@@ -35,6 +35,7 @@ protected:
     void initializeGL();
     void resizeGL(int width, int height);
     void paintGL();
+    void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
@@ -64,7 +65,9 @@ private:
     CSGTree_t &m_csgTree;
     NodeList m_selectedNodes;
 
-    QPoint prevMouseLoc;
+    typedef enum {DRAGGING, NONE} UIMode;
+    UIMode m_uiMode;
+    QPoint m_prevMouseLoc;
 };
 
 #endif // CSGVIEW_HH

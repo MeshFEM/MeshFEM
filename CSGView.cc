@@ -161,24 +161,31 @@ void CSGView2D::paintGL()
     draw();
 }
 
+void CSGView2D::mouseReleaseEvent(QMouseEvent *event)
+{
+    m_prevMouseLoc = event->pos();
+    m_uiMode = NONE;
+}
+
 void CSGView2D::mousePressEvent(QMouseEvent *event)
 {
-    prevMouseLoc = event->pos();
+    m_prevMouseLoc = event->pos();
+    m_uiMode = DRAGGING;
 }
 
 void CSGView2D::mouseMoveEvent(QMouseEvent *event)
 {
     Vector start, end;
-    getWorldCoords(-prevMouseLoc.y(), prevMouseLoc.x(), start[0], start[1]);
+    getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
     getWorldCoords(-event->pos().y(), event->pos().x(), end[0], end[1]);
-    if (event->buttons() & Qt::LeftButton) {
+    if (m_uiMode == DRAGGING) {
         for (NodeList::iterator it = m_selectedNodes.begin();
                                 it != m_selectedNodes.end(); ++it) {
             (*it)->applyTranslation(end - start);
         }
         update();
     }
-    prevMouseLoc = event->pos();
+    m_prevMouseLoc = event->pos();
 }
 
 void CSGView2D::mouseDoubleClickEvent(QMouseEvent *event)
