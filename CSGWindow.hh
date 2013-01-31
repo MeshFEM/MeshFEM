@@ -1,0 +1,29 @@
+////////////////////////////////////////////////////////////////////////////////
+// CSGWindow.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      The main window for CSG operations and visualization.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  01/28/2013 14:52:21
+////////////////////////////////////////////////////////////////////////////////
+#ifndef CSGWINDOW_HH
+#define CSGWINDOW_HH
+
+#include <QMainWindow>
+#include "GlobalTypes.hh"
+#include "CSGWindowController.hh"
+
+class CSGWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    CSGWindow(CSGTree_t &csgTree);
+    ~CSGWindow() { delete controller; }
+private:
+    CSGWindowController *controller;
+};
+
+#endif // CSGWINDOW_HH
