@@ -23,6 +23,9 @@ class CSGView2D : public QGLWidget
     Q_OBJECT
 
 public:
+    typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
+                  DISPLACEMENTS_STATE} GUIState;
+
     CSGView2D(CSGTree_t &tree, QWidget *parent = NULL);
     ~CSGView2D() {
         delete m_rgbaBuffer;
@@ -54,7 +57,8 @@ protected:
 
 private:
     template<typename CSGObject>
-    void drawCSG(const CSGObject *obj, const QColor &c) const;
+    void drawCSG(const CSGObject *obj, const QColor &c,
+                 bool drawBoundingBox = false) const;
     void draw();
 
     Vector m_frameMin, m_frameMax;
@@ -65,8 +69,15 @@ private:
     CSGTree_t &m_csgTree;
     NodeList m_selectedNodes;
 
-    typedef enum {DRAGGING, NONE} UIMode;
-    UIMode m_uiMode;
+    void setGUIState(GUIState state) {
+        m_guiState = state;
+        m_gesture = NONE;
+        update();
+    }
+
+    GUIState m_guiState;
+    typedef enum {DRAGGING, NONE} MouseGesture;
+    MouseGesture m_gesture;
     QPoint m_prevMouseLoc;
 };
 

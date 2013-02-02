@@ -13,6 +13,6 @@ typedef BBox<Vector> BBox_t;
 #include <list>
 typedef std::list<CSGNode *> NodeList;
 
-typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
+#include "Quadrature.hh"
 
 #endif // GLOBAL_TYPES_HH

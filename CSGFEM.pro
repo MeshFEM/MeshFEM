@@ -17,7 +17,8 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            CSGWindowController.hh \
            Geometry.hh \
            AnalysisSettings.hh \
-           AnalysisForm.hh QuadraturePointsSpinBox.hh
+           AnalysisForm.hh QuadraturePointsSpinBox.hh \
+           Quadrature.hh MeshlessFEM.hh
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc CSGView.cc CSGWindow.cc \
-           CSGWindowController.cc AnalysisForm.cc
+           CSGWindowController.cc AnalysisForm.cc Quadrature.cc

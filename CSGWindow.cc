@@ -21,6 +21,7 @@
 CSGWindow::CSGWindow(CSGTree_t &csgTree)
 {
     CSGView2D *csgView = new CSGView2D(csgTree);
+    csgView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
 
     CSGTreeModel *model = new CSGTreeModel(csgTree);
@@ -42,6 +43,7 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
     splitter->addWidget(csgView);
     // splitter->setOrientation(Qt::Vertical);
     splitter->setCollapsible(0, false);
+    splitter->setCollapsible(1, false);
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
@@ -63,4 +65,20 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
                      csgView, SLOT(csgNodesSelected(const NodeList &)));
 
     setCentralWidget(splitter);
+
+    QToolBar *tb = new QToolBar("Mouse Mode");
+    QActionGroup *uiActionGroup = new QActionGroup(tb);
+    QAction *panZoomAction   = new QAction("Pan/Zoom",  uiActionGroup);
+    QAction *transformAction = new QAction("Transform", uiActionGroup);
+    QAction *selectAction    = new QAction("Select",    uiActionGroup);
+    panZoomAction->setCheckable(true);
+    selectAction->setCheckable(true);
+    transformAction->setCheckable(true);
+
+    panZoomAction->setChecked(true);
+
+    tb->addActions(uiActionGroup->actions());
+
+    // tb->addAction(uiActionGroup);
+    addToolBar(tb);
 }

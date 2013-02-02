@@ -32,7 +32,6 @@ public:
 
     void stepBy(int steps) {
         int val = value();
-        bool increment = steps > 0;
         if (m_quadrature == UNIFORM_QUADRATURE) {
             int valSqrt = sqrtf(val);
             valSqrt += steps;

@@ -20,7 +20,8 @@
 
 CSGView2D::CSGView2D(CSGTree_t &csgTree, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_rgbaBuffer(NULL), m_csgTree(csgTree)
+      m_rgbaBuffer(NULL), m_csgTree(csgTree),
+      m_guiState(MODEL_STATE), m_gesture(NONE)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
 }
@@ -69,12 +70,17 @@ void CSGView2D::resizeGL(int width, int height)
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0, width, 0, height, -1, 1);
+
+    // Center m_witdh, m_height box
+    int hmargin = (height - m_height) / 2;
+    int wmargin = (width  -  m_width) / 2;
+    glOrtho(-wmargin, width - wmargin, -hmargin, height - hmargin, -1, 1);
     glMatrixMode(GL_MODELVIEW);
 }
 
 template<typename CSGObject>
-void CSGView2D::drawCSG(const CSGObject *obj, const QColor &fg) const
+void CSGView2D::drawCSG(const CSGObject *obj, const QColor &fg,
+                        bool drawBoundingBox) const
 {
     memset(m_rgbaBuffer, 0, 4 * m_width * m_height);
     for (int r = 0; r < m_height; ++r) {
@@ -116,20 +122,22 @@ void CSGView2D::drawCSG(const CSGObject *obj, const QColor &fg) const
     glDisable(GL_TEXTURE_2D);
 
     // Draw the bounding box
-    BBox_t b = obj->boundingBox();
-    int minx, miny, maxx, maxy;
-    getBufferCoords(b.minCorner[0], b.minCorner[1], miny, minx);
-    getBufferCoords(b.maxCorner[0], b.maxCorner[1], maxy, maxx);
+    if (drawBoundingBox) {
+        BBox_t b = obj->boundingBox();
+        int minx, miny, maxx, maxy;
+        getBufferCoords(b.minCorner[0], b.minCorner[1], miny, minx);
+        getBufferCoords(b.maxCorner[0], b.maxCorner[1], maxy, maxx);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glColor3f(fg.red() / 255.0f, fg.green() / 255.0f, fg.blue() / 255.0f);
-    glBegin(GL_QUADS);
-    glVertex2f(minx, miny);
-    glVertex2f(maxx, miny);
-    glVertex2f(maxx, maxy);
-    glVertex2f(minx, maxy);
-    glEnd();
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glColor3f(fg.red() / 255.0f, fg.green() / 255.0f, fg.blue() / 255.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(minx, miny);
+        glVertex2f(maxx, miny);
+        glVertex2f(maxx, maxy);
+        glVertex2f(minx, maxy);
+        glEnd();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
 }
 
 void CSGView2D::draw()
@@ -150,7 +158,7 @@ void CSGView2D::draw()
     QColor selectedObjectColor(128, 128, 128, 128);
     for (NodeList::iterator it = m_selectedNodes.begin();
                             it != m_selectedNodes.end(); ++it) {
-        drawCSG(*it, selectedObjectColor);
+        drawCSG(*it, selectedObjectColor, true);
     }
 
 }
@@ -164,13 +172,13 @@ void CSGView2D::paintGL()
 void CSGView2D::mouseReleaseEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
-    m_uiMode = NONE;
+    m_gesture = NONE;
 }
 
 void CSGView2D::mousePressEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
-    m_uiMode = DRAGGING;
+    m_gesture = DRAGGING;
 }
 
 void CSGView2D::mouseMoveEvent(QMouseEvent *event)
@@ -178,7 +186,7 @@ void CSGView2D::mouseMoveEvent(QMouseEvent *event)
     Vector start, end;
     getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
     getWorldCoords(-event->pos().y(), event->pos().x(), end[0], end[1]);
-    if (m_uiMode == DRAGGING) {
+    if (m_gesture == DRAGGING) {
         for (NodeList::iterator it = m_selectedNodes.begin();
                                 it != m_selectedNodes.end(); ++it) {
             (*it)->applyTranslation(end - start);

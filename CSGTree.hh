@@ -27,6 +27,7 @@ public:
     class CSGPrimitive;
     class CSGRectangleNode;
     class CSGEllipseNode;
+    typedef BBox<Vector> BBox_t;
 
     CSGTree()
     {
@@ -95,7 +96,6 @@ public:
 
 private:
     typedef typename std::vector<CSGNode *>::const_iterator RootIt;
-    typedef BBox<Vector> BBox_t;
     std::vector<CSGNode *> m_roots;
 };
 

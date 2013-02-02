@@ -13,6 +13,8 @@
 
 template<typename Vector>
 struct BBox {
+    typedef typename Vector::Scalar Real;
+
     BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
     BBox(const Vector &minCorner, const Vector &maxCorner)
         : minCorner(minCorner), maxCorner(maxCorner) { }
@@ -25,6 +27,14 @@ struct BBox {
     void intersectBox(const BBox &b) {
         minCorner = minCorner.cwiseMax(b.minCorner);
         maxCorner = maxCorner.cwiseMin(b.maxCorner);
+    }
+
+    Real volume() const {
+        Vector widths = maxCorner - minCorner;
+        Real result = 1.0;
+        for (int i = 0; i < widths.rows(); ++i)
+            result *= widths[i];
+        return result;
     }
 };
 
