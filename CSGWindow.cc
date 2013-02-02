@@ -15,6 +15,8 @@
 
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
+#include "AnalysisSettings.hh"
+#include "AnalysisForm.hh"
 
 CSGWindow::CSGWindow(CSGTree_t &csgTree)
 {
@@ -26,11 +28,24 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
     treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     treeView->setModel(model);
 
-    splitter->addWidget(treeView);
+    QWidget *sideBar = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout();
+    QTabWidget *sideBarTab = new QTabWidget(sideBar);
+    sideBarTab->addTab(treeView, "Model");
+    layout->addWidget(sideBarTab);
+    sideBar->setLayout(layout);
+
+    AnalysisSettings settings;
+    AnalysisForm *analysisForm = new AnalysisForm(settings);
+    sideBarTab->addTab(analysisForm, "Analyze");
+    splitter->addWidget(sideBar);
     splitter->addWidget(csgView);
     // splitter->setOrientation(Qt::Vertical);
     splitter->setCollapsible(0, false);
+    splitter->setStretchFactor(0, 0);
+    splitter->setStretchFactor(1, 1);
 
+    // Set up controller/connections
     controller = new CSGWindowController(model, treeView, &csgTree);
     QObject::connect(treeView->selectionModel(),
                      SIGNAL(selectionChanged(const QItemSelection &,

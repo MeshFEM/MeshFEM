@@ -11,13 +11,13 @@ QT += opengl
 CONFIG += release
 
 # Input
-HEADERS += CSGTree.hh \
-           CSGTreeModel.hh \
-           CSGView.hh \
-           CSGWindow.hh \
+HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
+           CSGView.hh CSGWindow.hh \
            GlobalTypes.hh \
-           CSGTree.inl \
            CSGWindowController.hh \
-           Geometry.hh
+           Geometry.hh \
+           AnalysisSettings.hh \
+           AnalysisForm.hh QuadraturePointsSpinBox.hh
+
 SOURCES += CSGFEM.cc CSGTreeModel.cc CSGView.cc CSGWindow.cc \
-           CSGWindowController.cc
+           CSGWindowController.cc AnalysisForm.cc

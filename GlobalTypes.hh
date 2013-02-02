@@ -1,3 +1,6 @@
+#ifndef GLOBAL_TYPES_HH
+#define GLOBAL_TYPES_HH
+
 #include "CSGTree.hh"
 #include "Geometry.hh"
 
@@ -9,3 +12,7 @@ typedef BBox<Vector> BBox_t;
 
 #include <list>
 typedef std::list<CSGNode *> NodeList;
+
+typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
+
+#endif // GLOBAL_TYPES_HH
