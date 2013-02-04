@@ -64,3 +64,10 @@ void CSGWindowController::csgTreeSelectionChanged(
 
     // m_csgGLView->setSelectedCSGNodes()
 }
+
+void CSGWindowController::changedSidebarTab(int newTab) {
+    if (newTab == 0)
+        m_femView->setGUIState(FEMView2D::MODEL_STATE);
+    else
+        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+}

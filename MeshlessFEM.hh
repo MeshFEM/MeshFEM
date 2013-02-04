@@ -15,21 +15,37 @@
 #define MESHLESS_FEM_HH
 
 #include "GlobalTypes.hh"
+#include "ElementGrid.hh"
+#include <cassert>
 
 template<typename Model>
-class MeshlessFem {
+class MeshlessFEM {
 public:
-    MeshlessFem(int Nx, int Ny, Quadrature *quadrature, Model *model)
-        : m_Nx(Nx), m_Ny(Ny), m_quadrature(quadrature), m_model(model)
+    MeshlessFEM(Model &model) : m_model(model)
     {
-        
+        m_quadrature = new Quadrature2D();
+        m_elementGrid = new ElementGrid2D<Model>(1, 1, *m_quadrature, model);
     }
+
+    ElementGrid2D<Model> &elementGrid() {
+        assert(m_elementGrid != NULL);
+        return *m_elementGrid;
+    }
+
+    Model &model() {
+        return m_model;
+    }
+
+    Quadrature2D &quadrature() {
+        assert(m_quadrature != NULL);
+        return *m_quadrature;
+    }
+
 private:
-    int m_Nx, m_Ny;
-    Quadrature *m_quadrature;
-    int quadraturePoints;
-    Model *m_model;
-}
+    Quadrature2D *m_quadrature;
+    Model &m_model;
+    ElementGrid2D<Model> *m_elementGrid;
+};
 
 #endif // MESHLESS_FEM_HH
 

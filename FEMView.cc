@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// CSGView.cc
+// FEMView.cc
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      OpenGL-based viewer for the CSG object
@@ -11,44 +11,51 @@
 //  Revision History:
 //      01/28/2013  Julian Panetta    Initial Revision
 ////////////////////////////////////////////////////////////////////////////////
-#include "CSGView.hh"
+#include "FEMView.hh"
 #include <QtGui>
 #include <QGLWidget>
 #include <QColor>
 #include <cassert>
 #include <iostream>
 
-CSGView2D::CSGView2D(CSGTree_t &csgTree, QWidget *parent)
+FEMView2D::FEMView2D(CSGTree_t &csgTree, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_rgbaBuffer(NULL), m_csgTree(csgTree),
-      m_guiState(MODEL_STATE), m_gesture(NONE)
+      m_rgbaBuffer(NULL), m_overlayDirty(true), m_objectDirty(true),
+      m_csgTree(csgTree), m_guiState(MODEL_STATE), m_gesture(NONE)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
 }
 
-void CSGView2D::csgNodesSelected(const NodeList &nList)
+void FEMView2D::csgNodesSelected(const NodeList &nList)
 {
     m_selectedNodes = nList;
+    m_overlayDirty = true;
     update();
 }
 
-void CSGView2D::initializeGL()
+void FEMView2D::initializeGL()
 {
     glClearColor(0.8, 0.8, 0.8, 1.0);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
     
-    glGenTextures(1, &m_renderTex);
-    glBindTexture(GL_TEXTURE_2D, m_renderTex);
+    glGenTextures(1, &m_objTex);
+    glBindTexture(GL_TEXTURE_2D, m_objTex);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    // Allow texture to wrap to enable checkerboard resolution scaling
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+    glGenTextures(1, &m_overlayTex);
+    glBindTexture(GL_TEXTURE_2D, m_overlayTex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 }
 
-void CSGView2D::resizeGL(int width, int height)
+void FEMView2D::resizeGL(int width, int height)
 {
     // Largest possible viewing rectangle with the frame's aspect ratio
     // aspect = view width / height
@@ -66,23 +73,44 @@ void CSGView2D::resizeGL(int width, int height)
 
     delete m_rgbaBuffer;
     m_rgbaBuffer = new char[4 * m_width * m_height];
+    m_objectDirty = m_overlayDirty = true;
 
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    // Center m_witdh, m_height box
+    // Center m_width, m_height box
     int hmargin = (height - m_height) / 2;
     int wmargin = (width  -  m_width) / 2;
     glOrtho(-wmargin, width - wmargin, -hmargin, height - hmargin, -1, 1);
     glMatrixMode(GL_MODELVIEW);
 }
 
-template<typename CSGObject>
-void CSGView2D::drawCSG(const CSGObject *obj, const QColor &fg,
-                        bool drawBoundingBox) const
+void drawQuad(float minx, float miny, float maxx, float maxy) {
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0);
+    glVertex2f(minx, miny);
+
+    glTexCoord2f(1, 0);
+    glVertex2f(maxx, miny);
+
+    glTexCoord2f(1, 1);
+    glVertex2f(maxx, maxy);
+
+    glTexCoord2f(0, 1);
+    glVertex2f(minx, maxy);
+
+    glEnd();
+}
+
+void FEMView2D::m_clearBuffer()
 {
     memset(m_rgbaBuffer, 0, 4 * m_width * m_height);
+}
+
+template<typename CSGObject>
+void FEMView2D::drawCSG(const CSGObject *obj, const QColor &fg) const
+{
     for (int r = 0; r < m_height; ++r) {
         for (int c = 0; c < m_width; ++c) {
             Vector p;
@@ -95,93 +123,100 @@ void CSGView2D::drawCSG(const CSGObject *obj, const QColor &fg,
             }
         }
     }
+}
 
-    glBindTexture(GL_TEXTURE_2D, m_renderTex);
+void FEMView2D::m_loadTexture(GLuint tex)
+{
+    glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
             GL_UNSIGNED_BYTE, m_rgbaBuffer);
+}
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+void FEMView2D::m_drawObject()
+{
+    QColor fullObjectColor(128, 192, 255, 255);
+
+    if (m_objectDirty) {
+        m_clearBuffer();
+        drawCSG(&m_csgTree, fullObjectColor);
+        m_loadTexture(m_objTex);
+        m_objectDirty = false;
+    }
 
     glEnable(GL_TEXTURE_2D);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(0, 0);
+    glBindTexture(GL_TEXTURE_2D, m_objTex);
+    drawQuad(0, 0, m_width, m_height);
+}
 
-    glTexCoord2f(1, 0);
-    glVertex2f(m_width, 0);
+void FEMView2D::m_drawSelectedObjects()
+{
+    QColor selectedObjectColor(128, 128, 128, 128);
+    if (m_overlayDirty) {
+        m_clearBuffer();
+        for (NodeList::iterator it = m_selectedNodes.begin();
+                                it != m_selectedNodes.end(); ++it) {
+            drawCSG(*it, selectedObjectColor);
+        }
+        m_loadTexture(m_overlayTex);
+        m_overlayDirty = false;
+    }
 
-    glTexCoord2f(1, 1);
-    glVertex2f(m_width, m_height);
-
-    glTexCoord2f(0, 1);
-    glVertex2f(0, m_height);
-
-    glEnd();
+    glBindTexture(GL_TEXTURE_2D, m_overlayTex);
+    drawQuad(0, 0, m_width, m_height);
     glDisable(GL_TEXTURE_2D);
 
-    // Draw the bounding box
-    if (drawBoundingBox) {
-        BBox_t b = obj->boundingBox();
+    // Draw the bounding boxes for selected objects
+    for (NodeList::iterator it = m_selectedNodes.begin();
+                            it != m_selectedNodes.end(); ++it) {
+        BBox_t b = (*it)->boundingBox();
         int minx, miny, maxx, maxy;
         getBufferCoords(b.minCorner[0], b.minCorner[1], miny, minx);
         getBufferCoords(b.maxCorner[0], b.maxCorner[1], maxy, maxx);
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glColor3f(fg.red() / 255.0f, fg.green() / 255.0f, fg.blue() / 255.0f);
-        glBegin(GL_QUADS);
-        glVertex2f(minx, miny);
-        glVertex2f(maxx, miny);
-        glVertex2f(maxx, maxy);
-        glVertex2f(minx, maxy);
-        glEnd();
+        glColor3i(selectedObjectColor.red(), selectedObjectColor.green(),
+                  selectedObjectColor.blue());
+        drawQuad(minx, miny, maxx, maxy);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 }
 
-void CSGView2D::draw()
+void FEMView2D::draw()
 {
-    glDisable(GL_TEXTURE_2D);
-
     glColor3f(1, 1, 1);
-    glBegin(GL_QUADS);
-    glVertex2f(0      , 0);
-    glVertex2f(m_width, 0);
-    glVertex2f(m_width, m_height);
-    glVertex2f(0      , m_height);
-    glEnd();
+    glDisable(GL_TEXTURE_2D);
+    drawQuad(0, 0, m_width, m_height);
 
-    QColor fullObjectColor(128, 192, 255, 255);
-    drawCSG(&m_csgTree, fullObjectColor);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
-    QColor selectedObjectColor(128, 128, 128, 128);
-    for (NodeList::iterator it = m_selectedNodes.begin();
-                            it != m_selectedNodes.end(); ++it) {
-        drawCSG(*it, selectedObjectColor, true);
+
+    m_drawObject();
+    if (m_guiState == MODEL_STATE) {
+        m_drawSelectedObjects();
     }
-
 }
 
-void CSGView2D::paintGL()
+void FEMView2D::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     draw();
 }
 
-void CSGView2D::mouseReleaseEvent(QMouseEvent *event)
+void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
     m_gesture = NONE;
 }
 
-void CSGView2D::mousePressEvent(QMouseEvent *event)
+void FEMView2D::mousePressEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
     m_gesture = DRAGGING;
 }
 
-void CSGView2D::mouseMoveEvent(QMouseEvent *event)
+void FEMView2D::mouseMoveEvent(QMouseEvent *event)
 {
     Vector start, end;
     getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
@@ -191,12 +226,13 @@ void CSGView2D::mouseMoveEvent(QMouseEvent *event)
                                 it != m_selectedNodes.end(); ++it) {
             (*it)->applyTranslation(end - start);
         }
+        m_objectDirty = m_overlayDirty = true;
         update();
     }
     m_prevMouseLoc = event->pos();
 }
 
-void CSGView2D::mouseDoubleClickEvent(QMouseEvent *event)
+void FEMView2D::mouseDoubleClickEvent(QMouseEvent *event)
 {
     
 }

@@ -14,19 +14,21 @@
 #include "CSGTreeModel.hh"
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
+#include "FEMView.hh"
 
 class CSGWindowController : public QObject {
     Q_OBJECT
 
 public:
     CSGWindowController(CSGTreeModel *treeModel, QTreeView *treeView,
-                        CSGTree_t *tree)
+                        CSGTree_t *tree, FEMView2D *femView)
         : m_csgTreeModel(treeModel),
-          m_csgTreeView(treeView), m_csgTree(tree) { }
+          m_csgTreeView(treeView), m_csgTree(tree), m_femView(femView) { }
 
 public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
+    void changedSidebarTab(int newTab);
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =
@@ -37,6 +39,7 @@ private:
     CSGTreeModel *m_csgTreeModel;
     QTreeView    *m_csgTreeView;
     CSGTree_t    *m_csgTree;
+    FEMView2D    *m_femView;
 
     typedef CSGTree_t::CSGNode CSGNode;
 };

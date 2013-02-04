@@ -9,7 +9,7 @@
 //  Created:  01/28/2013 14:52:21
 ////////////////////////////////////////////////////////////////////////////////
 #include "CSGWindow.hh"
-#include "CSGView.hh"
+#include "FEMView.hh"
 #include "CSGTreeModel.hh"
 #include <QtGui>
 
@@ -18,16 +18,16 @@
 #include "AnalysisSettings.hh"
 #include "AnalysisForm.hh"
 
-CSGWindow::CSGWindow(CSGTree_t &csgTree)
+CSGWindow::CSGWindow(MeshlessFEM_t &fem)
 {
-    CSGView2D *csgView = new CSGView2D(csgTree);
-    csgView->setMinimumSize(100, 100);
+    FEMView2D *femView = new FEMView2D(fem.model());
+    femView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
 
-    CSGTreeModel *model = new CSGTreeModel(csgTree);
+    CSGTreeModel *treeModel = new CSGTreeModel(fem.model());
     QTreeView *treeView = new QTreeView();
     treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    treeView->setModel(model);
+    treeView->setModel(treeModel);
 
     QWidget *sideBar = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout();
@@ -40,7 +40,7 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
     AnalysisForm *analysisForm = new AnalysisForm(settings);
     sideBarTab->addTab(analysisForm, "Analyze");
     splitter->addWidget(sideBar);
-    splitter->addWidget(csgView);
+    splitter->addWidget(femView);
     // splitter->setOrientation(Qt::Vertical);
     splitter->setCollapsible(0, false);
     splitter->setCollapsible(1, false);
@@ -48,7 +48,8 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
     splitter->setStretchFactor(1, 1);
 
     // Set up controller/connections
-    controller = new CSGWindowController(model, treeView, &csgTree);
+    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
+                                         femView);
     QObject::connect(treeView->selectionModel(),
                      SIGNAL(selectionChanged(const QItemSelection &,
                                              const QItemSelection &)),
@@ -62,7 +63,9 @@ CSGWindow::CSGWindow(CSGTree_t &csgTree)
                                         const QItemSelection &,
                                         QItemSelectionModel::SelectionFlags)));
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
-                     csgView, SLOT(csgNodesSelected(const NodeList &)));
+                     femView, SLOT(csgNodesSelected(const NodeList &)));
+    QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
+                     controller, SLOT(changedSidebarTab(int)));
 
     setCentralWidget(splitter);
 

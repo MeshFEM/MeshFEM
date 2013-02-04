@@ -27,6 +27,7 @@ public:
     QuadraturePointsSpinBox(QWidget *parent = NULL)
         : QSpinBox(parent), m_quadrature(UNIFORM_QUADRATURE)
     {
+        setMinimum(1);
         lineEdit()->setReadOnly(true);
     }
 

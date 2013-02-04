@@ -12,13 +12,13 @@ CONFIG += release
 
 # Input
 HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
-           CSGView.hh CSGWindow.hh \
+           FEMView.hh CSGWindow.hh \
            GlobalTypes.hh \
            CSGWindowController.hh \
            Geometry.hh \
            AnalysisSettings.hh \
            AnalysisForm.hh QuadraturePointsSpinBox.hh \
-           Quadrature.hh MeshlessFEM.hh
+           Quadrature.hh MeshlessFEM.hh ElementGrid.hh
 
-SOURCES += CSGFEM.cc CSGTreeModel.cc CSGView.cc CSGWindow.cc \
+SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc

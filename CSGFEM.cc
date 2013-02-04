@@ -22,7 +22,8 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     CSGTree_t csgTree;
-    CSGWindow window(csgTree);
+    MeshlessFEM_t fem(csgTree);
+    CSGWindow window(fem);
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
     window.show();

@@ -26,7 +26,8 @@ typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
 class Quadrature2D {
     typedef Vector2D::Scalar Real;
 public:
-    Quadrature2D(int numPoints, QuadratureMethod method)
+    Quadrature2D(int numPoints = 1,
+                 QuadratureMethod method = UNIFORM_QUADRATURE)
         : m_method(method) {
         setNumPoints(numPoints);
     }
@@ -49,13 +50,16 @@ public:
     typename Func2D::value_type integrate(const Func2D &f,
                                           BBox<Vector2D> &b) const {
         typename Func2D::value_type result;
-
+        
         int n = numPoints();
         for (int i = 0; i < n; ++i) {
             const Vector2D &p = m_referenceQuadraturePoints[i];
-            Real x = p[0] * (b.maxCorner[0]) + (1 - p[0]) * (b.minCorner[0]);
-            Real y = p[1] * (b.maxCorner[1]) + (1 - p[1]) * (b.minCorner[1]);
-            result += f(x, y) * m_referenceQuadratureWeights[i];
+            Real weight = m_referenceQuadratureWeights[i];
+            Vector2D sample = b.interpolatePoint(p);
+            if (i == 0)
+                result  = f(sample[0], sample[0]) * weight;
+            else
+                result += f(sample[0], sample[0]) * weight;
         }
 
         result *= b.volume();

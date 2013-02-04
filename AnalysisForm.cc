@@ -18,6 +18,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
     // Construct all widgets
     g_nxStepper = new QSpinBox();
     g_nyStepper = new QSpinBox();
+    g_nxStepper->setMinimum(1);
+    g_nyStepper->setMinimum(1);
     g_numModesStepper = new QSpinBox();
     g_numWeakRegionsStepper = new QSpinBox();
     g_lumpedMassCheck = new QCheckBox();

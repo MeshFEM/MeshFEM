@@ -15,4 +15,9 @@ typedef std::list<CSGNode *> NodeList;
 
 #include "Quadrature.hh"
 
+template<typename Model>
+class MeshlessFEM;
+
+typedef MeshlessFEM<CSGTree_t> MeshlessFEM_t;
+
 #endif // GLOBAL_TYPES_HH

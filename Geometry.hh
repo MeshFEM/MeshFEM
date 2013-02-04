@@ -24,9 +24,15 @@ struct BBox {
         minCorner = minCorner.cwiseMin(b.minCorner);
         maxCorner = maxCorner.cwiseMax(b.maxCorner);
     }
+
     void intersectBox(const BBox &b) {
         minCorner = minCorner.cwiseMax(b.minCorner);
         maxCorner = maxCorner.cwiseMin(b.maxCorner);
+    }
+
+    Vector interpolatePoint(const Vector &v) const {
+        return minCorner +
+              (v.array() * (maxCorner - minCorner).array()).matrix();
     }
 
     Real volume() const {

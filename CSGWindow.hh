@@ -14,13 +14,14 @@
 #include <QMainWindow>
 #include "GlobalTypes.hh"
 #include "CSGWindowController.hh"
+#include "MeshlessFEM.hh"
 
 class CSGWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    CSGWindow(CSGTree_t &csgTree);
+    CSGWindow(MeshlessFEM_t &fem);
     ~CSGWindow() { delete controller; }
 private:
     CSGWindowController *controller;

@@ -15,11 +15,8 @@ Quadrature2D::quadraturePoints(const BBox<Vector2D> &b) const
 {
     std::vector<Vector2D> points(m_referenceQuadraturePoints);
     int n = numPoints();
-    for (int i = 0; i < n; ++i) {
-        Vector2D &p = points[i];
-        p[0] = p[0] * (b.maxCorner[0]) + (1 - p[0]) * (b.minCorner[0]);
-        p[1] = p[1] * (b.maxCorner[1]) + (1 - p[1]) * (b.minCorner[1]);
-    }
+    for (int i = 0; i < n; ++i)
+        points[i] = b.interpolatePoint(points[i]);
     return points;
 }
 

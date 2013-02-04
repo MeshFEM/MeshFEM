@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// CSGView.hh
+// FEMView.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      OpenGL-based viewer for the CSG object
@@ -18,7 +18,7 @@
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
 
-class CSGView2D : public QGLWidget
+class FEMView2D : public QGLWidget
 {
     Q_OBJECT
 
@@ -26,9 +26,15 @@ public:
     typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
                   DISPLACEMENTS_STATE} GUIState;
 
-    CSGView2D(CSGTree_t &tree, QWidget *parent = NULL);
-    ~CSGView2D() {
+    FEMView2D(CSGTree_t &tree, QWidget *parent = NULL);
+    ~FEMView2D() {
         delete m_rgbaBuffer;
+    }
+
+    void setGUIState(GUIState state) {
+        m_guiState = state;
+        m_gesture = NONE;
+        update();
     }
 
 public slots:
@@ -57,23 +63,21 @@ protected:
 
 private:
     template<typename CSGObject>
-    void drawCSG(const CSGObject *obj, const QColor &c,
-                 bool drawBoundingBox = false) const;
+    void drawCSG(const CSGObject *obj, const QColor &c) const;
     void draw();
+    void m_drawObject();
+    void m_drawSelectedObjects();
+    void m_loadTexture(GLuint tex);
+    void m_clearBuffer();
 
     Vector m_frameMin, m_frameMax;
     int m_width, m_height;
-    GLuint m_renderTex;
+    GLuint m_objTex, m_overlayTex;
     char *m_rgbaBuffer;
+    bool m_overlayDirty, m_objectDirty;
 
     CSGTree_t &m_csgTree;
     NodeList m_selectedNodes;
-
-    void setGUIState(GUIState state) {
-        m_guiState = state;
-        m_gesture = NONE;
-        update();
-    }
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;
