@@ -68,6 +68,8 @@ void CSGWindowController::csgTreeSelectionChanged(
 void CSGWindowController::changedSidebarTab(int newTab) {
     if (newTab == 0)
         m_femView->setGUIState(FEMView2D::MODEL_STATE);
-    else
+    else {
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        m_fem.elementGrid().update();
+    }
 }

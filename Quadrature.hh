@@ -26,7 +26,7 @@ typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
 class Quadrature2D {
     typedef Vector2D::Scalar Real;
 public:
-    Quadrature2D(int numPoints = 1,
+    Quadrature2D(int numPoints = 4,
                  QuadratureMethod method = UNIFORM_QUADRATURE)
         : m_method(method) {
         setNumPoints(numPoints);

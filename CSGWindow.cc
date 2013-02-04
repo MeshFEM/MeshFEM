@@ -49,7 +49,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem)
 
     // Set up controller/connections
     controller = new CSGWindowController(treeModel, treeView, &fem.model(),
-                                         femView);
+                                         femView, fem);
     QObject::connect(treeView->selectionModel(),
                      SIGNAL(selectionChanged(const QItemSelection &,
                                              const QItemSelection &)),

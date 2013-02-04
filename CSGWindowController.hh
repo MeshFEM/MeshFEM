@@ -15,15 +15,17 @@
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
 #include "FEMView.hh"
+#include "MeshlessFEM.hh"
 
 class CSGWindowController : public QObject {
     Q_OBJECT
 
 public:
     CSGWindowController(CSGTreeModel *treeModel, QTreeView *treeView,
-                        CSGTree_t *tree, FEMView2D *femView)
-        : m_csgTreeModel(treeModel),
-          m_csgTreeView(treeView), m_csgTree(tree), m_femView(femView) { }
+                        CSGTree_t *tree, FEMView2D *femView,
+                        MeshlessFEM_t &fem)
+        : m_csgTreeModel(treeModel), m_csgTreeView(treeView),
+        m_csgTree(tree), m_femView(femView), m_fem(fem) { }
 
 public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
@@ -36,10 +38,11 @@ signals:
     void csgNodesSelected(const NodeList &nList);
     
 private:
-    CSGTreeModel *m_csgTreeModel;
-    QTreeView    *m_csgTreeView;
-    CSGTree_t    *m_csgTree;
-    FEMView2D    *m_femView;
+    CSGTreeModel  *m_csgTreeModel;
+    QTreeView     *m_csgTreeView;
+    CSGTree_t     *m_csgTree;
+    FEMView2D     *m_femView;
+    MeshlessFEM_t &m_fem;
 
     typedef CSGTree_t::CSGNode CSGNode;
 };

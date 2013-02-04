@@ -40,18 +40,19 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
         int n = sqrtf(numPoints);
 
         // Uniform quadrature sample weights
-        Real interiorWeight = 1.0 / ((n - 1) * (n - 1));
+        float spaces = n - 1;
+        Real interiorWeight = 1.0 / (spaces * spaces);
 
-        for (int i = 0; i <= n; ++i) {
-            for (int j = 0; j <= n; ++j) {
-                Real x = (1.0 / n) * j, y = (1.0 / n) * i;
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                Real x = j / spaces, y = i / spaces;
                 m_referenceQuadraturePoints.push_back(Vector2D(x, y));
                 // Interior nodes get full weight, edges get half, and corners
                 // get 1/4.
                 Real weight = interiorWeight;
-                if ((i == 0) || (i == n))
+                if ((i == 0) || (i == n - 1))
                     weight *= .5;
-                if ((j == 0) || (j == n))
+                if ((j == 0) || (j == n - 1))
                     weight *= .5;
                 m_referenceQuadratureWeights.push_back(weight);
             }
