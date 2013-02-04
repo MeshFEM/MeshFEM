@@ -9,6 +9,9 @@ INCLUDEPATH += . /opt/local/include/eigen3
 
 QT += opengl
 CONFIG += release
+# CONFIG += debug
+
+# QMAKE_CXXFLAGS += -D_D_GLIBCXX_DEBUG
 
 # Input
 HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \

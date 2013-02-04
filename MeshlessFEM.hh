@@ -24,7 +24,7 @@ public:
     MeshlessFEM(Model &model) : m_model(model)
     {
         m_quadrature = new Quadrature2D();
-        m_elementGrid = new ElementGrid2D<Model>(1, 1, *m_quadrature, model);
+        m_elementGrid = new ElementGrid2D<Model>(20, 20, *m_quadrature, model);
     }
 
     ElementGrid2D<Model> &elementGrid() {

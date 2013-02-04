@@ -20,11 +20,11 @@ void ElementGrid2D<Model>::update()
     m_bbox = m_model.boundingBox();
 
     m_elementForCell.assign(m_numCells(), -1);
-    size_t i = 0;
+    std::vector<bool> isFullElement(m_numCells(), false);
     size_t numElements = 0;
-    std::vector<bool> isFullElement(m_Nx * m_Ny, false);
-    for (size_t r = 0; r < m_Ny; ++r, i += m_Nx) {
-        for (size_t c = 0; c < m_Nx; ++c, ++i) {
+    for (size_t r = 0; r < m_Ny; ++r) {
+        for (size_t c = 0; c < m_Nx; ++c) {
+            size_t cell = m_get1DCellIndex(r, c);
             BBox_t b = m_cellBoundingBox(r, c);
             std::vector<Vector> quadraturePoints =
                                 m_quadrature.quadraturePoints(b);
@@ -33,12 +33,9 @@ void ElementGrid2D<Model>::update()
                 if (m_model.isInside(quadraturePoints[pi]))
                     ++insideCount;
             }
-            if (insideCount == 0) {
-                continue;
-            }
-            else {
-                isFullElement[i] = (insideCount == quadraturePoints.size());
-                m_elementForCell[i] = numElements++;
+            if (insideCount > 0) {
+                isFullElement[cell] = (insideCount == quadraturePoints.size());
+                m_elementForCell[cell] = numElements++;
             }
         }
     }
@@ -54,12 +51,15 @@ void ElementGrid2D<Model>::update()
     for (size_t cell = 0; cell < m_elementForCell.size(); ++cell) {
         int e = m_elementForCell[cell];
         if (e >= 0) {
+            assert((size_t) e < numElements);
             m_cellForElement[e] = cell;
             m_isFullElement[e] = isFullElement[cell];
             m_cellVertices(cell, cellVertices);
             // All corners of an element cell are nodes.
-            for (size_t i = 0; i < (size_t) cellVertices.rows(); ++i)
+            for (size_t i = 0; i < (size_t) cellVertices.rows(); ++i) {
+                assert((size_t) cellVertices[i] < numVertices);
                 isNode[cellVertices[i]] = true;
+            }
         }
     }
 
@@ -67,12 +67,14 @@ void ElementGrid2D<Model>::update()
     m_nodeForVertex.assign(numVertices, -1);
     size_t numNodes = 0;
     for (size_t v = 0; v < numVertices; ++v) {
-        m_nodeForVertex[i] = numNodes++;
+        m_nodeForVertex[v] = numNodes++;
     }
     m_vertexForNode.resize(numNodes);
     for (size_t v = 0; v < numVertices; ++v) {
         int n = m_nodeForVertex[v];
-        if (n >= 0)
+        if (n >= 0) {
+            assert((size_t) n < numNodes);
             m_vertexForNode[n] = v;
+        }
     }
 }

@@ -20,7 +20,7 @@
 
 CSGWindow::CSGWindow(MeshlessFEM_t &fem)
 {
-    FEMView2D *femView = new FEMView2D(fem.model());
+    FEMView2D *femView = new FEMView2D(fem);
     femView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
 

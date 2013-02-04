@@ -100,7 +100,7 @@ public:
         return AdjacencyVec(AdjacencyVec::Zero());
     }
 
-    bool isFullElement(size_t i) const
+    bool elementIsFull(size_t i) const
     {
         assert(i < m_isFullElement.size());
         return m_isFullElement[i];
@@ -157,8 +157,8 @@ private:
 
     Vector m_vertexPosition(size_t row, size_t col) const {
         assert((row < m_Ny + 1) && (col < m_Nx + 1));
-        return m_bbox.interpolatePoint(Vector((1.0 * col) / (m_Nx + 1),
-                                              (1.0 * row) / (m_Ny + 1)));
+        return m_bbox.interpolatePoint(Vector((1.0 * col) / m_Nx,
+                                              (1.0 * row) / m_Ny));
     }
 
     BBox_t m_cellBoundingBox(size_t i) const {

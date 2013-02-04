@@ -2,20 +2,19 @@
 // FEMView.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      OpenGL-based viewer for the CSG object
+//      OpenGL-based viewer for the MeshlessFEM/CSG code.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  01/28/2013 15:09:13
 ////////////////////////////////////////////////////////////////////////////////
-#ifndef CSGVIEW_HH
-#define CSGVIEW_HH
+#ifndef FEMVIEW_HH
+#define FEMVIEW_HH
 
 #include <QGLWidget>
 #include <Eigen/Dense>
 #include <cmath>
 
-#include "CSGTree.hh"
 #include "GlobalTypes.hh"
 
 class FEMView2D : public QGLWidget
@@ -26,7 +25,7 @@ public:
     typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
                   DISPLACEMENTS_STATE} GUIState;
 
-    FEMView2D(CSGTree_t &tree, QWidget *parent = NULL);
+    FEMView2D(MeshlessFEM_t &fem, QWidget *parent = NULL);
     ~FEMView2D() {
         delete m_rgbaBuffer;
     }
@@ -62,22 +61,23 @@ protected:
     }
 
 private:
-    template<typename CSGObject>
-    void drawCSG(const CSGObject *obj, const QColor &c) const;
+    template<typename Object>
+    void drawObject(const Object *obj, const QColor &c) const;
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
+    void m_drawWorldBox(const BBox_t &b);
     void m_loadTexture(GLuint tex);
     void m_clearBuffer();
 
     Vector m_frameMin, m_frameMax;
     int m_width, m_height;
-    GLuint m_objTex, m_overlayTex;
+    GLuint m_modelTex, m_overlayTex;
     char *m_rgbaBuffer;
     bool m_overlayDirty, m_objectDirty;
 
-    CSGTree_t &m_csgTree;
-    NodeList m_selectedNodes;
+    MeshlessFEM_t &m_fem;
+    NodeList m_selectedObjects;
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;
@@ -85,4 +85,4 @@ private:
     QPoint m_prevMouseLoc;
 };
 
-#endif // CSGVIEW_HH
+#endif // FEMVIEW_HH

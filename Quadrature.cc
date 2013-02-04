@@ -24,10 +24,10 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
 {
     assert(numPoints > 0);
 
-    m_referenceQuadraturePoints.reserve(numPoints);
     m_referenceQuadraturePoints.resize(0);
-    m_referenceQuadratureWeights.reserve(numPoints);
     m_referenceQuadratureWeights.resize(0);
+    m_referenceQuadraturePoints.reserve(numPoints);
+    m_referenceQuadratureWeights.reserve(numPoints);
 
     // TODO: implement gauss nodes;
 

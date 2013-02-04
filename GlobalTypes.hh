@@ -17,7 +17,10 @@ typedef std::list<CSGNode *> NodeList;
 
 template<typename Model>
 class MeshlessFEM;
+template<typename Model>
+class ElementGrid2D;
 
-typedef MeshlessFEM<CSGTree_t> MeshlessFEM_t;
+typedef MeshlessFEM<CSGTree_t>   MeshlessFEM_t;
+typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
 
 #endif // GLOBAL_TYPES_HH
