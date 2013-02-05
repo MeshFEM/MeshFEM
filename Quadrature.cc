@@ -31,6 +31,7 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
 
     // TODO: implement gauss nodes;
 
+#if 0 // As uniform as possible while sampling vertices...
     // Uniform Quadrature
     if (numPoints == 1) {
         m_referenceQuadraturePoints.push_back(Vector2D(0.5, 0.5));
@@ -56,6 +57,20 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
                     weight *= .5;
                 m_referenceQuadratureWeights.push_back(weight);
             }
+        }
+    }
+#endif
+
+    // Uniform Quadrature
+    int n = sqrtf(numPoints);
+    Real sampleWidth = 1.0 / n;
+    Real sampleArea = sampleWidth * sampleWidth;
+    for (int i = 0; i < n; ++i) {
+        Real y = sampleWidth * i + .5 * sampleWidth;
+        for (int j = 0; j < n; ++j) {
+            Real x = sampleWidth * j + .5 * sampleWidth;
+            m_referenceQuadraturePoints.push_back(Vector2D(x, y));
+            m_referenceQuadratureWeights.push_back(sampleArea);
         }
     }
 

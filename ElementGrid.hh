@@ -93,6 +93,27 @@ public:
         return result;
     }
 
+    // Query the grid to count how many neighboring nodes a node has.
+    // Useful for NNZ computation.
+    size_t numNodesAdjacentNode(size_t ni) const {
+        assert(ni < m_vertexForNode.size());
+        size_t row, col;
+        m_get2DVertexIndex(ni, row, col);
+        size_t adjacencyCount;
+        for (size_t r  = row - 1; r <= row + 1; ++r) {
+            if (r > m_Ny) continue;
+            for (size_t c  = col  - 1; c <= col + 1; ++c) {
+                if (c > m_Nx) continue;
+                size_t v = m_get1DVertexIndex(r, c);
+                if (m_cellForElement[v] >= 0)
+                    ++adjacencyCount;
+            }
+        }
+
+        // Don't count the node itself.
+        return adjacencyCount - 1;
+    }
+
     AdjacencyVec elementsAdjacentNode(size_t ni) const {
         // TODO implement this
         assert(ni < numNodes());

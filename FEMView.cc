@@ -215,6 +215,21 @@ void FEMView2D::draw()
             m_drawWorldBox(grid.elementBoundingBox(i));
         }
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        glPointSize(2.0f);
+        glColor3f(1.0, 1.0, 0);
+        glBegin(GL_POINTS);
+        for (unsigned int i = 0; i < grid.numElements(); ++i) {
+            BBox_t b = grid.elementBoundingBox(i);
+            std::vector<Vector> qpoints =
+                m_fem.quadrature().quadraturePoints(b);
+            for (unsigned int p = 0; p < qpoints.size(); ++p) {
+                int r, c;
+                getBufferCoords(qpoints[p][0], qpoints[p][1], r, c);
+                glVertex2f(c, r);
+            }
+        }
+        glEnd();
     }
 }
 
