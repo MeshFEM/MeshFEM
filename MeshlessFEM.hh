@@ -27,6 +27,36 @@ public:
         m_elementGrid = new ElementGrid2D<Model>(20, 20, *m_quadrature, model);
     }
 
+    bool configureElements(size_t Nx, size_t Ny,
+                           size_t nQuadraturePoints, bool gaussNodes) {
+        bool changed = false;
+        size_t oldNx, oldNy;
+        if (quadrature().numPoints() != nQuadraturePoints) {
+            quadrature().setNumPoints(nQuadraturePoints);
+            changed = true;
+        }
+        if (quadrature().usingGaussQuadrature() != gaussNodes) {
+            quadrature().setUsingGaussQuadrature(gaussNodes);
+            changed = true;
+        }
+        elementGrid().getGridSize(oldNx, oldNy);
+        if ((Nx != oldNx) || (Ny != oldNy)) {
+            elementGrid().setGridSize(Nx, Ny);
+            elementGrid().setGridSize(Nx, Ny);
+            changed = true;
+        }
+        else if (changed) {
+            // Even if the grid size doesn't change, a quadrature rule change
+            // must
+            elementGrid().update();
+        }
+
+        if (changed) {
+            // TODO: clear cached matrix
+        }
+        return changed;
+    }
+
     ElementGrid2D<Model> &elementGrid() {
         assert(m_elementGrid != NULL);
         return *m_elementGrid;

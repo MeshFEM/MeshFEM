@@ -41,6 +41,15 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     elementsQuadratureGroup->setLayout(eqForm);
 
+    QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_nyStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_quadraturePointsStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_gaussQuadratureCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(elementsQuadratureGroup);
@@ -52,4 +61,12 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
     // QScrollArea *scrollArea = new QScrollArea(this);
     // scrollArea->setLayout(layout);
     setLayout(layout);
+}
+
+void AnalysisForm::elementGridControlsChanged(int i) {
+    int Nx = g_nxStepper->value();
+    int Ny = g_nyStepper->value();
+    int quadraturePoints = g_quadraturePointsStepper->value();
+    bool gaussNodes = g_gaussQuadratureCheck->isChecked();
+    emit elementGridChanged(Nx, Ny, quadraturePoints, gaussNodes);
 }

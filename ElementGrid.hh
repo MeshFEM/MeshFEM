@@ -57,7 +57,7 @@ public:
         update();
     }
 
-    void getGridSize(size_t &Nx, size_t Ny) const {
+    void getGridSize(size_t &Nx, size_t &Ny) const {
         Nx = m_Nx;
         Ny = m_Ny;
     }

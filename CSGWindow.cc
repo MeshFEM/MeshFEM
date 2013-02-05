@@ -66,6 +66,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem)
                      femView, SLOT(csgNodesSelected(const NodeList &)));
     QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
                      controller, SLOT(changedSidebarTab(int)));
+    QObject::connect(analysisForm,
+                     SIGNAL(elementGridChanged(int, int, int, bool)),
+                     controller,
+                     SLOT(elementGridChanged(int, int, int, bool)));
 
     setCentralWidget(splitter);
 

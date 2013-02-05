@@ -31,6 +31,8 @@ public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
     void changedSidebarTab(int newTab);
+    void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
+                            bool gaussQuadrature);
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =

@@ -26,6 +26,13 @@ class AnalysisForm : public QWidget
 public:
     AnalysisForm(AnalysisSettings &settings, QWidget *parent = NULL);
 
+private slots:
+    void elementGridControlsChanged(int i);
+
+signals:
+    void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
+                            bool gaussQuadrature);
+
 private:
     AnalysisSettings &m_settings;
 

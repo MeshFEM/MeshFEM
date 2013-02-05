@@ -73,3 +73,10 @@ void CSGWindowController::changedSidebarTab(int newTab) {
         m_fem.elementGrid().update();
     }
 }
+
+void CSGWindowController::elementGridChanged(int Nx, int Ny,
+        int numQuadraturePoints, bool gaussQuadrature)
+{
+    if (m_fem.configureElements(Nx, Ny, numQuadraturePoints, gaussQuadrature))
+        m_femView->update();
+}
