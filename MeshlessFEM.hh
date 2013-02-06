@@ -17,6 +17,7 @@
 #include "GlobalTypes.hh"
 #include "ElementGrid.hh"
 #include "AnalysisSettings.hh"
+#include "MatlabInterface/MatlabShell.h"
 #include <cassert>
 #include <vector>
 
@@ -27,6 +28,8 @@ public:
     typedef Eigen::Matrix<Real, 5, 1> DType;
 
     class PerElementStiffnessDerivative;
+    class PerElementMassMatrixDerivative;
+    class PerElementLumpedMassMatrixDerivative;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings)
         : m_model(model), m_stiffnessCached(false), m_massCached(false)
@@ -91,10 +94,22 @@ public:
     }
 
     void modalAnalysis() {
-        std::vector<size_t> i, j;
-        std::vector<Real> v;
-        size_t n;
-        m_assembleStiffnessMatrix(n, i, j, v);
+        std::vector<size_t> K_i, K_j;
+        std::vector<Real> K_v;
+        size_t K_n;
+        m_assembleStiffnessMatrix(K_n, K_i, K_j, K_v);
+
+        std::vector<size_t> M_i, M_j;
+        std::vector<Real> M_v;
+        size_t M_n;
+        m_assembleMassMatrix(M_n, M_i, M_j, M_v);
+
+        MatlabShell mshell;
+        mshell.SetEngineSparseRealMatrix("K", K_i.size(), &K_i[0], &K_j[0],
+                                         &K_v[0], K_n, K_n);
+        mshell.SetEngineSparseRealMatrix("M", M_i.size(), &M_i[0], &M_j[0],
+                                         &M_v[0], M_n, M_n);
+        mshell.run();
     }
 
 
@@ -108,6 +123,8 @@ private:
 
     typedef std::vector<size_t> IndexVec;
     void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
+                                   std::vector<Real> &v);
+    void m_assembleMassMatrix(size_t &n, IndexVec &i, IndexVec &j,
                                    std::vector<Real> &v);
 };
 

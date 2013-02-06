@@ -1,6 +1,14 @@
 #include <Eigen/Dense>
-#include "MatlabInterface/MatlabShell.h"
 #include <iostream>
+
+// Element node ordering:
+// 3         2
+//  +-------+
+//  |       |
+//  |       |
+//  |       |
+//  +-------+
+// 0         1
 
 template<typename Model>
 class MeshlessFEM<Model>::PerElementStiffnessDerivative
@@ -9,14 +17,9 @@ public:
     typedef Eigen::Matrix<Real, 8, 8> value_type;
     // D: (d00, d01, d10, d11, d22)
     PerElementStiffnessDerivative(const DType &d, const Model &model)
-        : m_model(model), m_d(d)
-    {
-        clear();
-    }
+        : m_model(model), m_d(d) { clear(); }
 
-    void clear() {
-        result = value_type::Zero();
-    }
+    void clear() { result = value_type::Zero(); }
 
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
@@ -102,6 +105,72 @@ private:
     const DType &m_d;
 };
 
+// template<typename Model>
+// class MeshlessFEM<Model>::PerElementMassMatrixDerivative
+// {
+// public:
+//     typedef Eigen::Matrix<Real, 4, 4> value_type;
+//     PerElementMassMatrixDerivative(const Model &model)
+//         : m_model(model)
+//     {
+//         clear();
+//     }
+// 
+//     void clear() { result = value_type::Zero(); }
+//     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
+//     {
+//         if (!m_model.isInside(sample))
+//             return;
+//     }
+// 
+// public:
+//     value_type result;
+// private:
+//     const Model &m_model;
+// };
+// 
+template<typename Model>
+class MeshlessFEM<Model>::PerElementLumpedMassMatrixDerivative
+{
+public:
+    typedef Eigen::Matrix<Real, 4, 1> value_type;
+    PerElementLumpedMassMatrixDerivative(const Model &model)
+        : m_model(model)
+    {
+        clear();
+    }
+
+    void clear() { result = value_type::Zero(); }
+    void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
+    {
+        if (!m_model.isInside(sample))
+            return;
+        Real x = ref_sample[0], y = ref_sample[0];
+
+        // Element node ordering:
+        // 3         2
+        //  +-------+
+        //  | 3 | 2 |
+        //  |---+---|
+        //  | 0 | 1 |
+        //  +-------+
+        // 0         1
+        if ((x <= .5) && (y <= .5))
+            result[0] += weight;
+        else if ((x  > .5) && (y <= .5))
+            result[1] += weight;
+        else if ((x  > .5) && (y  > .5))
+            result[2] += weight;
+        else if ((x <= .5) && (y  > .5))
+            result[3] += weight;
+    }
+
+public:
+    value_type result;
+private:
+    const Model &m_model;
+};
+
 template<typename Model>
 void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
         IndexVec &mat_j, std::vector<Real> &mat_v)
@@ -141,8 +210,31 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
             }
         }
     }
-    MatlabShell mshell;
-    mshell.SetEngineSparseRealMatrix("K", mat_i.size(), &mat_i[0], &mat_j[0],
-                                     &mat_v[0], n, n);
-    mshell.run();
+}
+
+template<typename Model>
+void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
+        IndexVec &mat_j, std::vector<Real> &mat_v)
+{
+    // Simple (i, j v) mass matrix generation
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    const Quadrature2D &q = quadrature();
+    n = 2 * elemGrid.numNodes();
+    PerElementLumpedMassMatrixDerivative lmass(model());
+    typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
+
+    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+        q.integrate(lmass, elemGrid.elementBoundingBox(e));
+        elemGrid.elementCorners(e, cornerIndices);
+        for (size_t i = 0; i < 4; ++i) {
+            size_t vidx = cornerIndices[i];
+            mat_i.push_back(2 * vidx);
+            mat_j.push_back(2 * vidx);
+            mat_v.push_back(lmass.result(i));
+
+            mat_i.push_back(2 * vidx + 1);
+            mat_j.push_back(2 * vidx + 1);
+            mat_v.push_back(lmass.result(i));
+        }
+    }
 }
