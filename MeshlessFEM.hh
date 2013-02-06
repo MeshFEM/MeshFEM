@@ -16,15 +16,33 @@
 
 #include "GlobalTypes.hh"
 #include "ElementGrid.hh"
+#include "AnalysisSettings.hh"
 #include <cassert>
+#include <vector>
 
 template<typename Model>
 class MeshlessFEM {
 public:
-    MeshlessFEM(Model &model) : m_model(model)
+    typedef typename Model::Real Real;
+    typedef Eigen::Matrix<Real, 5, 1> DType;
+
+    class PerElementStiffnessDerivative;
+
+    MeshlessFEM(Model &model, const AnalysisSettings &settings)
+        : m_model(model), m_stiffnessCached(false), m_massCached(false)
     {
-        m_quadrature = new Quadrature2D();
-        m_elementGrid = new ElementGrid2D<Model>(20, 20, *m_quadrature, model);
+        m_quadrature = new Quadrature2D(settings.quadraturePoints);
+        m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
+        m_elementGrid = new ElementGrid2D<Model>(settings.Nx, settings.Ny,
+                                                *m_quadrature, model);
+        Real E  = settings.young_modulus;
+        Real nu = settings.poisson_ratio;
+        Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
+        Real mu = E / (2.0 + 2.0 * nu);
+        m_density = settings.density;
+
+        // Isotropic
+        m_d << lambda + 2 * mu, lambda, lambda, lambda + 2 * mu, 2 * mu;
     }
 
     bool configureElements(size_t Nx, size_t Ny,
@@ -47,12 +65,13 @@ public:
         }
         else if (changed) {
             // Even if the grid size doesn't change, a quadrature rule change
-            // must
+            // must trigger a grid update.
             elementGrid().update();
         }
 
         if (changed) {
-            // TODO: clear cached matrix
+            m_stiffnessCached = false;
+            m_massCached = false;
         }
         return changed;
     }
@@ -71,11 +90,28 @@ public:
         return *m_quadrature;
     }
 
+    void modalAnalysis() {
+        std::vector<size_t> i, j;
+        std::vector<Real> v;
+        size_t n;
+        m_assembleStiffnessMatrix(n, i, j, v);
+    }
+
+
 private:
     Quadrature2D *m_quadrature;
     Model &m_model;
     ElementGrid2D<Model> *m_elementGrid;
+    bool m_stiffnessCached, m_massCached;
+    DType m_d;
+    Real m_density;
+
+    typedef std::vector<size_t> IndexVec;
+    void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
+                                   std::vector<Real> &v);
 };
+
+#include "MeshlessFEM.inl"
 
 #endif // MESHLESS_FEM_HH
 

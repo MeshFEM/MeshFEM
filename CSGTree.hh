@@ -28,6 +28,7 @@ public:
     class CSGRectangleNode;
     class CSGEllipseNode;
     typedef BBox<Vector> BBox_t;
+    typedef typename Vector::Scalar Real;
 
     CSGTree()
     {

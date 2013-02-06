@@ -82,14 +82,18 @@ public:
         return m_vertexPosition(m_vertexForNode[i]);
     }
 
-    AdjacencyVec elementCorners(size_t ei) const {
+    void elementCorners(size_t ei, AdjacencyVec &corners) const {
         assert(ei < m_elementForCell.size());
-        AdjacencyVec result;
-        m_cellVertices(m_cellForElement[ei], result);
-        for (size_t i = 0; i < (size_t) result.rows(); ++i) {
-            result[i] = m_nodeForVertex[result[i]];
-            assert((result[i] >= 0) && ((size_t) result[i] < numNodes()));
+        m_cellVertices(m_cellForElement[ei], corners);
+        for (size_t i = 0; i < (size_t) corners.rows(); ++i) {
+            corners[i] = m_nodeForVertex[corners[i]];
+            assert((corners[i] >= 0) && ((size_t) corners[i] < numNodes()));
         }
+    }
+
+    AdjacencyVec elementCorners(size_t ei) const {
+        AdjacencyVec result;
+        elementCorners(ei, result);
         return result;
     }
 

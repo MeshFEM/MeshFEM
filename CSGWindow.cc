@@ -18,7 +18,7 @@
 #include "AnalysisSettings.hh"
 #include "AnalysisForm.hh"
 
-CSGWindow::CSGWindow(MeshlessFEM_t &fem)
+CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
 {
     FEMView2D *femView = new FEMView2D(fem);
     femView->setMinimumSize(100, 100);
@@ -36,8 +36,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem)
     layout->addWidget(sideBarTab);
     sideBar->setLayout(layout);
 
-    AnalysisSettings settings;
-    AnalysisForm *analysisForm = new AnalysisForm(settings);
+    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
+                                         femView, fem);
+
+    AnalysisForm *analysisForm = new AnalysisForm(settings, controller);
     sideBarTab->addTab(analysisForm, "Analyze");
     splitter->addWidget(sideBar);
     splitter->addWidget(femView);
@@ -47,9 +49,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem)
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
-    // Set up controller/connections
-    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
-                                         femView, fem);
+    // Set up connections
     QObject::connect(treeView->selectionModel(),
                      SIGNAL(selectionChanged(const QItemSelection &,
                                              const QItemSelection &)),

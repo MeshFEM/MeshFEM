@@ -6,6 +6,9 @@ TEMPLATE = app
 TARGET = 
 DEPENDPATH += .
 INCLUDEPATH += . /opt/local/include/eigen3
+INCLUDEPATH += /Applications/MATLAB_R2010b.app/extern/include/
+LIBS += -L/Applications/MATLAB_R2010b.app/bin/maci64/ -leng -lmx -lmat
+LIBS += -L/opt/local/lib -lreadline
 
 QT += opengl
 CONFIG += release
@@ -21,7 +24,10 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            Geometry.hh \
            AnalysisSettings.hh \
            AnalysisForm.hh QuadraturePointsSpinBox.hh \
-           Quadrature.hh MeshlessFEM.hh ElementGrid.hh
+           Quadrature.hh MeshlessFEM.hh ElementGrid.hh \
+           MatlabInterface/MatlabInterface.h \
+           MatlabInterface/MatlabShell.h
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
-           CSGWindowController.cc AnalysisForm.cc Quadrature.cc
+           CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
+           MatlabInterface/MatlabInterface.cpp

@@ -33,6 +33,8 @@ public slots:
     void changedSidebarTab(int newTab);
     void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
                             bool gaussQuadrature);
+    void runModalAnalysis();
+
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =

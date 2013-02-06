@@ -80,3 +80,8 @@ void CSGWindowController::elementGridChanged(int Nx, int Ny,
     if (m_fem.configureElements(Nx, Ny, numQuadraturePoints, gaussQuadrature))
         m_femView->update();
 }
+
+void CSGWindowController::runModalAnalysis()
+{
+    m_fem.modalAnalysis();
+}

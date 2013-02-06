@@ -17,7 +17,8 @@ struct AnalysisSettings {
     AnalysisSettings()
         : Nx(10), Ny(10), quadrature(UNIFORM_QUADRATURE), quadraturePoints(9),
           lumpedMass(false), laplacianModes(false), numModes(10),
-          weakRegionsPerMode(5), weaknessCutoff(.95) { }
+          weakRegionsPerMode(5), weaknessCutoff(.95),
+          young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     // Element settings
     int Nx, Ny;
@@ -32,6 +33,9 @@ struct AnalysisSettings {
     // Optimization Settings
     int weakRegionsPerMode;
     double weaknessCutoff;
+
+    // Material Settings
+    double young_modulus, poisson_ratio, density;
 };
 
 #endif // ANALYSIS_SETTINGS_HH

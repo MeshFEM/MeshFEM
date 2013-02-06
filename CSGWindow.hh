@@ -21,7 +21,7 @@ class CSGWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    CSGWindow(MeshlessFEM_t &fem);
+    CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings);
     ~CSGWindow() { delete controller; }
 private:
     CSGWindowController *controller;

@@ -11,8 +11,10 @@
 #include "AnalysisForm.hh"
 #include <QtGui>
 #include "QuadraturePointsSpinBox.hh"
+#include "CSGWindowController.hh"
 
-AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
+AnalysisForm::AnalysisForm(AnalysisSettings &settings,
+                           CSGWindowController *controller, QWidget *parent)
     : QWidget(parent), m_settings(settings)
 {
     // Construct all widgets
@@ -25,6 +27,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
     g_lumpedMassCheck = new QCheckBox();
     g_gaussQuadratureCheck = new QCheckBox();
     g_quadraturePointsStepper = new QuadraturePointsSpinBox();
+    g_modalAnalysisButton = new QPushButton("Modal Analysis");
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
@@ -33,7 +36,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
 
     // Elements and Quadrature
     QFormLayout *eqForm = new QFormLayout();
-    
     eqForm->addRow("Nx", g_nxStepper);
     eqForm->addRow("Ny", g_nyStepper);
     eqForm->addRow("Lumped Mass", g_lumpedMassCheck);
@@ -41,6 +43,12 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     elementsQuadratureGroup->setLayout(eqForm);
 
+    // Modal Analysis
+    QFormLayout *modalForm = new QFormLayout();
+    modalForm->addRow(g_modalAnalysisButton);
+    modalAnalysisGroup->setLayout(modalForm);
+
+    // Connections
     QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_nyStepper, SIGNAL(valueChanged(int)),
@@ -49,6 +57,9 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings, QWidget *parent)
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_gaussQuadratureCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
+    assert(controller);
+    QObject::connect(g_modalAnalysisButton, SIGNAL(clicked()),
+                     controller, SLOT(runModalAnalysis()));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();

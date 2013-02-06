@@ -67,7 +67,8 @@ void ElementGrid2D<Model>::update()
     m_nodeForVertex.assign(numVertices, -1);
     size_t numNodes = 0;
     for (size_t v = 0; v < numVertices; ++v) {
-        m_nodeForVertex[v] = numNodes++;
+        if (isNode[v])
+            m_nodeForVertex[v] = numNodes++;
     }
     m_vertexForNode.resize(numNodes);
     for (size_t v = 0; v < numVertices; ++v) {

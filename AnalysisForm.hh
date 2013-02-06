@@ -14,6 +14,7 @@
 #include <QWidget>
 #include "AnalysisSettings.hh"
 
+class CSGWindowController;
 class QSpinBox;
 class QDoubleSpinBox;
 class QuadraturePointsSpinBox;
@@ -24,7 +25,8 @@ class AnalysisForm : public QWidget
 {
     Q_OBJECT
 public:
-    AnalysisForm(AnalysisSettings &settings, QWidget *parent = NULL);
+    AnalysisForm(AnalysisSettings &settings,
+                 CSGWindowController *controller, QWidget *parent = NULL);
 
 private slots:
     void elementGridControlsChanged(int i);
@@ -40,5 +42,6 @@ private:
              *g_numWeakRegionsStepper;
     QCheckBox *g_lumpedMassCheck, *g_gaussQuadratureCheck;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
+    QPushButton *g_modalAnalysisButton;
 };
 #endif // ANALYSIS_FORM_HH

@@ -216,6 +216,8 @@ void FEMView2D::draw()
         }
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+        glEnable(GL_POINT_SMOOTH);
+        // Draw quadrature points
         glPointSize(2.0f);
         glColor3f(1.0, 1.0, 0);
         glBegin(GL_POINTS);
@@ -228,6 +230,18 @@ void FEMView2D::draw()
                 getBufferCoords(qpoints[p][0], qpoints[p][1], r, c);
                 glVertex2f(c, r);
             }
+        }
+        glEnd();
+
+        // Draw nodes
+        glPointSize(4.0f);
+        glColor3f(0.0, 0.0, 0);
+        glBegin(GL_POINTS);
+        for (unsigned int i = 0; i < grid.numNodes(); ++i) {
+            Vector p = grid.nodePosition(i);
+            int r, c;
+            getBufferCoords(p[0], p[1], r, c);
+            glVertex2f(c, r);
         }
         glEnd();
     }

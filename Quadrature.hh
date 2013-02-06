@@ -54,25 +54,16 @@ public:
 
     std::vector<Vector2D> quadraturePoints(const BBox<Vector2D> &b) const;
 
-    template<typename Func2D>
-    typename Func2D::value_type integrate(const Func2D &f,
-                                          BBox<Vector2D> &b) const {
-        typename Func2D::value_type result;
-        
+    template<typename Func>
+    void integrate(Func &f, const BBox<Vector2D> &b) const {
         int n = numPoints();
+        Real volume = b.volume();
         for (int i = 0; i < n; ++i) {
             const Vector2D &p = m_referenceQuadraturePoints[i];
             Real weight = m_referenceQuadratureWeights[i];
             Vector2D sample = b.interpolatePoint(p);
-            if (i == 0)
-                result  = f(sample[0], sample[0]) * weight;
-            else
-                result += f(sample[0], sample[0]) * weight;
+            f.accumulate(sample, p, weight * volume);
         }
-
-        result *= b.volume();
-
-        return result;
     }
 
 private:
