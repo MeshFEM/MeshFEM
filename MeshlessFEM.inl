@@ -134,8 +134,8 @@ class MeshlessFEM<Model>::PerElementLumpedMassMatrixDerivative
 {
 public:
     typedef Eigen::Matrix<Real, 4, 1> value_type;
-    PerElementLumpedMassMatrixDerivative(const Model &model)
-        : m_model(model)
+    PerElementLumpedMassMatrixDerivative(const Model &model, Real density)
+        : m_model(model), m_density(density)
     {
         clear();
     }
@@ -145,30 +145,14 @@ public:
     {
         if (!m_model.isInside(sample))
             return;
-        Real x = ref_sample[0], y = ref_sample[0];
-
-        // Element node ordering:
-        // 3         2
-        //  +-------+
-        //  | 3 | 2 |
-        //  |---+---|
-        //  | 0 | 1 |
-        //  +-------+
-        // 0         1
-        if ((x <= .5) && (y <= .5))
-            result[0] += weight;
-        else if ((x  > .5) && (y <= .5))
-            result[1] += weight;
-        else if ((x  > .5) && (y  > .5))
-            result[2] += weight;
-        else if ((x <= .5) && (y  > .5))
-            result[3] += weight;
+        result.array() += .25 * weight * m_density;
     }
 
 public:
     value_type result;
 private:
     const Model &m_model;
+    Real m_density;
 };
 
 template<typename Model>
@@ -220,7 +204,7 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
-    PerElementLumpedMassMatrixDerivative lmass(model());
+    PerElementLumpedMassMatrixDerivative lmass(model(), m_density);
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {

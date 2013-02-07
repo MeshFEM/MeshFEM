@@ -32,7 +32,8 @@ public:
     class PerElementLumpedMassMatrixDerivative;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings)
-        : m_model(model), m_stiffnessCached(false), m_massCached(false)
+        : m_model(model), m_stiffnessCached(false), m_massCached(false),
+          m_numModes(10)
     {
         m_quadrature = new Quadrature2D(settings.quadraturePoints);
         m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
@@ -109,6 +110,16 @@ public:
                                          &K_v[0], K_n, K_n);
         mshell.SetEngineSparseRealMatrix("M", M_i.size(), &M_i[0], &M_j[0],
                                          &M_v[0], M_n, M_n);
+        char modeCommand[64];
+        snprintf(modeCommand, 64, "[V, D] = eigs(K, M, %i, 'SM');", m_numModes);
+        mshell.Eval(modeCommand);
+        mshell.Eval("lambda = diag(D)");
+
+        Real *modeData = new Real[K_n * m_numModes];
+        // Column major
+        mshell.GetEngineRealMatrix("V", K_n, m_numModes, modeData, true);
+        delete[] modeData;
+        
         mshell.run();
     }
 
@@ -120,6 +131,7 @@ private:
     bool m_stiffnessCached, m_massCached;
     DType m_d;
     Real m_density;
+    int m_numModes;
 
     typedef std::vector<size_t> IndexVec;
     void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
