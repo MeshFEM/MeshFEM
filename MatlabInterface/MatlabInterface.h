@@ -6,6 +6,8 @@
 #include <map>
 #include <vector>
 
+#include "engine.h"  // Matlab engine header
+
 // from Matlab
 struct engine;
 struct mxArray_tag;
@@ -32,6 +34,11 @@ public:
     /*! Tell MATLAB to stop writting command output to the output buffer
     *///////////////////////////////////////////////////////////////////////////
     void AttachOutputBuffer();
+
+    virtual bool putVar(const char *name, const mxArray *pm) {
+        int ret = engPutVariable(m_ep, name, pm);
+        return (ret == 0);
+    }
 
     // Creates a matrix in matlab.
     template <typename T>
@@ -73,7 +80,7 @@ public:
     int RunScript(const char *fname);
 
     // Eval in-place string
-    int Eval(const char *matlab_code);
+    virtual int Eval(const char *matlab_code);
 
 private:
     // Note that the arrays created by these matrices *must be destroyed*

@@ -6,8 +6,6 @@
 
 #include "MatlabInterface.h"
 
-#include "engine.h"  // Matlab engine header
-
 #include <sys/stat.h>
 // from http://www.codeproject.com/KB/files/filesize.aspx
 static long FileSize(const char* fname)
@@ -237,7 +235,7 @@ MatlabInterface::SetEngineIndexMatrix(const char *name, unsigned int m, unsigned
 {
     mxArray *ary = CreateIndexMatrix(m, n, vals, colmaj);
     assert(ary);
-    engPutVariable(m_ep, name, ary);
+    putVar(name, ary);
     mxDestroyArray(ary);
 }
 
@@ -247,7 +245,7 @@ MatlabInterface::SetEngineRealMatrix(const char *name, unsigned int m, unsigned 
 {
     mxArray *ary = CreateRealMatrix(m, n, vals, colmaj);
     assert(ary);
-    engPutVariable(m_ep, name, ary);
+    putVar(name, ary);
     mxDestroyArray(ary);
 }
 
@@ -257,7 +255,7 @@ MatlabInterface::SetEngineComplexMatrix(const char *name, unsigned int m, unsign
 {
     mxArray *ary = CreateComplexMatrix(m, n, vals, colmaj);
     assert(ary);
-    engPutVariable(m_ep, name, ary);
+    putVar(name, ary);
     mxDestroyArray(ary);
 }
 
@@ -293,7 +291,7 @@ MatlabInterface::SetEngineEncodedSparseRealMatrix(const char *name, unsigned int
 {
     mxArray *ary = CreateEncodedSparseRealMatrix(n, rowind, colind, vals);
     assert(ary);
-    engPutVariable(m_ep, name, ary);
+    putVar(name, ary);
     mxDestroyArray(ary);
 }
 
@@ -320,7 +318,7 @@ MatlabInterface::SetEngineEncodedSparseComplexMatrix(const char *name, unsigned 
 {
     mxArray *ary = CreateEncodedSparseComplexMatrix(n, rowind, colind, vals);
     assert(ary);
-    engPutVariable(m_ep, name, ary);
+    putVar(name, ary);
     mxDestroyArray(ary);
 }
 

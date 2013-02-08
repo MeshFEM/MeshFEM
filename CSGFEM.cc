@@ -11,6 +11,8 @@
 #include <QApplication>
 #include "CSGWindow.hh"
 #include "GlobalTypes.hh"
+#include "QMatlabInterface.hh"
+#include "Solver.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
@@ -23,11 +25,19 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     CSGTree_t csgTree;
     AnalysisSettings settings;
-    MeshlessFEM_t fem(csgTree, settings);
+
+    QMatlabInterface *matlabInterface = new QMatlabInterface();
+    MatlabSolver<CSGTree_t::Real> *solver =
+        new MatlabSolver<CSGTree_t::Real>(matlabInterface);
+
+    MeshlessFEM_t fem(csgTree, settings, solver);
+
     CSGWindow window(fem, settings);
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
+
     window.show();
+    matlabInterface->show();
 
     return app.exec();
 }

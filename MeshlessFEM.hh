@@ -17,7 +17,7 @@
 #include "GlobalTypes.hh"
 #include "ElementGrid.hh"
 #include "AnalysisSettings.hh"
-#include "MatlabInterface/MatlabShell.h"
+#include "Solver.hh"
 #include <cassert>
 #include <vector>
 
@@ -31,9 +31,10 @@ public:
     class PerElementMassMatrixDerivative;
     class PerElementLumpedMassMatrixDerivative;
 
-    MeshlessFEM(Model &model, const AnalysisSettings &settings)
+    MeshlessFEM(Model &model, const AnalysisSettings &settings,
+                Solver<Real> *solver)
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
-          m_numModes(10)
+          m_numModes(10), m_solver(solver)
     {
         m_quadrature = new Quadrature2D(settings.quadraturePoints);
         m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
@@ -105,22 +106,9 @@ public:
         size_t M_n;
         m_assembleMassMatrix(M_n, M_i, M_j, M_v);
 
-        MatlabShell mshell;
-        mshell.SetEngineSparseRealMatrix("K", K_i.size(), &K_i[0], &K_j[0],
-                                         &K_v[0], K_n, K_n);
-        mshell.SetEngineSparseRealMatrix("M", M_i.size(), &M_i[0], &M_j[0],
-                                         &M_v[0], M_n, M_n);
-        char modeCommand[64];
-        snprintf(modeCommand, 64, "[V, D] = eigs(K, M, %i, 'SM');", m_numModes);
-        mshell.Eval(modeCommand);
-        mshell.Eval("lambda = diag(D)");
-
-        Real *modeData = new Real[K_n * m_numModes];
-        // Column major
-        mshell.GetEngineRealMatrix("V", K_n, m_numModes, modeData, true);
-        delete[] modeData;
-        
-        mshell.run();
+        std::vector<typename Solver<Real>::EigenVector> modes;
+        m_solver->GeneralizedEigenvalueProblem(m_numModes, K_n, K_i, K_j, K_v,
+                                               M_n, M_i, M_j, M_v, modes);
     }
 
 
@@ -132,6 +120,7 @@ private:
     DType m_d;
     Real m_density;
     int m_numModes;
+    Solver<Real> *m_solver;
 
     typedef std::vector<size_t> IndexVec;
     void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
