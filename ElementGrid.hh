@@ -33,6 +33,7 @@
 #define ELEMENT_GRID_HH
 
 #include "GlobalTypes.hh"
+#include "Quadrature.hh"
 #include <Eigen/Dense>
 #include <vector>
 

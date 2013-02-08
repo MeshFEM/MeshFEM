@@ -48,13 +48,13 @@ protected:
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
 
-    void getWorldCoords(int r, int c, float &x, float &y) const {
+    void getWorldCoords(int r, int c, Scalar &x, Scalar &y) const {
         Vector frameDim = m_frameMax - m_frameMin;
         x = m_frameMin[0] + frameDim[0] * ((c + .5) / m_width);
         y = m_frameMin[1] + frameDim[1] * ((r + .5) / m_height);
     }
 
-    void getBufferCoords(float x, float y, int &r, int &c) const {
+    void getBufferCoords(Scalar x, Scalar y, int &r, int &c) const {
         Vector frameDim = m_frameMax - m_frameMin;
         r = floor((y - m_frameMin[1]) * (m_height / frameDim[1]));
         c = floor((x - m_frameMin[0]) * (m_width / frameDim[0]));
@@ -82,6 +82,7 @@ private:
 
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
+    std::vector<Vector> selectedDeformation;
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;

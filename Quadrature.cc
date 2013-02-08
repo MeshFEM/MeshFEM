@@ -41,7 +41,7 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
         int n = sqrtf(numPoints);
 
         // Uniform quadrature sample weights
-        float spaces = n - 1;
+        Real spaces = n - 1;
         Real interiorWeight = 1.0 / (spaces * spaces);
 
         for (int i = 0; i < n; ++i) {

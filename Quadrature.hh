@@ -16,10 +16,10 @@
 #include <algorithm>
 
 #include "Geometry.hh"
+#include "GlobalTypes.hh"
 
 #include <Eigen/Dense>
-typedef Eigen::Vector2f Vector2D;
-typedef Eigen::Vector3f Vector3D;
+typedef Vector Vector2D;
 
 typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
 

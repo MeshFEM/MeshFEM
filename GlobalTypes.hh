@@ -5,15 +5,15 @@
 #include "Geometry.hh"
 
 #include <Eigen/Dense>
-typedef Eigen::Vector2f Vector;
+typedef Eigen::Vector2d                          Vector;
+typedef Eigen::Vector2d::Scalar                  Scalar;
+typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> DVector;
 typedef CSGTree<Vector> CSGTree_t;
 typedef CSGTree_t::CSGNode CSGNode;
 typedef BBox<Vector> BBox_t;
 
 #include <list>
 typedef std::list<CSGNode *> NodeList;
-
-#include "Quadrature.hh"
 
 template<typename Model>
 class MeshlessFEM;

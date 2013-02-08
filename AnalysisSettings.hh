@@ -12,6 +12,7 @@
 #define ANALYSIS_SETTINGS_HH
 
 #include "GlobalTypes.hh"
+#include "Quadrature.hh"
 
 struct AnalysisSettings {
     AnalysisSettings()

@@ -17,7 +17,7 @@
 #include <QLineEdit>
 #include <cmath>
 #include <algorithm>
-#include "GlobalTypes.hh"
+#include "Quadrature.hh"
 
 class QuadraturePointsSpinBox : public QSpinBox
 {
