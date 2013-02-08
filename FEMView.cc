@@ -186,6 +186,45 @@ void FEMView2D::m_drawSelectedObjects()
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
+void FEMView2D::m_drawWorldVertex(const Vector &v)
+{
+    int r, c;
+    getBufferCoords(v[0], v[1], r, c);
+    glVertex2f(c, r);
+}
+
+void FEMView2D::drawGrid(DrawOp op, const std::vector<Vector> &deformation)
+{
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+    ElementGrid2D_t::AdjacencyVec corners;
+
+    glColor3f(0, 0, 0);
+    if ((op == DRAW_CELLS) || (op == DRAW_EDGES)) {
+        if (op == DRAW_EDGES)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glBegin(GL_QUADS);
+        for (size_t i = 0; i < grid.numElements(); ++i) {
+            if (op == DRAW_CELLS) {
+                glColor4f(.8f, .8f, .8f, .5f);
+                if (!grid.elementIsFull(i)) 
+                    glColor4f(.8f, 0.0f, 0.0f, .5f);
+            }
+            grid.elementCorners(i, corners);
+            for (size_t c = 0; c < (size_t) corners.rows(); ++c)
+                m_drawWorldVertex(grid.nodePosition(corners[c]));
+        }
+        glEnd();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    else if (op == DRAW_NODES) {
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        for (unsigned int i = 0; i < grid.numNodes(); ++i)
+            m_drawWorldVertex(grid.nodePosition(i));
+        glEnd();
+    }
+}
+
 void FEMView2D::draw()
 {
     glColor3f(1, 1, 1);
@@ -195,53 +234,33 @@ void FEMView2D::draw()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glEnable(GL_POINT_SMOOTH);
 
     m_drawObject();
     if (m_guiState == MODEL_STATE) {
         m_drawSelectedObjects();
     }
-    if (m_guiState == ELEMENTS_STATE) {
+    if (m_guiState == ELEMENTS_STATE || m_guiState == DISPLACEMENTS_STATE) {
         glDisable(GL_TEXTURE_2D);
-        ElementGrid2D_t &grid = m_fem.elementGrid();
-        for (size_t i = 0; i < grid.numElements(); ++i) {
-            glColor4f(.8f, .8f, .8f, .5f);
-            if (!grid.elementIsFull(i)) 
-                glColor4f(.8f, 0.0f, 0.0f, .5f);
-            m_drawWorldBox(grid.elementBoundingBox(i));
-        }
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glColor4f(0, 0, 0, 1);
-        for (size_t i = 0; i < grid.numElements(); ++i) {
-            m_drawWorldBox(grid.elementBoundingBox(i));
-        }
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        drawGrid(DRAW_CELLS);
+        drawGrid(DRAW_EDGES);
+        drawGrid(DRAW_NODES);
 
-        glEnable(GL_POINT_SMOOTH);
+    }
+    if (m_guiState == ELEMENTS_STATE) {
         // Draw quadrature points
         glPointSize(2.0f);
         glColor3f(1.0, 1.0, 0);
         glBegin(GL_POINTS);
+
+        ElementGrid2D_t &grid = m_fem.elementGrid();
         for (unsigned int i = 0; i < grid.numElements(); ++i) {
             BBox_t b = grid.elementBoundingBox(i);
             std::vector<Vector> qpoints =
                 m_fem.quadrature().quadraturePoints(b);
             for (unsigned int p = 0; p < qpoints.size(); ++p) {
-                int r, c;
-                getBufferCoords(qpoints[p][0], qpoints[p][1], r, c);
-                glVertex2f(c, r);
+                m_drawWorldVertex(qpoints[p]);
             }
-        }
-        glEnd();
-
-        // Draw nodes
-        glPointSize(4.0f);
-        glColor3f(0.0, 0.0, 0);
-        glBegin(GL_POINTS);
-        for (unsigned int i = 0; i < grid.numNodes(); ++i) {
-            Vector p = grid.nodePosition(i);
-            int r, c;
-            getBufferCoords(p[0], p[1], r, c);
-            glVertex2f(c, r);
         }
         glEnd();
     }

@@ -63,10 +63,14 @@ protected:
 private:
     template<typename Object>
     void drawObject(const Object *obj, const QColor &c) const;
+    typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
+    void drawGrid(DrawOp op, const std::vector<Vector> &deformation =
+                  std::vector<Vector>());
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
     void m_drawWorldBox(const BBox_t &b);
+    void m_drawWorldVertex(const Vector &v);
     void m_loadTexture(GLuint tex);
     void m_clearBuffer();
 

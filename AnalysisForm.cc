@@ -27,7 +27,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_lumpedMassCheck = new QCheckBox();
     g_gaussQuadratureCheck = new QCheckBox();
     g_quadraturePointsStepper = new QuadraturePointsSpinBox();
-    g_modalAnalysisButton = new QPushButton("Modal Analysis");
+    g_modalAnalysisButton = new QPushButton("&Modal Analysis");
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");

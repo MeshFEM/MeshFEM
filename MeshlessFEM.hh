@@ -20,6 +20,7 @@
 #include "Solver.hh"
 #include <cassert>
 #include <vector>
+#include <algorithm>
 
 template<typename Model>
 class MeshlessFEM {
@@ -107,7 +108,8 @@ public:
         m_assembleMassMatrix(M_n, M_i, M_j, M_v);
 
         std::vector<typename Solver<Real>::EigenVector> modes;
-        m_solver->GeneralizedEigenvalueProblem(m_numModes, K_n, K_i, K_j, K_v,
+        size_t numModes = std::min((size_t) m_numModes, K_n);
+        m_solver->GeneralizedEigenvalueProblem(numModes, K_n, K_i, K_j, K_v,
                                                M_n, M_i, M_j, M_v, modes);
     }
 
