@@ -13,6 +13,7 @@
 
 #include <vector>
 #include <Eigen/Dense>
+#include <iostream>
 
 template<typename Real>
 class Solver {
@@ -52,13 +53,18 @@ class MatlabSolver : public Solver<Real> {
             char modeCommand[64];
             snprintf(modeCommand, 64, "[V, D] = eigs(K, M, %i, 'SM');",
                      (int) numModes);
-            m_matlab->Eval(modeCommand);
-            m_matlab->Eval("lambda = diag(D)");
+            int ret = m_matlab->Eval(modeCommand);
+            bool success = (ret == 0);
+            if (success) {
+                m_matlab->Eval("lambda = diag(D);");
 
-            Real *modeData = new Real[Kn * numModes];
-            // Column major
-            m_matlab->GetEngineRealMatrix("V", Kn, numModes, modeData, true);
-            delete[] modeData;
+                Real *modeData = new Real[Kn * numModes];
+                // Column major
+                m_matlab->GetEngineRealMatrix("V", Kn, numModes, modeData, true);
+                delete[] modeData;
+            }
+
+            return success;
         }
 
         virtual ~MatlabSolver() { }

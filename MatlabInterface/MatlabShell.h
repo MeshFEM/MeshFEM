@@ -39,11 +39,7 @@ class MatlabShell : public MatlabInterface
         //  @param[in]  bufferSize  Size of output buffer (defaults to 4k)
         *///////////////////////////////////////////////////////////////////////
         MatlabShell(int bufferSize = 4 * 1024)
-            : m_bufferSize(bufferSize)
-        {
-            m_outputBuffer = new char[bufferSize];
-            AttachOutputBuffer(m_outputBuffer, bufferSize);
-        }
+            : MatlabInterface(bufferSize) { }
 
         ////////////////////////////////////////////////////////////////////////
         /*! Runs the interactive shell loop, presenting a prompt and passing
@@ -57,10 +53,11 @@ class MatlabShell : public MatlabInterface
                 if (cmd[0])    {
                     add_history(cmd);
                     bool shouldExit = extractExitCommand(cmd);
-                    Eval(cmd);
+                    std::string outputString, errorString;
+                    Eval(cmd, outputString, errorString);
 
-                    terminateOutput();
-                    printf("%s", skipPromptGarbage());
+                    printf("%s", errorString.c_str());
+                    printf("%s", skipPromptGarbage(outputString.c_str()));
 
                     if (shouldExit)
                         break;
@@ -70,33 +67,6 @@ class MatlabShell : public MatlabInterface
             }
 
             printf("\n");
-        }
-
-        ////////////////////////////////////////////////////////////////////////
-        /*! Skip past the ">> " or "EDU>> " that MATLAB sometimes puts at the
-        //  beginning of its output.
-        //  @return     offset string that skips the undesirable characters
-        *///////////////////////////////////////////////////////////////////////
-        char *skipPromptGarbage()
-        {
-            char *offsetString = m_outputBuffer;
-            if (strncmp(m_outputBuffer, ">> ", 3) == 0)
-                offsetString += 3;
-            else if (strncmp(m_outputBuffer, "EDU>> ", 6) == 0)
-                offsetString += 6;
-
-            return offsetString;
-        }
-
-        ////////////////////////////////////////////////////////////////////////
-        /*! Terminate the output nicely in case MATLAB "overflowed" the
-        //  output buffer.
-        *///////////////////////////////////////////////////////////////////////
-        void terminateOutput()
-        {
-            static const char overflowMessage[] = "...\n";
-            strcpy(&m_outputBuffer[m_bufferSize - sizeof(overflowMessage)]
-                    , overflowMessage);
         }
 
         ////////////////////////////////////////////////////////////////////////

@@ -3,8 +3,11 @@
 #include <fstream>
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include "MatlabInterface.h"
+
+using namespace std;
 
 #include <sys/stat.h>
 // from http://www.codeproject.com/KB/files/filesize.aspx
@@ -17,7 +20,8 @@ static long FileSize(const char* fname)
         return 0;
 }
 
-MatlabInterface::MatlabInterface()
+MatlabInterface::MatlabInterface(int bufferSize)
+    : m_outputBufferSize(bufferSize)
 {
     // Start the MATLAB engine locally by executing the string
     // "matlab"
@@ -40,34 +44,29 @@ MatlabInterface::MatlabInterface()
     else
         std::cout << "engSetVisible failed" << std::endl;
 #endif
+
+    m_outputBuffer = new char[m_outputBufferSize];
+    engOutputBuffer(m_ep, m_outputBuffer, m_outputBufferSize);
 }
-
-////////////////////////////////////////////////////////////////////////////////
-/*! Tell MATLAB to write command output to the passed character buffer.
-//  @param[in]  buffer  Pointer to a pre-allocated character buffer
-//  @param[in]  len     Length of the character buffer    
-*///////////////////////////////////////////////////////////////////////////////
-void MatlabInterface::AttachOutputBuffer(char *buffer, size_t len)
-{
-    engOutputBuffer(m_ep, buffer, len);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/*! Tell MATLAB to stop writting command output to the output buffer
-*///////////////////////////////////////////////////////////////////////////////
-void MatlabInterface::AttachOutputBuffer()
-{
-    engOutputBuffer(m_ep, NULL, 0);
-}
-
-
 
 MatlabInterface::~MatlabInterface()
 {
+    engOutputBuffer(m_ep, NULL, 0);
+    delete[] m_outputBuffer;
     engClose(m_ep);
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Terminate the output nicely in case MATLAB overflowed the
+//  output buffer.
+*///////////////////////////////////////////////////////////////////////////////
+void MatlabInterface::terminateOutput()
+{
+    static const char overflowMessage[] = "...\n";
+    strcpy(&m_outputBuffer[m_outputBufferSize - sizeof(overflowMessage)],
+            overflowMessage);
+}
 
 // This also shifts all the values by 1 to account for the difference
 // between matlab and C/C++ indexing
@@ -401,9 +400,44 @@ MatlabInterface::RunScript(const char *fname)
 int
 MatlabInterface::Eval(const char *matlab_code)
 {
+    string error_str;
+    string output_str;
+    return Eval(matlab_code, output_str, error_str);
+}
+
+// Evaluate a single line, retrieving an error string if an error is thrown.
+// Returns non-zero on error.
+int
+MatlabInterface::Eval(const char *matlab_code, string &output_str,
+                      string &error_str)
+{
+    int retval = engEvalString(m_ep,"lasterror('reset');");
+
     int res = engEvalString(m_ep, matlab_code);
-    if (res != 0)
+    terminateOutput();
+    output_str = string(skipPromptGarbage(m_outputBuffer));
+
+    if (res != 0) {
         std::cerr << "ERROR: Error running matlab command \"" << matlab_code << "\"\n";
+    }
+    else {
+        retval = engEvalString(m_ep,"lastErr = lasterror;");
+        // get the struct
+        mxArray *err = engGetVariable(m_ep,"lastErr");
+        if (mxIsStruct(err)) {
+            // get the error message string field
+            mxArray *errStr = mxGetField(err,0,"message");
+            if ((errStr != NULL) && mxIsChar(errStr)) {
+                char str[512];
+                // get the string
+                retval = mxGetString(errStr, str, sizeof(str) / sizeof(str[0]));
+                // mxDestroyArray(errStr);
+                res = strlen(str);
+                error_str = string(str);
+            }
+        }
+        mxDestroyArray(err);
+    }
     return res;
 }
 

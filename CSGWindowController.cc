@@ -11,6 +11,7 @@
 #include "CSGWindowController.hh"
 #include <list>
 #include <iostream>
+#include <QMessageBox>
 
 struct NodeAccumulator {
     typedef NodeList::iterator iterator;
@@ -83,5 +84,13 @@ void CSGWindowController::elementGridChanged(int Nx, int Ny,
 
 void CSGWindowController::runModalAnalysis()
 {
-    m_fem.modalAnalysis();
+    bool success = m_fem.modalAnalysis();
+    if (!success) {
+        QMessageBox mbox(QMessageBox::Critical,
+                "Modal analysis Failed",
+                "Error: Modal analysis failed.",
+                QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+    }
 }

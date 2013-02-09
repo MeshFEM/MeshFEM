@@ -5,6 +5,7 @@
 #include <cassert>
 #include <map>
 #include <vector>
+#include <string>
 
 #include "engine.h"  // Matlab engine header
 
@@ -20,24 +21,34 @@ class MatlabInterface
 public:
     typedef std::complex<double> Complex;
 
-    MatlabInterface();
+    MatlabInterface(int bufferSize = 4 * 1024);
     ~MatlabInterface();
-
-    ////////////////////////////////////////////////////////////////////////////
-    /*! Tell MATLAB to write command output to the passed character buffer.
-    //  @param[in]  buffer  Pointer to a pre-allocated character buffer
-    //  @param[in]  len     Length of the character buffer    
-    *///////////////////////////////////////////////////////////////////////////
-    void AttachOutputBuffer(char *buffer, size_t len);
-
-    ////////////////////////////////////////////////////////////////////////////
-    /*! Tell MATLAB to stop writting command output to the output buffer
-    *///////////////////////////////////////////////////////////////////////////
-    void AttachOutputBuffer();
 
     virtual bool putVar(const char *name, const mxArray *pm) {
         int ret = engPutVariable(m_ep, name, pm);
         return (ret == 0);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Terminate the output nicely in case MATLAB "overflowed" the
+    //  output buffer.
+    *///////////////////////////////////////////////////////////////////////////
+    void terminateOutput();
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Skip past the ">> " or "EDU>> " that MATLAB sometimes puts at the
+    //  beginning of its output.
+    //  @return     offset string that skips the undesirable characters
+    *///////////////////////////////////////////////////////////////////////////
+    const char *skipPromptGarbage(const char *str)
+    {
+        const char *offsetString = str;
+        if (strncmp(str, ">> ", 3) == 0)
+            offsetString += 3;
+        else if (strncmp(str, "EDU>> ", 6) == 0)
+            offsetString += 6;
+
+        return offsetString;
     }
 
     // Creates a matrix in matlab.
@@ -81,6 +92,8 @@ public:
 
     // Eval in-place string
     virtual int Eval(const char *matlab_code);
+    virtual int Eval(const char *matlab_code, std::string &output_str,
+                     std::string &error_str);
 
 private:
     // Note that the arrays created by these matrices *must be destroyed*
@@ -112,6 +125,8 @@ private:
 
 private:
     Engine *m_ep;
+    char *m_outputBuffer;
+    size_t m_outputBufferSize;
 };
 
 #endif /* MATLAB_INTERFACE_H */

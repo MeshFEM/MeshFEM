@@ -17,11 +17,6 @@
 QMatlabInterface::QMatlabInterface(QWidget *parent)
     : QWidget(parent), MatlabInterface()
 {
-    // 4K buffer
-    m_outputBufferSize = 4 * 1024;
-    m_outputBuffer = new char[m_outputBufferSize];
-    AttachOutputBuffer(m_outputBuffer, m_outputBufferSize);
-
     g_commandLine = new QCommandLine();
     g_outputView = new QTextEdit();
     g_outputView->setReadOnly(true);
@@ -43,13 +38,16 @@ QMatlabInterface::QMatlabInterface(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     QObject::connect(g_commandLine, SIGNAL(commandEntered(QString)),
                      this, SLOT(commandEntered(QString)));
+    QObject::connect(g_commandLine, SIGNAL(clearOutput()),
+                     g_outputView, SLOT(clear()));
 }
 
-void QMatlabInterface::m_terminateOutput()
+void QMatlabInterface::appendText(const char *text)
 {
-    static const char overflowMessage[] = "...\n";
-    strcpy(&m_outputBuffer[m_outputBufferSize - sizeof(overflowMessage)],
-            overflowMessage);
+    QTextCursor cursor = g_outputView->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    cursor.insertText(text);
+    g_outputView->setTextCursor(cursor);
 }
 
 void QMatlabInterface::appendNotification(const char *note, bool error)
@@ -77,24 +75,10 @@ void QMatlabInterface::commandEntered(QString cmd)
     }
 
     Eval(cmd.toAscii());
-    m_terminateOutput();
-
-    // Skip past the ">>"
-    char *offsetString = m_outputBuffer;
-    if (strncmp(m_outputBuffer, ">> ", 3) == 0)
-        offsetString += 3;
-    else if (strncmp(m_outputBuffer, "EDU>> ", 6) == 0)
-        offsetString += 6;
-    cmd.append("\n");
 
     if (hasExit) {
         appendNotification("WARNING: exit command disabled", true);
     }
-
-    QTextCursor cursor = g_outputView->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    cursor.insertText(QString(offsetString));
-    g_outputView->setTextCursor(cursor);
 }
 
 void QMatlabInterface::changeEvent(QEvent *event)

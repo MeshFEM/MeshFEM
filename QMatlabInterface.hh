@@ -15,6 +15,7 @@
 #include "QCommandLine.hh"
 #include <QWidget>
 #include <iostream>
+#include <string>
 
 class QTextEdit;
 
@@ -24,9 +25,10 @@ class QMatlabInterface : public QWidget, public MatlabInterface
 
 public:
     QMatlabInterface(QWidget *parent = NULL);
-    ~QMatlabInterface() { delete[] m_outputBuffer; }
+    ~QMatlabInterface() { }
 
     void appendNotification(const char *note, bool error = false);
+    void appendText(const char *note);
 
     virtual bool putVar(const char *name, const mxArray *pm) {
         bool success = MatlabInterface::putVar(name, pm);
@@ -40,15 +42,17 @@ public:
         return success;
     }
 
-    virtual int Eval(const char *command) {
-        int ret = MatlabInterface::Eval(command);
-        bool success = (ret == 0);
+    using MatlabInterface::Eval;
+    virtual int Eval(const char *command, std::string &output_str,
+                     std::string &error_str) {
+        int ret = MatlabInterface::Eval(command, output_str, error_str);
         QString note;
-        if (success)
-            note.sprintf(">> %s\n", command);
-        else
-            note.sprintf("ERROR: failed to run command '%s'", command);
-        appendNotification(note.toAscii(), !success);
+        note.sprintf(">> %s\n", command);
+        appendNotification(note.toAscii(), false);
+        appendText(output_str.c_str());
+        if (ret) {
+            appendNotification(error_str.c_str(), true);
+        }
         return ret;
     }
 
@@ -62,10 +66,6 @@ public slots:
 private:
     QCommandLine *g_commandLine;
     QTextEdit *g_outputView;
-    char *m_outputBuffer;
-    size_t m_outputBufferSize;
-
-    void m_terminateOutput();
 protected:
     void changeEvent(QEvent *event);
 };

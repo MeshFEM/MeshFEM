@@ -96,7 +96,7 @@ public:
         return *m_quadrature;
     }
 
-    void modalAnalysis() {
+    bool modalAnalysis() {
         std::vector<size_t> K_i, K_j;
         std::vector<Real> K_v;
         size_t K_n;
@@ -109,7 +109,8 @@ public:
 
         std::vector<typename Solver<Real>::EigenVector> modes;
         size_t numModes = std::min((size_t) m_numModes, K_n);
-        m_solver->GeneralizedEigenvalueProblem(numModes, K_n, K_i, K_j, K_v,
+        return m_solver->GeneralizedEigenvalueProblem(numModes,
+                                               K_n, K_i, K_j, K_v,
                                                M_n, M_i, M_j, M_v, modes);
     }
 

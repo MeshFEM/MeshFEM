@@ -22,6 +22,7 @@ class QCommandLine : public QLineEdit
     Q_OBJECT
 signals:
     void commandEntered(QString cmd);
+    void clearOutput();
 
 public:
     QCommandLine(QWidget *parent = NULL)
@@ -61,6 +62,9 @@ public:
         else if (control && (key == Qt::Key_F)) {
             remappedEvent = new QKeyEvent(event->type(), Qt::Key_Right,
                                   Qt::KeypadModifier);
+        }
+        else if (control && (key == Qt::Key_L)) {
+            emit(clearOutput());
         }
         if (remappedEvent) {
             event = remappedEvent;
