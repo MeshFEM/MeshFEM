@@ -21,11 +21,11 @@ class Solver {
         Solver() { }
         typedef std::vector<size_t> IVec;
         typedef std::vector<Real> VVec;
-        typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> EigenVector;
+        typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> VectorField;
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
-                std::vector<EigenVector> &modes)  = 0;
+                std::vector<VectorField> &modes, std::vector<Real> &eigval) = 0;
 
         virtual ~Solver() { }
 };
@@ -39,12 +39,14 @@ class MatlabSolver : public Solver<Real> {
 
         using typename Solver<Real>::IVec;
         using typename Solver<Real>::VVec;
-        using typename Solver<Real>::EigenVector;
+        using typename Solver<Real>::VectorField;
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
-                std::vector<EigenVector> &modes) {
+                std::vector<VectorField> &modes, std::vector<Real> &eigval) {
+            modes.resize(0);
+            eigval.resize(0);
             m_matlab->SetEngineSparseRealMatrix("K", Ki.size(), &Ki[0], &Kj[0],
                                                 &Kv[0], Kn, Kn);
             m_matlab->SetEngineSparseRealMatrix("M", Mi.size(), &Mi[0], &Mj[0],
@@ -59,8 +61,23 @@ class MatlabSolver : public Solver<Real> {
                 m_matlab->Eval("lambda = diag(D);");
 
                 Real *modeData = new Real[Kn * numModes];
+                Real *eigenvalueData = new Real[numModes];
                 // Column major
-                m_matlab->GetEngineRealMatrix("V", Kn, numModes, modeData, true);
+                m_matlab->GetEngineRealMatrix("V", Kn, numModes, modeData,
+                                              true);
+                m_matlab->GetEngineRealMatrix("lambda", numModes, 1,
+                                              eigenvalueData, true);
+                VectorField vec(Kn, 1);
+                modes.reserve(numModes);
+                eigval.reserve(numModes);
+                // Convert into array of modal displacement vectors
+                for (size_t m = 0; m < numModes; ++m) {
+                    for (size_t i = 0; i < Kn; ++i) {
+                        vec[i] = modeData[m * numModes + i];
+                    }
+                    modes.push_back(vec);
+                    eigval.push_back(eigenvalueData[m]);
+                }
                 delete[] modeData;
             }
 

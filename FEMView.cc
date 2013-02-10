@@ -23,7 +23,8 @@
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_rgbaBuffer(NULL), m_overlayDirty(true), m_objectDirty(true),
-      m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE)
+      m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
+      m_displacementPhase(0.0)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
 }
@@ -193,9 +194,10 @@ void FEMView2D::m_drawWorldVertex(const Vector &v)
     glVertex2f(c, r);
 }
 
-void FEMView2D::drawGrid(DrawOp op, const std::vector<Vector> &deformation)
+void FEMView2D::drawGrid(DrawOp op, const VectorField &deformation)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
+    bool hasDeformation = ((size_t) deformation.rows() == 2 * grid.numNodes());
     ElementGrid2D_t::AdjacencyVec corners;
 
     glColor3f(0, 0, 0);
@@ -210,8 +212,14 @@ void FEMView2D::drawGrid(DrawOp op, const std::vector<Vector> &deformation)
                     glColor4f(.8f, 0.0f, 0.0f, .5f);
             }
             grid.elementCorners(i, corners);
-            for (size_t c = 0; c < (size_t) corners.rows(); ++c)
-                m_drawWorldVertex(grid.nodePosition(corners[c]));
+            for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
+                Vector p = grid.nodePosition(corners[c]);
+                if (hasDeformation) {
+                    p[0] += deformation[2 * corners[c] + 0];
+                    p[1] += deformation[2 * corners[c] + 1];
+                }
+                m_drawWorldVertex(p);
+            }
         }
         glEnd();
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -219,8 +227,14 @@ void FEMView2D::drawGrid(DrawOp op, const std::vector<Vector> &deformation)
     else if (op == DRAW_NODES) {
         glPointSize(5.0f);
         glBegin(GL_POINTS);
-        for (unsigned int i = 0; i < grid.numNodes(); ++i)
-            m_drawWorldVertex(grid.nodePosition(i));
+        for (unsigned int i = 0; i < grid.numNodes(); ++i) {
+            Vector p = grid.nodePosition(i);
+            if (hasDeformation) {
+                p[0] += deformation[2 * i + 0];
+                p[1] += deformation[2 * i + 1];
+            }
+            m_drawWorldVertex(p);
+        }
         glEnd();
     }
 }
@@ -240,14 +254,23 @@ void FEMView2D::draw()
     if (m_guiState == MODEL_STATE) {
         m_drawSelectedObjects();
     }
-    if (m_guiState == ELEMENTS_STATE || m_guiState == DISPLACEMENTS_STATE) {
+    else if (m_guiState == DISPLACEMENTS_STATE) {
+        glDisable(GL_TEXTURE_2D);
+        VectorField deformation;
+        if (m_selectedDeformation < m_fem.numModes()) {
+            deformation = .1 * sin(m_displacementPhase) *
+                              m_fem.mode(m_selectedDeformation);
+        }
+        drawGrid(DRAW_CELLS, deformation);
+        drawGrid(DRAW_EDGES, deformation);
+        drawGrid(DRAW_NODES, deformation);
+    }
+    else if (m_guiState == ELEMENTS_STATE) {
         glDisable(GL_TEXTURE_2D);
         drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
         drawGrid(DRAW_NODES);
 
-    }
-    if (m_guiState == ELEMENTS_STATE) {
         // Draw quadrature points
         glPointSize(2.0f);
         glColor3f(1.0, 1.0, 0);

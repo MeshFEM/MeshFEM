@@ -12,10 +12,13 @@
 #define FEMVIEW_HH
 
 #include <QGLWidget>
+#include <QBasicTimer>
+#include <QTimerEvent>
 #include <Eigen/Dense>
 #include <cmath>
 
 #include "GlobalTypes.hh"
+#include "MeshlessFEM.hh"
 
 class FEMView2D : public QGLWidget
 {
@@ -24,6 +27,7 @@ class FEMView2D : public QGLWidget
 public:
     typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
                   DISPLACEMENTS_STATE} GUIState;
+    typedef MeshlessFEM_t::VectorField VectorField;
 
     FEMView2D(MeshlessFEM_t &fem, QWidget *parent = NULL);
     ~FEMView2D() {
@@ -34,8 +38,20 @@ public:
         m_guiState = state;
         m_gesture = NONE;
         update();
+
+        if (m_guiState == DISPLACEMENTS_STATE) {
+            m_timer.start(1000.0 / 60, this);
+        }
+        else {
+            m_timer.stop();
+        }
     }
 
+    void selectDeformation(size_t i) {
+        assert(i < m_fem.numModes());
+        m_selectedDeformation = i;
+    }
+    
 public slots:
     void csgNodesSelected(const NodeList &nList);
 
@@ -60,12 +76,26 @@ protected:
         c = floor((x - m_frameMin[0]) * (m_width / frameDim[0]));
     }
 
+    void timerEvent(QTimerEvent *event) {
+        if (event->timerId() == m_timer.timerId()) {
+            m_displacementPhase += .05;
+            if (m_displacementPhase > 2.0 * M_PI) {
+                m_displacementPhase = 0;
+            }
+            update();
+        }
+        else {
+            QGLWidget::timerEvent(event);
+        }
+    }
+
+
 private:
     template<typename Object>
     void drawObject(const Object *obj, const QColor &c) const;
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
-    void drawGrid(DrawOp op, const std::vector<Vector> &deformation =
-                  std::vector<Vector>());
+    void drawGrid(DrawOp op, const VectorField &deformation =
+                  VectorField());
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
@@ -82,12 +112,15 @@ private:
 
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
-    std::vector<Vector> selectedDeformation;
+    size_t m_selectedDeformation;
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;
     MouseGesture m_gesture;
     QPoint m_prevMouseLoc;
+
+    QBasicTimer m_timer;
+    Scalar m_displacementPhase;
 };
 
 #endif // FEMVIEW_HH

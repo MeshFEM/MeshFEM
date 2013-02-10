@@ -34,12 +34,14 @@ public slots:
     void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
                             bool gaussQuadrature);
     void runModalAnalysis();
+    void modeSelectionChanged(int index);
 
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =
             QItemSelectionModel::ClearAndSelect);
     void csgNodesSelected(const NodeList &nList);
+    void modesUpdated(const MeshlessFEM_t *fem);
     
 private:
     CSGTreeModel  *m_csgTreeModel;
@@ -49,6 +51,9 @@ private:
     MeshlessFEM_t &m_fem;
 
     typedef CSGTree_t::CSGNode CSGNode;
+
+    void m_modesUpdated() {
+    }
 };
 
 #endif // CSGWINDOW_CONTROLLER_HH

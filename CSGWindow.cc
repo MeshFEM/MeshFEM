@@ -70,6 +70,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      SIGNAL(elementGridChanged(int, int, int, bool)),
                      controller,
                      SLOT(elementGridChanged(int, int, int, bool)));
+    QObject::connect(controller, SIGNAL(modesUpdated(const MeshlessFEM_t *)),
+                     analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
 
     setCentralWidget(splitter);
 

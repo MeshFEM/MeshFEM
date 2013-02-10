@@ -70,16 +70,22 @@ void CSGWindowController::changedSidebarTab(int newTab) {
     if (newTab == 0)
         m_femView->setGUIState(FEMView2D::MODEL_STATE);
     else {
+        // The model might have changed--notify m_fem
+        m_fem.modelChanged();
+        emit modesUpdated(&m_fem);
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
-        m_fem.elementGrid().update();
     }
 }
 
 void CSGWindowController::elementGridChanged(int Nx, int Ny,
         int numQuadraturePoints, bool gaussQuadrature)
 {
+    // When the grid changes, we must go back to the element state.
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     if (m_fem.configureElements(Nx, Ny, numQuadraturePoints, gaussQuadrature))
         m_femView->update();
+    // Configuring the elements clears all modes
+    emit modesUpdated(&m_fem);
 }
 
 void CSGWindowController::runModalAnalysis()
@@ -92,5 +98,17 @@ void CSGWindowController::runModalAnalysis()
                 QMessageBox::Ok);
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
+    }
+    emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::modeSelectionChanged(int index)
+{
+    if (index > 0) {
+        m_femView->selectDeformation(index - 1);
+        m_femView->setGUIState(FEMView2D::DISPLACEMENTS_STATE);
+    }
+    else {
+        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     }
 }

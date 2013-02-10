@@ -20,6 +20,7 @@ class QDoubleSpinBox;
 class QuadraturePointsSpinBox;
 class QCheckBox;
 class QPushButton;
+class QComboBox;
 
 class AnalysisForm : public QWidget
 {
@@ -27,6 +28,9 @@ class AnalysisForm : public QWidget
 public:
     AnalysisForm(AnalysisSettings &settings,
                  CSGWindowController *controller, QWidget *parent = NULL);
+
+public slots:
+    void modesUpdated(const MeshlessFEM_t *fem);
 
 private slots:
     void elementGridControlsChanged(int i);
@@ -43,5 +47,6 @@ private:
     QCheckBox *g_lumpedMassCheck, *g_gaussQuadratureCheck;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QPushButton *g_modalAnalysisButton;
+    QComboBox *g_modeSelector;
 };
 #endif // ANALYSIS_FORM_HH
