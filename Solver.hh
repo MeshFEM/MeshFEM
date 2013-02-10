@@ -73,7 +73,7 @@ class MatlabSolver : public Solver<Real> {
                 // Convert into array of modal displacement vectors
                 for (size_t m = 0; m < numModes; ++m) {
                     for (size_t i = 0; i < Kn; ++i) {
-                        vec[i] = modeData[m * numModes + i];
+                        vec[i] = modeData[m * Kn + i];
                     }
                     modes.push_back(vec);
                     eigval.push_back(eigenvalueData[m]);

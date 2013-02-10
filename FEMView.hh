@@ -14,8 +14,10 @@
 #include <QGLWidget>
 #include <QBasicTimer>
 #include <QTimerEvent>
+#include <QKeyEvent>
 #include <Eigen/Dense>
 #include <cmath>
+#include <iostream>
 
 #include "GlobalTypes.hh"
 #include "MeshlessFEM.hh"
@@ -38,6 +40,9 @@ public:
         m_guiState = state;
         m_gesture = NONE;
         update();
+
+        m_selectedElement = 0;
+        m_selectedCorner  = 0;
 
         if (m_guiState == DISPLACEMENTS_STATE) {
             m_timer.start(1000.0 / 60, this);
@@ -63,6 +68,27 @@ protected:
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
+    void keyPressEvent(QKeyEvent *event) {
+        if (event->key() == Qt::Key_Up) {
+            const ElementGrid2D_t &grid = m_fem.elementGrid();
+            if (grid.numElements() > 0) {
+                if (++m_selectedCorner == 4) {
+                    m_selectedCorner = 0;
+                    m_selectedElement =
+                        (m_selectedElement + 1) % grid.numElements();
+                }
+                ElementGrid2D_t::AdjacencyVec corners = grid.elementCorners(m_selectedElement);
+                std::cout << "Selected element, corner, node: "
+                    << m_selectedElement << ", " << m_selectedCorner << ", "
+                    << corners[m_selectedCorner] << std::endl;
+            }
+            else {
+                m_selectedElement = 0;
+                m_selectedCorner = 0;
+            }
+            update();
+        }
+    }
 
     void getWorldCoords(int r, int c, Scalar &x, Scalar &y) const {
         Vector frameDim = m_frameMax - m_frameMin;
@@ -121,6 +147,8 @@ private:
 
     QBasicTimer m_timer;
     Scalar m_displacementPhase;
+
+    size_t m_selectedCorner, m_selectedElement;
 };
 
 #endif // FEMVIEW_HH

@@ -24,9 +24,10 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_rgbaBuffer(NULL), m_overlayDirty(true), m_objectDirty(true),
       m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
-      m_displacementPhase(0.0)
+      m_displacementPhase(0.0), m_selectedCorner(0), m_selectedElement(0)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void FEMView2D::csgNodesSelected(const NodeList &nList)
@@ -258,7 +259,7 @@ void FEMView2D::draw()
         glDisable(GL_TEXTURE_2D);
         VectorField deformation;
         if (m_selectedDeformation < m_fem.numModes()) {
-            deformation = .1 * sin(m_displacementPhase) *
+            deformation = .2 * sin(m_displacementPhase) *
                               m_fem.mode(m_selectedDeformation);
         }
         drawGrid(DRAW_CELLS, deformation);
@@ -285,6 +286,13 @@ void FEMView2D::draw()
                 m_drawWorldVertex(qpoints[p]);
             }
         }
+        glEnd();
+        
+        ElementGrid2D_t::AdjacencyVec corners = grid.elementCorners(m_selectedElement);
+        glPointSize(5.0f);
+        glColor3f(0.0, 1.0, 0.0);
+        glBegin(GL_POINTS);
+        m_drawWorldVertex(grid.nodePosition(corners[m_selectedCorner]));
         glEnd();
     }
 }

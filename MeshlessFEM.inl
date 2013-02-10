@@ -167,8 +167,11 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+        stiff.clear();
         q.integrate(stiff, elemGrid.elementBoundingBox(e));
         elemGrid.elementCorners(e, cornerIndices);
+        // std::cout << "element " << e << " stiffness matrix: " << std::endl
+        //           << stiff.result << std::endl;
         for (size_t i = 0; i < 4; ++i) {
             for (size_t j = 0; j < 4; ++j) {
                 size_t vi = cornerIndices[i], vj = cornerIndices[j];
@@ -208,6 +211,7 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+        lmass.clear();
         q.integrate(lmass, elemGrid.elementBoundingBox(e));
         elemGrid.elementCorners(e, cornerIndices);
         for (size_t i = 0; i < 4; ++i) {
