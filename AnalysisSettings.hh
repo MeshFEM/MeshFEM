@@ -17,22 +17,22 @@
 struct AnalysisSettings {
     AnalysisSettings()
         : Nx(10), Ny(10), quadrature(UNIFORM_QUADRATURE), quadraturePoints(9),
-          lumpedMass(false), laplacianModes(false), numModes(10),
+          lumpedMass(true), laplacianModes(false), numModes(10),
           weakRegionsPerMode(5), weaknessCutoff(.95),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     // Element settings
-    int Nx, Ny;
+    size_t Nx, Ny;
     QuadratureMethod quadrature;
-    int quadraturePoints;
+    size_t quadraturePoints;
     bool lumpedMass, gaussNodes;
 
     // True: use laplacian eigenfunctions instead of true stiffness eigenvectors
     bool laplacianModes;
-    int numModes;
+    size_t numModes;
 
     // Optimization Settings
-    int weakRegionsPerMode;
+    size_t weakRegionsPerMode;
     double weaknessCutoff;
 
     // Material Settings

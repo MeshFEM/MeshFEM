@@ -16,6 +16,7 @@
 #include "GlobalTypes.hh"
 #include "FEMView.hh"
 #include "MeshlessFEM.hh"
+#include "AnalysisSettings.hh"
 
 class CSGWindowController : public QObject {
     Q_OBJECT
@@ -31,8 +32,8 @@ public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
     void changedSidebarTab(int newTab);
-    void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
-                            bool gaussQuadrature);
+    void elementGridChanged(const AnalysisSettings &settings);
+    void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();
     void modeSelectionChanged(int index);
 

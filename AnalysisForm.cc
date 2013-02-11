@@ -33,6 +33,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     modesUpdated(NULL);
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
+    QGroupBox *materialGroup = new QGroupBox("Material");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
     QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
     QGroupBox *simulationGroup = new QGroupBox("Simulation");
@@ -48,9 +49,15 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Modal Analysis
     QFormLayout *modalForm = new QFormLayout();
+    modalForm->addRow("Number of Modes", g_numModesStepper);
+    g_numModesStepper->setMinimum(1);
+    g_numModesStepper->setMaximum(50);
     modalForm->addRow(g_modalAnalysisButton);
     modalForm->addRow(g_modeSelector);
     modalAnalysisGroup->setLayout(modalForm);
+
+    // Initialize all the GUI values
+    m_setGUIFromSettings();
 
     // Connections
     QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
@@ -61,6 +68,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_gaussQuadratureCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_numModesStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(modalAnalysisControlsChanged(int)));
     assert(controller);
     QObject::connect(g_modalAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runModalAnalysis()));
@@ -70,6 +79,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(elementsQuadratureGroup);
+    layout->addWidget(materialGroup);
     layout->addWidget(modalAnalysisGroup);
     layout->addWidget(weaknessAnalysisGroup);
     layout->addWidget(simulationGroup);
@@ -78,6 +88,26 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // QScrollArea *scrollArea = new QScrollArea(this);
     // scrollArea->setLayout(layout);
     setLayout(layout);
+}
+
+void AnalysisForm::m_setGUIFromSettings() {
+    g_nxStepper->setValue(m_settings.Nx);
+    g_nyStepper->setValue(m_settings.Ny);
+    g_numModesStepper->setValue(m_settings.numModes);   
+    g_lumpedMassCheck->setChecked(m_settings.lumpedMass);
+    g_gaussQuadratureCheck->setChecked(m_settings.quadrature ==
+                                       GAUSS_QUADRATURE);
+    g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
+}
+
+void AnalysisForm::m_readSettingsFromGUI() {
+    m_settings.Nx = g_nxStepper->value();
+    m_settings.Ny = g_nyStepper->value();
+    m_settings.numModes = g_numModesStepper->value();
+    m_settings.lumpedMass = g_lumpedMassCheck->isChecked();
+    m_settings.quadrature = g_gaussQuadratureCheck->isChecked()
+                                    ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
+    m_settings.quadraturePoints = g_quadraturePointsStepper->value();
 }
 
 void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
@@ -100,9 +130,11 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
 }
 
 void AnalysisForm::elementGridControlsChanged(int i) {
-    int Nx = g_nxStepper->value();
-    int Ny = g_nyStepper->value();
-    int quadraturePoints = g_quadraturePointsStepper->value();
-    bool gaussNodes = g_gaussQuadratureCheck->isChecked();
-    emit elementGridChanged(Nx, Ny, quadraturePoints, gaussNodes);
+    m_readSettingsFromGUI();
+    emit eqSettingsChanged(m_settings);
+}
+
+void AnalysisForm::modalAnalysisControlsChanged(int i) {
+    m_readSettingsFromGUI();
+    emit modalAnalysisSettingsChanged(m_settings);
 }

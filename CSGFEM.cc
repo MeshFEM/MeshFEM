@@ -13,6 +13,7 @@
 #include "GlobalTypes.hh"
 #include "QMatlabInterface.hh"
 #include "Solver.hh"
+#include "AnalysisForm.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point

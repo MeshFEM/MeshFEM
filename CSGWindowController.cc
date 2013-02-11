@@ -77,14 +77,25 @@ void CSGWindowController::changedSidebarTab(int newTab) {
     }
 }
 
-void CSGWindowController::elementGridChanged(int Nx, int Ny,
-        int numQuadraturePoints, bool gaussQuadrature)
+void CSGWindowController::
+elementGridChanged(const AnalysisSettings &settings)
 {
     // When the grid changes, we must go back to the element state.
     m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
-    if (m_fem.configureElements(Nx, Ny, numQuadraturePoints, gaussQuadrature))
+    if (m_fem.configureElements(settings))
         m_femView->update();
     // Configuring the elements clears all modes
+    emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::
+modalAnalysisSettingsChanged(const AnalysisSettings &settings)
+{
+    // When the modal analysis settings change, we must go back to the element
+    // state.
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_fem.configureModalAnalysis(settings);
+    // Configuring modal analysis settings clears all modes
     emit modesUpdated(&m_fem);
 }
 

@@ -34,10 +34,12 @@ public slots:
 
 private slots:
     void elementGridControlsChanged(int i);
+    void modalAnalysisControlsChanged(int i);
 
 signals:
-    void elementGridChanged(int Nx, int Ny, int numQuadraturePoints,
-                            bool gaussQuadrature);
+    void eqSettingsChanged(const AnalysisSettings &settings);
+    void materialSettingsChanged(const AnalysisSettings &settings);
+    void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
 
 private:
     AnalysisSettings &m_settings;
@@ -48,5 +50,8 @@ private:
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QPushButton *g_modalAnalysisButton;
     QComboBox *g_modeSelector;
+
+    void m_setGUIFromSettings();
+    void m_readSettingsFromGUI();
 };
 #endif // ANALYSIS_FORM_HH

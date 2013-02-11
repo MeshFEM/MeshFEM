@@ -36,7 +36,7 @@ public:
     MeshlessFEM(Model &model, const AnalysisSettings &settings,
                 Solver<Real> *solver)
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
-          m_numRequestedModes(10), m_solver(solver)
+          m_solver(solver)
     {
         m_quadrature = new Quadrature2D(settings.quadraturePoints);
         m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
@@ -44,30 +44,31 @@ public:
                                                 *m_quadrature, model);
         Real E  = settings.young_modulus;
         Real nu = settings.poisson_ratio;
+        m_density = settings.density;
+
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
-        m_density = settings.density;
+        m_numRequestedModes = settings.numModes;
 
         // Isotropic
         m_d << lambda + 2 * mu, lambda, lambda, lambda + 2 * mu, 2 * mu;
     }
 
-    bool configureElements(size_t Nx, size_t Ny,
-                           size_t nQuadraturePoints, bool gaussNodes) {
+    bool configureElements(const AnalysisSettings &settings) {
         bool changed = false;
         size_t oldNx, oldNy;
-        if (quadrature().numPoints() != nQuadraturePoints) {
-            quadrature().setNumPoints(nQuadraturePoints);
+        if (quadrature().numPoints() != settings.quadraturePoints) {
+            quadrature().setNumPoints(settings.quadraturePoints);
             changed = true;
         }
-        if (quadrature().usingGaussQuadrature() != gaussNodes) {
-            quadrature().setUsingGaussQuadrature(gaussNodes);
+        if (quadrature().usingGaussQuadrature() != settings.gaussNodes) {
+            quadrature().setUsingGaussQuadrature(settings.gaussNodes);
             changed = true;
         }
         elementGrid().getGridSize(oldNx, oldNy);
-        if ((Nx != oldNx) || (Ny != oldNy)) {
-            elementGrid().setGridSize(Nx, Ny);
-            elementGrid().setGridSize(Nx, Ny);
+        if ((settings.Nx != oldNx) || (settings.Ny != oldNy)) {
+            elementGrid().setGridSize(settings.Nx, settings.Ny);
+            elementGrid().setGridSize(settings.Nx, settings.Ny);
             changed = true;
         }
         else if (changed) {
@@ -82,7 +83,12 @@ public:
         return changed;
     }
 
-    bool modelChanged() {
+    void configureModalAnalysis(const AnalysisSettings &settings) {
+        m_numRequestedModes = settings.numModes;
+        m_modes.resize(0);
+    }
+
+    void modelChanged() {
         elementGrid().update();
         m_invalidateCache();
     }

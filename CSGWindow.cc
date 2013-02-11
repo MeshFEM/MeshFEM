@@ -67,9 +67,13 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
                      controller, SLOT(changedSidebarTab(int)));
     QObject::connect(analysisForm,
-                     SIGNAL(elementGridChanged(int, int, int, bool)),
+                     SIGNAL(eqSettingsChanged(const AnalysisSettings &)),
                      controller,
-                     SLOT(elementGridChanged(int, int, int, bool)));
+                     SLOT(elementGridChanged(const AnalysisSettings &)));
+    QObject::connect(analysisForm,
+                     SIGNAL(modalAnalysisSettingsChanged(const AnalysisSettings &)),
+                     controller,
+                     SLOT(modalAnalysisSettingsChanged(const AnalysisSettings &)));
     QObject::connect(controller, SIGNAL(modesUpdated(const MeshlessFEM_t *)),
                      analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
 
