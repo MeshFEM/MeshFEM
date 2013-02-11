@@ -71,6 +71,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      controller,
                      SLOT(elementGridChanged(const AnalysisSettings &)));
     QObject::connect(analysisForm,
+                     SIGNAL(materialSettingsChanged(const AnalysisSettings &)),
+                     controller,
+                     SLOT(materialSettingsChanged(const AnalysisSettings &)));
+    QObject::connect(analysisForm,
                      SIGNAL(modalAnalysisSettingsChanged(const AnalysisSettings &)),
                      controller,
                      SLOT(modalAnalysisSettingsChanged(const AnalysisSettings &)));

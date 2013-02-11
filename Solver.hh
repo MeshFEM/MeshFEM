@@ -58,7 +58,10 @@ class MatlabSolver : public Solver<Real> {
             int ret = m_matlab->Eval(modeCommand);
             bool success = (ret == 0);
             if (success) {
-                m_matlab->Eval("lambda = diag(D);");
+                // sort in ascending order
+                m_matlab->Eval("[lambda, sortPerm] = sort(diag(D));");
+                m_matlab->Eval("V = V(:, sortPerm);");
+                m_matlab->Eval("clear D; clear sortPerm;");
 
                 Real *modeData = new Real[Kn * numModes];
                 Real *eigenvalueData = new Real[numModes];

@@ -89,6 +89,17 @@ elementGridChanged(const AnalysisSettings &settings)
 }
 
 void CSGWindowController::
+materialSettingsChanged(const AnalysisSettings &settings)
+{
+    // When the material settings change, we must go back to the element
+    // state.
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_fem.configureMaterial(settings);
+    // Configuring modal analysis settings clears all modes
+    emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::
 modalAnalysisSettingsChanged(const AnalysisSettings &settings)
 {
     // When the modal analysis settings change, we must go back to the element

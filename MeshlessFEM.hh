@@ -42,16 +42,9 @@ public:
         m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
         m_elementGrid = new ElementGrid2D<Model>(settings.Nx, settings.Ny,
                                                 *m_quadrature, model);
-        Real E  = settings.young_modulus;
-        Real nu = settings.poisson_ratio;
-        m_density = settings.density;
-
-        Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
-        Real mu = E / (2.0 + 2.0 * nu);
-        m_numRequestedModes = settings.numModes;
-
-        // Isotropic
-        m_d << lambda + 2 * mu, lambda, lambda, lambda + 2 * mu, 2 * mu;
+        
+        configureMaterial(settings);
+        configureModalAnalysis(settings);
     }
 
     bool configureElements(const AnalysisSettings &settings) {
@@ -81,6 +74,19 @@ public:
             m_invalidateCache();
         }
         return changed;
+    }
+
+    void configureMaterial(const AnalysisSettings &settings) {
+        // Isotropic
+        Real E  = settings.young_modulus;
+        Real nu = settings.poisson_ratio;
+        m_density = settings.density;
+
+        Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
+        Real mu = E / (2.0 + 2.0 * nu);
+        m_d << lambda + 2 * mu, lambda, lambda, lambda + 2 * mu, 2 * mu;
+
+        m_modes.resize(0);
     }
 
     void configureModalAnalysis(const AnalysisSettings &settings) {

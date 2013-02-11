@@ -35,6 +35,7 @@ public slots:
 private slots:
     void elementGridControlsChanged(int i);
     void modalAnalysisControlsChanged(int i);
+    void materialControlsChanged(double v);
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);
@@ -44,12 +45,23 @@ signals:
 private:
     AnalysisSettings &m_settings;
 
-    QSpinBox *g_nxStepper, *g_nyStepper, *g_numModesStepper,
-             *g_numWeakRegionsStepper;
-    QCheckBox *g_lumpedMassCheck, *g_gaussQuadratureCheck;
+    // Elements and quadrature settings
+    QSpinBox *g_nxStepper, *g_nyStepper;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
+    QCheckBox *g_lumpedMassCheck, *g_gaussQuadratureCheck;
+
+    // Material settings
+    QDoubleSpinBox *g_youngModulusStepper;
+    QDoubleSpinBox *g_poissonRatioStepper;
+    QDoubleSpinBox *g_densityStepper;
+
+    // Modal analysis settings
+    QSpinBox *g_numModesStepper;
     QPushButton *g_modalAnalysisButton;
     QComboBox *g_modeSelector;
+
+    // Weakness analysis settings
+    QSpinBox *g_numWeakRegionsStepper;
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();

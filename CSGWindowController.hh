@@ -33,6 +33,7 @@ public slots:
                                  const QItemSelection &deselected);
     void changedSidebarTab(int newTab);
     void elementGridChanged(const AnalysisSettings &settings);
+    void materialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();
     void modeSelectionChanged(int index);
