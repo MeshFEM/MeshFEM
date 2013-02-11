@@ -23,10 +23,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_nyStepper = new QSpinBox();
     g_nxStepper->setMinimum(1);
     g_nyStepper->setMinimum(1);
-    g_lumpedMassCheck = new QCheckBox();
     g_gaussQuadratureCheck = new QCheckBox();
     g_quadraturePointsStepper = new QuadraturePointsSpinBox();
 
+    g_massMatrixSelector = new QComboBox();
     g_youngModulusStepper = new QDoubleSpinBox();
     g_poissonRatioStepper = new QDoubleSpinBox();
     g_densityStepper = new QDoubleSpinBox();
@@ -39,7 +39,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     modesUpdated(NULL);
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
-    QGroupBox *materialGroup = new QGroupBox("Material");
+    QGroupBox *materialGroup = new QGroupBox("Materials and Matrices");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
     QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
     QGroupBox *simulationGroup = new QGroupBox("Simulation");
@@ -48,13 +48,16 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QFormLayout *eqForm = new QFormLayout();
     eqForm->addRow("Number of Columns", g_nxStepper);
     eqForm->addRow("Number of Rows", g_nyStepper);
-    eqForm->addRow("Lumped Mass", g_lumpedMassCheck);
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     elementsQuadratureGroup->setLayout(eqForm);
 
-    // Material Settings
+    // Material/Matrix Settings
     QFormLayout *matForm = new QFormLayout();
+    matForm->addRow("Mass matrix", g_massMatrixSelector);
+    g_massMatrixSelector->addItem("Full");
+    g_massMatrixSelector->addItem("Lumped");
+    g_massMatrixSelector->addItem("Quarter Cell");
     matForm->addRow("Young's Modulus", g_youngModulusStepper);
     matForm->addRow("Poisson Ratio", g_poissonRatioStepper);
     g_poissonRatioStepper->setMinimum(-1.0);
@@ -85,6 +88,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_gaussQuadratureCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
 
+    QObject::connect(g_massMatrixSelector, SIGNAL(currentIndexChanged(int)),
+                     this, SLOT(matrixControlsChanged(int)));
     QObject::connect(g_youngModulusStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(materialControlsChanged(double)));
     QObject::connect(g_poissonRatioStepper, SIGNAL(valueChanged(double)),
@@ -116,13 +121,14 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 void AnalysisForm::m_setGUIFromSettings() {
     g_nxStepper->setValue(m_settings.Nx);
     g_nyStepper->setValue(m_settings.Ny);
-    g_lumpedMassCheck->setChecked(m_settings.lumpedMass);
     g_gaussQuadratureCheck->setChecked(m_settings.quadrature ==
                                        GAUSS_QUADRATURE);
     g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
 
     g_numModesStepper->setValue(m_settings.numModes);   
 
+    // Note: assumes MassMatrixType enum index matches combo box index
+    g_massMatrixSelector->setCurrentIndex(m_settings.massMatrixType);
     g_youngModulusStepper->setValue(m_settings.young_modulus);
     g_poissonRatioStepper->setValue(m_settings.poisson_ratio);
     g_densityStepper->setValue(m_settings.density);
@@ -131,13 +137,15 @@ void AnalysisForm::m_setGUIFromSettings() {
 void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.Nx = g_nxStepper->value();
     m_settings.Ny = g_nyStepper->value();
-    m_settings.lumpedMass = g_lumpedMassCheck->isChecked();
     m_settings.quadrature = g_gaussQuadratureCheck->isChecked()
                                     ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     m_settings.quadraturePoints = g_quadraturePointsStepper->value();
 
     m_settings.numModes = g_numModesStepper->value();
 
+    // Note: assumes MassMatrixType enum index matches combo box index
+    m_settings.massMatrixType =
+        (MassMatrixType) g_massMatrixSelector->currentIndex();
     m_settings.young_modulus = g_youngModulusStepper->value();
     m_settings.poisson_ratio = g_poissonRatioStepper->value();
     m_settings.density       = g_densityStepper->value();
@@ -167,9 +175,14 @@ void AnalysisForm::elementGridControlsChanged(int i) {
     emit eqSettingsChanged(m_settings);
 }
 
+void AnalysisForm::matrixControlsChanged(int i) {
+    m_readSettingsFromGUI();
+    emit matrixOrMaterialSettingsChanged(m_settings);
+}
+
 void AnalysisForm::materialControlsChanged(double v) {
     m_readSettingsFromGUI();
-    emit materialSettingsChanged(m_settings);
+    emit matrixOrMaterialSettingsChanged(m_settings);
 }
 
 void AnalysisForm::modalAnalysisControlsChanged(int i) {

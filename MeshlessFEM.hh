@@ -31,7 +31,6 @@ public:
 
     class PerElementStiffnessDerivative;
     class PerElementMassMatrixDerivative;
-    class PerElementLumpedMassMatrixDerivative;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings,
                 Solver<Real> *solver)
@@ -43,6 +42,7 @@ public:
         m_elementGrid = new ElementGrid2D<Model>(settings.Nx, settings.Ny,
                                                 *m_quadrature, model);
         
+        configureMatrices(settings);
         configureMaterial(settings);
         configureModalAnalysis(settings);
     }
@@ -74,6 +74,11 @@ public:
             m_invalidateCache();
         }
         return changed;
+    }
+
+    void configureMatrices(const AnalysisSettings &settings) {
+        m_massMatrixType = settings.massMatrixType;
+        m_modes.resize(0);
     }
 
     void configureMaterial(const AnalysisSettings &settings) {
@@ -151,6 +156,7 @@ private:
     Model &m_model;
     ElementGrid2D<Model> *m_elementGrid;
     bool m_stiffnessCached, m_massCached;
+    MassMatrixType m_massMatrixType;   
     DType m_d;
     Real m_density;
     Solver<Real> *m_solver;

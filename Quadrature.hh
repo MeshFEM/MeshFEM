@@ -21,8 +21,6 @@
 #include <Eigen/Dense>
 typedef Vector Vector2D;
 
-typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
-
 class Quadrature2D {
     typedef Vector2D::Scalar Real;
 public:

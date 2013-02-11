@@ -17,6 +17,7 @@
 #include <QColor>
 #include <cassert>
 #include <iostream>
+#include <algorithm>
 
 #include "MeshlessFEM.hh"
 
@@ -259,8 +260,25 @@ void FEMView2D::draw()
         glDisable(GL_TEXTURE_2D);
         VectorField deformation;
         if (m_selectedDeformation < m_fem.numModes()) {
-            deformation = .2 * sin(m_displacementPhase) *
-                              m_fem.mode(m_selectedDeformation);
+            deformation = m_fem.mode(m_selectedDeformation);
+            // Scale deformation so that the maximum displacement doesn't exceed
+            // a fraction of the window size
+            Scalar relMag = .125;
+            Scalar maxX = 0.0, maxY = 0.0;
+            size_t numNodes = m_fem.elementGrid().numNodes();
+            assert((size_t) deformation.rows() == 2 * numNodes);
+            for (size_t i = 0; i < numNodes; ++i) {
+                maxX = std::max((Scalar) std::abs(deformation[2 * i    ]), maxX);
+                maxY = std::max((Scalar) std::abs(deformation[2 * i + 1]), maxY);
+            }
+
+            Vector frameDim = m_frameMax - m_frameMin;
+            Scalar xMag = (maxX > 1e-6) ? relMag * (frameDim[0] / maxX) : 1.0;
+            Scalar yMag = (maxY > 1e-6) ? relMag * (frameDim[1] / maxY) : 1.0;
+
+            Scalar magnitude = std::min(xMag, yMag);
+
+            deformation *= magnitude * sin(m_displacementPhase);
         }
         drawGrid(DRAW_CELLS, deformation);
         drawGrid(DRAW_EDGES, deformation);

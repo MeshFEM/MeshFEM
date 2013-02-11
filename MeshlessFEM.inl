@@ -98,61 +98,85 @@ public:
         result(7, 7) += weight * (d11 - 2 * x * d11 + x * x * d11 + y * y * d22);
     }
 
-public:
-    value_type result;
+    Real operator()(size_t i, size_t j) const {
+        assert((i < 8) && (j < 8));
+        return result(i, j);
+    }
+
 private:
     const Model &m_model;
     const DType &m_d;
+    value_type result;
 };
 
-// template<typename Model>
-// class MeshlessFEM<Model>::PerElementMassMatrixDerivative
-// {
-// public:
-//     typedef Eigen::Matrix<Real, 4, 4> value_type;
-//     PerElementMassMatrixDerivative(const Model &model)
-//         : m_model(model)
-//     {
-//         clear();
-//     }
-// 
-//     void clear() { result = value_type::Zero(); }
-//     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
-//     {
-//         if (!m_model.isInside(sample))
-//             return;
-//     }
-// 
-// public:
-//     value_type result;
-// private:
-//     const Model &m_model;
-// };
-// 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementLumpedMassMatrixDerivative
+class MeshlessFEM<Model>::PerElementMassMatrixDerivative
 {
 public:
-    typedef Eigen::Matrix<Real, 4, 1> value_type;
-    PerElementLumpedMassMatrixDerivative(const Model &model, Real density)
-        : m_model(model), m_density(density)
+    typedef Eigen::Matrix<Real, 4, 4> value_type;
+    PerElementMassMatrixDerivative(const Model &model, Real density,
+                                   MassMatrixType type = MASS_QUARTER_CELL)
+        : m_model(model), m_density(density), m_type(type)
     {
         clear();
     }
 
-    void clear() { result = value_type::Zero(); }
+    void clear() {
+        result = value_type::Zero();
+        m_element_mass = 0.0;
+    }
+
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
         if (!m_model.isInside(sample))
             return;
-        result.array() += .25 * weight * m_density;
+        m_element_mass += weight * m_density;
+
+        Real x = ref_sample[0], y = ref_sample[1];
+        // Node ordering: 3 2
+        //                0 1
+        Eigen::Matrix<Real, 4, 1> phi;
+        phi[0] = (1 - x) * (1 - y);
+        phi[1] =      x  * (1 - y);
+        phi[2] =      x  *      y ;
+        phi[3] = (1 - x) *      y ;
+
+        for (size_t i = 0; i < 4; ++i) {
+            for (size_t j = 0; j < 4; ++j) {
+                result(i, j) += weight * m_density * phi[i] * phi[j];
+            }
+        }
     }
 
-public:
-    value_type result;
+    Real operator()(size_t i, size_t j) const {
+        Real val = 0.0;
+        if (m_type == MASS_LUMPED) {
+            if (i == j) {
+                val = .25 * (result(i, 0) + result(i, 1) +
+                             result(i, 2) + result(i, 3));
+            }
+        }
+        else if (m_type == MASS_QUARTER_CELL) {
+            if (i == j) {
+                val = .25 * m_element_mass;
+            }
+        }
+        else if (m_type == MASS_FULL) {
+            val = result(i, j);
+        }
+        else {
+            assert(false);
+        }
+        return val;
+    }
+
 private:
     const Model &m_model;
     Real m_density;
+    MassMatrixType m_type;
+
+    value_type result;
+    Real m_element_mass;
 };
 
 template<typename Model>
@@ -166,34 +190,35 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
     PerElementStiffnessDerivative stiff(m_d, model());
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
+    mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
+
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         stiff.clear();
         q.integrate(stiff, elemGrid.elementBoundingBox(e));
         elemGrid.elementCorners(e, cornerIndices);
-        // std::cout << "element " << e << " stiffness matrix: " << std::endl
-        //           << stiff.result << std::endl;
         for (size_t i = 0; i < 4; ++i) {
+            size_t vi = cornerIndices[i];
             for (size_t j = 0; j < 4; ++j) {
-                size_t vi = cornerIndices[i], vj = cornerIndices[j];
+                size_t vj = cornerIndices[j];
                 // xx
                 mat_i.push_back(2 * vi);
                 mat_j.push_back(2 * vj);
-                mat_v.push_back(stiff.result(2 * i, 2 * j));
+                mat_v.push_back(stiff(2 * i, 2 * j));
 
                 // xy
                 mat_i.push_back(2 * vi);
                 mat_j.push_back(2 * vj + 1);
-                mat_v.push_back(stiff.result(2 * i, 2 * j + 1));
+                mat_v.push_back(stiff(2 * i, 2 * j + 1));
 
                 // yy
                 mat_i.push_back(2 * vi + 1);
                 mat_j.push_back(2 * vj + 1);
-                mat_v.push_back(stiff.result(2 * i + 1, 2 * j + 1));
+                mat_v.push_back(stiff(2 * i + 1, 2 * j + 1));
 
                 // yx
                 mat_i.push_back(2 * vi + 1);
                 mat_j.push_back(2 * vj);
-                mat_v.push_back(stiff.result(2 * i + 1, 2 * j));
+                mat_v.push_back(stiff(2 * i + 1, 2 * j));
             }
         }
     }
@@ -207,22 +232,30 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
-    PerElementLumpedMassMatrixDerivative lmass(model(), m_density);
+    PerElementMassMatrixDerivative lmass(model(), m_density, m_massMatrixType);
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
+
+    mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         lmass.clear();
         q.integrate(lmass, elemGrid.elementBoundingBox(e));
         elemGrid.elementCorners(e, cornerIndices);
         for (size_t i = 0; i < 4; ++i) {
-            size_t vidx = cornerIndices[i];
-            mat_i.push_back(2 * vidx);
-            mat_j.push_back(2 * vidx);
-            mat_v.push_back(lmass.result(i));
+            size_t vi = cornerIndices[i];
+            for (size_t j = 0; j < 4; ++j) {
+                size_t vj = cornerIndices[j];
+                Real val = lmass(i, j);
+                if (val > 1e-12) {
+                    mat_i.push_back(2 * vi);
+                    mat_j.push_back(2 * vj);
+                    mat_v.push_back(val);
 
-            mat_i.push_back(2 * vidx + 1);
-            mat_j.push_back(2 * vidx + 1);
-            mat_v.push_back(lmass.result(i));
+                    mat_i.push_back(2 * vi + 1);
+                    mat_j.push_back(2 * vj + 1);
+                    mat_v.push_back(val);
+                }
+            }
         }
     }
 }

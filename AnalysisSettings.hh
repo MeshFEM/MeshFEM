@@ -17,15 +17,16 @@
 struct AnalysisSettings {
     AnalysisSettings()
         : Nx(10), Ny(10), quadrature(UNIFORM_QUADRATURE), quadraturePoints(9),
-          lumpedMass(true), laplacianModes(false), numModes(10),
-          weakRegionsPerMode(5), weaknessCutoff(.95),
+          massMatrixType(MASS_QUARTER_CELL), laplacianModes(false),
+          numModes(10), weakRegionsPerMode(5), weaknessCutoff(.95),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     // Element settings
     size_t Nx, Ny;
     QuadratureMethod quadrature;
     size_t quadraturePoints;
-    bool lumpedMass, gaussNodes;
+    bool gaussNodes;
+    MassMatrixType massMatrixType;
 
     // True: use laplacian eigenfunctions instead of true stiffness eigenvectors
     bool laplacianModes;

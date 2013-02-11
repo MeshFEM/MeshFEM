@@ -35,11 +35,12 @@ public slots:
 private slots:
     void elementGridControlsChanged(int i);
     void modalAnalysisControlsChanged(int i);
+    void matrixControlsChanged(int i);
     void materialControlsChanged(double v);
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);
-    void materialSettingsChanged(const AnalysisSettings &settings);
+    void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
 
 private:
@@ -48,9 +49,10 @@ private:
     // Elements and quadrature settings
     QSpinBox *g_nxStepper, *g_nyStepper;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
-    QCheckBox *g_lumpedMassCheck, *g_gaussQuadratureCheck;
+    QCheckBox *g_gaussQuadratureCheck;
 
-    // Material settings
+    // Matrix/material settings
+    QComboBox *g_massMatrixSelector;
     QDoubleSpinBox *g_youngModulusStepper;
     QDoubleSpinBox *g_poissonRatioStepper;
     QDoubleSpinBox *g_densityStepper;
