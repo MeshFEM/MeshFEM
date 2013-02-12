@@ -29,8 +29,10 @@ public:
     typedef Eigen::Matrix<Real, 5, 1> DType;
     typedef typename Solver<Real>::VectorField VectorField;
 
-    class PerElementStiffnessDerivative;
-    class PerElementMassMatrixDerivative;
+    class PerElementLaplacianStiffnessDensity;
+    class PerElementStiffnessDensity;
+    class PerElementGradU;
+    class PerElementMassMatrixDensity;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings,
                 Solver<Real> *solver)

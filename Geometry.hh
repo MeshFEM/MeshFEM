@@ -35,6 +35,10 @@ struct BBox {
               (v.array() * (maxCorner - minCorner).array()).matrix();
     }
 
+    Vector dimensions() const {
+        return maxCorner - minCorner;
+    }
+
     Real volume() const {
         Vector widths = maxCorner - minCorner;
         Real result = 1.0;

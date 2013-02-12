@@ -11,15 +11,19 @@
 // 0         1
 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementStiffnessDerivative
+class MeshlessFEM<Model>::PerElementStiffnessDensity
 {
 public:
     typedef Eigen::Matrix<Real, 8, 8> value_type;
     // D: (d00, d01, d10, d11, d22)
-    PerElementStiffnessDerivative(const DType &d, const Model &model)
+    PerElementStiffnessDensity(const DType &d, const Model &model)
         : m_model(model), m_d(d) { clear(); }
 
     void clear() { result = value_type::Zero(); }
+
+    void setDimensions(const Vector &dims) {
+        m_dimensions = dims;
+    }
 
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
@@ -32,70 +36,73 @@ public:
         // .5 scaling for d22 is to account for engineering stress * strain
         // double counting the off-diagonals.
         Real d00 = m_d[0], d01 = m_d[1], d10 = m_d[2], d11 = m_d[3], d22 = .5 * m_d[4];
-        result(0, 0) += weight * (y * y * d00 - 2 * y * d00 + d00 + d22 - 2 * x * d22 + x * x * d22);
-        result(0, 1) += weight * (d01 - y * d01 - d01 * x + y * d01 * x + d22 - y * d22 - x * d22 + y * d22 * x);
-        result(0, 2) += weight * (2 * y * d00 - y * y * d00 - d00 - x * x * d22 + x * d22);
-        result(0, 3) += weight * (-y * d01 * x + d01 * x + y * d22 - y * d22 * x - d22 + x * d22);
-        result(0, 4) += weight * (y * y * d00 - y * d00 + x * x * d22 - x * d22);
-        result(0, 5) += weight * (y * d01 * x - d01 * x + y * d22 * x - y * d22);
-        result(0, 6) += weight * (-y * y * d00 + y * d00 + 2 * x * d22 - x * x * d22 - d22);
-        result(0, 7) += weight * (y * d01 - y * d01 * x - d01 + d01 * x - y * d22 * x + y * d22);
-        result(1, 0) += weight * (d10 - d10 * y - x * d10 + x * d10 * y + d22 - y * d22 - x * d22 + y * d22 * x);
-        result(1, 1) += weight * (d11 - 2 * x * d11 + x * x * d11 + y * y * d22 - 2 * y * d22 + d22);
-        result(1, 2) += weight * (d10 * y - x * d10 * y - d10 + x * d10 - y * d22 * x + x * d22);
-        result(1, 3) += weight * (-x * x * d11 + x * d11 + 2 * y * d22 - y * y * d22 - d22);
-        result(1, 4) += weight * (x * d10 * y - d10 * y + y * d22 * x - x * d22);
-        result(1, 5) += weight * (x * x * d11 - x * d11 + y * y * d22 - y * d22);
-        result(1, 6) += weight * (-x * d10 * y + d10 * y + y * d22 - y * d22 * x - d22 + x * d22);
-        result(1, 7) += weight * (2 * x * d11 - x * x * d11 - d11 - y * y * d22 + y * d22);
-        result(2, 0) += weight * (2 * y * d00 - y * y * d00 - d00 - x * x * d22 + x * d22);
-        result(2, 1) += weight * (y * d01 - y * d01 * x - d01 + d01 * x - y * d22 * x + x * d22);
-        result(2, 2) += weight * (y * y * d00 - 2 * y * d00 + d00 + x * x * d22);
-        result(2, 3) += weight * (-d01 * x + y * d01 * x - x * d22 + y * d22 * x);
-        result(2, 4) += weight * (y * d00 - y * y * d00 - x * x * d22);
-        result(2, 5) += weight * (d01 * x - y * d01 * x - y * d22 * x);
-        result(2, 6) += weight * (y * y * d00 - y * d00 + x * x * d22 - x * d22);
-        result(2, 7) += weight * (d01 - y * d01 - d01 * x + y * d01 * x + y * d22 * x);
-        result(3, 0) += weight * (-x * d10 * y + x * d10 + y * d22 - y * d22 * x - d22 + x * d22);
-        result(3, 1) += weight * (-x * x * d11 + x * d11 + 2 * y * d22 - y * y * d22 - d22);
-        result(3, 2) += weight * (-x * d10 + x * d10 * y - x * d22 + y * d22 * x);
-        result(3, 3) += weight * (x * x * d11 + y * y * d22 - 2 * y * d22 + d22);
-        result(3, 4) += weight * (-x * d10 * y + x * d22 - y * d22 * x);
-        result(3, 5) += weight * (-x * x * d11 + y * d22 - y * y * d22);
-        result(3, 6) += weight * (x * d10 * y + d22 - y * d22 - x * d22 + y * d22 * x);
-        result(3, 7) += weight * (x * x * d11 - x * d11 + y * y * d22 - y * d22);
-        result(4, 0) += weight * (y * y * d00 - y * d00 + x * x * d22 - x * d22);
-        result(4, 1) += weight * (y * d01 * x - y * d01 + y * d22 * x - x * d22);
-        result(4, 2) += weight * (y * d00 - y * y * d00 - x * x * d22);
-        result(4, 3) += weight * (-y * d01 * x + x * d22 - y * d22 * x);
-        result(4, 4) += weight * (y * y * d00 + x * x * d22);
-        result(4, 5) += weight * (y * d01 * x + y * d22 * x);
-        result(4, 6) += weight * (-y * y * d00 + x * d22 - x * x * d22);
-        result(4, 7) += weight * (y * d01 - y * d01 * x - y * d22 * x);
-        result(5, 0) += weight * (x * d10 * y - x * d10 + y * d22 * x - y * d22);
-        result(5, 1) += weight * (x * x * d11 - x * d11 + y * y * d22 - y * d22);
-        result(5, 2) += weight * (x * d10 - x * d10 * y - y * d22 * x);
-        result(5, 3) += weight * (-x * x * d11 + y * d22 - y * y * d22);
-        result(5, 4) += weight * (x * d10 * y + y * d22 * x);
-        result(5, 5) += weight * (x * x * d11 + y * y * d22);
-        result(5, 6) += weight * (-x * d10 * y + y * d22 - y * d22 * x);
-        result(5, 7) += weight * (x * d11 - x * x * d11 - y * y * d22);
-        result(6, 0) += weight * (-y * y * d00 + y * d00 + 2 * x * d22 - x * x * d22 - d22);
-        result(6, 1) += weight * (-y * d01 * x + y * d01 + y * d22 - y * d22 * x - d22 + x * d22);
-        result(6, 2) += weight * (y * y * d00 - y * d00 + x * x * d22 - x * d22);
-        result(6, 3) += weight * (y * d01 * x + d22 - y * d22 - x * d22 + y * d22 * x);
-        result(6, 4) += weight * (-y * y * d00 + x * d22 - x * x * d22);
-        result(6, 5) += weight * (-y * d01 * x + y * d22 - y * d22 * x);
-        result(6, 6) += weight * (y * y * d00 + d22 - 2 * x * d22 + x * x * d22);
-        result(6, 7) += weight * (-y * d01 + y * d01 * x - y * d22 + y * d22 * x);
-        result(7, 0) += weight * (d10 * y - x * d10 * y - d10 + x * d10 - y * d22 * x + y * d22);
-        result(7, 1) += weight * (2 * x * d11 - x * x * d11 - d11 - y * y * d22 + y * d22);
-        result(7, 2) += weight * (d10 - d10 * y - x * d10 + x * d10 * y + y * d22 * x);
-        result(7, 3) += weight * (x * x * d11 - x * d11 + y * y * d22 - y * d22);
-        result(7, 4) += weight * (d10 * y - x * d10 * y - y * d22 * x);
-        result(7, 5) += weight * (x * d11 - x * x * d11 - y * y * d22);
-        result(7, 6) += weight * (-d10 * y + x * d10 * y - y * d22 + y * d22 * x);
-        result(7, 7) += weight * (d11 - 2 * x * d11 + x * x * d11 + y * y * d22);
+        Real invW = 1.0 / m_dimensions[0];
+        Real invH = 1.0 / m_dimensions[1];
+
+        result(0, 0) += weight * (invW * invW * y * y * d00 - 2 * invW * invW * d00 * y + invW * invW * d00 + invH * invH * d22 - 2 * invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(0, 1) += weight * (invW * d01 * invH - invW * d01 * invH * x - invW * d01 * invH * y + invW * y * d01 * invH * x + invW * d22 * invH - invW * d22 * invH * x - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(0, 2) += weight * (2 * invW * invW * d00 * y - invW * invW * y * y * d00 - invW * invW * d00 - invH * invH * x * x * d22 + invH * invH * d22 * x);
+        result(0, 3) += weight * (-invW * y * d01 * invH * x + invW * d01 * invH * x + invW * d22 * invH * y - invW * d22 * invH - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(0, 4) += weight * (-invW * invW * d00 * y + invW * invW * y * y * d00 - invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(0, 5) += weight * (invW * y * d01 * invH * x - invW * d01 * invH * x + invH * x * d22 * invW * y - invW * d22 * invH * y);
+        result(0, 6) += weight * (-invW * invW * y * y * d00 + invW * invW * d00 * y + 2 * invH * invH * d22 * x - invH * invH * x * x * d22 - invH * invH * d22);
+        result(0, 7) += weight * (invW * d01 * invH * y - invW * d01 * invH - invW * y * d01 * invH * x + invW * d01 * invH * x - invH * x * d22 * invW * y + invW * d22 * invH * y);
+        result(1, 0) += weight * (invH * d10 * invW - invH * x * d10 * invW - invH * d10 * invW * y + invH * x * d10 * invW * y + invW * d22 * invH - invW * d22 * invH * x - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(1, 1) += weight * (invH * invH * d11 - 2 * invH * invH * d11 * x + invH * invH * x * x * d11 + invW * invW * y * y * d22 - 2 * invW * invW * d22 * y + invW * invW * d22);
+        result(1, 2) += weight * (invH * d10 * invW * y - invH * d10 * invW - invH * x * d10 * invW * y + invH * x * d10 * invW - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(1, 3) += weight * (-invH * invH * x * x * d11 + invH * invH * d11 * x + 2 * invW * invW * d22 * y - invW * invW * y * y * d22 - invW * invW * d22);
+        result(1, 4) += weight * (invH * x * d10 * invW * y - invH * d10 * invW * y + invH * x * d22 * invW * y - invW * d22 * invH * x);
+        result(1, 5) += weight * (-invH * invH * d11 * x + invH * invH * x * x * d11 - invW * invW * d22 * y + invW * invW * y * y * d22);
+        result(1, 6) += weight * (-invH * x * d10 * invW * y + invH * d10 * invW * y + invW * d22 * invH * y - invW * d22 * invH - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(1, 7) += weight * (2 * invH * invH * d11 * x - invH * invH * x * x * d11 - invH * invH * d11 - invW * invW * y * y * d22 + invW * invW * d22 * y);
+        result(2, 0) += weight * (2 * invW * invW * d00 * y - invW * invW * y * y * d00 - invW * invW * d00 - invH * invH * x * x * d22 + invH * invH * d22 * x);
+        result(2, 1) += weight * (invW * d01 * invH * y - invW * d01 * invH - invW * y * d01 * invH * x + invW * d01 * invH * x - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(2, 2) += weight * (invW * invW * y * y * d00 - 2 * invW * invW * d00 * y + invW * invW * d00 + invH * invH * x * x * d22);
+        result(2, 3) += weight * (-invW * d01 * invH * x + invW * y * d01 * invH * x - invW * d22 * invH * x + invH * x * d22 * invW * y);
+        result(2, 4) += weight * (invW * invW * d00 * y - invW * invW * y * y * d00 - invH * invH * x * x * d22);
+        result(2, 5) += weight * (invW * d01 * invH * x - invW * y * d01 * invH * x - invH * x * d22 * invW * y);
+        result(2, 6) += weight * (-invW * invW * d00 * y + invW * invW * y * y * d00 - invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(2, 7) += weight * (invW * d01 * invH - invW * d01 * invH * x - invW * d01 * invH * y + invW * y * d01 * invH * x + invH * x * d22 * invW * y);
+        result(3, 0) += weight * (-invH * x * d10 * invW * y + invH * x * d10 * invW + invW * d22 * invH * y - invW * d22 * invH - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(3, 1) += weight * (-invH * invH * x * x * d11 + invH * invH * d11 * x + 2 * invW * invW * d22 * y - invW * invW * y * y * d22 - invW * invW * d22);
+        result(3, 2) += weight * (-invH * x * d10 * invW + invH * x * d10 * invW * y - invW * d22 * invH * x + invH * x * d22 * invW * y);
+        result(3, 3) += weight * (invH * invH * x * x * d11 + invW * invW * y * y * d22 - 2 * invW * invW * d22 * y + invW * invW * d22);
+        result(3, 4) += weight * (-invH * x * d10 * invW * y + invW * d22 * invH * x - invH * x * d22 * invW * y);
+        result(3, 5) += weight * (-invH * invH * x * x * d11 + invW * invW * d22 * y - invW * invW * y * y * d22);
+        result(3, 6) += weight * (invH * x * d10 * invW * y + invW * d22 * invH - invW * d22 * invH * x - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(3, 7) += weight * (-invH * invH * d11 * x + invH * invH * x * x * d11 - invW * invW * d22 * y + invW * invW * y * y * d22);
+        result(4, 0) += weight * (-invW * invW * d00 * y + invW * invW * y * y * d00 - invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(4, 1) += weight * (invW * y * d01 * invH * x - invW * d01 * invH * y + invH * x * d22 * invW * y - invW * d22 * invH * x);
+        result(4, 2) += weight * (invW * invW * d00 * y - invW * invW * y * y * d00 - invH * invH * x * x * d22);
+        result(4, 3) += weight * (-invW * y * d01 * invH * x + invW * d22 * invH * x - invH * x * d22 * invW * y);
+        result(4, 4) += weight * (invW * invW * y * y * d00 + invH * invH * x * x * d22);
+        result(4, 5) += weight * (invW * y * d01 * invH * x + invH * x * d22 * invW * y);
+        result(4, 6) += weight * (-invW * invW * y * y * d00 + invH * invH * d22 * x - invH * invH * x * x * d22);
+        result(4, 7) += weight * (invW * d01 * invH * y - invW * y * d01 * invH * x - invH * x * d22 * invW * y);
+        result(5, 0) += weight * (invH * x * d10 * invW * y - invH * x * d10 * invW + invH * x * d22 * invW * y - invW * d22 * invH * y);
+        result(5, 1) += weight * (-invH * invH * d11 * x + invH * invH * x * x * d11 - invW * invW * d22 * y + invW * invW * y * y * d22);
+        result(5, 2) += weight * (invH * x * d10 * invW - invH * x * d10 * invW * y - invH * x * d22 * invW * y);
+        result(5, 3) += weight * (-invH * invH * x * x * d11 + invW * invW * d22 * y - invW * invW * y * y * d22);
+        result(5, 4) += weight * (invH * x * d10 * invW * y + invH * x * d22 * invW * y);
+        result(5, 5) += weight * (invH * invH * x * x * d11 + invW * invW * y * y * d22);
+        result(5, 6) += weight * (-invH * x * d10 * invW * y + invW * d22 * invH * y - invH * x * d22 * invW * y);
+        result(5, 7) += weight * (invH * invH * d11 * x - invH * invH * x * x * d11 - invW * invW * y * y * d22);
+        result(6, 0) += weight * (-invW * invW * y * y * d00 + invW * invW * d00 * y + 2 * invH * invH * d22 * x - invH * invH * x * x * d22 - invH * invH * d22);
+        result(6, 1) += weight * (-invW * y * d01 * invH * x + invW * d01 * invH * y + invW * d22 * invH * y - invW * d22 * invH - invH * x * d22 * invW * y + invW * d22 * invH * x);
+        result(6, 2) += weight * (-invW * invW * d00 * y + invW * invW * y * y * d00 - invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(6, 3) += weight * (invW * y * d01 * invH * x + invW * d22 * invH - invW * d22 * invH * x - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(6, 4) += weight * (-invW * invW * y * y * d00 + invH * invH * d22 * x - invH * invH * x * x * d22);
+        result(6, 5) += weight * (-invW * y * d01 * invH * x + invW * d22 * invH * y - invH * x * d22 * invW * y);
+        result(6, 6) += weight * (invW * invW * y * y * d00 + invH * invH * d22 - 2 * invH * invH * d22 * x + invH * invH * x * x * d22);
+        result(6, 7) += weight * (-invW * d01 * invH * y + invW * y * d01 * invH * x - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(7, 0) += weight * (invH * d10 * invW * y - invH * d10 * invW - invH * x * d10 * invW * y + invH * x * d10 * invW - invH * x * d22 * invW * y + invW * d22 * invH * y);
+        result(7, 1) += weight * (2 * invH * invH * d11 * x - invH * invH * x * x * d11 - invH * invH * d11 - invW * invW * y * y * d22 + invW * invW * d22 * y);
+        result(7, 2) += weight * (invH * d10 * invW - invH * x * d10 * invW - invH * d10 * invW * y + invH * x * d10 * invW * y + invH * x * d22 * invW * y);
+        result(7, 3) += weight * (-invH * invH * d11 * x + invH * invH * x * x * d11 - invW * invW * d22 * y + invW * invW * y * y * d22);
+        result(7, 4) += weight * (invH * d10 * invW * y - invH * x * d10 * invW * y - invH * x * d22 * invW * y);
+        result(7, 5) += weight * (invH * invH * d11 * x - invH * invH * x * x * d11 - invW * invW * y * y * d22);
+        result(7, 6) += weight * (-invH * d10 * invW * y + invH * x * d10 * invW * y - invW * d22 * invH * y + invH * x * d22 * invW * y);
+        result(7, 7) += weight * (invH * invH * d11 - 2 * invH * invH * d11 * x + invH * invH * x * x * d11 + invW * invW * y * y * d22);
     }
 
     Real operator()(size_t i, size_t j) const {
@@ -106,15 +113,57 @@ public:
 private:
     const Model &m_model;
     const DType &m_d;
+    Vector m_dimensions;
+
     value_type result;
 };
 
+// template<typename Model>
+// class MeshlessFEM<Model>::PerElementGradU
+// {
+// public:
+//     // i, j entry: d phi_i / d x_j
+//     typedef Eigen::Matrix<Real, 4, 2> value_type;
+//     typedef Eigen::Matrix<Real, 3, 1> StrainVec;
+// 
+//     // D: (d00, d01, d10, d11, d22)
+//     PerElementGradU(const Model &model)
+//         : m_model(model) { clear(); }
+// 
+//     void clear() { result = value_type::Zero(); }
+// 
+//     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
+//     {
+//         if (!m_model.isInside(sample))
+//             return;
+//         Real x = ref_sample[0], y = ref_sample[1];
+//         // TODO: add in chain rule contributions
+//         // phi0 = (1 - x) * (1 - y)    =>    grad phi0 = (y - 1,  x - 1)
+//         // phi1 =      x  * (1 - y)    =>    grad phi1 = (1 - y,     -x)
+//         // phi2 =      x  *      y     =>    grad phi2 = (    y,      x)
+//         // phi3 = (1 - x) *      y     =>    grad phi3 = (   -y,  1 - x)
+//         result(0, 0) += weight * (y - 1); result(0, 1) += weight * (x - 1);
+//         result(1, 0) += weight * (1 - y); result(1, 1) += weight * (   -x);
+//         result(2, 0) += weight * (    y); result(2, 1) += weight * (    x);
+//         result(3, 0) += weight * (   -y); result(3, 1) += weight * (1 - x);
+//     }
+// 
+//     Real operator()(size_t i, size_t j) const {
+//         assert((i < 8) && (j < 8));
+//         return result(i, j);
+//     }
+// 
+// private:
+//     const Model &m_model;
+//     value_type result;
+// };
+// 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementMassMatrixDerivative
+class MeshlessFEM<Model>::PerElementMassMatrixDensity
 {
 public:
     typedef Eigen::Matrix<Real, 4, 4> value_type;
-    PerElementMassMatrixDerivative(const Model &model, Real density,
+    PerElementMassMatrixDensity(const Model &model, Real density,
                                    MassMatrixType type = MASS_QUARTER_CELL)
         : m_model(model), m_density(density), m_type(type)
     {
@@ -187,14 +236,16 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
-    PerElementStiffnessDerivative stiff(m_d, model());
+    PerElementStiffnessDensity stiff(m_d, model());
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
     mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         stiff.clear();
-        q.integrate(stiff, elemGrid.elementBoundingBox(e));
+        BBox_t b = elemGrid.elementBoundingBox(e);
+        stiff.setDimensions(b.dimensions());
+        q.integrate(stiff, b);
         elemGrid.elementCorners(e, cornerIndices);
         for (size_t i = 0; i < 4; ++i) {
             size_t vi = cornerIndices[i];
@@ -232,7 +283,7 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
-    PerElementMassMatrixDerivative lmass(model(), m_density, m_massMatrixType);
+    PerElementMassMatrixDensity lmass(model(), m_density, m_massMatrixType);
     typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
 
     mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
