@@ -35,7 +35,7 @@ public:
         // Derivations/2DStiffness.mpl
         // .5 scaling for d22 is to account for engineering stress * strain
         // double counting the off-diagonals.
-        Real d00 = m_d[0], d01 = m_d[1], d10 = m_d[2], d11 = m_d[3], d22 = .5 * m_d[4];
+        Real d00 = m_d[0], d01 = m_d[1], d10 = m_d[1], d11 = m_d[2], d22 = .5 * m_d[3];
         Real invW = 1.0 / m_dimensions[0];
         Real invH = 1.0 / m_dimensions[1];
 
@@ -118,46 +118,67 @@ private:
     value_type result;
 };
 
-// template<typename Model>
-// class MeshlessFEM<Model>::PerElementGradU
-// {
-// public:
-//     // i, j entry: d phi_i / d x_j
-//     typedef Eigen::Matrix<Real, 4, 2> value_type;
-//     typedef Eigen::Matrix<Real, 3, 1> StrainVec;
-// 
-//     // D: (d00, d01, d10, d11, d22)
-//     PerElementGradU(const Model &model)
-//         : m_model(model) { clear(); }
-// 
-//     void clear() { result = value_type::Zero(); }
-// 
-//     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
-//     {
-//         if (!m_model.isInside(sample))
-//             return;
-//         Real x = ref_sample[0], y = ref_sample[1];
-//         // TODO: add in chain rule contributions
-//         // phi0 = (1 - x) * (1 - y)    =>    grad phi0 = (y - 1,  x - 1)
-//         // phi1 =      x  * (1 - y)    =>    grad phi1 = (1 - y,     -x)
-//         // phi2 =      x  *      y     =>    grad phi2 = (    y,      x)
-//         // phi3 = (1 - x) *      y     =>    grad phi3 = (   -y,  1 - x)
-//         result(0, 0) += weight * (y - 1); result(0, 1) += weight * (x - 1);
-//         result(1, 0) += weight * (1 - y); result(1, 1) += weight * (   -x);
-//         result(2, 0) += weight * (    y); result(2, 1) += weight * (    x);
-//         result(3, 0) += weight * (   -y); result(3, 1) += weight * (1 - x);
-//     }
-// 
-//     Real operator()(size_t i, size_t j) const {
-//         assert((i < 8) && (j < 8));
-//         return result(i, j);
-//     }
-// 
-// private:
-//     const Model &m_model;
-//     value_type result;
-// };
-// 
+// Average grad phi over the element.
+template<typename Model>
+class MeshlessFEM<Model>::PerElementGradPhi
+{
+public:
+    // D: (d00, d01, d10, d11, d22)
+    PerElementGradPhi(const Model &model)
+        : m_model(model) { clear(); }
+
+    void clear() {
+        result = GradPhis::Zero();
+        m_volume = 0.0;
+    }
+
+    void setDimensions(const Vector &dims) {
+        m_dimensions = dims;
+    }
+
+    void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
+    {
+        if (!m_model.isInside(sample))
+            return;
+        Real x = ref_sample[0], y = ref_sample[1];
+        // phi0 = (1 - x) * (1 - y) => grad phi0 = (invW (y - 1), invH (x - 1))
+        // phi1 =      x  * (1 - y) => grad phi1 = (invW (1 - y), invH (   -x))
+        // phi2 =      x  *      y  => grad phi2 = (invW (    y), invH (    x))
+        // phi3 = (1 - x) *      y  => grad phi3 = (invW (   -y), invH (1 - x))
+        Real invW = 1.0 / m_dimensions[0];
+        Real invH = 1.0 / m_dimensions[1];
+        Real xWeight = weight * invW;
+        Real yWeight = weight * invH;
+
+        result(0, 0) += xWeight * (y - 1); result(0, 1) += yWeight * (x - 1);
+        result(1, 0) += xWeight * (1 - y); result(1, 1) += yWeight * (   -x);
+        result(2, 0) += xWeight * (    y); result(2, 1) += yWeight * (    x);
+        result(3, 0) += xWeight * (   -y); result(3, 1) += yWeight * (1 - x);
+
+        m_volume += weight * m_dimensions[0] * m_dimensions[1];
+    }
+
+    void finalize() {
+        result /= m_volume;
+    }
+
+    Real operator()(size_t i, size_t j) const {
+        assert((i < 8) && (j < 8));
+        return result(i, j);
+    }
+
+    // Allow type cast to GradPhi
+    operator const GradPhis &() const {
+        return result;
+    }
+
+private:
+    const Model &m_model;
+    GradPhis result;
+    Vector m_dimensions;
+    Real m_volume;
+};
+
 template<typename Model>
 class MeshlessFEM<Model>::PerElementMassMatrixDensity
 {
@@ -229,6 +250,61 @@ private:
 };
 
 template<typename Model>
+class MeshlessFEM<Model>::ElementData
+{
+public:
+    ElementData() { }
+
+    void setGradPhis(const GradPhis &gp) {
+        m_gradPhis = gp;
+    }
+
+    typedef typename MeshlessFEM<Model>::FlattenedTensor FlattenedTensor;
+
+    // Compute non-engineering strain tensor for linear elasticity:
+    // e_xx = d u_x / dx = u_0_x d phi_0 / dx + u_1_x d phi_1 / dx + ...
+    // e_yy = d u_y / dy = u_0_y d phi_0 / dy + u_1_y d phi_1 / dy + ...
+    // e_xy = .5 * (d u_y / dx + d u_x / dy) = u_0_x d phi_0 / dy + ...
+    template<typename Tensor>
+    void displacementToStrain(const VField &displacements,
+                              const CornerVec &corners, Tensor &strain) const
+    {
+        strain[0] = strain[1] = strain[2] = 0;
+
+        for (size_t c = 0; c < (size_t) corners.size(); ++c) {
+            size_t v = corners[c];
+            // e_xx contribution
+            strain[0] += m_gradPhis(c, 0) * displacements(v)[0];
+            // e_yy contribution
+            strain[1] += m_gradPhis(c, 1) * displacements(v)[1];
+            // e_xy contribution
+            strain[2] += .5 * (m_gradPhis(c, 0) * displacements(v)[1]
+                            +  m_gradPhis(c, 1) * displacements(v)[0]);
+        }
+    }
+
+    // Compute non-engineering stress tensor for linear elasticity:
+    // sigma = D * B * u = D * displacementToStress
+    // D = d00 d01   0 =  d0 d1   0 
+    //     d10 d11   0    d1 d2   0
+    //     0   0   d22    0   0   d3
+    template<typename Tensor>
+    void displacementToStress(const VField &displacements,
+                              const CornerVec &corners, const DType &d,
+                              Tensor &stress) const
+    {
+        FlattenedTensor strain;
+        displacementToStrain(displacements, corners, strain);
+        stress[0] = d[0] * strain[0] + d[1] * strain[1];
+        stress[1] = d[1] * strain[0] + d[2] * strain[1];
+        stress[2] = d[3] * strain[2];
+    }
+    
+private:
+    GradPhis m_gradPhis;
+};
+
+template<typename Model>
 void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
         IndexVec &mat_j, std::vector<Real> &mat_v)
 {
@@ -237,9 +313,9 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
     PerElementStiffnessDensity stiff(m_d, model());
-    typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
+    CornerVec cornerIndices;
 
-    mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
+    mat_i.clear(); mat_j.clear(); mat_v.clear();
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         stiff.clear();
@@ -275,6 +351,56 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
     }
 }
 
+
+// Compute the quantities needed to evaluate strain from displacement.
+template<typename Model>
+void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
+{
+    // Simple (i, j v) stiffness matrix generation
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    const Quadrature2D &q = quadrature();
+    PerElementGradPhi gradPhi(model());
+
+    size_t numElements = elemGrid.numElements();
+    if (m_elementData.size() != numElements) {
+        m_elementData.resize(numElements);
+    }
+    for (size_t e = 0; e < numElements; ++e) {
+        gradPhi.clear();
+        BBox_t b = elemGrid.elementBoundingBox(e);
+        gradPhi.setDimensions(b.dimensions());
+        q.integrate(gradPhi, b);
+        gradPhi.finalize();
+        m_elementData[e].setGradPhis(gradPhi);
+    }
+
+    m_displacementStrainCached = true;
+}
+
+template<typename Model>
+typename MeshlessFEM<Model>::SMField
+MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
+{
+    if (!m_displacementStrainCached) {
+        m_computePerElementDisplacementStrainMap();
+    }
+    size_t numElements = elementGrid().numElements();
+    assert(m_elementData.size() == numElements);
+
+    SMField stressTensorField(numElements);
+
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    for (size_t e = 0; e < numElements; ++e) {
+        CornerVec cornerIndices;
+        elemGrid.elementCorners(e, cornerIndices);
+        typename SMField::SymmetricMatrix tensor = stressTensorField(e);
+        m_elementData[e].displacementToStress(displacement, cornerIndices, m_d,
+                                              tensor);
+    }
+
+    return stressTensorField;
+}
+
 template<typename Model>
 void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
         IndexVec &mat_j, std::vector<Real> &mat_v)
@@ -284,9 +410,9 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     const Quadrature2D &q = quadrature();
     n = 2 * elemGrid.numNodes();
     PerElementMassMatrixDensity lmass(model(), m_density, m_massMatrixType);
-    typename ElementGrid2D<Model>::AdjacencyVec cornerIndices;
+    CornerVec cornerIndices;
 
-    mat_i.resize(0); mat_j.resize(0); mat_v.resize(0);
+    mat_i.clear(); mat_j.clear(); mat_v.clear();
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         lmass.clear();

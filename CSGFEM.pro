@@ -27,7 +27,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            Quadrature.hh MeshlessFEM.hh ElementGrid.hh \
            MatlabInterface/MatlabInterface.h \
            MatlabInterface/MatlabShell.h QMatlabInterface.hh \
-           QCommandLine.hh Solver.hh
+           QCommandLine.hh Solver.hh Fields.hh
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \

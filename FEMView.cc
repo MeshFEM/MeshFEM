@@ -196,10 +196,10 @@ void FEMView2D::m_drawWorldVertex(const Vector &v)
     glVertex2f(c, r);
 }
 
-void FEMView2D::drawGrid(DrawOp op, const VectorField &deformation)
+void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
-    bool hasDeformation = ((size_t) deformation.rows() == 2 * grid.numNodes());
+    bool hasDeformation = ((size_t) deformation.domainSize() == grid.numNodes());
     ElementGrid2D_t::AdjacencyVec corners;
 
     glColor3f(0, 0, 0);
@@ -216,10 +216,8 @@ void FEMView2D::drawGrid(DrawOp op, const VectorField &deformation)
             grid.elementCorners(i, corners);
             for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
                 Vector p = grid.nodePosition(corners[c]);
-                if (hasDeformation) {
-                    p[0] += deformation[2 * corners[c] + 0];
-                    p[1] += deformation[2 * corners[c] + 1];
-                }
+                if (hasDeformation)
+                    p += deformation(corners[c]);
                 m_drawWorldVertex(p);
             }
         }
@@ -231,10 +229,8 @@ void FEMView2D::drawGrid(DrawOp op, const VectorField &deformation)
         glBegin(GL_POINTS);
         for (unsigned int i = 0; i < grid.numNodes(); ++i) {
             Vector p = grid.nodePosition(i);
-            if (hasDeformation) {
-                p[0] += deformation[2 * i + 0];
-                p[1] += deformation[2 * i + 1];
-            }
+            if (hasDeformation)
+                p += deformation(i);
             m_drawWorldVertex(p);
         }
         glEnd();
@@ -258,7 +254,7 @@ void FEMView2D::draw()
     }
     else if (m_guiState == DISPLACEMENTS_STATE) {
         glDisable(GL_TEXTURE_2D);
-        VectorField deformation;
+        VField deformation;
         if (m_selectedDeformation < m_fem.numModes()) {
             deformation = m_fem.mode(m_selectedDeformation);
             // Scale deformation so that the maximum displacement doesn't exceed
@@ -266,10 +262,10 @@ void FEMView2D::draw()
             Scalar relMag = .125;
             Scalar maxX = 0.0, maxY = 0.0;
             size_t numNodes = m_fem.elementGrid().numNodes();
-            assert((size_t) deformation.rows() == 2 * numNodes);
+            assert((size_t) deformation.domainSize() == numNodes);
             for (size_t i = 0; i < numNodes; ++i) {
-                maxX = std::max((Scalar) std::abs(deformation[2 * i    ]), maxX);
-                maxY = std::max((Scalar) std::abs(deformation[2 * i + 1]), maxY);
+                maxX = std::max((Scalar) std::abs(deformation(i)[0]), maxX);
+                maxY = std::max((Scalar) std::abs(deformation(i)[1]), maxY);
             }
 
             Vector frameDim = m_frameMax - m_frameMin;

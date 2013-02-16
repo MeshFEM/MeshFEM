@@ -32,15 +32,15 @@ public:
 
     CSGTree()
     {
-        // CSGRectangleNode *rectA = new CSGRectangleNode(Vector(0, .0), Vector(.5, .5));
-        CSGRectangleNode *rectA = new CSGRectangleNode(Vector(0, .0), Vector(1.5, 1.5));
+        CSGRectangleNode *rectA = new CSGRectangleNode(Vector(0, .0), Vector(.5, .5));
+        // CSGRectangleNode *rectA = new CSGRectangleNode(Vector(0, .0), Vector(1.5, 1.5));
         CSGRectangleNode *rectB = new CSGRectangleNode(Vector(0, 0), Vector(3.80, .25), 30);
         CSGBoolNode *rectUnion = new CSGBoolNode(UNION, rectA, rectB);
         CSGEllipseNode *ellipse = new CSGEllipseNode(Vector(0, .5), Vector(.5, .7));
         CSGBoolNode *subtract = new CSGBoolNode(SUBTRACT, rectUnion, ellipse);
         CSGEllipseNode *circle = new CSGEllipseNode(Vector(0, 0), Vector(1.5, 1.5));
-        // m_roots.push_back(new CSGBoolNode(INTERSECT, subtract, circle));
-        m_roots.push_back(rectA);
+        m_roots.push_back(new CSGBoolNode(INTERSECT, subtract, circle));
+        // m_roots.push_back(rectA);
     }
 
     bool isInside(const Vector &p) const {

@@ -46,8 +46,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Elements and Quadrature
     QFormLayout *eqForm = new QFormLayout();
-    eqForm->addRow("Number of Columns", g_nxStepper);
-    eqForm->addRow("Number of Rows", g_nyStepper);
+    eqForm->addRow("Grid Columns", g_nxStepper);
+    eqForm->addRow("Grid Rows", g_nyStepper);
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     elementsQuadratureGroup->setLayout(eqForm);

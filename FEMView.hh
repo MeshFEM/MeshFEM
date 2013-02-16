@@ -29,7 +29,7 @@ class FEMView2D : public QGLWidget
 public:
     typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
                   DISPLACEMENTS_STATE} GUIState;
-    typedef MeshlessFEM_t::VectorField VectorField;
+    typedef MeshlessFEM_t::VField VField;
 
     FEMView2D(MeshlessFEM_t &fem, QWidget *parent = NULL);
     ~FEMView2D() {
@@ -98,8 +98,8 @@ private:
     template<typename Object>
     void drawObject(const Object *obj, const QColor &c) const;
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
-    void drawGrid(DrawOp op, const VectorField &deformation =
-                  VectorField());
+    void drawGrid(DrawOp op, const VField &deformation =
+                  VField());
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
