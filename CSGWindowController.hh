@@ -28,6 +28,8 @@ public:
         : m_csgTreeModel(treeModel), m_csgTreeView(treeView),
         m_csgTree(tree), m_femView(femView), m_fem(fem) { }
 
+    QTreeView *csgTreeView()  { return m_csgTreeView; }
+
 public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);

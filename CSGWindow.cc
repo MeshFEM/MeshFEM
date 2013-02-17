@@ -10,11 +10,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "CSGWindow.hh"
 #include "FEMView.hh"
-#include "CSGTreeModel.hh"
 #include <QtGui>
 
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
+#include "ModelForm.hh"
 #include "AnalysisSettings.hh"
 #include "AnalysisForm.hh"
 
@@ -29,15 +29,16 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     treeView->setModel(treeModel);
 
+    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
+                                         femView, fem);
+
+    ModelForm *modelForm = new ModelForm(controller);
     QWidget *sideBar = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout();
     QTabWidget *sideBarTab = new QTabWidget(sideBar);
-    sideBarTab->addTab(treeView, "Model");
+    sideBarTab->addTab(modelForm, "Model");
     layout->addWidget(sideBarTab);
     sideBar->setLayout(layout);
-
-    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
-                                         femView, fem);
 
     AnalysisForm *analysisForm = new AnalysisForm(settings, controller);
     sideBarTab->addTab(analysisForm, "Analyze");
@@ -50,18 +51,6 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     splitter->setStretchFactor(1, 1);
 
     // Set up connections
-    QObject::connect(treeView->selectionModel(),
-                     SIGNAL(selectionChanged(const QItemSelection &,
-                                             const QItemSelection &)),
-                     controller, SLOT(csgTreeSelectionChanged(
-                                        const QItemSelection &,
-                                        const QItemSelection &)));
-    QObject::connect(controller, SIGNAL(csgTreeApplyModifiedSelection(
-                                        const QItemSelection &,
-                                        QItemSelectionModel::SelectionFlags)),
-                     treeView->selectionModel(), SLOT(select(
-                                        const QItemSelection &,
-                                        QItemSelectionModel::SelectionFlags)));
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
                      femView, SLOT(csgNodesSelected(const NodeList &)));
     QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
