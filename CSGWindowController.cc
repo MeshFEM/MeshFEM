@@ -9,9 +9,24 @@
 //  Created:  01/30/2013 00:58:08
 ////////////////////////////////////////////////////////////////////////////////
 #include "CSGWindowController.hh"
+#include "MarchingSquaresGrid.hh"
 #include <list>
+#include <fstream>
 #include <iostream>
 #include <QMessageBox>
+
+using namespace std;
+
+void CSGWindowController::changedSidebarTab(int newTab) {
+    if (newTab == 0)
+        m_femView->setGUIState(FEMView2D::MODEL_STATE);
+    else {
+        // The model might have changed--notify m_fem
+        m_fem.modelChanged();
+        emit modesUpdated(&m_fem);
+        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    }
+}
 
 struct NodeAccumulator {
     typedef NodeList::iterator iterator;
@@ -66,19 +81,45 @@ void CSGWindowController::csgTreeSelectionChanged(
     // m_csgGLView->setSelectedCSGNodes()
 }
 
-void CSGWindowController::changedSidebarTab(int newTab) {
-    if (newTab == 0)
-        m_femView->setGUIState(FEMView2D::MODEL_STATE);
-    else {
-        // The model might have changed--notify m_fem
-        m_fem.modelChanged();
-        emit modesUpdated(&m_fem);
-        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+void CSGWindowController::saveBoundaryPolygon()
+{
+    // Output resolution... this should probably be configurable
+    size_t Nx = 400, Ny = 400;
+    MarchingSquaresGrid ms(Nx, Ny);
+    vector<Polygon_t> polygons;
+    assert(m_csgTree != NULL);
+    ms.extractBoundaryPolygons(*m_csgTree, polygons);
+    
+    if (polygons.size() == 0) {
+        QMessageBox mbox(QMessageBox::Critical,
+                "Save Boundary Polygon Failed",
+                "Error: no geometry boundary found", QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+        return;
+    }
+
+    QString fileName = QFileDialog::getSaveFileName(0, "Save Boundary Polygon");
+    if (fileName.length() > 0) {
+        ofstream polygonOut(fileName.toAscii());
+        if (!polygonOut.is_open()) {
+            QString errorMsg;
+            errorMsg.sprintf("Error: couldn't open file '%s' for writing.",
+                             (const char *) fileName.toAscii());
+
+            QMessageBox mbox(QMessageBox::Critical,
+                    "Save Boundary Polygon Failed",
+                    errorMsg, QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+        else {
+            polygonOut << polygons[0];
+        }
     }
 }
 
-void CSGWindowController::
-elementGridChanged(const AnalysisSettings &settings)
+void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
 {
     // When the grid changes, we must go back to the element state.
     m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);

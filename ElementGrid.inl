@@ -17,15 +17,15 @@
 template<typename Model>
 void ElementGrid2D<Model>::update()
 {
-    m_bbox = m_model.boundingBox();
+    setBoundingBox(m_model.boundingBox());
 
-    m_elementForCell.assign(m_numCells(), -1);
-    std::vector<bool> isFullElement(m_numCells(), false);
+    m_elementForCell.assign(numCells(), -1);
+    std::vector<bool> isFullElement(numCells(), false);
     size_t numElements = 0;
     for (size_t r = 0; r < m_Ny; ++r) {
         for (size_t c = 0; c < m_Nx; ++c) {
-            size_t cell = m_get1DCellIndex(r, c);
-            BBox_t b = m_cellBoundingBox(r, c);
+            size_t cell = get1DCellIndex(r, c);
+            BBox_t b = cellBoundingBox(r, c);
             std::vector<Vector> quadraturePoints =
                                 m_quadrature.quadraturePoints(b);
             size_t insideCount = 0;
@@ -43,35 +43,35 @@ void ElementGrid2D<Model>::update()
     m_cellForElement.resize(numElements);
     m_isFullElement.resize(numElements);
 
-    const size_t numVertices = m_numVertices();
-    std::vector<bool> isNode(numVertices);
+    const size_t numVerts = numVertices();
+    std::vector<bool> isNode(numVerts);
 
     // Invert m_elementForCell, mark nodes and full elements
-    AdjacencyVec cellVertices;
+    AdjacencyVec cellVerts;
     for (size_t cell = 0; cell < m_elementForCell.size(); ++cell) {
         int e = m_elementForCell[cell];
         if (e >= 0) {
             assert((size_t) e < numElements);
             m_cellForElement[e] = cell;
             m_isFullElement[e] = isFullElement[cell];
-            m_cellVertices(cell, cellVertices);
+            cellVertices(cell, cellVerts);
             // All corners of an element cell are nodes.
-            for (size_t i = 0; i < (size_t) cellVertices.rows(); ++i) {
-                assert((size_t) cellVertices[i] < numVertices);
-                isNode[cellVertices[i]] = true;
+            for (size_t i = 0; i < (size_t) cellVerts.rows(); ++i) {
+                assert((size_t) cellVerts[i] < numVerts);
+                isNode[cellVerts[i]] = true;
             }
         }
     }
 
     // Compute m_vertexForNode, m_nodeForVertex
-    m_nodeForVertex.assign(numVertices, -1);
+    m_nodeForVertex.assign(numVerts, -1);
     size_t numNodes = 0;
-    for (size_t v = 0; v < numVertices; ++v) {
+    for (size_t v = 0; v < numVerts; ++v) {
         if (isNode[v])
             m_nodeForVertex[v] = numNodes++;
     }
     m_vertexForNode.resize(numNodes);
-    for (size_t v = 0; v < numVertices; ++v) {
+    for (size_t v = 0; v < numVerts; ++v) {
         int n = m_nodeForVertex[v];
         if (n >= 0) {
             assert((size_t) n < numNodes);

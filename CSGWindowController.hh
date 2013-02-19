@@ -31,9 +31,13 @@ public:
     QTreeView *csgTreeView()  { return m_csgTreeView; }
 
 public slots:
+    void changedSidebarTab(int newTab);
+    // Modeling actions
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
-    void changedSidebarTab(int newTab);
+    void saveBoundaryPolygon();
+
+    // Analysis actions
     void elementGridChanged(const AnalysisSettings &settings);
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);

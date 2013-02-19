@@ -11,6 +11,7 @@
 #include "ModelForm.hh"
 
 #include <QTreeView>
+#include <QPushButton>
 #include "CSGWindowController.hh"
 #include "CSGTreeModel.hh"
 
@@ -18,18 +19,17 @@ ModelForm::ModelForm(CSGWindowController *controller, QWidget *parent)
 {
     QTreeView *treeView = controller->csgTreeView();
 
-    QVBoxLayout *modelSidebarLayout = new QVBoxLayout();
-    modelSidebarLayout->addWidget(treeView);
-    QPushButton *extractBoundaryButton = new QPushButton("Extract/Dump Boundary");
+    QVBoxLayout *layout = new QVBoxLayout();
+    QPushButton *extractBoundaryButton = new QPushButton("Save Boundary");
     treeView->setSizePolicy(QSizePolicy::MinimumExpanding,
                             QSizePolicy::MinimumExpanding);
-    modelSidebarLayout->addWidget(treeView);
-    modelSidebarLayout->addStretch(1);
-    modelSidebarLayout->addWidget(extractBoundaryButton);
-    modelSidebarLayout->setStretchFactor(treeView, 1);
-    modelSidebarLayout->setStretchFactor(extractBoundaryButton, 0);
+    layout->addWidget(treeView);
+    layout->addWidget(extractBoundaryButton);
+    layout->setStretchFactor(treeView, 1);
+    layout->setStretchFactor(extractBoundaryButton, 0);
+    layout->setContentsMargins(5, 5, 5, 5);
 
-    setLayout(modelSidebarLayout);
+    setLayout(layout);
 
     // Set up connections
     QObject::connect(treeView->selectionModel(),
@@ -44,4 +44,6 @@ ModelForm::ModelForm(CSGWindowController *controller, QWidget *parent)
                      treeView->selectionModel(), SLOT(select(
                                         const QItemSelection &,
                                         QItemSelectionModel::SelectionFlags)));
+    QObject::connect(extractBoundaryButton, SIGNAL(clicked()),
+                     controller, SLOT(saveBoundaryPolygon()));
 }

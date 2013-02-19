@@ -111,7 +111,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     layout->addWidget(modalAnalysisGroup);
     layout->addWidget(weaknessAnalysisGroup);
     layout->addWidget(simulationGroup);
-    layout->addStretch();
+    layout->addStretch(1.0);
+    layout->setContentsMargins(5, 5, 5, 5);
 
     // QScrollArea *scrollArea = new QScrollArea(this);
     // scrollArea->setLayout(layout);

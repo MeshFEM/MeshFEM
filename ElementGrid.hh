@@ -34,22 +34,23 @@
 
 #include "GlobalTypes.hh"
 #include "Quadrature.hh"
+#include "Grid.hh"
 #include <Eigen/Dense>
 #include <vector>
 
 template<typename Model>
-class ElementGrid2D {
+class ElementGrid2D : private Grid2D {
 public:
     typedef Eigen::Vector4i AdjacencyVec;
 
     ElementGrid2D(size_t Nx, size_t Ny, const Quadrature2D &q,
                   const Model &model)
-        : m_Nx(Nx), m_Ny(Ny), m_quadrature(q), m_model(model)
+        : Grid2D(Nx, Ny, model.boundingBox()), m_quadrature(q), m_model(model)
     {
         update();
     }
 
-    // Should be called whenever the quadrature or model changes
+    // Should be called whenever the grid size, quadrature, or model changes
     void update();
 
     void setGridSize(size_t Nx, size_t Ny) {
@@ -74,18 +75,18 @@ public:
     BBox_t elementBoundingBox(size_t i) const
     {
         assert(i < m_cellForElement.size());
-        return m_cellBoundingBox(m_cellForElement[i]);
+        return cellBoundingBox(m_cellForElement[i]);
     }
 
     Vector nodePosition(size_t i) const
     {
         assert(i < m_vertexForNode.size());
-        return m_vertexPosition(m_vertexForNode[i]);
+        return vertexPosition(m_vertexForNode[i]);
     }
 
     void elementCorners(size_t ei, AdjacencyVec &corners) const {
         assert(ei < m_elementForCell.size());
-        m_cellVertices(m_cellForElement[ei], corners);
+        cellVertices(m_cellForElement[ei], corners);
         for (size_t i = 0; i < (size_t) corners.rows(); ++i) {
             corners[i] = m_nodeForVertex[corners[i]];
             assert((corners[i] >= 0) && ((size_t) corners[i] < numNodes()));
@@ -103,13 +104,13 @@ public:
     size_t numNodesAdjacentNode(size_t ni) const {
         assert(ni < m_vertexForNode.size());
         size_t row, col;
-        m_get2DVertexIndex(ni, row, col);
+        get2DVertexIndex(ni, row, col);
         size_t adjacencyCount;
         for (size_t r  = row - 1; r <= row + 1; ++r) {
             if (r > m_Ny) continue;
             for (size_t c  = col  - 1; c <= col + 1; ++c) {
                 if (c > m_Nx) continue;
-                size_t v = m_get1DVertexIndex(r, c);
+                size_t v = get1DVertexIndex(r, c);
                 if (m_cellForElement[v] >= 0)
                     ++adjacencyCount;
             }
@@ -126,8 +127,7 @@ public:
         return AdjacencyVec(AdjacencyVec::Zero());
     }
 
-    bool elementIsFull(size_t i) const
-    {
+    bool elementIsFull(size_t i) const {
         assert(i < m_isFullElement.size());
         return m_isFullElement[i];
     }
@@ -139,8 +139,6 @@ private:
     // Member Variables
     ////////////////////////////////////////////////////////////////////////////
     typedef std::vector<int> IndexVector;
-    size_t m_Nx, m_Ny;
-    BBox_t m_bbox;
 
     // Maps between node/vertex indices and element/cell indices
     IndexVector m_nodeForVertex, m_vertexForNode,
@@ -153,63 +151,6 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     // Private Member Functions
     ////////////////////////////////////////////////////////////////////////////
-    void m_get2DCellIndex(size_t i, size_t &row, size_t &col) const {
-        assert(i < m_numCells());
-        row = i / m_Nx;
-        col = i % m_Nx;
-    }
-
-    size_t m_get1DCellIndex(size_t row, size_t col) const {
-        assert((row < m_Ny) && (col < m_Nx));
-        return row * m_Nx + col;
-    }
-
-    void m_get2DVertexIndex(size_t i, size_t &row, size_t &col) const {
-        assert(i < m_numVertices());
-        row = i / (m_Nx + 1);
-        col = i % (m_Nx + 1);
-    }
-
-    size_t m_get1DVertexIndex(size_t row, size_t col) const {
-        assert((row < m_Ny + 1) && (col < m_Nx + 1));
-        return row * (m_Nx + 1) + col;
-    }
-
-    Vector m_vertexPosition(size_t i) const {
-        size_t row, col;
-        m_get2DVertexIndex(i, row, col);
-        return m_vertexPosition(row, col);
-    }
-
-    Vector m_vertexPosition(size_t row, size_t col) const {
-        assert((row < m_Ny + 1) && (col < m_Nx + 1));
-        return m_bbox.interpolatePoint(Vector((1.0 * col) / m_Nx,
-                                              (1.0 * row) / m_Ny));
-    }
-
-    BBox_t m_cellBoundingBox(size_t i) const {
-        size_t row, col;
-        m_get2DCellIndex(i, row, col);
-        return m_cellBoundingBox(row, col);
-    }
-
-    BBox_t m_cellBoundingBox(size_t row, size_t col) const {
-        assert((row < m_Ny) && (col < m_Nx));
-        return BBox_t(m_vertexPosition(row, col),
-                      m_vertexPosition(row + 1, col + 1));
-    }
-    
-    void m_cellVertices(size_t i, AdjacencyVec &adj) const {
-        size_t row, col;
-        m_get2DCellIndex(i, row, col);
-        adj[0] = m_get1DVertexIndex(row    , col    );
-        adj[1] = m_get1DVertexIndex(row    , col + 1);
-        adj[2] = m_get1DVertexIndex(row + 1, col + 1);
-        adj[3] = m_get1DVertexIndex(row + 1, col    );
-    }
-
-    size_t m_numVertices() const { return (m_Nx + 1) * (m_Ny + 1); }
-    size_t m_numCells()    const { return m_Nx * m_Ny; }
 };
 
 #include "ElementGrid.inl"

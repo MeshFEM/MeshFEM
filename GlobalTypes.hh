@@ -11,6 +11,7 @@ typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> DVector;
 typedef CSGTree<Vector> CSGTree_t;
 typedef CSGTree_t::CSGNode CSGNode;
 typedef BBox<Vector> BBox_t;
+typedef Polygon<Vector> Polygon_t;
 
 #include <list>
 typedef std::list<CSGNode *> NodeList;

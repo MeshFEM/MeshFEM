@@ -2,7 +2,7 @@
 // Geometry.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      
+//      Basic geometry types.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -10,6 +10,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef GEOMETRY_HH
 #define GEOMETRY_HH
+
+#include <vector>
+#include <iostream>
 
 template<typename Vector>
 struct BBox {
@@ -20,6 +23,7 @@ struct BBox {
         : minCorner(minCorner), maxCorner(maxCorner) { }
 
     Vector minCorner, maxCorner;
+
     void unionBox(const BBox &b) {
         minCorner = minCorner.cwiseMin(b.minCorner);
         maxCorner = maxCorner.cwiseMax(b.maxCorner);
@@ -39,6 +43,14 @@ struct BBox {
         return maxCorner - minCorner;
     }
 
+    // Expands the bounding box around its center so that dimension i is
+    // increased by factors[i].
+    void expand(Vector factors) {
+        Vector delta = .5 * (factors.array() * dimensions().array());
+        minCorner -= delta;
+        maxCorner += delta;
+    }
+
     Real volume() const {
         Vector widths = maxCorner - minCorner;
         Real result = 1.0;
@@ -47,5 +59,29 @@ struct BBox {
         return result;
     }
 };
+
+template<typename Vector>
+struct Polygon {
+    typedef typename Vector::Scalar Real;
+
+    Polygon() { }
+
+    void addPoint(const Vector &p) {
+        points.push_back(p);
+    }
+    
+    std::vector<Vector> points;
+};
+
+template<typename Vector>
+std::ostream &operator<<(std::ostream &os, const Polygon<Vector> &p)
+{
+    os << p.points.size() << std::endl;
+    for (size_t i = 0; i < p.points.size(); ++i) {
+        os << p.points[i][0] << " " << p.points[i][1] << std::endl;;
+    }
+
+    return os;
+}
 
 #endif // GEOMETRY_HH

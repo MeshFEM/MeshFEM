@@ -24,12 +24,13 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            Geometry.hh \
            AnalysisSettings.hh \
            AnalysisForm.hh QuadraturePointsSpinBox.hh \
-           Quadrature.hh MeshlessFEM.hh ElementGrid.hh \
+           Quadrature.hh MeshlessFEM.hh Grid.hh ElementGrid.hh \
            MatlabInterface/MatlabInterface.h \
            MatlabInterface/MatlabShell.h QMatlabInterface.hh \
-           QCommandLine.hh Solver.hh Fields.hh ModelForm.hh
+           QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
+           MarchingSquaresGrid.hh
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
-           ModelForm.cc
+           ModelForm.cc MarchingSquaresGrid.cc
