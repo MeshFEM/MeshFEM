@@ -99,7 +99,8 @@ void CSGWindowController::saveBoundaryPolygon()
         return;
     }
 
-    QString fileName = QFileDialog::getSaveFileName(0, "Save Boundary Polygon");
+    QString fileName = QFileDialog::getSaveFileName(0, "Save Boundary Polygon",
+            QString(), "Text files (*.poly)");
     if (fileName.length() > 0) {
         ofstream polygonOut(fileName.toAscii());
         if (!polygonOut.is_open()) {

@@ -73,13 +73,24 @@ struct Polygon {
     std::vector<Vector> points;
 };
 
+// Outputs the polygon in .poly format.
 template<typename Vector>
 std::ostream &operator<<(std::ostream &os, const Polygon<Vector> &p)
 {
-    os << p.points.size() << std::endl;
+    // # Vertices   dimension   # of attributes     # of boundary markers
+    os << p.points.size() << " 2 0 0" << std::endl;
+    // Vertex number, x, y
     for (size_t i = 0; i < p.points.size(); ++i) {
-        os << p.points[i][0] << " " << p.points[i][1] << std::endl;;
+        os << i << " " << p.points[i][0] << " " << p.points[i][1] << std::endl;
     }
+    // # of segments    # of boundary markers
+    os << p.points.size() << " 0" << std::endl;
+    // Segment number, endpoint, endpoint
+    for (size_t i = 0; i < p.points.size(); ++i) {
+        os << i << " " << i << " " << (i + 1) % p.points.size() << std::endl;
+    }
+    // # of holes
+    os << 0 << std::endl;
 
     return os;
 }
