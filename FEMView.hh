@@ -68,16 +68,34 @@ protected:
     void keyPressEvent(QKeyEvent *event) {
     }
 
+    // Get the world coordinates corresponding to buffer coordinates
     void getWorldCoords(int r, int c, Scalar &x, Scalar &y) const {
         Vector frameDim = m_frameMax - m_frameMin;
         x = m_frameMin[0] + frameDim[0] * ((c + .5) / m_width);
         y = m_frameMin[1] + frameDim[1] * ((r + .5) / m_height);
     }
 
-    void getBufferCoords(Scalar x, Scalar y, int &r, int &c) const {
+    void getTextureCoordinates(Scalar x, Scalar y, Scalar &s, Scalar &t) const
+    {
         Vector frameDim = m_frameMax - m_frameMin;
-        r = floor((y - m_frameMin[1]) * (m_height / frameDim[1]));
-        c = floor((x - m_frameMin[0]) * (m_width / frameDim[0]));
+        s = (x - m_frameMin[0]) / frameDim[0];
+        t = (y - m_frameMin[1]) / frameDim[1];
+    }
+
+    // Non-rounded for opengl drawing
+    void getScreenCoords(Scalar x, Scalar y, Scalar &sx, Scalar &sy) const {
+        Scalar s, t;
+        getTextureCoordinates(x, y, s, t);
+        sx = m_width * s;
+        sy = m_height * t;
+    }
+
+    // Rounded for buffer drawing
+    void getBufferCoords(Scalar x, Scalar y, int &r, int &c) const {
+        Scalar s, t;
+        getTextureCoordinates(x, y, s, t);
+        r = floor(m_height * t);
+        c = floor(m_width * s);
     }
 
     void timerEvent(QTimerEvent *event) {
@@ -98,8 +116,8 @@ private:
     template<typename Object>
     void drawObject(const Object *obj, const QColor &c) const;
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
-    void drawGrid(DrawOp op, const VField &deformation =
-                  VField());
+    void drawObjectTextureCells(const VField &deformation = VField());
+    void drawGrid(DrawOp op, const VField &deformation = VField());
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();

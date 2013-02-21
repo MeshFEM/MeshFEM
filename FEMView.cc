@@ -47,8 +47,8 @@ void FEMView2D::initializeGL()
     
     glGenTextures(1, &m_modelTex);
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
@@ -93,15 +93,13 @@ void FEMView2D::resizeGL(int width, int height)
 
 void drawQuad(float minx, float miny, float maxx, float maxy) {
     glBegin(GL_QUADS);
+
     glTexCoord2f(0, 0);
     glVertex2f(minx, miny);
-
     glTexCoord2f(1, 0);
     glVertex2f(maxx, miny);
-
     glTexCoord2f(1, 1);
     glVertex2f(maxx, maxy);
-
     glTexCoord2f(0, 1);
     glVertex2f(minx, maxy);
 
@@ -151,13 +149,14 @@ void FEMView2D::m_drawObject()
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
     drawQuad(0, 0, m_width, m_height);
+    glDisable(GL_TEXTURE_2D);
 }
 
 void FEMView2D::m_drawWorldBox(const BBox_t &b)
 {
-    int minx, miny, maxx, maxy;
-    getBufferCoords(b.minCorner[0], b.minCorner[1], miny, minx);
-    getBufferCoords(b.maxCorner[0], b.maxCorner[1], maxy, maxx);
+    Scalar minx, miny, maxx, maxy;
+    getScreenCoords(b.minCorner[0], b.minCorner[1], minx, miny);
+    getScreenCoords(b.maxCorner[0], b.maxCorner[1], maxx, maxy);
     drawQuad(minx, miny, maxx, maxy);
 }
 
@@ -175,6 +174,7 @@ void FEMView2D::m_drawSelectedObjects()
     }
 
     glBindTexture(GL_TEXTURE_2D, m_overlayTex);
+    glEnable(GL_TEXTURE_2D);
     drawQuad(0, 0, m_width, m_height);
     glDisable(GL_TEXTURE_2D);
 
@@ -191,15 +191,46 @@ void FEMView2D::m_drawSelectedObjects()
 
 void FEMView2D::m_drawWorldVertex(const Vector &v)
 {
-    int r, c;
-    getBufferCoords(v[0], v[1], r, c);
-    glVertex2f(c, r);
+    Scalar x, y;
+    getScreenCoords(v[0], v[1], x, y);
+    glVertex2f(x, y);
+}
+
+void FEMView2D::drawObjectTextureCells(const VField &deformation)
+{
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+    bool hasDeformation = deformation.domainSize() == grid.numNodes();
+    // TODO: Bilinear interpolation
+    // glUseProgram(
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, m_modelTex);
+
+    glBegin(GL_QUADS);
+    for (size_t i = 0; i < grid.numElements(); ++i) {
+        ElementGrid2D_t::AdjacencyVec corners;
+        grid.elementCorners(i, corners);
+        for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
+            Vector p = grid.nodePosition(corners[c]);
+            // Map world coordinates to texture coordinates
+            Scalar s, t;
+            getTextureCoordinates(p[0], p[1], s, t);
+            
+            if (hasDeformation)
+                p += deformation(corners[c]);
+
+            glTexCoord2f(s, t);
+            m_drawWorldVertex(p);
+        }
+    }
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
 }
 
 void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
-    bool hasDeformation = ((size_t) deformation.domainSize() == grid.numNodes());
+    bool hasDeformation = deformation.domainSize() == grid.numNodes();
     ElementGrid2D_t::AdjacencyVec corners;
 
     glColor3f(0, 0, 0);
@@ -248,12 +279,11 @@ void FEMView2D::draw()
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glEnable(GL_POINT_SMOOTH);
 
-    m_drawObject();
     if (m_guiState == MODEL_STATE) {
+        m_drawObject();
         m_drawSelectedObjects();
     }
     else if (m_guiState == DISPLACEMENTS_STATE) {
-        glDisable(GL_TEXTURE_2D);
         VField deformation;
         if (m_selectedDeformation < m_fem.numModes()) {
             deformation = m_fem.mode(m_selectedDeformation);
@@ -277,11 +307,12 @@ void FEMView2D::draw()
             deformation *= magnitude * sin(m_displacementPhase);
         }
         drawGrid(DRAW_CELLS, deformation);
+        drawObjectTextureCells(deformation);
         drawGrid(DRAW_EDGES, deformation);
         drawGrid(DRAW_NODES, deformation);
     }
     else if (m_guiState == ELEMENTS_STATE) {
-        glDisable(GL_TEXTURE_2D);
+        drawObjectTextureCells();
         drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
         drawGrid(DRAW_NODES);
