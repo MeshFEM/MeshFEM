@@ -72,7 +72,7 @@ private:
 //    [         ..       ]
 //    [           ..     ]
 //    [              N-1 ]
-// This flattening is compatible for the common stress/strain flattening that
+// This flattening is compatible with the typical stress/strain flattening that
 // collects the diagonal xx, yy, ... entries at the beginning
 // The total number of entries is sum_{i=1}^N i = (N * (N + 1)) / 2
 // (because there are i entries in the ith column).

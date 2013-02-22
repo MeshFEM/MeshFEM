@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "MeshlessFEM.hh"
+#include "ShaderCompiler.hh"
 
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
@@ -58,6 +59,23 @@ void FEMView2D::initializeGL()
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+    // TODO: make these paths relative to the application bundle and copy the
+    // shaders in the build rules
+    readShader("/Users/jpanetta/Research/CSGFEM/Shaders/BilinearShader.vert",
+               "/Users/jpanetta/Research/CSGFEM/Shaders/BilinearShader.frag",
+               m_bilinearShader);
+    glUseProgram(m_bilinearShader);
+    m_vCoordLoc[0] = glGetAttribLocation(m_bilinearShader, "point0");
+    m_vCoordLoc[1] = glGetAttribLocation(m_bilinearShader, "point1");
+    m_vCoordLoc[2] = glGetAttribLocation(m_bilinearShader, "point2");
+    m_vCoordLoc[3] = glGetAttribLocation(m_bilinearShader, "point3");
+
+    m_tCoordLoc[0] = glGetAttribLocation(m_bilinearShader, "texCoord0");
+    m_tCoordLoc[1] = glGetAttribLocation(m_bilinearShader, "texCoord1");
+    m_tCoordLoc[2] = glGetAttribLocation(m_bilinearShader, "texCoord2");
+    m_tCoordLoc[3] = glGetAttribLocation(m_bilinearShader, "texCoord3");
+    glUseProgram(0);
 }
 
 void FEMView2D::resizeGL(int width, int height)
@@ -200,31 +218,53 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
-    // TODO: Bilinear interpolation
-    // glUseProgram(
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, m_modelTex);
+    glUseProgram(m_bilinearShader);
+    // glEnable(GL_TEXTURE_2D);
+    // glBindTexture(GL_TEXTURE_2D, m_modelTex);
+    //
+    // glColor3f(1.0, 0.0, 0.0);
 
     glBegin(GL_QUADS);
     for (size_t i = 0; i < grid.numElements(); ++i) {
         ElementGrid2D_t::AdjacencyVec corners;
         grid.elementCorners(i, corners);
+        Vector minCorner, maxCorner;
         for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
             Vector p = grid.nodePosition(corners[c]);
             // Map world coordinates to texture coordinates
             Scalar s, t;
             getTextureCoordinates(p[0], p[1], s, t);
+            glVertexAttrib2f(m_tCoordLoc[c], s, t);
             
             if (hasDeformation)
                 p += deformation(corners[c]);
+            
+            Vector v;
+            getScreenCoords(p[0], p[1], v[0], v[1]);
 
-            glTexCoord2f(s, t);
-            m_drawWorldVertex(p);
+            glVertexAttrib2f(m_vCoordLoc[c], v[0], v[1]);
+            
+            // Get bounding box
+            if (c == 0) {
+                minCorner = maxCorner = v;
+            }
+            else {
+                minCorner = minCorner.cwiseMin(v);
+                maxCorner = maxCorner.cwiseMax(v);
+            }
         }
+
+        // Draw quad's bounding box
+        glVertex2f(minCorner[0], minCorner[1]);
+        glVertex2f(maxCorner[0], minCorner[1]);
+        glVertex2f(maxCorner[0], maxCorner[1]);
+        glVertex2f(minCorner[0], maxCorner[1]);
     }
     glEnd();
 
-    glDisable(GL_TEXTURE_2D);
+    glUseProgram(0);
+
+    // glDisable(GL_TEXTURE_2D);
 }
 
 void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
@@ -306,7 +346,7 @@ void FEMView2D::draw()
 
             deformation *= magnitude * sin(m_displacementPhase);
         }
-        drawGrid(DRAW_CELLS, deformation);
+        // drawGrid(DRAW_CELLS, deformation);
         drawObjectTextureCells(deformation);
         drawGrid(DRAW_EDGES, deformation);
         drawGrid(DRAW_NODES, deformation);

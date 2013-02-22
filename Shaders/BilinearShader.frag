@@ -1,0 +1,57 @@
+varying vec2 f_point[4];
+varying vec2 f_texCoord[4];
+varying vec2 f_position;
+
+void main()
+{
+    // gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    // return;
+    vec2 H = f_position - f_point[0];
+    vec2 E = f_point[1]   - f_point[0];
+    vec2 F = f_point[3]   - f_point[0];
+    vec2 G = f_point[2]   - f_point[3] - E;
+
+    // sampler1D texture;
+
+    // F.x + s * G.x will appear in the denominator of t's expression, so choose
+    // coordinate labling to make that division as robust as possible.
+    if (abs(F.x + .5 * G.x) < abs(F.y + .5 * G.y)) {
+        H.xy = H.yx;
+        E.xy = E.yx;
+        F.xy = F.yx;
+        G.xy = G.yx;
+    }
+
+    float a = E.x * G.y - E.y * G.x;
+    float b = E.x * F.y - E.y * F.x + G.x * H.y - G.y * H.x; 
+    float c = F.x * H.y - F.y * H.x;
+
+    // Robust quadratic formula
+    float discriminant = b * b - 4.0 * a * c;
+    if (discriminant < 0.0)
+        discard;
+    // bSign = 1 if b >= 0, -1 otherwise (glsl's sign gives 0 for b = 0)
+    float bSign = sign(b);
+    bSign = (bSign == 0.0) ? 1.0 : bSign;
+    float q = -.5 * (b + bSign * sqrt(discriminant));
+    float s1 = q / a;
+    float s2 = c / q;
+
+    float t1 = (H.x - s1 * E.x) / (F.x + s1 * G.x);
+    float t2 = (H.x - s2 * E.x) / (F.x + s2 * G.x);
+
+    bool solution1Valid = ((s1 >= 0.0) && (s1 <= 1.0)) &&
+                          ((t1 >= 0.0) && (t1 <= 1.0));
+    bool solution2Valid = ((s2 >= 0.0) && (s2 <= 1.0)) &&
+                          ((t2 >= 0.0) && (t2 <= 1.0));
+
+    if (!(solution1Valid || solution2Valid))
+        discard;
+
+    // Highlight non-bijective regions in blue,
+    // shade bijective with texture coordinates
+    gl_FragColor = solution1Valid ? (solution2Valid ? vec4(0.0, 0.0, 1.0, 1.0)
+                                                    : vec4( s1,  t1, .25, 1.0))
+                                  : vec4( s2,  t2, .25, 1.0);
+}
+

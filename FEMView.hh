@@ -129,6 +129,12 @@ private:
     Vector m_frameMin, m_frameMax;
     int m_width, m_height;
     GLuint m_modelTex, m_overlayTex;
+    GLuint m_bilinearShader = 0;
+    // Vertex coordinate attributes for bilinear displacement shader.
+    GLuint m_vCoordLoc[4];
+    // Texture coordinate attributes for bilinear displacement shader.
+    GLuint m_tCoordLoc[4];
+
     char *m_rgbaBuffer;
     bool m_overlayDirty, m_objectDirty;
 
