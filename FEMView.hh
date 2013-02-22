@@ -134,6 +134,8 @@ private:
     GLuint m_vCoordLoc[4];
     // Texture coordinate attributes for bilinear displacement shader.
     GLuint m_tCoordLoc[4];
+    // Object texture sampler loc
+    GLuint m_objectTexLoc;
 
     char *m_rgbaBuffer;
     bool m_overlayDirty, m_objectDirty;

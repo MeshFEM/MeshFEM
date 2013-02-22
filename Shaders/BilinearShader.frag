@@ -1,3 +1,4 @@
+uniform sampler2D objectTex;
 varying vec2 f_point[4];
 varying vec2 f_texCoord[4];
 varying vec2 f_position;
@@ -48,10 +49,15 @@ void main()
     if (!(solution1Valid || solution2Valid))
         discard;
 
-    // Highlight non-bijective regions in blue,
-    // shade bijective with texture coordinates
-    gl_FragColor = solution1Valid ? (solution2Valid ? vec4(0.0, 0.0, 1.0, 1.0)
-                                                    : vec4( s1,  t1, .25, 1.0))
-                                  : vec4( s2,  t2, .25, 1.0);
+    vec2 texCoord = solution1Valid ? vec2(s1,  t1) : vec2(s2,  t2);
+    // Bilinearly interpolate texture coordinates...
+    texCoord = mix(mix(f_texCoord[0], f_texCoord[1], texCoord[0]),
+                   mix(f_texCoord[3], f_texCoord[2], texCoord[0]), texCoord[1]);
+
+    bool nonBijective = (solution1Valid && solution2Valid);
+    vec4 objColor = texture2D(objectTex, texCoord);
+    // Highlight non-bijective regions in red
+    gl_FragColor = mix(objColor, vec4(1.0, 0.0, 0.0, 1.0),
+                       nonBijective ? .5 : 0.0);
 }
 

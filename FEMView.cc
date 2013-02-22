@@ -75,6 +75,8 @@ void FEMView2D::initializeGL()
     m_tCoordLoc[1] = glGetAttribLocation(m_bilinearShader, "texCoord1");
     m_tCoordLoc[2] = glGetAttribLocation(m_bilinearShader, "texCoord2");
     m_tCoordLoc[3] = glGetAttribLocation(m_bilinearShader, "texCoord3");
+
+    m_objectTexLoc = glGetUniformLocation(m_bilinearShader, "objectTex");
     glUseProgram(0);
 }
 
@@ -219,10 +221,10 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation)
     ElementGrid2D_t &grid = m_fem.elementGrid();
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
     glUseProgram(m_bilinearShader);
-    // glEnable(GL_TEXTURE_2D);
-    // glBindTexture(GL_TEXTURE_2D, m_modelTex);
-    //
-    // glColor3f(1.0, 0.0, 0.0);
+    
+    // Set the object texture sampler to be texture unit 0
+    glBindTexture(GL_TEXTURE_2D, m_modelTex);
+    glUniform1i(m_objectTexLoc, 0);
 
     glBegin(GL_QUADS);
     for (size_t i = 0; i < grid.numElements(); ++i) {
