@@ -18,6 +18,7 @@
 #include <cassert>
 #include <iostream>
 #include <algorithm>
+#include <cstdlib>
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
@@ -41,6 +42,54 @@ void FEMView2D::csgNodesSelected(const NodeList &nList)
 
 void FEMView2D::initializeGL()
 {
+    // Create OpenCL context sharing with the OpenGL context
+    CGLContextObj kCGLContext = CGLGetCurrentContext();                   
+    CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);      
+
+    cl_context_properties props[] = {                                     
+        CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE,                     
+        (cl_context_properties) kCGLShareGroup,                           
+        0                                                                 
+    };                                                                    
+
+    cl_int status;                                                        
+    m_clContext = clCreateContext(props, 0, 0, NULL, 0, &status);               
+    // compute the number of devices                                      
+    cl_int err;                                                           
+    size_t ret_size;                                                      
+    err = clGetContextInfo(m_clContext, CL_CONTEXT_DEVICES, 0, NULL, &ret_size);
+    CHECK_CL_ERROR(err, "clGetContextInfo");                              
+    cl_int numDevices = ret_size / sizeof(cl_device_id);                  
+
+    // Get the device list                                                
+    cl_device_id devices[numDevices];                                     
+    err = clGetContextInfo(m_clContext, CL_CONTEXT_DEVICES, ret_size, devices,  
+            &ret_size);                                    
+    CHECK_CL_ERROR(err, "clGetContextInfo");                              
+
+    // Get the GPU device and queue                                       
+    for(int i = 0; i < numDevices; ++i) {                                 
+        cl_int deviceType, error;                                         
+        err = clGetDeviceInfo(devices[i], CL_DEVICE_TYPE,                 
+                sizeof(cl_device_type), &deviceType, &ret_size);          
+        CHECK_CL_ERROR(err, "clGetDeviceInfo");                           
+
+        if (deviceType == CL_DEVICE_TYPE_GPU) {                           
+            cl_device_id dev = devices[i];                                
+            m_clQueue = clCreateCommandQueue(m_clContext, dev, 0, &error);        
+            CHECK_CL_ERROR(error, "clCreateCommandQueue");                
+
+            break;                                                        
+        }                                                                 
+    }                                                                     
+
+    // Load and compile OpenCL Kernels
+    char *knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/RenderCSG.cl");
+    assert(knl_text != NULL);
+    m_renderKernel = kernel_from_string(m_clContext, knl_text,
+                                        "RenderCSG", NULL);
+    free(knl_text);
+
     glClearColor(0.8, 0.8, 0.8, 1.0);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -163,6 +212,32 @@ void FEMView2D::m_drawObject()
         m_clearBuffer();
         drawObject(&(m_fem.model()), modelColor);
         m_loadTexture(m_modelTex);
+
+        cl_int err;
+        glBindTexture(GL_TEXTURE_2D, 0);
+        cl_mem texBuf = clCreateFromGLTexture(m_clContext, CL_MEM_READ_WRITE,
+                                        GL_TEXTURE_2D, 0, m_modelTex, &err);
+        CHECK_CL_ERROR(err, "clCreateFromGLTexture");
+
+        CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
+                (m_clQueue, 1, &texBuf, 0, NULL, NULL));
+
+        size_t ldim[] = {8, 8};
+        size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
+                         ((m_width  + ldim[1]) / ldim[1]) * ldim[1] };
+
+        SET_7_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
+                m_frameMin[0], m_frameMax[0], m_frameMin[1], m_frameMax[1]);
+
+        CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
+                    /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+        
+        CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
+                        &texBuf, 0, NULL, NULL));
+        CALL_CL_GUARDED(clFinish, (m_clQueue));
+
+        CALL_CL_GUARDED(clReleaseMemObject, (texBuf));
+    
         m_objectDirty = false;
     }
 

@@ -47,10 +47,10 @@ public:
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
           m_displacementStrainCached(false), m_solver(solver)
     {
-        m_quadrature = new Quadrature2D(settings.quadraturePoints);
-        m_quadrature->setUsingGaussQuadrature(settings.gaussNodes);
+        m_quadrature = new Quadrature2D(settings.quadraturePoints,
+                                        settings.quadrature);
         m_elementGrid = new ElementGrid2D<Model>(settings.Nx, settings.Ny,
-                                                *m_quadrature, model);
+                settings.cellOverlapThreshold, *m_quadrature, model);
         
         configureMatrices(settings);
         configureMaterial(settings);
@@ -59,19 +59,23 @@ public:
 
     bool configureElements(const AnalysisSettings &settings) {
         bool changed = false;
-        size_t oldNx, oldNy;
         if (quadrature().numPoints() != settings.quadraturePoints) {
             quadrature().setNumPoints(settings.quadraturePoints);
             changed = true;
         }
-        if (quadrature().usingGaussQuadrature() != settings.gaussNodes) {
-            quadrature().setUsingGaussQuadrature(settings.gaussNodes);
+        if (quadrature().getQuadratureMethod() != settings.quadrature) {
+            quadrature().setUsingGaussQuadrature(settings.quadrature);
             changed = true;
         }
-        elementGrid().getGridSize(oldNx, oldNy);
+        ElementGrid2D<Model> &grid = elementGrid();
+        if (grid.getCellOverlapThreshold() != settings.cellOverlapThreshold) {
+            grid.setCellOverlapThreshold(settings.cellOverlapThreshold);
+            changed = true;
+        }
+        size_t oldNx, oldNy;
+        grid.getGridSize(oldNx, oldNy);
         if ((settings.Nx != oldNx) || (settings.Ny != oldNy)) {
-            elementGrid().setGridSize(settings.Nx, settings.Ny);
-            elementGrid().setGridSize(settings.Nx, settings.Ny);
+            grid.setGridSize(settings.Nx, settings.Ny);
             changed = true;
         }
         else if (changed) {

@@ -19,6 +19,11 @@
 #include <cmath>
 #include <iostream>
 
+#include <OpenGL/OpenGL.h>
+extern "C" {
+#include "cl-helper.h"
+}
+
 #include "GlobalTypes.hh"
 #include "MeshlessFEM.hh"
 
@@ -33,6 +38,11 @@ public:
 
     FEMView2D(MeshlessFEM_t &fem, QWidget *parent = NULL);
     ~FEMView2D() {
+        // Clean up OpenCL stuff
+        CALL_CL_GUARDED(clReleaseKernel, (m_renderKernel));
+        CALL_CL_GUARDED(clReleaseCommandQueue, (m_clQueue));
+        CALL_CL_GUARDED(clReleaseContext, (m_clContext));
+
         delete m_rgbaBuffer;
     }
 
@@ -126,10 +136,13 @@ private:
     void m_loadTexture(GLuint tex);
     void m_clearBuffer();
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Instance variables
+    ////////////////////////////////////////////////////////////////////////////
     Vector m_frameMin, m_frameMax;
     int m_width, m_height;
     GLuint m_modelTex, m_overlayTex;
-    GLuint m_bilinearShader = 0;
+    GLuint m_bilinearShader;
     // Vertex coordinate attributes for bilinear displacement shader.
     GLuint m_vCoordLoc[4];
     // Texture coordinate attributes for bilinear displacement shader.
@@ -151,6 +164,13 @@ private:
 
     QBasicTimer m_timer;
     Scalar m_displacementPhase;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // OpenCL stuff
+    ////////////////////////////////////////////////////////////////////////////
+    cl_context       m_clContext;
+    cl_kernel        m_renderKernel;
+    cl_command_queue m_clQueue;
 };
 
 #endif // FEMVIEW_HH

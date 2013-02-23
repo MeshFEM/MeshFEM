@@ -34,6 +34,7 @@ public slots:
 
 private slots:
     void elementGridControlsChanged(int i);
+    void elementGridControlsChanged(double i);
     void modalAnalysisControlsChanged(int i);
     void matrixControlsChanged(int i);
     void materialControlsChanged(double v);
@@ -50,6 +51,7 @@ private:
     QSpinBox *g_nxStepper, *g_nyStepper;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QCheckBox *g_gaussQuadratureCheck;
+    QDoubleSpinBox *g_cellOverlapStepper;
 
     // Matrix/material settings
     QComboBox *g_massMatrixSelector;

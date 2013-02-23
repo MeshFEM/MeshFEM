@@ -42,10 +42,14 @@ public:
         return m_referenceQuadraturePoints.size();
     }
 
-    bool usingGaussQuadrature() const {
-        return m_method == GAUSS_QUADRATURE;
+    void setQuadratureMethod(QuadratureMethod method) {
+        m_method = method;
     }
-    
+
+    QuadratureMethod getQuadratureMethod() const {
+        return m_method;
+    }
+
     void setUsingGaussQuadrature(bool b) {
         m_method = b ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     }

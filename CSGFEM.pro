@@ -9,6 +9,7 @@ INCLUDEPATH += . /opt/local/include/eigen3
 INCLUDEPATH += /Applications/MATLAB_R2010b.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2010b.app/bin/maci64/ -leng -lmx -lmat
 LIBS += -L/opt/local/lib -lreadline
+LIBS += -framework OpenCL
 
 QT += opengl
 CONFIG += release
@@ -28,9 +29,12 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            MatlabInterface/MatlabInterface.h \
            MatlabInterface/MatlabShell.h QMatlabInterface.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
-           MarchingSquaresGrid.hh ShaderCompiler.hh
+           MarchingSquaresGrid.hh ShaderCompiler.hh \
+           cl-helper.h
+
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
-           ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc
+           ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
+           cl-helper.c

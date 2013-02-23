@@ -20,7 +20,7 @@ void ElementGrid2D<Model>::update()
     setBoundingBox(m_model.boundingBox());
 
     m_elementForCell.assign(numCells(), -1);
-    std::vector<bool> isFullElement(numCells(), false);
+    std::vector<bool> isFullCell(numCells(), false);
     size_t numElements = 0;
     for (size_t r = 0; r < m_Ny; ++r) {
         for (size_t c = 0; c < m_Nx; ++c) {
@@ -33,8 +33,11 @@ void ElementGrid2D<Model>::update()
                 if (m_model.isInside(quadraturePoints[pi]))
                     ++insideCount;
             }
-            if (insideCount > 0) {
-                isFullElement[cell] = (insideCount == quadraturePoints.size());
+            double fracIn = ((double) insideCount) / quadraturePoints.size();
+            isFullCell[cell] = (insideCount == quadraturePoints.size());
+            // A cell is an element if all quadrature points fall inside the
+            // object, or if the fraction exceeds the cell overlap threshold.
+            if (isFullCell[cell] || (fracIn > m_cellOverlapThreshold)) {
                 m_elementForCell[cell] = numElements++;
             }
         }
@@ -53,7 +56,7 @@ void ElementGrid2D<Model>::update()
         if (e >= 0) {
             assert((size_t) e < numElements);
             m_cellForElement[e] = cell;
-            m_isFullElement[e] = isFullElement[cell];
+            m_isFullElement[e] = isFullCell[cell];
             cellVertices(cell, cellVerts);
             // All corners of an element cell are nodes.
             for (size_t i = 0; i < (size_t) cellVerts.rows(); ++i) {

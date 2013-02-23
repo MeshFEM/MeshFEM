@@ -43,9 +43,11 @@ class ElementGrid2D : private Grid2D {
 public:
     typedef Eigen::Vector4i AdjacencyVec;
 
-    ElementGrid2D(size_t Nx, size_t Ny, const Quadrature2D &q,
-                  const Model &model)
-        : Grid2D(Nx, Ny, model.boundingBox()), m_quadrature(q), m_model(model)
+    ElementGrid2D(size_t Nx, size_t Ny, double cellOverlapThreshold,
+                  const Quadrature2D &q, const Model &model)
+        : Grid2D(Nx, Ny, model.boundingBox()),
+          m_cellOverlapThreshold(cellOverlapThreshold), m_quadrature(q),
+          m_model(model)
     {
         update();
     }
@@ -62,6 +64,15 @@ public:
     void getGridSize(size_t &Nx, size_t &Ny) const {
         Nx = m_Nx;
         Ny = m_Ny;
+    }
+
+    void setCellOverlapThreshold(double eps) {
+        m_cellOverlapThreshold = eps;
+        update();
+    }
+
+    double getCellOverlapThreshold() const {
+        return m_cellOverlapThreshold;
     }
 
     size_t numElements() const  {
@@ -139,6 +150,9 @@ private:
     // Member Variables
     ////////////////////////////////////////////////////////////////////////////
     typedef std::vector<int> IndexVector;
+
+    // How much a cell must overlap the object to be considered an element.
+    Scalar m_cellOverlapThreshold;
 
     // Maps between node/vertex indices and element/cell indices
     IndexVector m_nodeForVertex, m_vertexForNode,
