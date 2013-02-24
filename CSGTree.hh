@@ -17,6 +17,8 @@
 #include "Geometry.hh"
 
 typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
+typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_INTERSECT = 2,
+               CSG_NODE_UNION = 3, CSG_NODE_SUBTRACT = 4 } CSGNodeType;
 
 template<typename Vector>
 class CSGTree {

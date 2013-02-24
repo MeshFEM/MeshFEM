@@ -124,7 +124,10 @@ protected:
 
 private:
     template<typename Object>
-    void drawObject(const Object *obj, const QColor &c) const;
+    void drawObject(const Object *obj, const QColor &c);
+    template<typename Object>
+    void m_clRenderObject(const Object *obj, GLuint tex);
+
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
     void drawObjectTextureCells(const VField &deformation = VField());
     void drawGrid(DrawOp op, const VField &deformation = VField());

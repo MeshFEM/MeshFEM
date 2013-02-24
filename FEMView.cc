@@ -145,6 +145,10 @@ void FEMView2D::resizeGL(int width, int height)
         m_height = width / aspect;
     }
 
+    glBindTexture(GL_TEXTURE_2D, m_modelTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
+            GL_UNSIGNED_BYTE, NULL);
+
     delete m_rgbaBuffer;
     m_rgbaBuffer = new char[4 * m_width * m_height];
     m_objectDirty = m_overlayDirty = true;
@@ -181,7 +185,7 @@ void FEMView2D::m_clearBuffer()
 }
 
 template<typename Object>
-void FEMView2D::drawObject(const Object *obj, const QColor &fg) const
+void FEMView2D::drawObject(const Object *obj, const QColor &fg)
 {
     for (int r = 0; r < m_height; ++r) {
         for (int c = 0; c < m_width; ++c) {
@@ -204,40 +208,119 @@ void FEMView2D::m_loadTexture(GLuint tex)
             GL_UNSIGNED_BYTE, m_rgbaBuffer);
 }
 
+typedef struct _CSGPrimitiveData {
+    cl_float2 center;
+    union {
+        struct {
+            cl_float2 half_dim;
+            float rotation;
+        } rect;
+        struct {
+            cl_float2 focus;
+            float double_majorRadius;
+        } ellipse;
+    };
+} CSGPrimitiveData;
+
+struct CSGTreeFlattener {
+    void preVisit(CSGNode *node) { } 
+    void postVisit(CSGNode *node) {
+        CSGNodeType type = node->nodeType();
+        nodeTypes.push_back(type);
+        if (type == CSG_NODE_RECT) {
+            CSGPrimitiveData p;
+            CSGRectangleNode *r = dynamic_cast<CSGRectangleNode *>(node);
+            assert(r);
+            Vector dim = .5 * r->getDimensions();
+            p.center.x        = r->getCenter()[0];
+            p.center.y        = r->getCenter()[1];
+            p.rect.half_dim.x = dim[0];
+            p.rect.half_dim.y = dim[1];
+            p.rect.rotation   = r->getRotationRad();
+            primitiveData.push_back(p);
+        }
+        else if (type == CSG_NODE_ELLIPSE) {
+            CSGPrimitiveData p;
+            CSGEllipseNode *e = dynamic_cast<CSGEllipseNode *>(node);
+            assert(e);
+            Vector focus = e->getFocus();
+            p.center.x                   = e->getCenter()[0];
+            p.center.y                   = e->getCenter()[1];
+            p.ellipse.focus.x            = focus[0];
+            p.ellipse.focus.y            = focus[1];
+            p.ellipse.double_majorRadius = 2.0 * e->getMajorRadius();
+            primitiveData.push_back(p);
+        }
+    }
+
+    std::vector<CSGNodeType>      nodeTypes;
+    std::vector<CSGPrimitiveData> primitiveData;
+};
+
+template<typename Object>
+void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex)
+{
+    cl_int err;
+    glBindTexture(GL_TEXTURE_2D, 0);
+    cl_mem d_texBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
+                                            GL_TEXTURE_2D, 0, m_modelTex, &err);
+    CHECK_CL_ERROR(err, "clCreateFromGLTexture");
+
+    CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
+            (m_clQueue, 1, &d_texBuf, 0, NULL, NULL));
+
+    CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener());
+    int numNodes      = flatTree.nodeTypes.size();
+    int numPrimitives = flatTree.primitiveData.size();
+
+    // TODO: keep these around unless they change in size...
+    cl_mem d_nodeBuf = clCreateBuffer(m_clContext, CL_MEM_READ_ONLY,
+                                      numNodes * sizeof(CSGNodeType),
+                                      0, &err);
+    CHECK_CL_ERROR(err, "Creating node buffer");
+    cl_mem d_primBuf = clCreateBuffer(m_clContext, CL_MEM_READ_ONLY,
+                                      numPrimitives * sizeof(CSGPrimitiveData),
+                                      0, &err);
+    CHECK_CL_ERROR(err, "Creating primitive buffer");
+
+    CALL_CL_GUARDED(clEnqueueWriteBuffer,
+            ( m_clQueue, d_nodeBuf, /* Blocking */ CL_TRUE, 0,
+              numNodes * sizeof(CSGNodeType),
+              &flatTree.nodeTypes[0], 0, NULL, NULL ));
+    CALL_CL_GUARDED(clEnqueueWriteBuffer,
+            ( m_clQueue, d_primBuf, /* Blocking */ CL_TRUE, 0,
+              numPrimitives * sizeof(CSGPrimitiveData),
+              &flatTree.primitiveData[0], 0, NULL, NULL ));
+
+    size_t ldim[] = {32, 1};
+    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
+        m_width};
+
+    float minX = m_frameMin[0], maxX = m_frameMax[0],
+          minY = m_frameMin[1], maxY = m_frameMax[1];
+    int w, h;
+    SET_11_KERNEL_ARGS(m_renderKernel, d_texBuf, m_width, m_height,
+            minX, maxX, minY, maxY, numNodes, d_nodeBuf, numPrimitives,
+            d_primBuf);
+
+    CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
+                /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+
+    CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
+                &d_texBuf, 0, NULL, NULL));
+    CALL_CL_GUARDED(clFinish, (m_clQueue));
+
+    CALL_CL_GUARDED(clReleaseMemObject, (d_texBuf));
+    CALL_CL_GUARDED(clReleaseMemObject, (d_nodeBuf));
+    CALL_CL_GUARDED(clReleaseMemObject, (d_primBuf));
+}
+
 void FEMView2D::m_drawObject()
 {
     QColor modelColor(128, 192, 255, 255);
 
     if (m_objectDirty) {
-        m_clearBuffer();
-        drawObject(&(m_fem.model()), modelColor);
-        m_loadTexture(m_modelTex);
-
-        cl_int err;
-        glBindTexture(GL_TEXTURE_2D, 0);
-        cl_mem texBuf = clCreateFromGLTexture(m_clContext, CL_MEM_READ_WRITE,
-                                        GL_TEXTURE_2D, 0, m_modelTex, &err);
-        CHECK_CL_ERROR(err, "clCreateFromGLTexture");
-
-        CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
-                (m_clQueue, 1, &texBuf, 0, NULL, NULL));
-
-        size_t ldim[] = {8, 8};
-        size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
-                         ((m_width  + ldim[1]) / ldim[1]) * ldim[1] };
-
-        SET_7_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
-                m_frameMin[0], m_frameMax[0], m_frameMin[1], m_frameMax[1]);
-
-        CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
-                    /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
-        
-        CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
-                        &texBuf, 0, NULL, NULL));
-        CALL_CL_GUARDED(clFinish, (m_clQueue));
-
-        CALL_CL_GUARDED(clReleaseMemObject, (texBuf));
-    
+        m_clRenderObject(&(m_fem.model()), m_modelTex);
         m_objectDirty = false;
     }
 

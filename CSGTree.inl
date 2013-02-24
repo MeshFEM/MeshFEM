@@ -34,6 +34,7 @@ public:
     }
 
         
+    virtual CSGNodeType nodeType() const = 0;
     virtual bool isInside(const Vector &p) const = 0;
     virtual ~CSGNode() { }
 
@@ -57,6 +58,15 @@ public:
     virtual bool isInside(const Vector &p) const = 0;
     virtual ~CSGPrimitive() { }
 
+    const Vector &getCenter() const {
+        return m_c;
+    }
+    
+    const Vector &getDimensions() const {
+        return m_dim;
+    }
+
+    Real getRotationRad() const { return -m_rot_inv.angle(); }
     Real getRotation() const { return -m_deg(m_rot_inv.angle()); }
     void setRotation(Real r) {
         m_rot_inv.angle() = -m_rad(r);
@@ -95,9 +105,9 @@ public:
 
 protected:
     Vector m_c, m_dim;
-private:
     Eigen::Rotation2D<Real> m_rot_inv;
 
+private:
     Real m_deg(Real angle) const { return 180.0 * (angle / M_PI); }
     Real m_rad(Real angle) const { return M_PI  * (angle / 180.0); }
 };
@@ -124,6 +134,19 @@ public:
                 return "Subtract";
             default:
                 return "Invalid operation";
+        }
+    }
+
+    CSGNodeType nodeType() const {
+        switch(m_op) {
+            case INTERSECT:
+                return CSG_NODE_INTERSECT;
+            case UNION:
+                return CSG_NODE_UNION;
+            case SUBTRACT:
+                return CSG_NODE_SUBTRACT;
+            default:
+                assert(false);
         }
     }
 
@@ -213,6 +236,10 @@ public:
         return "Rectangle";
     }
 
+    CSGNodeType nodeType() const {
+        return CSG_NODE_RECT;
+    }
+
     bool isInside(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
         return (l.cwiseAbs().array() <= (.5 * this->m_dim).array()).all();
@@ -244,6 +271,20 @@ public:
 
     std::string defaultName() const {
         return "Ellipse";
+    }
+
+    Vector getFocus() const {
+        Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
+        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
+        return rot * f;
+    }
+
+    Real getMajorRadius() const {
+        return m_a;
+    }
+
+    CSGNodeType nodeType() const {
+        return CSG_NODE_ELLIPSE;
     }
 
     bool isInside(const Vector &p) const {
