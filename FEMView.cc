@@ -22,6 +22,7 @@
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
+#include "timing.h"
 
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
@@ -213,7 +214,7 @@ typedef struct _CSGPrimitiveData {
     union {
         struct {
             cl_float2 half_dim;
-            float rotation;
+            cl_float2 rotationCosSin;
         } rect;
         struct {
             cl_float2 focus;
@@ -236,7 +237,8 @@ struct CSGTreeFlattener {
             p.center.y        = r->getCenter()[1];
             p.rect.half_dim.x = dim[0];
             p.rect.half_dim.y = dim[1];
-            p.rect.rotation   = r->getRotationRad();
+            p.rect.rotationCosSin.x = cos(-r->getRotationRad());
+            p.rect.rotationCosSin.y = sin(-r->getRotationRad());
             primitiveData.push_back(p);
         }
         else if (type == CSG_NODE_ELLIPSE) {
@@ -263,7 +265,7 @@ void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex)
     cl_int err;
     glBindTexture(GL_TEXTURE_2D, 0);
     cl_mem d_texBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
-                                            GL_TEXTURE_2D, 0, m_modelTex, &err);
+                                            GL_TEXTURE_2D, 0, tex, &err);
     CHECK_CL_ERROR(err, "clCreateFromGLTexture");
 
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
@@ -292,16 +294,22 @@ void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex)
               numPrimitives * sizeof(CSGPrimitiveData),
               &flatTree.primitiveData[0], 0, NULL, NULL ));
 
-    size_t ldim[] = {32, 1};
+    size_t ldim[] = {64, 1};
     size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
         m_width};
 
     float minX = m_frameMin[0], maxX = m_frameMax[0],
           minY = m_frameMin[1], maxY = m_frameMax[1];
     int w, h;
-    SET_11_KERNEL_ARGS(m_renderKernel, d_texBuf, m_width, m_height,
+    cl_float4 fgColor = {1.0f, 0.0f, 1.0f, 1.0f};
+    CALL_CL_GUARDED(clFinish, (m_clQueue));
+
+    timestamp_type start, end;
+    get_timestamp(&start);
+
+    SET_12_KERNEL_ARGS(m_renderKernel, d_texBuf, m_width, m_height,
             minX, maxX, minY, maxY, numNodes, d_nodeBuf, numPrimitives,
-            d_primBuf);
+            d_primBuf, fgColor);
 
     CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
                 /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
@@ -309,6 +317,8 @@ void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex)
     CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
                 &d_texBuf, 0, NULL, NULL));
     CALL_CL_GUARDED(clFinish, (m_clQueue));
+    get_timestamp(&end);
+    std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
 
     CALL_CL_GUARDED(clReleaseMemObject, (d_texBuf));
     CALL_CL_GUARDED(clReleaseMemObject, (d_nodeBuf));
