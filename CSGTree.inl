@@ -33,7 +33,6 @@ public:
             child(i)->applyTranslation(t);
     }
 
-        
     virtual CSGNodeType nodeType() const = 0;
     virtual bool isInside(const Vector &p) const = 0;
     virtual ~CSGNode() { }
@@ -42,6 +41,44 @@ protected:
     bool m_hasName;
     std::string m_name;
     CSGNode *m_parent;
+};
+
+// Lightweight union-type node used to collect CSG subtrees for rendering
+// without altering ownership/parenthood of the subtrees.
+template<typename Vector>
+class CSGTree<Vector>::CSGGlueNode : public CSGTree<Vector>::CSGNode
+{
+public:
+    CSGGlueNode(CSGTree<Vector>::CSGNode *left,
+                CSGTree<Vector>::CSGNode *right)
+        : m_left(left), m_right(right) { }
+    bool isInside(const Vector &p) const {
+        return m_left->isInside(p) || m_right->isInside(p);
+    }
+    int indexOfChild(const CSGNode *c) const {
+        if (c == m_left)  return 0;
+        if (c == m_right) return 1;
+        return -1;
+    }
+
+    int numChildren() const { return 2; }
+
+    CSGTree<Vector>::CSGNode *child(size_t i) {
+        if (i == 0) return m_left;
+        if (i == 1) return m_right;
+        assert(false);
+    }
+
+    const CSGTree<Vector>::CSGNode *child(size_t i) const {
+        if (i == 0) return m_left;
+        if (i == 1) return m_right;
+        assert(false);
+    }
+
+    CSGNodeType nodeType() const { return CSG_NODE_UNION; }
+    ~CSGGlueNode() { }
+private:
+    CSGTree<Vector>::CSGNode *m_left, *m_right;
 };
 
 template<typename Vector>
@@ -184,28 +221,22 @@ public:
     }
 
     int indexOfChild(const CSGNode *c) const {
-        if (c == m_left)
-            return 0;
-        if (c == m_right)
-            return 1;
+        if (c == m_left)  return 0;
+        if (c == m_right) return 1;
         return -1;
     }
 
     int numChildren() const { return 2; }
 
     CSGTree<Vector>::CSGNode *child(size_t i) {
-        if (i == 0)
-            return m_left;
-        if (i == 1)
-            return m_right;
+        if (i == 0) return m_left;
+        if (i == 1) return m_right;
         assert(false);
     }
 
     const CSGTree<Vector>::CSGNode *child(size_t i) const {
-        if (i == 0)
-            return m_left;
-        if (i == 1)
-            return m_right;
+        if (i == 0) return m_left;
+        if (i == 1) return m_right;
         assert(false);
     }
 

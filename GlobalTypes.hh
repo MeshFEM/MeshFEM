@@ -10,7 +10,7 @@ typedef Eigen::Vector2d::Scalar                  Scalar;
 typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> DVector;
 typedef CSGTree<Vector> CSGTree_t;
 typedef CSGTree_t::CSGNode CSGNode;
-typedef CSGTree_t::CSGBoolNode CSGBoolNode;
+typedef CSGTree_t::CSGGlueNode CSGGlueNode;
 typedef CSGTree_t::CSGRectangleNode CSGRectangleNode;
 typedef CSGTree_t::CSGEllipseNode CSGEllipseNode;
 typedef BBox<Vector> BBox_t;

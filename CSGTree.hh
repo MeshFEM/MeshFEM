@@ -25,6 +25,7 @@ class CSGTree {
 
 public:
     class CSGNode;
+    class CSGGlueNode;
     class CSGBoolNode;
     class CSGPrimitive;
     class CSGRectangleNode;

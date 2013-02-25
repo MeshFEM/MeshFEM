@@ -283,21 +283,14 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
 {
     cl_int err;
     timestamp_type start, end, sub_start, sub_end;
-    get_timestamp(&start);
-    get_timestamp(&sub_start);
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
             (m_clQueue, 1, &texBuf, 0, NULL, NULL));
-    get_timestamp(&sub_end);
-    std::cout << "\tAcquire texture: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
-    get_timestamp(&sub_start);
 
     CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener(), node);
     int numNodes      = flatTree.nodeTypes.size();
     int numPrimitives = flatTree.primitiveData.size();
-    get_timestamp(&sub_end);
-    std::cout << "\tFlatten tree: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
-    get_timestamp(&sub_start);
 
+    get_timestamp(&sub_start);
     CALL_CL_GUARDED(clEnqueueWriteBuffer,
             ( m_clQueue, m_nodeBuf, /* Blocking */ CL_TRUE, 0,
               numNodes * sizeof(CSGNodeType),
@@ -320,11 +313,6 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
     cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
                           fg.blue() / 255.0f, fg.alpha() / 255.0f}};
 
-    get_timestamp(&end);
-    std::cout << "\tPre-render: " << timestamp_diff_in_seconds(start, end) << std::endl;
-
-    get_timestamp(&start);
-
     SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
             minX, maxX, minY, maxY, numNodes, m_nodeBuf, numPrimitives,
             m_primBuf, fgColor);
@@ -336,12 +324,8 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
     get_timestamp(&end);
     std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
 
-    get_timestamp(&start);
     CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
                 &texBuf, 0, NULL, NULL));
-    get_timestamp(&end);
-    std::cout << "\tRelease texture: " << timestamp_diff_in_seconds(start, end) << std::endl;
-
 }
 
 void FEMView2D::m_drawObject()
@@ -494,15 +478,15 @@ void FEMView2D::m_rerenderOverlay()
 {
     glFinish();
     CSGNode *overlayRoot = NULL;
-    std::vector<CSGBoolNode> unionGlueNodes;
+    std::vector<CSGNode *> unionGlueNodes;
     for (NodeList::iterator it = m_selectedObjects.begin();
                             it != m_selectedObjects.end(); ++it) {
-        if (!overlayRoot) {
+        if (overlayRoot == NULL) {
             overlayRoot = *it;
         }
         else {
-            unionGlueNodes.push_back(CSGBoolNode(UNION, overlayRoot, *it));
-            overlayRoot = &unionGlueNodes.back();
+            overlayRoot = new CSGGlueNode(overlayRoot, *it);
+            unionGlueNodes.push_back(overlayRoot);
         }
     }
     QColor selectedObjectColor(128, 128, 128, 128);
@@ -510,6 +494,10 @@ void FEMView2D::m_rerenderOverlay()
         m_clRenderCSGNode(overlayRoot, m_overlayTexBuf, selectedObjectColor);
     else
         m_clClearCSGRender(m_overlayTexBuf);
+
+    for (size_t i = 0; i < unionGlueNodes.size(); ++i) {
+        delete unionGlueNodes[i];
+    }
 }
 
 void FEMView2D::draw()
