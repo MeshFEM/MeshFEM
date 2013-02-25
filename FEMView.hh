@@ -126,7 +126,7 @@ private:
     template<typename Object>
     void drawObject(const Object *obj, const QColor &c);
     template<typename Object>
-    void m_clRenderObject(const Object *obj, GLuint tex);
+    void m_clRenderObject(const Object *obj, GLuint tex, const QColor &fg);
 
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
     void drawObjectTextureCells(const VField &deformation = VField());
@@ -174,6 +174,7 @@ private:
     cl_context       m_clContext;
     cl_kernel        m_renderKernel;
     cl_command_queue m_clQueue;
+    cl_mem           m_nodeBuf, m_primBuf;
 };
 
 #endif // FEMVIEW_HH
