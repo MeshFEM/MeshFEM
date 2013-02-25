@@ -24,8 +24,8 @@ typedef struct _CSGPrimitiveData {
 
 __kernel void RenderCSG(write_only image2d_t img, const int w, const int h,
                         const float xMin, const float xMax, const float yMin,
-                        const float yMax, const int nNodes,
-                        __constant CSGNodeType *nodes, const int nPrimitives,
+                        const float yMax, const int nNodes, const int nPrims,
+                        __constant CSGNodeType *nodes,
                         __constant CSGPrimitiveData *primitiveData,
                         const float4 fgColor)
 {
@@ -38,7 +38,7 @@ __kernel void RenderCSG(write_only image2d_t img, const int w, const int h,
     int lSize = get_local_size(0);
     for (int i = lIdx; i < min(nNodes, MAX_NODES); i += lSize)
         lnodes[i] = nodes[i];
-    for (int i = lIdx; i < min(nPrimitives, MAX_PRIMITIVES); i += lSize)
+    for (int i = lIdx; i < min(nPrims, MAX_PRIMITIVES); i += lSize)
         lpdata[i] = primitiveData[i];
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -98,7 +98,7 @@ __kernel void RenderCSG(write_only image2d_t img, const int w, const int h,
             }
         }
 
-        write_imagef(img, (int2)(col, row), computeStack[0] ?
-                    fgColor : (float4)(1.0f, 1.0f, 1.0f, 0.0f));
+        if (computeStack[0])
+            write_imagef(img, (int2)(col, row), fgColor);
     }
 }

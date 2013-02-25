@@ -100,6 +100,7 @@ void FEMView2D::initializeGL()
         }                                                                 
     }                                                                     
 
+    // Allocate CSG Tree host/device buffers
     m_nodeBuf = clCreateBuffer(m_clContext, CL_MEM_READ_ONLY,
                                MAX_NODES * sizeof(CSGNodeType),
                                0, &err);
@@ -107,7 +108,16 @@ void FEMView2D::initializeGL()
     m_primBuf = clCreateBuffer(m_clContext, CL_MEM_READ_ONLY,
                                MAX_PRIMITIVES * sizeof(CSGPrimitiveData),
                                0, &err);
+
     CHECK_CL_ERROR(err, "Creating primitive buffer");
+    m_nodeHostBuf = clCreateBuffer(m_clContext,
+                               CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+                               MAX_NODES * sizeof(CSGNodeType),
+                               NULL, &err);
+    m_primHostBuf = clCreateBuffer(m_clContext,
+                               CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+                               MAX_PRIMITIVES * sizeof(CSGPrimitiveData),
+                               NULL, &err);
 
     // Load and compile OpenCL Kernels
     char *knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/RenderCSG.cl");
@@ -227,12 +237,18 @@ void drawQuad(float minx, float miny, float maxx, float maxy) {
 }
 
 struct CSGTreeFlattener {
+    CSGTreeFlattener(CSGNodeType *ntype, CSGPrimitiveData *pdata)
+        : nodeTypes(ntype), primitiveData(pdata),
+          numNodes(0), numPrimitives(0) { }
     void preVisit(CSGNode *node) { } 
     void postVisit(CSGNode *node) {
         CSGNodeType type = node->nodeType();
-        nodeTypes.push_back(type);
+        assert(numNodes < MAX_NODES);
+        nodeTypes[numNodes++] = type;
+
         if (type == CSG_NODE_RECT) {
-            CSGPrimitiveData p;
+            assert(numPrimitives < MAX_PRIMITIVES);
+            CSGPrimitiveData &p = primitiveData[numPrimitives++];
             CSGRectangleNode *r = dynamic_cast<CSGRectangleNode *>(node);
             assert(r);
             Vector dim = .5 * r->getDimensions();
@@ -242,10 +258,11 @@ struct CSGTreeFlattener {
             p.rect.half_dim.y = dim[1];
             p.rect.rotationCosSin.x = cos(-r->getRotationRad());
             p.rect.rotationCosSin.y = sin(-r->getRotationRad());
-            primitiveData.push_back(p);
         }
+
         else if (type == CSG_NODE_ELLIPSE) {
-            CSGPrimitiveData p;
+            assert(numPrimitives < MAX_PRIMITIVES);
+            CSGPrimitiveData &p = primitiveData[numPrimitives++];
             CSGEllipseNode *e = dynamic_cast<CSGEllipseNode *>(node);
             assert(e);
             Vector focus = e->getFocus();
@@ -254,12 +271,12 @@ struct CSGTreeFlattener {
             p.ellipse.focus.x            = focus[0];
             p.ellipse.focus.y            = focus[1];
             p.ellipse.double_majorRadius = 2.0 * e->getMajorRadius();
-            primitiveData.push_back(p);
         }
     }
 
-    std::vector<CSGNodeType>      nodeTypes;
-    std::vector<CSGPrimitiveData> primitiveData;
+    CSGNodeType      *nodeTypes;
+    CSGPrimitiveData *primitiveData;
+    int numNodes, numPrimitives;
 };
 
 void FEMView2D::m_clClearCSGRender(cl_mem texBuf)
@@ -282,50 +299,55 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
                                   const QColor &fg)
 {
     cl_int err;
-    timestamp_type start, end, sub_start, sub_end;
+    // timestamp_type start, end;
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
             (m_clQueue, 1, &texBuf, 0, NULL, NULL));
 
-    CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener(), node);
-    int numNodes      = flatTree.nodeTypes.size();
-    int numPrimitives = flatTree.primitiveData.size();
+    CSGNodeType *nodes = (CSGNodeType *) clEnqueueMapBuffer(m_clQueue,
+                        m_nodeHostBuf, CL_TRUE, CL_MAP_WRITE, 0,
+                        MAX_NODES * sizeof(CSGNodeType), 0, NULL, NULL, &err);
+    CHECK_CL_ERROR(err, "map node buffer");
+    CSGPrimitiveData *pdata = (CSGPrimitiveData *) clEnqueueMapBuffer(m_clQueue,
+                        m_primHostBuf, CL_TRUE, CL_MAP_WRITE, 0,
+                        MAX_PRIMITIVES * sizeof(CSGPrimitiveData),
+                        0, NULL, NULL, &err);
+    CHECK_CL_ERROR(err, "map prim buffer");
+                 
+    CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener(nodes, pdata), node);
+    int numNodes      = flatTree.numNodes;
+    int numPrimitives = flatTree.numPrimitives;
 
-    get_timestamp(&sub_start);
     CALL_CL_GUARDED(clEnqueueWriteBuffer,
-            ( m_clQueue, m_nodeBuf, /* Blocking */ CL_TRUE, 0,
-              numNodes * sizeof(CSGNodeType),
-              &flatTree.nodeTypes[0], 0, NULL, NULL ));
+            ( m_clQueue, m_nodeBuf, /* Blocking */ CL_FALSE, 0,
+              numNodes * sizeof(CSGNodeType), nodes, 0, NULL, NULL ));
     CALL_CL_GUARDED(clEnqueueWriteBuffer,
-            ( m_clQueue, m_primBuf, /* Blocking */ CL_TRUE, 0,
-              numPrimitives * sizeof(CSGPrimitiveData),
-              &flatTree.primitiveData[0], 0, NULL, NULL ));
+            ( m_clQueue, m_primBuf, /* Blocking */ CL_FALSE, 0,
+              numPrimitives * sizeof(CSGPrimitiveData), pdata, 0, NULL, NULL ));
 
-    get_timestamp(&sub_end);
-    std::cout << "\tCopy tree: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
+    clEnqueueUnmapMemObject(m_clQueue, m_nodeHostBuf, nodes, 0, NULL, NULL);
+    clEnqueueUnmapMemObject(m_clQueue, m_primHostBuf, pdata, 0, NULL, NULL);
 
     size_t ldim[] = {128, 1};
-    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
-        m_width};
+    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0], m_width};
 
     float minX = m_frameMin[0], maxX = m_frameMax[0],
           minY = m_frameMin[1], maxY = m_frameMax[1];
-    int w, h;
     cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
                           fg.blue() / 255.0f, fg.alpha() / 255.0f}};
 
     SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
-            minX, maxX, minY, maxY, numNodes, m_nodeBuf, numPrimitives,
-            m_primBuf, fgColor);
+            minX, maxX, minY, maxY, numNodes, numPrimitives,
+            m_nodeBuf, m_primBuf, fgColor);
 
-    get_timestamp(&start);
+    // get_timestamp(&start);
     CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
                 /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
-    CALL_CL_GUARDED(clFinish, (m_clQueue));
-    get_timestamp(&end);
-    std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
-
     CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
                 &texBuf, 0, NULL, NULL));
+
+    CALL_CL_GUARDED(clFinish, (m_clQueue));
+    // get_timestamp(&end);
+    // std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
 }
 
 void FEMView2D::m_drawObject()
@@ -471,6 +493,7 @@ void FEMView2D::m_rerenderObject()
 {
     QColor modelColor(128, 192, 255, 255);
     glFinish();
+    m_clClearCSGRender(m_modelTexBuf);
     m_clRenderCSGNode(NULL, m_modelTexBuf, modelColor);
 }
 
@@ -490,10 +513,10 @@ void FEMView2D::m_rerenderOverlay()
         }
     }
     QColor selectedObjectColor(128, 128, 128, 128);
+
+    m_clClearCSGRender(m_overlayTexBuf);
     if (overlayRoot)
         m_clRenderCSGNode(overlayRoot, m_overlayTexBuf, selectedObjectColor);
-    else
-        m_clClearCSGRender(m_overlayTexBuf);
 
     for (size_t i = 0; i < unionGlueNodes.size(); ++i) {
         delete unionGlueNodes[i];

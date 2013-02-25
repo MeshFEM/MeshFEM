@@ -45,7 +45,9 @@ public:
         CALL_CL_GUARDED(clReleaseContext, (m_clContext));
 
         CALL_CL_GUARDED(clReleaseMemObject, (m_nodeBuf));
+        CALL_CL_GUARDED(clReleaseMemObject, (m_nodeHostBuf));
         CALL_CL_GUARDED(clReleaseMemObject, (m_primBuf));
+        CALL_CL_GUARDED(clReleaseMemObject, (m_primHostBuf));
         if (m_modelTexBuf)
             CALL_CL_GUARDED(clReleaseMemObject, (m_modelTexBuf));
         if (m_overlayTexBuf)
@@ -177,6 +179,7 @@ private:
     cl_kernel        m_clearKernel;
     cl_command_queue m_clQueue;
     cl_mem           m_nodeBuf, m_primBuf;
+    cl_mem           m_nodeHostBuf, m_primHostBuf;
     cl_mem           m_modelTexBuf;
     cl_mem           m_overlayTexBuf;
 };
