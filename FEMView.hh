@@ -40,10 +40,16 @@ public:
     ~FEMView2D() {
         // Clean up OpenCL stuff
         CALL_CL_GUARDED(clReleaseKernel, (m_renderKernel));
+        CALL_CL_GUARDED(clReleaseKernel, (m_clearKernel));
         CALL_CL_GUARDED(clReleaseCommandQueue, (m_clQueue));
         CALL_CL_GUARDED(clReleaseContext, (m_clContext));
 
-        delete m_rgbaBuffer;
+        CALL_CL_GUARDED(clReleaseMemObject, (m_nodeBuf));
+        CALL_CL_GUARDED(clReleaseMemObject, (m_primBuf));
+        if (m_modelTexBuf)
+            CALL_CL_GUARDED(clReleaseMemObject, (m_modelTexBuf));
+        if (m_overlayTexBuf)
+            CALL_CL_GUARDED(clReleaseMemObject, (m_overlayTexBuf));
     }
 
     void setGUIState(GUIState state) {
@@ -123,10 +129,8 @@ protected:
 
 
 private:
-    template<typename Object>
-    void drawObject(const Object *obj, const QColor &c);
-    template<typename Object>
-    void m_clRenderObject(const Object *obj, GLuint tex, const QColor &fg);
+    void m_clClearCSGRender(cl_mem texBuf);
+    void m_clRenderCSGNode(CSGNode *node, cl_mem texBuf, const QColor &fg);
 
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
     void drawObjectTextureCells(const VField &deformation = VField());
@@ -134,10 +138,10 @@ private:
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
+    void m_rerenderObject();
+    void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
     void m_drawWorldVertex(const Vector &v);
-    void m_loadTexture(GLuint tex);
-    void m_clearBuffer();
 
     ////////////////////////////////////////////////////////////////////////////
     // Instance variables
@@ -152,9 +156,6 @@ private:
     GLuint m_tCoordLoc[4];
     // Object texture sampler loc
     GLuint m_objectTexLoc;
-
-    char *m_rgbaBuffer;
-    bool m_overlayDirty, m_objectDirty;
 
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
@@ -173,8 +174,11 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     cl_context       m_clContext;
     cl_kernel        m_renderKernel;
+    cl_kernel        m_clearKernel;
     cl_command_queue m_clQueue;
     cl_mem           m_nodeBuf, m_primBuf;
+    cl_mem           m_modelTexBuf;
+    cl_mem           m_overlayTexBuf;
 };
 
 #endif // FEMVIEW_HH

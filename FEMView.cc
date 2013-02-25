@@ -43,9 +43,8 @@ typedef struct _CSGPrimitiveData {
 
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_rgbaBuffer(NULL), m_overlayDirty(true), m_objectDirty(true),
       m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
-      m_displacementPhase(0.0)
+      m_displacementPhase(0.0), m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
     setFocusPolicy(Qt::StrongFocus);
@@ -54,7 +53,7 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
 void FEMView2D::csgNodesSelected(const NodeList &nList)
 {
     m_selectedObjects = nList;
-    m_overlayDirty = true;
+    m_rerenderOverlay();
     update();
 }
 
@@ -116,6 +115,11 @@ void FEMView2D::initializeGL()
     m_renderKernel = kernel_from_string(m_clContext, knl_text,
                                         "RenderCSG", NULL);
     free(knl_text);
+    knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/ClearTexture.cl");
+    assert(knl_text != NULL);
+    m_clearKernel = kernel_from_string(m_clContext, knl_text,
+                                       "ClearTexture", NULL);
+    free(knl_text);
 
     glClearColor(0.8, 0.8, 0.8, 1.0);
     glDisable(GL_DEPTH_TEST);
@@ -172,13 +176,29 @@ void FEMView2D::resizeGL(int width, int height)
         m_height = width / aspect;
     }
 
+    // Allocate empty textures
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
             GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, m_overlayTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
+            GL_UNSIGNED_BYTE, NULL);
 
-    delete m_rgbaBuffer;
-    m_rgbaBuffer = new char[4 * m_width * m_height];
-    m_objectDirty = m_overlayDirty = true;
+    cl_int err;
+
+    if (m_modelTexBuf)
+        CALL_CL_GUARDED(clReleaseMemObject, (m_modelTexBuf));
+    m_modelTexBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
+                                            GL_TEXTURE_2D, 0, m_modelTex, &err);
+    CHECK_CL_ERROR(err, "clCreateFromGLTexture");
+
+    if (m_overlayTexBuf)
+        CALL_CL_GUARDED(clReleaseMemObject, (m_overlayTexBuf));
+    m_overlayTexBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
+                                            GL_TEXTURE_2D, 0, m_overlayTex, &err);
+
+    m_rerenderObject();
+    m_rerenderOverlay();
 
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
@@ -204,35 +224,6 @@ void drawQuad(float minx, float miny, float maxx, float maxy) {
     glVertex2f(minx, maxy);
 
     glEnd();
-}
-
-void FEMView2D::m_clearBuffer()
-{
-    memset(m_rgbaBuffer, 0, 4 * m_width * m_height);
-}
-
-template<typename Object>
-void FEMView2D::drawObject(const Object *obj, const QColor &fg)
-{
-    for (int r = 0; r < m_height; ++r) {
-        for (int c = 0; c < m_width; ++c) {
-            Vector p;
-            getWorldCoords(r, c, p[0], p[1]);
-            if (obj->isInside(p)) {
-                m_rgbaBuffer[4 * (r * m_width + c) + 0] = (char) fg.red();
-                m_rgbaBuffer[4 * (r * m_width + c) + 1] = (char) fg.green();
-                m_rgbaBuffer[4 * (r * m_width + c) + 2] = (char) fg.blue();
-                m_rgbaBuffer[4 * (r * m_width + c) + 3] = (char) fg.alpha();
-            }
-        }
-    }
-}
-
-void FEMView2D::m_loadTexture(GLuint tex)
-{
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
-            GL_UNSIGNED_BYTE, m_rgbaBuffer);
 }
 
 struct CSGTreeFlattener {
@@ -271,26 +262,36 @@ struct CSGTreeFlattener {
     std::vector<CSGPrimitiveData> primitiveData;
 };
 
-template<typename Object>
-void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex,
-                                 const QColor &fg)
+void FEMView2D::m_clClearCSGRender(cl_mem texBuf)
 {
+    CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
+            (m_clQueue, 1, &texBuf, 0, NULL, NULL));
+    size_t ldim[] = {128, 1};
+    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
+        m_width};
+    SET_3_KERNEL_ARGS(m_clearKernel, texBuf, m_width, m_height);
+    CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_clearKernel,
+                /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+
+    CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
+                &texBuf, 0, NULL, NULL));
+    CALL_CL_GUARDED(clFinish, (m_clQueue));
+}
+
+void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
+                                  const QColor &fg)
+{
+    cl_int err;
     timestamp_type start, end, sub_start, sub_end;
     get_timestamp(&start);
-
-    cl_int err;
-    glBindTexture(GL_TEXTURE_2D, 0);
-    cl_mem d_texBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
-                                            GL_TEXTURE_2D, 0, tex, &err);
-    CHECK_CL_ERROR(err, "clCreateFromGLTexture");
-
+    get_timestamp(&sub_start);
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
-            (m_clQueue, 1, &d_texBuf, 0, NULL, NULL));
+            (m_clQueue, 1, &texBuf, 0, NULL, NULL));
     get_timestamp(&sub_end);
-    std::cout << "\tPrepare texture: " << timestamp_diff_in_seconds(start, sub_end) << std::endl;
+    std::cout << "\tAcquire texture: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
     get_timestamp(&sub_start);
 
-    CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener());
+    CSGTreeFlattener flatTree = m_fem.model().dfs(CSGTreeFlattener(), node);
     int numNodes      = flatTree.nodeTypes.size();
     int numPrimitives = flatTree.primitiveData.size();
     get_timestamp(&sub_end);
@@ -306,9 +307,8 @@ void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex,
               numPrimitives * sizeof(CSGPrimitiveData),
               &flatTree.primitiveData[0], 0, NULL, NULL ));
 
-    CALL_CL_GUARDED(clFinish, (m_clQueue));
     get_timestamp(&sub_end);
-    std::cout << "\Copy tree: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
+    std::cout << "\tCopy tree: " << timestamp_diff_in_seconds(sub_start, sub_end) << std::endl;
 
     size_t ldim[] = {128, 1};
     size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
@@ -325,34 +325,31 @@ void FEMView2D::m_clRenderObject(const Object *obj, GLuint tex,
 
     get_timestamp(&start);
 
-    SET_12_KERNEL_ARGS(m_renderKernel, d_texBuf, m_width, m_height,
+    SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
             minX, maxX, minY, maxY, numNodes, m_nodeBuf, numPrimitives,
             m_primBuf, fgColor);
 
+    get_timestamp(&start);
     CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
                 /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
-
-    CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
-                &d_texBuf, 0, NULL, NULL));
     CALL_CL_GUARDED(clFinish, (m_clQueue));
     get_timestamp(&end);
     std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
 
-    CALL_CL_GUARDED(clReleaseMemObject, (d_texBuf));
+    get_timestamp(&start);
+    CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
+                &texBuf, 0, NULL, NULL));
+    get_timestamp(&end);
+    std::cout << "\tRelease texture: " << timestamp_diff_in_seconds(start, end) << std::endl;
+
 }
 
 void FEMView2D::m_drawObject()
 {
-    QColor modelColor(128, 192, 255, 255);
-
-    if (m_objectDirty) {
-        m_clRenderObject(&(m_fem.model()), m_modelTex, modelColor);
-        m_objectDirty = false;
-    }
-
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
     drawQuad(0, 0, m_width, m_height);
+    glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
 }
 
@@ -367,19 +364,11 @@ void FEMView2D::m_drawWorldBox(const BBox_t &b)
 void FEMView2D::m_drawSelectedObjects()
 {
     QColor selectedObjectColor(128, 128, 128, 128);
-    if (m_overlayDirty) {
-        m_clearBuffer();
-        for (NodeList::iterator it = m_selectedObjects.begin();
-                                it != m_selectedObjects.end(); ++it) {
-            drawObject(*it, selectedObjectColor);
-        }
-        m_loadTexture(m_overlayTex);
-        m_overlayDirty = false;
-    }
 
     glBindTexture(GL_TEXTURE_2D, m_overlayTex);
     glEnable(GL_TEXTURE_2D);
     drawQuad(0, 0, m_width, m_height);
+    glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
 
     // Draw the bounding boxes for selected objects
@@ -494,10 +483,38 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
     }
 }
 
+void FEMView2D::m_rerenderObject()
+{
+    QColor modelColor(128, 192, 255, 255);
+    glFinish();
+    m_clRenderCSGNode(NULL, m_modelTexBuf, modelColor);
+}
+
+void FEMView2D::m_rerenderOverlay()
+{
+    glFinish();
+    CSGNode *overlayRoot = NULL;
+    std::vector<CSGBoolNode> unionGlueNodes;
+    for (NodeList::iterator it = m_selectedObjects.begin();
+                            it != m_selectedObjects.end(); ++it) {
+        if (!overlayRoot) {
+            overlayRoot = *it;
+        }
+        else {
+            unionGlueNodes.push_back(CSGBoolNode(UNION, overlayRoot, *it));
+            overlayRoot = &unionGlueNodes.back();
+        }
+    }
+    QColor selectedObjectColor(128, 128, 128, 128);
+    if (overlayRoot)
+        m_clRenderCSGNode(overlayRoot, m_overlayTexBuf, selectedObjectColor);
+    else
+        m_clClearCSGRender(m_overlayTexBuf);
+}
+
 void FEMView2D::draw()
 {
     glColor3f(1, 1, 1);
-    glDisable(GL_TEXTURE_2D);
     drawQuad(0, 0, m_width, m_height);
 
     glEnable(GL_BLEND);
@@ -591,7 +608,8 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
                                 it != m_selectedObjects.end(); ++it) {
             (*it)->applyTranslation(end - start);
         }
-        m_objectDirty = m_overlayDirty = true;
+        m_rerenderObject();
+        m_rerenderOverlay();
         update();
     }
     m_prevMouseLoc = event->pos();
