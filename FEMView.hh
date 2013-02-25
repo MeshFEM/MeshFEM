@@ -180,8 +180,7 @@ private:
     cl_command_queue m_clQueue;
     cl_mem           m_nodeBuf, m_primBuf;
     cl_mem           m_nodeHostBuf, m_primHostBuf;
-    cl_mem           m_modelTexBuf;
-    cl_mem           m_overlayTexBuf;
+    cl_mem           m_modelTexBuf, m_overlayTexBuf;
 };
 
 #endif // FEMVIEW_HH

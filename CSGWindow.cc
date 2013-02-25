@@ -85,6 +85,11 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
 
     tb->addActions(uiActionGroup->actions());
 
+    QMenu *viewMenu = menuBar()->addMenu("View");
+    QAction *showGridAction = new QAction("Show Grid During Deformation", this);
+    showGridAction->setCheckable(true);
+    viewMenu->addAction(showGridAction);
+
     // tb->addAction(uiActionGroup);
     addToolBar(tb);
 }
