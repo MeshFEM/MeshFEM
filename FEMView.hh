@@ -74,6 +74,7 @@ public:
     
 public slots:
     void csgNodesSelected(const NodeList &nList);
+    void showGridDuringDeformationToggled(bool showGrid);
 
 protected:
     void initializeGL();
@@ -170,6 +171,8 @@ private:
 
     QBasicTimer m_timer;
     Scalar m_displacementPhase;
+
+    bool m_showGridWhileDeforming;
 
     ////////////////////////////////////////////////////////////////////////////
     // OpenCL stuff

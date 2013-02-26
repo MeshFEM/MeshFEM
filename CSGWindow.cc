@@ -50,6 +50,12 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
+    QMenu *viewMenu = menuBar()->addMenu("View");
+    QAction *showGridAction = new QAction("Show Grid During Deformation", this);
+    showGridAction->setCheckable(true);
+    showGridAction->setChecked(true);
+    viewMenu->addAction(showGridAction);
+
     // Set up connections
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
                      femView, SLOT(csgNodesSelected(const NodeList &)));
@@ -69,6 +75,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      SLOT(modalAnalysisSettingsChanged(const AnalysisSettings &)));
     QObject::connect(controller, SIGNAL(modesUpdated(const MeshlessFEM_t *)),
                      analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
+    QObject::connect(showGridAction, SIGNAL(toggled(bool)),
+                     femView, SLOT(showGridDuringDeformationToggled(bool)));
 
     setCentralWidget(splitter);
 
@@ -80,15 +88,9 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     panZoomAction->setCheckable(true);
     selectAction->setCheckable(true);
     transformAction->setCheckable(true);
-
     panZoomAction->setChecked(true);
 
     tb->addActions(uiActionGroup->actions());
-
-    QMenu *viewMenu = menuBar()->addMenu("View");
-    QAction *showGridAction = new QAction("Show Grid During Deformation", this);
-    showGridAction->setCheckable(true);
-    viewMenu->addAction(showGridAction);
 
     // tb->addAction(uiActionGroup);
     addToolBar(tb);

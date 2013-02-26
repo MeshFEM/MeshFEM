@@ -12,8 +12,6 @@ void main()
     vec2 F = f_point[3]   - f_point[0];
     vec2 G = f_point[2]   - f_point[3] - E;
 
-    // sampler1D texture;
-
     // F.x + s * G.x will appear in the denominator of t's expression, so choose
     // coordinate labling to make that division as robust as possible.
     if (abs(F.x + .5 * G.x) < abs(F.y + .5 * G.y)) {
@@ -41,10 +39,9 @@ void main()
     float t1 = (H.x - s1 * E.x) / (F.x + s1 * G.x);
     float t2 = (H.x - s2 * E.x) / (F.x + s2 * G.x);
 
-    bool solution1Valid = ((s1 >= 0.0) && (s1 <= 1.0)) &&
-                          ((t1 >= 0.0) && (t1 <= 1.0));
-    bool solution2Valid = ((s2 >= 0.0) && (s2 <= 1.0)) &&
-                          ((t2 >= 0.0) && (t2 <= 1.0));
+    float threshold = .5 + 1e-3;
+    bool solution1Valid = abs(s1 - .5) < threshold && abs(t1 - .5) < threshold;
+    bool solution2Valid = abs(s2 - .5) < threshold && abs(t2 - .5) < threshold;
 
     if (!(solution1Valid || solution2Valid))
         discard;

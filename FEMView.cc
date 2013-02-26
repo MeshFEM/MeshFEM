@@ -44,7 +44,8 @@ typedef struct _CSGPrimitiveData {
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
-      m_displacementPhase(0.0), m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
+      m_displacementPhase(0.0), m_showGridWhileDeforming(true),
+      m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
     setFocusPolicy(Qt::StrongFocus);
@@ -56,6 +57,13 @@ void FEMView2D::csgNodesSelected(const NodeList &nList)
     m_rerenderOverlay();
     update();
 }
+
+void FEMView2D::showGridDuringDeformationToggled(bool showGrid)
+{
+    m_showGridWhileDeforming = showGrid;
+    update();
+}
+    
 
 void FEMView2D::initializeGL()
 {
@@ -562,8 +570,10 @@ void FEMView2D::draw()
         }
         // drawGrid(DRAW_CELLS, deformation);
         drawObjectTextureCells(deformation);
-        drawGrid(DRAW_EDGES, deformation);
-        drawGrid(DRAW_NODES, deformation);
+        if (m_showGridWhileDeforming) {
+            drawGrid(DRAW_EDGES, deformation);
+            drawGrid(DRAW_NODES, deformation);
+        }
     }
     else if (m_guiState == ELEMENTS_STATE) {
         drawObjectTextureCells();
