@@ -28,6 +28,7 @@ class MeshlessFEM {
 public:
     typedef typename Model::Real Real;
     typedef Eigen::Matrix<Real, 4, 1> DType;
+    typedef ScalarField<Real>         SField;
     typedef VectorField<Real, 2>      VField;
     typedef SymmetricMatrixField<Real, 2> SMField;
 
@@ -166,19 +167,37 @@ public:
                                                K_n, K_i, K_j, K_v,
                                                M_n, M_i, M_j, M_v, m_modes,
                                                m_eigenvalues);
-        // Compute modal stress tensors.
+
+        // Normalize so all (nonzero) modes inject unit energy
+        // Mode energy = .5 lambda^2
+        // Mode energy = 1/2 u^T K u = 1/2 lambda ||u||^2 := 1
+        // ==> ||u|| = sqrt(2 / lambda)
+        for (size_t i = 0; i < numModes; ++i) {
+            Real lambda = eigenvalue(i);
+            if (lambda > (Real) 1e-6)
+                m_modes[i] *= sqrt(2.0 / lambda) / m_modes[i].data().norm();
+        }
+
         m_modalStressTensors.clear();
+        m_modalStressNorms.clear();
+
         if (success) {
             assert(numModes == m_modes.size());
+
+            // Compute modal stress tensors.
             m_modalStressTensors.reserve(numModes);
-            for (size_t i = 0; i < numModes; ++i) {
+            for (size_t i = 0; i < numModes; ++i)
                 m_modalStressTensors.push_back(elementStressTensors(mode(i)));
-            }
+            // Compute modal stress norms
+            for (size_t i = 0; i < numModes; ++i)
+                m_modalStressNorms.push_back(
+                        computeStressTensorNorms(m_modalStressTensors[i]));
         }
         return success;
     }
 
     SMField elementStressTensors(const VField &displacement);
+    SField  computeStressTensorNorms(const SMField &stressField);
 
 private:
     Quadrature2D *m_quadrature;
@@ -192,6 +211,7 @@ private:
     int m_numRequestedModes;
     std::vector<VField> m_modes;
     std::vector<SMField> m_modalStressTensors;
+    std::vector<SField>  m_modalStressNorms;
     std::vector<Real> m_eigenvalues;
     std::vector<ElementData> m_elementData;
 

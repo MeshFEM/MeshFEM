@@ -8,9 +8,9 @@ void main()
     // gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     // return;
     vec2 H = f_position - f_point[0];
-    vec2 E = f_point[1]   - f_point[0];
-    vec2 F = f_point[3]   - f_point[0];
-    vec2 G = f_point[2]   - f_point[3] - E;
+    vec2 E = f_point[1] - f_point[0];
+    vec2 F = f_point[3] - f_point[0];
+    vec2 G = f_point[2] - f_point[3] - E;
 
     // F.x + s * G.x will appear in the denominator of t's expression, so choose
     // coordinate labling to make that division as robust as possible.
@@ -39,6 +39,7 @@ void main()
     float t1 = (H.x - s1 * E.x) / (F.x + s1 * G.x);
     float t2 = (H.x - s2 * E.x) / (F.x + s2 * G.x);
 
+    // Tolerance needed to avoid gaps between adjacent deformed cells
     float threshold = .5 + 1e-3;
     bool solution1Valid = abs(s1 - .5) < threshold && abs(t1 - .5) < threshold;
     bool solution2Valid = abs(s2 - .5) < threshold && abs(t2 - .5) < threshold;
@@ -47,7 +48,7 @@ void main()
         discard;
 
     vec2 texCoord = solution1Valid ? vec2(s1,  t1) : vec2(s2,  t2);
-    // Bilinearly interpolate texture coordinates...
+    // Bilinearly interpolate texture coordinates
     texCoord = mix(mix(f_texCoord[0], f_texCoord[1], texCoord[0]),
                    mix(f_texCoord[3], f_texCoord[2], texCoord[0]), texCoord[1]);
 

@@ -13,7 +13,30 @@
 
 #include <vector>
 #include <iostream>
+#include <cassert>
 #include "Fields.hh"
+
+// Numerically robust quadratic formula implementation (avoids cancellation)
+template<typename Real>
+void quadraticFormula(Real a, Real b, Real c, Real &s1, Real &s2,
+                      int &nSolutions)
+{
+    Real discriminant = b * b - 4 * a * c;
+    Real bSign = b < 0 ? -1.0 : 1.0;
+    Real q = -.5 * (b + bSign * sqrt(discriminant));
+    Real eps = 1e-6;
+    if (fabs(a) > eps) {
+        // Note: when b \approx 0, 
+        // D > 0 ==> a and c must differ in sign ==> we still get both roots!
+        s1 = q / a;
+        s2 = c / q;
+        nSolutions = 2;
+    }
+    else {
+        s1 = c / q;
+        nSolutions = 1;
+    }
+}
 
 template<typename Real>
 class Solver {
@@ -21,11 +44,20 @@ class Solver {
         Solver() { }
         typedef std::vector<size_t>  IVec;
         typedef std::vector<Real>    VVec;
+        typedef ScalarField<Real>    SField;
         typedef VectorField<Real, 2> VField;
+        typedef SymmetricMatrixField<Real, 2> SM2Field;
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
                 std::vector<VField> &modes, std::vector<Real> &eigval) = 0;
+
+        // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.
+        // These matrices are compressed in the form
+        // [a1 b1]  [a2 b2]         ==>   [a1 a2      ]
+        // [b1 c1], [b2 c2], ...          [c1 c2  ... ]
+        //                                [b1 b2      ]
+        virtual VField symm2x2Eigenvalues(const SM2Field &symMatField) = 0;
 
         virtual ~Solver() { }
 };
@@ -39,7 +71,9 @@ class MatlabSolver : public Solver<Real> {
 
         using typename Solver<Real>::IVec;
         using typename Solver<Real>::VVec;
+        using typename Solver<Real>::SField;
         using typename Solver<Real>::VField;
+        using typename Solver<Real>::SM2Field;
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
@@ -87,6 +121,33 @@ class MatlabSolver : public Solver<Real> {
             }
 
             return success;
+        }
+
+        // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.
+        // These matrices are compressed in the form
+        // [a1 b1]  [a2 b2]         ==>   [a1 a2      ]
+        // [b1 c1], [b2 c2], ...          [c1 c2  ... ]
+        //                                [b1 b2      ]
+        virtual VField symm2x2Eigenvalues(const SM2Field &symMatField) {
+            // We don't need MATLAB for this one!
+            // m_matlab->SetEngineRealMatrix("flattened3x3s", 3,
+            //                              symMatField.domainSize(),
+            //                              symMatField.data().data(), true);
+            size_t numMats = symMatField.domainSize();
+            VField result(numMats);
+
+            for (size_t i = 0; i < numMats; ++i) {
+                Real a = symMatField(i)[0], b = symMatField(i)[1],
+                     c = symMatField(i)[1];
+                // Characteristic polynomial:
+                // (a - lambda) * (c - lambda) - b * b
+                //  = lambda^2 - (a + c) * lambda + (ac - b * b)
+                int nSolutions;
+                quadraticFormula((Real) 1.0, -(a + c), a * c - b * b,
+                                 result(i)[0], result(i)[1], nSolutions);
+                assert(nSolutions == 2);
+            }
+            return result;
         }
 
         virtual ~MatlabSolver() { }

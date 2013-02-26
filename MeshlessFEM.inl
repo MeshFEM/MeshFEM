@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <iostream>
+#include <algorithm>
 
 // Element node ordering:
 // 3         2
@@ -399,6 +400,22 @@ MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
     }
 
     return stressTensorField;
+}
+
+
+template<typename Model>
+typename MeshlessFEM<Model>::SField
+MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
+{
+    size_t numMats = stressField.domainSize();
+    VField eigenvalues = m_solver->symm2x2Eigenvalues(stressField);
+    assert(eigenvalues.domainSize() == numMats);
+    SField result(numMats);
+
+    for (size_t i = 0; i < numMats; ++i)
+        result(i) = std::max(fabs(eigenvalues(i)[0]), fabs(eigenvalues(i)[1]));
+
+    return result;
 }
 
 template<typename Model>
