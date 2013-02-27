@@ -93,8 +93,8 @@ private:
             typename ElementGrid::AdjacencyVec adj;
             m_grid.elementCorners(i, adj);
             // Element number, quad element type (3), 0 tags, n0 n1 n2 n3
-            m_outStream << i + 1 << " 3 0 " << adj[0] << ' ' << adj[1]
-                        << ' ' << adj[2] << ' ' << adj[3] << std::endl;
+            m_outStream << i + 1 << " 3 0 " << adj[0] + 1 << ' ' << adj[1] + 1
+                        << ' ' << adj[2] + 1 << ' ' << adj[3] + 1 << std::endl;
         }
         m_outStream << "$EndElements" << std::endl;
     }
