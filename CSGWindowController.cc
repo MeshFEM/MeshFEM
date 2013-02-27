@@ -176,10 +176,20 @@ void CSGWindowController::dumpModalData()
         typedef MSHWriter<MeshlessFEM_t::ElementGrid> MSHWriter_t;
         MSHWriter_t mshOut(fileName.toAscii(), m_fem.elementGrid());
         if (mshOut) {
+            VectorField<double, 3> modal3Vector(m_fem.elementGrid().numNodes());
+            modal3Vector.clear();
             for (size_t i = 0; i < m_fem.numModes(); ++i) {
                 char name[64];
+                const MeshlessFEM_t::VField &mode = m_fem.mode(i);
+                assert(mode.domainSize() == modal3Vector.domainSize());
+
+                for (size_t i = 0; i < mode.domainSize(); ++i) {
+                    modal3Vector(i)[0] = mode(i)[0];
+                    modal3Vector(i)[1] = mode(i)[1];
+                }
+
                 snprintf(name, 64, "modal displacement %i", (int) i);
-                mshOut.addField(name, m_fem.mode(i), MSHWriter_t::PER_NODE);
+                mshOut.addField(name, modal3Vector, MSHWriter_t::PER_NODE);
                 snprintf(name, 64, "modal stress norm %i", (int) i);
                 mshOut.addField(name, m_fem.modalStressNorms(i),
                                 MSHWriter_t::PER_ELEMENT);

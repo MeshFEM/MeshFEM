@@ -56,6 +56,10 @@ public:
         return m_values.col(i);
     }
 
+    void clear() {
+        m_values = ArrayType::Zero(dim(), domainSize());
+    }
+
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
 
