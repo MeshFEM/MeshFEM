@@ -30,6 +30,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            MatlabInterface/MatlabShell.h QMatlabInterface.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
+           MSHWriter.hh \
            cl-helper.h
 
 

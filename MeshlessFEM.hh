@@ -31,11 +31,12 @@ public:
     typedef ScalarField<Real>         SField;
     typedef VectorField<Real, 2>      VField;
     typedef SymmetricMatrixField<Real, 2> SMField;
+    typedef ElementGrid2D<Model>      ElementGrid;
 
     // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 4, 2> GradPhis;
     typedef Eigen::Matrix<Real, 3, 1> FlattenedTensor;
-    typedef typename ElementGrid2D<Model>::AdjacencyVec CornerVec;
+    typedef typename ElementGrid::AdjacencyVec CornerVec;
 
     class ElementData;
     class PerElementLaplacianStiffnessDensity;
@@ -50,7 +51,7 @@ public:
     {
         m_quadrature = new Quadrature2D(settings.quadraturePoints,
                                         settings.quadrature);
-        m_elementGrid = new ElementGrid2D<Model>(settings.Nx, settings.Ny,
+        m_elementGrid = new ElementGrid(settings.Nx, settings.Ny,
                 settings.cellOverlapThreshold, *m_quadrature, model);
         
         configureMatrices(settings);
@@ -68,7 +69,7 @@ public:
             quadrature().setUsingGaussQuadrature(settings.quadrature);
             changed = true;
         }
-        ElementGrid2D<Model> &grid = elementGrid();
+        ElementGrid &grid = elementGrid();
         if (grid.getCellOverlapThreshold() != settings.cellOverlapThreshold) {
             grid.setCellOverlapThreshold(settings.cellOverlapThreshold);
             changed = true;
@@ -123,7 +124,7 @@ public:
         m_invalidateCache();
     }
 
-    ElementGrid2D<Model> &elementGrid() {
+    ElementGrid &elementGrid() {
         assert(m_elementGrid != NULL);
         return *m_elementGrid;
     }
@@ -149,6 +150,10 @@ public:
     const VField &mode(size_t i) const {
         assert(i < numModes());
         return m_modes[i];
+    }
+
+    const SField &modalStressNorms(size_t i) const {
+        return m_modalStressNorms[i];
     }
 
     bool modalAnalysis() {
@@ -202,7 +207,7 @@ public:
 private:
     Quadrature2D *m_quadrature;
     Model &m_model;
-    ElementGrid2D<Model> *m_elementGrid;
+    ElementGrid *m_elementGrid;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
     DType m_d;

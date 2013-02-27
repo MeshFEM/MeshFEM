@@ -42,6 +42,7 @@ public slots:
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();
+    void dumpModalData();
     void modeSelectionChanged(int index);
 
 signals:

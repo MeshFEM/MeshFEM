@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "CSGWindowController.hh"
 #include "MarchingSquaresGrid.hh"
+#include "MSHWriter.hh"
 #include <list>
 #include <fstream>
 #include <iostream>
@@ -165,6 +166,26 @@ void CSGWindowController::runModalAnalysis()
         mbox.exec();
     }
     emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::dumpModalData()
+{
+    QString fileName = QFileDialog::getSaveFileName(0, "Save Modal Data (.msh)",
+            QString(), "Text files (*.msh)");
+    if (fileName.length() > 0) {
+        typedef MSHWriter<MeshlessFEM_t::ElementGrid> MSHWriter_t;
+        MSHWriter_t mshOut(fileName.toAscii(), m_fem.elementGrid());
+        if (mshOut) {
+            for (size_t i = 0; i < m_fem.numModes(); ++i) {
+                char name[64];
+                snprintf(name, 64, "modal displacement %i", (int) i);
+                mshOut.addField(name, m_fem.mode(i), MSHWriter_t::PER_NODE);
+                snprintf(name, 64, "modal stress norm %i", (int) i);
+                mshOut.addField(name, m_fem.modalStressNorms(i),
+                                MSHWriter_t::PER_ELEMENT);
+            }
+        }
+    }
 }
 
 void CSGWindowController::modeSelectionChanged(int index)

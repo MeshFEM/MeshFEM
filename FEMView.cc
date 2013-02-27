@@ -568,7 +568,11 @@ void FEMView2D::draw()
 
             deformation *= magnitude * sin(m_displacementPhase);
         }
-        // drawGrid(DRAW_CELLS, deformation);
+        // if (m_shadeWithStress) {
+        //     const SField &stressNorms =
+        //             m_fem.modalStressNorms(m_selectedDeformation);
+        //     drawGrid(DRAW_CELLS, deformation);
+        // }
         drawObjectTextureCells(deformation);
         if (m_showGridWhileDeforming) {
             drawGrid(DRAW_EDGES, deformation);

@@ -21,44 +21,6 @@
 #include <cassert>
 #include <algorithm>
 
-template<typename Real>
-class ScalarField {
-public:
-    typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
-    typedef Eigen::Matrix<Real, 1, Eigen::Dynamic> ArrayType;
-    // Note: copies data
-    ScalarField(const FlattenedType &values)
-        : m_values(values) { }
-
-    ScalarField(size_t domainSize = 0)
-        : m_values(1, domainSize) { }
-
-    ScalarField &operator*=(Real scalar) {
-        m_values *= scalar;
-        return *this;
-    }
-
-    Real operator()(size_t i) const {
-        assert(i < (size_t) m_values.cols());
-        return m_values[i];
-    }
-
-    Real &operator()(size_t i) {
-        assert(i < (size_t) m_values.cols());
-        return m_values[i];
-    }
-
-    const ArrayType &data() const { return m_values; }
-          ArrayType &data()       { return m_values; }
-
-    size_t dim() const { return 1; }
-    size_t domainSize() const { return m_values.cols(); }
-
-private:
-    /** Data storage */
-    ArrayType m_values;
-};
-
 template<typename Real, size_t t_dim>
 class VectorField {
 public:
@@ -100,10 +62,29 @@ public:
     size_t dim() const { return t_dim; }
     size_t domainSize() const { return m_values.cols(); }
 
-private:
+protected:
     /** Data storage */
     ArrayType m_values;
 };
+
+template<typename Real>
+class ScalarField : public VectorField<Real, 1> {
+public:
+    using typename VectorField<Real, 1>::FlattenedType;
+
+    ScalarField(const FlattenedType &values)
+        : VectorField<Real, 1>(values) { }
+    ScalarField(size_t domainSize = 0)
+        : VectorField<Real, 1>(domainSize) { }
+
+    // Also provide direct access to values in the scalar field case
+    // (So this looks just like an array)
+    Real  operator[](size_t i) const { return m_values[i]; }
+    Real &operator[](size_t i)       { return m_values[i]; }
+private:
+    using VectorField<Real, 1>::m_values;
+};
+
 
 // Symmetric matrix NxN fields need only store the upper triangle of the NxN
 // matrix. This triangle is flattened into a 1D vector as follows:

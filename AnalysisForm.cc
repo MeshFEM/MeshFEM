@@ -37,6 +37,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     g_numModesStepper = new QSpinBox();
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
+    g_dumpModalDataButton = new QPushButton("Dump Modal Data");
+    g_dumpModalDataButton->setEnabled(false);
     g_modeSelector = new QComboBox();
 
     g_numWeakRegionsStepper = new QSpinBox();
@@ -78,6 +80,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_numModesStepper->setMinimum(1);
     g_numModesStepper->setMaximum(50);
     modalForm->addRow(g_modalAnalysisButton);
+    modalForm->addRow(g_dumpModalDataButton);
     modalForm->addRow(g_modeSelector);
     modalAnalysisGroup->setLayout(modalForm);
 
@@ -108,6 +111,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_modalAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runModalAnalysis()));
+    QObject::connect(g_dumpModalDataButton, SIGNAL(clicked()),
+                     controller, SLOT(dumpModalData()));
     QObject::connect(g_numModesStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(modalAnalysisControlsChanged(int)));
     QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
@@ -176,9 +181,11 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
             g_modeSelector->addItem(label);
         }
         g_modeSelector->setEnabled(true);
+        g_dumpModalDataButton->setEnabled(true);
     }
     else {
         g_modeSelector->setEnabled(false);
+        g_dumpModalDataButton->setEnabled(false);
     }
 }
 

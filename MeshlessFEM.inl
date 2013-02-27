@@ -413,7 +413,7 @@ MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
     SField result(numMats);
 
     for (size_t i = 0; i < numMats; ++i)
-        result(i) = std::max(fabs(eigenvalues(i)[0]), fabs(eigenvalues(i)[1]));
+        result[i] = std::max(fabs(eigenvalues(i)[0]), fabs(eigenvalues(i)[1]));
 
     return result;
 }
