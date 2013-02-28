@@ -174,13 +174,14 @@ public:
                                                m_eigenvalues);
 
         // Normalize so all (nonzero) modes inject unit energy
-        // Mode energy = .5 lambda^2
-        // Mode energy = 1/2 u^T K u = 1/2 lambda ||u||^2 := 1
-        // ==> ||u|| = sqrt(2 / lambda)
+        // Mode energy = 1/2 u^T K u = 1/2 lambda u^T M u := 1
+        // ==> u^T M u = 2 / lambda
+        // Eigensolver gives us u^T M u = 1, so we must just scale u by
+        // sqrt(2 / lambda)
         for (size_t i = 0; i < numModes; ++i) {
             Real lambda = eigenvalue(i);
             if (lambda > (Real) 1e-6)
-                m_modes[i] *= sqrt(2.0 / lambda) / m_modes[i].data().norm();
+                m_modes[i] *= sqrt(2.0 / lambda);
         }
 
         m_modalStressTensors.clear();
