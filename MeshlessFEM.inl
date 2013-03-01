@@ -156,7 +156,8 @@ public:
         result(2, 0) += xWeight * (    y); result(2, 1) += yWeight * (    x);
         result(3, 0) += xWeight * (   -y); result(3, 1) += yWeight * (1 - x);
 
-        m_volume += weight * m_dimensions[0] * m_dimensions[1];
+        // volume = \int 1 * dV
+        m_volume += weight;
     }
 
     void finalize() {

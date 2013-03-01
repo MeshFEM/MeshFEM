@@ -194,6 +194,7 @@ public:
             m_modalStressTensors.reserve(numModes);
             for (size_t i = 0; i < numModes; ++i)
                 m_modalStressTensors.push_back(elementStressTensors(mode(i)));
+
             // Compute modal stress norms
             for (size_t i = 0; i < numModes; ++i)
                 m_modalStressNorms.push_back(
