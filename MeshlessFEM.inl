@@ -224,8 +224,8 @@ public:
         Real val = 0.0;
         if (m_type == MASS_LUMPED) {
             if (i == j) {
-                val = .25 * (result(i, 0) + result(i, 1) +
-                             result(i, 2) + result(i, 3));
+                // Lumped mass puts sum of entire row on the diagonal
+                val = result(i, 0) + result(i, 1) + result(i, 2) + result(i, 3);
             }
         }
         else if (m_type == MASS_QUARTER_CELL) {
