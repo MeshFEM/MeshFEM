@@ -8,9 +8,10 @@ attribute vec2 texCoord1;
 attribute vec2 texCoord2;
 attribute vec2 texCoord3;
 
-varying vec2 f_position;
 varying vec2 f_point[4];
 varying vec2 f_texCoord[4];
+varying vec2 f_position;
+varying vec4 f_color;
 
 void main()
 {
@@ -25,5 +26,7 @@ void main()
     f_texCoord[3] = texCoord3;
 
     f_position = gl_Vertex.xy;
+    f_color   =  gl_Color;
+
     gl_Position = ftransform();
 }

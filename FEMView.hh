@@ -26,6 +26,8 @@ extern "C" {
 
 #include "GlobalTypes.hh"
 #include "MeshlessFEM.hh"
+#include "ViewSettings.hh"
+#include "colors.hh"
 
 class FEMView2D : public QGLWidget
 {
@@ -34,9 +36,11 @@ class FEMView2D : public QGLWidget
 public:
     typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
                   DISPLACEMENTS_STATE} GUIState;
+    typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
 
-    FEMView2D(MeshlessFEM_t &fem, QWidget *parent = NULL);
+    FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
+              QWidget *parent = NULL);
     ~FEMView2D() {
         // Clean up OpenCL stuff
         CALL_CL_GUARDED(clReleaseKernel, (m_renderKernel));
@@ -74,7 +78,7 @@ public:
     
 public slots:
     void csgNodesSelected(const NodeList &nList);
-    void showGridDuringDeformationToggled(bool showGrid);
+    void viewSettingsUpdated();
 
 protected:
     void initializeGL();
@@ -136,8 +140,10 @@ private:
     void m_clRenderCSGNode(CSGNode *node, cl_mem texBuf, const QColor &fg);
 
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
-    void drawObjectTextureCells(const VField &deformation = VField());
-    void drawGrid(DrawOp op, const VField &deformation = VField());
+    void drawObjectTextureCells(const VField &deformation = VField(),
+                  const SField &elemScalarField = SField());
+    void drawGrid(DrawOp op, const VField &deformation = VField(),
+                  const SField &elemScalarField = SField());
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
@@ -172,7 +178,8 @@ private:
     QBasicTimer m_timer;
     Scalar m_displacementPhase;
 
-    bool m_showGridWhileDeforming;
+    const ViewSettings &m_viewSettings;
+    ColorMap<RGBColorf, Scalar> m_scalarColorMap;
 
     ////////////////////////////////////////////////////////////////////////////
     // OpenCL stuff

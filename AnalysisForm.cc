@@ -37,7 +37,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     g_numModesStepper = new QSpinBox();
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
-    g_dumpModalDataButton = new QPushButton("Dump Modal Data");
+    g_dumpModalDataButton = new QPushButton("Dump Modal Data (.msh)");
     g_dumpModalDataButton->setEnabled(false);
     g_modeSelector = new QComboBox();
 
@@ -153,6 +153,8 @@ void AnalysisForm::m_setGUIFromSettings() {
 void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.Nx = g_nxStepper->value();
     m_settings.Ny = g_nyStepper->value();
+    g_nxStepper->setMaximum(999);
+    g_nyStepper->setMaximum(999);
     m_settings.quadrature = g_gaussQuadratureCheck->isChecked()
                                     ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     m_settings.quadraturePoints = g_quadraturePointsStepper->value();

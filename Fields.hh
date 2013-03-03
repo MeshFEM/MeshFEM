@@ -85,6 +85,9 @@ public:
     // (So this looks just like an array)
     Real  operator[](size_t i) const { return m_values[i]; }
     Real &operator[](size_t i)       { return m_values[i]; }
+
+    Real min() const { return m_values.minCoeff(); }
+    Real max() const { return m_values.maxCoeff(); }
 private:
     using VectorField<Real, 1>::m_values;
 };

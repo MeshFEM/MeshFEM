@@ -13,7 +13,7 @@
 #include "GlobalTypes.hh"
 #include "QMatlabInterface.hh"
 #include "Solver.hh"
-#include "AnalysisForm.hh"
+#include "AnalysisSettings.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
@@ -37,8 +37,8 @@ int main(int argc, char *argv[])
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
 
-    window.show();
     matlabInterface->show();
+    window.show();
 
     return app.exec();
 }

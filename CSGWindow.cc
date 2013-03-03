@@ -17,10 +17,15 @@
 #include "ModelForm.hh"
 #include "AnalysisSettings.hh"
 #include "AnalysisForm.hh"
+#include "ViewSettings.hh"
+#include "ViewSettingsWidget.hh"
 
 CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
 {
-    FEMView2D *femView = new FEMView2D(fem);
+    g_vsWidget = new ViewSettingsWidget(vsettings);
+    g_vsWidget->setWindowTitle("View Settings");
+
+    FEMView2D *femView = new FEMView2D(fem, vsettings);
     femView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
 
@@ -51,10 +56,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     splitter->setStretchFactor(1, 1);
 
     QMenu *viewMenu = menuBar()->addMenu("View");
-    QAction *showGridAction = new QAction("Show Grid During Deformation", this);
-    showGridAction->setCheckable(true);
-    showGridAction->setChecked(true);
-    viewMenu->addAction(showGridAction);
+    QAction *viewSettingsAction = new QAction("View Settings", this);
+    viewMenu->addAction(viewSettingsAction);
 
     // Set up connections
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
@@ -75,8 +78,11 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      SLOT(modalAnalysisSettingsChanged(const AnalysisSettings &)));
     QObject::connect(controller, SIGNAL(modesUpdated(const MeshlessFEM_t *)),
                      analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
-    QObject::connect(showGridAction, SIGNAL(toggled(bool)),
-                     femView, SLOT(showGridDuringDeformationToggled(bool)));
+    QObject::connect(g_vsWidget, SIGNAL(viewSettingsUpdated()),
+                     femView, SLOT(viewSettingsUpdated()));
+    QObject::connect(viewSettingsAction, SIGNAL(triggered()),
+                     this, SLOT(showViewSettings()));
+                    
 
     setCentralWidget(splitter);
 
@@ -94,4 +100,11 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
 
     // tb->addAction(uiActionGroup);
     addToolBar(tb);
+}
+
+void CSGWindow::showViewSettings()
+{
+    g_vsWidget->show();
+    g_vsWidget->raise();
+    g_vsWidget->activateWindow();
 }

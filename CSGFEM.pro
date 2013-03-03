@@ -30,7 +30,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            MatlabInterface/MatlabShell.h QMatlabInterface.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
-           MSHWriter.hh \
+           MSHWriter.hh colors.hh ViewSettingsWidget.hh ViewSettings.hh \
            cl-helper.h
 
 
@@ -38,4 +38,5 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
+           ViewSettingsWidget.cc \
            cl-helper.c

@@ -16,6 +16,13 @@
 #include "CSGWindowController.hh"
 #include "MeshlessFEM.hh"
 
+#include "AnalysisSettings.hh"
+#include "ViewSettings.hh"
+#include "ViewSettingsWidget.hh"
+struct AnalysisSettings;
+struct ViewSettings;
+class  ViewSettingsWidget;
+
 class CSGWindow : public QMainWindow
 {
     Q_OBJECT
@@ -23,8 +30,14 @@ class CSGWindow : public QMainWindow
 public:
     CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings);
     ~CSGWindow() { delete controller; }
+
+private slots:
+    void showViewSettings();
+
 private:
     CSGWindowController *controller;
+    ViewSettings vsettings;
+    ViewSettingsWidget *g_vsWidget;
 };
 
 #endif // CSGWINDOW_HH

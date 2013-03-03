@@ -2,6 +2,7 @@ uniform sampler2D objectTex;
 varying vec2 f_point[4];
 varying vec2 f_texCoord[4];
 varying vec2 f_position;
+varying vec4 f_color;
 
 void main()
 {
@@ -54,6 +55,7 @@ void main()
 
     bool nonBijective = (solution1Valid && solution2Valid);
     vec4 objColor = texture2D(objectTex, texCoord);
+    objColor.rgb = f_color.rgb;
     // Highlight non-bijective regions in red
     gl_FragColor = mix(objColor, vec4(1.0, 0.0, 0.0, 1.0),
                        nonBijective ? .5 : 0.0);

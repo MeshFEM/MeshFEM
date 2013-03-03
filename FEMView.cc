@@ -41,14 +41,17 @@ typedef struct _CSGPrimitiveData {
 } CSGPrimitiveData;
 
 
-FEMView2D::FEMView2D(MeshlessFEM_t &fem, QWidget *parent)
+FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
+                     QWidget *parent)
     : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
-      m_displacementPhase(0.0), m_showGridWhileDeforming(true),
+      m_displacementPhase(0.0), m_viewSettings(vs),
+      m_scalarColorMap(COLORMAP_JET),
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
 {
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
     setFocusPolicy(Qt::StrongFocus);
+    viewSettingsUpdated();
 }
 
 void FEMView2D::csgNodesSelected(const NodeList &nList)
@@ -58,13 +61,12 @@ void FEMView2D::csgNodesSelected(const NodeList &nList)
     update();
 }
 
-void FEMView2D::showGridDuringDeformationToggled(bool showGrid)
+void FEMView2D::viewSettingsUpdated()
 {
-    m_showGridWhileDeforming = showGrid;
+    m_scalarColorMap.selectMap(m_viewSettings.colormap);
     update();
 }
     
-
 void FEMView2D::initializeGL()
 {
     // Create OpenCL context sharing with the OpenGL context
@@ -355,7 +357,8 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
 
     CALL_CL_GUARDED(clFinish, (m_clQueue));
     // get_timestamp(&end);
-    // std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end) << std::endl;
+    // std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end)
+    //           << std::endl;
 }
 
 void FEMView2D::m_drawObject()
@@ -403,10 +406,12 @@ void FEMView2D::m_drawWorldVertex(const Vector &v)
     glVertex2f(x, y);
 }
 
-void FEMView2D::drawObjectTextureCells(const VField &deformation)
+void FEMView2D::drawObjectTextureCells(const VField &deformation,
+                         const SField &elemScalarField)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
+    bool hasEScalarField = elemScalarField.domainSize() == grid.numElements();
     glUseProgram(m_bilinearShader);
     
     // Set the object texture sampler to be texture unit 0
@@ -443,6 +448,11 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation)
             }
         }
 
+        if (hasEScalarField)
+            glColor4fv(m_scalarColorMap(elemScalarField[i]));
+        else
+            glColor3f(0.25f, 0.25f, 0.25f);
+
         // Draw quad's bounding box
         glVertex2f(minCorner[0], minCorner[1]);
         glVertex2f(maxCorner[0], minCorner[1]);
@@ -456,10 +466,12 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation)
     // glDisable(GL_TEXTURE_2D);
 }
 
-void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
+void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
+                         const SField &elemScalarField)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
+    bool hasEScalarField = elemScalarField.domainSize() == grid.numElements();
     ElementGrid2D_t::AdjacencyVec corners;
 
     glColor3f(0, 0, 0);
@@ -469,9 +481,14 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation)
         glBegin(GL_QUADS);
         for (size_t i = 0; i < grid.numElements(); ++i) {
             if (op == DRAW_CELLS) {
-                glColor4f(.8f, .8f, .8f, .5f);
-                if (!grid.elementIsFull(i)) 
-                    glColor4f(.8f, 0.0f, 0.0f, .5f);
+                if (hasEScalarField) {
+                    glColor4fv(m_scalarColorMap(elemScalarField[i]));
+                }
+                else {
+                    glColor4f(.8f, .8f, .8f, .5f);
+                    if (!grid.elementIsFull(i)) 
+                        glColor4f(.8f, 0.0f, 0.0f, .5f);
+                }
             }
             grid.elementCorners(i, corners);
             for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
@@ -535,7 +552,7 @@ void FEMView2D::draw()
 {
     glColor3f(1, 1, 1);
     drawQuad(0, 0, m_width, m_height);
-
+    
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -568,13 +585,21 @@ void FEMView2D::draw()
 
             deformation *= magnitude * sin(m_displacementPhase);
         }
-        // if (m_shadeWithStress) {
-        //     const SField &stressNorms =
-        //             m_fem.modalStressNorms(m_selectedDeformation);
-        //     drawGrid(DRAW_CELLS, deformation);
-        // }
-        drawObjectTextureCells(deformation);
-        if (m_showGridWhileDeforming) {
+
+        if (m_viewSettings.showStressesDuringDeformation) {
+            const SField &stressNorms =
+                    m_fem.modalStressNorms(m_selectedDeformation);
+            m_scalarColorMap.setAlpha(0.5f);
+            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
+            drawObjectTextureCells(deformation, stressNorms);
+        }
+        else {
+            drawObjectTextureCells(deformation);
+        }
+
+        // drawGrid(DRAW_CELLS, deformation, stressNorms);
+
+        if (m_viewSettings.showGridDuringDeformation) {
             drawGrid(DRAW_EDGES, deformation);
             drawGrid(DRAW_NODES, deformation);
         }
