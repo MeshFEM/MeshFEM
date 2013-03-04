@@ -34,8 +34,8 @@ class FEMView2D : public QGLWidget
     Q_OBJECT
 
 public:
-    typedef enum {MODEL_STATE, ELEMENTS_STATE, FORCES_STATE,
-                  DISPLACEMENTS_STATE} GUIState;
+    typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
+                  FORCES_STATE = 2, DISPLACEMENTS_STATE = 3} GUIState;
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
 
@@ -70,8 +70,6 @@ public:
             m_timer.stop();
         }
     }
-
-    GUIState guiState() const { return m_guiState; }
 
     void selectDeformation(size_t i) {
         assert(i < m_fem.numModes());

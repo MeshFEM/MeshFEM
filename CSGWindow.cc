@@ -57,12 +57,16 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
 
     // File Menu
     QMenu *fileMenu = menuBar()->addMenu("File");
-    QAction *saveBoundaryAction = new QAction("Save Boundary (.poly)", this);
-    QAction *loadCSGAction = new QAction("Load Object (.csg)", this);
-    QAction *saveCSGAction = new QAction("Save Object (.csg)", this);
+    QAction *saveBoundaryAction = new QAction("Save &Boundary (.poly)", this);
+    QAction *loadCSGAction = new QAction("&Open Object (.csg)", this);
+    QAction *saveCSGAction = new QAction("&Save Object (.csg)", this);
     fileMenu->addAction(saveBoundaryAction);
     fileMenu->addAction(loadCSGAction);
     fileMenu->addAction(saveCSGAction);
+
+    loadCSGAction->setShortcut(QKeySequence::Open);
+    saveCSGAction->setShortcut(QKeySequence::Save);
+
     QObject::connect(saveBoundaryAction, SIGNAL(triggered()),
                      controller, SLOT(saveBoundaryPolygon()));
     QObject::connect(loadCSGAction, SIGNAL(triggered()),
@@ -73,6 +77,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     // View Menu
     QMenu *viewMenu = menuBar()->addMenu("View");
     QAction *viewSettingsAction = new QAction("View Settings", this);
+    viewSettingsAction->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_V);
     viewMenu->addAction(viewSettingsAction);
     QObject::connect(viewSettingsAction, SIGNAL(triggered()),
                      this, SLOT(showViewSettings()));

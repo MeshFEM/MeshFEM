@@ -104,11 +104,10 @@ public:
         return m_dim;
     }
 
-    Real getRotationRad() const { return -m_rot_inv.angle(); }
     Real getRotation() const { return -m_deg(m_rot_inv.angle()); }
-    void setRotation(Real r) {
-        m_rot_inv.angle() = -m_rad(r);
-    }
+    Real getRotationRad() const { return -m_rot_inv.angle(); }
+    void setRotation(Real r) { m_rot_inv.angle() = -m_rad(r); }
+    void setRotationRad(Real r) { m_rot_inv.angle() = -r; }
 
     Vector toLocalCoords(const Vector &p) const {
         return m_rot_inv * (p - m_c);

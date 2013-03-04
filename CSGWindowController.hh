@@ -25,8 +25,9 @@ public:
     CSGWindowController(CSGTreeModel *treeModel, QTreeView *treeView,
                         CSGTree_t *tree, FEMView2D *femView,
                         MeshlessFEM_t &fem)
-        : m_csgTreeModel(treeModel), m_csgTreeView(treeView),
-        m_csgTree(tree), m_femView(femView), m_fem(fem) { }
+        : m_state(CONTROLLER_STATE_MODEL),
+          m_csgTreeModel(treeModel), m_csgTreeView(treeView),
+          m_csgTree(tree), m_femView(femView), m_fem(fem) { }
 
     QTreeView *csgTreeView()  { return m_csgTreeView; }
 
@@ -55,6 +56,7 @@ signals:
     void modesUpdated(const MeshlessFEM_t *fem);
     
 private:
+    enum { CONTROLLER_STATE_MODEL, CONTROLLER_STATE_ANALYSIS } m_state;
     CSGTreeModel  *m_csgTreeModel;
     QTreeView     *m_csgTreeView;
     CSGTree_t     *m_csgTree;

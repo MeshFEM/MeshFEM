@@ -20,13 +20,16 @@
 using namespace std;
 
 void CSGWindowController::changedSidebarTab(int newTab) {
-    if (newTab == 0)
+    if (newTab == 0) {
         m_femView->setGUIState(FEMView2D::MODEL_STATE);
+        m_state = CONTROLLER_STATE_MODEL;
+    }
     else {
         // The model might have changed--notify m_fem
         m_fem.modelChanged();
         emit modesUpdated(&m_fem);
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        m_state = CONTROLLER_STATE_ANALYSIS;
     }
 }
 
@@ -101,8 +104,8 @@ void CSGWindowController::saveBoundaryPolygon()
         return;
     }
 
-    QString fileName = QFileDialog::getSaveFileName(0, "Save Boundary Polygon",
-            QString(), "Text files (*.poly)");
+    QString fileName = QFileDialog::getSaveFileName(0,
+            "Save Boundary Polygon (.poly)", QString(), "Text files (*.poly)");
     if (fileName.length() > 0) {
         ofstream polygonOut(fileName.toAscii());
         if (!polygonOut.is_open()) {
@@ -124,31 +127,52 @@ void CSGWindowController::saveBoundaryPolygon()
 
 void CSGWindowController::saveCSG()
 {
+    QString fileName = QFileDialog::getSaveFileName(0, "Save Object (.csg)",
+            QString(), "Text files (*.csg)");
+    if (fileName.length() > 0) {
+        try {
+            writeCSGFile(fileName.toAscii(), *m_csgTree);
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
 }
 
 void CSGWindowController::loadCSG()
 {
-    m_csgTreeModel->csgTreeAboutToUpdate();
+    QString fileName = QFileDialog::getOpenFileName(0, "Open Object (.csg)",
+            QString(), "Text files (*.csg)");
+    if (fileName.length() > 0) {
+        m_csgTreeModel->csgTreeAboutToUpdate();
 
-    try {
-        parseCSGFile("test.csg", *m_csgTree);
-    }
-    catch (std::exception &e)
-    {
-        QMessageBox mbox(QMessageBox::Critical,
-                e.what(), e.what(),
-                QMessageBox::Ok);
-        mbox.setDefaultButton(QMessageBox::Ok);
-        mbox.exec();
-    }
+        try {
+            parseCSGFile(fileName.toAscii(), *m_csgTree);
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
 
-    m_csgTreeModel->csgTreeUpdated();
-    m_fem.modelChanged();
-    emit modesUpdated(&m_fem);
-    m_femView->modelChanged();
-    // If we're in the analysis view, we must return to the elements view state.
-    if (m_femView->guiState() != FEMView2D::MODEL_STATE)
-        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        m_csgTreeModel->csgTreeUpdated();
+        m_fem.modelChanged();
+        m_femView->modelChanged();
+        // If we're in the analysis state, we must update the modes and return
+        // to the element grid display
+        if (m_state == CONTROLLER_STATE_ANALYSIS) {
+            emit modesUpdated(&m_fem);
+            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        }
+    }
 }
 
 void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)

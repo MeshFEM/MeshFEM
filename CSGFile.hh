@@ -133,5 +133,71 @@ void parseCSGFile(const char *path, CSGTree<Vector> &csgTree)
     csgTree.setRoot(node);
 }
 
+template<typename Vector>
+void writeNode(QTextStream &os, int indentLevel,
+               const typename CSGTree<Vector>::CSGNode *node)
+{
+    typedef           CSGTree<Vector>           _CSGTree;
+    typedef typename _CSGTree::CSGNode          CSGNode;
+    typedef typename _CSGTree::CSGBoolNode      CSGBoolNode;
+    typedef typename _CSGTree::CSGPrimitive     CSGPrimitive;
+
+    QString indent(4 * indentLevel, ' ');
+    const char *type;
+    bool isPrim;
+    switch (node->nodeType()) {
+        case CSG_NODE_INTERSECT: type = "intersect"; isPrim = false; break;
+        case CSG_NODE_UNION:     type = "union";     isPrim = false; break;
+        case CSG_NODE_SUBTRACT:  type = "subtract";  isPrim = false; break;
+        case CSG_NODE_RECT:      type = "rectangle"; isPrim = true; break;
+        case CSG_NODE_ELLIPSE:   type = "ellipse";   isPrim = true; break;
+        default: assert(false);
+    }
+
+    os << indent << "\"name\": \"" << node->name().c_str() << "\"," << endl;
+    os << indent << "\"type\": \""  << type << "\"," << endl;
+
+    if (isPrim) {
+        const CSGPrimitive *pNode = dynamic_cast<const CSGPrimitive *>(node);
+        assert(pNode != NULL);
+        Vector v = pNode->getCenter();
+        os << indent << "\"center\": ["  << v[0] << ", " << v[1] << "],"
+           << endl;
+        v = pNode->getDimensions();
+        os << indent << "\"dimensions\": ["  << v[0] << ", " << v[1] << "],"
+           << endl;
+        os << indent << "\"rotation\": " << pNode->getRotation() << endl;
+    }
+    else {
+        const CSGBoolNode *bNode = dynamic_cast<const CSGBoolNode *>(node);
+        assert(bNode != NULL);
+        os << indent << "\"left\": {" << endl;
+        writeNode<Vector>(os, indentLevel + 1, bNode->child(0));
+        os << indent << "}," << endl;
+        os << indent << "\"right\": {" << endl;
+        writeNode<Vector>(os, indentLevel + 1, bNode->child(1));
+        os << indent << "}" << endl;
+    }
+}
+
+template<typename Vector>
+void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
+{
+    QFile file(path);
+    bool success = file.open(QIODevice::WriteOnly | QIODevice::Text);
+    if (!success)
+        throw std::runtime_error("Couldn't open csg output file.");
+
+    QTextStream os(&file);
+
+    os << '{' << endl;
+    
+    if (csgTree.numRoots() > 0) {
+        writeNode<Vector>(os, 1, csgTree.root(0));
+    }
+
+    os << '}' << endl;
+
+}
 
 #endif // CSGFILE_HH
