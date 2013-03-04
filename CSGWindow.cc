@@ -55,11 +55,29 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
+    // File Menu
+    QMenu *fileMenu = menuBar()->addMenu("File");
+    QAction *saveBoundaryAction = new QAction("Save Boundary (.poly)", this);
+    QAction *loadCSGAction = new QAction("Load Object (.csg)", this);
+    QAction *saveCSGAction = new QAction("Save Object (.csg)", this);
+    fileMenu->addAction(saveBoundaryAction);
+    fileMenu->addAction(loadCSGAction);
+    fileMenu->addAction(saveCSGAction);
+    QObject::connect(saveBoundaryAction, SIGNAL(triggered()),
+                     controller, SLOT(saveBoundaryPolygon()));
+    QObject::connect(loadCSGAction, SIGNAL(triggered()),
+                     controller, SLOT(loadCSG()));
+    QObject::connect(saveCSGAction, SIGNAL(triggered()),
+                     controller, SLOT(saveCSG()));
+
+    // View Menu
     QMenu *viewMenu = menuBar()->addMenu("View");
     QAction *viewSettingsAction = new QAction("View Settings", this);
     viewMenu->addAction(viewSettingsAction);
+    QObject::connect(viewSettingsAction, SIGNAL(triggered()),
+                     this, SLOT(showViewSettings()));
 
-    // Set up connections
+    // GUI connections
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
                      femView, SLOT(csgNodesSelected(const NodeList &)));
     QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
@@ -80,8 +98,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
     QObject::connect(g_vsWidget, SIGNAL(viewSettingsUpdated()),
                      femView, SLOT(viewSettingsUpdated()));
-    QObject::connect(viewSettingsAction, SIGNAL(triggered()),
-                     this, SLOT(showViewSettings()));
+
                     
 
     setCentralWidget(splitter);

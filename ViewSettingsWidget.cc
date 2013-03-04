@@ -20,8 +20,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     form->addRow("Colormap", g_colormapSelector);
 
     g_colormapSelector->addItem("Jet");
-    g_colormapSelector->addItem("Fire Print");
     g_colormapSelector->addItem("Combined Weakness");
+    g_colormapSelector->addItem("Fire Print");
 
     QHBoxLayout *colormapRangeLayout = new QHBoxLayout();
     QLabel *toLabel = new QLabel("to");

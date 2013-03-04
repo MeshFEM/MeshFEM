@@ -49,6 +49,14 @@ public:
         return createIndex(row, 0, node);
     }
 
+    void csgTreeAboutToUpdate() {
+        emit beginResetModel();
+    }
+
+    void csgTreeUpdated() {
+        emit endResetModel();
+    }
+
     ~CSGTreeModel() { }
 private:
     CSGTree_t &m_tree;

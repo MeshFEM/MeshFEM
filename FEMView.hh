@@ -71,6 +71,8 @@ public:
         }
     }
 
+    GUIState guiState() const { return m_guiState; }
+
     void selectDeformation(size_t i) {
         assert(i < m_fem.numModes());
         m_selectedDeformation = i;
@@ -79,6 +81,14 @@ public:
 public slots:
     void csgNodesSelected(const NodeList &nList);
     void viewSettingsUpdated();
+
+    // To be called, for instance, when new .csg is loaded.
+    void modelChanged() {
+        m_selectedObjects.clear();
+        m_rerenderObject();
+        m_rerenderOverlay();
+        update();
+    }
 
 protected:
     void initializeGL();
@@ -133,7 +143,6 @@ protected:
             QGLWidget::timerEvent(event);
         }
     }
-
 
 private:
     void m_clClearCSGRender(cl_mem texBuf);

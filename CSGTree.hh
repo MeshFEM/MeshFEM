@@ -94,10 +94,21 @@ public:
         return m_roots[i];
     }
 
-    ~CSGTree() {
+    // Note: the tree takes ownership of node when node becomes root!
+    void setRoot(CSGNode *node) {
+        clearRoots();
+        m_roots.push_back(node);
+    }
+
+    void clearRoots() {
         for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
             delete *it;
         }
+        m_roots.clear();
+    }
+
+    ~CSGTree() {
+        clearRoots();
     }
 
 private:

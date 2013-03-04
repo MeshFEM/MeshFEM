@@ -11,6 +11,7 @@
 #include "CSGWindowController.hh"
 #include "MarchingSquaresGrid.hh"
 #include "MSHWriter.hh"
+#include "CSGFile.hh"
 #include <list>
 #include <fstream>
 #include <iostream>
@@ -119,6 +120,35 @@ void CSGWindowController::saveBoundaryPolygon()
             polygonOut << polygons[0];
         }
     }
+}
+
+void CSGWindowController::saveCSG()
+{
+}
+
+void CSGWindowController::loadCSG()
+{
+    m_csgTreeModel->csgTreeAboutToUpdate();
+
+    try {
+        parseCSGFile("test.csg", *m_csgTree);
+    }
+    catch (std::exception &e)
+    {
+        QMessageBox mbox(QMessageBox::Critical,
+                e.what(), e.what(),
+                QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+    }
+
+    m_csgTreeModel->csgTreeUpdated();
+    m_fem.modelChanged();
+    emit modesUpdated(&m_fem);
+    m_femView->modelChanged();
+    // If we're in the analysis view, we must return to the elements view state.
+    if (m_femView->guiState() != FEMView2D::MODEL_STATE)
+        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
 }
 
 void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)

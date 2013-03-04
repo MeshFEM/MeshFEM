@@ -5,10 +5,10 @@
 TEMPLATE = app
 TARGET = 
 DEPENDPATH += .
-INCLUDEPATH += . /opt/local/include/eigen3
+INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson
 INCLUDEPATH += /Applications/MATLAB_R2010b.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2010b.app/bin/maci64/ -leng -lmx -lmat
-LIBS += -L/opt/local/lib -lreadline
+LIBS += -L/opt/local/lib -lreadline -lqjson
 LIBS += -framework OpenCL
 
 QT += opengl
@@ -31,6 +31,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
            MSHWriter.hh colors.hh ViewSettingsWidget.hh ViewSettings.hh \
+           CSGFile.hh \
            cl-helper.h
 
 

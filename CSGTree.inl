@@ -19,6 +19,7 @@ public:
     CSGNode *parent() const { return m_parent; }
     void setParent(CSGNode *p) { m_parent = p; }
     std::string name() const { return m_hasName ? m_name : defaultName(); }
+    void setName(const std::string &name) { m_name = name; m_hasName = true; }
     virtual std::string defaultName() const { return "Default"; }
 
     virtual int indexOfChild(const CSGNode *) const { return -1; }

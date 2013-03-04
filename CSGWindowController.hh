@@ -36,6 +36,8 @@ public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
     void saveBoundaryPolygon();
+    void loadCSG();
+    void saveCSG();
 
     // Analysis actions
     void elementGridChanged(const AnalysisSettings &settings);
