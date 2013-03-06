@@ -17,8 +17,10 @@
 #include <QColor>
 #include <cassert>
 #include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <cstdlib>
+#include <stdexcept>
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
@@ -43,12 +45,17 @@ typedef struct _CSGPrimitiveData {
 
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
                      QWidget *parent)
-    : QGLWidget(parent), m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
+    : QGLWidget(parent),
+      m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
+      m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
 {
+    if (m_font.Error())
+        throw std::runtime_error("Failed ot load font!");
+    m_font.FaceSize(12);
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
     setFocusPolicy(Qt::StrongFocus);
     viewSettingsUpdated();
@@ -557,6 +564,7 @@ void FEMView2D::draw()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glEnable(GL_POINT_SMOOTH);
+    bool usedColormap = false;
 
     if (m_guiState == MODEL_STATE) {
         m_drawObject();
@@ -591,6 +599,7 @@ void FEMView2D::draw()
                     m_fem.modalStressNorms(m_selectedDeformation);
             m_scalarColorMap.setAlpha(0.5f);
             m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
+            usedColormap = true;
             drawObjectTextureCells(deformation, stressNorms);
         }
         else {
@@ -626,7 +635,74 @@ void FEMView2D::draw()
         }
         glEnd();
     }
+
+    float colorBarWidth = 300;
+    // Horizontally center colorbar
+    float colorbarX = .5 * (m_width - colorBarWidth);
+    
+    if (usedColormap && m_viewSettings.showColorbar)
+        m_drawColorbar(colorbarX, 5, colorBarWidth, 35);
 }
+
+void FEMView2D::m_drawColorbar(float x, float y, float width, float height)
+{
+    // Draw background box
+    glColor4f(1.0f, 1.0f, 1.0f, .5f);
+    glBegin(GL_QUADS);
+        glVertex2f(x, y);
+        glVertex2f(x + width, y);
+        glVertex2f(x + width, y + height);
+        glVertex2f(x, y + height);
+    glEnd();
+    
+    std::stringstream ss;
+    ss << m_scalarColorMap.getRangeMin();
+    std::string rangeMin = ss.str();
+    ss.str("");
+    ss.clear();
+    ss << m_scalarColorMap.getRangeMax();
+    std::string rangeMax = ss.str();
+
+    FTBBox bbox = m_font.BBox(rangeMin.c_str());
+    float lowTextWidth  = bbox.Upper().X() - bbox.Lower().X();
+    float textHeight = bbox.Upper().Y() - bbox.Lower().Y();
+
+    bbox = m_font.BBox(rangeMax.c_str());
+    float highTextWidth = bbox.Upper().X() - bbox.Lower().X();
+
+    // Vertically center text within height.
+    // Horizontal margins on text, with colorbar filling the rest
+    float textMargin = 5;
+    float barWidth = width - 4 * textMargin - lowTextWidth - highTextWidth;
+    float barVMargin = 5;
+    float barHeight = height - 2 * barVMargin;
+    float textY = y + .5 * (height - textHeight);
+
+    // Note: glRasterPos2i must be used to apply glColor3;
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glRasterPos2i(x + textMargin, textY);
+    m_font.Render(rangeMin.c_str());
+    glRasterPos2i(x + 3 * textMargin + lowTextWidth + barWidth, textY);
+    m_font.Render(rangeMax.c_str());
+    
+    float barX = x + 2 * textMargin + lowTextWidth;
+    float barY = y + barVMargin;
+    int numSegments = 100;
+    float segmentWidth = barWidth / numSegments;
+    glBegin(GL_QUADS);
+        for (int i = 0; i < numSegments; ++i) {
+            float segmentStart = barX + segmentWidth * i;
+            float segmentEnd = barX + segmentWidth * (i + 1);
+            float normalizedValue = i / ((float) numSegments);
+            glColor3fv(m_scalarColorMap.normalizedValueColor(normalizedValue));
+            glVertex2f(segmentStart, barY + barHeight);
+            glVertex2f(segmentStart, barY);
+            glVertex2f(segmentEnd  , barY);
+            glVertex2f(segmentEnd  , barY + barHeight);
+        }
+    glEnd();
+}
+
 
 void FEMView2D::paintGL()
 {

@@ -19,8 +19,6 @@ ModelForm::ModelForm(CSGWindowController *controller, QWidget *parent)
 {
     QTreeView *treeView = controller->csgTreeView();
     QVBoxLayout *layout = new QVBoxLayout();
-    QPushButton *extractBoundaryButton =
-            new QPushButton("Save Boundary (.poly)");
     treeView->setSizePolicy(QSizePolicy::MinimumExpanding,
                             QSizePolicy::MinimumExpanding);
     layout->addWidget(treeView);

@@ -35,7 +35,8 @@ private:
     ViewSettings &m_viewSettings;
 
     QCheckBox *g_showGridDuringDeformationCheck,
-              *g_showStressesDuringDeformationCheck;
+              *g_showStressesDuringDeformationCheck,
+              *g_showColorbar;
     QComboBox *g_colormapSelector;
     QDoubleSpinBox *g_colormapMinStepper, *g_colormapMaxStepper;
     QCheckBox *g_colormapAutoRangeCheck;

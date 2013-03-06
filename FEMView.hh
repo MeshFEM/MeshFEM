@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <iostream>
+#include <FTGL/ftgl.h>
 
 #include <OpenGL/OpenGL.h>
 extern "C" {
@@ -158,10 +159,12 @@ private:
     void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
     void m_drawWorldVertex(const Vector &v);
+    void m_drawColorbar(float x, float y, float width, float height);
 
     ////////////////////////////////////////////////////////////////////////////
     // Instance variables
     ////////////////////////////////////////////////////////////////////////////
+    FTGLBitmapFont m_font;
     Vector m_frameMin, m_frameMax;
     int m_width, m_height;
     GLuint m_modelTex, m_overlayTex;

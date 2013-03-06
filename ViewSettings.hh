@@ -17,12 +17,13 @@
 struct ViewSettings {
     ViewSettings()
         : showGridDuringDeformation(true), showStressesDuringDeformation(true),
-          colormap(COLORMAP_JET), colormapRangeAuto(true)
+          showColorbar(true), colormap(COLORMAP_JET), colormapRangeAuto(true)
     {
     }
 
     bool showGridDuringDeformation;
     bool showStressesDuringDeformation;
+    bool showColorbar;
 
     CMapName colormap;
     bool colormapRangeAuto;

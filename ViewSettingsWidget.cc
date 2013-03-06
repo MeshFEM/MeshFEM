@@ -10,6 +10,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     QFormLayout *form = new QFormLayout();
     g_showGridDuringDeformationCheck = new QCheckBox();
     g_showStressesDuringDeformationCheck = new QCheckBox();
+    g_showColorbar = new QCheckBox();
     g_colormapSelector = new QComboBox();
     g_colormapMinStepper = new QDoubleSpinBox();
     g_colormapMaxStepper = new QDoubleSpinBox();
@@ -17,6 +18,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 
     form->addRow("Show Grid During Deformation", g_showGridDuringDeformationCheck);
     form->addRow("Show Stresses During Deformation", g_showStressesDuringDeformationCheck);
+    form->addRow("Show colorbar", g_showColorbar);
     form->addRow("Colormap", g_colormapSelector);
 
     g_colormapSelector->addItem("Jet");
@@ -38,6 +40,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showStressesDuringDeformationCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
+    QObject::connect(g_showColorbar, SIGNAL(stateChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_colormapSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_colormapAutoRangeCheck, SIGNAL(stateChanged(int)),
@@ -51,6 +55,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 void ViewSettingsWidget::m_setGUIFromSettings() {
     g_showGridDuringDeformationCheck->setChecked(m_viewSettings.showGridDuringDeformation);
     g_showStressesDuringDeformationCheck->setChecked(m_viewSettings.showStressesDuringDeformation);
+    g_showColorbar->setChecked(m_viewSettings.showColorbar);
     // Note: assumes CMapName enum index matches combo box index
     g_colormapSelector->setCurrentIndex(m_viewSettings.colormap);
     g_colormapAutoRangeCheck->setChecked(m_viewSettings.colormapRangeAuto);
@@ -64,6 +69,7 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
 void ViewSettingsWidget::m_readSettingsFromGUI() {
     m_viewSettings.showGridDuringDeformation = g_showGridDuringDeformationCheck->isChecked();
     m_viewSettings.showStressesDuringDeformation = g_showStressesDuringDeformationCheck->isChecked();
+    m_viewSettings.showColorbar = g_showColorbar->isChecked();
     // Note: assumes CMapName enum index matches combo box index
     m_viewSettings.colormap = (CMapName) g_colormapSelector->currentIndex();
     m_viewSettings.colormapRangeAuto = g_colormapAutoRangeCheck->isChecked();

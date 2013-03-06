@@ -6,9 +6,10 @@ TEMPLATE = app
 TARGET = 
 DEPENDPATH += .
 INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson
+INCLUDEPATH += . /opt/local/include /opt/local/include/freetype2
 INCLUDEPATH += /Applications/MATLAB_R2010b.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2010b.app/bin/maci64/ -leng -lmx -lmat
-LIBS += -L/opt/local/lib -lreadline -lqjson
+LIBS += -L/opt/local/lib -lqjson -lftgl
 LIBS += -framework OpenCL
 
 QT += opengl
@@ -26,8 +27,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            AnalysisSettings.hh \
            AnalysisForm.hh QuadraturePointsSpinBox.hh \
            Quadrature.hh MeshlessFEM.hh Grid.hh ElementGrid.hh \
-           MatlabInterface/MatlabInterface.h \
-           MatlabInterface/MatlabShell.h QMatlabInterface.hh \
+           MatlabInterface/MatlabInterface.h QMatlabInterface.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
            MSHWriter.hh colors.hh ViewSettingsWidget.hh ViewSettings.hh \

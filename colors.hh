@@ -215,18 +215,12 @@ public:
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    /*! Look up the color corresponding to scalar field value s.
-    //  @param[in]  var   description
-    //  @return     return val
+    /*! Look up the color corresponding to normalized scalar field value s.
+    //  @param[in]  s   normalized scalar field value (in [0, 1])
+    //  @return     color for s
     *///////////////////////////////////////////////////////////////////////////
-    Color operator()(Real s) const
+    Color normalizedValueColor(Real s) const
     {
-        // Put s in the colormap coordinates ([rangeMin, rangeMax] => [0, 1])
-        if (m_rangeMin == m_rangeMax)
-            s = 0.0;
-        else
-            s = (s - m_rangeMin) / (m_rangeMax - m_rangeMin);
-
         // Get the first value in the colormap equal or greater to s
         typename Map_t::const_iterator lb = m_map.lower_bound(s);
         if (lb == m_map.begin()) {
@@ -251,6 +245,22 @@ public:
     }
 
     ////////////////////////////////////////////////////////////////////////////
+    /*! Look up the color corresponding to scalar field value s.
+    //  @param[in]  s   scalar field value (in [rangeMin, rangeMax])
+    //  @return     color for s
+    *///////////////////////////////////////////////////////////////////////////
+    Color operator()(Real s) const
+    {
+        // Put s in the colormap coordinates ([rangeMin, rangeMax] => [0, 1])
+        if (m_rangeMin == m_rangeMax)
+            s = 0.0;
+        else
+            s = (s - m_rangeMin) / (m_rangeMax - m_rangeMin);
+
+        return normalizedValueColor(s);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
     /*! Rescale this color map.
     //  @param[in]  rangeMin    Bottom of colormap range (mapped to value 0.0)
     //  @param[in]  rangeMax    Top of colormap range    (mapped to value 1.0)
@@ -259,6 +269,9 @@ public:
         m_rangeMin = rangeMin;
         m_rangeMax = rangeMax;
     }
+
+    Real getRangeMin() const { return m_rangeMin; }
+    Real getRangeMax() const { return m_rangeMax; }
 
     void selectMap(CMapName name) {
         m_map.clear();
