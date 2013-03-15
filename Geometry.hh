@@ -95,4 +95,29 @@ std::ostream &operator<<(std::ostream &os, const Polygon<Vector> &p)
     return os;
 }
 
+template<typename Vector>
+struct BoundaryPoint {
+    typedef typename Vector::Scalar Real;
+
+    BoundaryPoint(Vector pt, Vector normal, Real area = 0)
+        : p(pt), n(normal), a(area) { }
+
+    Vector p, n;
+    // Area of point.
+    Real a;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Returns parameter values 't' generating N evenly (arc-length) spaced points
+//  around the ellipse:
+//      t |--> (a * cos(t), b * sin(t))
+//  @param[in]  s   spacing of points to distibute
+//  @param[in]  a   ellipse major axis
+//  @param[in]  b   ellipse minor axis
+//  @param[out] pointAreas      length of the arc segment centered on each point
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real>
+void ellipseParameterPoints(Real s, Real a, Real b,
+                            std::vector<Real> &paramPoints, Real &pointAreas);
+
 #endif // GEOMETRY_HH

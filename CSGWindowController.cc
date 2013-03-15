@@ -237,9 +237,9 @@ void CSGWindowController::dumpModalData()
                 const MeshlessFEM_t::VField &mode = m_fem.mode(i);
                 assert(mode.domainSize() == modal3Vector.domainSize());
 
-                for (size_t i = 0; i < mode.domainSize(); ++i) {
-                    modal3Vector(i)[0] = mode(i)[0];
-                    modal3Vector(i)[1] = mode(i)[1];
+                for (size_t j = 0; j < mode.domainSize(); ++i) {
+                    modal3Vector(j)[0] = mode(j)[0];
+                    modal3Vector(j)[1] = mode(j)[1];
                 }
 
                 snprintf(name, 64, "modal displacement %i", (int) i);

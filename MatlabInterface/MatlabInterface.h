@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <cstring>
 
 #include "engine.h"  // Matlab engine header
 

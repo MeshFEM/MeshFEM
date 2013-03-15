@@ -385,6 +385,21 @@ void FEMView2D::m_drawWorldBox(const BBox_t &b)
     drawQuad(minx, miny, maxx, maxy);
 }
 
+void FEMView2D::m_drawWorldArrow(const Vector &p, const Vector &n)
+{
+    // Draw unit vectors up to 15 pixels long
+    Scalar scale = 15 * getPixelSize();
+    Vector tip = p + scale * n;
+
+    glBegin(GL_LINES);
+        Scalar x, y;
+        getScreenCoords(p[0], p[1], x, y);
+        glVertex2f(x, y);
+        getScreenCoords(tip[0], tip[1], x, y);
+        glVertex2f(x, y);
+    glEnd();
+}
+
 void FEMView2D::m_drawSelectedObjects()
 {
     QColor selectedObjectColor(128, 128, 128, 128);
@@ -395,13 +410,26 @@ void FEMView2D::m_drawSelectedObjects()
     glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
 
-    // Draw the bounding boxes for selected objects
+    // Boundary point size
+    glPointSize(5.0);
+
+    // Draw the bounding boxes and boundary points for selected objects
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glColor3i(selectedObjectColor.red(), selectedObjectColor.green(),
               selectedObjectColor.blue());
     for (NodeList::iterator it = m_selectedObjects.begin();
                             it != m_selectedObjects.end(); ++it) {
         m_drawWorldBox((*it)->boundingBox());
+        
+        glBegin(GL_POINTS);
+        std::vector<BoundaryPoint_t> bndPts = (*it)->boundaryPoints(.1);
+        for (size_t i = 0; i < bndPts.size(); ++i) {
+            m_drawWorldVertex(bndPts[i].p);
+        }
+        glEnd();
+        for (size_t i = 0; i < bndPts.size(); ++i) {
+            m_drawWorldArrow(bndPts[i].p, bndPts[i].n);
+        }
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }

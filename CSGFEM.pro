@@ -16,6 +16,9 @@ QT += opengl
 CONFIG += release
 # CONFIG += debug
 
+QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0
+QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
+
 # QMAKE_CXXFLAGS += -D_D_GLIBCXX_DEBUG
 
 # Input
@@ -39,5 +42,5 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
-           ViewSettingsWidget.cc \
+           ViewSettingsWidget.cc Geometry.cc \
            cl-helper.c

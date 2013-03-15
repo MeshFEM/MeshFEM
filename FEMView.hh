@@ -114,6 +114,12 @@ protected:
         t = (y - m_frameMin[1]) / frameDim[1];
     }
 
+    // Get the size of a pixel in world coordinates
+    // Assumes pixel box is square in world coordinates.
+    Scalar getPixelSize() const {
+        return (m_frameMax[0] - m_frameMin[0]) / m_width;
+    }
+
     // Non-rounded for opengl drawing
     void getScreenCoords(Scalar x, Scalar y, Scalar &sx, Scalar &sy) const {
         Scalar s, t;
@@ -158,6 +164,7 @@ private:
     void m_rerenderObject();
     void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
+    void m_drawWorldArrow(const Vector &p, const Vector &n);
     void m_drawWorldVertex(const Vector &v);
     void m_drawColorbar(float x, float y, float width, float height);
 

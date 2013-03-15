@@ -2,14 +2,18 @@
 #include <cstdlib>
 #include <string>
 #include <sstream>
+#include <algorithm>
 
 #include <Eigen/Dense>
+
+#include "Geometry.hh"
 
 template<typename Vector>
 class CSGTree<Vector>::CSGNode
 {
 public:
     typedef typename Vector::Scalar Real;
+    typedef BoundaryPoint<Vector> _BoundaryPoint;
 
     CSGNode(const std::string &name, CSGNode *parent = NULL)
         : m_name(name), m_hasName(true), m_parent(parent) { }
@@ -32,6 +36,11 @@ public:
     virtual void applyTranslation(const Vector &t) {
         for (int i = 0; i < numChildren(); ++i)
             child(i)->applyTranslation(t);
+    }
+
+    virtual std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) {
+        std::vector<_BoundaryPoint> bndPts;
+        return bndPts;
     }
 
     virtual CSGNodeType nodeType() const = 0;
@@ -119,10 +128,9 @@ public:
         int nCorners = 1 << n;
         std::vector<Vector> corners(nCorners);
         for (int i = 0; i < nCorners; ++i) {
-            corners[i] = Vector::Zero();
             for (int j = 0; j < n; ++j) {
                 Real sign = ((i & (1 << j))) ? 1.0 : -1.0;
-                corners[i][j] += sign * .5 * m_dim[j];
+                corners[i][j] = sign * .5 * m_dim[j];
             }
 
             // Apply rotation and offset
@@ -152,6 +160,7 @@ private:
 template<typename Vector>
 class CSGTree<Vector>::CSGBoolNode : public CSGTree<Vector>::CSGNode
 {
+    typedef BoundaryPoint<Vector> _BoundaryPoint;
 public:
     CSGBoolNode(CSGOperation op, CSGTree<Vector>::CSGNode *left,
                 CSGTree<Vector>::CSGNode *right)
@@ -199,6 +208,67 @@ public:
                 assert(false);
         }
         return false;
+    }
+
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+        std::vector<_BoundaryPoint> leftPts, rightPts, bndPts;
+        leftPts = m_left->boundaryPoints(pointSpacing);
+        rightPts = m_right->boundaryPoints(pointSpacing);
+
+        // Perturb boundary points slightly in the normal direction to handle
+        // the case where to childrens' boundaries coincide
+        std::vector<Vector> perturbLeftPts, perturbRightPts;
+        perturbLeftPts.reserve(leftPts.size());
+        perturbRightPts.reserve(rightPts.size());
+        for (size_t i = 0; i < leftPts.size(); ++i)
+            perturbLeftPts[i] = leftPts[i].p + 1e-12 * leftPts[i].n;
+        for (size_t i = 0; i < rightPts.size(); ++i)
+            perturbRightPts[i] = rightPts[i].p + 1e-12 * rightPts[i].n;
+
+        // New boundary points are comprise
+        switch(m_op) {
+            case INTERSECT: // (left & right)
+                // each child boundary point if it is in the other child
+                for (size_t i = 0; i < leftPts.size(); ++i) {
+                    if (m_right->isInside(perturbLeftPts[i]))
+                        bndPts.push_back(leftPts[i]);
+                }
+                for (size_t i = 0; i < rightPts.size(); ++i) {
+                    if (m_left->isInside(perturbRightPts[i]))
+                        bndPts.push_back(rightPts[i]);
+                }
+                break;
+            case UNION: // (left | right)
+                // each child boundary point if it isn't in the other child
+                for (size_t i = 0; i < leftPts.size(); ++i) {
+                    if (!(m_right->isInside(perturbLeftPts[i])))
+                        bndPts.push_back(leftPts[i]);
+                }
+                for (size_t i = 0; i < rightPts.size(); ++i) {
+                    if (!(m_left->isInside(perturbRightPts[i])))
+                        bndPts.push_back(rightPts[i]);
+                }
+                break;
+            case SUBTRACT: // (left - right)
+                // left child boundary point if it isn't in right child
+                for (size_t i = 0; i < leftPts.size(); ++i) {
+                    if (!(m_right->isInside(perturbLeftPts[i])))
+                        bndPts.push_back(leftPts[i]);
+                }
+                // right child boundary point if it is in left child
+                // (with reversed normal)
+                for (size_t i = 0; i < rightPts.size(); ++i) {
+                    if (m_left->isInside(perturbRightPts[i])) {
+                        bndPts.push_back(_BoundaryPoint(rightPts[i].p,
+                                    -rightPts[i].n, rightPts[i].a));
+                    }
+                }
+
+                break;
+            default:
+                assert(false);
+        }
+        return bndPts;
     }
 
     BBox_t boundingBox() const {
@@ -258,6 +328,7 @@ template<typename Vector>
 class CSGTree<Vector>::CSGRectangleNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
+    typedef BoundaryPoint<Vector> _BoundaryPoint;
 public:
     CSGRectangleNode(const Vector &center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
@@ -276,6 +347,77 @@ public:
         return (l.cwiseAbs().array() <= (.5 * this->m_dim).array()).all();
     }
 
+    // Corners are always chosen as boundary points.
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+        std::vector<_BoundaryPoint> bndPts;
+        Real width = this->m_dim[0];
+        Real height = this->m_dim[1];
+        Real perimeter = 2.0 * (this->m_dim[0] + this->m_dim[1]);
+        size_t N = ceil(perimeter / pointSpacing);
+
+        int nCorners = std::min(N, (size_t) 4);
+        for (int i = 0; i < nCorners; ++i) {
+            Vector p, n;
+            for (int j = 0; j < 2; ++j) {
+                Real sign = ((i & (1 << j))) ? 1.0 : -1.0;
+                p[j] = sign * .5 * this->m_dim[j];
+                n[j] = sign;
+            }
+
+            n /= n.norm();
+            bndPts.push_back(_BoundaryPoint(p, n));
+        }
+
+        N -= nCorners;
+
+        int widthPoints = (N * width) / (width + height);
+        int heightPoints = N - widthPoints;
+
+        // Fit leftPoints + 1 segments on the left edge.
+        int leftPoints = .5 * heightPoints;
+        Vector p, n(-1, 0);
+        for (unsigned int i = 0; i < leftPoints; ++i) {
+            p[0] = -.5 * this->m_dim[0];
+            p[1] = ((i + 1.0) / (leftPoints + 1) - .5) * this->m_dim[1];
+            bndPts.push_back(_BoundaryPoint(p, n));
+        }
+
+        int rightPoints = heightPoints - leftPoints;
+        n = Vector(1, 0);
+        for (unsigned int i = 0; i < rightPoints; ++i) {
+            p[0] = .5 * this->m_dim[0];
+            p[1] = ((i + 1.0) / (rightPoints + 1) - .5) * this->m_dim[1];
+            bndPts.push_back(_BoundaryPoint(p, n));
+        }
+
+        int topPoints = .5 * widthPoints;
+        n = Vector(0, 1);
+        for (unsigned int i = 0; i < topPoints; ++i) {
+            p[0] = ((i + 1.0) / (topPoints + 1) - .5) * this->m_dim[0];
+            p[1] = .5 * this->m_dim[1];
+            bndPts.push_back(_BoundaryPoint(p, n));
+        }
+
+        n = Vector(0, -1);
+        int bottomPoints = widthPoints - topPoints;
+        for (unsigned int i = 0; i < bottomPoints; ++i) {
+            p[0] = ((i + 1.0) / (bottomPoints + 1) - .5) * this->m_dim[0];
+            p[1] = -.5 * this->m_dim[1];
+            bndPts.push_back(_BoundaryPoint(p, n));
+        }
+        
+        // Transorm all boundary points
+        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
+        for (size_t i = 0; i < bndPts.size(); ++i) {
+            _BoundaryPoint &bp = bndPts[i];
+            bp.p = rot * bp.p + this->m_c; 
+            bp.n = rot * bp.n;
+        }
+
+
+        return bndPts;
+    }
+
     ~CSGRectangleNode() { }
 };
 
@@ -284,6 +426,7 @@ template<typename Vector>
 class CSGTree<Vector>::CSGEllipseNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
+    typedef BoundaryPoint<Vector> _BoundaryPoint;
 public:
     CSGEllipseNode(Vector center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
@@ -314,6 +457,10 @@ public:
         return m_a;
     }
 
+    Real getMinorRadius() const {
+        return sqrt(m_a * m_a - m_f * m_f);
+    }
+
     CSGNodeType nodeType() const {
         return CSG_NODE_ELLIPSE;
     }
@@ -322,6 +469,48 @@ public:
         Vector l = this->toLocalCoords(p);
         Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
         return ((l - f).norm() + (l + f).norm()) <= 2 * m_a;
+    }
+
+    // Boundary points are evely spread around ellipse (by arc length)
+    // Each ellipse gets area of (arc length) / N.
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+        std::vector<Real> parameterValues;
+        Real a = getMajorRadius();
+        Real b = getMinorRadius();
+        Real pointAreas;
+        ellipseParameterPoints(pointSpacing, a, b, parameterValues,
+                               pointAreas);
+
+        size_t N = parameterValues.size();
+        std::vector<_BoundaryPoint> bndPts;
+        bndPts.reserve(N);
+
+        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
+
+        for (size_t i = 0; i < N; ++i) {
+            Real t = parameterValues[i];
+            // Parametrization always assumes major axis is in the x direction.
+            Vector p(a * sin(t), b * cos(t));
+            // Clockwise tangent vector (parametrization traces clockwise):
+            //      t = (a * cos(t), -b * sin(t))
+            // Normal is tangent rotated counter-clockwise by 90 degrees:
+            //      n = (b * sin(t), a * cos(t))
+            Vector n(b * sin(t), a * cos(t));
+            n /= n.norm();
+
+            // Vertical elipses have to be rotated by 90 degrees
+            if (m_vertical) {
+                p = Vector(-p[1], p[0]);
+                n = Vector(-n[1], n[0]);
+            }
+
+            p = rot * p + this->m_c;
+            n = rot * n;
+
+            bndPts.push_back(_BoundaryPoint(p, n, pointAreas));
+        }
+
+        return bndPts;
     }
 
     ~CSGEllipseNode() { }

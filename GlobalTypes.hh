@@ -15,6 +15,7 @@ typedef CSGTree_t::CSGRectangleNode CSGRectangleNode;
 typedef CSGTree_t::CSGEllipseNode CSGEllipseNode;
 typedef BBox<Vector> BBox_t;
 typedef Polygon<Vector> Polygon_t;
+typedef BoundaryPoint<Vector> BoundaryPoint_t;
 
 #include <list>
 typedef std::list<CSGNode *> NodeList;
