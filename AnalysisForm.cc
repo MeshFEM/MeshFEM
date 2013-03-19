@@ -29,6 +29,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_cellOverlapStepper->setMinimum(0.0);
     g_cellOverlapStepper->setMaximum(1.0);
     g_cellOverlapStepper->setSingleStep(.05);
+    g_boundaryPointStepper = new QDoubleSpinBox();
+    g_boundaryPointStepper->setMinimum(0.01);
+    g_boundaryPointStepper->setMaximum(1.0);
+    g_boundaryPointStepper->setSingleStep(.01);
 
     g_massMatrixSelector = new QComboBox();
     g_youngModulusStepper = new QDoubleSpinBox();
@@ -59,6 +63,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     eqForm->addRow("Cell Overlap Threshold", g_cellOverlapStepper);
+    eqForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     elementsQuadratureGroup->setLayout(eqForm);
 
     // Material/Matrix Settings
@@ -99,6 +104,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_cellOverlapStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(elementGridControlsChanged(double)));
+    QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(boundaryPointControlsChanged(double)));
 
     QObject::connect(g_massMatrixSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(matrixControlsChanged(int)));
@@ -142,6 +149,7 @@ void AnalysisForm::m_setGUIFromSettings() {
 
     g_numModesStepper->setValue(m_settings.numModes);   
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
+    g_boundaryPointStepper->setValue(m_settings.boundarySpacing);
 
     // Note: assumes MassMatrixType enum index matches combo box index
     g_massMatrixSelector->setCurrentIndex(m_settings.massMatrixType);
@@ -161,6 +169,7 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.numModes = g_numModesStepper->value();
     m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
+    m_settings.boundarySpacing = g_boundaryPointStepper->value();
 
     // Note: assumes MassMatrixType enum index matches combo box index
     m_settings.massMatrixType =
@@ -191,26 +200,31 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
     }
 }
 
-void AnalysisForm::elementGridControlsChanged(int i) {
+void AnalysisForm::elementGridControlsChanged(int) {
     m_readSettingsFromGUI();
     emit eqSettingsChanged(m_settings);
 }
 
-void AnalysisForm::elementGridControlsChanged(double d) {
+void AnalysisForm::elementGridControlsChanged(double) {
     elementGridControlsChanged((int) 0);
 }
 
-void AnalysisForm::matrixControlsChanged(int i) {
+void AnalysisForm::boundaryPointControlsChanged(double) {
+    m_readSettingsFromGUI();
+    emit bpSettingsChanged(m_settings);
+}
+
+void AnalysisForm::matrixControlsChanged(int) {
     m_readSettingsFromGUI();
     emit matrixOrMaterialSettingsChanged(m_settings);
 }
 
-void AnalysisForm::materialControlsChanged(double v) {
+void AnalysisForm::materialControlsChanged(double) {
     m_readSettingsFromGUI();
     emit matrixOrMaterialSettingsChanged(m_settings);
 }
 
-void AnalysisForm::modalAnalysisControlsChanged(int i) {
+void AnalysisForm::modalAnalysisControlsChanged(int) {
     m_readSettingsFromGUI();
     emit modalAnalysisSettingsChanged(m_settings);
 }

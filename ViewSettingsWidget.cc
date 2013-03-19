@@ -77,7 +77,7 @@ void ViewSettingsWidget::m_readSettingsFromGUI() {
     m_viewSettings.colormapRangeMax = g_colormapMaxStepper->value();
 }
 
-void ViewSettingsWidget::m_guiIntChanged(int val) {
+void ViewSettingsWidget::m_guiIntChanged(int) {
     m_readSettingsFromGUI();
     // Some settings affect enabled properties of the GUI...
     m_setGUIFromSettings();
@@ -85,7 +85,7 @@ void ViewSettingsWidget::m_guiIntChanged(int val) {
     emit viewSettingsUpdated();
 }
 
-void ViewSettingsWidget::m_guiDoubleChanged(double val) {
+void ViewSettingsWidget::m_guiDoubleChanged(double) {
     m_readSettingsFromGUI();
     // Some settings affect enabled properties of the GUI...
     m_setGUIFromSettings();

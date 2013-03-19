@@ -17,6 +17,7 @@
 
 ModelForm::ModelForm(CSGWindowController *controller, QWidget *parent)
 {
+    Q_UNUSED(parent)
     QTreeView *treeView = controller->csgTreeView();
     QVBoxLayout *layout = new QVBoxLayout();
     treeView->setSizePolicy(QSizePolicy::MinimumExpanding,

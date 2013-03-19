@@ -24,6 +24,8 @@ QVariant CSGTreeModel::data(const QModelIndex &index, int role) const
 QVariant CSGTreeModel::headerData(int section, Qt::Orientation orientation,
             int role) const
 {
+    Q_UNUSED(section)
+
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
         return QVariant("CSG Layers");
     return QVariant();
@@ -82,6 +84,7 @@ int CSGTreeModel::rowCount(const QModelIndex &parent) const
 
 int CSGTreeModel::columnCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent)
     return 1;
 }
 

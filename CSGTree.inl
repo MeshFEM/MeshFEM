@@ -28,8 +28,8 @@ public:
 
     virtual int indexOfChild(const CSGNode *) const { return -1; }
     virtual int numChildren() const { return 0; }
-    virtual CSGTree<Vector>::CSGNode *child(size_t i) { return NULL; }
-    virtual const CSGTree<Vector>::CSGNode *child(size_t i) const { return NULL; }
+    virtual CSGTree<Vector>::CSGNode *child(size_t) { return NULL; }
+    virtual const CSGTree<Vector>::CSGNode *child(size_t) const { return NULL; }
 
     virtual BBox_t boundingBox() const { return BBox_t(); }
 
@@ -38,9 +38,8 @@ public:
             child(i)->applyTranslation(t);
     }
 
-    virtual std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) {
-        std::vector<_BoundaryPoint> bndPts;
-        return bndPts;
+    virtual std::vector<_BoundaryPoint> boundaryPoints(Real) const {
+        return std::vector<_BoundaryPoint>();
     }
 
     virtual CSGNodeType nodeType() const = 0;
@@ -210,7 +209,7 @@ public:
         return false;
     }
 
-    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
         std::vector<_BoundaryPoint> leftPts, rightPts, bndPts;
         leftPts = m_left->boundaryPoints(pointSpacing);
         rightPts = m_right->boundaryPoints(pointSpacing);
@@ -225,7 +224,7 @@ public:
         for (size_t i = 0; i < rightPts.size(); ++i)
             perturbRightPts[i] = rightPts[i].p + 1e-12 * rightPts[i].n;
 
-        // New boundary points are comprise
+        // New boundary points comprise
         switch(m_op) {
             case INTERSECT: // (left & right)
                 // each child boundary point if it is in the other child
@@ -348,7 +347,7 @@ public:
     }
 
     // Corners are always chosen as boundary points.
-    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
         std::vector<_BoundaryPoint> bndPts;
         Real width = this->m_dim[0];
         Real height = this->m_dim[1];
@@ -376,7 +375,7 @@ public:
         // Fit leftPoints + 1 segments on the left edge.
         int leftPoints = .5 * heightPoints;
         Vector p, n(-1, 0);
-        for (unsigned int i = 0; i < leftPoints; ++i) {
+        for (int i = 0; i < leftPoints; ++i) {
             p[0] = -.5 * this->m_dim[0];
             p[1] = ((i + 1.0) / (leftPoints + 1) - .5) * this->m_dim[1];
             bndPts.push_back(_BoundaryPoint(p, n));
@@ -384,7 +383,7 @@ public:
 
         int rightPoints = heightPoints - leftPoints;
         n = Vector(1, 0);
-        for (unsigned int i = 0; i < rightPoints; ++i) {
+        for (int i = 0; i < rightPoints; ++i) {
             p[0] = .5 * this->m_dim[0];
             p[1] = ((i + 1.0) / (rightPoints + 1) - .5) * this->m_dim[1];
             bndPts.push_back(_BoundaryPoint(p, n));
@@ -392,7 +391,7 @@ public:
 
         int topPoints = .5 * widthPoints;
         n = Vector(0, 1);
-        for (unsigned int i = 0; i < topPoints; ++i) {
+        for (int i = 0; i < topPoints; ++i) {
             p[0] = ((i + 1.0) / (topPoints + 1) - .5) * this->m_dim[0];
             p[1] = .5 * this->m_dim[1];
             bndPts.push_back(_BoundaryPoint(p, n));
@@ -400,7 +399,7 @@ public:
 
         n = Vector(0, -1);
         int bottomPoints = widthPoints - topPoints;
-        for (unsigned int i = 0; i < bottomPoints; ++i) {
+        for (int i = 0; i < bottomPoints; ++i) {
             p[0] = ((i + 1.0) / (bottomPoints + 1) - .5) * this->m_dim[0];
             p[1] = -.5 * this->m_dim[1];
             bndPts.push_back(_BoundaryPoint(p, n));
@@ -473,7 +472,7 @@ public:
 
     // Boundary points are evely spread around ellipse (by arc length)
     // Each ellipse gets area of (arc length) / N.
-    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) { 
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
         std::vector<Real> parameterValues;
         Real a = getMajorRadius();
         Real b = getMinorRadius();
@@ -536,7 +535,7 @@ template<typename Functor>
 Functor CSGTree<Vector>::dfs(Functor f, CSGNode *node)
 {
     if (node == NULL) {
-        for (int i = 0; i < numRoots(); ++i) {
+        for (size_t i = 0; i < numRoots(); ++i) {
             dfsWorker(f, root(i));
         }
     }

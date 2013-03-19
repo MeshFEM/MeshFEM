@@ -24,7 +24,7 @@
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
-#include "timing.h"
+// #include "timing.h"
 
 #define MAX_NODES 128
 #define MAX_PRIMITIVES 64
@@ -257,7 +257,7 @@ struct CSGTreeFlattener {
     CSGTreeFlattener(CSGNodeType *ntype, CSGPrimitiveData *pdata)
         : nodeTypes(ntype), primitiveData(pdata),
           numNodes(0), numPrimitives(0) { }
-    void preVisit(CSGNode *node) { } 
+    void preVisit(CSGNode *) { } 
     void postVisit(CSGNode *node) {
         CSGNodeType type = node->nodeType();
         assert(numNodes < MAX_NODES);
@@ -301,8 +301,8 @@ void FEMView2D::m_clClearCSGRender(cl_mem texBuf)
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
             (m_clQueue, 1, &texBuf, 0, NULL, NULL));
     size_t ldim[] = {128, 1};
-    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0],
-        m_width};
+    size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
+                       (size_t) m_width};
     SET_3_KERNEL_ARGS(m_clearKernel, texBuf, m_width, m_height);
     CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_clearKernel,
                 /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
@@ -345,7 +345,8 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
     clEnqueueUnmapMemObject(m_clQueue, m_primHostBuf, pdata, 0, NULL, NULL);
 
     size_t ldim[] = {128, 1};
-    size_t gdim[] = {((m_height + ldim[0]) / ldim[0]) * ldim[0], m_width};
+    size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
+                       (size_t) m_width};
 
     float minX = m_frameMin[0], maxX = m_frameMax[0],
           minY = m_frameMin[1], maxY = m_frameMax[1];
@@ -410,26 +411,13 @@ void FEMView2D::m_drawSelectedObjects()
     glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
 
-    // Boundary point size
-    glPointSize(5.0);
-
-    // Draw the bounding boxes and boundary points for selected objects
+    // Draw the bounding boxes for selected objects
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glColor3i(selectedObjectColor.red(), selectedObjectColor.green(),
               selectedObjectColor.blue());
     for (NodeList::iterator it = m_selectedObjects.begin();
                             it != m_selectedObjects.end(); ++it) {
         m_drawWorldBox((*it)->boundingBox());
-        
-        glBegin(GL_POINTS);
-        std::vector<BoundaryPoint_t> bndPts = (*it)->boundaryPoints(.1);
-        for (size_t i = 0; i < bndPts.size(); ++i) {
-            m_drawWorldVertex(bndPts[i].p);
-        }
-        glEnd();
-        for (size_t i = 0; i < bndPts.size(); ++i) {
-            m_drawWorldArrow(bndPts[i].p, bndPts[i].n);
-        }
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
@@ -662,6 +650,19 @@ void FEMView2D::draw()
             }
         }
         glEnd();
+
+        // Draw boundary points
+        glPointSize(5.0);
+        glColor3f(0.0f, 0.0f, 0.0f);
+
+        glBegin(GL_POINTS);
+        const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
+        for (size_t i = 0; i < bndPts.size(); ++i)
+            m_drawWorldVertex(bndPts[i].p);
+        glEnd();
+
+        for (size_t i = 0; i < bndPts.size(); ++i)
+            m_drawWorldArrow(bndPts[i].p, bndPts[i].n);
     }
 
     float colorBarWidth = 300;
@@ -771,5 +772,5 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
 
 void FEMView2D::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    
+    Q_UNUSED(event)
 }

@@ -19,6 +19,7 @@
 #include "AnalysisSettings.hh"
 #include "Solver.hh"
 #include "Fields.hh"
+#include "Geometry.hh"
 #include <cassert>
 #include <vector>
 #include <algorithm>
@@ -26,12 +27,14 @@
 template<typename Model>
 class MeshlessFEM {
 public:
-    typedef typename Model::Real Real;
+    typedef typename Model::Vector_t Vector;
+    typedef typename Model::Real   Real;
     typedef Eigen::Matrix<Real, 4, 1> DType;
     typedef ScalarField<Real>         SField;
     typedef VectorField<Real, 2>      VField;
     typedef SymmetricMatrixField<Real, 2> SMField;
     typedef ElementGrid2D<Model>      ElementGrid;
+    typedef BoundaryPoint<Vector>     _BoundaryPoint;
 
     // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 4, 2> GradPhis;
@@ -54,6 +57,7 @@ public:
         m_elementGrid = new ElementGrid(settings.Nx, settings.Ny,
                 settings.cellOverlapThreshold, *m_quadrature, model);
         
+        configureBoundaryPoints(settings);
         configureMatrices(settings);
         configureMaterial(settings);
         configureModalAnalysis(settings);
@@ -92,6 +96,12 @@ public:
         return changed;
     }
 
+    void configureBoundaryPoints(const AnalysisSettings &settings) {
+        m_boundaryPointSpacing = settings.boundarySpacing;
+        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
+    }
+
+
     void configureMatrices(const AnalysisSettings &settings) {
         m_massMatrixType = settings.massMatrixType;
         m_invalidateCache();
@@ -121,6 +131,7 @@ public:
 
     void modelChanged() {
         elementGrid().update();
+        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
         m_invalidateCache();
     }
 
@@ -131,6 +142,10 @@ public:
 
     Model &model() {
         return m_model;
+    }
+
+    const std::vector<_BoundaryPoint> &boundaryPoints() const {
+        return m_boundaryPoints;
     }
 
     Quadrature2D &quadrature() {
@@ -210,6 +225,8 @@ private:
     Quadrature2D *m_quadrature;
     Model &m_model;
     ElementGrid *m_elementGrid;
+    std::vector<_BoundaryPoint> m_boundaryPoints;
+    Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
     DType m_d;

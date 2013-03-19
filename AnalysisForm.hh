@@ -33,14 +33,16 @@ public slots:
     void modesUpdated(const MeshlessFEM_t *fem);
 
 private slots:
-    void elementGridControlsChanged(int i);
-    void elementGridControlsChanged(double i);
-    void modalAnalysisControlsChanged(int i);
-    void matrixControlsChanged(int i);
-    void materialControlsChanged(double v);
+    void elementGridControlsChanged(int);
+    void elementGridControlsChanged(double);
+    void boundaryPointControlsChanged(double);
+    void modalAnalysisControlsChanged(int);
+    void matrixControlsChanged(int);
+    void materialControlsChanged(double);
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);
+    void bpSettingsChanged(const AnalysisSettings &settings);
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
 
@@ -52,6 +54,7 @@ private:
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QCheckBox *g_gaussQuadratureCheck;
     QDoubleSpinBox *g_cellOverlapStepper;
+    QDoubleSpinBox *g_boundaryPointStepper;
 
     // Matrix/material settings
     QComboBox *g_massMatrixSelector;

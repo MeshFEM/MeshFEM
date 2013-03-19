@@ -92,6 +92,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
                      controller,
                      SLOT(elementGridChanged(const AnalysisSettings &)));
     QObject::connect(analysisForm,
+                     SIGNAL(bpSettingsChanged(const AnalysisSettings &)),
+                     controller,
+                     SLOT(boundaryPointSettingsChanged(const AnalysisSettings &)));
+    QObject::connect(analysisForm,
                      SIGNAL(matrixOrMaterialSettingsChanged(const AnalysisSettings &)),
                      controller,
                      SLOT(matrixOrMaterialSettingsChanged(const AnalysisSettings &)));

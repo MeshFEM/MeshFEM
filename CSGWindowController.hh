@@ -42,6 +42,7 @@ public slots:
 
     // Analysis actions
     void elementGridChanged(const AnalysisSettings &settings);
+    void boundaryPointSettingsChanged(const AnalysisSettings &settings);
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();

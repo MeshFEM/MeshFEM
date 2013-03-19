@@ -411,9 +411,9 @@ int
 MatlabInterface::Eval(const char *matlab_code, string &output_str,
                       string &error_str)
 {
-    int retval = engEvalString(m_ep,"lasterror('reset');");
+    int res = engEvalString(m_ep,"lasterror('reset');");
 
-    int res = engEvalString(m_ep, matlab_code);
+    res = engEvalString(m_ep, matlab_code);
     terminateOutput();
     output_str = string(skipPromptGarbage(m_outputBuffer));
 
@@ -421,7 +421,7 @@ MatlabInterface::Eval(const char *matlab_code, string &output_str,
         std::cerr << "ERROR: Error running matlab command \"" << matlab_code << "\"\n";
     }
     else {
-        retval = engEvalString(m_ep,"lastErr = lasterror;");
+        res = engEvalString(m_ep,"lastErr = lasterror;");
         // get the struct
         mxArray *err = engGetVariable(m_ep,"lastErr");
         if (mxIsStruct(err)) {
@@ -430,7 +430,7 @@ MatlabInterface::Eval(const char *matlab_code, string &output_str,
             if ((errStr != NULL) && mxIsChar(errStr)) {
                 char str[512];
                 // get the string
-                retval = mxGetString(errStr, str, sizeof(str) / sizeof(str[0]));
+                res = mxGetString(errStr, str, sizeof(str) / sizeof(str[0]));
                 // mxDestroyArray(errStr);
                 res = strlen(str);
                 error_str = string(str);
@@ -460,8 +460,8 @@ void MatlabInterface::GetEncodedSparseRealMatrix(const char* name, unsigned int*
 
     for (unsigned int i = 0; i < nentries; ++i)
     {
-        rowind[i] = (unsigned int)(pM[           i]) - 1; assert(rowind[i] >= 0); 
-        colind[i] = (unsigned int)(pM[  nentries+i]) - 1; assert(colind[i] >= 0); 
+        rowind[i] = (unsigned int)(pM[           i]) - 1; // assert(rowind[i] >= 0); -- JP: Trivially true!
+        colind[i] = (unsigned int)(pM[  nentries+i]) - 1; // assert(colind[i] >= 0); -- JP: Trivially true!
         vals  [i] = (double      )(pM[2*nentries+i]);
     }
 }

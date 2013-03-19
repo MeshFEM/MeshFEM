@@ -40,7 +40,7 @@ struct NodeAccumulator {
         nodes.push_back(node);
     }
 
-    void postVisit(CSGNode *node) { }
+    void postVisit(CSGNode *) { }
 
     iterator begin() { return nodes.begin(); }
     iterator end()   { return nodes.end(); }
@@ -52,6 +52,10 @@ void CSGWindowController::csgTreeSelectionChanged(
                 const QItemSelection &selected,
                 const QItemSelection &deselected) 
 {
+    // We must process the full selection, so ignore the deltas
+    Q_UNUSED(selected)
+    Q_UNUSED(deselected)
+
     // Extend selection to all children
     QItemSelection fullSelection;
     NodeAccumulator accum;
@@ -183,6 +187,13 @@ void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
         m_femView->update();
     // Configuring the elements clears all modes
     emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::
+boundaryPointSettingsChanged(const AnalysisSettings &settings)
+{
+    m_fem.configureBoundaryPoints(settings);
+    m_femView->update();
 }
 
 void CSGWindowController::

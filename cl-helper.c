@@ -246,7 +246,7 @@ void create_context_on(const char *plat_name, const char*dev_name, cl_uint idx,
       abort();
     }
 
-    int sel_int = MIN(MAX(0, atoi(sel)), plat_count-1);
+    int sel_int = MIN(MAX(0, atoi(sel)), ((int) plat_count)-1);
     free(sel);
 
     CALL_CL_GUARDED(clGetPlatformInfo, (platforms[sel_int], CL_PLATFORM_VENDOR,
@@ -302,7 +302,7 @@ void create_context_on(const char *plat_name, const char*dev_name, cl_uint idx,
           abort();
         }
 
-        int int_sel = MIN(MAX(0, atoi(sel)), dev_count-1);
+        int int_sel = MIN(MAX(0, atoi(sel)), ((int) dev_count)-1);
         free(sel);
 
         CALL_CL_GUARDED(clGetDeviceInfo, (devices[int_sel], CL_DEVICE_NAME,
@@ -383,7 +383,7 @@ char *read_file(const char *filename)
   // allocate memory, slurp in entire file
   char *result = (char *) malloc(size+1);
   CHECK_SYS_ERROR(!result, "read_file: allocating file contents");
-  CHECK_SYS_ERROR(fread(result, 1, size, f) < size,
+  CHECK_SYS_ERROR(fread(result, 1, size, f) < (size_t) size,
       "read_file: reading file contents");
 
   // close, return

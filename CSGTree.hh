@@ -31,7 +31,9 @@ public:
     class CSGRectangleNode;
     class CSGEllipseNode;
     typedef BBox<Vector> BBox_t;
+    typedef Vector                  Vector_t;
     typedef typename Vector::Scalar Real;
+    typedef BoundaryPoint<Vector> _BoundaryPoint;
 
     CSGTree() { }
 
@@ -73,7 +75,7 @@ public:
     template<typename Functor>
     Functor dfs(Functor f, CSGNode *node = NULL);
 
-    int numRoots() const { return m_roots.size(); }
+    size_t numRoots() const { return m_roots.size(); }
     const CSGNode *root(size_t i) const {
         assert(i < m_roots.size());
         return m_roots[i];
@@ -81,6 +83,19 @@ public:
     CSGNode *root(size_t i) {
         assert(i < m_roots.size());
         return m_roots[i];
+    }
+
+
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing)
+    {
+        typedef std::vector<_BoundaryPoint> BndPts;
+        BndPts bndPoints;
+        for (size_t i = 0; i < numRoots(); ++i) {
+            BndPts rootBoundaryPts = root(i)->boundaryPoints(pointSpacing);
+            bndPoints.insert(bndPoints.end(), rootBoundaryPts.begin(),
+                             rootBoundaryPts.end());
+        }
+        return bndPoints;
     }
 
     // Note: the tree takes ownership of node when node becomes root!

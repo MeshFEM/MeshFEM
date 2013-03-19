@@ -98,6 +98,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
     void keyPressEvent(QKeyEvent *event) {
+        Q_UNUSED(event)
     }
 
     // Get the world coordinates corresponding to buffer coordinates
