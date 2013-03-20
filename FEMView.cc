@@ -48,7 +48,8 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
       m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_fem(fem), m_guiState(MODEL_STATE), m_gesture(NONE),
+      m_fem(fem), m_selectedBoundaryPoint(-1LL),
+      m_guiState(MODEL_STATE), m_gesture(NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
@@ -657,12 +658,60 @@ void FEMView2D::draw()
 
         glBegin(GL_POINTS);
         const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
-        for (size_t i = 0; i < bndPts.size(); ++i)
+        for (size_t i = 0; i < bndPts.size(); ++i) {
+            if (i == m_selectedBoundaryPoint)
+                glColor3f(0.0f, 1.0f, 0.0f);
+            else
+                glColor3f(0.0f, 0.0f, 0.0f);
             m_drawWorldVertex(bndPts[i].p);
+        }
         glEnd();
 
-        for (size_t i = 0; i < bndPts.size(); ++i)
+        for (size_t i = 0; i < bndPts.size(); ++i) {
+            if (i == m_selectedBoundaryPoint)
+                glColor3f(0.0f, 1.0f, 0.0f);
+            else
+                glColor3f(0.0f, 0.0f, 0.0f);
             m_drawWorldArrow(bndPts[i].p, bndPts[i].n);
+        }
+
+        // Visualize cubic kernel around selected point
+        Vector cellSize = grid.cellSize();
+        Scalar h = std::max(cellSize[0], cellSize[1]);
+        if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
+            SPHCubicSpline<Scalar, 2>
+                    phi(m_fem.boundaryPoints()[m_selectedBoundaryPoint].p, h);
+            // Draw a sub-grid of quads around the point spanning
+            // a square with edge length 4 * h
+#define KERNEL_VIS_SUBDIV 5
+            Scalar subdivWidth = 4 * h / KERNEL_VIS_SUBDIV;
+            Scalar scale = phi.maxNormalizationFactor();
+            for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
+                Scalar minY = phi.center()[1] - 4 * h +
+                              subdivWidth * i;
+                Scalar maxY = minY + subdivWidth;
+                for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
+                    Scalar minX = phi.center()[0] - 4 * h +
+                                  subdivWidth * j;
+                    Scalar maxX = minX + subdivWidth;
+
+                    Scalar x, y;
+                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+                    getScreenCoords(minX, minY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+                    getScreenCoords(maxX, minY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+                    getScreenCoords(maxX, maxY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+                    getScreenCoords(minX, maxY, x, y);
+                    glVertex2f(x, y);
+                }
+            }
+            
+        }
     }
 
     float colorBarWidth = 300;

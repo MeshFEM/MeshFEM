@@ -30,6 +30,12 @@ public:
         m_Ny = Ny;
     }
 
+    Vector cellSize() const {
+        Vector sizes = m_bbox.dimensions();
+        sizes[0] /= m_Nx, sizes[1] /= m_Ny;
+        return sizes;
+    }
+
     void get2DCellIndex(size_t i, size_t &row, size_t &col) const {
         assert(i < numCells());
         row = i / m_Nx;

@@ -20,6 +20,7 @@
 #include "Solver.hh"
 #include "Fields.hh"
 #include "Geometry.hh"
+#include "SPHKernels.hh"
 #include <cassert>
 #include <vector>
 #include <algorithm>
@@ -216,6 +217,10 @@ public:
                         computeStressTensorNorms(m_modalStressTensors[i]));
         }
         return success;
+    }
+
+    bool weaknessAnalysis() {
+        return false;
     }
 
     SMField elementStressTensors(const VField &displacement);

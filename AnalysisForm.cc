@@ -29,10 +29,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_cellOverlapStepper->setMinimum(0.0);
     g_cellOverlapStepper->setMaximum(1.0);
     g_cellOverlapStepper->setSingleStep(.05);
-    g_boundaryPointStepper = new QDoubleSpinBox();
-    g_boundaryPointStepper->setMinimum(0.01);
-    g_boundaryPointStepper->setMaximum(1.0);
-    g_boundaryPointStepper->setSingleStep(.01);
 
     g_massMatrixSelector = new QComboBox();
     g_youngModulusStepper = new QDoubleSpinBox();
@@ -46,13 +42,18 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_modeSelector = new QComboBox();
 
     g_numWeakRegionsStepper = new QSpinBox();
+    g_boundaryPointStepper = new QDoubleSpinBox();
+    g_boundaryPointStepper->setMinimum(0.01);
+    g_boundaryPointStepper->setMaximum(1.0);
+    g_boundaryPointStepper->setSingleStep(.01);
+
     modesUpdated(NULL);
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *materialGroup = new QGroupBox("Materials and Matrices");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
-    QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
     QGroupBox *simulationGroup = new QGroupBox("Simulation");
+    QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
 
     // Elements and Quadrature
     QFormLayout *eqForm = new QFormLayout();
@@ -63,7 +64,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     eqForm->addRow("Cell Overlap Threshold", g_cellOverlapStepper);
-    eqForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     elementsQuadratureGroup->setLayout(eqForm);
 
     // Material/Matrix Settings
@@ -89,6 +89,16 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     modalForm->addRow(g_modeSelector);
     modalAnalysisGroup->setLayout(modalForm);
 
+    // Simulation
+    QFormLayout *simForm = new QFormLayout();
+    simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
+    simulationGroup->setLayout(simForm);
+
+    // Weakness Analysis
+    QFormLayout *weakForm = new QFormLayout();
+    weakForm->addRow("Number of Weak Regions", g_numWeakRegionsStepper);
+    weaknessAnalysisGroup->setLayout(weakForm);
+
     // Initialize all the GUI values
     m_setGUIFromSettings();
 
@@ -104,8 +114,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_cellOverlapStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(elementGridControlsChanged(double)));
-    QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
-                     this, SLOT(boundaryPointControlsChanged(double)));
 
     QObject::connect(g_massMatrixSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(matrixControlsChanged(int)));
@@ -125,18 +133,25 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
                      controller, SLOT(modeSelectionChanged(int)));
 
+    QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(boundaryPointControlsChanged(double)));
+
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(elementsQuadratureGroup);
     layout->addWidget(materialGroup);
     layout->addWidget(modalAnalysisGroup);
-    layout->addWidget(weaknessAnalysisGroup);
     layout->addWidget(simulationGroup);
+    layout->addWidget(weaknessAnalysisGroup);
     layout->addStretch(1.0);
     layout->setContentsMargins(5, 5, 5, 5);
 
+    // QVBoxLayout *fullLayout = new QVBoxLayout();
     // QScrollArea *scrollArea = new QScrollArea(this);
-    // scrollArea->setLayout(layout);
+    // scrollArea->setWidget(layout);
+    // fullLayout->addWidget(scrollArea);
+    // setLayout(fullLayout);
+
     setLayout(layout);
 }
 

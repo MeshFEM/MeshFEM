@@ -98,7 +98,17 @@ protected:
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
     void keyPressEvent(QKeyEvent *event) {
-        Q_UNUSED(event)
+        if (event->key() == Qt::Key_Down)
+            --m_selectedBoundaryPoint;
+        if (event->key() == Qt::Key_Up)
+            ++m_selectedBoundaryPoint;
+
+        // Replace all invalid selected indexes with -1
+        size_t numBPs = m_fem.boundaryPoints().size();
+        if (m_selectedBoundaryPoint >= numBPs)
+            m_selectedBoundaryPoint = -1LL;
+
+        update();
     }
 
     // Get the world coordinates corresponding to buffer coordinates
@@ -187,6 +197,8 @@ private:
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
     size_t m_selectedDeformation;
+
+    size_t m_selectedBoundaryPoint;
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;

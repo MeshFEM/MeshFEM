@@ -39,7 +39,7 @@
 #include <vector>
 
 template<typename Model>
-class ElementGrid2D : private Grid2D {
+class ElementGrid2D : public Grid2D {
 public:
     typedef Eigen::Vector4i AdjacencyVec;
 
