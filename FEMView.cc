@@ -676,11 +676,10 @@ void FEMView2D::draw()
         }
 
         // Visualize cubic kernel around selected point
-        Vector cellSize = grid.cellSize();
-        Scalar h = std::max(cellSize[0], cellSize[1]);
         if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
-            SPHCubicSpline<Scalar, 2>
-                    phi(m_fem.boundaryPoints()[m_selectedBoundaryPoint].p, h);
+            const MeshlessFEM_t::BoundaryFunction &phi =
+                m_fem.boundaryFunction(m_selectedBoundaryPoint);
+            Scalar h = phi.h();
             // Draw a sub-grid of quads around the point spanning
             // a square with edge length 4 * h
             glBegin(GL_QUADS);

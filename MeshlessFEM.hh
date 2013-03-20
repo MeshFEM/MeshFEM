@@ -36,6 +36,7 @@ public:
     typedef SymmetricMatrixField<Real, 2> SMField;
     typedef ElementGrid2D<Model>      ElementGrid;
     typedef BoundaryPoint<Vector>     _BoundaryPoint;
+    typedef SPHCubicSpline<Real, 2>   BoundaryFunction;
 
     // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 4, 2> GradPhis;
@@ -99,9 +100,8 @@ public:
 
     void configureBoundaryPoints(const AnalysisSettings &settings) {
         m_boundaryPointSpacing = settings.boundarySpacing;
-        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
+        m_invalidateCache();
     }
-
 
     void configureMatrices(const AnalysisSettings &settings) {
         m_massMatrixType = settings.massMatrixType;
@@ -132,7 +132,6 @@ public:
 
     void modelChanged() {
         elementGrid().update();
-        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
         m_invalidateCache();
     }
 
@@ -170,6 +169,13 @@ public:
 
     const SField &modalStressNorms(size_t i) const {
         return m_modalStressNorms[i];
+    }
+
+    const BoundaryFunction &boundaryFunction(size_t i) {
+        if (m_boundaryFunctions.size() != m_boundaryPoints.size())
+            buildBoundaryFunctions();
+        assert(i < m_boundaryFunctions.size());
+        return m_boundaryFunctions[i];
     }
 
     bool modalAnalysis() {
@@ -219,6 +225,18 @@ public:
         return success;
     }
 
+    void buildBoundaryFunctions() {
+        m_boundaryFunctions.clear();
+        m_boundaryFunctions.reserve(m_boundaryPoints.size());
+        Vector cellSize = m_elementGrid->cellSize();
+        Real h = std::max(cellSize[0], cellSize[1]);
+            
+        for (size_t i = 0; i < m_boundaryPoints.size(); ++i) {
+            m_boundaryFunctions.push_back(
+                    BoundaryFunction(m_boundaryPoints[i].p, h));
+        }
+    }
+
     bool weaknessAnalysis() {
         return false;
     }
@@ -230,7 +248,8 @@ private:
     Quadrature2D *m_quadrature;
     Model &m_model;
     ElementGrid *m_elementGrid;
-    std::vector<_BoundaryPoint> m_boundaryPoints;
+    std::vector<_BoundaryPoint>   m_boundaryPoints;
+    std::vector<BoundaryFunction> m_boundaryFunctions;
     Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
@@ -254,9 +273,12 @@ private:
     void m_invalidateCache() {
         m_stiffnessCached = false;
         m_massCached = false;
-        m_modes.resize(0);
+        m_modes.clear();
         m_displacementStrainCached = false;
-        m_elementData.resize(0);
+        m_elementData.clear();
+
+        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
+        m_boundaryFunctions.clear();
     }
 
 };

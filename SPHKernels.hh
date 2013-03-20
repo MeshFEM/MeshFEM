@@ -19,7 +19,7 @@
 template<typename Real, size_t dim>
 class SPHKernel {
 public:
-    typedef typename Eigen::Matrix<Real, dim, 1> Vector;
+    typedef typename Eigen::Matrix<Real, 1, dim> Vector;
     SPHKernel(const Vector &c, Real h)
         : m_c(c), m_h(h), m_normalization(1.0) { }
 
@@ -27,6 +27,7 @@ public:
     virtual bool isInSupport(const Vector &x) const = 0;
 
     const Vector &center() const { return m_c; }
+    Real h() const { return m_h; }
     
     ////////////////////////////////////////////////////////////////////////////
     /*! Renomalize so that the integral of this kernel over the domain (formerly

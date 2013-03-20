@@ -34,7 +34,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
            MSHWriter.hh colors.hh ViewSettingsWidget.hh ViewSettings.hh \
-           CSGFile.hh \
+           CSGFile.hh SPHKernels.hh \
            cl-helper.h
 
 
