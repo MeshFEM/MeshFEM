@@ -102,6 +102,8 @@ protected:
             --m_selectedBoundaryPoint;
         if (event->key() == Qt::Key_Up)
             ++m_selectedBoundaryPoint;
+        if (event->key() == Qt::Key_Escape)
+            m_selectedBoundaryPoint = -1LL;
 
         // Replace all invalid selected indexes with -1
         size_t numBPs = m_fem.boundaryPoints().size();

@@ -683,33 +683,39 @@ void FEMView2D::draw()
                     phi(m_fem.boundaryPoints()[m_selectedBoundaryPoint].p, h);
             // Draw a sub-grid of quads around the point spanning
             // a square with edge length 4 * h
-#define KERNEL_VIS_SUBDIV 5
-            Scalar subdivWidth = 4 * h / KERNEL_VIS_SUBDIV;
-            Scalar scale = phi.maxNormalizationFactor();
-            for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
-                Scalar minY = phi.center()[1] - 4 * h +
-                              subdivWidth * i;
-                Scalar maxY = minY + subdivWidth;
-                for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
-                    Scalar minX = phi.center()[0] - 4 * h +
-                                  subdivWidth * j;
-                    Scalar maxX = minX + subdivWidth;
+            glBegin(GL_QUADS);
+                #define KERNEL_VIS_SUBDIV 10
+                Scalar subdivWidth = 4 * h / KERNEL_VIS_SUBDIV;
+                Scalar scale = phi.maxNormalizationFactor();
+                for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
+                    Scalar minY = phi.center()[1] - 2 * h +
+                                  subdivWidth * i;
+                    Scalar maxY = minY + subdivWidth;
+                    for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
+                        Scalar minX = phi.center()[0] - 2 * h +
+                                      subdivWidth * j;
+                        Scalar maxX = minX + subdivWidth;
 
-                    Scalar x, y;
-                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
-                    getScreenCoords(minX, minY, x, y);
-                    glVertex2f(x, y);
-                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
-                    getScreenCoords(maxX, minY, x, y);
-                    glVertex2f(x, y);
-                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
-                    getScreenCoords(maxX, maxY, x, y);
-                    glVertex2f(x, y);
-                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
-                    getScreenCoords(minX, maxY, x, y);
-                    glVertex2f(x, y);
+                        Scalar x, y;
+                        glColor4f(0.0f, 1.0f, 0.0f,
+                                  scale * phi(Vector(minX, minY)));
+                        getScreenCoords(minX, minY, x, y);
+                        glVertex2f(x, y);
+                        glColor4f(0.0f, 1.0f, 0.0f,
+                                  scale * phi(Vector(maxX, minY)));
+                        getScreenCoords(maxX, minY, x, y);
+                        glVertex2f(x, y);
+                        glColor4f(0.0f, 1.0f, 0.0f,
+                                  scale * phi(Vector(maxX, maxY)));
+                        getScreenCoords(maxX, maxY, x, y);
+                        glVertex2f(x, y);
+                        glColor4f(0.0f, 1.0f, 0.0f,
+                                  scale * phi(Vector(minX, maxY)));
+                        getScreenCoords(minX, maxY, x, y);
+                        glVertex2f(x, y);
+                    }
                 }
-            }
+            glEnd();
             
         }
     }
