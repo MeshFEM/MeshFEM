@@ -225,17 +225,7 @@ public:
         return success;
     }
 
-    void buildBoundaryFunctions() {
-        m_boundaryFunctions.clear();
-        m_boundaryFunctions.reserve(m_boundaryPoints.size());
-        Vector cellSize = m_elementGrid->cellSize();
-        Real h = std::max(cellSize[0], cellSize[1]);
-            
-        for (size_t i = 0; i < m_boundaryPoints.size(); ++i) {
-            m_boundaryFunctions.push_back(
-                    BoundaryFunction(m_boundaryPoints[i].p, h));
-        }
-    }
+    void buildBoundaryFunctions();
 
     bool weaknessAnalysis() {
         return false;

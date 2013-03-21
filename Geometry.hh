@@ -39,6 +39,12 @@ struct BBox {
               (v.array() * (maxCorner - minCorner).array()).matrix();
     }
 
+    // Get the interpolation coordinates of a point.
+    // These are inside [0, 1]^dim if the point is in the box.
+    Vector interpolationCoordinates(const Vector &v) const {
+        return ((v - minCorner).array() / dimensions().array()).matrix();
+    }
+
     Vector dimensions() const {
         return maxCorner - minCorner;
     }
@@ -57,6 +63,29 @@ struct BBox {
         for (int i = 0; i < widths.rows(); ++i)
             result *= widths[i];
         return result;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Determine whether there is any overlap with a circle.
+    //  Adapted from:
+    //  http://stackoverflow.com/questions/401847/ ...
+    //         circle-rectangle-collision-detection-intersection/402010#402010
+    //  @param[in]  c   circle center
+    //  @param[in]  r   circle radius
+    //  @return     true if this box overlaps the circle.
+    *///////////////////////////////////////////////////////////////////////////
+    bool intersectsCircle(const Vector &c, Real r) const {
+        Vector boxCenter = .5 * (minCorner + maxCorner);
+        Vector circleDistance = (c - boxCenter).cwiseAbs();
+        Vector boxHalfDims = .5 * dimensions();
+
+        if ((circleDistance.array() > (boxHalfDims.array() + r)).any())
+            return false;
+
+        if ((circleDistance.array() <= boxHalfDims.array()).any())
+            return true;
+
+        return circleDistance.squaredNorm() <= r * r;
     }
 };
 

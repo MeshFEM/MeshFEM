@@ -25,6 +25,7 @@ public:
 
     virtual Real operator()(const Vector &x) const = 0;
     virtual bool isInSupport(const Vector &x) const = 0;
+    virtual Real supportRadius() const = 0;
 
     const Vector &center() const { return m_c; }
     Real h() const { return m_h; }
@@ -92,6 +93,10 @@ public:
 
     virtual bool isInSupport(const Vector &x) const {
         return ((x - this->m_c).norm() < 2.0 * this->m_h);
+    }
+
+    virtual Real supportRadius() const {
+        return 2.0 * this->m_h;
     }
 
 };

@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <Eigen/Dense>
 #include "GlobalTypes.hh"
+#include "Geometry.hh"
 #ifndef GRID_HH
 #define GRID_HH
 
@@ -99,6 +100,33 @@ public:
         adj[1] = get1DVertexIndex(row    , col + 1);
         adj[2] = get1DVertexIndex(row + 1, col + 1);
         adj[3] = get1DVertexIndex(row + 1, col    );
+    }
+
+    void cellsAroundPoint(const Vector &pt, Scalar radius,
+                          std::vector<size_t> &cells) const
+    {
+        cells.clear();
+
+        Vector icoord = m_bbox.interpolationCoordinates(pt);
+        Vector iradius = radius / m_bbox.dimensions().array();
+        Vector minCorner = icoord - iradius;
+        Vector maxCorner = icoord + iradius;
+
+        minCorner = minCorner.cwiseMax(Vector::Zero());
+        maxCorner = maxCorner.cwiseMin(Vector::Ones());
+
+        size_t gridStartX = floor(m_Nx * minCorner[0]),
+               gridStartY = floor(m_Ny * minCorner[1]),
+               gridEndX   =  ceil(m_Nx * maxCorner[0]),
+               gridEndY   =  ceil(m_Ny * maxCorner[1]);
+        for (size_t row = gridStartY; row < gridEndY; ++row) {
+            for (size_t col = gridStartX; col < gridEndX; ++col) {
+                BBox_t candidate = cellBoundingBox(row, col);
+                if (candidate.intersectsCircle(pt, radius)) {
+                    cells.push_back(get1DCellIndex(row, col));
+                }
+            }
+        }
     }
 
     size_t numVertices() const { return (m_Nx + 1) * (m_Ny + 1); }

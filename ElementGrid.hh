@@ -138,6 +138,21 @@ public:
         return AdjacencyVec(AdjacencyVec::Zero());
     }
 
+    void elementsAroundPoint(const Vector &pt, Scalar radius,
+                          std::vector<size_t> &elements) const {
+        elements.clear();
+
+        std::vector<size_t> cells;
+        cellsAroundPoint(pt, radius, cells);
+
+        for (size_t i = 0; i < cells.size(); ++i) {
+            assert(cells[i] < m_elementForCell.size());
+            int elem = m_elementForCell[cells[i]];
+            if (elem >= 0)
+                elements.push_back(elem);
+        }
+    }
+
     bool elementIsFull(size_t i) const {
         assert(i < m_isFullElement.size());
         return m_isFullElement[i];

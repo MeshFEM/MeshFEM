@@ -526,7 +526,7 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
     else if (op == DRAW_NODES) {
-        glPointSize(5.0f);
+        glPointSize(3.0f);
         glBegin(GL_POINTS);
         for (unsigned int i = 0; i < grid.numNodes(); ++i) {
             Vector p = grid.nodePosition(i);
@@ -637,7 +637,7 @@ void FEMView2D::draw()
         drawGrid(DRAW_NODES);
 
         // Draw quadrature points
-        glPointSize(2.0f);
+        glPointSize(1.0f);
         glColor3f(1.0, 1.0, 0);
         glBegin(GL_POINTS);
 
@@ -679,19 +679,26 @@ void FEMView2D::draw()
         if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
             const MeshlessFEM_t::BoundaryFunction &phi =
                 m_fem.boundaryFunction(m_selectedBoundaryPoint);
-            Scalar h = phi.h();
-            // Draw a sub-grid of quads around the point spanning
-            // a square with edge length 4 * h
+            Scalar radius = phi.supportRadius();
+            // Highlight all elements overlapping the basis function's support
+            std::vector<size_t> elems;
+            grid.elementsAroundPoint(phi.center(), radius, elems);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
+            for (size_t i = 0; i < elems.size(); ++i)
+                m_drawWorldBox(grid.elementBoundingBox(elems[i]));
+            
+            // Draw a sub-grid of quads around the point, spanning
+            // the full basis function's support
             glBegin(GL_QUADS);
                 #define KERNEL_VIS_SUBDIV 10
-                Scalar subdivWidth = 4 * h / KERNEL_VIS_SUBDIV;
+                Scalar subdivWidth = 2 * radius / KERNEL_VIS_SUBDIV;
                 Scalar scale = phi.maxNormalizationFactor();
                 for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
-                    Scalar minY = phi.center()[1] - 2 * h +
+                    Scalar minY = phi.center()[1] - radius +
                                   subdivWidth * i;
                     Scalar maxY = minY + subdivWidth;
                     for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
-                        Scalar minX = phi.center()[0] - 2 * h +
+                        Scalar minX = phi.center()[0] - radius +
                                       subdivWidth * j;
                         Scalar maxX = minX + subdivWidth;
 

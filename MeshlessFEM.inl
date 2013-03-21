@@ -454,3 +454,17 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
         }
     }
 }
+
+template<typename Model>
+void MeshlessFEM<Model>::buildBoundaryFunctions()
+{
+    m_boundaryFunctions.clear();
+    m_boundaryFunctions.reserve(m_boundaryPoints.size());
+    Vector cellSize = m_elementGrid->cellSize();
+    Real h = std::max(cellSize[0], cellSize[1]);
+
+    for (size_t i = 0; i < m_boundaryPoints.size(); ++i) {
+        m_boundaryFunctions.push_back(
+                BoundaryFunction(m_boundaryPoints[i].p, h));
+    }
+}
