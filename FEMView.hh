@@ -36,7 +36,8 @@ class FEMView2D : public QGLWidget
 
 public:
     typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
-                  FORCES_STATE = 2, DISPLACEMENTS_STATE = 3} GUIState;
+                  SIM_SETUP_STATE = 2,
+                  FORCES_STATE = 3, DISPLACEMENTS_STATE = 4} GUIState;
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
 
@@ -93,6 +94,7 @@ protected:
     void initializeGL();
     void resizeGL(int width, int height);
     void paintGL();
+    void paintPressure(const Vector &screenPt);
     void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
@@ -141,6 +143,22 @@ protected:
         sy = m_height * t;
     }
 
+    void getScreenCoords(const Vector &world, Vector &screen) const
+    {
+        getScreenCoords(world[0], world[1], screen[0], screen[1]);
+    }
+
+    void qtToScreenCoords(const QPoint &pt, Vector &spt) const {
+        spt[0] = pt.x();
+        spt[1] = m_screenTop - pt.y();
+    }
+
+    Vector qtToScreenCoords(const QPoint &pt) const {
+        Vector spt;
+        qtToScreenCoords(pt, spt);
+        return spt;
+    }
+
     // Rounded for buffer drawing
     void getBufferCoords(Scalar x, Scalar y, int &r, int &c) const {
         Scalar s, t;
@@ -171,6 +189,9 @@ private:
                   const SField &elemScalarField = SField());
     void drawGrid(DrawOp op, const VField &deformation = VField(),
                   const SField &elemScalarField = SField());
+    void drawBoundary(bool pressureField = false,
+            const QColor &color = QColor(0, 0, 0),
+            const QColor &selColor = QColor(0, 255, 0));
     void draw();
     void m_drawObject();
     void m_drawSelectedObjects();
@@ -186,7 +207,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     FTGLBitmapFont m_font;
     Vector m_frameMin, m_frameMax;
-    int m_width, m_height;
+    int m_width, m_height, m_screenTop;
     GLuint m_modelTex, m_overlayTex;
     GLuint m_bilinearShader;
     // Vertex coordinate attributes for bilinear displacement shader.

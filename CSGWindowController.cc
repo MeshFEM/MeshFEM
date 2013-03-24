@@ -192,8 +192,12 @@ void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
 void CSGWindowController::
 boundaryPointSettingsChanged(const AnalysisSettings &settings)
 {
+    // Go back to the element state.
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     m_fem.configureBoundaryPoints(settings);
     m_femView->update();
+    // Currently, configuring the boundary points clears all modes
+    emit modesUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -231,6 +235,28 @@ void CSGWindowController::runModalAnalysis()
         mbox.exec();
     }
     emit modesUpdated(&m_fem);
+}
+
+void CSGWindowController::configureSimulation()
+{
+    m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
+}
+
+void CSGWindowController::runSimulation()
+{
+}
+
+void CSGWindowController::runWeaknessAnalysis()
+{
+    bool success = m_fem.weaknessAnalysis();
+    if (!success) {
+        QMessageBox mbox(QMessageBox::Critical,
+                "Weakness analysis Failed",
+                "Error: Weakness analysis failed.",
+                QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+    }
 }
 
 void CSGWindowController::dumpModalData()

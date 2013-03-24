@@ -66,6 +66,11 @@ public:
     size_t dim() const { return t_dim; }
     size_t domainSize() const { return m_values.cols(); }
 
+    void resizeDomain(size_t dSize) {
+        m_values.resize(Eigen::NoChange, dSize);
+        clear();
+    }
+
 protected:
     /** Data storage */
     ArrayType m_values;

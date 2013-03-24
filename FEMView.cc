@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <limits>
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
@@ -236,6 +237,7 @@ void FEMView2D::resizeGL(int width, int height)
     int hmargin = (height - m_height) / 2;
     int wmargin = (width  -  m_width) / 2;
     glOrtho(-wmargin, width - wmargin, -hmargin, height - hmargin, -1, 1);
+    m_screenTop = height - hmargin;
     glMatrixMode(GL_MODELVIEW);
 }
 
@@ -414,8 +416,8 @@ void FEMView2D::m_drawSelectedObjects()
 
     // Draw the bounding boxes for selected objects
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glColor3i(selectedObjectColor.red(), selectedObjectColor.green(),
-              selectedObjectColor.blue());
+    glColor3ub(selectedObjectColor.red(), selectedObjectColor.green(),
+               selectedObjectColor.blue());
     for (NodeList::iterator it = m_selectedObjects.begin();
                             it != m_selectedObjects.end(); ++it) {
         m_drawWorldBox((*it)->boundingBox());
@@ -538,6 +540,34 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
     }
 }
 
+void FEMView2D::drawBoundary(bool pressureField,
+        const QColor &color, const QColor &selColor)
+{
+    // Draw boundary points
+    glPointSize(5.0);
+
+    glBegin(GL_POINTS);
+    const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
+    for (size_t i = 0; i < bndPts.size(); ++i) {
+        if (i == m_selectedBoundaryPoint)
+            glColor3ub(selColor.red(), selColor.green(), selColor.blue());
+        else
+            glColor3ub(color.red(), color.green(), color.blue());
+        m_drawWorldVertex(bndPts[i].p);
+    }
+    glEnd();
+
+    for (size_t i = 0; i < bndPts.size(); ++i) {
+        if (i == m_selectedBoundaryPoint)
+            glColor3ub(selColor.red(), selColor.green(), selColor.blue());
+        else
+            glColor3ub(color.red(), color.green(), color.blue());
+        Scalar scale = pressureField ? m_fem.pressure(i) : 1.0;
+        m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n);
+    }
+}
+
+
 void FEMView2D::m_rerenderObject()
 {
     QColor modelColor(128, 192, 255, 255);
@@ -652,28 +682,7 @@ void FEMView2D::draw()
         }
         glEnd();
 
-        // Draw boundary points
-        glPointSize(5.0);
-        glColor3f(0.0f, 0.0f, 0.0f);
-
-        glBegin(GL_POINTS);
-        const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
-        for (size_t i = 0; i < bndPts.size(); ++i) {
-            if (i == m_selectedBoundaryPoint)
-                glColor3f(0.0f, 1.0f, 0.0f);
-            else
-                glColor3f(0.0f, 0.0f, 0.0f);
-            m_drawWorldVertex(bndPts[i].p);
-        }
-        glEnd();
-
-        for (size_t i = 0; i < bndPts.size(); ++i) {
-            if (i == m_selectedBoundaryPoint)
-                glColor3f(0.0f, 1.0f, 0.0f);
-            else
-                glColor3f(0.0f, 0.0f, 0.0f);
-            m_drawWorldArrow(bndPts[i].p, bndPts[i].n);
-        }
+        drawBoundary();
 
         // Visualize cubic kernel around selected point
         if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
@@ -724,6 +733,14 @@ void FEMView2D::draw()
             glEnd();
             
         }
+    }
+    else if (m_guiState == SIM_SETUP_STATE) {
+        drawObjectTextureCells();
+        // drawGrid(DRAW_CELLS);
+        drawGrid(DRAW_EDGES);
+        drawGrid(DRAW_NODES);
+
+        drawBoundary(true, QColor(255, 160, 0));
     }
 
     float colorBarWidth = 300;
@@ -800,6 +817,26 @@ void FEMView2D::paintGL()
     draw();
 }
 
+#define PAINT_DIST_THRESHOLD 10.0
+void FEMView2D::paintPressure(const Vector &screenPt) {
+    const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
+    size_t closest = 0;
+    Scalar closestDist = std::numeric_limits<Scalar>::max();
+    for (size_t i = 0; i < bndPts.size(); ++i) {
+        Vector screenBP;
+        getScreenCoords(bndPts[i].p, screenBP);
+        Scalar dist = (screenPt - screenBP).norm();
+        if (dist < closestDist) {
+            closest = i;
+            closestDist = dist;
+        }
+    }
+    if (closestDist < PAINT_DIST_THRESHOLD) {
+        m_fem.pressure(closest) = 1.0;
+        update();
+    }
+}
+
 void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
@@ -811,6 +848,9 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
     if (m_guiState == MODEL_STATE) {
         m_prevMouseLoc = event->pos();
         m_gesture = DRAGGING;
+    }
+    else if (m_guiState == SIM_SETUP_STATE) {
+        paintPressure(qtToScreenCoords(event->pos()));
     }
 }
 
@@ -827,6 +867,9 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         m_rerenderObject();
         m_rerenderOverlay();
         update();
+    }
+    else if (m_guiState == SIM_SETUP_STATE) {
+        paintPressure(qtToScreenCoords(event->pos()));
     }
     m_prevMouseLoc = event->pos();
 }

@@ -41,11 +41,16 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_dumpModalDataButton->setEnabled(false);
     g_modeSelector = new QComboBox();
 
-    g_numWeakRegionsStepper = new QSpinBox();
     g_boundaryPointStepper = new QDoubleSpinBox();
     g_boundaryPointStepper->setMinimum(0.01);
     g_boundaryPointStepper->setMaximum(1.0);
     g_boundaryPointStepper->setSingleStep(.01);
+    g_configureSimulationButton = new QPushButton("Configure");
+    g_runSimulationButton = new QPushButton("Run");
+    g_pressurePaintValueStepper = new QDoubleSpinBox();
+
+    g_numWeakRegionsStepper = new QSpinBox();
+    g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
 
     modesUpdated(NULL);
 
@@ -92,11 +97,17 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Simulation
     QFormLayout *simForm = new QFormLayout();
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
+    QHBoxLayout *simButtonLayout = new QHBoxLayout();
+    simButtonLayout->addWidget(g_configureSimulationButton);
+    simButtonLayout->addWidget(g_runSimulationButton);
+    simForm->addRow(simButtonLayout);
+    simForm->addRow("PressurePaint Value", g_pressurePaintValueStepper);
     simulationGroup->setLayout(simForm);
 
     // Weakness Analysis
     QFormLayout *weakForm = new QFormLayout();
     weakForm->addRow("Number of Weak Regions", g_numWeakRegionsStepper);
+    weakForm->addRow(g_weaknessAnalysisButton);
     weaknessAnalysisGroup->setLayout(weakForm);
 
     // Initialize all the GUI values
@@ -135,6 +146,14 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(boundaryPointControlsChanged(double)));
+    QObject::connect(g_configureSimulationButton, SIGNAL(clicked()),
+                     controller, SLOT(configureSimulation()));
+    QObject::connect(g_runSimulationButton, SIGNAL(clicked()),
+                     controller, SLOT(runSimulation()));
+
+
+    QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
+                     controller, SLOT(runWeaknessAnalysis()));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();

@@ -46,6 +46,11 @@ public slots:
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();
+
+    void configureSimulation();
+    void runSimulation();
+
+    void runWeaknessAnalysis();
     void dumpModalData();
     void modeSelectionChanged(int index);
 

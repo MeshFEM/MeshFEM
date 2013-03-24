@@ -308,7 +308,7 @@ private:
 
 template<typename Model>
 void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, std::vector<Real> &mat_v)
+        IndexVec &mat_j, ValueVec &mat_v)
 {
     // Simple (i, j v) stiffness matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -421,7 +421,7 @@ MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
 
 template<typename Model>
 void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, std::vector<Real> &mat_v)
+        IndexVec &mat_j, ValueVec &mat_v)
 {
     // Simple (i, j v) mass matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -455,6 +455,50 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
     }
 }
 
+
+template<typename Model>
+class MeshlessFEM<Model>::BoundaryFunctionLoad
+{
+public:
+    typedef Eigen::Matrix<Real, 4, 1> value_type;
+
+    BoundaryFunctionLoad(const BoundaryFunction &psi)
+        : m_psi(psi) {
+        clear();
+    }
+
+    void clear() {
+        m_load = value_type::Zero();
+    }
+
+    void accumulate(const Vector &sample,
+                    const Vector &ref_sample, Real weight) {
+        bool inSupport = m_psi.isInSupport(sample);
+        if (inSupport) {
+            Real psi = m_psi(sample);
+
+            // Compute unscaled load (integral against each grid node function.)
+            value_type phi;
+            Real x = ref_sample[0], y = ref_sample[1];
+            phi[0] = (1 - x) * (1 - y);
+            phi[1] =      x  * (1 - y);
+            phi[2] =      x  *      y ;
+            phi[3] = (1 - x) *      y ;
+
+            m_load += (weight * psi) * phi;
+        }
+    }
+
+    Real operator()(size_t i) const {
+        assert(i < 4);
+        return m_load(i);
+    }
+
+private:
+    value_type m_load;
+    const BoundaryFunction &m_psi;
+};
+
 template<typename Model>
 void MeshlessFEM<Model>::buildBoundaryFunctions()
 {
@@ -466,5 +510,63 @@ void MeshlessFEM<Model>::buildBoundaryFunctions()
     for (size_t i = 0; i < m_boundaryPoints.size(); ++i) {
         m_boundaryFunctions.push_back(
                 BoundaryFunction(m_boundaryPoints[i].p, h));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Construct the surface force -> surface force load matrix.
+//  This matrix maps a (B x dim) matrix of per-boundary point force densities to
+//  a (N * dim) matrix of per-node loads.
+//  Each pressure variable p_i is blurred into a volume force by boundary
+//  function psi_i. Psi_i is (effectively) normalized so that the integral of
+//  the point's force over the surface is n_i * a_i * p_i (n_i normal, a_i area)
+//  Note: Because of partition of unity, this condition means the matrix columns
+//        should sum to 1.
+//  @param[out]  m, n       Number of matrix rows, columns
+//  @param[out]  i, j, v    Entry row indices, column indices, and values
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Model>
+void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
+                                              IndexVec &j, ValueVec &v)
+{
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    m = elemGrid.numNodes();
+    n = numBoundaryPoints();
+
+    i.clear(), j.clear(), v.clear();
+
+    std::vector<size_t> support_elems;
+    CornerVec cornerIndices;
+    const Quadrature2D &q = quadrature();
+
+    // Fill out one column of the matrix at a time.
+    for (size_t f = 0; f < n; ++f) {
+        const BoundaryFunction &psi = boundaryFunction(f);
+        BoundaryFunctionLoad load(psi);
+
+        elemGrid.elementsAroundPoint(psi.center(), psi.supportRadius(),
+                                     support_elems);
+        Real colSum = 0;
+        // Mark the start of the values in this column so we can go back and
+        // normalize them.
+        size_t colValuesOffset = v.size();
+        for (size_t e = 0; e < support_elems.size(); ++e) {
+            load.clear();
+            q.integrate(load, elemGrid.elementBoundingBox(support_elems[e]));
+            elemGrid.elementCorners(support_elems[e], cornerIndices);
+            for (size_t c = 0; c < 4; ++c) {
+                Real ld = load(c);
+                if (std::abs(ld) > 1e-8) {
+                    i.push_back(cornerIndices[c]);
+                    j.push_back(f);
+                    v.push_back(ld);
+                    colSum += ld;
+                }
+            }
+        }
+
+        // Normalize so the column sums to 1
+        for (size_t vo = colValuesOffset; vo < v.size(); ++vo)
+            v[vo] /= colSum;
     }
 }

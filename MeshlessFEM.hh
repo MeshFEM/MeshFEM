@@ -48,6 +48,7 @@ public:
     class PerElementStiffnessDensity;
     class PerElementGradPhi;
     class PerElementMassMatrixDensity;
+    class BoundaryFunctionLoad;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings,
                 Solver<Real> *solver)
@@ -156,6 +157,10 @@ public:
     size_t numModes() const {
         return m_modes.size();
     }
+    
+    size_t numBoundaryPoints() const {
+        return m_boundaryPoints.size();
+    }
 
     Real eigenvalue(size_t i) const {
         assert(i < numModes());
@@ -176,6 +181,16 @@ public:
             buildBoundaryFunctions();
         assert(i < m_boundaryFunctions.size());
         return m_boundaryFunctions[i];
+    }
+
+    // Get the pressure on the ith boundary point
+    Real pressure(size_t i) const {
+        assert(i < m_pressures.domainSize());
+        return m_pressures[i];
+    }
+    Real &pressure(size_t i) {
+        assert(i < m_pressures.domainSize());
+        return m_pressures[i];
     }
 
     bool modalAnalysis() {
@@ -228,6 +243,13 @@ public:
     void buildBoundaryFunctions();
 
     bool weaknessAnalysis() {
+        MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
+        assert(solver != NULL);
+        IndexVec i, j;
+        ValueVec v;
+        size_t m, n;
+        m_assembleLoadMatrix(m, n, i, j, v);
+        solver->setSparseMatrix("F", m, n, i, j, v);
         return false;
     }
 
@@ -240,6 +262,8 @@ private:
     ElementGrid *m_elementGrid;
     std::vector<_BoundaryPoint>   m_boundaryPoints;
     std::vector<BoundaryFunction> m_boundaryFunctions;
+    /** Pressures for simulation */
+    SField                        m_pressures;
     Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
@@ -254,11 +278,14 @@ private:
     std::vector<ElementData> m_elementData;
 
     typedef std::vector<size_t> IndexVec;
+    typedef std::vector<Real>   ValueVec;
     void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                                   std::vector<Real> &v);
+                                   ValueVec &v);
     void m_assembleMassMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                                   std::vector<Real> &v);
+                                   ValueVec &v);
     void m_computePerElementDisplacementStrainMap();
+    void m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                              ValueVec &v);
 
     void m_invalidateCache() {
         m_stiffnessCached = false;
@@ -269,6 +296,7 @@ private:
 
         m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
         m_boundaryFunctions.clear();
+        m_pressures.resizeDomain(m_boundaryPoints.size());
     }
 
 };

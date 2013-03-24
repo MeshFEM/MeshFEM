@@ -123,6 +123,13 @@ class MatlabSolver : public Solver<Real> {
             return success;
         }
 
+        void setSparseMatrix(const char *name, size_t m, size_t n,
+                             const IVec &i, const IVec &j, const VVec &v)
+        {
+            m_matlab->SetEngineSparseRealMatrix(name, i.size(), &i[0], &j[0],
+                                                &v[0], m, n);
+        }
+
         // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.
         // These matrices are compressed in the form
         // [a1 b1]  [a2 b2]         ==>   [a1 a2      ]

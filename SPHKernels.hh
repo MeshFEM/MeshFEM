@@ -19,7 +19,7 @@
 template<typename Real, size_t dim>
 class SPHKernel {
 public:
-    typedef typename Eigen::Matrix<Real, 1, dim> Vector;
+    typedef typename Eigen::Matrix<Real, dim, 1> Vector;
     SPHKernel(const Vector &c, Real h)
         : m_c(c), m_h(h), m_normalization(1.0) { }
 
@@ -30,17 +30,6 @@ public:
     const Vector &center() const { return m_c; }
     Real h() const { return m_h; }
     
-    ////////////////////////////////////////////////////////////////////////////
-    /*! Renomalize so that the integral of this kernel over the domain (formerly
-    //  oldIntegral) is 1.
-    //  @param[in]  oldIntegral     Integral of kernel pre-renomalization;
-    //                              should be strictly positive.
-    *///////////////////////////////////////////////////////////////////////////
-    void renormalize(Real oldIntegral) {
-        assert(oldIntegral > 1.0e-8);
-        m_normalization *= 1.0 / oldIntegral;
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     /*! Get the scale factor that makes kernel's maximum value 1
     //  @return     scaling factor

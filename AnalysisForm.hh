@@ -54,7 +54,6 @@ private:
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QCheckBox *g_gaussQuadratureCheck;
     QDoubleSpinBox *g_cellOverlapStepper;
-    QDoubleSpinBox *g_boundaryPointStepper;
 
     // Matrix/material settings
     QComboBox *g_massMatrixSelector;
@@ -68,8 +67,15 @@ private:
     QPushButton *g_dumpModalDataButton;
     QComboBox *g_modeSelector;
 
+    // Simulation settings
+    QDoubleSpinBox *g_boundaryPointStepper;
+    QPushButton *g_configureSimulationButton;
+    QPushButton *g_runSimulationButton;
+    QDoubleSpinBox *g_pressurePaintValueStepper;
+
     // Weakness analysis settings
     QSpinBox *g_numWeakRegionsStepper;
+    QPushButton *g_weaknessAnalysisButton;
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();

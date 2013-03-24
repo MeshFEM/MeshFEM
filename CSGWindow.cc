@@ -46,7 +46,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     sideBar->setLayout(layout);
 
     AnalysisForm *analysisForm = new AnalysisForm(settings, controller);
-    sideBarTab->addTab(analysisForm, "Analyze");
+    QScrollArea *scroller = new QScrollArea();
+    scroller->setWidget(analysisForm);
+    scroller->setWidgetResizable(true);
+    sideBarTab->addTab(scroller, "Analyze");
     splitter->addWidget(sideBar);
     splitter->addWidget(femView);
     // splitter->setOrientation(Qt::Vertical);
