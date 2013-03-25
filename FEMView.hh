@@ -36,8 +36,8 @@ class FEMView2D : public QGLWidget
 
 public:
     typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
-                  SIM_SETUP_STATE = 2,
-                  FORCES_STATE = 3, DISPLACEMENTS_STATE = 4} GUIState;
+                  SIM_SETUP_STATE = 2, SIM_RESULT_STATE = 3,
+                  FORCES_STATE = 4, MODE_STATE = 5} GUIState;
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
 
@@ -65,12 +65,16 @@ public:
         m_gesture = NONE;
         update();
 
-        if (m_guiState == DISPLACEMENTS_STATE) {
+        if (m_guiState == MODE_STATE) {
             m_timer.start(1000.0 / 60, this);
         }
         else {
             m_timer.stop();
         }
+    }
+
+    void setPressurePaintValue(double value) {
+        m_pressurePaintValue = value;
     }
 
     void selectDeformation(size_t i) {
@@ -94,7 +98,8 @@ protected:
     void initializeGL();
     void resizeGL(int width, int height);
     void paintGL();
-    void paintPressure(const Vector &screenPt);
+    void paintPressure(const Vector &screenPt, bool erase = false);
+    void paintFixedNodes(const Vector &screenPt, bool subtract = false);
     void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
@@ -149,7 +154,7 @@ protected:
     }
 
     void qtToScreenCoords(const QPoint &pt, Vector &spt) const {
-        spt[0] = pt.x();
+        spt[0] = pt.x() + m_screenLeft;
         spt[1] = m_screenTop - pt.y();
     }
 
@@ -207,7 +212,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     FTGLBitmapFont m_font;
     Vector m_frameMin, m_frameMax;
-    int m_width, m_height, m_screenTop;
+    int m_width, m_height, m_screenTop, m_screenLeft;
     GLuint m_modelTex, m_overlayTex;
     GLuint m_bilinearShader;
     // Vertex coordinate attributes for bilinear displacement shader.
@@ -222,6 +227,7 @@ private:
     size_t m_selectedDeformation;
 
     size_t m_selectedBoundaryPoint;
+    Scalar m_pressurePaintValue;
 
     GUIState m_guiState;
     typedef enum {DRAGGING, NONE} MouseGesture;

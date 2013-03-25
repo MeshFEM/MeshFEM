@@ -244,6 +244,24 @@ void CSGWindowController::configureSimulation()
 
 void CSGWindowController::runSimulation()
 {
+    bool success = m_fem.simulate();
+    if (!success) {
+        QMessageBox mbox(QMessageBox::Critical,
+                "Simulation Failed",
+                "Error: Simulation failed.",
+                QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    }
+    else {
+        m_femView->setGUIState(FEMView2D::SIM_RESULT_STATE);
+    }
+}
+
+void CSGWindowController::pressurePaintValueChanged(double value)
+{
+    m_femView->setPressurePaintValue(value);
 }
 
 void CSGWindowController::runWeaknessAnalysis()
@@ -251,8 +269,8 @@ void CSGWindowController::runWeaknessAnalysis()
     bool success = m_fem.weaknessAnalysis();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
-                "Weakness analysis Failed",
-                "Error: Weakness analysis failed.",
+                "Weakness Analysis Failed",
+                "Error: Weakness Analysis failed.",
                 QMessageBox::Ok);
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
@@ -293,7 +311,7 @@ void CSGWindowController::modeSelectionChanged(int index)
 {
     if (index > 0) {
         m_femView->selectDeformation(index - 1);
-        m_femView->setGUIState(FEMView2D::DISPLACEMENTS_STATE);
+        m_femView->setGUIState(FEMView2D::MODE_STATE);
     }
     else {
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);

@@ -193,6 +193,19 @@ public:
         return m_pressures[i];
     }
 
+    const VField &simulationDisplacement() const {
+        return m_simulatedDisplacement;
+    }
+
+    // Fixed/unfixed status of nodes
+    bool nodeIsFixed(size_t i) const {
+        assert(i < m_nodeFixed.size());
+        return m_nodeFixed[i];
+    }
+    void setNodeFixed(size_t i, bool fixed) {
+        m_nodeFixed[i] = fixed;
+    }
+
     bool modalAnalysis() {
         std::vector<size_t> K_i, K_j;
         std::vector<Real> K_v;
@@ -242,6 +255,69 @@ public:
 
     void buildBoundaryFunctions();
 
+    bool simulate() {
+        MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
+        assert(solver != NULL);
+
+        size_t Fm, Fn, Kn;
+        IndexVec Fi, Fj, Ki, Kj;
+        ValueVec Fv, Kv;
+        m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
+        m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
+        solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
+        solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
+
+        // All the fixed nodes' displacements are set to 0.
+        // This means zeroing the entire stiffness matrix row/column and placing
+        // a 1 on the diagonal. This component of the resulting solution vector
+        // is then ignored.
+        assert(m_nodeFixed.size() == elementGrid().numNodes());
+        char cmd[128];
+        for (size_t i = 0; i < m_nodeFixed.size(); ++i) {
+            if (m_nodeFixed[i]) {
+                int xIdx = 2 * ((int) i) + 1; // Matlab is 1-indexed
+                int yIdx = 2 * ((int) i) + 2; // Matlab is 1-indexed
+                snprintf(cmd, 128, "K(%i, :) = 0; K(:, %i) = 0; K(%i, %i) = 1; "
+                                   "K(%i, :) = 0; K(:, %i) = 0; K(%i, %i) = 1;",
+                         xIdx, xIdx, xIdx, xIdx, yIdx, yIdx, yIdx, yIdx);
+                solver->eval(cmd);
+            }
+        }
+
+        size_t nBnd = numBoundaryPoints();
+        // Column major: x components go in 0..nBnd - 1
+        //               y components go in nBnd..2 * nBnd - 1
+        Real *boundaryForces = new Real[2 * nBnd];
+        for (size_t i = 0; i < nBnd; ++i) {
+            Vector f = -m_boundaryPoints[i].n *
+                       (pressure(i) * m_boundaryPoints[i].a);
+            boundaryForces[i       ] = f[0];
+            boundaryForces[i + nBnd] = f[1];
+        }
+        solver->setDenseMatrix("nap", nBnd, 2, boundaryForces, true);
+        delete[] boundaryForces;
+
+        snprintf(cmd, 128, "f = F * nap; f = reshape(f', %i, 1);", (int) Kn);
+        solver->eval(cmd);
+        solver->eval("u = K \\ f;");
+
+        Real *displacements = new Real[Kn];
+        solver->getDenseMatrix("u", Kn, 1, displacements, true);
+        m_simulatedDisplacement.resizeDomain(m_nodeFixed.size());
+        for (size_t i = 0; i < m_nodeFixed.size(); ++i) {
+            if (m_nodeFixed[i]) {
+                m_simulatedDisplacement(i) = Vector::Zero();
+            }
+            else {
+                m_simulatedDisplacement(i) = Vector(displacements[2 * i],
+                                                    displacements[2 * i + 1]);
+            }
+        }
+        delete[] displacements;
+
+        return true;
+    }
+
     bool weaknessAnalysis() {
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
@@ -264,6 +340,9 @@ private:
     std::vector<BoundaryFunction> m_boundaryFunctions;
     /** Pressures for simulation */
     SField                        m_pressures;
+    /** Fixed nodes for simulation */
+    std::vector<bool>             m_nodeFixed;
+    VField                        m_simulatedDisplacement;
     Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
@@ -297,6 +376,7 @@ private:
         m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
         m_boundaryFunctions.clear();
         m_pressures.resizeDomain(m_boundaryPoints.size());
+        m_nodeFixed.assign(elementGrid().numNodes(), false);
     }
 
 };

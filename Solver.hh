@@ -123,11 +123,27 @@ class MatlabSolver : public Solver<Real> {
             return success;
         }
 
+        ////////////////////////////////////////////////////////////////////////
+        // Direct access to MATLAB
+        ////////////////////////////////////////////////////////////////////////
         void setSparseMatrix(const char *name, size_t m, size_t n,
-                             const IVec &i, const IVec &j, const VVec &v)
-        {
+                             const IVec &i, const IVec &j, const VVec &v) {
             m_matlab->SetEngineSparseRealMatrix(name, i.size(), &i[0], &j[0],
                                                 &v[0], m, n);
+        }
+
+        void getDenseMatrix(const char *name, size_t m, size_t n,
+                            Real *vals, bool colmaj) {
+            m_matlab->GetEngineRealMatrix(name, m, n, vals, colmaj);
+        }
+
+        void setDenseMatrix(const char *name, size_t m, size_t n,
+                            const Real *vals, bool colmaj) {
+            m_matlab->SetEngineRealMatrix(name, m, n, vals, colmaj);
+        }
+
+        void eval(const char *command) {
+            m_matlab->Eval(command);
         }
 
         // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.

@@ -49,7 +49,7 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
       m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_fem(fem), m_selectedBoundaryPoint(-1LL),
+      m_fem(fem), m_selectedBoundaryPoint(-1LL), m_pressurePaintValue(1.0),
       m_guiState(MODEL_STATE), m_gesture(NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
@@ -238,6 +238,7 @@ void FEMView2D::resizeGL(int width, int height)
     int wmargin = (width  -  m_width) / 2;
     glOrtho(-wmargin, width - wmargin, -hmargin, height - hmargin, -1, 1);
     m_screenTop = height - hmargin;
+    m_screenLeft = -wmargin;
     glMatrixMode(GL_MODELVIEW);
 }
 
@@ -607,6 +608,7 @@ void FEMView2D::draw()
     glColor3f(1, 1, 1);
     drawQuad(0, 0, m_width, m_height);
     
+    glEnable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -617,7 +619,7 @@ void FEMView2D::draw()
         m_drawObject();
         m_drawSelectedObjects();
     }
-    else if (m_guiState == DISPLACEMENTS_STATE) {
+    else if (m_guiState == MODE_STATE) {
         VField deformation;
         if (m_selectedDeformation < m_fem.numModes()) {
             deformation = m_fem.mode(m_selectedDeformation);
@@ -738,9 +740,31 @@ void FEMView2D::draw()
         drawObjectTextureCells();
         // drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
-        drawGrid(DRAW_NODES);
+        ElementGrid2D_t &grid = m_fem.elementGrid();
+
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        for (unsigned int i = 0; i < grid.numNodes(); ++i) {
+            if (m_fem.nodeIsFixed(i))
+                glColor3f(1.0f, 0.0f, 0.0f);
+            else
+                glColor3f(0.0f, 0.0f, 0.0f);
+
+            Vector p = grid.nodePosition(i);
+            m_drawWorldVertex(p);
+        }
+        glEnd();
 
         drawBoundary(true, QColor(255, 160, 0));
+    }
+    else if (m_guiState == SIM_RESULT_STATE) {
+        const VField &deformation = m_fem.simulationDisplacement();
+        drawObjectTextureCells(deformation);
+
+        if (m_viewSettings.showGridDuringDeformation) {
+            drawGrid(DRAW_EDGES, deformation);
+            drawGrid(DRAW_NODES, deformation);
+        }
     }
 
     float colorBarWidth = 300;
@@ -817,8 +841,9 @@ void FEMView2D::paintGL()
     draw();
 }
 
-#define PAINT_DIST_THRESHOLD 10.0
-void FEMView2D::paintPressure(const Vector &screenPt) {
+#define PAINT_DIST_THRESHOLD 30.0
+void FEMView2D::paintPressure(const Vector &screenPt, bool erase)
+{
     const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
     size_t closest = 0;
     Scalar closestDist = std::numeric_limits<Scalar>::max();
@@ -832,7 +857,27 @@ void FEMView2D::paintPressure(const Vector &screenPt) {
         }
     }
     if (closestDist < PAINT_DIST_THRESHOLD) {
-        m_fem.pressure(closest) = 1.0;
+        m_fem.pressure(closest) = erase ? 0.0 : m_pressurePaintValue;
+        update();
+    }
+}
+
+void FEMView2D::paintFixedNodes(const Vector &screenPt, bool subtract)
+{
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+    size_t closest = 0;
+    Scalar closestDist = std::numeric_limits<Scalar>::max();
+    for (unsigned int i = 0; i < grid.numNodes(); ++i) {
+        Vector screenNP;
+        getScreenCoords(grid.nodePosition(i), screenNP);
+        Scalar dist = (screenPt - screenNP).norm();
+        if (dist < closestDist) {
+            closest = i;
+            closestDist = dist;
+        }
+    }
+    if (closestDist < PAINT_DIST_THRESHOLD) {
+        m_fem.setNodeFixed(closest, !subtract);
         update();
     }
 }
@@ -850,7 +895,14 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
         m_gesture = DRAGGING;
     }
     else if (m_guiState == SIM_SETUP_STATE) {
-        paintPressure(qtToScreenCoords(event->pos()));
+        if (event->button() == Qt::LeftButton) {
+            bool erase = event->modifiers() & Qt::AltModifier;
+            paintPressure(qtToScreenCoords(event->pos()), erase);
+        }
+        else if (event->button() == Qt::RightButton) {
+            bool subtract = event->modifiers() & Qt::AltModifier;
+            paintFixedNodes(qtToScreenCoords(event->pos()), subtract);
+        }
     }
 }
 
@@ -869,7 +921,16 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         update();
     }
     else if (m_guiState == SIM_SETUP_STATE) {
-        paintPressure(qtToScreenCoords(event->pos()));
+        bool leftButton  = event->buttons() & Qt::LeftButton,
+             rightButton = event->buttons() & Qt::RightButton;
+        if (leftButton && !rightButton) {
+            bool erase = event->modifiers() & Qt::AltModifier;
+            paintPressure(qtToScreenCoords(event->pos()), erase);
+        }
+        else if (rightButton && !leftButton) {
+            bool subtract = event->modifiers() & Qt::AltModifier;
+            paintFixedNodes(qtToScreenCoords(event->pos()), subtract);
+        }
     }
     m_prevMouseLoc = event->pos();
 }

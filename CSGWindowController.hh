@@ -49,6 +49,7 @@ public slots:
 
     void configureSimulation();
     void runSimulation();
+    void pressurePaintValueChanged(double);
 
     void runWeaknessAnalysis();
     void dumpModalData();
