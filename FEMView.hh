@@ -203,7 +203,8 @@ private:
     void m_rerenderObject();
     void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
-    void m_drawWorldArrow(const Vector &p, const Vector &n);
+    void m_drawWorldArrow(const Vector &p, const Vector &n,
+                          Scalar length = 1.0);
     void m_drawWorldVertex(const Vector &v);
     void m_drawColorbar(float x, float y, float width, float height);
 

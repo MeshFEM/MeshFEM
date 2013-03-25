@@ -48,7 +48,9 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_configureSimulationButton = new QPushButton("Configure");
     g_runSimulationButton = new QPushButton("Run");
     g_pressurePaintValueStepper = new QDoubleSpinBox();
-    g_pressurePaintValueStepper->setValue(1.0);
+    g_pressurePaintValueStepper->setSingleStep(.01);
+    g_pressurePaintValueStepper->setMaximum(2.0);
+    g_pressurePaintValueStepper->setValue(0.1);
 
     g_numWeakRegionsStepper = new QSpinBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");

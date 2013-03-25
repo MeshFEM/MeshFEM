@@ -197,6 +197,10 @@ public:
         return m_simulatedDisplacement;
     }
 
+    const SField &simulationStressNorms() const {
+        return m_simulatedStressNorms;
+    }
+
     // Fixed/unfixed status of nodes
     bool nodeIsFixed(size_t i) const {
         assert(i < m_nodeFixed.size());
@@ -315,6 +319,9 @@ public:
         }
         delete[] displacements;
 
+        m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
+        m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
+
         return true;
     }
 
@@ -343,6 +350,8 @@ private:
     /** Fixed nodes for simulation */
     std::vector<bool>             m_nodeFixed;
     VField                        m_simulatedDisplacement;
+    SMField                       m_simulatedStressTensors;
+    SField                        m_simulatedStressNorms;
     Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   

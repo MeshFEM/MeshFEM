@@ -390,10 +390,11 @@ void FEMView2D::m_drawWorldBox(const BBox_t &b)
     drawQuad(minx, miny, maxx, maxy);
 }
 
-void FEMView2D::m_drawWorldArrow(const Vector &p, const Vector &n)
+void FEMView2D::m_drawWorldArrow(const Vector &p, const Vector &n,
+                                 Scalar length)
 {
-    // Draw unit vectors up to 15 pixels long
-    Scalar scale = 15 * getPixelSize();
+    // Draw unit vectors "length" pixels long
+    Scalar scale = length * getPixelSize();
     Vector tip = p + scale * n;
 
     glBegin(GL_LINES);
@@ -563,7 +564,7 @@ void FEMView2D::drawBoundary(bool pressureField,
             glColor3ub(selColor.red(), selColor.green(), selColor.blue());
         else
             glColor3ub(color.red(), color.green(), color.blue());
-        Scalar scale = pressureField ? m_fem.pressure(i) : 1.0;
+        Scalar scale = pressureField ? 200 * m_fem.pressure(i) : 15.0;
         m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n);
     }
 }
@@ -759,7 +760,16 @@ void FEMView2D::draw()
     }
     else if (m_guiState == SIM_RESULT_STATE) {
         const VField &deformation = m_fem.simulationDisplacement();
-        drawObjectTextureCells(deformation);
+        if (m_viewSettings.showStressesDuringDeformation) {
+            const SField &stressNorms = m_fem.simulationStressNorms();;
+            m_scalarColorMap.setAlpha(0.5f);
+            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
+            usedColormap = true;
+            drawObjectTextureCells(deformation, stressNorms);
+        }
+        else {
+            drawObjectTextureCells(deformation);
+        }
 
         if (m_viewSettings.showGridDuringDeformation) {
             drawGrid(DRAW_EDGES, deformation);

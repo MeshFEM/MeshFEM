@@ -42,8 +42,8 @@ void ellipseParameterPoints(Real s, Real a, Real b,
     Real k = sqrt(kSq);
     Real perimeter = 4 * a * comp_ellint_2(k);
     int N = ceil(perimeter / s);
-    Real partialArcLen = perimeter / N;
-    pointAreas = partialArcLen;
+    Real segmentArcLen = perimeter / N;
+    pointAreas = segmentArcLen;
 
     paramPoints.clear();
     paramPoints.reserve(N);
@@ -59,7 +59,7 @@ void ellipseParameterPoints(Real s, Real a, Real b,
     paramPoints.push_back(t);
 
     for (int i = 1; i < N; ++i) {
-        Real s_target = i * partialArcLen;
+        Real s_target = i * segmentArcLen;
 
         for (size_t j = 0; j < NUM_NEWTON_ITERATIONS; ++j) {
             Real s_t = a * ellint_2(k, t);

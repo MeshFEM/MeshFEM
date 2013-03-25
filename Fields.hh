@@ -189,7 +189,7 @@ public:
                                                domainSize);
     }
 
-    SymmetricMatrixField(size_t domainSize)
+    SymmetricMatrixField(size_t domainSize = 0)
         : m_values(dim(), domainSize) { }
     
     size_t dim() const { return ((t_N * (t_N + 1)) / 2); }

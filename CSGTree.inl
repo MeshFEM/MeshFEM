@@ -351,20 +351,27 @@ public:
         std::vector<_BoundaryPoint> bndPts;
         Real width = this->m_dim[0];
         Real height = this->m_dim[1];
-        Real perimeter = 2.0 * (this->m_dim[0] + this->m_dim[1]);
+        Real perimeter = 2.0 * (width + height);
         size_t N = ceil(perimeter / pointSpacing);
+        // Always at least choose the corners as boundary points.
+        size_t nCorners = 4;
+        N = std::max(N, nCorners);
 
-        int nCorners = std::min(N, (size_t) 4);
-        for (int i = 0; i < nCorners; ++i) {
+        Vector halfDim = .5 * this->m_dim;
+        // Corner numbering:
+        // 2 3
+        // 0 1
+        for (size_t i = 0; i < nCorners; ++i) {
             Vector p, n;
             for (int j = 0; j < 2; ++j) {
                 Real sign = ((i & (1 << j))) ? 1.0 : -1.0;
-                p[j] = sign * .5 * this->m_dim[j];
+                p[j] = sign * halfDim[j];
                 n[j] = sign;
             }
 
             n /= n.norm();
-            bndPts.push_back(_BoundaryPoint(p, n));
+            // Note: areas are assigned to the corners below
+            bndPts.push_back(_BoundaryPoint(p, n, 0.0));
         }
 
         N -= nCorners;
@@ -375,35 +382,54 @@ public:
         // Fit leftPoints + 1 segments on the left edge.
         int leftPoints = .5 * heightPoints;
         Vector p, n(-1, 0);
+        Real segmentLength = height / (leftPoints + 1);
+        p[0] = -.5 * width;
         for (int i = 0; i < leftPoints; ++i) {
-            p[0] = -.5 * this->m_dim[0];
-            p[1] = ((i + 1.0) / (leftPoints + 1) - .5) * this->m_dim[1];
-            bndPts.push_back(_BoundaryPoint(p, n));
+            p[1] = (i + 1) * segmentLength - halfDim[1];
+            bndPts.push_back(_BoundaryPoint(p, n, segmentLength));
         }
+        // Left segments contribute to the two left corner areas
+        bndPts[0].a += .5 * segmentLength;
+        bndPts[2].a += .5 * segmentLength;
 
+        // Fit rightPoints + 1 segments on the right edge
         int rightPoints = heightPoints - leftPoints;
         n = Vector(1, 0);
+        segmentLength = height / (rightPoints + 1);
+        p[0] = .5 * width;
         for (int i = 0; i < rightPoints; ++i) {
-            p[0] = .5 * this->m_dim[0];
-            p[1] = ((i + 1.0) / (rightPoints + 1) - .5) * this->m_dim[1];
-            bndPts.push_back(_BoundaryPoint(p, n));
+            p[1] = (i + 1) * segmentLength - halfDim[1];
+            bndPts.push_back(_BoundaryPoint(p, n, segmentLength));
         }
+        // Right segments contribute to the two right corner areas
+        bndPts[1].a += .5 * segmentLength;
+        bndPts[3].a += .5 * segmentLength;
 
+        // Fit topPoints + 1 segments on the top edge
         int topPoints = .5 * widthPoints;
         n = Vector(0, 1);
+        segmentLength = width / (topPoints + 1);
+        p[1] = .5 * height;
         for (int i = 0; i < topPoints; ++i) {
-            p[0] = ((i + 1.0) / (topPoints + 1) - .5) * this->m_dim[0];
-            p[1] = .5 * this->m_dim[1];
-            bndPts.push_back(_BoundaryPoint(p, n));
+            p[0] = (i + 1) * segmentLength - halfDim[0];
+            bndPts.push_back(_BoundaryPoint(p, n, segmentLength));
         }
+        // Top segments contribute to the two top corner areas
+        bndPts[2].a += .5 * segmentLength;
+        bndPts[3].a += .5 * segmentLength;
 
+        // Fit bottomPoints + 1 segments on the bottom edge
         n = Vector(0, -1);
         int bottomPoints = widthPoints - topPoints;
+        segmentLength = width / (bottomPoints + 1);
+        p[1] = -.5 * height;
         for (int i = 0; i < bottomPoints; ++i) {
-            p[0] = ((i + 1.0) / (bottomPoints + 1) - .5) * this->m_dim[0];
-            p[1] = -.5 * this->m_dim[1];
-            bndPts.push_back(_BoundaryPoint(p, n));
+            p[0] = (i + 1) * segmentLength - halfDim[0];
+            bndPts.push_back(_BoundaryPoint(p, n, segmentLength));
         }
+        // Bottom segments contribute to the two bottom corner areas
+        bndPts[0].a += .5 * segmentLength;
+        bndPts[1].a += .5 * segmentLength;
         
         // Transorm all boundary points
         Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
@@ -413,6 +439,11 @@ public:
             bp.n = rot * bp.n;
         }
 
+        // Verify the point areas sum to the perimeter
+        Real areaSum = 0.0;
+        for (size_t i = 0; i < bndPts.size(); ++i)
+            areaSum += bndPts[i].a;
+        assert(std::abs(areaSum - perimeter) < 1e-7);
 
         return bndPts;
     }
