@@ -346,6 +346,12 @@ public:
         return (l.cwiseAbs().array() <= (.5 * this->m_dim).array()).all();
     }
 
+    Real signedDistance(const Vector &p) const {
+        Vector l = this->toLocalCoords(p);
+        Real d = p - .5 * this->m_dim;
+        return 0.0f;
+    }
+
     // Corners are always chosen as boundary points.
     std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
         std::vector<_BoundaryPoint> bndPts;
