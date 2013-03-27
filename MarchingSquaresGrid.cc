@@ -110,7 +110,7 @@ m_extractPolygon(const Model &model, size_t ci,
         Vector newPoint;
         Direction dir = movement[cellCase];
 
-        Scalar a, b, s;
+        Scalar a, b, s = 0.5;
         Grid2D::AdjacencyVec corners;
         cellVertices(ci, corners);
 
@@ -164,12 +164,18 @@ m_extractPolygon(const Model &model, size_t ci,
 
 template<typename Model>
 void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
-                                                  vector<Polygon_t> &p)
+                                  vector<Polygon_t> &p,
+                                  typename Model::Real mergeThreshold)
 {
+    typedef typename Model::Real Real;
+
     m_bbox = model.boundingBox();
     // Expand the bounding box to account for the fact that a border has been
-    // added.
-    m_bbox.expand(Vector(m_Nx / (m_Nx - 2.0), m_Ny / (m_Ny - 2.0)));
+    // added. Also expand outward slightly more to avoid instabilities/issues
+    // when the bounding box is tight.
+    Scalar eps = 0.0; // 1e-2;
+    m_bbox.expand(Vector((2.0 + eps) / (m_Nx - 2.0),
+                         (2.0 + eps) / (m_Ny - 2.0)));
     
     vector<bool> vertexInside(numVertices(), false);
     for (size_t v = 0; v < numVertices(); ++v) {
@@ -213,6 +219,38 @@ void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
                 continue;
             }
             boundary = m_extractPolygon(model, ci, cellCornerCase, visitCount);
+
+            // Merge pairs of points that are within the merging threshold of
+            // each other. The following code assumes mergeThreshold < 1.0, so
+            // no more than two adjacent points will be close enough for
+            // merging.
+            Real mthresh = mergeThreshold * cellSize().minCoeff();
+            std::vector<Vector> &pts = boundary.points;
+            size_t numMergedPoints = 0;
+            // Handle all points except the last
+            for (size_t i = 0; i < pts.size() - 1; ++i) {
+                Vector p = pts[i];
+                Vector pNext = pts[i + 1];
+                if ((pNext - p).norm() < mthresh) {
+                    // Merged point becomes the average
+                    p += pNext;
+                    p *= .5;
+                    ++i; // Skip the point we merged with
+                }
+
+                pts[++numMergedPoints] = p;
+            }
+            // Handle the last point
+            if ((pts.back() - pts[0]).norm() < mthresh) {
+                // Merging with the first point repositions it
+                pts[0] += pts.back();
+                pts[0] *= .5;
+            }
+            else {
+                pts[++numMergedPoints] = pts.back();
+            }
+
+            pts.resize(numMergedPoints);
             p.push_back(boundary);
         }
     }
@@ -223,4 +261,5 @@ void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
 ////////////////////////////////////////////////////////////////////////////////
 template void MarchingSquaresGrid::
 extractBoundaryPolygons<CSGTree_t>(const CSGTree_t &model,
-                                   vector<Polygon_t> &p);
+                                   vector<Polygon_t> &p,
+                                   typename CSGTree_t::Real mergeThreshold);

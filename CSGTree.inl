@@ -370,7 +370,9 @@ public:
     Real signedDistance(const Vector &p) const {
         Vector d = this->toLocalCoords(p).cwiseAbs() - .5 * this->m_dim;
         bool inside = (d.array() < Vector::Zero().array()).all();
-        return (inside ? -1.0 : 1.0) * d.cwiseMax(Vector::Zero()).norm();
+        if (!inside)
+            return d.cwiseMax(Vector::Zero()).norm();
+        return d.maxCoeff(); // Interior distance is to closest edge
     }
 
     // Corners are always chosen as boundary points.

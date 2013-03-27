@@ -20,7 +20,7 @@
 #include <vector>
 #include "Grid.hh"
 
-class MarchingSquaresGrid : protected Grid2D {
+class MarchingSquaresGrid : public Grid2D {
 public:
     MarchingSquaresGrid(size_t Nx, size_t Ny)
         : Grid2D(Nx + 2, Ny + 2, BBox_t()) { }
@@ -31,7 +31,8 @@ public:
     }
 
     template<typename Model>
-    void extractBoundaryPolygons(const Model &model, std::vector<Polygon_t> &p);
+    void extractBoundaryPolygons(const Model &model, std::vector<Polygon_t> &p,
+                                 typename Model::Real mergeThreshold = .01);
 
 private:
     template<typename Model>
