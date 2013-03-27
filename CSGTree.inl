@@ -44,6 +44,7 @@ public:
 
     virtual CSGNodeType nodeType() const = 0;
     virtual bool isInside(const Vector &p) const = 0;
+    virtual Real signedDistance(const Vector &p) const = 0;
     virtual ~CSGNode() { }
 
 protected:
@@ -63,6 +64,9 @@ public:
         : m_left(left), m_right(right) { }
     bool isInside(const Vector &p) const {
         return m_left->isInside(p) || m_right->isInside(p);
+    }
+    Real signedDistance(const Vector &p) const {
+        return std::min(m_left->signedDistance(p), m_right->signedDistance(p));
     }
     int indexOfChild(const CSGNode *c) const {
         if (c == m_left)  return 0;
@@ -101,7 +105,6 @@ public:
         setRotation(rot);
     }
 
-    virtual bool isInside(const Vector &p) const = 0;
     virtual ~CSGPrimitive() { }
 
     const Vector &getCenter() const {
@@ -196,7 +199,7 @@ public:
     }
 
     bool isInside(const Vector &p) const {
-        switch(m_op) {
+        switch (m_op) {
             case INTERSECT:
                 return m_left->isInside(p) && m_right->isInside(p);
             case UNION:
@@ -207,6 +210,24 @@ public:
                 assert(false);
         }
         return false;
+    }
+
+    Real signedDistance(const Vector &p) const {
+        switch (m_op) {
+            case INTERSECT:
+                return std::max(m_left->signedDistance(p),
+                                m_right->signedDistance(p));
+            case UNION:
+                return std::min(m_left->signedDistance(p),
+                                m_right->signedDistance(p));
+            case SUBTRACT:
+                // Intersect left with complement of right
+                return std::max(m_left->signedDistance(p),
+                                -m_right->signedDistance(p));
+            default:
+                assert(false);
+        }
+        return 0.0;
     }
 
     std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
@@ -347,9 +368,9 @@ public:
     }
 
     Real signedDistance(const Vector &p) const {
-        Vector l = this->toLocalCoords(p);
-        Real d = p - .5 * this->m_dim;
-        return 0.0f;
+        Vector d = this->toLocalCoords(p).cwiseAbs() - .5 * this->m_dim;
+        bool inside = (d.array() < Vector::Zero().array()).all();
+        return (inside ? -1.0 : 1.0) * d.cwiseMax(Vector::Zero()).norm();
     }
 
     // Corners are always chosen as boundary points.
@@ -505,6 +526,13 @@ public:
         Vector l = this->toLocalCoords(p);
         Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
         return ((l - f).norm() + (l + f).norm()) <= 2 * m_a;
+    }
+
+    Real signedDistance(const Vector &p) const {
+        // This is an approximation!
+        Vector l = this->toLocalCoords(p);
+        Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
+        return ((l - f).norm() + (l + f).norm()) - 2 * m_a;
     }
 
     // Boundary points are evely spread around ellipse (by arc length)

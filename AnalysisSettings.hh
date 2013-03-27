@@ -17,7 +17,7 @@
 struct AnalysisSettings {
     AnalysisSettings()
         : Nx(10), Ny(10), quadrature(UNIFORM_QUADRATURE), quadraturePoints(9),
-          cellOverlapThreshold(0.0), boundarySpacing(.02),
+          cellOverlapThreshold(0.0), useMSBoundary(false), boundarySpacing(.02),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95),
@@ -28,6 +28,7 @@ struct AnalysisSettings {
     QuadratureMethod quadrature;
     size_t quadraturePoints;
     double cellOverlapThreshold;
+    bool   useMSBoundary;
     double boundarySpacing;
 
     MassMatrixType massMatrixType;

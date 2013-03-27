@@ -41,6 +41,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_dumpModalDataButton->setEnabled(false);
     g_modeSelector = new QComboBox();
 
+    g_useMarchingSquaresCheck = new QCheckBox();
     g_boundaryPointStepper = new QDoubleSpinBox();
     g_boundaryPointStepper->setMinimum(0.01);
     g_boundaryPointStepper->setMaximum(1.0);
@@ -99,6 +100,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Simulation
     QFormLayout *simForm = new QFormLayout();
+    simForm->addRow("Marching Squares Boundary", g_useMarchingSquaresCheck);
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     QHBoxLayout *simButtonLayout = new QHBoxLayout();
     simButtonLayout->addWidget(g_configureSimulationButton);
@@ -147,8 +149,11 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
                      controller, SLOT(modeSelectionChanged(int)));
 
+    QObject::connect(g_useMarchingSquaresCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(boundaryPointControlsChanged(int)));
     QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(boundaryPointControlsChanged(double)));
+
     QObject::connect(g_configureSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(configureSimulation()));
     QObject::connect(g_runSimulationButton, SIGNAL(clicked()),
@@ -188,6 +193,7 @@ void AnalysisForm::m_setGUIFromSettings() {
 
     g_numModesStepper->setValue(m_settings.numModes);   
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
+    g_useMarchingSquaresCheck->setChecked(m_settings.useMSBoundary);
     g_boundaryPointStepper->setValue(m_settings.boundarySpacing);
 
     // Note: assumes MassMatrixType enum index matches combo box index
@@ -208,7 +214,6 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.numModes = g_numModesStepper->value();
     m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
-    m_settings.boundarySpacing = g_boundaryPointStepper->value();
 
     // Note: assumes MassMatrixType enum index matches combo box index
     m_settings.massMatrixType =
@@ -216,6 +221,9 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.young_modulus = g_youngModulusStepper->value();
     m_settings.poisson_ratio = g_poissonRatioStepper->value();
     m_settings.density       = g_densityStepper->value();
+
+    m_settings.useMSBoundary   = g_useMarchingSquaresCheck->isChecked();
+    m_settings.boundarySpacing = g_boundaryPointStepper->value();
 }
 
 void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
@@ -249,6 +257,11 @@ void AnalysisForm::elementGridControlsChanged(double) {
 }
 
 void AnalysisForm::boundaryPointControlsChanged(double) {
+    m_readSettingsFromGUI();
+    emit bpSettingsChanged(m_settings);
+}
+
+void AnalysisForm::boundaryPointControlsChanged(int) {
     m_readSettingsFromGUI();
     emit bpSettingsChanged(m_settings);
 }

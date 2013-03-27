@@ -36,6 +36,7 @@ private slots:
     void elementGridControlsChanged(int);
     void elementGridControlsChanged(double);
     void boundaryPointControlsChanged(double);
+    void boundaryPointControlsChanged(int);
     void modalAnalysisControlsChanged(int);
     void matrixControlsChanged(int);
     void materialControlsChanged(double);
@@ -68,6 +69,7 @@ private:
     QComboBox *g_modeSelector;
 
     // Simulation settings
+    QCheckBox *g_useMarchingSquaresCheck;
     QDoubleSpinBox *g_boundaryPointStepper;
     QPushButton *g_configureSimulationButton;
     QPushButton *g_runSimulationButton;

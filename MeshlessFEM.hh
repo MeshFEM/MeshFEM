@@ -21,6 +21,7 @@
 #include "Fields.hh"
 #include "Geometry.hh"
 #include "SPHKernels.hh"
+#include "MarchingSquaresGrid.hh"
 #include <cassert>
 #include <vector>
 #include <algorithm>
@@ -100,6 +101,7 @@ public:
     }
 
     void configureBoundaryPoints(const AnalysisSettings &settings) {
+        m_useMarchingSquaresBoundary = settings.useMSBoundary;
         m_boundaryPointSpacing = settings.boundarySpacing;
         m_invalidateCache();
     }
@@ -352,6 +354,7 @@ private:
     VField                        m_simulatedDisplacement;
     SMField                       m_simulatedStressTensors;
     SField                        m_simulatedStressNorms;
+    bool m_useMarchingSquaresBoundary;
     Real m_boundaryPointSpacing;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
@@ -382,7 +385,35 @@ private:
         m_displacementStrainCached = false;
         m_elementData.clear();
 
-        m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
+        if (m_useMarchingSquaresBoundary) {
+            m_boundaryPoints.clear();
+
+            std::vector<Polygon_t> polygons;
+            MarchingSquaresGrid ms(elementGrid().cols(), elementGrid().rows());
+            ms.extractBoundaryPolygons(m_model, polygons);
+            for (size_t p = 0; p < polygons.size(); ++p) {
+                const std::vector<Vector> &points = polygons[p].points;
+                m_boundaryPoints.reserve(m_boundaryPoints.size() +
+                                         points.size());
+                Vector prevSegment = points[0] - points.back();
+                for (size_t i = 0; i < points.size(); ++i) {
+                    Vector nextSegment =
+                            points[(i + 1) % points.size()] - points[i];
+                    Real a = .5 * (prevSegment.norm() + nextSegment.norm());
+                    // Normals: rotate tangent clockwise 90 degrees
+                    // (y = -x, x = y)
+                    Vector n = .5 * (Vector(prevSegment[1], -prevSegment[0]) +
+                                     Vector(nextSegment[1], -nextSegment[0]));
+                    n /= n.norm();
+                    m_boundaryPoints.push_back(_BoundaryPoint(points[i], n, a));
+
+                    prevSegment = nextSegment;
+                }
+            }
+        }
+        else {
+            m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
+        }
         m_boundaryFunctions.clear();
         m_pressures.resizeDomain(m_boundaryPoints.size());
         m_nodeFixed.assign(elementGrid().numNodes(), false);

@@ -109,22 +109,44 @@ m_extractPolygon(const Model &model, size_t ci,
         get2DCellIndex(ci, row, col);
         Vector newPoint;
         Direction dir = movement[cellCase];
+
+        Scalar a, b, s;
+        Grid2D::AdjacencyVec corners;
+        cellVertices(ci, corners);
+
+        // Assumes corner numbering:
+        //      3--2
+        //      |  |
+        //      0--1
         switch(dir) {
             case MS_LEFT:
                 --col;
-                newPoint = Vector(0, .5);
+                a = model.signedDistance(vertexPosition(corners[0]));
+                b = model.signedDistance(vertexPosition(corners[3]));
+                s = a / (a - b); // Approximate zero crossing
+                assert(s <= 1.0 && s >= 0.0);
+                newPoint = Vector(0, s);
                 break;
             case MS_DOWN:
                 --row;
-                newPoint = Vector(.5, 0);
+                a = model.signedDistance(vertexPosition(corners[0]));
+                b = model.signedDistance(vertexPosition(corners[1]));
+                s = a / (a - b); // Approximate zero crossing
+                newPoint = Vector(s, 0);
                 break;
             case MS_RIGHT:
                 ++col;
-                newPoint = Vector(1.0, .5);
+                a = model.signedDistance(vertexPosition(corners[1]));
+                b = model.signedDistance(vertexPosition(corners[2]));
+                s = a / (a - b); // Approximate zero crossing
+                newPoint = Vector(1.0, s);
                 break;
             case MS_UP:
                 ++row;
-                newPoint = Vector(.5, 1.0);
+                a = model.signedDistance(vertexPosition(corners[3]));
+                b = model.signedDistance(vertexPosition(corners[2]));
+                s = a / (a - b); // Approximate zero crossing
+                newPoint = Vector(s, 1.0);
                 break;
             default:
                 // We better be making a valid movement!
@@ -132,6 +154,7 @@ m_extractPolygon(const Model &model, size_t ci,
         }
 
         border.addPoint(cellBoundingBox(ci).interpolatePoint(newPoint));
+        // Move to the next cell
         ci = get1DCellIndex(row, col);
         prevDir = dir;
     }

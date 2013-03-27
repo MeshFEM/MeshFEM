@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <vector>
 #include <cassert>
+#include <limits>
 #include "Geometry.hh"
 
 typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
@@ -38,11 +39,21 @@ public:
     CSGTree() { }
 
     bool isInside(const Vector &p) const {
+        // Implied union of all roots
         for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
             if ((*it)->isInside(p))
                 return true;
         }
         return false;
+    }
+
+    Real signedDistance(const Vector &p) const {
+        // Implied union of all roots
+        Real distance = std::numeric_limits<Real>::max();
+        for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
+            distance = std::min(distance, (*it)->signedDistance(p));
+        }
+        return distance;
     }
 
     // Get a node's position in its parent's list of children

@@ -26,6 +26,14 @@ public:
         m_bbox = bbox;
     }
 
+    size_t cols() const {
+        return m_Nx;
+    }
+
+    size_t rows() const {
+        return m_Ny;
+    }
+
     void setGridSize(size_t Nx, size_t Ny) {
         m_Nx = Nx;
         m_Ny = Ny;

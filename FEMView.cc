@@ -56,7 +56,7 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
 {
     if (m_font.Error())
-        throw std::runtime_error("Failed ot load font!");
+        throw std::runtime_error("Failed to load font!");
     m_font.FaceSize(12);
     setFormat(QGLFormat(QGL::DoubleBuffer | QGL::DepthBuffer));
     setFocusPolicy(Qt::StrongFocus);
