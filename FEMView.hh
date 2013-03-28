@@ -116,6 +116,11 @@ protected:
         size_t numBPs = m_fem.boundaryPoints().size();
         if (m_selectedBoundaryPoint >= numBPs)
             m_selectedBoundaryPoint = -1LL;
+        else {
+            std::cout << "Boundary point " << m_selectedBoundaryPoint << ": "
+                      << m_fem.boundaryPoints()[m_selectedBoundaryPoint].info()
+                      << std::endl;
+        }
 
         update();
     }

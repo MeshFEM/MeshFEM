@@ -162,6 +162,75 @@ m_extractPolygon(const Model &model, size_t ci,
     return border;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Merge sequences of pontis that are within the merging threshold of each
+//  other. This is a conservative merge--we are realing merging sequences of
+//  points such that all are within a ball of radius (merging threshold) / 2 of
+//  their average. We'll miss some with this greedy approach, but hey, we tried.
+//  @param[in]    mergeThreshold    merge distance threshold
+//                                  (relative to cell size)
+//  @param[inout] boundary          boundary polygon to merge
+*///////////////////////////////////////////////////////////////////////////////
+void MarchingSquaresGrid::m_mergePolygon(Scalar mergeThreshold,
+                                         Polygon_t &boundary) const
+{
+    // Merge pairs of points that are within the merging threshold of
+    // each other.
+    Scalar mthresh = mergeThreshold * cellSize().minCoeff();
+
+    const std::vector<Vector> &pts = boundary.points;
+    std::vector<Vector> mergedBoundary;
+
+    // Avoid merging backward by choosing the starting point with greatest
+    // possible distance from its previous
+    size_t start = 0;
+    Scalar maxDistance = 0.0;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        size_t prevI = (i == 0) ? pts.size() - 1 : i - 1;
+        Scalar dist = (pts[i] - pts[prevI]).norm();
+        if (dist > maxDistance) {
+            maxDistance = dist;
+            start = i;
+        }
+    }
+
+    std::vector<bool> processed(pts.size(), false);
+    for (size_t offset = 0; offset < pts.size(); ++offset) {
+        size_t i = (start + offset) % pts.size();
+        if (processed[i])
+            continue;
+
+        Vector p = pts[i];
+        processed[i] = true;
+
+        size_t nextI = i;
+        size_t seqLen = 1;
+        bool expanded;
+        do {
+            expanded = false;
+            nextI = (nextI + 1) % pts.size();
+            if (!processed[nextI]) {
+                Vector avg = (p + pts[nextI]) / (seqLen + 1);
+                bool mergeable = true;
+                for (size_t j = 0; j < seqLen + 1; ++j) {
+                    Vector dist = pts[(i + j) % pts.size()] - avg;
+                    mergeable = mergeable && (dist.norm() < .5 * mthresh);
+                }
+                if (mergeable) {
+                    expanded = true;
+                    processed[nextI] = true;
+                    p += pts[nextI];
+                    ++seqLen;
+                }
+            }
+        } while (expanded);
+
+        mergedBoundary.push_back(p / seqLen);
+    }
+
+    boundary.points = mergedBoundary;
+}
+
 template<typename Model>
 void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
                                   vector<Polygon_t> &p,
@@ -219,38 +288,7 @@ void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
                 continue;
             }
             boundary = m_extractPolygon(model, ci, cellCornerCase, visitCount);
-
-            // Merge pairs of points that are within the merging threshold of
-            // each other. The following code assumes mergeThreshold < 1.0, so
-            // no more than two adjacent points will be close enough for
-            // merging.
-            Real mthresh = mergeThreshold * cellSize().minCoeff();
-            std::vector<Vector> &pts = boundary.points;
-            size_t numMergedPoints = 0;
-            // Handle all points except the last
-            for (size_t i = 0; i < pts.size() - 1; ++i) {
-                Vector p = pts[i];
-                Vector pNext = pts[i + 1];
-                if ((pNext - p).norm() < mthresh) {
-                    // Merged point becomes the average
-                    p += pNext;
-                    p *= .5;
-                    ++i; // Skip the point we merged with
-                }
-
-                pts[++numMergedPoints] = p;
-            }
-            // Handle the last point
-            if ((pts.back() - pts[0]).norm() < mthresh) {
-                // Merging with the first point repositions it
-                pts[0] += pts.back();
-                pts[0] *= .5;
-            }
-            else {
-                pts[++numMergedPoints] = pts.back();
-            }
-
-            pts.resize(numMergedPoints);
+            m_mergePolygon(mergeThreshold, boundary);
             p.push_back(boundary);
         }
     }

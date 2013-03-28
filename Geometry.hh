@@ -13,6 +13,8 @@
 
 #include <vector>
 #include <iostream>
+#include <string>
+#include <sstream>
 
 template<typename Vector>
 struct BBox {
@@ -130,6 +132,13 @@ struct BoundaryPoint {
 
     BoundaryPoint(Vector pt, Vector normal, Real area = 0)
         : p(pt), n(normal), a(area) { }
+
+    std::string info() const {
+        std::stringstream ss;
+        ss << "[" << p[0] << ", " << p[1] << "], <"
+           << n[0] << ", " << n[1] << ">, " << a;
+        return ss.str();
+    }
 
     Vector p, n;
     // Area of point.

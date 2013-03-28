@@ -30,9 +30,11 @@ public:
         m_Ny = Ny + 2;
     }
 
+    void m_mergePolygon(Scalar mergeThreshold, Polygon_t &boundary) const;
+
     template<typename Model>
     void extractBoundaryPolygons(const Model &model, std::vector<Polygon_t> &p,
-                                 typename Model::Real mergeThreshold = .01);
+                                 typename Model::Real mergeThreshold = .10);
 
 private:
     template<typename Model>
