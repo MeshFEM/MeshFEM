@@ -1,0 +1,48 @@
+////////////////////////////////////////////////////////////////////////////////
+// ViewSettingsWidget.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//        GUI for changing the view settings.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  03/01/2013 14:16:15
+////////////////////////////////////////////////////////////////////////////////
+#ifndef VIEW_SETTINGS_WIDGET_HH
+#define VIEW_SETTINGS_WIDGET_HH
+#include <QWidget>
+
+class QComboBox;
+class QCheckBox;
+class QDoubleSpinBox;
+struct ViewSettings;
+
+class ViewSettingsWidget : public QWidget
+{
+    Q_OBJECT
+
+private slots:
+    void m_guiIntChanged(int);
+    void m_guiDoubleChanged(double);
+
+signals:
+    void viewSettingsUpdated();
+
+public:
+    ViewSettingsWidget(ViewSettings &settings, QWidget *parent = NULL);
+
+private:
+    ViewSettings &m_viewSettings;
+
+    QCheckBox *g_showGridDuringDeformationCheck,
+              *g_showStressesDuringDeformationCheck,
+              *g_showColorbar;
+    QComboBox *g_colormapSelector;
+    QDoubleSpinBox *g_colormapMinStepper, *g_colormapMaxStepper;
+    QCheckBox *g_colormapAutoRangeCheck;
+
+    void m_setGUIFromSettings();
+    void m_readSettingsFromGUI();
+};
+
+#endif // VIEW_SETTINGS_WIDGET_HH

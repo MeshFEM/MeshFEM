@@ -1,0 +1,40 @@
+{
+    "name": "Intersect",
+    "type": "intersect",
+    "left": {
+        "name": "Subtract",
+        "type": "subtract",
+        "left": {
+            "name": "Union",
+            "type": "union",
+            "left": {
+                "name": "Rectangle",
+                "type": "rectangle",
+                "center": [0, 0],
+                "dimensions": [0.5, 0.5],
+                "rotation": 0
+            },
+            "right": {
+                "name": "Rectangle",
+                "type": "rectangle",
+                "center": [0, 0],
+                "dimensions": [3.8, 0.25],
+                "rotation": 30
+            }
+        },
+        "right": {
+            "name": "Ellipse",
+            "type": "ellipse",
+            "center": [0, 0.5],
+            "dimensions": [0.5, 0.7],
+            "rotation": 0
+        }
+    },
+    "right": {
+        "name": "Ellipse",
+        "type": "ellipse",
+        "center": [0, 0],
+        "dimensions": [1.5, 1.5],
+        "rotation": 0
+    }
+}
