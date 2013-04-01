@@ -15,6 +15,8 @@
 #include <list>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
+#include <limits>
 #include <QMessageBox>
 
 using namespace std;
@@ -93,8 +95,8 @@ void CSGWindowController::csgTreeSelectionChanged(
 void CSGWindowController::saveBoundaryPolygon()
 {
     // Output resolution... this should probably be configurable
-    size_t Nx = 400, Ny = 400;
-    MarchingSquaresGrid ms(Nx, Ny);
+    MarchingSquaresGrid ms(m_fem.elementGrid().cols(),
+                           m_fem.elementGrid().rows());
     vector<Polygon_t> polygons;
     assert(m_csgTree != NULL);
     ms.extractBoundaryPolygons(*m_csgTree, polygons);
@@ -240,6 +242,63 @@ void CSGWindowController::runModalAnalysis()
 void CSGWindowController::configureSimulation()
 {
     m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
+}
+
+void CSGWindowController::loadPressure()
+{
+    QString fileName = QFileDialog::getOpenFileName(0, "Open boundary pressures (.bp)",
+            QString(), "Text files (*.bp)");
+    if (fileName.length() > 0) {
+        try {
+            std::ifstream bpFile(fileName.toStdString().c_str());
+            if (!bpFile.is_open()) {
+                throw std::runtime_error(std::string("Couldn't open file: ") +
+                                         fileName.toStdString());
+            }
+            size_t boundarySize;
+            bpFile >> boundarySize;
+
+            if (boundarySize != m_fem.numBoundaryPoints())
+                throw std::runtime_error(std::string("Boundary count mismatch"));
+
+            const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
+                    m_fem.boundaryPoints();
+            std::vector<bool> mapped(boundarySize, false);
+
+            for (size_t i = 0; i < boundarySize; ++i) {
+                Vector p;
+                Scalar pressure;
+                bpFile >> p[0] >> p[1] >> pressure;
+                size_t closest = 0;
+                Scalar closestDist = std::numeric_limits<Scalar>::max();
+                for (size_t j = 0; j < bpts.size(); ++j) {
+                    Scalar dist = (bpts[j].p - p).norm();
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closest = j;
+                    }
+                }
+                if (mapped[closest])
+
+                    throw std::runtime_error(std::string("Mapping not bijective"));
+                mapped[closest] = true;
+                // Note: Python StructAys uses negative pressures.
+                m_fem.pressure(closest) = -pressure;
+            }
+            if (!bpFile)
+                throw std::runtime_error(std::string("Error reading file"));
+
+            m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
 }
 
 void CSGWindowController::runSimulation()

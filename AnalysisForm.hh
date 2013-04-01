@@ -72,6 +72,7 @@ private:
     QCheckBox *g_useMarchingSquaresCheck;
     QDoubleSpinBox *g_boundaryPointStepper;
     QPushButton *g_configureSimulationButton;
+    QPushButton *g_loadPressureButton;
     QPushButton *g_runSimulationButton;
     QDoubleSpinBox *g_pressurePaintValueStepper;
 

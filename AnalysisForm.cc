@@ -47,6 +47,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_boundaryPointStepper->setMaximum(1.0);
     g_boundaryPointStepper->setSingleStep(.01);
     g_configureSimulationButton = new QPushButton("Configure");
+    g_loadPressureButton = new QPushButton("Load p");
     g_runSimulationButton = new QPushButton("Run");
     g_pressurePaintValueStepper = new QDoubleSpinBox();
     g_pressurePaintValueStepper->setSingleStep(.01);
@@ -104,6 +105,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     QHBoxLayout *simButtonLayout = new QHBoxLayout();
     simButtonLayout->addWidget(g_configureSimulationButton);
+    simButtonLayout->addWidget(g_loadPressureButton);
     simButtonLayout->addWidget(g_runSimulationButton);
     simForm->addRow(simButtonLayout);
     simForm->addRow("PressurePaint Value", g_pressurePaintValueStepper);
@@ -156,6 +158,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_configureSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(configureSimulation()));
+    QObject::connect(g_loadPressureButton, SIGNAL(clicked()),
+                     controller, SLOT(loadPressure()));
     QObject::connect(g_runSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(runSimulation()));
     QObject::connect(g_pressurePaintValueStepper, SIGNAL(valueChanged(double)),

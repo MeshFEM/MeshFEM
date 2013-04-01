@@ -48,6 +48,7 @@ public slots:
     void runModalAnalysis();
 
     void configureSimulation();
+    void loadPressure();
     void runSimulation();
     void pressurePaintValueChanged(double);
 

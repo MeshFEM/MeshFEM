@@ -163,7 +163,7 @@ m_extractPolygon(const Model &model, size_t ci,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/*! Merge sequences of pontis that are within the merging threshold of each
+/*! Merge sequences of points that are within the merging threshold of each
 //  other. This is a conservative merge--we are realing merging sequences of
 //  points such that all are within a ball of radius (merging threshold) / 2 of
 //  their average. We'll miss some with this greedy approach, but hey, we tried.
