@@ -402,8 +402,8 @@ private:
                     Real a = .5 * (prevSegment.norm() + nextSegment.norm());
                     // Normals: rotate tangent clockwise 90 degrees
                     // (y = -x, x = y)
-                    Vector n = .5 * (Vector(prevSegment[1], -prevSegment[0]) +
-                                     Vector(nextSegment[1], -nextSegment[0]));
+                    Vector n = Vector(prevSegment[1], -prevSegment[0]) +
+                               Vector(nextSegment[1], -nextSegment[0]);
                     n /= n.norm();
                     m_boundaryPoints.push_back(_BoundaryPoint(points[i], n, a));
 
