@@ -266,15 +266,17 @@ public:
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
 
-        size_t Fm, Fn, Kn, Rm, Rn;
-        IndexVec Fi, Fj, Ki, Kj, Ri, Rj;
-        ValueVec Fv, Kv, Rv;
+        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn;
+        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj;
+        ValueVec Fv, Kv, Rv, NAv;
         m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
         m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
         m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
+        m_assembleNAMatrix(NAm, NAn, NAi, NAj, NAv);
         solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
         solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
         solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
+        solver->setSparseMatrix("NA", NAm, NAn, NAi, NAj, NAv);
 
         // All the fixed nodes' displacements are set to 0.
         // This means zeroing the entire stiffness matrix row/column and placing
@@ -282,7 +284,6 @@ public:
         // is then ignored.
         size_t numNodes = elementGrid().numNodes();
         assert(m_nodeFixed.size() == numNodes);
-        char cmd[128];
         // Old way of removing rigid DoFs (fixing vertices)
         // for (size_t i = 0; i < m_nodeFixed.size(); ++i) {
         //     if (m_nodeFixed[i]) {
@@ -299,20 +300,15 @@ public:
         solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
 
         size_t nBnd = numBoundaryPoints();
-        // Column major: x components go in 0..nBnd - 1
-        //               y components go in nBnd..2 * nBnd - 1
-        Real *boundaryForces = new Real[2 * nBnd];
+        // Flattened boundary force vector: x1, y1, x2, y2, ...
+        Real *boundaryPressures = new Real[nBnd];
         for (size_t i = 0; i < nBnd; ++i) {
-            Vector f = -m_boundaryPoints[i].n *
-                       (pressure(i) * m_boundaryPoints[i].a);
-            boundaryForces[i       ] = f[0];
-            boundaryForces[i + nBnd] = f[1];
+            boundaryPressures[i] = pressure(i);
         }
-        solver->setDenseMatrix("nap", nBnd, 2, boundaryForces, true);
-        delete[] boundaryForces;
+        solver->setDenseMatrix("p", nBnd, 1, boundaryPressures, true);
+        delete[] boundaryPressures;
 
-        snprintf(cmd, 128, "f = F * nap; f = reshape(f', %i, 1);", (int) Kn);
-        solver->eval(cmd);
+        solver->eval("f = F * NA * p;");
         solver->eval("u_lam = C_s \\ (S * f);");
         solver->eval("u = S' * u_lam;");
 
@@ -351,11 +347,24 @@ public:
     bool weaknessAnalysis() {
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
-        IndexVec i, j;
-        ValueVec v;
-        size_t m, n;
-        m_assembleLoadMatrix(m, n, i, j, v);
-        solver->setSparseMatrix("F", m, n, i, j, v);
+
+        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn, VBm, VBn, Dm, Dn;
+        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj, VBi, VBj, Di, Dj;
+        ValueVec Fv, Kv, Rv, NAv, VBv, Dv;
+        m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
+        m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
+        m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
+        m_assembleNAMatrix(NAm, NAn, NAi, NAj, NAv);
+        m_assembleVBMatrix(VBm, VBn, VBi, VBj, VBv);
+        m_assembleDMatrix(Dm, Dn, Di, Dj, Dv);
+        solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
+        solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
+        solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
+        solver->setSparseMatrix("NA", NAm, NAn, NAi, NAj, NAv);
+        // TODO: verify this actually acts like VB and not just B
+        solver->setSparseMatrix("VB", VBm, VBn, VBi, VBj, VBv);
+        solver->setSparseMatrix("D", Dm, Dn, Di, Dj, Dv);
+
         return false;
     }
 
@@ -400,6 +409,12 @@ private:
                               ValueVec &v);
     void m_assembleRigidModeMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                                    ValueVec &v);
+    void m_assembleNAMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                            ValueVec &v);
+    void m_assembleVBMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                            ValueVec &v);
+    void m_assembleDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                            ValueVec &v);
 
     void m_invalidateCache() {
         m_stiffnessCached = false;

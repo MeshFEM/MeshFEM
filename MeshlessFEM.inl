@@ -261,6 +261,12 @@ public:
         m_gradPhis = gp;
     }
 
+    // c: corner
+    // d: coordinate
+    Real gradPhi(size_t c, size_t d) {
+        return m_gradPhis(c, d);
+    }
+
     typedef typename MeshlessFEM<Model>::FlattenedTensor FlattenedTensor;
 
     // Compute non-engineering strain tensor for linear elasticity:
@@ -358,7 +364,6 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
 template<typename Model>
 void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
 {
-    // Simple (i, j v) stiffness matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
     PerElementGradPhi gradPhi(model());
@@ -383,9 +388,8 @@ template<typename Model>
 typename MeshlessFEM<Model>::SMField
 MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
 {
-    if (!m_displacementStrainCached) {
+    if (!m_displacementStrainCached)
         m_computePerElementDisplacementStrainMap();
-    }
     size_t numElements = elementGrid().numElements();
     assert(m_elementData.size() == numElements);
 
@@ -515,8 +519,9 @@ void MeshlessFEM<Model>::buildBoundaryFunctions()
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Construct the surface force -> surface force load matrix.
-//  This matrix maps a (B x dim) matrix of per-boundary point force densities to
-//  a (N * dim) matrix of per-node loads.
+//  This matrix maps a (B * dim) vector of flattened (x1, y1, ..) per-boundary
+//  point force densities to a (N * dim) vector of flattened (x1, y1, ..)
+//  per-node loads.
 //  Each pressure variable p_i is blurred into a volume force by boundary
 //  function psi_i. Psi_i is (effectively) normalized so that the integral of
 //  the point's force over the surface is n_i * a_i * p_i (n_i normal, a_i area)
@@ -569,12 +574,28 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
         for (size_t vo = colValuesOffset; vo < v.size(); ++vo)
             v[vo] /= colSum;
     }
+
+    // Duplicate matrix for each dimension
+    m *= 2, n *= 2;
+    size_t singleNZ = i.size();
+    i.reserve(singleNZ * 2), j.reserve(singleNZ * 2), v.reserve(singleNZ * 2);
+    for (size_t k = 0; k < singleNZ; ++k) {
+        size_t row = i[k], col = j[k];
+        i[k] = 2 * row;
+        j[k] = 2 * col;
+        i.push_back(2 * row + 1);
+        j.push_back(2 * col + 1);
+        v.push_back(v[k]);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix whose rows span the space of rigid transformation
 //  displacements. These are the translations and infinitesimal rotations.
 //  In 2D, there are three.
+//  The generated matrix also can compute total force and net torque of a
+//  (volume) force distribution, so it is useful in formulating the pressure
+//  equality constraints for structural optimization.
 //  @param[out]  m, n       Number of matrix rows, columns
 //  @param[out]  i, j, v    Entry row indices, column indices, and values
 *///////////////////////////////////////////////////////////////////////////////
@@ -614,5 +635,126 @@ void MeshlessFEM<Model>::m_assembleRigidModeMatrix(size_t &m, size_t &n,
         i.push_back(2);
         j.push_back(2 * k + 1);
         v.push_back(p[0]);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a sparse matrix mapping boundary pressures to a flattened vector of
+// forces at those boundary points.
+//  @param[out]  m, n       Number of matrix rows, columns
+//  @param[out]  i, j, v    Entry row indices, column indices, and values
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Model>
+void MeshlessFEM<Model>::m_assembleNAMatrix(size_t &m, size_t &n,
+                            IndexVec &i, IndexVec &j, ValueVec &v)
+{
+    m = 2 * m_boundaryPoints.size();
+    n = m_boundaryPoints.size();
+
+    for (size_t k = 0; k < m_boundaryPoints.size(); ++k) {
+        Vector f = -m_boundaryPoints[k].n * m_boundaryPoints[k].a;
+        // x component
+        i.push_back(2 * k);
+        j.push_back(k);
+        v.push_back(f[0]);
+
+        // y component
+        i.push_back(2 * k + 1);
+        j.push_back(k);
+        v.push_back(f[1]);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a sparse matrix mapping a flattened per-node displacement vector to a 
+//  flattened per-element strain tensor.
+//  @param[out]  m, n       Number of matrix rows, columns
+//  @param[out]  i, j, v    Entry row indices, column indices, and values
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Model>
+void MeshlessFEM<Model>::m_assembleVBMatrix(size_t &m, size_t &n,
+                            IndexVec &i, IndexVec &j, ValueVec &v)
+{
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    m = 3 * elemGrid.numElements();
+    n = 2 * elemGrid.numNodes();
+
+    if (!m_displacementStrainCached)
+        m_computePerElementDisplacementStrainMap();
+
+    size_t nnz = 16 * elemGrid.numElements();
+    i.clear(), j.clear(), v.clear();
+    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+
+    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+        CornerVec cornerIndices;
+        elemGrid.elementCorners(e, cornerIndices);
+        for (size_t c = 0; c < 4; ++c) {
+            size_t vtx = cornerIndices[c];
+            // e_xx
+            i.push_back(3 * e + 0);
+            j.push_back(2 * vtx + 0);
+            v.push_back(m_elementData[e].gradPhi(c, 0));
+
+            // e_yy
+            i.push_back(3 * e + 1);
+            j.push_back(2 * vtx + 1);
+            v.push_back(m_elementData[e].gradPhi(c, 1));
+
+            // e_xy (1)
+            i.push_back(3 * e + 2);
+            j.push_back(2 * vtx + 0);
+            v.push_back(.5 * m_elementData[e].gradPhi(c, 1));
+
+            // e_xy (2)
+            i.push_back(3 * e + 2);
+            j.push_back(2 * vtx + 1);
+            v.push_back(.5 * m_elementData[e].gradPhi(c, 0));
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a sparse matrix mapping a flattened per-element strain tensor to
+//  a flattened per-element stress tensor
+//  @param[out]  m, n       Number of matrix rows, columns
+//  @param[out]  i, j, v    Entry row indices, column indices, and values
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Model>
+void MeshlessFEM<Model>::m_assembleDMatrix(size_t &m, size_t &n,
+                            IndexVec &i, IndexVec &j, ValueVec &v)
+{
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    m = 3 * elemGrid.numElements();
+    n = 3 * elemGrid.numElements();
+
+    size_t nnz = 5 * elemGrid.numElements();
+    i.clear(), j.clear(), v.clear();
+    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+
+    // The per-element matrix is given by:
+    // D = d00 d01   0 =  d0 d1   0 
+    //     d10 d11   0    d1 d2   0
+    //     0   0   d22    0   0   d3
+    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+        i.push_back(3 * e + 0);
+        j.push_back(3 * e + 0);
+        v.push_back(m_d[0]);
+
+        i.push_back(3 * e + 0);
+        j.push_back(3 * e + 1);
+        v.push_back(m_d[1]);
+
+        i.push_back(3 * e + 1);
+        j.push_back(3 * e + 0);
+        v.push_back(m_d[1]);
+
+        i.push_back(3 * e + 1);
+        j.push_back(3 * e + 1);
+        v.push_back(m_d[2]);
+
+        i.push_back(3 * e + 2);
+        j.push_back(3 * e + 2);
+        v.push_back(m_d[3]);
     }
 }
