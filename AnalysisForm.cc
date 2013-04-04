@@ -55,9 +55,13 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_pressurePaintValueStepper->setValue(0.1);
 
     g_numWeakRegionsStepper = new QSpinBox();
+    g_weaknessCutoffStepper = new QDoubleSpinBox();
+    g_weakRegionExtractionButton = new QPushButton("Extract Weak Regions");
+    g_weakRegionSelector = new QComboBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
 
     modesUpdated(NULL);
+    weakRegionsUpdated(NULL);
 
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *materialGroup = new QGroupBox("Materials and Matrices");
@@ -113,7 +117,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Weakness Analysis
     QFormLayout *weakForm = new QFormLayout();
-    weakForm->addRow("Number of Weak Regions", g_numWeakRegionsStepper);
+    weakForm->addRow("Weak Regions Per Mode", g_numWeakRegionsStepper);
+    weakForm->addRow("Weak Region Cutoff", g_weaknessCutoffStepper);
+    weakForm->addRow(g_weakRegionExtractionButton);
+    weakForm->addRow(g_weakRegionSelector);
     weakForm->addRow(g_weaknessAnalysisButton);
     weaknessAnalysisGroup->setLayout(weakForm);
 
@@ -165,7 +172,12 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_pressurePaintValueStepper, SIGNAL(valueChanged(double)),
                      controller, SLOT(pressurePaintValueChanged(double)));
 
-
+    QObject::connect(g_numWeakRegionsStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(weaknessAnalysisControlsChanged(int)));
+    QObject::connect(g_weaknessCutoffStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(weaknessAnalysisControlsChanged(double)));
+    QObject::connect(g_weakRegionExtractionButton, SIGNAL(clicked()),
+                     controller, SLOT(runWeakRegionExtraction()));
     QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runWeaknessAnalysis()));
 
@@ -205,6 +217,9 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_youngModulusStepper->setValue(m_settings.young_modulus);
     g_poissonRatioStepper->setValue(m_settings.poisson_ratio);
     g_densityStepper->setValue(m_settings.density);
+
+    g_numWeakRegionsStepper->setValue(m_settings.weakRegionsPerMode);
+    g_weaknessCutoffStepper->setValue(m_settings.weaknessCutoff);
 }
 
 void AnalysisForm::m_readSettingsFromGUI() {
@@ -228,6 +243,9 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.useMSBoundary   = g_useMarchingSquaresCheck->isChecked();
     m_settings.boundarySpacing = g_boundaryPointStepper->value();
+
+    m_settings.weakRegionsPerMode = g_numWeakRegionsStepper->value();
+    m_settings.weaknessCutoff = g_weaknessCutoffStepper->value();
 }
 
 void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
@@ -251,6 +269,24 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
     }
 }
 
+void AnalysisForm::weakRegionsUpdated(const MeshlessFEM_t *fem) {
+    size_t numWeakRegions = (fem != NULL) ? fem->numWeakRegions() : 0;
+    g_weakRegionSelector->clear();
+    g_weakRegionSelector->addItem("Select Weak Region");
+
+    if (numWeakRegions > 0) {
+        QString label;
+        for (size_t r = 0; r < numWeakRegions; ++r) {
+            label.sprintf("Region %i", (int) r);
+            g_weakRegionSelector->addItem(label);
+        }
+        g_weakRegionSelector->setEnabled(true);
+    }
+    else {
+        g_weakRegionSelector->setEnabled(false);
+    }
+}
+
 void AnalysisForm::elementGridControlsChanged(int) {
     m_readSettingsFromGUI();
     emit eqSettingsChanged(m_settings);
@@ -270,6 +306,12 @@ void AnalysisForm::boundaryPointControlsChanged(int) {
     emit bpSettingsChanged(m_settings);
 }
 
+
+void AnalysisForm::modalAnalysisControlsChanged(int) {
+    m_readSettingsFromGUI();
+    emit modalAnalysisSettingsChanged(m_settings);
+}
+
 void AnalysisForm::matrixControlsChanged(int) {
     m_readSettingsFromGUI();
     emit matrixOrMaterialSettingsChanged(m_settings);
@@ -280,7 +322,13 @@ void AnalysisForm::materialControlsChanged(double) {
     emit matrixOrMaterialSettingsChanged(m_settings);
 }
 
-void AnalysisForm::modalAnalysisControlsChanged(int) {
+void AnalysisForm::weaknessAnalysisControlsChanged(int) {
     m_readSettingsFromGUI();
-    emit modalAnalysisSettingsChanged(m_settings);
+    emit weaknessAnalysisSettingsChanged(m_settings);
 }
+
+void AnalysisForm::weaknessAnalysisControlsChanged(double) {
+    m_readSettingsFromGUI();
+    emit weaknessAnalysisSettingsChanged(m_settings);
+}
+

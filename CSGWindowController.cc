@@ -200,6 +200,7 @@ boundaryPointSettingsChanged(const AnalysisSettings &settings)
     m_femView->update();
     // Currently, configuring the boundary points clears all modes
     emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -212,6 +213,7 @@ matrixOrMaterialSettingsChanged(const AnalysisSettings &settings)
     m_fem.configureMatrices(settings);
     // Configuring modal analysis settings clears all modes
     emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -223,6 +225,7 @@ modalAnalysisSettingsChanged(const AnalysisSettings &settings)
     m_fem.configureModalAnalysis(settings);
     // Configuring modal analysis settings clears all modes
     emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::runModalAnalysis()
@@ -321,6 +324,23 @@ void CSGWindowController::runSimulation()
 void CSGWindowController::pressurePaintValueChanged(double value)
 {
     m_femView->setPressurePaintValue(value);
+}
+
+void CSGWindowController::
+weaknessAnalysisSettingsChanged(const AnalysisSettings &settings)
+{
+    m_fem.configureWeaknessAnalysis(settings);
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    emit weakRegionsUpdated(&m_fem);
+}
+
+void CSGWindowController::runWeakRegionExtraction()
+{
+    int ret = m_fem.weakRegionExtraction();
+    if (ret >= 0)
+        emit weakRegionsUpdated(&m_fem);
+    if (ret == 1)
+        emit modesUpdated(&m_fem);
 }
 
 void CSGWindowController::runWeaknessAnalysis()

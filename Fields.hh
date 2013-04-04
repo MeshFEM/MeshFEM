@@ -93,6 +93,8 @@ public:
 
     Real min() const { return m_values.minCoeff(); }
     Real max() const { return m_values.maxCoeff(); }
+    const Real *data() const { return m_values.data(); }
+          Real *data()       { return m_values.data(); }
 private:
     using VectorField<Real, 1>::m_values;
 };

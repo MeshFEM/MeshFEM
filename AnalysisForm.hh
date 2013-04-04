@@ -31,6 +31,7 @@ public:
 
 public slots:
     void modesUpdated(const MeshlessFEM_t *fem);
+    void weakRegionsUpdated(const MeshlessFEM_t *fem);
 
 private slots:
     void elementGridControlsChanged(int);
@@ -40,12 +41,15 @@ private slots:
     void modalAnalysisControlsChanged(int);
     void matrixControlsChanged(int);
     void materialControlsChanged(double);
+    void weaknessAnalysisControlsChanged(int);
+    void weaknessAnalysisControlsChanged(double);
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);
     void bpSettingsChanged(const AnalysisSettings &settings);
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
+    void weaknessAnalysisSettingsChanged(const AnalysisSettings &settings);
 
 private:
     AnalysisSettings &m_settings;
@@ -78,6 +82,10 @@ private:
 
     // Weakness analysis settings
     QSpinBox *g_numWeakRegionsStepper;
+    QDoubleSpinBox *g_weaknessCutoffStepper;
+    QPushButton *g_weakRegionExtractionButton;
+    QComboBox *g_weakRegionSelector;
+
     QPushButton *g_weaknessAnalysisButton;
 
     void m_setGUIFromSettings();

@@ -47,11 +47,15 @@ public slots:
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runModalAnalysis();
 
+    // Simulation actions
     void configureSimulation();
     void loadPressure();
     void runSimulation();
     void pressurePaintValueChanged(double);
 
+    // Weakness analysis actions
+    void weaknessAnalysisSettingsChanged(const AnalysisSettings &settings);
+    void runWeakRegionExtraction();
     void runWeaknessAnalysis();
     void dumpModalData();
     void modeSelectionChanged(int index);
@@ -62,6 +66,7 @@ signals:
             QItemSelectionModel::ClearAndSelect);
     void csgNodesSelected(const NodeList &nList);
     void modesUpdated(const MeshlessFEM_t *fem);
+    void weakRegionsUpdated(const MeshlessFEM_t *fem);
     
 private:
     enum { CONTROLLER_STATE_MODEL, CONTROLLER_STATE_ANALYSIS } m_state;
@@ -72,9 +77,6 @@ private:
     MeshlessFEM_t &m_fem;
 
     typedef CSGTree_t::CSGNode CSGNode;
-
-    void m_modesUpdated() {
-    }
 };
 
 #endif // CSGWINDOW_CONTROLLER_HH

@@ -32,6 +32,7 @@ class MeshlessFEM {
 public:
     typedef typename Model::Vector_t Vector;
     typedef typename Model::Real   Real;
+    typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
     typedef Eigen::Matrix<Real, 4, 1> DType;
     typedef ScalarField<Real>         SField;
     typedef VectorField<Real, 2>      VField;
@@ -66,6 +67,7 @@ public:
         configureMatrices(settings);
         configureMaterial(settings);
         configureModalAnalysis(settings);
+        configureWeaknessAnalysis(settings);
     }
 
     bool configureElements(const AnalysisSettings &settings) {
@@ -134,6 +136,11 @@ public:
         m_modes.resize(0);
     }
 
+    void configureWeaknessAnalysis(const AnalysisSettings &settings) {
+        m_weakRegionsPerMode = settings.weakRegionsPerMode;
+        m_weaknessCutoff = settings.weaknessCutoff;
+    }
+
     void modelChanged() {
         elementGrid().update();
         m_invalidateCache();
@@ -143,6 +150,12 @@ public:
         assert(m_elementGrid != NULL);
         return *m_elementGrid;
     }
+
+    const ElementGrid &elementGrid() const {
+        assert(m_elementGrid != NULL);
+        return *m_elementGrid;
+    }
+        
 
     Model &model() {
         return m_model;
@@ -159,6 +172,10 @@ public:
 
     size_t numModes() const {
         return m_modes.size();
+    }
+
+    size_t numWeakRegions() const {
+        return m_weakRegions.size();
     }
     
     size_t numBoundaryPoints() const {
@@ -300,13 +317,9 @@ public:
         solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
 
         size_t nBnd = numBoundaryPoints();
-        // Flattened boundary force vector: x1, y1, x2, y2, ...
-        Real *boundaryPressures = new Real[nBnd];
-        for (size_t i = 0; i < nBnd; ++i) {
-            boundaryPressures[i] = pressure(i);
-        }
-        solver->setDenseMatrix("p", nBnd, 1, boundaryPressures, true);
-        delete[] boundaryPressures;
+
+        assert(m_pressures.domainSize() == nBnd);
+        solver->setDenseMatrix("p", nBnd, 1, m_pressures.data(), true);
 
         solver->eval("f = F * NA * p;");
         solver->eval("u_lam = C_s \\ (S * f);");
@@ -344,26 +357,44 @@ public:
         return true;
     }
 
+    int weakRegionExtraction() {
+        bool recomputedModes = false;
+        if (m_modes.size() == 0) {
+            if (!modalAnalysis())
+                return -1;
+            recomputedModes = true;
+        }
+
+        for (size_t m = 0; m < m_modes.size(); ++m) {
+            // Choose the highest 
+        }
+
+        return recomputedModes ? 1 : 0;
+    }
+
     bool weaknessAnalysis() {
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
 
-        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn, VBm, VBn, Dm, Dn;
-        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj, VBi, VBj, Di, Dj;
-        ValueVec Fv, Kv, Rv, NAv, VBv, Dv;
+        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn, Bm, Bn, VDm, VDn;
+        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj, Bi, Bj, VDi, VDj;
+        ValueVec Fv, Kv, Rv, NAv, Bv, VDv;
         m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
         m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
         m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
         m_assembleNAMatrix(NAm, NAn, NAi, NAj, NAv);
-        m_assembleVBMatrix(VBm, VBn, VBi, VBj, VBv);
-        m_assembleDMatrix(Dm, Dn, Di, Dj, Dv);
+        m_assembleBMatrix(Bm, Bn, Bi, Bj, Bv);
+        m_assembleVDMatrix(VDm, VDn, VDi, VDj, VDv);
         solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
         solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
         solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
         solver->setSparseMatrix("NA", NAm, NAn, NAi, NAj, NAv);
-        // TODO: verify this actually acts like VB and not just B
-        solver->setSparseMatrix("VB", VBm, VBn, VBi, VBj, VBv);
-        solver->setSparseMatrix("D", Dm, Dn, Di, Dj, Dv);
+        solver->setSparseMatrix("B", Bm, Bn, Bi, Bj, Bv);
+        solver->setSparseMatrix("VD", VDm, VDn, VDi, VDj, VDv);
+
+        DVector w;
+        m_assembleWVector(w);
+        solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
 
         return false;
     }
@@ -393,10 +424,14 @@ private:
     Solver<Real> *m_solver;
     int m_numRequestedModes;
     std::vector<VField> m_modes;
+    std::vector<SField> m_weakRegions;
     std::vector<SMField> m_modalStressTensors;
     std::vector<SField>  m_modalStressNorms;
     std::vector<Real> m_eigenvalues;
     std::vector<ElementData> m_elementData;
+
+    int m_weakRegionsPerMode;
+    Real m_weaknessCutoff;
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;
@@ -411,10 +446,11 @@ private:
                                    ValueVec &v);
     void m_assembleNAMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
-    void m_assembleVBMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+    void m_assembleBMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
-    void m_assembleDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+    void m_assembleVDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
+    void m_assembleWVector(DVector &w) const;
 
     void m_invalidateCache() {
         m_stiffnessCached = false;
@@ -455,6 +491,8 @@ private:
         m_boundaryFunctions.clear();
         m_pressures.resizeDomain(m_boundaryPoints.size());
         m_nodeFixed.assign(elementGrid().numNodes(), false);
+
+        m_weakRegions.clear();
     }
 
 };
