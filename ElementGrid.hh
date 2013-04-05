@@ -115,7 +115,7 @@ public:
     size_t numNodesAdjacentNode(size_t ni) const {
         assert(ni < m_vertexForNode.size());
         size_t row, col;
-        get2DVertexIndex(ni, row, col);
+        get2DVertexIndex(m_vertexForNode[ni], row, col);
         size_t adjacencyCount;
         for (size_t r  = row - 1; r <= row + 1; ++r) {
             if (r > m_Ny) continue;
@@ -129,6 +129,35 @@ public:
 
         // Don't count the node itself.
         return adjacencyCount - 1;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Get the elements above, right, below, and left of this element.
+    //  @param[in]  ei      element to query
+    //  @param[out] adj     vector of adjacent element indices
+    *///////////////////////////////////////////////////////////////////////////
+    void elementsAdjacentElement(size_t ei, std::vector<size_t> &adj) const {
+        assert(ei < numElements());
+        size_t row, col;
+        get2DCellIndex(m_cellForElement[ei], row, col);
+        adj.clear();
+        adj.reserve(4);
+        if (row + 1 < m_Ny) {
+            int ej = m_elementForCell[get1DCellIndex(row + 1, col)];
+            if (ej >= 0) adj.push_back(ej);
+        }
+        if (col + 1 < m_Nx) {
+            int ej = m_elementForCell[get1DCellIndex(row, col + 1)];
+            if (ej >= 0) adj.push_back(ej);
+        }
+        if (row > 0) {
+            int ej = m_elementForCell[get1DCellIndex(row - 1, col)];
+            if (ej >= 0) adj.push_back(ej);
+        }
+        if (col > 0) {
+            int ej = m_elementForCell[get1DCellIndex(row, col - 1)];
+            if (ej >= 0) adj.push_back(ej);
+        }
     }
 
     AdjacencyVec elementsAdjacentNode(size_t ni) const {

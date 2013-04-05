@@ -23,8 +23,10 @@
 #include "SPHKernels.hh"
 #include "MarchingSquaresGrid.hh"
 #include "MSHWriter.hh"
+#include "utils.hh"
 #include <cassert>
 #include <vector>
+#include <queue>
 #include <algorithm>
 
 template<typename Model>
@@ -365,8 +367,84 @@ public:
             recomputedModes = true;
         }
 
+        std::vector<std::vector<size_t> > weakRegions;
+
+        const ElementGrid &grid = elementGrid();
         for (size_t m = 0; m < m_modes.size(); ++m) {
-            // Choose the highest 
+            // compute the stress cutoff value
+            const SField &stressNorms = m_modalStressNorms[m];
+            const VField &modalDisp   = m_modes[m];
+            assert(stressNorms.size() == grid.numElements());
+
+            std::vector<size_t> sortedElements;
+            sortPermutation(stressNorms, sortedElements);
+
+            // Everything above the cutoff percentile is a weak region
+            size_t cutoff = m_weaknessCutoff * sortedElements.size();
+            std::vector<int> wrIndex(sortedElements.size(), -1);
+            for (size_t i = cutoff; i < sortedElements.size(); ++i) {
+                // Flag as part of a weak region
+                wrIndex[sortedElements[i]] = 0;
+            }
+
+            // Extract connected components (BFS-based)
+            int tag = 0;
+            std::vector<size_t> adj;
+            for (size_t i = 0; i < wrIndex.size(); ++i) {
+                if (wrIndex[i] != 0) continue;
+                std::queue<size_t> bfsQueue;
+
+                ++tag;
+                bfsQueue.push(i);
+                while (!bfsQueue.empty()) {
+                    size_t u = bfsQueue.front();
+                    bfsQueue.pop();
+                    wrIndex[u] = tag;
+                    grid.elementsAdjacentElement(u, adj);
+                    for (size_t j = 0; j < adj.size(); ++j) {
+                        size_t v = adj[j];
+                        if (wrIndex[v] == 0) {
+                            bfsQueue.push(v);
+                        }
+                    }
+                }
+            }
+
+            std::vector<std::vector<size_t> > regions(tag);
+
+            // Extract weak region contents (numbered 1...# regions)
+            for (size_t i = 0; i < wrIndex.size(); ++i) {
+                assert(wrIndex[i] != 0);
+                if (wrIndex[i] > 0) {
+                    assert(wrIndex[i] <= regions.size());
+                    regions[wrIndex[i] - 1].push_back(i);
+                }
+            }
+
+            // Compute energy in each weak region
+            std::vector<Real> energies(regions.size(), 0);
+            CornerVec cornerIndices;
+            for (size_t r = 0; r < regions.size(); ++r) {
+                const std::vector<size_t> &region = regions[r];
+                for (size_t i = 0; i < region.size(); ++i) {
+                    size_t ei = region[i];
+                    const ElementData &e = m_elementData[ei];
+                    grid.elementCorners(ei, cornerIndices);
+                    energies[r] += e.displacementToEnergy(modalDisp,
+                            cornerIndices, m_d);
+                }
+            }
+
+            // Sort weak regions by energy
+            std::vector<size_t> sortedRegions;
+            sortPermutation(energies, sortedRegions, true);
+
+            // Take the top m_weakRegionsPerMode
+            size_t numWR = std::min((size_t) m_weakRegionsPerMode,
+                                             sortedRegions.size());
+            for (size_t i = 0; i < numWR; ++i) {
+                weakRegions.push_back(regions[sortedRegions[i]]);
+            }
         }
 
         return recomputedModes ? 1 : 0;

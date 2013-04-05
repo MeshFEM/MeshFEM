@@ -311,6 +311,14 @@ public:
         stress[1] = d[1] * strain[0] + d[2] * strain[1];
         stress[2] = d[3] * strain[2];
     }
+
+    // Compute energy induced in this element by a displacement.
+    Real displacementToEnergy(const VField &displacements,
+                              const CornerVec &corners, const DType &d) const
+    {
+        // TODO: implement
+        return 0.0;
+    }
     
 private:
     GradPhis m_gradPhis;
