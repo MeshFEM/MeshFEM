@@ -141,6 +141,7 @@ public:
     void configureWeaknessAnalysis(const AnalysisSettings &settings) {
         m_weakRegionsPerMode = settings.weakRegionsPerMode;
         m_weaknessCutoff = settings.weaknessCutoff;
+        m_invalidateCache();
     }
 
     void modelChanged() {
@@ -176,6 +177,10 @@ public:
         return m_modes.size();
     }
 
+    size_t numRigidModes() const {
+        return std::min(numModes(), (size_t) 3);
+    }
+
     size_t numWeakRegions() const {
         return m_weakRegions.size();
     }
@@ -196,6 +201,10 @@ public:
 
     const SField &modalStressNorms(size_t i) const {
         return m_modalStressNorms[i];
+    }
+
+    const SField &weakRegionStressNorms(size_t i) const {
+        return m_weakRegionStressNorms[i];
     }
 
     const BoundaryFunction &boundaryFunction(size_t i) {
@@ -367,10 +376,11 @@ public:
             recomputedModes = true;
         }
 
-        std::vector<std::vector<size_t> > weakRegions;
+        m_weakRegions.clear();
+        m_weakRegionStressNorms.clear();
 
         const ElementGrid &grid = elementGrid();
-        for (size_t m = 0; m < m_modes.size(); ++m) {
+        for (size_t m = numRigidModes() - 1; m < m_modes.size(); ++m) {
             // compute the stress cutoff value
             const SField &stressNorms = m_modalStressNorms[m];
             const VField &modalDisp   = m_modes[m];
@@ -443,7 +453,14 @@ public:
             size_t numWR = std::min((size_t) m_weakRegionsPerMode,
                                              sortedRegions.size());
             for (size_t i = 0; i < numWR; ++i) {
-                weakRegions.push_back(regions[sortedRegions[i]]);
+                m_weakRegions.push_back(regions[sortedRegions[i]]);
+                m_weakRegionStressNorms.push_back(SField(stressNorms.size()));
+                m_weakRegionStressNorms.back().clear();
+                size_t wrSize = m_weakRegions.back().size();
+                for (size_t j = 0; j < wrSize; ++j) {
+                    size_t ei = m_weakRegions.back()[j];
+                    m_weakRegionStressNorms.back()[ei] = stressNorms[ei];
+                }
             }
         }
 
@@ -502,7 +519,6 @@ private:
     Solver<Real> *m_solver;
     int m_numRequestedModes;
     std::vector<VField> m_modes;
-    std::vector<SField> m_weakRegions;
     std::vector<SMField> m_modalStressTensors;
     std::vector<SField>  m_modalStressNorms;
     std::vector<Real> m_eigenvalues;
@@ -510,6 +526,11 @@ private:
 
     int m_weakRegionsPerMode;
     Real m_weaknessCutoff;
+    // Indices of elements in each weak region
+    std::vector<std::vector<size_t> > m_weakRegions;
+    // (Modal) stress norms of elements in each weak region
+    // (to be used as weights in the objective function)
+    std::vector<SField> m_weakRegionStressNorms;
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;
@@ -571,6 +592,7 @@ private:
         m_nodeFixed.assign(elementGrid().numNodes(), false);
 
         m_weakRegions.clear();
+        m_weakRegionStressNorms.clear();
     }
 
 };

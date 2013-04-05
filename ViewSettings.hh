@@ -16,12 +16,12 @@
 
 struct ViewSettings {
     ViewSettings()
-        : showGridDuringDeformation(true), showStressesDuringDeformation(true),
+        : showGridOverResults(true), showStressesDuringDeformation(true),
           showColorbar(true), colormap(COLORMAP_JET), colormapRangeAuto(true)
     {
     }
 
-    bool showGridDuringDeformation;
+    bool showGridOverResults;
     bool showStressesDuringDeformation;
     bool showColorbar;
 

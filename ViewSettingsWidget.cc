@@ -8,7 +8,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     : QWidget(parent), m_viewSettings(settings)
 {
     QFormLayout *form = new QFormLayout();
-    g_showGridDuringDeformationCheck = new QCheckBox();
+    g_showGridOverResultsCheck = new QCheckBox();
     g_showStressesDuringDeformationCheck = new QCheckBox();
     g_showColorbar = new QCheckBox();
     g_colormapSelector = new QComboBox();
@@ -16,7 +16,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     g_colormapMaxStepper = new QDoubleSpinBox();
     g_colormapAutoRangeCheck = new QCheckBox("Auto");
 
-    form->addRow("Show Grid During Deformation", g_showGridDuringDeformationCheck);
+    form->addRow("Show Grid Over Results", g_showGridOverResultsCheck);
     form->addRow("Show Stresses During Deformation", g_showStressesDuringDeformationCheck);
     form->addRow("Show colorbar", g_showColorbar);
     form->addRow("Colormap", g_colormapSelector);
@@ -36,7 +36,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     setLayout(form);
     m_setGUIFromSettings();
 
-    QObject::connect(g_showGridDuringDeformationCheck, SIGNAL(stateChanged(int)),
+    QObject::connect(g_showGridOverResultsCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showStressesDuringDeformationCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
@@ -53,7 +53,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 }
 
 void ViewSettingsWidget::m_setGUIFromSettings() {
-    g_showGridDuringDeformationCheck->setChecked(m_viewSettings.showGridDuringDeformation);
+    g_showGridOverResultsCheck->setChecked(m_viewSettings.showGridOverResults);
     g_showStressesDuringDeformationCheck->setChecked(m_viewSettings.showStressesDuringDeformation);
     g_showColorbar->setChecked(m_viewSettings.showColorbar);
     // Note: assumes CMapName enum index matches combo box index
@@ -67,7 +67,7 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
 }
 
 void ViewSettingsWidget::m_readSettingsFromGUI() {
-    m_viewSettings.showGridDuringDeformation = g_showGridDuringDeformationCheck->isChecked();
+    m_viewSettings.showGridOverResults = g_showGridOverResultsCheck->isChecked();
     m_viewSettings.showStressesDuringDeformation = g_showStressesDuringDeformationCheck->isChecked();
     m_viewSettings.showColorbar = g_showColorbar->isChecked();
     // Note: assumes CMapName enum index matches combo box index

@@ -178,8 +178,15 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
     QObject::connect(g_weakRegionExtractionButton, SIGNAL(clicked()),
                      controller, SLOT(runWeakRegionExtraction()));
+    QObject::connect(g_weakRegionSelector, SIGNAL(currentIndexChanged(int)),
+                     controller, SLOT(weakRegionSelectionChanged(int)));
     QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runWeaknessAnalysis()));
+
+    QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
+                     this, SLOT(someSelectorChanged(int)));
+    QObject::connect(g_weakRegionSelector, SIGNAL(currentIndexChanged(int)),
+                     this, SLOT(someSelectorChanged(int)));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
@@ -332,3 +339,19 @@ void AnalysisForm::weaknessAnalysisControlsChanged(double) {
     emit weaknessAnalysisSettingsChanged(m_settings);
 }
 
+
+// We want the mode/weak region selector combo boxes to be mutually exclusive.
+void AnalysisForm::someSelectorChanged(int newIdx) {
+    // We only might need to enforce mutual exclusion when an actual selection
+    // is made.
+    if (newIdx == 0)
+        return;
+    QComboBox *selector = dynamic_cast<QComboBox *>(QObject::sender());
+    assert(selector);
+    if (selector == g_modeSelector) {
+        g_weakRegionSelector->setCurrentIndex(0);
+    }
+    if (selector == g_weakRegionSelector) {
+        g_modeSelector->setCurrentIndex(0);
+    }
+}

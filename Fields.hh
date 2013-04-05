@@ -90,7 +90,7 @@ public:
     // (So this looks just like an array)
     Real  operator[](size_t i) const { return m_values[i]; }
     Real &operator[](size_t i)       { return m_values[i]; }
-    size_t size() const { return m_values.rows(); }
+    size_t size() const { return this->domainSize(); }
 
     Real min() const { return m_values.minCoeff(); }
     Real max() const { return m_values.maxCoeff(); }

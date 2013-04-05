@@ -37,7 +37,8 @@ class FEMView2D : public QGLWidget
 public:
     typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
                   SIM_SETUP_STATE = 2, SIM_RESULT_STATE = 3,
-                  FORCES_STATE = 4, MODE_STATE = 5} GUIState;
+                  FORCES_STATE = 4, MODE_STATE = 5, WEAK_REGION_STATE = 6}
+            GUIState;
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
 
@@ -73,13 +74,22 @@ public:
         }
     }
 
+    GUIState getGUIState() const {
+        return m_guiState;
+    }
+
     void setPressurePaintValue(double value) {
         m_pressurePaintValue = value;
     }
 
     void selectDeformation(size_t i) {
-        assert(i < m_fem.numModes());
+        assert(i < m_fem.numWeakRegions());
         m_selectedDeformation = i;
+    }
+
+    void selectWeakRegion(size_t i) {
+        assert(i < m_fem.numWeakRegions());
+        m_selectedWeakRegion = i;
     }
     
 public slots:
@@ -231,6 +241,7 @@ private:
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
     size_t m_selectedDeformation;
+    size_t m_selectedWeakRegion;
 
     size_t m_selectedBoundaryPoint;
     Scalar m_pressurePaintValue;

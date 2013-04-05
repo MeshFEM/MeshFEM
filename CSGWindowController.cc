@@ -393,6 +393,22 @@ void CSGWindowController::modeSelectionChanged(int index)
         m_femView->setGUIState(FEMView2D::MODE_STATE);
     }
     else {
-        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        // Only revert GUI state if we "own" it
+        if (m_femView->getGUIState() == FEMView2D::MODE_STATE)
+            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    }
+}
+
+void CSGWindowController::weakRegionSelectionChanged(int index)
+{
+    if (index > 0) {
+        m_femView->selectWeakRegion(index - 1);
+        m_femView->setGUIState(FEMView2D::WEAK_REGION_STATE);
+
+    }
+    else {
+        // Only revert GUI state if we "own" it
+        if (m_femView->getGUIState() == FEMView2D::WEAK_REGION_STATE)
+            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     }
 }

@@ -43,6 +43,7 @@ private slots:
     void materialControlsChanged(double);
     void weaknessAnalysisControlsChanged(int);
     void weaknessAnalysisControlsChanged(double);
+    void someSelectorChanged(int);
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);

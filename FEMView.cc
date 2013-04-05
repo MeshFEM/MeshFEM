@@ -658,7 +658,7 @@ void FEMView2D::draw()
 
         // drawGrid(DRAW_CELLS, deformation, stressNorms);
 
-        if (m_viewSettings.showGridDuringDeformation) {
+        if (m_viewSettings.showGridOverResults) {
             drawGrid(DRAW_EDGES, deformation);
             drawGrid(DRAW_NODES, deformation);
         }
@@ -771,10 +771,21 @@ void FEMView2D::draw()
             drawObjectTextureCells(deformation);
         }
 
-        if (m_viewSettings.showGridDuringDeformation) {
+        if (m_viewSettings.showGridOverResults) {
             drawGrid(DRAW_EDGES, deformation);
             drawGrid(DRAW_NODES, deformation);
         }
+    }
+    else if (m_guiState == WEAK_REGION_STATE) {
+        if (m_selectedWeakRegion < m_fem.numWeakRegions()) {
+            const SField &stressNorms =
+                m_fem.weakRegionStressNorms(m_selectedWeakRegion);
+            m_scalarColorMap.setAlpha(1.0f);
+            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
+            drawObjectTextureCells(VField(), stressNorms);
+            usedColormap = true;
+        }
+        drawGrid(DRAW_EDGES);
     }
 
     float colorBarWidth = 300;

@@ -34,7 +34,7 @@ public:
 private:
     ViewSettings &m_viewSettings;
 
-    QCheckBox *g_showGridDuringDeformationCheck,
+    QCheckBox *g_showGridOverResultsCheck,
               *g_showStressesDuringDeformationCheck,
               *g_showColorbar;
     QComboBox *g_colormapSelector;

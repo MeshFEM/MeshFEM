@@ -59,6 +59,7 @@ public slots:
     void runWeaknessAnalysis();
     void dumpModalData();
     void modeSelectionChanged(int index);
+    void weakRegionSelectionChanged(int index);
 
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
