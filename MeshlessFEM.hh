@@ -416,7 +416,7 @@ public:
             for (size_t i = 0; i < wrIndex.size(); ++i) {
                 assert(wrIndex[i] != 0);
                 if (wrIndex[i] > 0) {
-                    assert(wrIndex[i] <= regions.size());
+                    assert(((size_t) wrIndex[i]) <= regions.size());
                     regions[wrIndex[i] - 1].push_back(i);
                 }
             }

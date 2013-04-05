@@ -297,9 +297,6 @@ public:
 
     // Compute non-engineering stress tensor for linear elasticity:
     // sigma = D * B * u = D * displacementToStress
-    // D = d00 d01   0 =  d0 d1   0 
-    //     d10 d11   0    d1 d2   0
-    //     0   0   d22    0   0   d3
     template<typename Tensor>
     void displacementToStress(const VField &displacements,
                               const CornerVec &corners, const DType &d,
@@ -307,6 +304,17 @@ public:
     {
         FlattenedTensor strain;
         displacementToStrain(displacements, corners, strain);
+        strainToStress(strain, d, stress);
+    }
+
+    // Compute non-engineering stress tensor for linear elasticity:
+    // D = d00 d01   0 =  d0 d1   0 
+    //     d10 d11   0    d1 d2   0
+    //     0   0   d22    0   0   d3
+    template<typename StrainTensor, typename StressTensor>
+    void strainToStress(const StrainTensor &strain, const DType &d,
+                        StressTensor &stress) const
+    {
         stress[0] = d[0] * strain[0] + d[1] * strain[1];
         stress[1] = d[1] * strain[0] + d[2] * strain[1];
         stress[2] = d[3] * strain[2];
@@ -316,8 +324,13 @@ public:
     Real displacementToEnergy(const VField &displacements,
                               const CornerVec &corners, const DType &d) const
     {
-        // TODO: implement
-        return 0.0;
+        FlattenedTensor strain;
+        displacementToStrain(displacements, corners, strain);
+        FlattenedTensor stress;
+        strainToStress(strain, d, stress);
+
+        return (strain[0] * stress[0] + strain[1] * stress[1] +
+            2 * strain[2] * stress[2]) * m_volume;
     }
     
 private:
