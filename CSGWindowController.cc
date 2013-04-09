@@ -30,6 +30,7 @@ void CSGWindowController::changedSidebarTab(int newTab) {
         // The model might have changed--notify m_fem
         m_fem.modelChanged();
         emit modesUpdated(&m_fem);
+        emit weakRegionsUpdated(&m_fem);
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
         m_state = CONTROLLER_STATE_ANALYSIS;
     }
@@ -176,6 +177,7 @@ void CSGWindowController::loadCSG()
         // to the element grid display
         if (m_state == CONTROLLER_STATE_ANALYSIS) {
             emit modesUpdated(&m_fem);
+            emit weakRegionsUpdated(&m_fem);
             m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
         }
     }
@@ -187,8 +189,9 @@ void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
     m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     if (m_fem.configureElements(settings))
         m_femView->update();
-    // Configuring the elements clears all modes
+    // Configuring the elements clears all modes and weak regions
     emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -404,6 +407,7 @@ void CSGWindowController::weakRegionSelectionChanged(int index)
     if (index > 0) {
         m_femView->selectWeakRegion(index - 1);
         m_femView->setGUIState(FEMView2D::WEAK_REGION_STATE);
+        m_fem.selectWeakRegion(index - 1);
 
     }
     else {

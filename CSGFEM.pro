@@ -40,6 +40,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisForm.cc Quadrature.cc \
+           MeshlessFEM.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
            ViewSettingsWidget.cc Geometry.cc \

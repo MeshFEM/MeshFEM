@@ -16,11 +16,11 @@
 
 struct AnalysisSettings {
     AnalysisSettings()
-        : Nx(10), Ny(10), quadrature(UNIFORM_QUADRATURE), quadraturePoints(9),
-          cellOverlapThreshold(0.0), useMSBoundary(false), boundarySpacing(.02),
+        : Nx(40), Ny(40), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
+          cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
-          weaknessCutoff(.95),
+          weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     // Element settings
@@ -40,6 +40,8 @@ struct AnalysisSettings {
     // Optimization Settings
     size_t weakRegionsPerMode;
     double weaknessCutoff;
+    double totalForceBound;
+    double pointwisePressureBound;
 
     // Material Settings
     double young_modulus, poisson_ratio, density;

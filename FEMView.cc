@@ -564,7 +564,7 @@ void FEMView2D::drawBoundary(bool pressureField,
             glColor3ub(selColor.red(), selColor.green(), selColor.blue());
         else
             glColor3ub(color.red(), color.green(), color.blue());
-        Scalar scale = pressureField ? 200 * m_fem.pressure(i) : 15.0;
+        Scalar scale = pressureField ? 800 * m_fem.pressure(i) : 15.0;
         m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n);
     }
 }
@@ -785,7 +785,9 @@ void FEMView2D::draw()
             drawObjectTextureCells(VField(), stressNorms);
             usedColormap = true;
         }
-        drawGrid(DRAW_EDGES);
+        if (m_viewSettings.showGridOverResults) {
+            drawGrid(DRAW_EDGES);
+        }
     }
 
     float colorBarWidth = 300;

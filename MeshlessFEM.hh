@@ -64,6 +64,8 @@ public:
                                         settings.quadrature);
         m_elementGrid = new ElementGrid(settings.Nx, settings.Ny,
                 settings.cellOverlapThreshold, *m_quadrature, model);
+
+        m_selectedWeakRegion = -1L;
         
         configureBoundaryPoints(settings);
         configureMatrices(settings);
@@ -141,6 +143,8 @@ public:
     void configureWeaknessAnalysis(const AnalysisSettings &settings) {
         m_weakRegionsPerMode = settings.weakRegionsPerMode;
         m_weaknessCutoff = settings.weaknessCutoff;
+        m_pointwisePressureBound = settings.pointwisePressureBound;
+        m_totalForceBound = settings.totalForceBound;
         m_invalidateCache();
     }
 
@@ -294,17 +298,19 @@ public:
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
 
-        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn;
-        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj;
-        ValueVec Fv, Kv, Rv, NAv;
+        size_t Fm, Fn, Kn, Rm, Rn, Nm, Nn, Am, An;
+        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, Ni, Nj, Ai, Aj;
+        ValueVec Fv, Kv, Rv, Nv, Av;
         m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
         m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
         m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
-        m_assembleNAMatrix(NAm, NAn, NAi, NAj, NAv);
+        m_assembleNMatrix(Nm, Nn, Ni, Nj, Nv);
+        m_assembleAMatrix(Am, An, Ai, Aj, Av);
         solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
         solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
         solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
-        solver->setSparseMatrix("NA", NAm, NAn, NAi, NAj, NAv);
+        solver->setSparseMatrix("N", Nm, Nn, Ni, Nj, Nv);
+        solver->setSparseMatrix("A", Am, An, Ai, Aj, Av);
 
         // All the fixed nodes' displacements are set to 0.
         // This means zeroing the entire stiffness matrix row/column and placing
@@ -332,7 +338,7 @@ public:
         assert(m_pressures.domainSize() == nBnd);
         solver->setDenseMatrix("p", nBnd, 1, m_pressures.data(), true);
 
-        solver->eval("f = F * NA * p;");
+        solver->eval("f = F * N * A * p;");
         solver->eval("u_lam = C_s \\ (S * f);");
         solver->eval("u = S' * u_lam;");
 
@@ -368,131 +374,14 @@ public:
         return true;
     }
 
-    int weakRegionExtraction() {
-        bool recomputedModes = false;
-        if (m_modes.size() == 0) {
-            if (!modalAnalysis())
-                return -1;
-            recomputedModes = true;
-        }
+    int weakRegionExtraction();
 
-        m_weakRegions.clear();
-        m_weakRegionStressNorms.clear();
-
-        const ElementGrid &grid = elementGrid();
-        for (size_t m = numRigidModes() - 1; m < m_modes.size(); ++m) {
-            // compute the stress cutoff value
-            const SField &stressNorms = m_modalStressNorms[m];
-            const VField &modalDisp   = m_modes[m];
-            assert(stressNorms.size() == grid.numElements());
-
-            std::vector<size_t> sortedElements;
-            sortPermutation(stressNorms, sortedElements);
-
-            // Everything above the cutoff percentile is a weak region
-            size_t cutoff = m_weaknessCutoff * sortedElements.size();
-            std::vector<int> wrIndex(sortedElements.size(), -1);
-            for (size_t i = cutoff; i < sortedElements.size(); ++i) {
-                // Flag as part of a weak region
-                wrIndex[sortedElements[i]] = 0;
-            }
-
-            // Extract connected components (BFS-based)
-            int tag = 0;
-            std::vector<size_t> adj;
-            for (size_t i = 0; i < wrIndex.size(); ++i) {
-                if (wrIndex[i] != 0) continue;
-                std::queue<size_t> bfsQueue;
-
-                ++tag;
-                bfsQueue.push(i);
-                while (!bfsQueue.empty()) {
-                    size_t u = bfsQueue.front();
-                    bfsQueue.pop();
-                    wrIndex[u] = tag;
-                    grid.elementsAdjacentElement(u, adj);
-                    for (size_t j = 0; j < adj.size(); ++j) {
-                        size_t v = adj[j];
-                        if (wrIndex[v] == 0) {
-                            bfsQueue.push(v);
-                        }
-                    }
-                }
-            }
-
-            std::vector<std::vector<size_t> > regions(tag);
-
-            // Extract weak region contents (numbered 1...# regions)
-            for (size_t i = 0; i < wrIndex.size(); ++i) {
-                assert(wrIndex[i] != 0);
-                if (wrIndex[i] > 0) {
-                    assert(((size_t) wrIndex[i]) <= regions.size());
-                    regions[wrIndex[i] - 1].push_back(i);
-                }
-            }
-
-            // Compute energy in each weak region
-            std::vector<Real> energies(regions.size(), 0);
-            CornerVec cornerIndices;
-            for (size_t r = 0; r < regions.size(); ++r) {
-                const std::vector<size_t> &region = regions[r];
-                for (size_t i = 0; i < region.size(); ++i) {
-                    size_t ei = region[i];
-                    const ElementData &e = m_elementData[ei];
-                    grid.elementCorners(ei, cornerIndices);
-                    energies[r] += e.displacementToEnergy(modalDisp,
-                            cornerIndices, m_d);
-                }
-            }
-
-            // Sort weak regions by energy
-            std::vector<size_t> sortedRegions;
-            sortPermutation(energies, sortedRegions, true);
-
-            // Take the top m_weakRegionsPerMode
-            size_t numWR = std::min((size_t) m_weakRegionsPerMode,
-                                             sortedRegions.size());
-            for (size_t i = 0; i < numWR; ++i) {
-                m_weakRegions.push_back(regions[sortedRegions[i]]);
-                m_weakRegionStressNorms.push_back(SField(stressNorms.size()));
-                m_weakRegionStressNorms.back().clear();
-                size_t wrSize = m_weakRegions.back().size();
-                for (size_t j = 0; j < wrSize; ++j) {
-                    size_t ei = m_weakRegions.back()[j];
-                    m_weakRegionStressNorms.back()[ei] = stressNorms[ei];
-                }
-            }
-        }
-
-        return recomputedModes ? 1 : 0;
+    // TODO: remove this hacky stuff!
+    void selectWeakRegion(size_t i) {
+        m_selectedWeakRegion = i;
     }
 
-    bool weaknessAnalysis() {
-        MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
-        assert(solver != NULL);
-
-        size_t Fm, Fn, Kn, Rm, Rn, NAm, NAn, Bm, Bn, VDm, VDn;
-        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, NAi, NAj, Bi, Bj, VDi, VDj;
-        ValueVec Fv, Kv, Rv, NAv, Bv, VDv;
-        m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
-        m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
-        m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
-        m_assembleNAMatrix(NAm, NAn, NAi, NAj, NAv);
-        m_assembleBMatrix(Bm, Bn, Bi, Bj, Bv);
-        m_assembleVDMatrix(VDm, VDn, VDi, VDj, VDv);
-        solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
-        solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
-        solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
-        solver->setSparseMatrix("NA", NAm, NAn, NAi, NAj, NAv);
-        solver->setSparseMatrix("B", Bm, Bn, Bi, Bj, Bv);
-        solver->setSparseMatrix("VD", VDm, VDn, VDi, VDj, VDv);
-
-        DVector w;
-        m_assembleWVector(w);
-        solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
-
-        return false;
-    }
+    bool weaknessAnalysis();
 
     SMField elementStressTensors(const VField &displacement);
     SField  computeStressTensorNorms(const SMField &stressField);
@@ -525,12 +414,13 @@ private:
     std::vector<ElementData> m_elementData;
 
     int m_weakRegionsPerMode;
-    Real m_weaknessCutoff;
+    Real m_weaknessCutoff, m_pointwisePressureBound, m_totalForceBound;
     // Indices of elements in each weak region
     std::vector<std::vector<size_t> > m_weakRegions;
     // (Modal) stress norms of elements in each weak region
     // (to be used as weights in the objective function)
     std::vector<SField> m_weakRegionStressNorms;
+    size_t m_selectedWeakRegion;
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;
@@ -543,60 +433,101 @@ private:
                               ValueVec &v);
     void m_assembleRigidModeMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                                    ValueVec &v);
-    void m_assembleNAMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                            ValueVec &v);
+    void m_assembleNMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                           ValueVec &v);
+    void m_assembleAMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
+                           ValueVec &v);
     void m_assembleBMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
     void m_assembleVDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
     void m_assembleWVector(DVector &w) const;
 
-    void m_invalidateCache() {
-        m_stiffnessCached = false;
-        m_massCached = false;
-        m_modes.clear();
-        m_displacementStrainCached = false;
-        m_elementData.clear();
-
-        if (m_useMarchingSquaresBoundary) {
-            m_boundaryPoints.clear();
-
-            std::vector<Polygon_t> polygons;
-            MarchingSquaresGrid ms(elementGrid().cols(), elementGrid().rows());
-            ms.extractBoundaryPolygons(m_model, polygons);
-            for (size_t p = 0; p < polygons.size(); ++p) {
-                const std::vector<Vector> &points = polygons[p].points;
-                m_boundaryPoints.reserve(m_boundaryPoints.size() +
-                                         points.size());
-                Vector prevSegment = points[0] - points.back();
-                for (size_t i = 0; i < points.size(); ++i) {
-                    Vector nextSegment =
-                            points[(i + 1) % points.size()] - points[i];
-                    Real a = .5 * (prevSegment.norm() + nextSegment.norm());
-                    // Normals: rotate tangent clockwise 90 degrees
-                    // (y = -x, x = y)
-                    Vector n = Vector(prevSegment[1], -prevSegment[0]) +
-                               Vector(nextSegment[1], -nextSegment[0]);
-                    n /= n.norm();
-                    m_boundaryPoints.push_back(_BoundaryPoint(points[i], n, a));
-
-                    prevSegment = nextSegment;
-                }
-            }
-        }
-        else {
-            m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
-        }
-        m_boundaryFunctions.clear();
-        m_pressures.resizeDomain(m_boundaryPoints.size());
-        m_nodeFixed.assign(elementGrid().numNodes(), false);
-
-        m_weakRegions.clear();
-        m_weakRegionStressNorms.clear();
-    }
+    void m_invalidateCache();
 
 };
 
-#include "MeshlessFEM.inl"
+template<typename Model>
+class MeshlessFEM<Model>::ElementData
+{
+public:
+    ElementData() { }
+
+    void setGradPhis(const GradPhis &gp) { m_gradPhis = gp; }
+    void setVolume(Real vol) { m_volume = vol; }
+    Real volume() const      { return m_volume; }
+
+    // c: corner
+    // d: coordinate
+    Real gradPhi(size_t c, size_t d) {
+        return m_gradPhis(c, d);
+    }
+
+    typedef typename MeshlessFEM<Model>::FlattenedTensor FlattenedTensor;
+
+    // Compute non-engineering strain tensor for linear elasticity:
+    // e_xx = d u_x / dx = u_0_x d phi_0 / dx + u_1_x d phi_1 / dx + ...
+    // e_yy = d u_y / dy = u_0_y d phi_0 / dy + u_1_y d phi_1 / dy + ...
+    // e_xy = .5 * (d u_y / dx + d u_x / dy) = u_0_x d phi_0 / dy + ...
+    template<typename Tensor>
+    void displacementToStrain(const VField &displacements,
+                              const CornerVec &corners, Tensor &strain) const
+    {
+        strain[0] = strain[1] = strain[2] = 0;
+
+        for (size_t c = 0; c < (size_t) corners.size(); ++c) {
+            size_t v = corners[c];
+            // e_xx contribution
+            strain[0] += m_gradPhis(c, 0) * displacements(v)[0];
+            // e_yy contribution
+            strain[1] += m_gradPhis(c, 1) * displacements(v)[1];
+            // e_xy contribution
+            strain[2] += .5 * (m_gradPhis(c, 0) * displacements(v)[1]
+                            +  m_gradPhis(c, 1) * displacements(v)[0]);
+        }
+    }
+
+    // Compute non-engineering stress tensor for linear elasticity:
+    // sigma = D * B * u = D * displacementToStress
+    template<typename Tensor>
+    void displacementToStress(const VField &displacements,
+                              const CornerVec &corners, const DType &d,
+                              Tensor &stress) const
+    {
+        FlattenedTensor strain;
+        displacementToStrain(displacements, corners, strain);
+        strainToStress(strain, d, stress);
+    }
+
+    // Compute non-engineering stress tensor for linear elasticity:
+    // D = d00 d01   0 =  d0 d1   0 
+    //     d10 d11   0    d1 d2   0
+    //     0   0   d22    0   0   d3
+    template<typename StrainTensor, typename StressTensor>
+    void strainToStress(const StrainTensor &strain, const DType &d,
+                        StressTensor &stress) const
+    {
+        stress[0] = d[0] * strain[0] + d[1] * strain[1];
+        stress[1] = d[1] * strain[0] + d[2] * strain[1];
+        stress[2] = d[3] * strain[2];
+    }
+
+    // Compute energy induced in this element by a displacement.
+    Real displacementToEnergy(const VField &displacements,
+                              const CornerVec &corners, const DType &d) const
+    {
+        FlattenedTensor strain;
+        displacementToStrain(displacements, corners, strain);
+        FlattenedTensor stress;
+        strainToStress(strain, d, stress);
+
+        return (strain[0] * stress[0] + strain[1] * stress[1] +
+            2 * strain[2] * stress[2]) * m_volume;
+    }
+    
+private:
+    GradPhis m_gradPhis;
+    Real m_volume;
+};
 
 #endif // MESHLESS_FEM_HH

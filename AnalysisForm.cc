@@ -58,7 +58,15 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_weaknessCutoffStepper = new QDoubleSpinBox();
     g_weakRegionExtractionButton = new QPushButton("Extract Weak Regions");
     g_weakRegionSelector = new QComboBox();
+    g_pressureBoundStepper = new QDoubleSpinBox();
+    g_forceBoundStepper = new QDoubleSpinBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
+    g_pressureBoundStepper->setSingleStep(.01);
+    g_pressureBoundStepper->setMaximum(5.0);
+    g_pressureBoundStepper->setValue(.1);
+    g_forceBoundStepper->setSingleStep(.01);
+    g_forceBoundStepper->setMaximum(5.0);
+    g_forceBoundStepper->setValue(.1);
 
     modesUpdated(NULL);
     weakRegionsUpdated(NULL);
@@ -121,6 +129,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     weakForm->addRow("Weak Region Cutoff", g_weaknessCutoffStepper);
     weakForm->addRow(g_weakRegionExtractionButton);
     weakForm->addRow(g_weakRegionSelector);
+    weakForm->addRow("Pointwise Pressure Bound", g_pressureBoundStepper);
+    weakForm->addRow("Total Force Bound", g_forceBoundStepper);
     weakForm->addRow(g_weaknessAnalysisButton);
     weaknessAnalysisGroup->setLayout(weakForm);
 
@@ -182,6 +192,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      controller, SLOT(weakRegionSelectionChanged(int)));
     QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runWeaknessAnalysis()));
+    QObject::connect(g_pressureBoundStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(weaknessAnalysisControlsChanged(double)));
+    QObject::connect(g_forceBoundStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(weaknessAnalysisControlsChanged(double)));
 
     QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(someSelectorChanged(int)));
@@ -227,6 +241,9 @@ void AnalysisForm::m_setGUIFromSettings() {
 
     g_numWeakRegionsStepper->setValue(m_settings.weakRegionsPerMode);
     g_weaknessCutoffStepper->setValue(m_settings.weaknessCutoff);
+
+    g_forceBoundStepper->setValue(m_settings.totalForceBound);
+    g_pressureBoundStepper->setValue(m_settings.pointwisePressureBound);
 }
 
 void AnalysisForm::m_readSettingsFromGUI() {
@@ -253,6 +270,9 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.weakRegionsPerMode = g_numWeakRegionsStepper->value();
     m_settings.weaknessCutoff = g_weaknessCutoffStepper->value();
+
+    m_settings.totalForceBound = g_forceBoundStepper->value();
+    m_settings.pointwisePressureBound = g_pressureBoundStepper->value();
 }
 
 void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
@@ -278,6 +298,7 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
 
 void AnalysisForm::weakRegionsUpdated(const MeshlessFEM_t *fem) {
     size_t numWeakRegions = (fem != NULL) ? fem->numWeakRegions() : 0;
+    std::cout << "weak regions updated (now there are " << numWeakRegions << ")" << std::endl;
     g_weakRegionSelector->clear();
     g_weakRegionSelector->addItem("Select Weak Region");
 
@@ -313,7 +334,6 @@ void AnalysisForm::boundaryPointControlsChanged(int) {
     emit bpSettingsChanged(m_settings);
 }
 
-
 void AnalysisForm::modalAnalysisControlsChanged(int) {
     m_readSettingsFromGUI();
     emit modalAnalysisSettingsChanged(m_settings);
@@ -338,7 +358,6 @@ void AnalysisForm::weaknessAnalysisControlsChanged(double) {
     m_readSettingsFromGUI();
     emit weaknessAnalysisSettingsChanged(m_settings);
 }
-
 
 // We want the mode/weak region selector combo boxes to be mutually exclusive.
 void AnalysisForm::someSelectorChanged(int newIdx) {
