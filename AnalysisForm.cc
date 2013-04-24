@@ -36,6 +36,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_densityStepper = new QDoubleSpinBox();
 
     g_numModesStepper = new QSpinBox();
+    g_laplacianModesCheck = new QCheckBox();
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
     g_dumpModalDataButton = new QPushButton("Dump Modal Data (.msh)");
     g_dumpModalDataButton->setEnabled(false);
@@ -104,6 +105,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Modal Analysis
     QFormLayout *modalForm = new QFormLayout();
     modalForm->addRow("Number of Modes", g_numModesStepper);
+    modalForm->addRow("Laplacian Modes", g_laplacianModesCheck);
     g_numModesStepper->setMinimum(1);
     g_numModesStepper->setMaximum(50);
     modalForm->addRow(g_modalAnalysisButton);
@@ -164,6 +166,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_dumpModalDataButton, SIGNAL(clicked()),
                      controller, SLOT(dumpModalData()));
     QObject::connect(g_numModesStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(modalAnalysisControlsChanged(int)));
+    QObject::connect(g_laplacianModesCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(modalAnalysisControlsChanged(int)));
     QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
                      controller, SLOT(modeSelectionChanged(int)));
@@ -228,7 +232,8 @@ void AnalysisForm::m_setGUIFromSettings() {
                                        GAUSS_QUADRATURE);
     g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
 
-    g_numModesStepper->setValue(m_settings.numModes);   
+    g_laplacianModesCheck->setChecked(m_settings.laplacianModes);
+    g_numModesStepper->setValue(m_settings.numModes);
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
     g_useMarchingSquaresCheck->setChecked(m_settings.useMSBoundary);
     g_boundaryPointStepper->setValue(m_settings.boundarySpacing);
@@ -255,6 +260,7 @@ void AnalysisForm::m_readSettingsFromGUI() {
                                     ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     m_settings.quadraturePoints = g_quadraturePointsStepper->value();
 
+    m_settings.laplacianModes = g_laplacianModesCheck->isChecked();
     m_settings.numModes = g_numModesStepper->value();
     m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
 

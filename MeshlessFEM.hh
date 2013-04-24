@@ -42,6 +42,7 @@ public:
     typedef ElementGrid2D<Model>      ElementGrid;
     typedef BoundaryPoint<Vector>     _BoundaryPoint;
     typedef SPHCubicSpline<Real, 2>   BoundaryFunction;
+    typedef std::vector<size_t>       Region;
 
     // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 4, 2> GradPhis;
@@ -49,7 +50,7 @@ public:
     typedef typename ElementGrid::AdjacencyVec CornerVec;
 
     class ElementData;
-    class PerElementLaplacianStiffnessDensity;
+    class PerElementLaplacianDensity;
     class PerElementStiffnessDensity;
     class PerElementGradPhi;
     class PerElementMassMatrixDensity;
@@ -137,7 +138,8 @@ public:
 
     void configureModalAnalysis(const AnalysisSettings &settings) {
         m_numRequestedModes = settings.numModes;
-        m_modes.resize(0);
+        m_laplacianModes = settings.laplacianModes;
+        m_invalidateCache();
     }
 
     void configureWeaknessAnalysis(const AnalysisSettings &settings) {
@@ -182,7 +184,10 @@ public:
     }
 
     size_t numRigidModes() const {
-        return std::min(numModes(), (size_t) 3);
+        if (m_laplacianModes)
+            return std::min(numModes(), (size_t) 2);
+        else
+            return std::min(numModes(), (size_t) 3);
     }
 
     size_t numWeakRegions() const {
@@ -245,52 +250,7 @@ public:
         m_nodeFixed[i] = fixed;
     }
 
-    bool modalAnalysis() {
-        std::vector<size_t> K_i, K_j;
-        std::vector<Real> K_v;
-        size_t K_n;
-        m_assembleStiffnessMatrix(K_n, K_i, K_j, K_v);
-
-        std::vector<size_t> M_i, M_j;
-        std::vector<Real> M_v;
-        size_t M_n;
-        m_assembleMassMatrix(M_n, M_i, M_j, M_v);
-
-        size_t numModes = std::min((size_t) m_numRequestedModes, K_n);
-        bool success =  m_solver->GeneralizedEigenvalueProblem(numModes,
-                                               K_n, K_i, K_j, K_v,
-                                               M_n, M_i, M_j, M_v, m_modes,
-                                               m_eigenvalues);
-
-        // Normalize so all (nonzero) modes inject unit energy
-        // Mode energy = 1/2 u^T K u = 1/2 lambda u^T M u := 1
-        // ==> u^T M u = 2 / lambda
-        // Eigensolver gives us u^T M u = 1, so we must just scale u by
-        // sqrt(2 / lambda)
-        for (size_t i = 0; i < numModes; ++i) {
-            Real lambda = eigenvalue(i);
-            if (lambda > (Real) 1e-6)
-                m_modes[i] *= sqrt(2.0 / lambda);
-        }
-
-        m_modalStressTensors.clear();
-        m_modalStressNorms.clear();
-
-        if (success) {
-            assert(numModes == m_modes.size());
-
-            // Compute modal stress tensors.
-            m_modalStressTensors.reserve(numModes);
-            for (size_t i = 0; i < numModes; ++i)
-                m_modalStressTensors.push_back(elementStressTensors(mode(i)));
-
-            // Compute modal stress norms
-            for (size_t i = 0; i < numModes; ++i)
-                m_modalStressNorms.push_back(
-                        computeStressTensorNorms(m_modalStressTensors[i]));
-        }
-        return success;
-    }
+    bool modalAnalysis();
 
     void buildBoundaryFunctions();
 
@@ -407,6 +367,7 @@ private:
     Real m_density;
     Solver<Real> *m_solver;
     int m_numRequestedModes;
+    bool m_laplacianModes;
     std::vector<VField> m_modes;
     std::vector<SMField> m_modalStressTensors;
     std::vector<SField>  m_modalStressNorms;
@@ -416,7 +377,7 @@ private:
     int m_weakRegionsPerMode;
     Real m_weaknessCutoff, m_pointwisePressureBound, m_totalForceBound;
     // Indices of elements in each weak region
-    std::vector<std::vector<size_t> > m_weakRegions;
+    std::vector<Region> m_weakRegions;
     // (Modal) stress norms of elements in each weak region
     // (to be used as weights in the objective function)
     std::vector<SField> m_weakRegionStressNorms;
@@ -426,9 +387,12 @@ private:
     typedef std::vector<Real>   ValueVec;
     void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
                                    ValueVec &v);
+    void m_assembleLaplacianMatrix(size_t &n, IndexVec &i, IndexVec &j,
+                                   ValueVec &v);
     void m_assembleMassMatrix(size_t &n, IndexVec &i, IndexVec &j,
                               ValueVec &v);
     void m_computePerElementDisplacementStrainMap();
+
     void m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                               ValueVec &v);
     void m_assembleRigidModeMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
@@ -442,6 +406,44 @@ private:
     void m_assembleVDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
     void m_assembleWVector(DVector &w) const;
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Compute the energy induced within a region by a per-node displacement.
+    //  @param[in]  disp    displacement vector field
+    //  @param[in]  region  region over which to compute energy
+    //                      (defaults to entire object)
+    //  @return     energy within region
+    *///////////////////////////////////////////////////////////////////////////
+    Real m_computeEnergy(const VField &disp,
+                         const Region &region = Region()) {
+
+        if (!m_displacementStrainCached)
+            m_computePerElementDisplacementStrainMap();
+
+        Real energy = 0;
+        CornerVec cornerIndices;
+        ElementGrid &grid = elementGrid();
+        if (region.size() > 0) {
+            // Only integrate over supplied region
+            for (size_t i = 0; i < region.size(); ++i) {
+                size_t ei = region[i];
+                grid.elementCorners(ei, cornerIndices);
+                const ElementData &e = m_elementData[ei];
+                energy += e.displacementToEnergy(disp, cornerIndices, m_d);
+            }
+        }
+        else {
+            // Integrate over entire object
+            size_t numElements = grid.numElements();
+            for (size_t ei = 0; ei < numElements; ++ei) {
+                grid.elementCorners(ei, cornerIndices);
+                const ElementData &e = m_elementData[ei];
+                energy += e.displacementToEnergy(disp, cornerIndices, m_d);
+            }
+        }
+
+        return energy;
+    }
 
     void m_invalidateCache();
 

@@ -83,7 +83,7 @@ public:
     }
 
     void selectDeformation(size_t i) {
-        assert(i < m_fem.numWeakRegions());
+        assert(i < m_fem.numModes());
         m_selectedDeformation = i;
     }
 

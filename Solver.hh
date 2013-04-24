@@ -51,6 +51,9 @@ class Solver {
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
                 std::vector<VField> &modes, std::vector<Real> &eigval) = 0;
+        virtual bool EigenvalueProblem(size_t numModes,
+                size_t Ln, const IVec &Li, const IVec &Lj, const VVec &Lv,
+                std::vector<SField> &modes, std::vector<Real> &eigval) = 0;
 
         // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.
         // These matrices are compressed in the form
@@ -115,6 +118,50 @@ class MatlabSolver : public Solver<Real> {
                 // Convert into array of modal displacement vectors
                 for (size_t m = 0; m < numModes; ++m) {
                     modes.push_back(VField(modesMatrix.col(m)));
+                    eigval.push_back(eigenvalueData[m]);
+                }
+                delete[] modeData;
+            }
+
+            return success;
+        }
+
+        // Computes eigenvalues and eigenvectors of a linear operator L
+        virtual bool EigenvalueProblem(size_t numModes,
+                size_t Ln, const IVec &Li, const IVec &Lj, const VVec &Lv,
+                std::vector<SField> &modes, std::vector<Real> &eigval) {
+            modes.resize(0);
+            eigval.resize(0);
+            m_matlab->SetEngineSparseRealMatrix("L", Li.size(), &Li[0], &Lj[0],
+                                                &Lv[0], Ln, Ln);
+
+            char modeCommand[64];
+            int ret = m_matlab->Eval("clear opts; opts.issym = 1;");
+            snprintf(modeCommand, 64, "[V, D] = eigs(L, %i, 'SM', opts);",
+                     (int) numModes);
+            ret = m_matlab->Eval(modeCommand);
+            bool success = (ret == 0);
+            if (success) {
+                // sort in ascending order
+                m_matlab->Eval("[lambda, sortPerm] = sort(diag(D));");
+                m_matlab->Eval("V = V(:, sortPerm);");
+                m_matlab->Eval("clear D; clear sortPerm;");
+
+                Real *modeData = new Real[Ln * numModes];
+                Real *eigenvalueData = new Real[numModes];
+                // Column major
+                m_matlab->GetEngineRealMatrix("V", Ln, numModes, modeData,
+                                              true);
+                m_matlab->GetEngineRealMatrix("lambda", numModes, 1,
+                                              eigenvalueData, true);
+                typedef Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic,
+                                                 Eigen::Dynamic> > MappedMat;
+                MappedMat modesMatrix(modeData, Ln, numModes);
+                modes.reserve(numModes);
+                eigval.reserve(numModes);
+                // Convert into array of modal displacement vectors
+                for (size_t m = 0; m < numModes; ++m) {
+                    modes.push_back(SField(modesMatrix.col(m)));
                     eigval.push_back(eigenvalueData[m]);
                 }
                 delete[] modeData;

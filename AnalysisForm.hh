@@ -69,6 +69,7 @@ private:
 
     // Modal analysis settings
     QSpinBox *g_numModesStepper;
+    QCheckBox *g_laplacianModesCheck;
     QPushButton *g_modalAnalysisButton;
     QPushButton *g_dumpModalDataButton;
     QComboBox *g_modeSelector;
