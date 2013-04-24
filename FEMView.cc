@@ -338,36 +338,38 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
     int numNodes      = flatTree.numNodes;
     int numPrimitives = flatTree.numPrimitives;
 
-    CALL_CL_GUARDED(clEnqueueWriteBuffer,
-            ( m_clQueue, m_nodeBuf, /* Blocking */ CL_FALSE, 0,
-              numNodes * sizeof(CSGNodeType), nodes, 0, NULL, NULL ));
-    CALL_CL_GUARDED(clEnqueueWriteBuffer,
-            ( m_clQueue, m_primBuf, /* Blocking */ CL_FALSE, 0,
-              numPrimitives * sizeof(CSGPrimitiveData), pdata, 0, NULL, NULL ));
+    if ((numNodes > 0) && (numPrimitives > 0)) {
+        CALL_CL_GUARDED(clEnqueueWriteBuffer,
+                ( m_clQueue, m_nodeBuf, /* Blocking */ CL_FALSE, 0,
+                  numNodes * sizeof(CSGNodeType), nodes, 0, NULL, NULL ));
+        CALL_CL_GUARDED(clEnqueueWriteBuffer,
+                ( m_clQueue, m_primBuf, /* Blocking */ CL_FALSE, 0,
+                  numPrimitives * sizeof(CSGPrimitiveData), pdata, 0, NULL, NULL ));
 
-    clEnqueueUnmapMemObject(m_clQueue, m_nodeHostBuf, nodes, 0, NULL, NULL);
-    clEnqueueUnmapMemObject(m_clQueue, m_primHostBuf, pdata, 0, NULL, NULL);
+        clEnqueueUnmapMemObject(m_clQueue, m_nodeHostBuf, nodes, 0, NULL, NULL);
+        clEnqueueUnmapMemObject(m_clQueue, m_primHostBuf, pdata, 0, NULL, NULL);
 
-    size_t ldim[] = {128, 1};
-    size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
-                       (size_t) m_width};
+        size_t ldim[] = {128, 1};
+        size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
+                           (size_t) m_width};
 
-    float minX = m_frameMin[0], maxX = m_frameMax[0],
-          minY = m_frameMin[1], maxY = m_frameMax[1];
-    cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
-                          fg.blue() / 255.0f, fg.alpha() / 255.0f}};
+        float minX = m_frameMin[0], maxX = m_frameMax[0],
+              minY = m_frameMin[1], maxY = m_frameMax[1];
+        cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
+                              fg.blue() / 255.0f, fg.alpha() / 255.0f}};
 
-    SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
-            minX, maxX, minY, maxY, numNodes, numPrimitives,
-            m_nodeBuf, m_primBuf, fgColor);
+        SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
+                minX, maxX, minY, maxY, numNodes, numPrimitives,
+                m_nodeBuf, m_primBuf, fgColor);
 
-    // get_timestamp(&start);
-    CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
-                /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
-    CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
-                &texBuf, 0, NULL, NULL));
+        // get_timestamp(&start);
+        CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
+                    /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+        CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
+                    &texBuf, 0, NULL, NULL));
 
-    CALL_CL_GUARDED(clFinish, (m_clQueue));
+        CALL_CL_GUARDED(clFinish, (m_clQueue));
+    }
     // get_timestamp(&end);
     // std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end)
     //           << std::endl;
