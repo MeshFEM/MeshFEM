@@ -464,15 +464,22 @@ MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
 //  @param[out]  m, n           Number of matrix rows, columns
 //  @param[out]  mat_i, mat_j,  row indices, column indices, and values
 //               mat_v Entry 
+//  @param[in]   forLaplacian   whether the mass matrix is for the laplacian
+//                              modal analysis (defaults to false)
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
 void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, ValueVec &mat_v)
+        IndexVec &mat_j, ValueVec &mat_v, bool forLaplacian)
 {
     // Simple (i, j v) mass matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
-    n = 2 * elemGrid.numNodes();
+
+    if (forLaplacian)
+        n = elemGrid.numNodes();
+    else
+        n = 2 * elemGrid.numNodes();
+
     PerElementMassMatrixDensity lmass(model(), m_density, m_massMatrixType);
     CornerVec cornerIndices;
 
@@ -488,13 +495,20 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
                 size_t vj = cornerIndices[j];
                 Real val = lmass(i, j);
                 if (val > 1e-12) {
-                    mat_i.push_back(2 * vi);
-                    mat_j.push_back(2 * vj);
-                    mat_v.push_back(val);
+                    if (forLaplacian) {
+                        mat_i.push_back(vi);
+                        mat_j.push_back(vj);
+                        mat_v.push_back(val);
+                    }
+                    else {
+                        mat_i.push_back(2 * vi);
+                        mat_j.push_back(2 * vj);
+                        mat_v.push_back(val);
 
-                    mat_i.push_back(2 * vi + 1);
-                    mat_j.push_back(2 * vj + 1);
-                    mat_v.push_back(val);
+                        mat_i.push_back(2 * vi + 1);
+                        mat_j.push_back(2 * vj + 1);
+                        mat_v.push_back(val);
+                    }
                 }
             }
         }
@@ -843,12 +857,19 @@ bool MeshlessFEM<Model>::modalAnalysis()
         std::vector<Real> L_v;
         size_t L_n;
         m_assembleLaplacianMatrix(L_n, L_i, L_j, L_v);
+
+        std::vector<size_t> M_i, M_j;
+        std::vector<Real> M_v;
+        size_t M_n;
+        m_assembleMassMatrix(M_n, M_i, M_j, M_v, true);
+
         size_t numModes = std::min((size_t) m_numRequestedModes, L_n);
 
         std::vector<SField> lapModes;
         std::vector<Real>   lapEigs;
-        success = m_solver->EigenvalueProblem(numModes / 2,
+        success = m_solver->GeneralizedEigenvalueProblem(numModes / 2,
                                               L_n, L_i, L_j, L_v,
+                                              M_n, M_i, M_j, M_v,
                                               lapModes, lapEigs);
         assert(numModes / 2 == lapModes.size());
 
@@ -893,11 +914,17 @@ bool MeshlessFEM<Model>::modalAnalysis()
         m_assembleMassMatrix(M_n, M_i, M_j, M_v);
 
         size_t numModes = std::min((size_t) m_numRequestedModes, K_n);
+        std::vector<SField> eigenVectors;
         success = m_solver->GeneralizedEigenvalueProblem(numModes,
                                               K_n, K_i, K_j, K_v,
-                                              M_n, M_i, M_j, M_v, m_modes,
+                                              M_n, M_i, M_j, M_v, eigenVectors,
                                               m_eigenvalues);
-        assert(numModes == m_modes.size());
+        assert(numModes == eigenVectors.size());
+        m_modes.clear(); m_modes.reserve(eigenVectors.size());
+        for (auto it = eigenVectors.begin(); it != eigenVectors.end(); ++it) {
+            // Convert to a vector field
+            m_modes.push_back(it->template unflatten<2>());
+        }
 
         // Normalize so all (nonzero) modes inject unit energy
         // Mode energy = 1/2 u^T K u = 1/2 lambda u^T M u := 1

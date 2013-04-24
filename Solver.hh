@@ -50,7 +50,7 @@ class Solver {
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
-                std::vector<VField> &modes, std::vector<Real> &eigval) = 0;
+                std::vector<SField> &eigvec, std::vector<Real> &eigval) = 0;
         virtual bool EigenvalueProblem(size_t numModes,
                 size_t Ln, const IVec &Li, const IVec &Lj, const VVec &Lv,
                 std::vector<SField> &modes, std::vector<Real> &eigval) = 0;
@@ -81,9 +81,8 @@ class MatlabSolver : public Solver<Real> {
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
                 size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
-                std::vector<VField> &modes, std::vector<Real> &eigval) {
-            modes.resize(0);
-            eigval.resize(0);
+                std::vector<SField> &eigvec, std::vector<Real> &eigval) {
+            eigvec.clear(), eigval.clear();
             m_matlab->SetEngineSparseRealMatrix("K", Ki.size(), &Ki[0], &Kj[0],
                                                 &Kv[0], Kn, Kn);
             m_matlab->SetEngineSparseRealMatrix("M", Mi.size(), &Mi[0], &Mj[0],
@@ -113,11 +112,11 @@ class MatlabSolver : public Solver<Real> {
                 MappedMat modesMatrix(modeData, Kn, numModes);
                 // Kn = 2 * numModes in 2D
                 VField vec(Kn / 2);
-                modes.reserve(numModes);
+                eigvec.reserve(numModes);
                 eigval.reserve(numModes);
                 // Convert into array of modal displacement vectors
                 for (size_t m = 0; m < numModes; ++m) {
-                    modes.push_back(VField(modesMatrix.col(m)));
+                    eigvec.push_back(SField(modesMatrix.col(m)));
                     eigval.push_back(eigenvalueData[m]);
                 }
                 delete[] modeData;

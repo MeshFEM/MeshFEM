@@ -96,6 +96,10 @@ public:
     Real max() const { return m_values.maxCoeff(); }
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
+    template<size_t dim>
+    VectorField<Real, dim> unflatten() const {
+        return VectorField<Real, dim>(m_values);
+    }
 private:
     using VectorField<Real, 1>::m_values;
 };

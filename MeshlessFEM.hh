@@ -390,7 +390,7 @@ private:
     void m_assembleLaplacianMatrix(size_t &n, IndexVec &i, IndexVec &j,
                                    ValueVec &v);
     void m_assembleMassMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                              ValueVec &v);
+                              ValueVec &v, bool forLaplacian = false);
     void m_computePerElementDisplacementStrainMap();
 
     void m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
