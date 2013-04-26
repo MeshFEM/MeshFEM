@@ -304,7 +304,7 @@ void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
 
 void AnalysisForm::weakRegionsUpdated(const MeshlessFEM_t *fem) {
     size_t numWeakRegions = (fem != NULL) ? fem->numWeakRegions() : 0;
-    std::cout << "weak regions updated (now there are " << numWeakRegions << ")" << std::endl;
+    /// std::cout << "weak regions updated (now there are " << numWeakRegions << ")" << std::endl;
     g_weakRegionSelector->clear();
     g_weakRegionSelector->addItem("Select Weak Region");
 

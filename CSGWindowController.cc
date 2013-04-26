@@ -243,6 +243,7 @@ void CSGWindowController::runModalAnalysis()
         mbox.exec();
     }
     emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::configureSimulation()
@@ -357,6 +358,10 @@ void CSGWindowController::runWeaknessAnalysis()
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
     }
+
+    emit modesUpdated(&m_fem);
+    emit weakRegionsUpdated(&m_fem);
+    m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
 }
 
 void CSGWindowController::dumpModalData()

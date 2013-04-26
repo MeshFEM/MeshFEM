@@ -37,7 +37,8 @@ class FEMView2D : public QGLWidget
 public:
     typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
                   SIM_SETUP_STATE = 2, SIM_RESULT_STATE = 3,
-                  FORCES_STATE = 4, MODE_STATE = 5, WEAK_REGION_STATE = 6}
+                  FORCES_STATE = 4, MODE_STATE = 5, WEAK_REGION_STATE = 6,
+                  COMBINED_WEAKNESS_STATE = 7 }
             GUIState;
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
@@ -196,6 +197,7 @@ protected:
             update();
         }
         else {
+            // Pass up the unhandled timer event
             QGLWidget::timerEvent(event);
         }
     }

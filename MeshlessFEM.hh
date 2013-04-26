@@ -184,10 +184,8 @@ public:
     }
 
     size_t numRigidModes() const {
-        if (m_laplacianModes)
-            return std::min(numModes(), (size_t) 2);
-        else
-            return std::min(numModes(), (size_t) 3);
+        size_t rigidModes = m_laplacianModes ? 2 : 3;
+        return std::min(numModes(), rigidModes);
     }
 
     size_t numWeakRegions() const {
@@ -214,6 +212,10 @@ public:
 
     const SField &weakRegionStressNorms(size_t i) const {
         return m_weakRegionStressNorms[i];
+    }
+
+    const SField &combinedWeakness() const {
+        return m_combinedWeakness;
     }
 
     const BoundaryFunction &boundaryFunction(size_t i) {
@@ -382,6 +384,7 @@ private:
     // (to be used as weights in the objective function)
     std::vector<SField> m_weakRegionStressNorms;
     size_t m_selectedWeakRegion;
+    SField  m_combinedWeakness;
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;
@@ -405,7 +408,7 @@ private:
                             ValueVec &v);
     void m_assembleVDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
                             ValueVec &v);
-    void m_assembleWVector(DVector &w) const;
+    void m_assembleWVector(DVector &w, size_t regionIdx) const;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Compute the energy induced within a region by a per-node displacement.

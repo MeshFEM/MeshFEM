@@ -100,6 +100,17 @@ public:
     VectorField<Real, dim> unflatten() const {
         return VectorField<Real, dim>(m_values);
     }
+
+    // this = min(this, b)
+    void minRelax(const ScalarField<Real> &b) {
+        m_values = m_values.cwiseMin(b.m_values);
+    }
+
+    // this = max(this, b)
+    void maxRelax(const ScalarField<Real> &b) {
+        m_values = m_values.cwiseMax(b.m_values);
+    }
+
 private:
     using VectorField<Real, 1>::m_values;
 };

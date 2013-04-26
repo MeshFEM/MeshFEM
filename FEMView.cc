@@ -618,6 +618,8 @@ void FEMView2D::draw()
     glEnable(GL_POINT_SMOOTH);
     bool usedColormap = false;
 
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+
     if (m_guiState == MODEL_STATE) {
         m_drawObject();
         m_drawSelectedObjects();
@@ -676,7 +678,6 @@ void FEMView2D::draw()
         glColor3f(1.0, 1.0, 0);
         glBegin(GL_POINTS);
 
-        ElementGrid2D_t &grid = m_fem.elementGrid();
         for (unsigned int i = 0; i < grid.numElements(); ++i) {
             BBox_t b = grid.elementBoundingBox(i);
             std::vector<Vector> qpoints =
@@ -743,7 +744,6 @@ void FEMView2D::draw()
         drawObjectTextureCells();
         // drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
-        ElementGrid2D_t &grid = m_fem.elementGrid();
 
         glPointSize(5.0f);
         glBegin(GL_POINTS);
@@ -785,6 +785,18 @@ void FEMView2D::draw()
             m_scalarColorMap.setAlpha(1.0f);
             m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
             drawObjectTextureCells(VField(), stressNorms);
+            usedColormap = true;
+        }
+        if (m_viewSettings.showGridOverResults) {
+            drawGrid(DRAW_EDGES);
+        }
+    }
+    else if (m_guiState == COMBINED_WEAKNESS_STATE) {
+        if (m_fem.combinedWeakness().size() == grid.numElements()) {
+            const SField &cWeak = m_fem.combinedWeakness();
+            m_scalarColorMap.setAlpha(1.0f);
+            m_scalarColorMap.setRange(cWeak.min(), cWeak.max());
+            drawObjectTextureCells(VField(), cWeak);
             usedColormap = true;
         }
         if (m_viewSettings.showGridOverResults) {

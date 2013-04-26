@@ -940,6 +940,8 @@ bool MeshlessFEM<Model>::modalAnalysis()
 
     m_modalStressTensors.clear();
     m_modalStressNorms.clear();
+    m_weakRegions.clear();
+    m_weakRegionStressNorms.clear();
 
     if (success) {
         size_t numModes = m_modes.size();
@@ -957,6 +959,10 @@ bool MeshlessFEM<Model>::modalAnalysis()
     return success;
 }
 
+// Return Values
+//  -1: modal analysis failure
+//   0: success
+//   1: success, and modes were updated
 template<typename Model>
 int MeshlessFEM<Model>::weakRegionExtraction()
 {
@@ -1005,6 +1011,7 @@ int MeshlessFEM<Model>::weakRegionExtraction()
                 grid.elementsAdjacentElement(u, adj);
                 for (size_t j = 0; j < adj.size(); ++j) {
                     size_t v = adj[j];
+                    assert(v < wrIndex.size());
                     if (wrIndex[v] == 0) {
                         bfsQueue.push(v);
                     }
@@ -1049,19 +1056,23 @@ int MeshlessFEM<Model>::weakRegionExtraction()
         }
     }
 
-    weakRegionVolumes.assign(m_weakRegions.size(), 0.0);
-    for (size_t r = 0; r < m_weakRegions.size(); ++r) {
-        const Region &region = m_weakRegions[r];
-        for (size_t i = 0; i < region.size(); ++i) {
-            weakRegionVolumes[i] += m_elementData[region[i]].volume();
-        }
-    }
+    // weakRegionVolumes.assign(m_weakRegions.size(), 0.0);
+    // for (size_t r = 0; r < m_weakRegions.size(); ++r) {
+    //     const Region &region = m_weakRegions[r];
+    //     for (size_t i = 0; i < region.size(); ++i) {
+    //         weakRegionVolumes[i] += m_elementData[region[i]].volume();
+    //     }
+    // }
 
     return recomputedModes ? 1 : 0;
 }
 
 template<typename Model>
 bool MeshlessFEM<Model>::weaknessAnalysis() {
+    int ret = weakRegionExtraction();
+    if (ret < 0)
+        return false;
+
     MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
     assert(solver != NULL);
 
@@ -1083,38 +1094,62 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
     solver->setSparseMatrix("B", Bm, Bn, Bi, Bj, Bv);
     solver->setSparseMatrix("VD", VDm, VDn, VDi, VDj, VDv);
 
-    DVector w;
-    m_assembleWVector(w);
-    solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
-
     solver->eval("C_s = [K, R'; R, zeros(3)];");
     solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
-    solver->eval("q = (C_s') \\ (S * B' * VD' * w);");
-    solver->eval("f = (S * F * N * A)' * q;");
 
-    char cmd[128];
-    snprintf(cmd, 128, "F_tot = %lf; p_max = %lf;",
-            (double) m_totalForceBound, (double) m_pointwisePressureBound);
-    solver->eval(cmd);
+    size_t numNodes = elementGrid().numNodes();
+    size_t numElems = elementGrid().numElements();
 
-    solver->eval("psize=size(f, 1); linprog_A = [-speye(psize); speye(psize)];");
-    solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
-    solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
-    solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
+    m_combinedWeakness.resizeDomain(numElems);
+    m_combinedWeakness.clear();
 
-    solver->eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
-    m_pressures.resizeDomain(m_boundaryPoints.size());
-    solver->getDenseMatrix("p", m_boundaryPoints.size(), 1, m_pressures.data(), true);
+    DVector w;
+    for (size_t i = 0; i < numWeakRegions(); ++i) {
+        m_assembleWVector(w, i);
+        solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
+
+        solver->eval("q = (C_s') \\ (S * B' * VD' * w);");
+        solver->eval("f = (S * F * N * A)' * q;");
+
+        char cmd[128];
+        snprintf(cmd, 128, "F_tot = %lf; p_max = %lf;",
+                (double) m_totalForceBound, (double) m_pointwisePressureBound);
+        solver->eval(cmd);
+
+        solver->eval("psize=size(f, 1); linprog_A = [-speye(psize); speye(psize)];");
+        solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
+        solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
+        solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
+
+        // Get optimal pressures
+        solver->eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
+        m_pressures.resizeDomain(m_boundaryPoints.size());
+        solver->getDenseMatrix("p", m_boundaryPoints.size(), 1, m_pressures.data(), true);
+
+        // Get optimal displacements
+        solver->eval("u_lam = C_s \\ (S * F * N * A * p);");
+        solver->eval("u = S' * u_lam;");
+
+        VField optU(numNodes);
+        solver->getDenseMatrix("u", Kn, 1, optU.data().data(), true);
+        typedef Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic,
+                                         2, Eigen::RowMajor> > MappedMat;
+
+        SMField stressTensors = elementStressTensors(optU);
+        SField  optStress = computeStressTensorNorms(stressTensors);
+
+        m_combinedWeakness.maxRelax(optStress);
+    }
 
     return true;
 }
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleWVector(DVector &w) const {
+void MeshlessFEM<Model>::m_assembleWVector(DVector &w, size_t regionIdx) const {
     size_t numElems = elementGrid().numElements();
     w.resize(3 * numElems, Eigen::NoChange);
-    if (m_selectedWeakRegion < m_weakRegions.size()) {
-        const SField &weights = m_weakRegionStressNorms[m_selectedWeakRegion];
+    if (regionIdx < m_weakRegions.size()) {
+        const SField &weights = m_weakRegionStressNorms[regionIdx];
         assert(weights.size() == numElems);
         for (size_t i = 0; i < numElems; ++i) {
             Real weight = weights[i];
