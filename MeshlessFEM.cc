@@ -1069,6 +1069,9 @@ int MeshlessFEM<Model>::weakRegionExtraction()
 
 template<typename Model>
 bool MeshlessFEM<Model>::weaknessAnalysis() {
+    if (combinedWeaknessIsCached())
+        return true;
+
     int ret = weakRegionExtraction();
     if (ret < 0)
         return false;
@@ -1097,6 +1100,16 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
     solver->eval("C_s = [K, R'; R, zeros(3)];");
     solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
 
+    char cmd[128];
+    snprintf(cmd, 128, "F_tot = %lf; p_max = %lf;",
+            (double) m_totalForceBound, (double) m_pointwisePressureBound);
+    solver->eval(cmd);
+
+    solver->eval("psize=size(A, 2); linprog_A = [-speye(psize); speye(psize)];");
+    solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
+    solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
+    solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
+
     size_t numNodes = elementGrid().numNodes();
     size_t numElems = elementGrid().numElements();
 
@@ -1111,24 +1124,13 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
         solver->eval("q = (C_s') \\ (S * B' * VD' * w);");
         solver->eval("f = (S * F * N * A)' * q;");
 
-        char cmd[128];
-        snprintf(cmd, 128, "F_tot = %lf; p_max = %lf;",
-                (double) m_totalForceBound, (double) m_pointwisePressureBound);
-        solver->eval(cmd);
-
-        solver->eval("psize=size(f, 1); linprog_A = [-speye(psize); speye(psize)];");
-        solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
-        solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
-        solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
-
         // Get optimal pressures
         solver->eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
         m_pressures.resizeDomain(m_boundaryPoints.size());
         solver->getDenseMatrix("p", m_boundaryPoints.size(), 1, m_pressures.data(), true);
 
         // Get optimal displacements
-        solver->eval("u_lam = C_s \\ (S * F * N * A * p);");
-        solver->eval("u = S' * u_lam;");
+        solver->eval("u = S' * (C_s \\ (S * F * N * A * p));");
 
         VField optU(numNodes);
         solver->getDenseMatrix("u", Kn, 1, optU.data().data(), true);
@@ -1140,6 +1142,31 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
 
         m_combinedWeakness.maxRelax(optStress);
     }
+
+    solver->setDenseMatrix("combinedWeakness", m_combinedWeakness.size(),
+            1, m_combinedWeakness.data(), true);
+
+    std::vector<size_t> cwSortPerm;
+    sortPermutation(m_combinedWeakness, cwSortPerm);
+    assert(cwSortPerm.size() == numElems);
+
+    DVector volumes(numElems);
+    for (size_t i = 0; i < numElems; ++i)
+        volumes[i] = m_elementData[i].volume();
+
+    Real accumVol = 0.0;
+    DVector percentile(numElems);
+    for (size_t i = 0; i < numElems; ++i) {
+        accumVol += volumes[cwSortPerm[i]];
+        percentile[cwSortPerm[i]] = accumVol;
+    }
+    percentile *= (1.0 / accumVol);
+
+    solver->setDenseMatrix("volumes", volumes.rows(),
+            1, volumes.data(), true);
+    solver->setDenseMatrix("cwPercentiles", percentile.rows(),
+            1, percentile.data(), true);
+    
 
     return true;
 }
@@ -1211,6 +1238,8 @@ void MeshlessFEM<Model>::m_invalidateCache() {
 
     m_weakRegions.clear();
     m_weakRegionStressNorms.clear();
+
+    m_combinedWeakness.resizeDomain(0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

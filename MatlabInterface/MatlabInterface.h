@@ -9,9 +9,9 @@
 #include <cstring>
 
 // Work around bug with C++11 and Matlab engine
-#if __cplusplus >= 201103L
-#define CHAR16_T char16_t
-#endif
+// #if __cplusplus >= 201103L
+// #define CHAR16_T char16_t
+// #endif
 #include "engine.h"  // Matlab engine header
 
 // from Matlab

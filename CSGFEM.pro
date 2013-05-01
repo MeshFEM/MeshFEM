@@ -7,10 +7,12 @@ TARGET =
 DEPENDPATH += .
 INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson
 INCLUDEPATH += . /opt/local/include /opt/local/include/freetype2
-INCLUDEPATH += /Applications/MATLAB_R2010b.app/extern/include/
-LIBS += -L/Applications/MATLAB_R2010b.app/bin/maci64/ -leng -lmx -lmat
+INCLUDEPATH += /Applications/MATLAB_R2013a.app/extern/include/
+LIBS += -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
 LIBS += -L/opt/local/lib -lqjson -lftgl
 LIBS += -framework OpenCL
+# Hack to circumvent bug when MOC tries to parse certain boost macros
+QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
 
 QT += opengl
 CONFIG += release
