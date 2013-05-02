@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "AnalysisSettings.hh"
 #include <iostream>
+#include <string>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -24,14 +25,44 @@ using namespace std;
 int main(int argc, const char *argv[])
 {
     AnalysisSettings settings;
-    // po::options_description opts("Analysis Settings");
-    po::options_description opts;
-    settings.getOptions(opts);
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, opts), vm);
-    po::notify(vm);
+    po::options_description analysis_opts("Analysis Settings");
+    settings.getOptions(analysis_opts);
 
-    cout << opts << endl;
+    po::options_description hidden_opts("Hidden Arguments");
+    hidden_opts.add_options()
+        ("input-file", po::value<string>(), "input CSG file")
+        ("output-file", po::value<string>(), "output MSH file")
+        ;
+
+    po::positional_options_description p;
+    p.add("input-file", 1);
+    p.add("output-file", 1);
+
+    po::options_description visible_opts;
+    visible_opts.add_options()("help", "Produce this help message");
+    visible_opts.add(analysis_opts);
+
+    po::options_description cli_opts;
+    cli_opts.add(visible_opts).add(hidden_opts);
+
+    po::variables_map vm;
+    try {
+        po::store(po::command_line_parser(argc, argv).
+                  options(cli_opts).positional(p).run(), vm);
+        po::notify(vm);
+    }
+    catch (std::exception &e) {
+        cout << "Error: " << e.what() << endl << endl;
+        cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
+        cout << visible_opts << endl;
+        return 1;
+    }
+
+    if (vm.count("help")) {
+        cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
+        cout << visible_opts << endl;
+        return 0;
+    }
 
     return 0;
 }
