@@ -349,7 +349,8 @@ void CSGWindowController::runWeakRegionExtraction()
 
 void CSGWindowController::runWeaknessAnalysis()
 {
-    bool success = m_fem.weaknessAnalysis();
+    Scalar weakness;
+    bool success = m_fem.weaknessAnalysis(weakness);
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Weakness Analysis Failed",
@@ -420,4 +421,42 @@ void CSGWindowController::weakRegionSelectionChanged(int index)
         if (m_femView->getGUIState() == FEMView2D::WEAK_REGION_STATE)
             m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     }
+}
+
+void CSGWindowController::runShapeOptimization()
+{
+
+    Scalar weakness;
+    bool success = m_fem.weaknessAnalysis(weakness);
+    assert(success);
+
+    // compute gradient
+    Scalar delta = .1;
+    std::vector<Scalar> params = m_csgTree->getParameters();
+    cout << "Optimizing over " << params.size() << " parameters." << endl;
+    DVector grad(params.size());
+    for (size_t i = 0; i < params.size(); ++i) {
+        Scalar old = params[i];
+        params[i] = old + delta;
+
+        m_csgTree->setParameters(params);
+        m_fem.modelChanged();
+        Scalar weaknessPerturb;
+        success = m_fem.weaknessAnalysis(weaknessPerturb);
+        assert(success);
+        grad[i] = (weaknessPerturb - weakness) / delta;
+
+        params[i] = old;
+    }
+
+    if (grad.norm() > 0) {
+        grad /= grad.norm();
+        for (size_t i = 0; i < params.size(); ++i) {
+            params[i] -= .125 * grad[i];
+        }
+    }
+    cout << "gradient: " << grad << endl;
+    
+    m_csgTree->setParameters(params);
+    m_fem.modelChanged();
 }

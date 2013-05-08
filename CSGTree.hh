@@ -96,7 +96,6 @@ public:
         return m_roots[i];
     }
 
-
     std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing)
     {
         typedef std::vector<_BoundaryPoint> BndPts;
@@ -107,6 +106,62 @@ public:
                              rootBoundaryPts.end());
         }
         return bndPoints;
+    }
+
+    struct CSGParameterGetter {
+        std::vector<Real> &parameters;
+        CSGParameterGetter(std::vector<Real> &params)
+            : parameters(params)
+        {
+            parameters.clear();
+        }
+        void preVisit(const CSGNode *) { }
+        void postVisit(const CSGNode *node) {
+            const CSGPrimitive *prim = dynamic_cast<const CSGPrimitive *>(node);
+            if (prim == NULL) return;
+            // Center, Dimensions, rotation
+            Vector v = prim->getCenter();
+            parameters.push_back(v[0]);
+            parameters.push_back(v[1]);
+
+            v = prim->getDimensions();
+            parameters.push_back(v[0]);
+            parameters.push_back(v[1]);
+
+            parameters.push_back(prim->getRotationRad());
+        }
+    };
+    
+    struct CSGParameterSetter {
+        const std::vector<Real> &parameters;
+        size_t primitivesVisited;
+        CSGParameterSetter(const std::vector<Real> &params)
+                : parameters(params), primitivesVisited(0) { }
+
+        void preVisit(CSGNode *) { }
+        void postVisit(CSGNode *node) {
+            CSGPrimitive *prim = dynamic_cast<CSGPrimitive *>(node);
+            if (prim == NULL) return;
+            ++primitivesVisited;
+            assert(5 * primitivesVisited <= parameters.size());
+            const Real *values = &parameters[5 * (primitivesVisited - 1)];
+
+            // Center, Dimensions, rotation
+            prim->setCenter(Vector(values[0], values[1]));
+            prim->setDimensions(Vector(values[2], values[3]));
+            prim->setRotationRad(values[4]);
+        }
+    };
+
+    std::vector<Real> getParameters() {
+        std::vector<Real> params;
+        dfs(CSGParameterGetter(params));
+        return params;
+    }
+
+    void setParameters(const std::vector<Real> &params)
+    {
+        dfs(CSGParameterSetter(params));
     }
 
     // Note: the tree takes ownership of node when node becomes root!

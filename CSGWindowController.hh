@@ -61,6 +61,9 @@ public slots:
     void modeSelectionChanged(int index);
     void weakRegionSelectionChanged(int index);
 
+    // Shape optimization actions
+    void runShapeOptimization();
+
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =

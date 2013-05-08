@@ -8,13 +8,24 @@
 //  Company:  New York University
 //  Created:  05/01/2013 12:25:38
 ////////////////////////////////////////////////////////////////////////////////
-#include "AnalysisSettings.hh"
 #include <iostream>
 #include <string>
+#include <cstdlib>
+
+#include "AnalysisSettings.hh"
+#include "Solver.hh"
+#include "GlobalTypes.hh"
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 using namespace std;
+
+void usage(int exitVal, const po::options_description &visible_opts)
+{
+    cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
+    cout << visible_opts << endl;
+    exit(exitVal);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
@@ -53,16 +64,18 @@ int main(int argc, const char *argv[])
     }
     catch (std::exception &e) {
         cout << "Error: " << e.what() << endl << endl;
-        cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
-        cout << visible_opts << endl;
-        return 1;
+        usage(1, visible_opts);
     }
 
-    if (vm.count("help")) {
-        cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
-        cout << visible_opts << endl;
-        return 0;
+    if (vm.count("help"))
+        usage(0, visible_opts);
+
+    if ((vm.count("input-file") == 0) || (vm.count("output-file") == 0)) {
+        cout << "Error: must specify input and output files" << endl;
+        usage(1, visible_opts);
     }
+
+    // MeshlessFEM_t fem(csgTree, settings, solver);
 
     return 0;
 }

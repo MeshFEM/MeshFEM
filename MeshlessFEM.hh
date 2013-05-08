@@ -347,7 +347,7 @@ public:
         m_selectedWeakRegion = i;
     }
 
-    bool weaknessAnalysis();
+    bool weaknessAnalysis(Real &weaknessCriterion);
 
     SMField elementStressTensors(const VField &displacement);
     SField  computeStressTensorNorms(const SMField &stressField);
@@ -389,6 +389,7 @@ private:
     std::vector<SField> m_weakRegionStressNorms;
     size_t m_selectedWeakRegion;
     SField  m_combinedWeakness;
+    Real m_weaknessCriterion;
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;

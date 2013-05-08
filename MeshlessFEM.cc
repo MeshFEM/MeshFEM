@@ -1068,9 +1068,11 @@ int MeshlessFEM<Model>::weakRegionExtraction()
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::weaknessAnalysis() {
-    if (combinedWeaknessIsCached())
+bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion) {
+    if (combinedWeaknessIsCached()) {
+        weaknessCriterion = m_weaknessCriterion;
         return true;
+    }
 
     int ret = weakRegionExtraction();
     if (ret < 0)
@@ -1110,8 +1112,9 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
     solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
     solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
 
-    size_t numNodes = elementGrid().numNodes();
-    size_t numElems = elementGrid().numElements();
+    const ElementGrid2D<Model> &elemGrid = elementGrid();
+    size_t numNodes = elemGrid.numNodes();
+    size_t numElems = elemGrid.numElements();
 
     m_combinedWeakness.resizeDomain(numElems);
     m_combinedWeakness.clear();
@@ -1161,6 +1164,30 @@ bool MeshlessFEM<Model>::weaknessAnalysis() {
         percentile[cwSortPerm[i]] = accumVol;
     }
     percentile *= (1.0 / accumVol);
+
+    // // Find the highest stress *full* element (stress is averaged over elements,
+    // // so partial elements have an unfair advantage in the rankings)
+    // Real weaknessCriterion = m_combinedWeakness[cwSortPerm.back()];
+    // for (int i = cwSortPerm.size() - 1; i >= 0; --i) {
+    //     if (elemGrid.elementIsFull(cwSortPerm[i])) {
+    //         weaknessCriterion = m_combinedWeakness[cwSortPerm[i]];
+    //         break;
+    //     }
+    // }
+
+    // Lp norm
+    Real p = 20;
+    weaknessCriterion = 0.0;
+    Real totalVol = 0.0;
+    for (size_t i = 0; i < m_combinedWeakness.size(); ++i) {
+        weaknessCriterion += pow(m_combinedWeakness[i], p) * volumes[i];
+        totalVol += volumes[i];
+    }
+    weaknessCriterion = pow(weaknessCriterion, 1.0 / p) / totalVol;
+
+    std::cout << "Weakness criterion: " << weaknessCriterion << std::endl;
+
+    m_weaknessCriterion = weaknessCriterion;
 
     solver->setDenseMatrix("volumes", volumes.rows(),
             1, volumes.data(), true);

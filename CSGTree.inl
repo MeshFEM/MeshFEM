@@ -107,13 +107,11 @@ public:
 
     virtual ~CSGPrimitive() { }
 
-    const Vector &getCenter() const {
-        return m_c;
-    }
-    
-    const Vector &getDimensions() const {
-        return m_dim;
-    }
+    const Vector &getCenter() const { return m_c; }
+    const Vector &getDimensions() const { return m_dim; }
+
+    void setCenter(const Vector &c) { m_c = c; }
+    void setDimensions(const Vector &dim) { m_dim = dim; }
 
     Real getRotation() const { return -m_deg(m_rot_inv.angle()); }
     Real getRotationRad() const { return -m_rot_inv.angle(); }

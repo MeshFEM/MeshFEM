@@ -90,7 +90,7 @@ private:
     QComboBox *g_weakRegionSelector;
 
     QPushButton *g_weaknessAnalysisButton;
-    QPushButton *g_dumpCombinedWeaknessButton;
+    QPushButton *g_optimizeShapeButton;
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();
