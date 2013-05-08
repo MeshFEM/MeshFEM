@@ -1,0 +1,29 @@
+{
+    "name": "Subtract 1",
+    "type": "subtract",
+    "left": {
+        "name": "Subtract 2",
+        "type": "subtract",
+        "left": {
+            "name": "Rectangle",
+            "type": "rectangle",
+            "center": [0, 0],
+            "dimensions": [1.5, 0.5],
+            "rotation": 0
+        },
+        "right": {
+            "name": "Ellipse 1",
+            "type": "ellipse",
+            "center": [0, 0.30],
+            "dimensions": [0.35, 0.5],
+            "rotation": 0.0
+        }
+    },
+    "right": {
+        "name": "Ellipse 2",
+        "type": "ellipse",
+        "center": [0, -0.30],
+        "dimensions": [0.35, 0.5],
+        "rotation": 0
+    }
+}

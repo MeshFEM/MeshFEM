@@ -431,7 +431,7 @@ void CSGWindowController::runShapeOptimization()
     assert(success);
 
     // compute gradient
-    Scalar delta = .1;
+    Scalar delta = .01;
     std::vector<Scalar> params = m_csgTree->getParameters();
     cout << "Optimizing over " << params.size() << " parameters." << endl;
     DVector grad(params.size());
