@@ -1000,19 +1000,25 @@ int MeshlessFEM<Model>::weakRegionExtraction()
         std::vector<size_t> adj;
         for (size_t i = 0; i < wrIndex.size(); ++i) {
             if (wrIndex[i] != 0) continue;
-            std::queue<size_t> bfsQueue;
 
             ++tag;
+            wrIndex[i] = tag;
+
+            std::queue<size_t> bfsQueue;
+            // Queue contains elements who have already been tagged, but whose
+            // neighbors might not have been.
+            // Each element appears at most once in the queue (an old version
+            // didn't have this guarantee, and memory blew up!).
             bfsQueue.push(i);
             while (!bfsQueue.empty()) {
                 size_t u = bfsQueue.front();
                 bfsQueue.pop();
-                wrIndex[u] = tag;
                 grid.elementsAdjacentElement(u, adj);
                 for (size_t j = 0; j < adj.size(); ++j) {
                     size_t v = adj[j];
                     assert(v < wrIndex.size());
                     if (wrIndex[v] == 0) {
+                        wrIndex[v] = tag;
                         bfsQueue.push(v);
                     }
                 }
