@@ -57,6 +57,7 @@ private:
 
     // Elements and quadrature settings
     QSpinBox *g_nxStepper, *g_nyStepper;
+    QSpinBox *g_borderWidthStepper;
     QuadraturePointsSpinBox *g_quadraturePointsStepper;
     QCheckBox *g_gaussQuadratureCheck;
     QDoubleSpinBox *g_cellOverlapStepper;

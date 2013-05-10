@@ -55,15 +55,14 @@ public:
     // Should be called whenever the grid size, quadrature, or model changes
     void update();
 
-    void setGridSize(size_t Nx, size_t Ny) {
-        m_Nx = Nx;
-        m_Ny = Ny;
+    void setBorderWidth(size_t borderWidth) {
+        Grid2D::setBorderWidth(borderWidth);
         update();
     }
 
-    void getGridSize(size_t &Nx, size_t &Ny) const {
-        Nx = m_Nx;
-        Ny = m_Ny;
+    void setGridSize(size_t Nx, size_t Ny) {
+        Grid2D::setGridSize(Nx, Ny);
+        update();
     }
 
     void setCellOverlapThreshold(double eps) {
@@ -118,9 +117,9 @@ public:
         get2DVertexIndex(m_vertexForNode[ni], row, col);
         size_t adjacencyCount;
         for (size_t r  = row - 1; r <= row + 1; ++r) {
-            if (r > m_Ny) continue;
+            if (r > rows()) continue;
             for (size_t c  = col  - 1; c <= col + 1; ++c) {
-                if (c > m_Nx) continue;
+                if (c > cols()) continue;
                 size_t v = get1DVertexIndex(r, c);
                 if (m_cellForElement[v] >= 0)
                     ++adjacencyCount;
@@ -142,11 +141,11 @@ public:
         get2DCellIndex(m_cellForElement[ei], row, col);
         adj.clear();
         adj.reserve(4);
-        if (row + 1 < m_Ny) {
+        if (row + 1 < rows()) {
             int ej = m_elementForCell[get1DCellIndex(row + 1, col)];
             if (ej >= 0) adj.push_back(ej);
         }
-        if (col + 1 < m_Nx) {
+        if (col + 1 < cols()) {
             int ej = m_elementForCell[get1DCellIndex(row, col + 1)];
             if (ej >= 0) adj.push_back(ej);
         }

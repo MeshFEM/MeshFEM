@@ -23,11 +23,10 @@
 class MarchingSquaresGrid : public Grid2D {
 public:
     MarchingSquaresGrid(size_t Nx, size_t Ny)
-        : Grid2D(Nx + 2, Ny + 2, BBox_t()) { }
-
-    void setGridSize(size_t Nx, size_t Ny) {
-        m_Nx = Nx + 2;
-        m_Ny = Ny + 2;
+        : Grid2D(Nx, Ny, BBox_t()) {
+        // Include a 1 cell-wide border around the bounding box to ensure the
+        // grid boundary vertices lie outside the object.
+        setBorderWidth(1);
     }
 
     void m_mergePolygon(Scalar mergeThreshold, Polygon_t &boundary) const;

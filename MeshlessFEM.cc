@@ -1240,7 +1240,8 @@ void MeshlessFEM<Model>::m_invalidateCache() {
         m_boundaryPoints.clear();
 
         std::vector<Polygon_t> polygons;
-        MarchingSquaresGrid ms(elementGrid().cols(), elementGrid().rows());
+        MarchingSquaresGrid ms(elementGrid().interiorRows(),
+                               elementGrid().interiorCols());
         ms.extractBoundaryPolygons(m_model, polygons);
         for (size_t p = 0; p < polygons.size(); ++p) {
             const std::vector<Vector> &points = polygons[p].points;

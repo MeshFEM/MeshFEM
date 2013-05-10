@@ -239,20 +239,14 @@ void MarchingSquaresGrid::extractBoundaryPolygons(const Model &model,
     typedef typename Model::Real Real;
 
     m_bbox = model.boundingBox();
-    // Expand the bounding box to account for the fact that a border has been
-    // added. Also expand outward slightly more to avoid instabilities/issues
-    // when the bounding box is tight.
-    Scalar eps = 0.0; // 1e-2;
-    m_bbox.expand(Vector((2.0 + eps) / (m_Nx - 2.0),
-                         (2.0 + eps) / (m_Ny - 2.0)));
     
     vector<bool> vertexInside(numVertices(), false);
     for (size_t v = 0; v < numVertices(); ++v) {
         size_t row, col;
         get2DVertexIndex(v, row, col);
-        // Note: vertex indices range from (0, 0) to (Nx, Ny)
+        // Note: vertex indices range from (0, 0) to (rows, cols)
         bool gridBorder = (row == 0)    || (col == 0) ||
-                          (row == m_Ny) || (col == m_Nx);
+                          (row == rows()) || (col == cols());
         // All grid border vertices are marked as outside the object.
         vertexInside[v] = gridBorder ? false
                                      : model.isInside(vertexPosition(v));

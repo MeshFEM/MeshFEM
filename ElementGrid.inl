@@ -22,8 +22,8 @@ void ElementGrid2D<Model>::update()
     m_elementForCell.assign(numCells(), -1);
     std::vector<bool> isFullCell(numCells(), false);
     size_t numElements = 0;
-    for (size_t r = 0; r < m_Ny; ++r) {
-        for (size_t c = 0; c < m_Nx; ++c) {
+    for (size_t r = 0; r < rows(); ++r) {
+        for (size_t c = 0; c < cols(); ++c) {
             size_t cell = get1DCellIndex(r, c);
             BBox_t b = cellBoundingBox(r, c);
             std::vector<Vector> quadraturePoints =

@@ -34,7 +34,8 @@ public:
 private:
     ViewSettings &m_viewSettings;
 
-    QCheckBox *g_showGridOverResultsCheck,
+    QCheckBox *g_showQuadraturePointsCheck,
+              *g_showGridOverResultsCheck,
               *g_showStressesDuringDeformationCheck,
               *g_showColorbar;
     QComboBox *g_colormapSelector;

@@ -21,8 +21,11 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Construct all widgets
     g_nxStepper = new QSpinBox();
     g_nyStepper = new QSpinBox();
+    g_borderWidthStepper = new QSpinBox();
     g_nxStepper->setMinimum(1);
     g_nyStepper->setMinimum(1);
+    g_nxStepper->setMaximum(999);
+    g_nyStepper->setMaximum(999);
     g_gaussQuadratureCheck = new QCheckBox();
     g_quadraturePointsStepper = new QuadraturePointsSpinBox();
     g_cellOverlapStepper = new QDoubleSpinBox();
@@ -86,6 +89,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     rowColLayout->addWidget(g_nyStepper);
     rowColLayout->addWidget(g_nxStepper);
     eqForm->addRow("Grid Rows/Cols", rowColLayout);
+    eqForm->addRow("Border width", g_borderWidthStepper);
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     eqForm->addRow("Cell Overlap Threshold", g_cellOverlapStepper);
@@ -147,6 +151,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_nyStepper, SIGNAL(valueChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_borderWidthStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_quadraturePointsStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
@@ -234,6 +240,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 void AnalysisForm::m_setGUIFromSettings() {
     g_nxStepper->setValue(m_settings.Nx);
     g_nyStepper->setValue(m_settings.Ny);
+    g_borderWidthStepper->setValue(m_settings.borderWidth);
     g_gaussQuadratureCheck->setChecked(m_settings.quadrature ==
                                        GAUSS_QUADRATURE);
     g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
@@ -260,8 +267,7 @@ void AnalysisForm::m_setGUIFromSettings() {
 void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.Nx = g_nxStepper->value();
     m_settings.Ny = g_nyStepper->value();
-    g_nxStepper->setMaximum(999);
-    g_nyStepper->setMaximum(999);
+    m_settings.borderWidth = g_borderWidthStepper->value();
     m_settings.quadrature = g_gaussQuadratureCheck->isChecked()
                                     ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     m_settings.quadraturePoints = g_quadraturePointsStepper->value();

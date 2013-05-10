@@ -96,6 +96,10 @@ public:
             grid.setGridSize(settings.Nx, settings.Ny);
             changed = true;
         }
+        if (settings.borderWidth != grid.getBorderWidth()) {
+            grid.setBorderWidth(settings.borderWidth);
+            changed = true;
+        }
         else if (changed) {
             // Even if the grid size doesn't change, a quadrature rule change
             // must trigger a grid update.

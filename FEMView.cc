@@ -673,20 +673,30 @@ void FEMView2D::draw()
         drawGrid(DRAW_EDGES);
         drawGrid(DRAW_NODES);
 
-        // Draw quadrature points
-        glPointSize(1.0f);
-        glColor3f(1.0, 1.0, 0);
-        glBegin(GL_POINTS);
-
-        for (unsigned int i = 0; i < grid.numElements(); ++i) {
-            BBox_t b = grid.elementBoundingBox(i);
-            std::vector<Vector> qpoints =
-                m_fem.quadrature().quadraturePoints(b);
-            for (unsigned int p = 0; p < qpoints.size(); ++p) {
-                m_drawWorldVertex(qpoints[p]);
-            }
+        // Draw non-element cells
+        glColor4f(0.0, 0.0, 0.0, .25f);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        for (size_t i = 0; i < grid.numCells(); ++i) {
+            m_drawWorldBox(grid.cellBoundingBox(i));
         }
-        glEnd();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        if (m_viewSettings.showQuadraturePoints) {
+            // Draw quadrature points
+            glPointSize(1.0f);
+            glColor3f(1.0, 1.0, 0);
+            glBegin(GL_POINTS);
+
+            for (unsigned int i = 0; i < grid.numElements(); ++i) {
+                BBox_t b = grid.elementBoundingBox(i);
+                std::vector<Vector> qpoints =
+                    m_fem.quadrature().quadraturePoints(b);
+                for (unsigned int p = 0; p < qpoints.size(); ++p) {
+                    m_drawWorldVertex(qpoints[p]);
+                }
+            }
+            glEnd();
+        }
 
         drawBoundary();
 

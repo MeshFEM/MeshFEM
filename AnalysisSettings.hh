@@ -20,7 +20,7 @@ namespace po = boost::program_options;
 
 struct AnalysisSettings {
     AnalysisSettings()
-        : Nx(40), Ny(40), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
+        : Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
           cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
@@ -29,6 +29,7 @@ struct AnalysisSettings {
 
     // Element settings
     size_t Nx, Ny;
+    size_t borderWidth;
     QuadratureMethod quadrature;
     size_t quadraturePoints;
     double cellOverlapThreshold;

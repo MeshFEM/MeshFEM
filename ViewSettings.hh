@@ -16,11 +16,12 @@
 
 struct ViewSettings {
     ViewSettings()
-        : showGridOverResults(true), showStressesDuringDeformation(true),
-          showColorbar(true), colormap(COLORMAP_JET), colormapRangeAuto(true)
-    {
-    }
+        : showQuadraturePoints(false), showGridOverResults(true),
+          showStressesDuringDeformation(true), showColorbar(true),
+          colormap(COLORMAP_JET), colormapRangeAuto(true)
+    { }
 
+    bool showQuadraturePoints;
     bool showGridOverResults;
     bool showStressesDuringDeformation;
     bool showColorbar;
