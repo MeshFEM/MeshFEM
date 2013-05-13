@@ -44,16 +44,16 @@ public:
     typedef Eigen::Vector4i AdjacencyVec;
 
     ElementGrid2D(size_t Nx, size_t Ny, double cellOverlapThreshold,
-                  const Quadrature2D &q, const Model &model)
-        : Grid2D(Nx, Ny, model.boundingBox()),
+                  const Quadrature2D &q, const Model &model, size_t borderWidth)
+        : Grid2D(Nx, Ny, model.boundingBox(), borderWidth),
           m_cellOverlapThreshold(cellOverlapThreshold), m_quadrature(q),
           m_model(model)
     {
-        update();
+        update(true);
     }
 
     // Should be called whenever the grid size, quadrature, or model changes
-    void update();
+    void update(bool refitGrid = true);
 
     void setBorderWidth(size_t borderWidth) {
         Grid2D::setBorderWidth(borderWidth);

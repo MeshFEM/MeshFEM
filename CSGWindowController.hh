@@ -63,6 +63,7 @@ public slots:
 
     // Shape optimization actions
     void runShapeOptimization();
+    void runTranslationTest();
 
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,

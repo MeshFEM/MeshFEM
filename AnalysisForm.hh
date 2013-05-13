@@ -92,6 +92,7 @@ private:
 
     QPushButton *g_weaknessAnalysisButton;
     QPushButton *g_optimizeShapeButton;
+    QPushButton *g_translationTestButton;
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();

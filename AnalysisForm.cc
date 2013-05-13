@@ -73,6 +73,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_forceBoundStepper->setValue(.1);
 
     g_optimizeShapeButton = new QPushButton("Optimize Shape");
+    g_translationTestButton = new QPushButton("Translation Test");
 
     modesUpdated(NULL);
     weakRegionsUpdated(NULL);
@@ -141,6 +142,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     weakForm->addRow("Total Force Bound", g_forceBoundStepper);
     weakForm->addRow(g_weaknessAnalysisButton);
     weakForm->addRow(g_optimizeShapeButton);
+    weakForm->addRow(g_translationTestButton);
     weaknessAnalysisGroup->setLayout(weakForm);
 
     // Initialize all the GUI values
@@ -217,6 +219,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_optimizeShapeButton, SIGNAL(clicked()),
                      controller, SLOT(runShapeOptimization()));
+    QObject::connect(g_translationTestButton, SIGNAL(clicked()),
+                     controller, SLOT(runTranslationTest()));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();

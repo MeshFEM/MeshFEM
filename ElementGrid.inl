@@ -15,9 +15,10 @@
 
 // Should be called whenever the quadrature or model changes
 template<typename Model>
-void ElementGrid2D<Model>::update()
+void ElementGrid2D<Model>::update(bool refitGrid)
 {
-    setBoundingBox(m_model.boundingBox());
+    if (refitGrid)
+        setBoundingBox(m_model.boundingBox());
 
     m_elementForCell.assign(numCells(), -1);
     std::vector<bool> isFullCell(numCells(), false);

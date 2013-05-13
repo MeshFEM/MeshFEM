@@ -64,7 +64,8 @@ public:
         m_quadrature = new Quadrature2D(settings.quadraturePoints,
                                         settings.quadrature);
         m_elementGrid = new ElementGrid(settings.Nx, settings.Ny,
-                settings.cellOverlapThreshold, *m_quadrature, model);
+                settings.cellOverlapThreshold, *m_quadrature, model,
+                settings.borderWidth);
 
         m_selectedWeakRegion = -1L;
         
@@ -154,8 +155,10 @@ public:
         m_invalidateCache();
     }
 
-    void modelChanged() {
-        elementGrid().update();
+    // refitGrid determines whether the element grid should be fit inside the
+    // new model bounding box.
+    void modelChanged(bool refitGrid = true) {
+        elementGrid().update(refitGrid);
         m_invalidateCache();
     }
 
@@ -168,7 +171,6 @@ public:
         assert(m_elementGrid != NULL);
         return *m_elementGrid;
     }
-        
 
     Model &model() {
         return m_model;

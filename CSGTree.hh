@@ -119,7 +119,7 @@ public:
         void postVisit(const CSGNode *node) {
             const CSGPrimitive *prim = dynamic_cast<const CSGPrimitive *>(node);
             if (prim == NULL) return;
-            // Center, Dimensions, rotation
+            // Center, dimensions, rotation
             Vector v = prim->getCenter();
             parameters.push_back(v[0]);
             parameters.push_back(v[1]);
@@ -146,7 +146,7 @@ public:
             assert(5 * primitivesVisited <= parameters.size());
             const Real *values = &parameters[5 * (primitivesVisited - 1)];
 
-            // Center, Dimensions, rotation
+            // Center, dimensions, rotation
             prim->setCenter(Vector(values[0], values[1]));
             prim->setDimensions(Vector(values[2], values[3]));
             prim->setRotationRad(values[4]);

@@ -460,3 +460,45 @@ void CSGWindowController::runShapeOptimization()
     m_csgTree->setParameters(params);
     m_fem.modelChanged();
 }
+
+
+void CSGWindowController::runTranslationTest()
+{
+    Scalar weakness;
+    bool success = m_fem.weaknessAnalysis(weakness);
+    cout << "Translation test" << endl << "----------------------" << endl;
+    cout << weakness << endl;
+    assert(success);
+
+    Vector cellSize = m_fem.elementGrid().cellSize();
+    const int TRANS_TEST_STEPS = 5;
+    Vector cellDelta = cellSize * (1.0 / TRANS_TEST_STEPS);
+
+    std::vector<Scalar> params = m_csgTree->getParameters();
+    std::vector<Scalar> translated(params);
+    // Center, dimensions, rotation
+    assert(params.size() % 5 == 0);
+    size_t numPrimitives = params.size() / 5;
+
+    for (int xStep = 0; xStep < TRANS_TEST_STEPS; ++xStep) {
+        for (int yStep = 0; yStep < TRANS_TEST_STEPS; ++yStep) {
+            Vector offset(cellDelta[0] * xStep, cellDelta[1] * yStep);
+            
+            for (size_t p = 0; p < numPrimitives; ++p) {
+                translated[5 * p + 0] = params[5 * p + 0] + offset[0];
+                translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+            }
+
+            m_csgTree->setParameters(translated);
+            m_fem.modelChanged(false);
+            success = m_fem.weaknessAnalysis(weakness);
+            assert(success);
+            cout << weakness << endl;
+        }
+    }
+
+    m_csgTree->setParameters(params);
+    m_fem.modelChanged(false);
+    // m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
+    m_femView->modelChanged();
+}
