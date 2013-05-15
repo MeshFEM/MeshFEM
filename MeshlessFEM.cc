@@ -396,7 +396,7 @@ void MeshlessFEM<Model>::m_assembleLaplacianMatrix(size_t &n, IndexVec &mat_i,
 }
 
 
-// Compute the quantities needed to evaluate strain from displacement.
+// Compute the quantities needed to evaluate strain/stress/energy from displacement.
 template<typename Model>
 void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
 {
@@ -1074,7 +1074,8 @@ int MeshlessFEM<Model>::weakRegionExtraction()
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion) {
+bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
+        const char *cwPath, const char *cwPercentiles) {
     if (combinedWeaknessIsCached()) {
         weaknessCriterion = m_weaknessCriterion;
         return true;
@@ -1199,6 +1200,11 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion) {
             1, volumes.data(), true);
     solver->setDenseMatrix("cwPercentiles", percentile.rows(),
             1, percentile.data(), true);
+
+    if (cwPath) {
+    }
+    if (cwPercentilePath) {
+    }
     
 
     return true;

@@ -20,6 +20,7 @@
 #include <Eigen/Dense>
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 template<typename Real, size_t t_dim>
 class VectorField {
@@ -114,6 +115,17 @@ public:
 private:
     using VectorField<Real, 1>::m_values;
 };
+
+template<typename Real>
+std::ostream &operator<<(std::ostream &os, const ScalarField<Real> &sf)
+{
+    size_t N = sf.size();
+    for (size_t i = 0; i < N; ++i) {
+        os << sf[i] << std::endl;
+    }
+
+    return os;
+}
 
 
 // Symmetric matrix NxN fields need only store the upper triangle of the NxN

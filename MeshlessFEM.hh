@@ -353,7 +353,8 @@ public:
         m_selectedWeakRegion = i;
     }
 
-    bool weaknessAnalysis(Real &weaknessCriterion);
+    bool weaknessAnalysis(Real &weaknessCriterion, const char *cwPath = NULL,
+                          const char *cwPercentilePath = NULL);
 
     SMField elementStressTensors(const VField &displacement);
     SField  computeStressTensorNorms(const SMField &stressField);

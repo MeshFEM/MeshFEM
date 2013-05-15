@@ -494,6 +494,17 @@ void CSGWindowController::runTranslationTest()
             success = m_fem.weaknessAnalysis(weakness);
             assert(success);
             cout << weakness << endl;
+            QString cwPath;
+            cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
+            const char *path = cwPath.toAscii();
+            ofstream cwFile(path);
+            if (!cwFile.is_open()) {
+                cout << "Failed to open output file '"
+                     << path << '\'' << endl;
+            }
+            else {
+                cwFile << m_fem.combinedWeakness();
+            }
         }
     }
 
