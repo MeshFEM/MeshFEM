@@ -491,20 +491,14 @@ void CSGWindowController::runTranslationTest()
 
             m_csgTree->setParameters(translated);
             m_fem.modelChanged(false);
-            success = m_fem.weaknessAnalysis(weakness);
-            assert(success);
-            cout << weakness << endl;
-            QString cwPath;
+
+            QString cwPath, cwPercentilePath;
             cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
-            const char *path = cwPath.toAscii();
-            ofstream cwFile(path);
-            if (!cwFile.is_open()) {
-                cout << "Failed to open output file '"
-                     << path << '\'' << endl;
-            }
-            else {
-                cwFile << m_fem.combinedWeakness();
-            }
+            cwPercentilePath.sprintf("translation_%i_%i.cwp", xStep, yStep);
+
+            success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
+                                             cwPercentilePath.toAscii());
+            assert(success);
         }
     }
 

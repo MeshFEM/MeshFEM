@@ -1075,7 +1075,7 @@ int MeshlessFEM<Model>::weakRegionExtraction()
 
 template<typename Model>
 bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
-        const char *cwPath, const char *cwPercentiles) {
+        const char *cwPath, const char *cwPercentilePath) {
     if (combinedWeaknessIsCached()) {
         weaknessCriterion = m_weaknessCriterion;
         return true;
@@ -1202,8 +1202,24 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
             1, percentile.data(), true);
 
     if (cwPath) {
+        std::ofstream cwFile(cwPath);
+        if (!cwFile.is_open()) {
+            std::cout << "Failed to open output file '"
+                      << cwPath << '\'' << std::endl;
+        }
+        else{
+            cwFile << m_combinedWeakness;
+        }
     }
     if (cwPercentilePath) {
+        std::ofstream cwpFile(cwPercentilePath);
+        if (!cwpFile.is_open()) {
+            std::cout << "Failed to open output file '"
+                      << cwPercentilePath << '\'' << std::endl;
+        }
+        else{
+            cwpFile << percentile;
+        }
     }
     
 

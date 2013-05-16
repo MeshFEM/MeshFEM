@@ -11,8 +11,10 @@
 #include <algorithm>
 
 ////////////////////////////////////////////////////////////////////////////////
-/*! Generate a permutation that puts a collection of values in sorted order.
-//  Be default, the sort is into ascending order.
+/*! Generate a permutation that puts a collection of values in sorted order:
+//      p[i] gives index of i^th entry in sorted list;
+//      values[p] is sorted.
+//  By default, the sort is into ascending order.
 //  @param[in]  values      values to sort
 //  @param[out] p           sorting permutation
 //  @param[in]  descend     when true, sort is descending (default to ascending)
