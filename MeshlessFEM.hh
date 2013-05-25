@@ -28,6 +28,7 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
+#include <Eigen/Sparse>
 
 template<typename Model>
 class MeshlessFEM {
@@ -43,11 +44,14 @@ public:
     typedef BoundaryPoint<Vector>     _BoundaryPoint;
     typedef SPHCubicSpline<Real, 2>   BoundaryFunction;
     typedef std::vector<size_t>       Region;
-
-    // i, j entry: d phi_i / d x_j
-    typedef Eigen::Matrix<Real, 4, 2> GradPhis;
+    
+    typedef Eigen::Matrix<Real, 4, 2> GradPhis; // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 3, 1> FlattenedTensor;
     typedef typename ElementGrid::AdjacencyVec CornerVec;
+
+    // Sparse Matrices
+    typedef TripletMatrix<Triplet<Real> > TMatrix;
+    typedef Eigen::SparseMatrix<Real> SparseMatrix;
 
     class ElementData;
     class PerElementLaplacianDensity;
@@ -152,6 +156,7 @@ public:
         m_weaknessCutoff = settings.weaknessCutoff;
         m_pointwisePressureBound = settings.pointwisePressureBound;
         m_totalForceBound = settings.totalForceBound;
+        m_equalizeCombinedWeakness = settings.equalizeCombinedWeakness;
         m_invalidateCache();
     }
 
@@ -270,19 +275,17 @@ public:
         MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
         assert(solver != NULL);
 
-        size_t Fm, Fn, Kn, Rm, Rn, Nm, Nn, Am, An;
-        IndexVec Fi, Fj, Ki, Kj, Ri, Rj, Ni, Nj, Ai, Aj;
-        ValueVec Fv, Kv, Rv, Nv, Av;
-        m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
-        m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
-        m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
-        m_assembleNMatrix(Nm, Nn, Ni, Nj, Nv);
-        m_assembleAMatrix(Am, An, Ai, Aj, Av);
-        solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
-        solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
-        solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
-        solver->setSparseMatrix("N", Nm, Nn, Ni, Nj, Nv);
-        solver->setSparseMatrix("A", Am, An, Ai, Aj, Av);
+        TMatrix K, F, R, N, A;
+        m_assembleStiffnessMatrix(K);
+        m_assembleLoadMatrix(F);
+        m_assembleRigidModeMatrix(R);
+        m_assembleNMatrix(N);
+        m_assembleAMatrix(A);
+        solver->setSparseMatrix("K", K);
+        solver->setSparseMatrix("F", F);
+        solver->setSparseMatrix("R", R);
+        solver->setSparseMatrix("N", N);
+        solver->setSparseMatrix("A", A);
 
         // All the fixed nodes' displacements are set to 0.
         // This means zeroing the entire stiffness matrix row/column and placing
@@ -314,8 +317,8 @@ public:
         solver->eval("u_lam = C_s \\ (S * f);");
         solver->eval("u = S' * u_lam;");
 
-        Real *displacements = new Real[Kn];
-        solver->getDenseMatrix("u", Kn, 1, displacements, true);
+        Real *displacements = new Real[K.n];
+        solver->getDenseMatrix("u", K.n, 1, displacements, true);
         m_simulatedDisplacement.resizeDomain(numNodes);
         for (size_t i = 0; i < numNodes; ++i) {
             // if (m_nodeFixed[i]) {
@@ -389,6 +392,7 @@ private:
 
     int m_weakRegionsPerMode;
     Real m_weaknessCutoff, m_pointwisePressureBound, m_totalForceBound;
+    bool m_equalizeCombinedWeakness;
     // Indices of elements in each weak region
     std::vector<Region> m_weakRegions;
     // (Modal) stress norms of elements in each weak region
@@ -400,26 +404,17 @@ private:
 
     typedef std::vector<size_t> IndexVec;
     typedef std::vector<Real>   ValueVec;
-    void m_assembleStiffnessMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                                   ValueVec &v);
-    void m_assembleLaplacianMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                                   ValueVec &v);
-    void m_assembleMassMatrix(size_t &n, IndexVec &i, IndexVec &j,
-                              ValueVec &v, bool forLaplacian = false);
+    void m_assembleStiffnessMatrix(TMatrix &K);
+    void m_assembleLaplacianMatrix(TMatrix &L);
+    void m_assembleMassMatrix(TMatrix &M, bool forLaplacian = false);
     void m_computePerElementDisplacementStrainMap();
 
-    void m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                              ValueVec &v);
-    void m_assembleRigidModeMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                                   ValueVec &v);
-    void m_assembleNMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                           ValueVec &v);
-    void m_assembleAMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                           ValueVec &v);
-    void m_assembleBMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                            ValueVec &v);
-    void m_assembleVDMatrix(size_t &m, size_t &n, IndexVec &i, IndexVec &j,
-                            ValueVec &v);
+    void m_assembleLoadMatrix(TMatrix &F);
+    void m_assembleRigidModeMatrix(TMatrix &R);
+    void m_assembleNMatrix(TMatrix &N);
+    void m_assembleAMatrix(TMatrix &A);
+    void m_assembleBMatrix(TMatrix &B);
+    void m_assembleVDMatrix(TMatrix &VD);
     void m_assembleWVector(DVector &w, size_t regionIdx) const;
 
     ////////////////////////////////////////////////////////////////////////////

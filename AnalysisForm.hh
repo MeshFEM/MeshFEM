@@ -87,8 +87,9 @@ private:
     QSpinBox *g_numWeakRegionsStepper;
     QDoubleSpinBox *g_weaknessCutoffStepper;
     QPushButton *g_weakRegionExtractionButton;
-    QDoubleSpinBox *g_pressureBoundStepper, *g_forceBoundStepper;
     QComboBox *g_weakRegionSelector;
+    QDoubleSpinBox *g_pressureBoundStepper, *g_forceBoundStepper;
+    QCheckBox *g_equalizeCombinedWeaknessCheck;
 
     QPushButton *g_weaknessAnalysisButton;
     QPushButton *g_optimizeShapeButton;

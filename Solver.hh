@@ -15,6 +15,7 @@
 #include <iostream>
 #include <cassert>
 #include "Fields.hh"
+#include "GlobalTypes.hh"
 
 // Numerically robust quadratic formula implementation (avoids cancellation)
 template<typename Real>
@@ -42,14 +43,14 @@ template<typename Real>
 class Solver {
     public:
         Solver() { }
+        typedef TripletMatrix<Triplet<Real> >  TMatrix;
         typedef std::vector<size_t>  IVec;
         typedef std::vector<Real>    VVec;
         typedef ScalarField<Real>    SField;
         typedef VectorField<Real, 2> VField;
         typedef SymmetricMatrixField<Real, 2> SM2Field;
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
-                size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
-                size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
+                const TMatrix &K, const TMatrix &M,
                 std::vector<SField> &eigvec, std::vector<Real> &eigval) = 0;
         virtual bool EigenvalueProblem(size_t numModes,
                 size_t Ln, const IVec &Li, const IVec &Lj, const VVec &Lv,
@@ -72,6 +73,7 @@ class MatlabSolver : public Solver<Real> {
         MatlabSolver(MatlabInterface *matlab)
             : m_matlab(matlab) { }
 
+        typedef TripletMatrix<Triplet<Real> >  TMatrix;
         using typename Solver<Real>::IVec;
         using typename Solver<Real>::VVec;
         using typename Solver<Real>::SField;
@@ -79,13 +81,10 @@ class MatlabSolver : public Solver<Real> {
         using typename Solver<Real>::SM2Field;
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
-                size_t Kn, const IVec &Ki, const IVec &Kj, const VVec &Kv,
-                size_t Mn, const IVec &Mi, const IVec &Mj, const VVec &Mv,
+                const TMatrix &K, const TMatrix &M,
                 std::vector<SField> &eigvec, std::vector<Real> &eigval) {
-            m_matlab->SetEngineSparseRealMatrix("K", Ki.size(), &Ki[0], &Kj[0],
-                                                &Kv[0], Kn, Kn);
-            m_matlab->SetEngineSparseRealMatrix("M", Mi.size(), &Mi[0], &Mj[0],
-                                                &Mv[0], Mn, Mn);
+            m_matlab->SetEngineSparseRealMatrix("K", K);
+            m_matlab->SetEngineSparseRealMatrix("M", M);
 
             char modeCommand[64];
             int ret = m_matlab->Eval("clear opts; opts.issym = 1;");
@@ -99,16 +98,16 @@ class MatlabSolver : public Solver<Real> {
                 m_matlab->Eval("V = V(:, sortPerm);");
                 m_matlab->Eval("clear D; clear sortPerm;");
 
-                Real *modeData = new Real[Kn * numModes];
+                Real *modeData = new Real[K.n * numModes];
                 Real *eigenvalueData = new Real[numModes];
                 // Column major
-                m_matlab->GetEngineRealMatrix("V", Kn, numModes, modeData,
+                m_matlab->GetEngineRealMatrix("V", K.n, numModes, modeData,
                                               true);
                 m_matlab->GetEngineRealMatrix("lambda", numModes, 1,
                                               eigenvalueData, true);
                 typedef Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic,
                                                  Eigen::Dynamic> > MappedMat;
-                MappedMat modesMatrix(modeData, Kn, numModes);
+                MappedMat modesMatrix(modeData, K.n, numModes);
 
                 eigvec.clear(), eigval.clear();
                 eigvec.reserve(numModes), eigval.reserve(numModes);
@@ -178,6 +177,11 @@ class MatlabSolver : public Solver<Real> {
                                                 &v[0], m, n);
         }
 
+        template <typename TMatrix>
+        void setSparseMatrix(const char *name, const TMatrix &t) {
+            m_matlab->SetEngineSparseRealMatrix(name, t);
+        }
+
         void getDenseMatrix(const char *name, size_t m, size_t n,
                             Real *vals, bool colmaj) {
             m_matlab->GetEngineRealMatrix(name, m, n, vals, colmaj);
@@ -191,6 +195,8 @@ class MatlabSolver : public Solver<Real> {
         void eval(const char *command) {
             m_matlab->Eval(command);
         }
+
+        MatlabInterface *getMatlabInterface() { return m_matlab; }
 
         // Compute eigenvalues of each matrix in a 2x2 symmetric matrix field.
         // These matrices are compressed in the form

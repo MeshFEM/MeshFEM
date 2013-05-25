@@ -1,7 +1,11 @@
-#include <Eigen/Dense>
 #include <iostream>
 #include <algorithm>
+#include <vector>
+#include <queue>
 #include "MeshlessFEM.hh"
+#include "QMatlabInterface.hh"
+
+using namespace std;
 
 // Element node ordering:
 // 3         2
@@ -314,19 +318,18 @@ private:
 };
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, ValueVec &mat_v)
+void MeshlessFEM<Model>::m_assembleStiffnessMatrix(TMatrix &K)
 {
     // Simple (i, j v) stiffness matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
-    n = 2 * elemGrid.numNodes();
+    K.m = K.n = 2 * elemGrid.numNodes();
     PerElementStiffnessDensity stiff(m_d, model());
     CornerVec cornerIndices;
 
-    mat_i.clear(); mat_j.clear(); mat_v.clear();
+    K.clear();
     size_t nnz = 64 * elemGrid.numElements();
-    mat_i.reserve(nnz); mat_j.reserve(nnz); mat_v.reserve(nnz);
+    K.nz.reserve(nnz);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         stiff.clear();
@@ -338,44 +341,29 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(size_t &n, IndexVec &mat_i,
             size_t vi = cornerIndices[i];
             for (size_t j = 0; j < 4; ++j) {
                 size_t vj = cornerIndices[j];
-                // xx
-                mat_i.push_back(2 * vi);
-                mat_j.push_back(2 * vj);
-                mat_v.push_back(stiff(2 * i, 2 * j));
-
-                // xy
-                mat_i.push_back(2 * vi);
-                mat_j.push_back(2 * vj + 1);
-                mat_v.push_back(stiff(2 * i, 2 * j + 1));
-
-                // yy
-                mat_i.push_back(2 * vi + 1);
-                mat_j.push_back(2 * vj + 1);
-                mat_v.push_back(stiff(2 * i + 1, 2 * j + 1));
-
-                // yx
-                mat_i.push_back(2 * vi + 1);
-                mat_j.push_back(2 * vj);
-                mat_v.push_back(stiff(2 * i + 1, 2 * j));
+                // xx, xy, yy, yx
+                K.addNZ(2 * vi    , 2 * vj    , stiff(2 * i    , 2 * j    ));
+                K.addNZ(2 * vi    , 2 * vj + 1, stiff(2 * i    , 2 * j + 1));
+                K.addNZ(2 * vi + 1, 2 * vj + 1, stiff(2 * i + 1, 2 * j + 1));
+                K.addNZ(2 * vi + 1, 2 * vj    , stiff(2 * i + 1, 2 * j    ));
             }
         }
     }
 }
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleLaplacianMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, ValueVec &mat_v)
+void MeshlessFEM<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 {
     // Simple (i, j v) laplacian matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
-    n = elemGrid.numNodes();
+    L.m = L.n = elemGrid.numNodes();
     PerElementLaplacianDensity lap(model());
     CornerVec cornerIndices;
 
-    mat_i.clear(); mat_j.clear(); mat_v.clear();
+    L.clear();
     size_t nnz = 16 * elemGrid.numElements();
-    mat_i.reserve(nnz); mat_j.reserve(nnz); mat_v.reserve(nnz);
+    L.nz.reserve(nnz);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         lap.clear();
@@ -387,9 +375,7 @@ void MeshlessFEM<Model>::m_assembleLaplacianMatrix(size_t &n, IndexVec &mat_i,
             size_t vi = cornerIndices[i];
             for (size_t j = 0; j < 4; ++j) {
                 size_t vj = cornerIndices[j];
-                mat_i.push_back(vi);
-                mat_j.push_back(vj);
-                mat_v.push_back(lap(i, j));
+                L.addNZ(vi, vj, lap(i, j));
             }
         }
     }
@@ -461,29 +447,25 @@ MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse mass matrix matrix for modal analysis.
-//  @param[out]  m, n           Number of matrix rows, columns
-//  @param[out]  mat_i, mat_j,  row indices, column indices, and values
-//               mat_v Entry 
+//  @param[out]  M           Mass matrix in triplet format.
 //  @param[in]   forLaplacian   whether the mass matrix is for the laplacian
 //                              modal analysis (defaults to false)
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
-        IndexVec &mat_j, ValueVec &mat_v, bool forLaplacian)
+void MeshlessFEM<Model>::m_assembleMassMatrix(TMatrix &M, bool forLaplacian)
 {
     // Simple (i, j v) mass matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
 
-    if (forLaplacian)
-        n = elemGrid.numNodes();
-    else
-        n = 2 * elemGrid.numNodes();
+    M.m = M.n = (forLaplacian ? 1 : 2) * elemGrid.numNodes();
 
     PerElementMassMatrixDensity lmass(model(), m_density, m_massMatrixType);
     CornerVec cornerIndices;
 
-    mat_i.clear(); mat_j.clear(); mat_v.clear();
+    M.clear();
+    size_t nnz = 16 * (forLaplacian ? 1 : 2) * (elemGrid.numElements());
+    M.nz.reserve(nnz);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         lmass.clear();
@@ -496,18 +478,11 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(size_t &n, IndexVec &mat_i,
                 Real val = lmass(i, j);
                 if (val > 1e-12) {
                     if (forLaplacian) {
-                        mat_i.push_back(vi);
-                        mat_j.push_back(vj);
-                        mat_v.push_back(val);
+                        M.addNZ(vi, vj, val);
                     }
                     else {
-                        mat_i.push_back(2 * vi);
-                        mat_j.push_back(2 * vj);
-                        mat_v.push_back(val);
-
-                        mat_i.push_back(2 * vi + 1);
-                        mat_j.push_back(2 * vj + 1);
-                        mat_v.push_back(val);
+                        M.addNZ(2 * vi    , 2 * vj    , val);
+                        M.addNZ(2 * vi + 1, 2 * vj + 1, val);
                     }
                 }
             }
@@ -582,25 +557,27 @@ void MeshlessFEM<Model>::buildBoundaryFunctions()
 //  the point's force over the surface is n_i * a_i * p_i (n_i normal, a_i area)
 //  Note: Because of partition of unity, this condition means the matrix columns
 //        should sum to 1.
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  F          Load matrix in triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
-                                              IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
-    m = elemGrid.numNodes();
-    n = numBoundaryPoints();
-
-    i.clear(), j.clear(), v.clear();
+    F.clear();
+    F.m = elemGrid.numNodes();
+    F.n = numBoundaryPoints();
 
     std::vector<size_t> support_elems;
     CornerVec cornerIndices;
     const Quadrature2D &q = quadrature();
 
+    // Create (i, j, v) triplets for each function's contribution to load in a
+    // single dimension.
+    IndexVec i, j;
+    ValueVec v;
+
     // Fill out one column of the matrix at a time.
-    for (size_t f = 0; f < n; ++f) {
+    for (size_t f = 0; f < F.n; ++f) {
         const BoundaryFunction &psi = boundaryFunction(f);
         BoundaryFunctionLoad load(psi);
 
@@ -609,7 +586,7 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
         Real colSum = 0;
         // Mark the start of the values in this column so we can go back and
         // normalize them.
-        size_t colValuesOffset = v.size();
+        size_t colValuesOffset = F.nz.size();
         for (size_t e = 0; e < support_elems.size(); ++e) {
             load.clear();
             q.integrate(load, elemGrid.elementBoundingBox(support_elems[e]));
@@ -626,21 +603,18 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
         }
 
         // Normalize so the column sums to 1
-        for (size_t vo = colValuesOffset; vo < v.size(); ++vo)
+        for (size_t vo = colValuesOffset; vo < F.nz.size(); ++vo) {
             v[vo] /= colSum;
+        }
     }
 
-    // Duplicate matrix for each dimension
-    m *= 2, n *= 2;
-    size_t singleNZ = i.size();
-    i.reserve(singleNZ * 2), j.reserve(singleNZ * 2), v.reserve(singleNZ * 2);
-    for (size_t k = 0; k < singleNZ; ++k) {
-        size_t row = i[k], col = j[k];
-        i[k] = 2 * row;
-        j[k] = 2 * col;
-        i.push_back(2 * row + 1);
-        j.push_back(2 * col + 1);
-        v.push_back(v[k]);
+    // Duplicate matrix for each dimension, inserting into F
+    F.m *= 2, F.n *= 2;
+    size_t singleNNZ = i.size();
+    F.reserve(2 * singleNNZ);
+    for (size_t k = 0; k < singleNNZ; ++k) {
+        F.addNZ(2 * i[k]    , 2 * j[k]    , v[k]);
+        F.addNZ(2 * i[k] + 1, 2 * j[k] + 1, v[k]);
     }
 }
 
@@ -651,151 +625,112 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(size_t &m, size_t &n, IndexVec &i,
 //  The generated matrix also can compute total force and net torque of a
 //  (volume) force distribution, so it is useful in formulating the pressure
 //  equality constraints for structural optimization.
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  R      Rigid mode matrix in sparse triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleRigidModeMatrix(size_t &m, size_t &n,
-                            IndexVec &i, IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleRigidModeMatrix(TMatrix &R)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
-    m = 3;
-    n = 2 * elemGrid.numNodes();
+    R.m = 3;
+    R.n = 2 * elemGrid.numNodes();
     size_t nNodes = elemGrid.numNodes();
     
-    i.clear(), j.clear(), v.clear();
+    R.clear();
     size_t predictedNNZ = 4 * nNodes;
-    i.reserve(predictedNNZ), j.reserve(predictedNNZ), v.reserve(predictedNNZ);
+    R.reserve(predictedNNZ);
 
     // Translations
     for (size_t k = 0; k < nNodes; ++k) {
-        i.push_back(0);
-        j.push_back(2 * k);
-        v.push_back(1.0);
-
-        i.push_back(1);
-        j.push_back(2 * k + 1);
-        v.push_back(1.0);
+        R.addNZ(0, 2 * k    , 1.0);
+        R.addNZ(1, 2 * k + 1, 1.0);
     }
 
     // Infinitesimal rotations
     for (size_t k = 0; k < nNodes; ++k) {
         Vector p = elemGrid.nodePosition(k);
         // x offset: -y
-        i.push_back(2);
-        j.push_back(2 * k);
-        v.push_back(-p[1]);
+        R.addNZ(2, 2 * k, -p[1]);
 
         // y offset: x
-        i.push_back(2);
-        j.push_back(2 * k + 1);
-        v.push_back(p[0]);
+        R.addNZ(2, 2 * k + 1, p[0]);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix mapping boundary pressures to boundary force
 //  magnitudes (i.e. weighting the pressures by the area over which they act).
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  A      boundary pressure->force matrix in sparse triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleAMatrix(size_t &m, size_t &n,
-                            IndexVec &i, IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleAMatrix(TMatrix &A)
 {
-    m = m_boundaryPoints.size();
-    n = m_boundaryPoints.size();
+    A.m = m_boundaryPoints.size();
+    A.n = m_boundaryPoints.size();
 
-    i.clear(), j.clear(), v.clear();
+    A.clear();
     size_t nnz = m_boundaryPoints.size();
-    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+    A.reserve(nnz);
 
     for (size_t k = 0; k < m_boundaryPoints.size(); ++k) {
-        i.push_back(k);
-        j.push_back(k);
-        v.push_back(m_boundaryPoints[k].a);
+        A.addNZ(k, k, m_boundaryPoints[k].a);
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix mapping boundary force magnitudes to a flattened
 //  vector of forces at those boundary points.
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  N      boundary force magnitude->force matrix in sparse
+//                      triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleNMatrix(size_t &m, size_t &n,
-                            IndexVec &i, IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleNMatrix(TMatrix &N)
 {
-    m = 2 * m_boundaryPoints.size();
-    n = m_boundaryPoints.size();
+    N.m = 2 * m_boundaryPoints.size();
+    N.n = m_boundaryPoints.size();
 
-    i.clear(), j.clear(), v.clear();
+    N.clear();
     size_t nnz = 2 * m_boundaryPoints.size();
-    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+    N.reserve(nnz);
 
     for (size_t k = 0; k < m_boundaryPoints.size(); ++k) {
         // Forces are applied in the negative normal direction
         Vector f = -m_boundaryPoints[k].n;
 
-        // x component
-        i.push_back(2 * k);
-        j.push_back(k);
-        v.push_back(f[0]);
-
-        // y component
-        i.push_back(2 * k + 1);
-        j.push_back(k);
-        v.push_back(f[1]);
+        // x, y component
+        N.addNZ(2 * k, k, f[0]);
+        N.addNZ(2 * k + 1, k, f[1]);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix mapping a flattened per-node displacement vector to a 
 //  flattened per-element strain tensor.
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  B      displacement->strain matrix in sparse triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleBMatrix(size_t &m, size_t &n,
-                            IndexVec &i, IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleBMatrix(TMatrix &B)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
-    m = 3 * elemGrid.numElements();
-    n = 2 * elemGrid.numNodes();
+    B.m = 3 * elemGrid.numElements();
+    B.n = 2 * elemGrid.numNodes();
 
     if (!m_displacementStrainCached)
         m_computePerElementDisplacementStrainMap();
 
     size_t nnz = 16 * elemGrid.numElements();
-    i.clear(), j.clear(), v.clear();
-    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+    B.clear();
+    B.reserve(nnz);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         CornerVec cornerIndices;
         elemGrid.elementCorners(e, cornerIndices);
         for (size_t c = 0; c < 4; ++c) {
             size_t vtx = cornerIndices[c];
-            // e_xx
-            i.push_back(3 * e + 0);
-            j.push_back(2 * vtx + 0);
-            v.push_back(m_elementData[e].gradPhi(c, 0));
-
-            // e_yy
-            i.push_back(3 * e + 1);
-            j.push_back(2 * vtx + 1);
-            v.push_back(m_elementData[e].gradPhi(c, 1));
-
-            // e_xy (1)
-            i.push_back(3 * e + 2);
-            j.push_back(2 * vtx + 0);
-            v.push_back(.5 * m_elementData[e].gradPhi(c, 1));
-
-            // e_xy (2)
-            i.push_back(3 * e + 2);
-            j.push_back(2 * vtx + 1);
-            v.push_back(.5 * m_elementData[e].gradPhi(c, 0));
+            // e_xx, e_yy, e_xy (1), e_xy (2)
+            B.addNZ(3 * e + 0, 2 * vtx + 0, m_elementData[e].gradPhi(c, 0));
+            B.addNZ(3 * e + 1, 2 * vtx + 1, m_elementData[e].gradPhi(c, 1));
+            B.addNZ(3 * e + 2, 2 * vtx + 0, .5 * m_elementData[e].gradPhi(c, 1));
+            B.addNZ(3 * e + 2, 2 * vtx + 1, .5 * m_elementData[e].gradPhi(c, 0));
         }
     }
 }
@@ -803,20 +738,18 @@ void MeshlessFEM<Model>::m_assembleBMatrix(size_t &m, size_t &n,
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix mapping a flattened per-element strain tensor to
 //  a flattened per-element stress tensor
-//  @param[out]  m, n       Number of matrix rows, columns
-//  @param[out]  i, j, v    Entry row indices, column indices, and values
+//  @param[out]  VD     strain->stress sparse matrix in triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleVDMatrix(size_t &m, size_t &n,
-                            IndexVec &i, IndexVec &j, ValueVec &v)
+void MeshlessFEM<Model>::m_assembleVDMatrix(TMatrix &VD)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
-    m = 3 * elemGrid.numElements();
-    n = 3 * elemGrid.numElements();
+    VD.m = 3 * elemGrid.numElements();
+    VD.n = 3 * elemGrid.numElements();
 
     size_t nnz = 5 * elemGrid.numElements();
-    i.clear(), j.clear(), v.clear();
-    i.reserve(nnz), j.reserve(nnz), v.reserve(nnz);
+    VD.clear();
+    VD.reserve(nnz);
 
     // The per-element matrix is given by:
     // D = d00 d01   0 =  d0 d1   0 
@@ -824,25 +757,11 @@ void MeshlessFEM<Model>::m_assembleVDMatrix(size_t &m, size_t &n,
     //     0   0   d22    0   0   d3
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
         Real vol = m_elementData[e].volume();
-        i.push_back(3 * e + 0);
-        j.push_back(3 * e + 0);
-        v.push_back(vol * m_d[0]);
-
-        i.push_back(3 * e + 0);
-        j.push_back(3 * e + 1);
-        v.push_back(vol * m_d[1]);
-
-        i.push_back(3 * e + 1);
-        j.push_back(3 * e + 0);
-        v.push_back(vol * m_d[1]);
-
-        i.push_back(3 * e + 1);
-        j.push_back(3 * e + 1);
-        v.push_back(vol * m_d[2]);
-
-        i.push_back(3 * e + 2);
-        j.push_back(3 * e + 2);
-        v.push_back(vol * m_d[3]);
+        VD.addNZ(3 * e + 0, 3 * e + 0, vol * m_d[0]);
+        VD.addNZ(3 * e + 0, 3 * e + 1, vol * m_d[1]);
+        VD.addNZ(3 * e + 1, 3 * e + 0, vol * m_d[1]);
+        VD.addNZ(3 * e + 1, 3 * e + 1, vol * m_d[2]);
+        VD.addNZ(3 * e + 2, 3 * e + 2, vol * m_d[3]);
     }
 }
 
@@ -853,42 +772,34 @@ bool MeshlessFEM<Model>::modalAnalysis()
 
     if (m_laplacianModes) {
         // Use laplacian modes
-        std::vector<size_t> L_i, L_j;
-        std::vector<Real> L_v;
-        size_t L_n;
-        m_assembleLaplacianMatrix(L_n, L_i, L_j, L_v);
+        TMatrix L, M;
+        m_assembleLaplacianMatrix(L);
+        m_assembleMassMatrix(M, true);
 
-        std::vector<size_t> M_i, M_j;
-        std::vector<Real> M_v;
-        size_t M_n;
-        m_assembleMassMatrix(M_n, M_i, M_j, M_v, true);
-
-        size_t numModes = std::min((size_t) m_numRequestedModes, L_n);
+        size_t numModes = std::min((size_t) m_numRequestedModes, L.n);
 
         std::vector<SField> lapModes;
         std::vector<Real>   lapEigs;
         success = m_solver->GeneralizedEigenvalueProblem(numModes / 2,
-                                              L_n, L_i, L_j, L_v,
-                                              M_n, M_i, M_j, M_v,
-                                              lapModes, lapEigs);
+                                              L, M, lapModes, lapEigs);
         assert(numModes / 2 == lapModes.size());
 
         m_modes.clear(), m_eigenvalues.clear();
         m_modes.reserve(lapModes.size() * 2);
         m_eigenvalues.reserve(lapEigs.size() * 2);
-        VField expanded(L_n);
+        VField expanded(L.n);
         for (size_t m = 0; m < lapModes.size(); ++m) {
             const SField &mode = lapModes[m];
             // x mode
             expanded.clear();
-            for (size_t i = 0; i < L_n; ++i)
+            for (size_t i = 0; i < L.n; ++i)
                 expanded(i)[0] = mode[i];
             m_modes.push_back(expanded);
             m_eigenvalues.push_back(lapEigs[m]);
 
             // y mode
             expanded.clear();
-            for (size_t i = 0; i < L_n; ++i)
+            for (size_t i = 0; i < L.n; ++i)
                 expanded(i)[1] = mode[i];
             m_modes.push_back(expanded);
             m_eigenvalues.push_back(lapEigs[m]);
@@ -903,22 +814,14 @@ bool MeshlessFEM<Model>::modalAnalysis()
     }
     else {
         // Use stiffness modes
-        std::vector<size_t> K_i, K_j;
-        std::vector<Real> K_v;
-        size_t K_n;
-        m_assembleStiffnessMatrix(K_n, K_i, K_j, K_v);
+        TMatrix K, M;
+        m_assembleStiffnessMatrix(K);
+        m_assembleMassMatrix(M);
 
-        std::vector<size_t> M_i, M_j;
-        std::vector<Real> M_v;
-        size_t M_n;
-        m_assembleMassMatrix(M_n, M_i, M_j, M_v);
-
-        size_t numModes = std::min((size_t) m_numRequestedModes, K_n);
+        size_t numModes = std::min((size_t) m_numRequestedModes, K.n);
         std::vector<SField> eigenVectors;
         success = m_solver->GeneralizedEigenvalueProblem(numModes,
-                                              K_n, K_i, K_j, K_v,
-                                              M_n, M_i, M_j, M_v, eigenVectors,
-                                              m_eigenvalues);
+                                          K, M, eigenVectors, m_eigenvalues);
         assert(numModes == eigenVectors.size());
         m_modes.clear(); m_modes.reserve(eigenVectors.size());
         for (auto it = eigenVectors.begin(); it != eigenVectors.end(); ++it) {
@@ -1088,25 +991,31 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
     assert(solver != NULL);
 
-    size_t Fm, Fn, Kn, Rm, Rn, Nm, Nn, Am, An, Bm, Bn, VDm, VDn;
-    IndexVec Fi, Fj, Ki, Kj, Ri, Rj, Ni, Nj, Ai, Aj, Bi, Bj, VDi, VDj;
-    ValueVec Fv, Kv, Rv, Nv, Av, Bv, VDv;
-    m_assembleLoadMatrix(Fm, Fn, Fi, Fj, Fv);
-    m_assembleStiffnessMatrix(Kn, Ki, Kj, Kv);
-    m_assembleRigidModeMatrix(Rm, Rn, Ri, Rj, Rv);
-    m_assembleNMatrix(Nm, Nn, Ni, Nj, Nv);
-    m_assembleAMatrix(Am, An, Ai, Aj, Av);
-    m_assembleBMatrix(Bm, Bn, Bi, Bj, Bv);
-    m_assembleVDMatrix(VDm, VDn, VDi, VDj, VDv);
-    solver->setSparseMatrix("F", Fm, Fn, Fi, Fj, Fv);
-    solver->setSparseMatrix("K", Kn, Kn, Ki, Kj, Kv);
-    solver->setSparseMatrix("R", Rm, Rn, Ri, Rj, Rv);
-    solver->setSparseMatrix("N", Nm, Nn, Ni, Nj, Nv);
-    solver->setSparseMatrix("A", Am, An, Ai, Aj, Av);
-    solver->setSparseMatrix("B", Bm, Bn, Bi, Bj, Bv);
-    solver->setSparseMatrix("VD", VDm, VDn, VDi, VDj, VDv);
+    TMatrix K, F, R, N, A, B, VD;
+    m_assembleStiffnessMatrix(K);
+    m_assembleLoadMatrix(F);
+    m_assembleRigidModeMatrix(R);
+    m_assembleNMatrix(N);
+    m_assembleAMatrix(A);
+    m_assembleBMatrix(B);
+    m_assembleVDMatrix(VD);
+    solver->setSparseMatrix("F", F);
+    solver->setSparseMatrix("K", K);
+    solver->setSparseMatrix("R", R);
+    solver->setSparseMatrix("N", N);
+    solver->setSparseMatrix("A", A);
+    solver->setSparseMatrix("B", B);
+    solver->setSparseMatrix("VD", VD);
 
-    solver->eval("C_s = [K, R'; R, zeros(3)];");
+    // C_s = [K, R'; R, zeros(3)]
+    // S = [I_Kn; 0_{3, Kn}]
+    TMatrix C_s, S;
+    C_s = K;
+    C_s.append(R, TMatrix::APPEND_RIGHT, false, true);
+    C_s.append(R, TMatrix::APPEND_BELOW, true, false);
+    solver->setSparseMatrix("C_s", C_s);
+
+    // solver->eval("C_s = [K, R'; R, zeros(3)];");
     solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
 
     char cmd[128];
@@ -1118,6 +1027,8 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
     solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
     solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
+    solver->eval("VDBSt = VD * B * S';");
+    solver->eval("SFNA = S * F * N * A;");
 
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     size_t numNodes = elemGrid.numNodes();
@@ -1126,24 +1037,42 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     m_combinedWeakness.resizeDomain(numElems);
     m_combinedWeakness.clear();
 
+    QMatlabInterface *qmi = dynamic_cast<QMatlabInterface *>(solver->getMatlabInterface());
+    qmi->setEcho(false);
+
+    bool matlabTiming = true;
+    if (matlabTiming) {
+        solver->eval("wallStart = tic;");
+        solver->eval("genObjTime = 0; linprogTime = 0; simTime = 0;");
+    }
+
     DVector w;
     for (size_t i = 0; i < numWeakRegions(); ++i) {
         m_assembleWVector(w, i);
         solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
 
-        solver->eval("q = (C_s') \\ (S * B' * VD' * w);");
-        solver->eval("f = (S * F * N * A)' * q;");
+        if (matlabTiming)
+            solver->eval("tic;");
+        solver->eval("f = SFNA' * (C_s' \\ (VDBSt' * w));");
+        if (matlabTiming)
+            solver->eval("genObjTime = genObjTime + toc;");
 
         // Get optimal pressures
+        if (matlabTiming)
+            solver->eval("tic;");
         solver->eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
+        if (matlabTiming)
+        solver->eval("linprogTime = linprogTime + toc;");
         m_pressures.resizeDomain(m_boundaryPoints.size());
         solver->getDenseMatrix("p", m_boundaryPoints.size(), 1, m_pressures.data(), true);
 
         // Get optimal displacements
-        solver->eval("u = S' * (C_s \\ (S * F * N * A * p));");
+        solver->eval("tic;");
+        solver->eval("u = S' * (C_s \\ (SFNA * p));");
+        solver->eval("simTime = simTime + toc;");
 
         VField optU(numNodes);
-        solver->getDenseMatrix("u", Kn, 1, optU.data().data(), true);
+        solver->getDenseMatrix("u", K.n, 1, optU.data().data(), true);
         typedef Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic,
                                          2, Eigen::RowMajor> > MappedMat;
 
@@ -1153,8 +1082,54 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
         m_combinedWeakness.maxRelax(optStress);
     }
 
-    solver->setDenseMatrix("combinedWeakness", m_combinedWeakness.size(),
-            1, m_combinedWeakness.data(), true);
+    qmi->setEcho(true);
+
+    if (matlabTiming) {
+        solver->eval("[genObjTime, linprogTime, simTime, genObjTime + linprogTime + simTime]");
+        solver->eval("toc(wallStart)");
+    }
+
+    if (m_equalizeCombinedWeakness) {
+        // For partial elements (cut cells), average with neighbors so that the
+        // cell quantities more closely approximate an averaging over a full
+        // cell area.
+        Real cellVol = elemGrid.cellVolume();
+        size_t eqCount = 0;
+        for (size_t i = 0; i < numElems; ++i) {
+            if (!elemGrid.elementIsFull(i)) {
+                Real averaged = 0, remainingVol = cellVol;
+                vector<bool> seen(numElems, false);
+                queue<size_t> bfsQueue;
+                vector<size_t> adj;
+                bfsQueue.push(i);
+                // BFS outward until we have found a total of cellVol volume
+                while ((!bfsQueue.empty()) && (abs(remainingVol) > 1e-6)) {
+                    size_t e = bfsQueue.front();
+                    bfsQueue.pop();
+                    Real addedVolume = std::min(m_elementData[e].volume(),
+                                                remainingVol);
+                    averaged += m_combinedWeakness[e] * (addedVolume / cellVol);
+                    remainingVol -= addedVolume;
+                    elemGrid.elementsAdjacentElement(e, adj);
+                    for (size_t ej: adj) {
+                        if (!seen[ej]) {
+                            bfsQueue.push(ej);
+                            seen[ej] = true;
+                        }
+                    }
+                }
+                m_combinedWeakness[i] = averaged;
+                ++eqCount;
+            }
+            else {
+                assert(abs(m_elementData[i].volume() - cellVol) < 1e-6);
+            }
+        }
+        cout << "Equalized " << eqCount << "/" << numElems << " elements" << endl;
+    }
+
+    solver->setDenseMatrix("cw", m_combinedWeakness.size(), 1,
+            m_combinedWeakness.data(), true);
 
     std::vector<size_t> cwSortPerm;
     sortPermutation(m_combinedWeakness, cwSortPerm);
@@ -1181,7 +1156,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     //         break;
     //     }
     // }
-
+    
     // Lp norm
     Real p = 20;
     weaknessCriterion = 0.0;
@@ -1198,7 +1173,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
 
     solver->setDenseMatrix("volumes", volumes.rows(),
             1, volumes.data(), true);
-    solver->setDenseMatrix("cwPercentiles", percentile.rows(),
+    solver->setDenseMatrix("cwp", percentile.rows(),
             1, percentile.data(), true);
 
     if (cwPath) {

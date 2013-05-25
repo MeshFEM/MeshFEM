@@ -25,6 +25,7 @@ struct AnalysisSettings {
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
+          equalizeCombinedWeakness(true),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     // Element settings
@@ -47,6 +48,7 @@ struct AnalysisSettings {
     double weaknessCutoff;
     double totalForceBound;
     double pointwisePressureBound;
+    bool equalizeCombinedWeakness;
 
     // Material Settings
     double young_modulus, poisson_ratio, density;
@@ -67,6 +69,8 @@ struct AnalysisSettings {
             ("weakness_cutoff", po::value<double>()->default_value(.95), "Stress norm percentile above which a cell is considered weak")
             ("total_force_bound", po::value<double>()->default_value(0.1), "F_tot: equality constraint for the total force")
             ("pointwise_pressure_bound", po::value<double>()->default_value(0.1), "p_max: maximum pressure at each boundary point")
+            ("equalize_combined_weakness", "Average partial cells' combined weakness with neighbor values.")
+
             ("young_modulus", po::value<double>()->default_value(1.0), "Material's young modulus")
             ("poisson_ratio", po::value<double>()->default_value(0.0), "Material's poisson ratio")
             ("density", po::value<double>()->default_value(1.0), "Material's density")

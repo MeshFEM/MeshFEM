@@ -113,6 +113,8 @@ public:
             // TODO: Add to history
             emit commandEntered(cmd);
             m_history.push_front(cmd);
+            // Running a command cancels the history browsing.
+            m_browsingHistory = false;
             setModified(false);
         }
         else{

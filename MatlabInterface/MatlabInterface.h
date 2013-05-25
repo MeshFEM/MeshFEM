@@ -74,6 +74,33 @@ public:
     void SetEngineSparseRealMatrix(const char *name, unsigned int n,
             const IndexType *rowind, const IndexType *colind, const ValueType *vals, unsigned int nrows=0, unsigned int ncols=0);
 
+    // Create a Matlab sparse matrix from a "Triplet Matrix"
+    // Note: always converts to double!
+    // Inlined so we don't need to konw what TMatrix is. It just must have:
+    //      size fields m, n
+    //      nonzeros nnz, each a triplet having row(), col(), value()
+    template <typename TMatrix>
+    void SetEngineSparseRealMatrix(const char *name, const TMatrix &t) {
+        mxArray *M = mxCreateDoubleMatrix(t.nz.size(), 3, mxREAL);
+        double *pM = mxGetPr(M);
+        size_t nnz = t.nz.size();
+        // Matlab expects the triplet data in column-major order
+        for (unsigned int i = 0; i < nnz; ++i) {
+            const typename TMatrix::Triplet &nz = t.nz[i];
+            pM[0 * nnz + i] = double(nz.row() + 1);
+            pM[1 * nnz + i] = double(nz.col() + 1);
+            pM[2 * nnz + i] = double(nz.value());
+        }
+        assert(M);
+        putVar(name, M);
+        mxDestroyArray(M);
+
+        char cmd[1024];
+        sprintf(cmd, "%s = sparse(%s(:,1), %s(:,2), %s(:,3), %d, %d)",
+                name, name, name, name, (int) t.m, (int) t.n);
+        engEvalString(m_ep, cmd);
+    }
+
     template <typename IndexType, typename ValueType>
     void SetEngineEncodedSparseComplexMatrix(const char *name, unsigned int n,
             const IndexType *rowind, const IndexType *colind, const std::complex<ValueType> *vals);

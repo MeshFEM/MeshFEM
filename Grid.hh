@@ -85,6 +85,11 @@ public:
         return sizes;
     }
 
+    Scalar cellVolume() const {
+        Vector size = cellSize();
+        return size[0] * size[1];
+    }
+
     void get2DCellIndex(size_t i, size_t &row, size_t &col) const {
         assert(i < numCells());
         row = i / cols();

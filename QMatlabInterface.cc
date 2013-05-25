@@ -15,7 +15,7 @@
 #include <QtGui>
 
 QMatlabInterface::QMatlabInterface(QWidget *parent)
-    : QWidget(parent), MatlabInterface()
+    : QWidget(parent), MatlabInterface(), m_echo(true)
 {
     g_commandLine = new QCommandLine();
     g_outputView = new QTextEdit();
