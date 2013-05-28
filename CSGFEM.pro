@@ -10,13 +10,15 @@ INCLUDEPATH += . /opt/local/include /opt/local/include/freetype2
 INCLUDEPATH += /Applications/MATLAB_R2013a.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
 LIBS += -L/opt/local/lib -lqjson -lftgl
+# Bring in umfpack and dependencies (BLAS)
+LIBS += -lumfpack -lSuiteSparse -framework Accelerate
 LIBS += -framework OpenCL
 # Hack to circumvent bug when MOC tries to parse certain boost macros
 QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
 
 QT += opengl
-CONFIG += release
-# CONFIG += debug
+# CONFIG += release
+CONFIG += debug
 
 QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=gnu++11
 QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99

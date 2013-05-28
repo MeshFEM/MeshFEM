@@ -648,10 +648,8 @@ void MeshlessFEM<Model>::m_assembleRigidModeMatrix(TMatrix &R)
     // Infinitesimal rotations
     for (size_t k = 0; k < nNodes; ++k) {
         Vector p = elemGrid.nodePosition(k);
-        // x offset: -y
+        // offset: [-y, x]
         R.addNZ(2, 2 * k, -p[1]);
-
-        // y offset: x
         R.addNZ(2, 2 * k + 1, p[0]);
     }
 }
@@ -988,9 +986,6 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     if (ret < 0)
         return false;
 
-    MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
-    assert(solver != NULL);
-
     TMatrix K, F, R, N, A, B, VD;
     m_assembleStiffnessMatrix(K);
     m_assembleLoadMatrix(F);
@@ -999,36 +994,8 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     m_assembleAMatrix(A);
     m_assembleBMatrix(B);
     m_assembleVDMatrix(VD);
-    solver->setSparseMatrix("F", F);
-    solver->setSparseMatrix("K", K);
-    solver->setSparseMatrix("R", R);
-    solver->setSparseMatrix("N", N);
-    solver->setSparseMatrix("A", A);
-    solver->setSparseMatrix("B", B);
-    solver->setSparseMatrix("VD", VD);
-
-    // C_s = [K, R'; R, zeros(3)]
-    // S = [I_Kn; 0_{3, Kn}]
-    TMatrix C_s, S;
-    C_s = K;
-    C_s.append(R, TMatrix::APPEND_RIGHT, false, true);
-    C_s.append(R, TMatrix::APPEND_BELOW, true, false);
-    solver->setSparseMatrix("C_s", C_s);
-
-    // solver->eval("C_s = [K, R'; R, zeros(3)];");
-    solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
-
-    char cmd[128];
-    snprintf(cmd, 128, "F_tot = %lf; p_max = %lf;",
-            (double) m_totalForceBound, (double) m_pointwisePressureBound);
-    solver->eval(cmd);
-
-    solver->eval("psize=size(A, 2); linprog_A = [-speye(psize); speye(psize)];");
-    solver->eval("linprog_b = [zeros(psize, 1); p_max * ones(psize, 1)];");
-    solver->eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
-    solver->eval("linprog_beq = [zeros(3, 1); F_tot];");
-    solver->eval("VDBSt = VD * B * S';");
-    solver->eval("SFNA = S * F * N * A;");
+    m_solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
+                                m_pointwisePressureBound);
 
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     size_t numNodes = elemGrid.numNodes();
@@ -1037,56 +1004,17 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     m_combinedWeakness.resizeDomain(numElems);
     m_combinedWeakness.clear();
 
-    QMatlabInterface *qmi = dynamic_cast<QMatlabInterface *>(solver->getMatlabInterface());
-    qmi->setEcho(false);
-
-    bool matlabTiming = true;
-    if (matlabTiming) {
-        solver->eval("wallStart = tic;");
-        solver->eval("genObjTime = 0; linprogTime = 0; simTime = 0;");
-    }
-
     DVector w;
     for (size_t i = 0; i < numWeakRegions(); ++i) {
         m_assembleWVector(w, i);
-        solver->setDenseMatrix("w", w.rows(), 1, w.data(), true);
-
-        if (matlabTiming)
-            solver->eval("tic;");
-        solver->eval("f = SFNA' * (C_s' \\ (VDBSt' * w));");
-        if (matlabTiming)
-            solver->eval("genObjTime = genObjTime + toc;");
-
-        // Get optimal pressures
-        if (matlabTiming)
-            solver->eval("tic;");
-        solver->eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
-        if (matlabTiming)
-        solver->eval("linprogTime = linprogTime + toc;");
-        m_pressures.resizeDomain(m_boundaryPoints.size());
-        solver->getDenseMatrix("p", m_boundaryPoints.size(), 1, m_pressures.data(), true);
-
-        // Get optimal displacements
-        solver->eval("tic;");
-        solver->eval("u = S' * (C_s \\ (SFNA * p));");
-        solver->eval("simTime = simTime + toc;");
-
+        m_solver->optimizeObjective(w, m_pressures);
         VField optU(numNodes);
-        solver->getDenseMatrix("u", K.n, 1, optU.data().data(), true);
-        typedef Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic,
-                                         2, Eigen::RowMajor> > MappedMat;
+        m_solver->simulate(m_pressures, optU);
 
         SMField stressTensors = elementStressTensors(optU);
         SField  optStress = computeStressTensorNorms(stressTensors);
 
         m_combinedWeakness.maxRelax(optStress);
-    }
-
-    qmi->setEcho(true);
-
-    if (matlabTiming) {
-        solver->eval("[genObjTime, linprogTime, simTime, genObjTime + linprogTime + simTime]");
-        solver->eval("toc(wallStart)");
     }
 
     if (m_equalizeCombinedWeakness) {
@@ -1128,8 +1056,8 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
         cout << "Equalized " << eqCount << "/" << numElems << " elements" << endl;
     }
 
-    solver->setDenseMatrix("cw", m_combinedWeakness.size(), 1,
-            m_combinedWeakness.data(), true);
+    // solver->setDenseMatrix("cw", m_combinedWeakness.size(), 1,
+    //         m_combinedWeakness.data(), true);
 
     std::vector<size_t> cwSortPerm;
     sortPermutation(m_combinedWeakness, cwSortPerm);
@@ -1171,10 +1099,10 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
 
     m_weaknessCriterion = weaknessCriterion;
 
-    solver->setDenseMatrix("volumes", volumes.rows(),
-            1, volumes.data(), true);
-    solver->setDenseMatrix("cwp", percentile.rows(),
-            1, percentile.data(), true);
+    // solver->setDenseMatrix("volumes", volumes.rows(),
+    //         1, volumes.data(), true);
+    // solver->setDenseMatrix("cwp", percentile.rows(),
+    //         1, percentile.data(), true);
 
     if (cwPath) {
         std::ofstream cwFile(cwPath);
@@ -1196,7 +1124,6 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
             cwpFile << percentile;
         }
     }
-    
 
     return true;
 }

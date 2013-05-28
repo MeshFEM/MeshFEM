@@ -8,9 +8,10 @@
 #include <cassert>
 
 #include <Eigen/Dense>
-typedef Eigen::Vector2d                          Vector;
-typedef Eigen::Vector2d::Scalar                  Scalar;
-typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> DVector;
+typedef Eigen::Vector2d                                       Vector;
+typedef Eigen::Vector2d::Scalar                               Scalar;
+typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1>              DVector;
+typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> DMatrix;
 typedef CSGTree<Vector> CSGTree_t;
 typedef CSGTree_t::CSGNode CSGNode;
 typedef CSGTree_t::CSGGlueNode CSGGlueNode;
@@ -58,6 +59,18 @@ struct TripletMatrix {
         nz.reserve(I_n);
         for (size_t i = 0; i < I_n; ++i)
             addNZ(i, i, 1);
+    }
+
+    TMatrix &operator*=(Real s) {
+        for (Triplet &t: nz)
+            t.v *= s;
+        return *this;
+    }
+
+    TMatrix operator*(Real s) const {
+        TMatrix result(*this);
+        result *= s;
+        return result;
     }
 
     ////////////////////////////////////////////////////////////////////////////

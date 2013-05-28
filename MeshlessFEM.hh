@@ -272,8 +272,6 @@ public:
     void buildBoundaryFunctions();
 
     bool simulate() {
-        MatlabSolver<Real> *solver = dynamic_cast<MatlabSolver<Real> *>(m_solver);
-        assert(solver != NULL);
 
         TMatrix K, F, R, N, A;
         m_assembleStiffnessMatrix(K);
@@ -281,60 +279,19 @@ public:
         m_assembleRigidModeMatrix(R);
         m_assembleNMatrix(N);
         m_assembleAMatrix(A);
-        solver->setSparseMatrix("K", K);
-        solver->setSparseMatrix("F", F);
-        solver->setSparseMatrix("R", R);
-        solver->setSparseMatrix("N", N);
-        solver->setSparseMatrix("A", A);
-
-        // All the fixed nodes' displacements are set to 0.
-        // This means zeroing the entire stiffness matrix row/column and placing
-        // a 1 on the diagonal. This component of the resulting solution vector
-        // is then ignored.
-        size_t numNodes = elementGrid().numNodes();
-        assert(m_nodeFixed.size() == numNodes);
-        // Old way of removing rigid DoFs (fixing vertices)
-        // for (size_t i = 0; i < m_nodeFixed.size(); ++i) {
-        //     if (m_nodeFixed[i]) {
-        //         int xIdx = 2 * ((int) i) + 1; // Matlab is 1-indexed
-        //         int yIdx = 2 * ((int) i) + 2; // Matlab is 1-indexed
-        //         snprintf(cmd, 128, "K(%i, :) = 0; K(:, %i) = 0; K(%i, %i) = 1; "
-        //                            "K(%i, :) = 0; K(:, %i) = 0; K(%i, %i) = 1;",
-        //                  xIdx, xIdx, xIdx, xIdx, yIdx, yIdx, yIdx, yIdx);
-        //         solver->eval(cmd);
-        //     }
-        // }
-
-        solver->eval("C_s = [K, R'; R, zeros(3)];");
-        solver->eval("S = [speye(size(K, 1)); zeros(3, size(K, 1))];");
-
-        size_t nBnd = numBoundaryPoints();
-
-        assert(m_pressures.domainSize() == nBnd);
-        solver->setDenseMatrix("p", nBnd, 1, m_pressures.data(), true);
-
-        solver->eval("f = F * N * A * p;");
-        solver->eval("u_lam = C_s \\ (S * f);");
-        solver->eval("u = S' * u_lam;");
-
-        Real *displacements = new Real[K.n];
-        solver->getDenseMatrix("u", K.n, 1, displacements, true);
-        m_simulatedDisplacement.resizeDomain(numNodes);
-        for (size_t i = 0; i < numNodes; ++i) {
-            // if (m_nodeFixed[i]) {
-            //     m_simulatedDisplacement(i) = Vector::Zero();
-            // }
-            // else {
-                m_simulatedDisplacement(i) = Vector(displacements[2 * i],
-                                                    displacements[2 * i + 1]);
-            // }
-        }
-        delete[] displacements;
+        // Note: the following aren't actually needed for simulation
+        TMatrix B, VD;
+        m_assembleBMatrix(B);
+        m_assembleVDMatrix(VD);
+        m_solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
+                                    m_pointwisePressureBound);
+        m_solver->simulate(m_pressures, m_simulatedDisplacement);
 
         m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
         m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
 
         // Dump MSH
+        size_t numNodes = elementGrid().numNodes();
         VectorField<Real, 3> disp3Vector(numNodes);
         disp3Vector.clear();
         for (size_t i = 0; i < numNodes; ++i) {

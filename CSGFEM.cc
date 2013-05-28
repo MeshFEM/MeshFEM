@@ -28,8 +28,10 @@ int main(int argc, char *argv[])
     AnalysisSettings settings;
 
     QMatlabInterface *matlabInterface = new QMatlabInterface();
-    MatlabSolver<CSGTree_t::Real> *solver =
-        new MatlabSolver<CSGTree_t::Real>(matlabInterface);
+    // MatlabSolver<CSGTree_t::Real> *solver =
+    //     new MatlabSolver<CSGTree_t::Real>(matlabInterface);
+    MatlabMosekSolver<CSGTree_t::Real> *solver =
+            new MatlabMosekSolver<CSGTree_t::Real>(matlabInterface);
 
     MeshlessFEM_t fem(csgTree, settings, solver);
 
