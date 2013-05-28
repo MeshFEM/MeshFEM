@@ -17,8 +17,8 @@ LIBS += -framework OpenCL
 QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
 
 QT += opengl
-# CONFIG += release
-CONFIG += debug
+CONFIG += release
+# CONFIG += debug
 
 QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=gnu++11
 QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99

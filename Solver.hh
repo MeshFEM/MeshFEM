@@ -342,10 +342,10 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
             S.makeCompressed();
             m_S_tr = S.transpose();
 
-            SparseMatrix Cs_mat(Cs.m, Cs.n);
-            Cs_mat.setFromTriplets(Cs.nz.begin(), Cs.nz.end());
-            Cs_mat.makeCompressed();
-            m_Cs_factors.compute(Cs_mat);
+            m_Cs.resize(Cs.m, Cs.n);
+            m_Cs.setFromTriplets(Cs.nz.begin(), Cs.nz.end());
+            m_Cs.makeCompressed();
+            m_Cs_factors.compute(m_Cs);
 
             if (m_Cs_factors.info() != Eigen::Success) {
                 std::cout << "Factorization error" << std::endl;
@@ -418,10 +418,17 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
         virtual bool simulate(const SField &p, VField &u)
         {
             DVector p_vec(p.domainSize());
-            // eval("u = S' * (C_s \\ (SFNA * p));");
-            DVector u_vec = m_S_tr * m_Cs_factors.solve(m_SFNA * p_vec);
-            if (m_Cs_factors.info() != Eigen::Success)
+            for (size_t i = 0; i < p.domainSize(); ++i)
+                p_vec[i] = p[i];
+
+            DVector rhs = m_SFNA * p_vec;
+            DVector x = m_Cs_factors.solve(rhs);
+            if (m_Cs_factors.info() != Eigen::Success) {
+                std::cout << "Solve error" << std::endl;
                 return false;
+            }
+
+            DVector u_vec = m_S_tr * x;
 
             u = VField(u_vec);
 
@@ -432,6 +439,9 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
         SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr, m_linprog_A;
         DMatrix m_linprog_Aeq;
         DVector m_linprog_beq, m_linprog_b;
+        // Note: must be kept around because UmfPackLU's solve accesses the
+        // original matrix for iterative refinement.
+        SparseMatrix m_Cs;
         Eigen::UmfPackLU<SparseMatrix> m_Cs_factors;
 };
 #endif // SOLVER_HH
