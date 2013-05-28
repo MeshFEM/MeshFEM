@@ -421,14 +421,11 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
             for (size_t i = 0; i < p.domainSize(); ++i)
                 p_vec[i] = p[i];
 
-            DVector rhs = m_SFNA * p_vec;
-            DVector x = m_Cs_factors.solve(rhs);
+            DVector u_vec = m_S_tr * m_Cs_factors.solve(m_SFNA * p_vec);
             if (m_Cs_factors.info() != Eigen::Success) {
                 std::cout << "Solve error" << std::endl;
                 return false;
             }
-
-            DVector u_vec = m_S_tr * x;
 
             u = VField(u_vec);
 
