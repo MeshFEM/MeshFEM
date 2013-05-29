@@ -382,7 +382,7 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             SparseMatrix RFNA = (((R_mat * F_mat) * N_mat) * A_mat);
             TMatrix T_linprog_Aeq(4, pSize);
             T_linprog_Aeq.reserve(RFNA.nonZeros() + pSize);
-            for (size_t k = 0; k < RFNA.outerSize(); ++k) {
+            for (int k = 0; k < RFNA.outerSize(); ++k) {
                 for (typename SparseMatrix::InnerIterator it(RFNA, k); it; ++it) {
                     assert(it.row() <= 2);
                     T_linprog_Aeq.addNZ(it.row(), it.col(), it.value());
@@ -465,8 +465,12 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
 
         MatlabGurobiSolver(MatlabInterface *matlab)
             : MatlabEigenSolver<Real>(matlab), m_model(NULL) {
-            int error = GRBloadenv(&m_env, "gurobi.log");
-            assert(!error);
+            // int error = GRBloadenv(&m_env, "gurobi.log");
+            int error = GRBloadenv(&m_env, NULL);
+            assert(error == 0);
+
+            error = GRBsetintparam(m_env, "OutputFlag", 0);
+            assert(error == 0);
         }
 
         virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
@@ -477,35 +481,45 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
             bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
                     N, A, B, VD, F_tot, p_max);
 
-            size_t pSize = A.n;
+            m_pSize = A.n;
             
             // Create a new Gurobi model, freeing the old one if it exists.
             if (m_model != NULL)
                 GRBfreemodel(m_model);
             int error = GRBnewmodel(m_env, &m_model, "weak_opt", 0, NULL, NULL,
                                     NULL, NULL, NULL);
+            assert(error == 0);
+
+            // Maximize instead of minimizing
+            error = GRBsetintattr(m_model, "ModelSense", -1);
+            assert(error == 0);
             
             // Add variables
-            Eigen::VectorXd ub(pSize);
+            Eigen::VectorXd ub(m_pSize);
             ub.fill(p_max);
-            GRBaddvars(m_model, pSize,
-                    0, NULL, NULL, NULL, // No constraints
-                    NULL,                // Don't specify objective yet
-                    NULL, ub.data(),     // Lower bound 0, upper bound p_max
-                    NULL,                // continuous variables
-                    NULL);               // unnamed variables
+            error = GRBaddvars(m_model, m_pSize,
+                     0, NULL, NULL, NULL, // No constraints
+                     NULL,                // Don't specify objective yet
+                     NULL, ub.data(),     // Lower bound 0, upper bound p_max
+                     NULL,                // continuous variables
+                     NULL);               // unnamed variables
+            assert(error == 0);
+
+            error = GRBupdatemodel(m_model);
+            assert(error == 0);
 
             size_t numConstraints = m_linprog_Aeq.rows();
             std::vector<char> senses(numConstraints, GRB_EQUAL);
             // Add constraints
-            GRBaddconstrs(m_model, numConstraints,
-                          m_linprog_Aeq.nonZeros(),
-                          m_linprog_Aeq.outerIndexPtr(),
-                          m_linprog_Aeq.innerIndexPtr(),
-                          m_linprog_Aeq.valuePtr(),
-                          &senses[0],
-                          m_linprog_beq.data(),
-                          NULL); // No names.
+            error = GRBaddconstrs(m_model, numConstraints,
+                                  m_linprog_Aeq.nonZeros(),
+                                  m_linprog_Aeq.outerIndexPtr(),
+                                  m_linprog_Aeq.innerIndexPtr(),
+                                  m_linprog_Aeq.valuePtr(),
+                                  &senses[0],
+                                  m_linprog_beq.data(),
+                                  NULL); // No names.
+            assert(error == 0);
 
             return success;
         }
@@ -513,14 +527,26 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
         // Run the actual weakness analysis
         virtual bool optimizeObjective(const DVector &w, SField &p)
         {
-            DVector f = m_SFNA_tr * m_Cs_factors.solve(m_VDBSt_tr * w);
+            Eigen::VectorXd f = m_SFNA_tr * m_Cs_factors.solve(m_VDBSt_tr * w);
             if (m_Cs_factors.info() != Eigen::Success) {
                 std::cout << "Solve error" << std::endl;
                 return false;
             }
 
-            // eval("f = SFNA' * (C_s' \\ (VDBSt' * w));");
-            // eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
+            int error;
+
+            // Set objective
+            error = GRBsetdblattrarray(m_model, "Obj", 0, m_pSize, f.data());
+            assert(error == 0);
+
+            error = GRBoptimize(m_model);
+            assert(error == 0);
+
+            p.resizeDomain(m_pSize);
+            error = GRBgetdblattrarray(m_model, GRB_DBL_ATTR_X, 0, m_pSize,
+                                       p.data());
+            assert(error == 0);
+
             return true;
         }
 
@@ -538,6 +564,7 @@ protected:
         using MatlabEigenSolver<Real>::m_linprog_Aeq;
         using MatlabEigenSolver<Real>::m_linprog_beq;
 
+        size_t m_pSize;
         GRBenv   *m_env;
         GRBmodel *m_model;
 };
