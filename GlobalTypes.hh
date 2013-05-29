@@ -40,6 +40,7 @@ template<typename _Triplet>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
                   APPEND_LEFT , APPEND_RIGHT} AppendPos;
+    TripletMatrix(size_t m, size_t n) : m(m), n(n) { }
     TripletMatrix() : m(0), n(0) { }
     typedef TripletMatrix<_Triplet>         TMatrix;
     typedef _Triplet                        Triplet;

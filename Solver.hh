@@ -307,7 +307,7 @@ class MatlabSolver : public Solver<Real> {
 #include <Eigen/Sparse>
 #include <Eigen/UmfPackSupport>
 template<typename Real>
-class MatlabMosekSolver : public MatlabSolver<Real> {
+class MatlabEigenSolver : public MatlabSolver<Real> {
     public:
         using typename MatlabSolver<Real>::IVec;
         using typename MatlabSolver<Real>::VVec;
@@ -317,9 +317,10 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
         using typename MatlabSolver<Real>::DVector;
         using typename MatlabSolver<Real>::DMatrix;
         typedef Eigen::SparseMatrix<Real> SparseMatrix;
+        typedef Eigen::SparseMatrix<Real, Eigen::RowMajor> SparseMatrixCSR;
         typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
 
-        MatlabMosekSolver(MatlabInterface *matlab)
+        MatlabEigenSolver(MatlabInterface *matlab)
             : MatlabSolver<Real>(matlab) { }
 
         // Set all the matrices needed for weakness analysis and simulation
@@ -354,17 +355,17 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
 
             size_t pSize = A.n;
 
-            m_linprog_b.resize(2 * pSize);
-            m_linprog_b.segment(0, pSize).setZero();
-            m_linprog_b.segment(pSize, pSize).fill(p_max);
+            // m_linprog_b.resize(2 * pSize);
+            // m_linprog_b.segment(0, pSize).setZero();
+            // m_linprog_b.segment(pSize, pSize).fill(p_max);
 
-            TMatrix linprog_A;
-            linprog_A.setIdentity(pSize);
-            linprog_A.append(linprog_A * -1.0, TMatrix::APPEND_ABOVE);
-            m_linprog_A.resize(linprog_A.m, linprog_A.n);
-            m_linprog_A.setFromTriplets(linprog_A.nz.begin(),
-                                        linprog_A.nz.end());
-            m_linprog_A.makeCompressed();
+            // TMatrix linprog_A;
+            // linprog_A.setIdentity(pSize);
+            // linprog_A.append(linprog_A * -1.0, TMatrix::APPEND_ABOVE);
+            // m_linprog_A.resize(linprog_A.m, linprog_A.n);
+            // m_linprog_A.setFromTriplets(linprog_A.nz.begin(),
+            //                             linprog_A.nz.end());
+            // m_linprog_A.makeCompressed();
 
             m_linprog_beq.resize(4);
             m_linprog_beq.setZero();
@@ -379,12 +380,21 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
             A_mat.setFromTriplets(A.nz.begin(), A.nz.end());
             
             SparseMatrix RFNA = (((R_mat * F_mat) * N_mat) * A_mat);
-            m_linprog_Aeq.block(0, 0, 3, pSize) = RFNA;
-            DMatrix::RowXpr pressure_integrator = m_linprog_Aeq.row(3);
-            for (size_t i = 0; i < pSize; ++i) {
-                assert(A.nz[i].row() == i);
-                pressure_integrator[i] = A.nz[i].value();
+            TMatrix T_linprog_Aeq(4, pSize);
+            T_linprog_Aeq.reserve(RFNA.nonZeros() + pSize);
+            for (size_t k = 0; k < RFNA.outerSize(); ++k) {
+                for (typename SparseMatrix::InnerIterator it(RFNA, k); it; ++it) {
+                    assert(it.row() <= 2);
+                    T_linprog_Aeq.addNZ(it.row(), it.col(), it.value());
+                }
             }
+            for (size_t i = 0; i < pSize; ++i) {
+                T_linprog_Aeq.addNZ(3, A.nz[i].col(), A.nz[i].value());
+            }
+            m_linprog_Aeq.resize(4, pSize);
+            m_linprog_Aeq.setFromTriplets(T_linprog_Aeq.nz.begin(),
+                                          T_linprog_Aeq.nz.end());
+            m_linprog_Aeq.makeCompressed();
 
             SparseMatrix B_mat(B.m, B.n), VD_mat(VD.m, VD.n);
             B_mat.setFromTriplets(B.nz.begin(), B.nz.end());
@@ -401,18 +411,7 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
         }
 
         // Run the actual weakness analysis
-        virtual bool optimizeObjective(const DVector &w, SField &p)
-        {
-            DVector f = m_SFNA_tr * m_Cs_factors.solve(m_VDBSt_tr * w);
-            if (m_Cs_factors.info() != Eigen::Success) {
-                std::cout << "Solve error" << std::endl;
-                return false;
-            }
-
-            // eval("f = SFNA' * (C_s' \\ (VDBSt' * w));");
-            // eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
-            return true;
-        }
+        virtual bool optimizeObjective(const DVector &w, SField &p) = 0;
 
         // Simulate the application of given pressures
         virtual bool simulate(const SField &p, VField &u)
@@ -432,14 +431,118 @@ class MatlabMosekSolver : public MatlabSolver<Real> {
             return true;
         }
 
-    private:
-        SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr, m_linprog_A;
-        DMatrix m_linprog_Aeq;
-        DVector m_linprog_beq, m_linprog_b;
+    protected:
+        SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr;
+        // The constraints need to be specified in compressed row format.
+        SparseMatrixCSR m_linprog_Aeq;
+        DVector m_linprog_beq; // , m_linprog_b;
         // Note: must be kept around because UmfPackLU's solve accesses the
         // original matrix for iterative refinement.
         SparseMatrix m_Cs;
         Eigen::UmfPackLU<SparseMatrix> m_Cs_factors;
 };
+
+
+#define HAS_GUROBI
+#ifdef HAS_GUROBI
+extern "C" {
+#include <gurobi_c.h>
+}
+
+template<typename Real>
+class MatlabGurobiSolver : public MatlabEigenSolver<Real>
+{
+    public:
+        using typename MatlabSolver<Real>::IVec;
+        using typename MatlabSolver<Real>::VVec;
+        using typename MatlabSolver<Real>::SField;
+        using typename MatlabSolver<Real>::VField;
+        using typename MatlabSolver<Real>::SM2Field;
+        using typename MatlabSolver<Real>::DVector;
+        using typename MatlabSolver<Real>::DMatrix;
+        typedef Eigen::SparseMatrix<Real> SparseMatrix;
+        typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
+
+        MatlabGurobiSolver(MatlabInterface *matlab)
+            : MatlabEigenSolver<Real>(matlab), m_model(NULL) {
+            int error = GRBloadenv(&m_env, "gurobi.log");
+            assert(!error);
+        }
+
+        virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
+                const TMatrix &R, const TMatrix &N, const TMatrix &A,
+                const TMatrix &B, const TMatrix &VD,
+                Real F_tot, Real p_max)
+        {
+            bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
+                    N, A, B, VD, F_tot, p_max);
+
+            size_t pSize = A.n;
+            
+            // Create a new Gurobi model, freeing the old one if it exists.
+            if (m_model != NULL)
+                GRBfreemodel(m_model);
+            int error = GRBnewmodel(m_env, &m_model, "weak_opt", 0, NULL, NULL,
+                                    NULL, NULL, NULL);
+            
+            // Add variables
+            Eigen::VectorXd ub(pSize);
+            ub.fill(p_max);
+            GRBaddvars(m_model, pSize,
+                    0, NULL, NULL, NULL, // No constraints
+                    NULL,                // Don't specify objective yet
+                    NULL, ub.data(),     // Lower bound 0, upper bound p_max
+                    NULL,                // continuous variables
+                    NULL);               // unnamed variables
+
+            size_t numConstraints = m_linprog_Aeq.rows();
+            std::vector<char> senses(numConstraints, GRB_EQUAL);
+            // Add constraints
+            GRBaddconstrs(m_model, numConstraints,
+                          m_linprog_Aeq.nonZeros(),
+                          m_linprog_Aeq.outerIndexPtr(),
+                          m_linprog_Aeq.innerIndexPtr(),
+                          m_linprog_Aeq.valuePtr(),
+                          &senses[0],
+                          m_linprog_beq.data(),
+                          NULL); // No names.
+
+            return success;
+        }
+
+        // Run the actual weakness analysis
+        virtual bool optimizeObjective(const DVector &w, SField &p)
+        {
+            DVector f = m_SFNA_tr * m_Cs_factors.solve(m_VDBSt_tr * w);
+            if (m_Cs_factors.info() != Eigen::Success) {
+                std::cout << "Solve error" << std::endl;
+                return false;
+            }
+
+            // eval("f = SFNA' * (C_s' \\ (VDBSt' * w));");
+            // eval("p = linprog(-f, linprog_A, linprog_b, linprog_Aeq, linprog_beq);");
+            return true;
+        }
+
+        ~MatlabGurobiSolver() {
+            if (m_model != NULL) {
+                GRBfreemodel(m_model);
+            }
+            GRBfreeenv(m_env);
+        }
+
+protected:
+        using MatlabEigenSolver<Real>::m_SFNA_tr;
+        using MatlabEigenSolver<Real>::m_VDBSt_tr;
+        using MatlabEigenSolver<Real>::m_Cs_factors;
+        using MatlabEigenSolver<Real>::m_linprog_Aeq;
+        using MatlabEigenSolver<Real>::m_linprog_beq;
+
+        GRBenv   *m_env;
+        GRBmodel *m_model;
+};
+
+#endif // HAS_GUROBI
+
 #endif // SOLVER_HH
 
