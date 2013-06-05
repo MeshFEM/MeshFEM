@@ -15,6 +15,11 @@
 #include "Solver.hh"
 #include "AnalysisSettings.hh"
 
+#include <map>
+#include <string>
+
+using namespace std;
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
 //  @param[in]  argc    Number of arguments
@@ -27,15 +32,13 @@ int main(int argc, char *argv[])
     CSGTree_t csgTree;
     AnalysisSettings settings;
 
+    typedef CSGTree_t::Real Real;
     QMatlabInterface *matlabInterface = new QMatlabInterface();
-    // MatlabSolver<CSGTree_t::Real> *solver =
-    //     new MatlabSolver<CSGTree_t::Real>(matlabInterface);
-    MatlabGurobiSolver<CSGTree_t::Real> *solver =
-            new MatlabGurobiSolver<CSGTree_t::Real>(matlabInterface);
+    SolverLibrary<Real> solvers(matlabInterface);
 
-    MeshlessFEM_t fem(csgTree, settings, solver);
+    MeshlessFEM_t fem(csgTree, settings, solvers);
 
-    CSGWindow window(fem, settings);
+    CSGWindow window(fem, settings, solvers);
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
 

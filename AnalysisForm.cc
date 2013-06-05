@@ -12,13 +12,17 @@
 #include <QtGui>
 #include "QuadraturePointsSpinBox.hh"
 #include "CSGWindowController.hh"
+#include "SolverLibrary.hh"
 #include <iostream>
 
 AnalysisForm::AnalysisForm(AnalysisSettings &settings,
-                           CSGWindowController *controller, QWidget *parent)
-    : QWidget(parent), m_settings(settings)
+                           CSGWindowController *controller,
+                           SolverLibrary<Scalar> &solvers, QWidget *parent)
+    : QWidget(parent), m_settings(settings), m_solvers(solvers)
 {
     // Construct all widgets
+    g_solverSelector = new QComboBox();
+
     g_nxStepper = new QSpinBox();
     g_nyStepper = new QSpinBox();
     g_borderWidthStepper = new QSpinBox();
@@ -79,11 +83,20 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     modesUpdated(NULL);
     weakRegionsUpdated(NULL);
 
+    QGroupBox *solverGroup = new QGroupBox("Solvers");
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *materialGroup = new QGroupBox("Materials and Matrices");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
     QGroupBox *simulationGroup = new QGroupBox("Simulation");
     QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
+
+    // Solver Config
+    QFormLayout *solverForm = new QFormLayout();
+    solverForm->addRow("Solver", g_solverSelector);
+    for (const std::string &name: solvers.names()) {
+        g_solverSelector->addItem(name.c_str());
+    }
+    solverGroup->setLayout(solverForm);
 
     // Elements and Quadrature
     QFormLayout *eqForm = new QFormLayout();
@@ -152,6 +165,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Connections
     assert(controller);
+    QObject::connect(g_solverSelector, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(solverControlsChanged(int)));
     QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_nyStepper, SIGNAL(valueChanged(int)),
@@ -228,6 +243,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
+    layout->addWidget(solverGroup);
     layout->addWidget(elementsQuadratureGroup);
     layout->addWidget(materialGroup);
     layout->addWidget(modalAnalysisGroup);
@@ -246,6 +262,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 }
 
 void AnalysisForm::m_setGUIFromSettings() {
+    m_solvers.selectSolver(m_settings.solver);
+    g_solverSelector->setCurrentIndex(m_solvers.selectedIndex());
     g_nxStepper->setValue(m_settings.Nx);
     g_nyStepper->setValue(m_settings.Ny);
     g_borderWidthStepper->setValue(m_settings.borderWidth);
@@ -275,6 +293,8 @@ void AnalysisForm::m_setGUIFromSettings() {
 }
 
 void AnalysisForm::m_readSettingsFromGUI() {
+    m_solvers.selectSolver(g_solverSelector->currentIndex());
+    m_settings.solver = m_solvers.selectedName();
     m_settings.Nx = g_nxStepper->value();
     m_settings.Ny = g_nyStepper->value();
     m_settings.borderWidth = g_borderWidthStepper->value();
@@ -342,6 +362,12 @@ void AnalysisForm::weakRegionsUpdated(const MeshlessFEM_t *fem) {
     else {
         g_weakRegionSelector->setEnabled(false);
     }
+}
+
+void AnalysisForm::solverControlsChanged(int) {
+    m_readSettingsFromGUI();
+    // Changing the solver doesn't invalidate anything, so we needn't emit a
+    // notification.
 }
 
 void AnalysisForm::elementGridControlsChanged(int) {

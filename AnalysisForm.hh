@@ -15,6 +15,8 @@
 #include "AnalysisSettings.hh"
 
 class CSGWindowController;
+template<typename Real>
+class SolverLibrary;
 class QSpinBox;
 class QDoubleSpinBox;
 class QuadraturePointsSpinBox;
@@ -26,14 +28,15 @@ class AnalysisForm : public QWidget
 {
     Q_OBJECT
 public:
-    AnalysisForm(AnalysisSettings &settings,
-                 CSGWindowController *controller, QWidget *parent = NULL);
+    AnalysisForm(AnalysisSettings &settings, CSGWindowController *controller,
+                 SolverLibrary<Scalar> &solvers, QWidget *parent = NULL);
 
 public slots:
     void modesUpdated(const MeshlessFEM_t *fem);
     void weakRegionsUpdated(const MeshlessFEM_t *fem);
 
 private slots:
+    void solverControlsChanged(int);
     void elementGridControlsChanged(int);
     void elementGridControlsChanged(double);
     void boundaryPointControlsChanged(double);
@@ -54,6 +57,10 @@ signals:
 
 private:
     AnalysisSettings &m_settings;
+    SolverLibrary<Scalar> &m_solvers;
+
+    // Solver selection
+    QComboBox *g_solverSelector;
 
     // Elements and quadrature settings
     QSpinBox *g_nxStepper, *g_nyStepper;

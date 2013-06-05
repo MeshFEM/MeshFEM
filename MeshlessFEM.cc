@@ -435,7 +435,7 @@ typename MeshlessFEM<Model>::SField
 MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
 {
     size_t numMats = stressField.domainSize();
-    VField eigenvalues = m_solver->symm2x2Eigenvalues(stressField);
+    VField eigenvalues = m_solvers.solver()->symm2x2Eigenvalues(stressField);
     assert(eigenvalues.domainSize() == numMats);
     SField result(numMats);
 
@@ -767,6 +767,7 @@ template<typename Model>
 bool MeshlessFEM<Model>::modalAnalysis()
 {
     bool success;
+    Solver<Real> *solver = m_solvers.solver();
 
     if (m_laplacianModes) {
         // Use laplacian modes
@@ -778,7 +779,7 @@ bool MeshlessFEM<Model>::modalAnalysis()
 
         std::vector<SField> lapModes;
         std::vector<Real>   lapEigs;
-        success = m_solver->GeneralizedEigenvalueProblem(numModes / 2,
+        success = solver->GeneralizedEigenvalueProblem(numModes / 2,
                                               L, M, lapModes, lapEigs);
         assert(numModes / 2 == lapModes.size());
 
@@ -818,7 +819,7 @@ bool MeshlessFEM<Model>::modalAnalysis()
 
         size_t numModes = std::min((size_t) m_numRequestedModes, K.n);
         std::vector<SField> eigenVectors;
-        success = m_solver->GeneralizedEigenvalueProblem(numModes,
+        success = solver->GeneralizedEigenvalueProblem(numModes,
                                           K, M, eigenVectors, m_eigenvalues);
         assert(numModes == eigenVectors.size());
         m_modes.clear(); m_modes.reserve(eigenVectors.size());
@@ -986,6 +987,8 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     if (ret < 0)
         return false;
 
+    Solver<Real> *solver = m_solvers.solver();
+
     TMatrix K, F, R, N, A, B, VD;
     m_assembleStiffnessMatrix(K);
     m_assembleLoadMatrix(F);
@@ -994,7 +997,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     m_assembleAMatrix(A);
     m_assembleBMatrix(B);
     m_assembleVDMatrix(VD);
-    m_solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
+    solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
                                 m_pointwisePressureBound);
 
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -1007,9 +1010,9 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     DVector w;
     for (size_t i = 0; i < numWeakRegions(); ++i) {
         m_assembleWVector(w, i);
-        m_solver->optimizeObjective(w, m_pressures);
+        solver->optimizeObjective(w, m_pressures);
         VField optU(numNodes);
-        m_solver->simulate(m_pressures, optU);
+        solver->simulate(m_pressures, optU);
 
         SMField stressTensors = elementStressTensors(optU);
         SField  optStress = computeStressTensorNorms(stressTensors);
@@ -1025,28 +1028,53 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
         size_t eqCount = 0;
         for (size_t i = 0; i < numElems; ++i) {
             if (!elemGrid.elementIsFull(i)) {
-                Real averaged = 0, remainingVol = cellVol;
+                Real elemVol = m_elementData[i].volume();
+                Real volNeeded = cellVol - elemVol;
+                assert(volNeeded > 0);
+                Real weakAccum = 0, volAccum = 0;
+
                 vector<bool> seen(numElems, false);
-                queue<size_t> bfsQueue;
+                queue<size_t> bfsQueue, bfsFrontier;
+                queue<size_t> *q = &bfsQueue, *qf = &bfsFrontier;
+
+                // Initialize queue with all neighbors
                 vector<size_t> adj;
-                bfsQueue.push(i);
-                // BFS outward until we have found a total of cellVol volume
-                while ((!bfsQueue.empty()) && (abs(remainingVol) > 1e-6)) {
-                    size_t e = bfsQueue.front();
-                    bfsQueue.pop();
-                    Real addedVolume = std::min(m_elementData[e].volume(),
-                                                remainingVol);
-                    averaged += m_combinedWeakness[e] * (addedVolume / cellVol);
-                    remainingVol -= addedVolume;
-                    elemGrid.elementsAdjacentElement(e, adj);
-                    for (size_t ej: adj) {
-                        if (!seen[ej]) {
-                            bfsQueue.push(ej);
-                            seen[ej] = true;
+                elemGrid.elementsAdjacentElement(i, adj);
+                for (size_t ej: adj) {
+                    qf->push(ej);
+                    seen[ej] = true;
+                }
+
+                // BFS outward until we have found a total of cellVol volume.
+                // We expand in full rings of cells at a time. I.e. if we need
+                // to average with at least one element at edge distance d, we
+                // average with all elements at distance d.
+                while ((!qf->empty()) && (volAccum < volNeeded)) {
+                    std::swap(q, qf);
+                    while (!q->empty()) {
+                        size_t e = q->front();
+                        q->pop();
+                        Real vol = m_elementData[e].volume();
+                        weakAccum += vol * m_combinedWeakness[e];
+                        volAccum += vol;
+                        elemGrid.elementsAdjacentElement(e, adj);
+                        for (size_t ej: adj) {
+                            if (!seen[ej]) {
+                                qf->push(ej);
+                                seen[ej] = true;
+                            }
                         }
                     }
                 }
-                m_combinedWeakness[i] = averaged;
+
+                // Get average weakness in the averaging annulus.
+                Real diskAverage = weakAccum / volAccum;
+                Real before = m_combinedWeakness[i];
+                // Do a weighted average of this with the original cell's value.
+                m_combinedWeakness[i] = (elemVol * m_combinedWeakness[i]
+                    + volNeeded * diskAverage) / cellVol;
+                // std::cout << "before: " << before << ", "
+                //           << "after: " << m_combinedWeakness[i] << std::endl;
                 ++eqCount;
             }
             else {
@@ -1056,8 +1084,11 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
         cout << "Equalized " << eqCount << "/" << numElems << " elements" << endl;
     }
 
-    // solver->setDenseMatrix("cw", m_combinedWeakness.size(), 1,
-    //         m_combinedWeakness.data(), true);
+    // MatlabSolver<Real> *matsolver = dynamic_cast<MatlabSolver<Real> *>(solver);
+    // if (matsolver) {
+    //     matsolver->getMatlabInterface()->SetEngineRealMatrix("cw",
+    //             m_combinedWeakness.size(), 1, m_combinedWeakness.data());
+    // }
 
     std::vector<size_t> cwSortPerm;
     sortPermutation(m_combinedWeakness, cwSortPerm);

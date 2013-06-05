@@ -19,8 +19,10 @@
 #include "AnalysisForm.hh"
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
+#include "SolverLibrary.hh"
 
-CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
+CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
+                     SolverLibrary<Scalar> &solvers)
 {
     g_vsWidget = new ViewSettingsWidget(vsettings);
     g_vsWidget->setWindowTitle("View Settings");
@@ -45,7 +47,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings)
     layout->addWidget(sideBarTab);
     sideBar->setLayout(layout);
 
-    AnalysisForm *analysisForm = new AnalysisForm(settings, controller);
+    AnalysisForm *analysisForm = new AnalysisForm(settings, controller, solvers);
     QScrollArea *scroller = new QScrollArea();
     scroller->setWidget(analysisForm);
     scroller->setWidgetResizable(true);

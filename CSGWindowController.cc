@@ -504,6 +504,6 @@ void CSGWindowController::runTranslationTest()
 
     m_csgTree->setParameters(params);
     m_fem.modelChanged(false);
-    // m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     m_femView->modelChanged();
 }

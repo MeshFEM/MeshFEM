@@ -431,6 +431,8 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             return true;
         }
 
+        virtual ~MatlabEigenSolver() { }
+
     protected:
         SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr;
         // The constraints need to be specified in compressed row format.
@@ -550,7 +552,7 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
             return true;
         }
 
-        ~MatlabGurobiSolver() {
+        virtual ~MatlabGurobiSolver() {
             if (m_model != NULL) {
                 GRBfreemodel(m_model);
             }

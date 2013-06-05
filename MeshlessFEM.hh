@@ -18,6 +18,7 @@
 #include "ElementGrid.hh"
 #include "AnalysisSettings.hh"
 #include "Solver.hh"
+#include "SolverLibrary.hh"
 #include "Fields.hh"
 #include "Geometry.hh"
 #include "SPHKernels.hh"
@@ -61,9 +62,9 @@ public:
     class BoundaryFunctionLoad;
 
     MeshlessFEM(Model &model, const AnalysisSettings &settings,
-                Solver<Real> *solver)
+                SolverLibrary<Real> &solvers)
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
-          m_displacementStrainCached(false), m_solver(solver)
+          m_displacementStrainCached(false), m_solvers(solvers)
     {
         m_quadrature = new Quadrature2D(settings.quadraturePoints,
                                         settings.quadrature);
@@ -79,6 +80,7 @@ public:
         configureModalAnalysis(settings);
         configureWeaknessAnalysis(settings);
     }
+
 
     bool configureElements(const AnalysisSettings &settings) {
         bool changed = false;
@@ -157,7 +159,12 @@ public:
         m_pointwisePressureBound = settings.pointwisePressureBound;
         m_totalForceBound = settings.totalForceBound;
         m_equalizeCombinedWeakness = settings.equalizeCombinedWeakness;
-        m_invalidateCache();
+
+        // Only invalidate weakness-dependent parts of cache
+        m_weakRegions.clear();
+        m_weakRegionStressNorms.clear();
+
+        m_combinedWeakness.resizeDomain(0);
     }
 
     // refitGrid determines whether the element grid should be fit inside the
@@ -283,9 +290,10 @@ public:
         TMatrix B, VD;
         m_assembleBMatrix(B);
         m_assembleVDMatrix(VD);
-        m_solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
-                                    m_pointwisePressureBound);
-        m_solver->simulate(m_pressures, m_simulatedDisplacement);
+        Solver<Real> *solver = m_solvers.solver();
+        solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
+                                  m_pointwisePressureBound);
+        solver->simulate(m_pressures, m_simulatedDisplacement);
 
         m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
         m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
@@ -338,7 +346,7 @@ private:
     MassMatrixType m_massMatrixType;   
     DType m_d;
     Real m_density;
-    Solver<Real> *m_solver;
+    SolverLibrary<Real> &m_solvers;
     int m_numRequestedModes;
     bool m_laplacianModes;
     std::vector<VField> m_modes;

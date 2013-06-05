@@ -20,13 +20,16 @@ namespace po = boost::program_options;
 
 struct AnalysisSettings {
     AnalysisSettings()
-        : Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
+        : solver("Gurobi"),
+          Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
           cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
           equalizeCombinedWeakness(true),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
+
+    std::string solver;
 
     // Element settings
     size_t Nx, Ny;
