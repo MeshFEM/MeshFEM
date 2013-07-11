@@ -180,22 +180,13 @@ public:
         gridEndX   = std::min((long)  ceil(m_Nx * maxCorner[0]), (long) cols());
         gridEndY   = std::min((long)  ceil(m_Ny * maxCorner[1]), (long) rows());
 
-        size_t candidates = 0;
         for (size_t row = gridStartY; row < gridEndY; ++row) {
             for (size_t col = gridStartX; col < gridEndX; ++col) {
                 BBox_t candidate = cellBoundingBox(row, col);
-                ++candidates;
-                std::cout << '\t' << candidate << ": " ;
-                if (candidate.intersectsCircle(pt, radius)) {
+                if (candidate.intersectsCircle(pt, radius))
                     cells.push_back(get1DCellIndex(row, col));
-                    std::cout << "overlaps" << std::endl;
-                }
-                else {
-                    std::cout << "no overlap" << std::endl;
-                }
             }
         }
-        std::cout << "Tested " << candidates << " candidates" << std::endl;
     }
 
     size_t numVertices() const { return vertexCols() * vertexRows(); }

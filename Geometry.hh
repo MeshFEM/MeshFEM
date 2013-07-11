@@ -77,17 +77,19 @@ struct BBox {
     //  @return     true if this box overlaps the circle.
     *///////////////////////////////////////////////////////////////////////////
     bool intersectsCircle(const Vector &c, Real r) const {
+        // Transform so box center is at the origin and the circle is in the
+        // first quadrant.
         Vector boxCenter = .5 * (minCorner + maxCorner);
-        Vector circleDistance = (c - boxCenter).cwiseAbs();
-        Vector boxHalfDims = .5 * dimensions();
+        Vector c_prime = (c - boxCenter).cwiseAbs();
 
-        if ((circleDistance.array() > (boxHalfDims.array() + r)).any())
+        Vector boxHalfDims = .5 * dimensions();
+        if ((c_prime.array() > (boxHalfDims.array() + r)).any())
             return false;
 
-        if ((circleDistance.array() <= boxHalfDims.array()).any())
+        if ((c_prime.array() <= boxHalfDims.array()).any())
             return true;
 
-        return circleDistance.squaredNorm() <= r * r;
+        return (c_prime - boxHalfDims).squaredNorm() <= r * r;
     }
 };
 
