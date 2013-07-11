@@ -45,6 +45,8 @@ public:
     virtual CSGNodeType nodeType() const = 0;
     virtual bool isInside(const Vector &p) const = 0;
     virtual Real signedDistance(const Vector &p) const = 0;
+    // virtual copy() const = 0;
+
     virtual ~CSGNode() { }
 
 protected:
@@ -331,6 +333,9 @@ public:
     void swapChildren() {
         std::swap(m_left, m_right);
     }
+
+
+    // virtual copy() { }
 
     ~CSGBoolNode() {
         delete m_left;

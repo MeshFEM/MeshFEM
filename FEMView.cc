@@ -442,6 +442,17 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation,
     ElementGrid2D_t &grid = m_fem.elementGrid();
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
     bool hasEScalarField = elemScalarField.domainSize() == grid.numElements();
+
+    if (hasEScalarField) {
+        if (m_viewSettings.colormapRangeAuto) {
+            m_scalarColorMap.setRange(elemScalarField.min(),
+                    elemScalarField.max());
+        }
+        else {
+            m_scalarColorMap.setRange(m_viewSettings.colormapRangeMin,
+                    m_viewSettings.colormapRangeMax);
+        }
+    }
     glUseProgram(m_bilinearShader);
     
     // Set the object texture sampler to be texture unit 0
@@ -503,6 +514,17 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
     bool hasEScalarField = elemScalarField.domainSize() == grid.numElements();
     ElementGrid2D_t::AdjacencyVec corners;
+
+    if (hasEScalarField) {
+        if (m_viewSettings.colormapRangeAuto) {
+            m_scalarColorMap.setRange(elemScalarField.min(),
+                    elemScalarField.max());
+        }
+        else {
+            m_scalarColorMap.setRange(m_viewSettings.colormapRangeMin,
+                    m_viewSettings.colormapRangeMax);
+        }
+    }
 
     glColor3f(0, 0, 0);
     if ((op == DRAW_CELLS) || (op == DRAW_EDGES)) {
@@ -652,7 +674,6 @@ void FEMView2D::draw()
             const SField &stressNorms =
                     m_fem.modalStressNorms(m_selectedDeformation);
             m_scalarColorMap.setAlpha(0.5f);
-            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
             usedColormap = true;
             drawObjectTextureCells(deformation, stressNorms);
         }
@@ -673,13 +694,13 @@ void FEMView2D::draw()
         drawGrid(DRAW_EDGES);
         drawGrid(DRAW_NODES);
 
-        // Draw non-element cells
-        glColor4f(0.0, 0.0, 0.0, .25f);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        for (size_t i = 0; i < grid.numCells(); ++i) {
-            m_drawWorldBox(grid.cellBoundingBox(i));
-        }
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        // // Draw non-element cells
+        // glColor4f(0.0, 0.0, 0.0, .25f);
+        // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        // for (size_t i = 0; i < grid.numCells(); ++i) {
+        //     m_drawWorldBox(grid.cellBoundingBox(i));
+        // }
+        // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
         if (m_viewSettings.showQuadraturePoints) {
             // Draw quadrature points
@@ -775,7 +796,6 @@ void FEMView2D::draw()
         if (m_viewSettings.showStressesDuringDeformation) {
             const SField &stressNorms = m_fem.simulationStressNorms();;
             m_scalarColorMap.setAlpha(0.5f);
-            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
             usedColormap = true;
             drawObjectTextureCells(deformation, stressNorms);
         }
@@ -793,7 +813,6 @@ void FEMView2D::draw()
             const SField &stressNorms =
                 m_fem.weakRegionStressNorms(m_selectedWeakRegion);
             m_scalarColorMap.setAlpha(1.0f);
-            m_scalarColorMap.setRange(stressNorms.min(), stressNorms.max());
             drawObjectTextureCells(VField(), stressNorms);
             usedColormap = true;
         }
@@ -805,7 +824,6 @@ void FEMView2D::draw()
         if (m_fem.combinedWeakness().size() == grid.numElements()) {
             const SField &cWeak = m_fem.combinedWeakness();
             m_scalarColorMap.setAlpha(1.0f);
-            m_scalarColorMap.setRange(cWeak.min(), cWeak.max());
             drawObjectTextureCells(VField(), cWeak);
             usedColormap = true;
         }

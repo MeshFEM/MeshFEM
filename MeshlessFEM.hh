@@ -122,6 +122,7 @@ public:
     void configureBoundaryPoints(const AnalysisSettings &settings) {
         m_useMarchingSquaresBoundary = settings.useMSBoundary;
         m_boundaryPointSpacing = settings.boundarySpacing;
+        m_boundaryKernelRadius = settings.kernelRadius;
         m_invalidateCache();
     }
 
@@ -242,7 +243,7 @@ public:
 
     const BoundaryFunction &boundaryFunction(size_t i) {
         if (m_boundaryFunctions.size() != m_boundaryPoints.size())
-            buildBoundaryFunctions();
+            buildBoundaryFunctions(m_boundaryKernelRadius);
         assert(i < m_boundaryFunctions.size());
         return m_boundaryFunctions[i];
     }
@@ -255,6 +256,13 @@ public:
     Real &pressure(size_t i) {
         assert(i < m_pressures.domainSize());
         return m_pressures[i];
+    }
+
+    template<typename PType>
+    void setPressures(const PType &p) {
+        assert(p.size() == m_pressures.size());
+        for (size_t i = 0; i < p.size(); ++i)
+            m_pressures[i] = p[i];
     }
 
     const VField &simulationDisplacement() const {
@@ -276,10 +284,12 @@ public:
 
     bool modalAnalysis();
 
-    void buildBoundaryFunctions();
+    // Rebuild all boundary force blurring functions
+    // @param[in] r    scale factor determining blur kernel radius. The actual
+    //                 radius will be r * cellSize
+    void buildBoundaryFunctions(Real r = 1.0);
 
-    bool simulate() {
-
+    bool simulate(const char *mshPath = NULL) {
         TMatrix K, F, R, N, A;
         m_assembleStiffnessMatrix(K);
         m_assembleLoadMatrix(F);
@@ -298,18 +308,19 @@ public:
         m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
         m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
 
-        // Dump MSH
-        size_t numNodes = elementGrid().numNodes();
-        VectorField<Real, 3> disp3Vector(numNodes);
-        disp3Vector.clear();
-        for (size_t i = 0; i < numNodes; ++i) {
-            disp3Vector(i)[0] = m_simulatedDisplacement(i)[0];
-            disp3Vector(i)[1] = m_simulatedDisplacement(i)[1];
+        if (mshPath) {
+            size_t numNodes = elementGrid().numNodes();
+            VectorField<Real, 3> disp3Vector(numNodes);
+            disp3Vector.clear();
+            for (size_t i = 0; i < numNodes; ++i) {
+                disp3Vector(i)[0] = m_simulatedDisplacement(i)[0];
+                disp3Vector(i)[1] = m_simulatedDisplacement(i)[1];
+            }
+            MSHWriter<ElementGrid> mshOut(mshPath, elementGrid());
+            mshOut.addField("sim u", disp3Vector, MSHWriter<ElementGrid>::PER_NODE);
+            mshOut.addField("sim stress norms", m_simulatedStressNorms,
+                            MSHWriter<ElementGrid>::PER_ELEMENT);
         }
-        MSHWriter<ElementGrid> mshOut("sim_disp.msh", elementGrid());
-        mshOut.addField("sim u", disp3Vector, MSHWriter<ElementGrid>::PER_NODE);
-        mshOut.addField("sim stress norms", m_simulatedStressNorms,
-                        MSHWriter<ElementGrid>::PER_ELEMENT);
 
         return true;
     }
@@ -341,7 +352,7 @@ private:
     SMField                       m_simulatedStressTensors;
     SField                        m_simulatedStressNorms;
     bool m_useMarchingSquaresBoundary;
-    Real m_boundaryPointSpacing;
+    Real m_boundaryPointSpacing, m_boundaryKernelRadius;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;
     MassMatrixType m_massMatrixType;   
     DType m_d;

@@ -47,6 +47,12 @@ private slots:
     void weaknessAnalysisControlsChanged(int);
     void weaknessAnalysisControlsChanged(double);
     void someSelectorChanged(int);
+    void ttestControlsChanged(int);
+    void ttestControlsChanged(double);
+    void ttestButtonClicked();
+    void fttestButtonClicked();
+    void frtestButtonClicked();
+    void reftestButtonClicked();
 
 signals:
     void eqSettingsChanged(const AnalysisSettings &settings);
@@ -54,6 +60,10 @@ signals:
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void weaknessAnalysisSettingsChanged(const AnalysisSettings &settings);
+    void runTranslationTest(const AnalysisSettings &settings);
+    void runForceTranslationTest(const AnalysisSettings &settings);
+    void runFunctionRadiusTest(const AnalysisSettings &settings);
+    void runRefinementTest(const AnalysisSettings &settings);
 
 private:
     AnalysisSettings &m_settings;
@@ -85,7 +95,9 @@ private:
     // Simulation settings
     QCheckBox *g_useMarchingSquaresCheck;
     QDoubleSpinBox *g_boundaryPointStepper;
+    QDoubleSpinBox *g_kernelRadiusStepper;
     QPushButton *g_configureSimulationButton;
+    QPushButton *g_savePressureButton;
     QPushButton *g_loadPressureButton;
     QPushButton *g_runSimulationButton;
     QDoubleSpinBox *g_pressurePaintValueStepper;
@@ -100,7 +112,12 @@ private:
 
     QPushButton *g_weaknessAnalysisButton;
     QPushButton *g_optimizeShapeButton;
+    QDoubleSpinBox *g_xTranslationStepper, *g_yTranslationStepper;
+    QCheckBox *g_translationFixedCheckbox;
     QPushButton *g_translationTestButton;
+    QPushButton *g_forceTranslationTestButton;
+    QPushButton *g_functionRadiusTestButton;
+    QPushButton *g_refinementTestButton;
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();

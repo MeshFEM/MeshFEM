@@ -22,11 +22,12 @@ struct AnalysisSettings {
     AnalysisSettings()
         : solver("Gurobi"),
           Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
-          cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02),
+          cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02), kernelRadius(1.0),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
           equalizeCombinedWeakness(true),
+          fixedTranslation(false), xTranslation(0.0), yTranslation(0.0),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     std::string solver;
@@ -39,6 +40,7 @@ struct AnalysisSettings {
     double cellOverlapThreshold;
     bool   useMSBoundary;
     double boundarySpacing;
+    double kernelRadius;
 
     MassMatrixType massMatrixType;
 
@@ -52,6 +54,10 @@ struct AnalysisSettings {
     double totalForceBound;
     double pointwisePressureBound;
     bool equalizeCombinedWeakness;
+
+    // Translation Test
+    bool fixedTranslation;
+    double xTranslation, yTranslation; // unused only if fixedTranslation
 
     // Material Settings
     double young_modulus, poisson_ratio, density;

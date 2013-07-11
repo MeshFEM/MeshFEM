@@ -49,6 +49,7 @@ public slots:
 
     // Simulation actions
     void configureSimulation();
+    void savePressure();
     void loadPressure();
     void runSimulation();
     void pressurePaintValueChanged(double);
@@ -63,7 +64,10 @@ public slots:
 
     // Shape optimization actions
     void runShapeOptimization();
-    void runTranslationTest();
+    void runTranslationTest(const AnalysisSettings &settings);
+    void runForceTranslationTest(const AnalysisSettings &settings);
+    void runFunctionRadiusTest(const AnalysisSettings &settings);
+    void runRefinementTest(const AnalysisSettings &settings);
 
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,

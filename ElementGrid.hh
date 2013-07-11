@@ -173,6 +173,9 @@ public:
         std::vector<size_t> cells;
         cellsAroundPoint(pt, radius, cells);
 
+        std::cout << cells.size() << " cells around (" << pt[0] << ", "
+                  << pt[1] << ") with radius " << radius << std::endl;
+
         for (size_t i = 0; i < cells.size(); ++i) {
             assert(cells[i] < m_elementForCell.size());
             int elem = m_elementForCell[cells[i]];
@@ -186,7 +189,7 @@ public:
         return m_isFullElement[i];
     }
 
-    ~ElementGrid2D();
+    ~ElementGrid2D() { };
 
 private:
     ////////////////////////////////////////////////////////////////////////////

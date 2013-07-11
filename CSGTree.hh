@@ -177,6 +177,15 @@ public:
         m_roots.clear();
     }
 
+    // CSGTree<Vector> &operator=(CSGTree &b) {
+    //     if (&b != this) {
+    //         clearRoots();
+    //         for (CSGNode *root: b.m_roots()) {
+    //             m_roots.push_back(root->copy());
+    //         }
+    //     }
+    // }
+
     ~CSGTree() {
         clearRoots();
     }

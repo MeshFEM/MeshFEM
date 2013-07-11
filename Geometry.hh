@@ -91,6 +91,13 @@ struct BBox {
     }
 };
 
+template<typename T>
+std::ostream &operator<<(std::ostream &os, const BBox<T> &b) {
+    os << "[(" << b.minCorner[0] << ", " << b.minCorner[1] << ") -> ("
+       << b.maxCorner[0] << ", " << b.maxCorner[1] << ")]";
+    return os;
+}
+
 template<typename Vector>
 struct Polygon {
     typedef typename Vector::Scalar Real;

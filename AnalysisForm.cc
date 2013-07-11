@@ -54,9 +54,14 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_boundaryPointStepper->setMinimum(0.01);
     g_boundaryPointStepper->setMaximum(1.0);
     g_boundaryPointStepper->setSingleStep(.01);
+    g_kernelRadiusStepper = new QDoubleSpinBox();
+    g_kernelRadiusStepper->setMinimum(0.01);
+    g_kernelRadiusStepper->setMaximum(8.0);
+    g_kernelRadiusStepper->setSingleStep(.01);
     g_configureSimulationButton = new QPushButton("Configure");
-    g_loadPressureButton = new QPushButton("Load p");
-    g_runSimulationButton = new QPushButton("Run");
+    g_savePressureButton = new QPushButton("Save P");
+    g_loadPressureButton = new QPushButton("Load P");
+    g_runSimulationButton = new QPushButton("Simulate");
     g_pressurePaintValueStepper = new QDoubleSpinBox();
     g_pressurePaintValueStepper->setSingleStep(.01);
     g_pressurePaintValueStepper->setMaximum(2.0);
@@ -78,7 +83,13 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_forceBoundStepper->setValue(.1);
 
     g_optimizeShapeButton = new QPushButton("Optimize Shape");
-    g_translationTestButton = new QPushButton("Translation Test");
+    g_xTranslationStepper = new QDoubleSpinBox();
+    g_yTranslationStepper = new QDoubleSpinBox();
+    g_translationFixedCheckbox = new QCheckBox();
+    g_translationTestButton = new QPushButton("Weakness Translation Test");
+    g_forceTranslationTestButton = new QPushButton("Force Translation Test");
+    g_functionRadiusTestButton = new QPushButton("Function Radius Test");
+    g_refinementTestButton = new QPushButton("Refinement Test");
 
     modesUpdated(NULL);
     weakRegionsUpdated(NULL);
@@ -138,26 +149,42 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QFormLayout *simForm = new QFormLayout();
     simForm->addRow("Marching Squares Boundary", g_useMarchingSquaresCheck);
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
+    simForm->addRow("Blur Kernel Radius Scale", g_kernelRadiusStepper);
     QHBoxLayout *simButtonLayout = new QHBoxLayout();
     simButtonLayout->addWidget(g_configureSimulationButton);
-    simButtonLayout->addWidget(g_loadPressureButton);
     simButtonLayout->addWidget(g_runSimulationButton);
     simForm->addRow(simButtonLayout);
+
+    QHBoxLayout *pressureButtonLayout = new QHBoxLayout();
+    pressureButtonLayout->addWidget(g_savePressureButton);
+    pressureButtonLayout->addWidget(g_loadPressureButton);
+    simForm->addRow(pressureButtonLayout);
+
     simForm->addRow("PressurePaint Value", g_pressurePaintValueStepper);
     simulationGroup->setLayout(simForm);
 
     // Weakness Analysis
     QFormLayout *weakForm = new QFormLayout();
-    weakForm->addRow("Weak Regions Per Mode", g_numWeakRegionsStepper);
+    weakForm->addRow("Weak Regions/Mode", g_numWeakRegionsStepper);
     weakForm->addRow("Weak Region Cutoff", g_weaknessCutoffStepper);
     weakForm->addRow(g_weakRegionExtractionButton);
     weakForm->addRow(g_weakRegionSelector);
-    weakForm->addRow("Pointwise Pressure Bound", g_pressureBoundStepper);
+    weakForm->addRow("Pressure Bound", g_pressureBoundStepper);
     weakForm->addRow("Total Force Bound", g_forceBoundStepper);
-    weakForm->addRow("Equalize Combined Weakness", g_equalizeCombinedWeaknessCheck);
+    weakForm->addRow("Equalize Weakness", g_equalizeCombinedWeaknessCheck);
     weakForm->addRow(g_weaknessAnalysisButton);
     weakForm->addRow(g_optimizeShapeButton);
+
+    // Translation Test
+    QHBoxLayout *ttestLayout = new QHBoxLayout();
+    ttestLayout->addWidget(g_translationFixedCheckbox);
+    ttestLayout->addWidget(g_xTranslationStepper);
+    ttestLayout->addWidget(g_yTranslationStepper);
+    weakForm->addRow("Fixed XY Trans", ttestLayout);
     weakForm->addRow(g_translationTestButton);
+    weakForm->addRow(g_forceTranslationTestButton);
+    weakForm->addRow(g_functionRadiusTestButton);
+    weakForm->addRow(g_refinementTestButton);
     weaknessAnalysisGroup->setLayout(weakForm);
 
     // Initialize all the GUI values
@@ -204,9 +231,13 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(boundaryPointControlsChanged(int)));
     QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(boundaryPointControlsChanged(double)));
+    QObject::connect(g_kernelRadiusStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(boundaryPointControlsChanged(double)));
 
     QObject::connect(g_configureSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(configureSimulation()));
+    QObject::connect(g_savePressureButton, SIGNAL(clicked()),
+                     controller, SLOT(savePressure()));
     QObject::connect(g_loadPressureButton, SIGNAL(clicked()),
                      controller, SLOT(loadPressure()));
     QObject::connect(g_runSimulationButton, SIGNAL(clicked()),
@@ -238,8 +269,29 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_optimizeShapeButton, SIGNAL(clicked()),
                      controller, SLOT(runShapeOptimization()));
+    QObject::connect(g_translationFixedCheckbox, SIGNAL(stateChanged(int)),
+                     this, SLOT(ttestControlsChanged(int)));
+    QObject::connect(g_xTranslationStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(ttestControlsChanged(double)));
+    QObject::connect(g_yTranslationStepper, SIGNAL(valueChanged(double)),
+                     this, SLOT(ttestControlsChanged(double)));
     QObject::connect(g_translationTestButton, SIGNAL(clicked()),
-                     controller, SLOT(runTranslationTest()));
+                     this, SLOT(ttestButtonClicked()));
+    QObject::connect(g_forceTranslationTestButton, SIGNAL(clicked()),
+                     this, SLOT(fttestButtonClicked()));
+    QObject::connect(g_functionRadiusTestButton, SIGNAL(clicked()),
+                     this, SLOT(frtestButtonClicked()));
+    QObject::connect(g_refinementTestButton, SIGNAL(clicked()),
+                     this, SLOT(reftestButtonClicked()));
+
+    QObject::connect(this, SIGNAL(runTranslationTest(const AnalysisSettings &)),
+                     controller, SLOT(runTranslationTest(const AnalysisSettings &)));
+    QObject::connect(this, SIGNAL(runForceTranslationTest(const AnalysisSettings &)),
+                     controller, SLOT(runForceTranslationTest(const AnalysisSettings &)));
+    QObject::connect(this, SIGNAL(runFunctionRadiusTest(const AnalysisSettings &)),
+                     controller, SLOT(runFunctionRadiusTest(const AnalysisSettings &)));
+    QObject::connect(this, SIGNAL(runRefinementTest(const AnalysisSettings &)),
+                     controller, SLOT(runRefinementTest(const AnalysisSettings &)));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
@@ -276,6 +328,7 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
     g_useMarchingSquaresCheck->setChecked(m_settings.useMSBoundary);
     g_boundaryPointStepper->setValue(m_settings.boundarySpacing);
+    g_kernelRadiusStepper->setValue(m_settings.kernelRadius);
 
     // Note: assumes MassMatrixType enum index matches combo box index
     g_massMatrixSelector->setCurrentIndex(m_settings.massMatrixType);
@@ -290,6 +343,19 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_pressureBoundStepper->setValue(m_settings.pointwisePressureBound);
 
     g_equalizeCombinedWeaknessCheck->setChecked(m_settings.equalizeCombinedWeakness);
+
+    // translation test
+    g_translationFixedCheckbox->setChecked(m_settings.fixedTranslation);
+    g_xTranslationStepper->setValue(m_settings.xTranslation);
+    g_yTranslationStepper->setValue(m_settings.yTranslation);
+    if (m_settings.fixedTranslation) {
+        g_xTranslationStepper->setEnabled(true);
+        g_yTranslationStepper->setEnabled(true);
+    }
+    else {
+        g_xTranslationStepper->setEnabled(false);
+        g_yTranslationStepper->setEnabled(false);
+    }
 }
 
 void AnalysisForm::m_readSettingsFromGUI() {
@@ -315,6 +381,7 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.useMSBoundary   = g_useMarchingSquaresCheck->isChecked();
     m_settings.boundarySpacing = g_boundaryPointStepper->value();
+    m_settings.kernelRadius    = g_kernelRadiusStepper->value();
 
     m_settings.weakRegionsPerMode = g_numWeakRegionsStepper->value();
     m_settings.weaknessCutoff = g_weaknessCutoffStepper->value();
@@ -322,6 +389,11 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.totalForceBound = g_forceBoundStepper->value();
     m_settings.pointwisePressureBound = g_pressureBoundStepper->value();
     m_settings.equalizeCombinedWeakness = g_equalizeCombinedWeaknessCheck->isChecked();
+
+    // translation test
+    m_settings.fixedTranslation = g_translationFixedCheckbox->isChecked();
+    m_settings.xTranslation = g_xTranslationStepper->value();
+    m_settings.yTranslation = g_yTranslationStepper->value();
 }
 
 void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
@@ -428,4 +500,36 @@ void AnalysisForm::someSelectorChanged(int newIdx) {
     if (selector == g_weakRegionSelector) {
         g_modeSelector->setCurrentIndex(0);
     }
+}
+
+void AnalysisForm::ttestControlsChanged(int) {
+    m_readSettingsFromGUI();
+    if (g_translationFixedCheckbox->isChecked()) {
+        g_xTranslationStepper->setEnabled(true);
+        g_yTranslationStepper->setEnabled(true);
+    }
+    else {
+        g_xTranslationStepper->setEnabled(false);
+        g_yTranslationStepper->setEnabled(false);
+    }
+}
+
+void AnalysisForm::ttestControlsChanged(double) {
+    m_readSettingsFromGUI();
+}
+
+void AnalysisForm::ttestButtonClicked() {
+    emit runTranslationTest(m_settings);
+}
+
+void AnalysisForm::fttestButtonClicked() {
+    emit runForceTranslationTest(m_settings);
+}
+
+void AnalysisForm::frtestButtonClicked() {
+    emit runFunctionRadiusTest(m_settings);
+}
+
+void AnalysisForm::reftestButtonClicked() {
+    emit runRefinementTest(m_settings);
 }

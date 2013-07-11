@@ -28,6 +28,7 @@ public:
         : QSpinBox(parent), m_quadrature(UNIFORM_QUADRATURE)
     {
         setMinimum(1);
+        setMaximum(1024);
         lineEdit()->setReadOnly(true);
     }
 

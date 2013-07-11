@@ -12,7 +12,10 @@
 #include "MarchingSquaresGrid.hh"
 #include "MSHWriter.hh"
 #include "CSGFile.hh"
+#include "ElementGrid.hh"
+#include "Fields.hh"
 #include <list>
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -251,6 +254,40 @@ void CSGWindowController::configureSimulation()
     m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
 }
 
+void CSGWindowController::savePressure()
+{
+    QString fileName = QFileDialog::getSaveFileName(0,
+            "Save Boundary Pressures (.bp)", QString(), "Text files (*.bp)");
+    if (fileName.length() > 0) {
+        try {
+            std::ofstream bpFile(fileName.toStdString().c_str());
+            if (!bpFile.is_open()) {
+                throw std::runtime_error(std::string("Couldn't open file: ") +
+                                         fileName.toStdString());
+            }
+
+            const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
+                    m_fem.boundaryPoints();
+            bpFile << bpts.size() << endl;
+            
+            for (size_t i = 0; i < bpts.size(); ++i) {
+                // Note: Python StructAys uses negative pressures, so our bp
+                // format takes this convention.
+                Scalar p = -m_fem.pressure(i);
+                bpFile << bpts[i].p[0] << "\t" << bpts[i].p[1] << p << endl;
+            }
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
+}
+
 void CSGWindowController::loadPressure()
 {
     QString fileName = QFileDialog::getOpenFileName(0, "Open boundary pressures (.bp)",
@@ -462,13 +499,13 @@ void CSGWindowController::runShapeOptimization()
 }
 
 
-void CSGWindowController::runTranslationTest()
+void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
 {
     Scalar weakness;
-    bool success = m_fem.weaknessAnalysis(weakness);
-    cout << "Translation test" << endl << "----------------------" << endl;
-    cout << weakness << endl;
-    assert(success);
+    // bool success = m_fem.weaknessAnalysis(weakness);
+    // cout << "Translation test" << endl << "----------------------" << endl;
+    // cout << weakness << endl;
+    // assert(success);
 
     Vector cellSize = m_fem.elementGrid().cellSize();
     const int TRANS_TEST_STEPS = 5;
@@ -480,30 +517,181 @@ void CSGWindowController::runTranslationTest()
     assert(params.size() % 5 == 0);
     size_t numPrimitives = params.size() / 5;
 
-    for (int xStep = 0; xStep < TRANS_TEST_STEPS; ++xStep) {
-        for (int yStep = 0; yStep < TRANS_TEST_STEPS; ++yStep) {
-            Vector offset(cellDelta[0] * xStep, cellDelta[1] * yStep);
-            
-            for (size_t p = 0; p < numPrimitives; ++p) {
-                translated[5 * p + 0] = params[5 * p + 0] + offset[0];
-                translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+    // typedef std::pair<ElementGrid2D<CSGTree_t>, ScalarField<Scalar> > GridField;
+    // std::list<GridField> *weaknessGrids = new std::list<GridField>();
+
+    if (settings.fixedTranslation) {
+        Vector offset(cellSize[0] * settings.xTranslation,
+                      cellSize[1] * settings.yTranslation);
+        std::cout << "Offset: " << offset << endl;
+        for (size_t p = 0; p < numPrimitives; ++p) {
+            translated[5 * p + 0] = params[5 * p + 0] + offset[0];
+            translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+        }
+
+        m_csgTree->setParameters(translated);
+        m_fem.modelChanged(false);
+
+        QString cwPath, cwPercentilePath;
+        cwPath.sprintf("ftranslation_%f_%f.cw", (float) settings.xTranslation,
+                       (float) settings.yTranslation);
+        cwPercentilePath.sprintf("ftranslation_%f_%f.cwp",
+                (float) settings.xTranslation, (float) settings.yTranslation);
+
+        bool success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
+                                              cwPercentilePath.toAscii());
+        assert(success);
+    }
+    else {
+        for (int xStep = 0; xStep < TRANS_TEST_STEPS; ++xStep) {
+            for (int yStep = 0; yStep < TRANS_TEST_STEPS; ++yStep) {
+                Vector offset(cellDelta[0] * xStep, cellDelta[1] * yStep);
+                std::cout << "Offset: " << offset << endl;
+                
+                for (size_t p = 0; p < numPrimitives; ++p) {
+                    translated[5 * p + 0] = params[5 * p + 0] + offset[0];
+                    translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+                }
+
+                m_csgTree->setParameters(translated);
+                m_fem.modelChanged(false);
+
+                QString cwPath, cwPercentilePath;
+                cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
+                cwPercentilePath.sprintf("translation_%i_%i.cwp", xStep, yStep);
+
+                bool success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
+                                                      cwPercentilePath.toAscii());
+
+                // weaknessGrids->push_back(make_pair(m_fem.elementGrid(),
+                //             m_fem.combinedWeakness()));
+                            
+                assert(success);
             }
-
-            m_csgTree->setParameters(translated);
-            m_fem.modelChanged(false);
-
-            QString cwPath, cwPercentilePath;
-            cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
-            cwPercentilePath.sprintf("translation_%i_%i.cwp", xStep, yStep);
-
-            success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
-                                             cwPercentilePath.toAscii());
-            assert(success);
         }
     }
 
-    m_csgTree->setParameters(params);
-    m_fem.modelChanged(false);
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    // m_femView->loadGridFields(weaknessGrids);
+
+    // Note the grid must now be manually recreated from the bounding box to
+    // repeat experiments.
+
+    // m_fem.modelChanged(false);
+    m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
     m_femView->modelChanged();
+
+    // m_csgTree->setParameters(params);
+}
+
+void CSGWindowController::
+runForceTranslationTest(const AnalysisSettings &settings)
+{
+    Vector cellSize = m_fem.elementGrid().cellSize();
+    const int TRANS_TEST_STEPS = 5;
+    Vector cellDelta = cellSize * (1.0 / TRANS_TEST_STEPS);
+
+    std::vector<Scalar> params = m_csgTree->getParameters();
+    std::vector<Scalar> translated(params);
+    // Center, dimensions, rotation
+    assert(params.size() % 5 == 0);
+    size_t numPrimitives = params.size() / 5;
+
+    if (settings.fixedTranslation) {
+        Vector offset(cellSize[0] * settings.xTranslation,
+                      cellSize[1] * settings.yTranslation);
+        std::cout << "Offset: " << offset << endl;
+        for (size_t p = 0; p < numPrimitives; ++p) {
+            translated[5 * p + 0] = params[5 * p + 0] + offset[0];
+            translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+        }
+
+        m_csgTree->setParameters(translated);
+        m_fem.modelChanged(false);
+
+        QString simPath;
+        simPath.sprintf("sim_ftranslation_%f_%f.msh",
+                       (float) settings.xTranslation,
+                       (float) settings.yTranslation);
+
+        bool success = m_fem.simulate(simPath.toAscii());
+        assert(success);
+    }
+    else {
+        for (int xStep = 0; xStep < TRANS_TEST_STEPS; ++xStep) {
+            for (int yStep = 0; yStep < TRANS_TEST_STEPS; ++yStep) {
+                Vector offset(cellDelta[0] * xStep, cellDelta[1] * yStep);
+                std::cout << "Offset: " << offset << endl;
+                
+                for (size_t p = 0; p < numPrimitives; ++p) {
+                    translated[5 * p + 0] = params[5 * p + 0] + offset[0];
+                    translated[5 * p + 1] = params[5 * p + 1] + offset[1];
+                }
+
+                m_csgTree->setParameters(translated);
+                m_fem.modelChanged(false);
+
+                QString simPath;
+                simPath.sprintf("sim_translation_%i_%i.msh", xStep, yStep);
+
+                bool success = m_fem.simulate(simPath.toAscii());
+
+                assert(success);
+            }
+        }
+    }
+}
+
+void CSGWindowController::
+runFunctionRadiusTest(const AnalysisSettings &settings)
+{
+    const int RADIUS_TEST_STEPS = 15;
+    Scalar minScale = 0.1;
+    Scalar maxScale = 4.0;
+    Scalar scaleDelta = (maxScale - minScale) / RADIUS_TEST_STEPS;
+    
+    Scalar rScale = minScale;
+    for (size_t i = 0; i < RADIUS_TEST_STEPS; ++i) {
+        rScale += scaleDelta;
+        m_fem.buildBoundaryFunctions(rScale);
+
+        QString simPath;
+        simPath.sprintf("sim_radius_%f.msh", rScale);
+
+        bool success = m_fem.simulate(simPath.toAscii());
+        assert(success);
+    }
+}
+
+void CSGWindowController::
+runRefinementTest(const AnalysisSettings &settings)
+{
+    vector<Scalar> pressures(m_fem.numBoundaryPoints());
+    for (size_t i = 0; i < pressures.size(); ++i) {
+        pressures[i] = m_fem.pressure(i);
+    }
+
+    const int REFINEMENT_TEST_STEPS = 40;
+    Scalar minScale = 0.1;
+    Scalar maxScale = 8.0;
+    Scalar scaleDelta = (maxScale - minScale) / REFINEMENT_TEST_STEPS;
+    
+    AnalysisSettings newSettings = settings;
+    Scalar scale = minScale;
+    for (size_t i = 0; i < REFINEMENT_TEST_STEPS; ++i) {
+        scale += scaleDelta;
+        newSettings.Nx = settings.Nx * scale;
+        newSettings.Ny = settings.Ny * scale;
+        m_fem.configureElements(newSettings);
+        m_fem.setPressures(pressures);
+
+        QString simPath;
+        simPath.sprintf("sim_refinement_%i_%i.msh", (int) newSettings.Nx,
+                        (int) newSettings.Ny);
+
+        bool success = m_fem.simulate(simPath.toAscii());
+        assert(success);
+    }
+
+    m_fem.configureElements(settings);
+    m_fem.setPressures(pressures);
 }

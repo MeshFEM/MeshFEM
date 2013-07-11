@@ -533,13 +533,17 @@ private:
     const BoundaryFunction &m_psi;
 };
 
+// Rebuild all boundary force blurring functions
+// @param[in] r    scale factor determining blur kernel radius. The actual
+//                 radius will be r * cellSize
 template<typename Model>
-void MeshlessFEM<Model>::buildBoundaryFunctions()
+void MeshlessFEM<Model>::buildBoundaryFunctions(Real r)
 {
     m_boundaryFunctions.clear();
     m_boundaryFunctions.reserve(m_boundaryPoints.size());
     Vector cellSize = m_elementGrid->cellSize();
     Real h = std::max(cellSize[0], cellSize[1]);
+    h *= r;
 
     for (size_t i = 0; i < m_boundaryPoints.size(); ++i) {
         m_boundaryFunctions.push_back(
@@ -1195,8 +1199,8 @@ void MeshlessFEM<Model>::m_invalidateCache() {
         m_boundaryPoints.clear();
 
         std::vector<Polygon_t> polygons;
-        MarchingSquaresGrid ms(elementGrid().interiorRows(),
-                               elementGrid().interiorCols());
+        MarchingSquaresGrid ms(elementGrid().interiorCols(),
+                               elementGrid().interiorRows());
         ms.extractBoundaryPolygons(m_model, polygons);
         for (size_t p = 0; p < polygons.size(); ++p) {
             const std::vector<Vector> &points = polygons[p].points;
@@ -1222,7 +1226,14 @@ void MeshlessFEM<Model>::m_invalidateCache() {
         m_boundaryPoints = m_model.boundaryPoints(m_boundaryPointSpacing);
     }
     m_boundaryFunctions.clear();
-    m_pressures.resizeDomain(m_boundaryPoints.size());
+
+    // Only resize the pressures if necessary. If the number of boundary points
+    // doesn't change, pressure values are retained. Otherwise, they are
+    // cleared.
+    if (m_boundaryPoints.size() != m_pressures.size()) {
+        m_pressures.resizeDomain(m_boundaryPoints.size());
+    }
+
     m_nodeFixed.assign(elementGrid().numNodes(), false);
 
     m_weakRegions.clear();
