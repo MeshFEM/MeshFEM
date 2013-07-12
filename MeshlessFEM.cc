@@ -511,13 +511,10 @@ public:
         if (inSupport) {
             Real psi = m_psi(sample);
 
-            // Compute unscaled load (integral against each grid node function.)
-            value_type phi;
+            // Compute unscaled load (integral against each grid node function)
             Real x = ref_sample[0], y = ref_sample[1];
-            phi[0] = (1 - x) * (1 - y);
-            phi[1] =      x  * (1 - y);
-            phi[2] =      x  *      y ;
-            phi[3] = (1 - x) *      y ;
+            value_type phi((1 - x) * (1 - y),      x  * (1 - y),
+                                x  *      y , (1 - x) *      y );
 
             m_load += (weight * psi) * phi;
         }
@@ -590,11 +587,11 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
         Real colSum = 0;
         // Mark the start of the values in this column so we can go back and
         // normalize them.
-        size_t colValuesOffset = F.nz.size();
-        for (size_t e = 0; e < support_elems.size(); ++e) {
+        size_t colValuesOffset = v.size();
+        for (size_t e : support_elems) {
             load.clear();
-            q.integrate(load, elemGrid.elementBoundingBox(support_elems[e]));
-            elemGrid.elementCorners(support_elems[e], cornerIndices);
+            q.integrate(load, elemGrid.elementBoundingBox(e));
+            elemGrid.elementCorners(e, cornerIndices);
             for (size_t c = 0; c < 4; ++c) {
                 Real ld = load(c);
                 if (std::abs(ld) > 1e-8) {
@@ -607,7 +604,7 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
         }
 
         // Normalize so the column sums to 1
-        for (size_t vo = colValuesOffset; vo < F.nz.size(); ++vo) {
+        for (size_t vo = colValuesOffset; vo < v.size(); ++vo) {
             v[vo] /= colSum;
         }
     }
