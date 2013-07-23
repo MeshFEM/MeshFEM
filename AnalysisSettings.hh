@@ -62,6 +62,35 @@ struct AnalysisSettings {
     // Material Settings
     double young_modulus, poisson_ratio, density;
 
+    // Memberwise comparator
+    bool operator==(const AnalysisSettings &rhs) const {
+        // Make sure new members haven't been added...
+        // BOOST_STATIC_ASSERT((sizeof(AnalysisSettings) == 176)
+        //         && "Settings members changed without updating comparator!");
+
+        return ((solver == rhs.solver) && (Nx == rhs.Nx) && (Ny == rhs.Ny) &&
+            (borderWidth == rhs.borderWidth) && (quadrature == rhs.quadrature) &&
+            (quadraturePoints == rhs.quadraturePoints) &&
+            (cellOverlapThreshold == rhs.cellOverlapThreshold) &&
+            (useMSBoundary == rhs.useMSBoundary) &&
+            (boundarySpacing == rhs.boundarySpacing) &&
+            (kernelRadius == rhs.kernelRadius) &&
+            (massMatrixType == rhs.massMatrixType) &&
+            (laplacianModes == rhs.laplacianModes) &&
+            (numModes == rhs.numModes) &&
+            (weakRegionsPerMode == rhs.weakRegionsPerMode) &&
+            (weaknessCutoff == rhs.weaknessCutoff) &&
+            (totalForceBound == rhs.totalForceBound) &&
+            (pointwisePressureBound == rhs.pointwisePressureBound) &&
+            (equalizeCombinedWeakness == rhs.equalizeCombinedWeakness) &&
+            (fixedTranslation == rhs.fixedTranslation) &&
+            (xTranslation == rhs.xTranslation) &&
+            (yTranslation == rhs.yTranslation) &&
+            (young_modulus == rhs.young_modulus) &&
+            (poisson_ratio == rhs.poisson_ratio) &&
+            (density == rhs.density));
+    }
+
     void getOptions(po::options_description &opts) const {
         opts.add_options()
             ("Nx", po::value<int>()->default_value(40), "Grid rows")

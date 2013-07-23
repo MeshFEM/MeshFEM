@@ -40,8 +40,7 @@ template<typename _Triplet>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
                   APPEND_LEFT , APPEND_RIGHT} AppendPos;
-    TripletMatrix(size_t m, size_t n) : m(m), n(n) { }
-    TripletMatrix() : m(0), n(0) { }
+    TripletMatrix(size_t m = 0, size_t n = 0) : m(m), n(n) { }
     typedef TripletMatrix<_Triplet>         TMatrix;
     typedef _Triplet                        Triplet;
     typedef typename _Triplet::value_type   Real;
@@ -168,10 +167,12 @@ template<typename Model>
 class MeshlessFEM;
 template<typename Model>
 class ElementGrid2D;
+template<typename Generator>
+class ResultsCollector;
 
 typedef MeshlessFEM<CSGTree_t>   MeshlessFEM_t;
 typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
-
+typedef ResultsCollector<MeshlessFEM_t> ResultsCollector_t;
 
 typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
 typedef enum {MASS_FULL = 0, MASS_LUMPED = 1, MASS_QUARTER_CELL = 2}

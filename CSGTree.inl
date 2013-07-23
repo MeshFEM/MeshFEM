@@ -45,7 +45,8 @@ public:
     virtual CSGNodeType nodeType() const = 0;
     virtual bool isInside(const Vector &p) const = 0;
     virtual Real signedDistance(const Vector &p) const = 0;
-    // virtual copy() const = 0;
+    virtual CSGNode *copy() const = 0;
+    virtual bool operator==(const CSGNode &b) const = 0;
 
     virtual ~CSGNode() { }
 
@@ -91,6 +92,15 @@ public:
     }
 
     CSGNodeType nodeType() const { return CSG_NODE_UNION; }
+
+    virtual CSGNode *copy() const { assert(false); }
+
+    virtual bool operator==(const CSGNode &b) const {
+        const CSGGlueNode *bCast = dynamic_cast<const CSGGlueNode *>(&b);
+        return bCast && (*m_left == *bCast->m_left) &&
+               (*m_right == *bCast->m_right);
+    }
+
     ~CSGGlueNode() { }
 private:
     CSGTree<Vector>::CSGNode *m_left, *m_right;
@@ -148,6 +158,12 @@ public:
 
     void applyTranslation(const Vector &t) {
         m_c += t;
+    }
+
+    virtual bool operator==(const CSGNode &b) const {
+        const CSGPrimitive *bCast = dynamic_cast<const CSGPrimitive *>(&b);
+        return bCast && (m_c == bCast->m_c) && (m_dim == bCast->m_dim) &&
+               (std::abs(this->getRotation() - bCast->getRotation() < 1e-6));
     }
 
 protected:
@@ -335,7 +351,15 @@ public:
     }
 
 
-    // virtual copy() { }
+    virtual CSGNode *copy() const {
+        return new CSGBoolNode(m_op, m_left->copy(), m_right->copy());
+    }
+
+    virtual bool operator==(const CSGNode &b) const {
+        const CSGBoolNode *bCast = dynamic_cast<const CSGBoolNode *>(&b);
+        return bCast && (m_op == bCast->m_op) && (*m_left == *bCast->m_left) &&
+               (*m_right == *bCast->m_right);
+    }
 
     ~CSGBoolNode() {
         delete m_left;
@@ -480,6 +504,11 @@ public:
         return bndPts;
     }
 
+    virtual CSGNode *copy() const {
+        return new CSGRectangleNode(this->getCenter(), this->getDimensions(),
+                                    this->getRotation());
+    }
+
     ~CSGRectangleNode() { }
 };
 
@@ -580,6 +609,11 @@ public:
         }
 
         return bndPts;
+    }
+
+    virtual CSGNode *copy() const {
+        return new CSGEllipseNode(this->getCenter(), this->getDimensions(),
+                                  this->getRotation());
     }
 
     ~CSGEllipseNode() { }

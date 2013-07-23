@@ -20,10 +20,13 @@
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
 #include "SolverLibrary.hh"
+#include "ResultsCollector.hh"
 
 CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      SolverLibrary<Scalar> &solvers)
 {
+    ResultsCollector_t resultsCollector;
+
     g_vsWidget = new ViewSettingsWidget(vsettings);
     g_vsWidget->setWindowTitle("View Settings");
 

@@ -1,0 +1,9 @@
+To build on Mac OS X
+1) Install dependencies listed in 'dependencies.txt'
+2) mkdir build
+   cd build
+   qmake -spec ../build_specs/macx-g++47 -o Makefile ../CSGFEM.pro
+   make
+
+*Should* be cross platform, but different build rules must be written for the
+different platforms.

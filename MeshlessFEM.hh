@@ -31,9 +31,10 @@
 #include <algorithm>
 #include <Eigen/Sparse>
 
-template<typename Model>
+template<typename _Model>
 class MeshlessFEM {
 public:
+    typedef _Model Model;
     typedef typename Model::Vector_t Vector;
     typedef typename Model::Real   Real;
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;

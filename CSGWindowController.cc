@@ -162,7 +162,10 @@ void CSGWindowController::loadCSG()
         m_csgTreeModel->csgTreeAboutToUpdate();
 
         try {
-            parseCSGFile(fileName.toAscii(), *m_csgTree);
+            CSGTree_t loadedCSG;
+            parseCSGFile(fileName.toAscii(), loadedCSG);
+            *m_csgTree = loadedCSG;
+            assert(*m_csgTree == loadedCSG);
         }
         catch (std::exception &e)
         {

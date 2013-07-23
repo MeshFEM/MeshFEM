@@ -37,6 +37,9 @@ public:
     typedef BoundaryPoint<Vector> _BoundaryPoint;
 
     CSGTree() { }
+    CSGTree(const CSGTree &b) {
+        *this = b;
+    }
 
     bool isInside(const Vector &p) const {
         // Implied union of all roots
@@ -177,14 +180,32 @@ public:
         m_roots.clear();
     }
 
-    // CSGTree<Vector> &operator=(CSGTree &b) {
-    //     if (&b != this) {
-    //         clearRoots();
-    //         for (CSGNode *root: b.m_roots()) {
-    //             m_roots.push_back(root->copy());
-    //         }
-    //     }
-    // }
+    // Recursive assignment operator
+    CSGTree<Vector> &operator=(const CSGTree &b) {
+        if (&b != this) {
+            clearRoots();
+            for (CSGNode *root: b.m_roots) {
+                m_roots.push_back(root->copy());
+            }
+        }
+        return *this;
+    }
+
+    // Recursive comparison operator
+    bool operator==(const CSGTree &b) const {
+        if (m_roots.size() != b.m_roots.size())
+            return false;
+        for (size_t i = 0; i < m_roots.size(); ++i) {
+            if (!(*m_roots[i] == *b.m_roots[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    bool operator!=(CSGTree &b) const {
+        return !(*this == b);
+    }
 
     ~CSGTree() {
         clearRoots();

@@ -355,6 +355,7 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
 
             size_t pSize = A.n;
 
+            // Variable bounds aren't specified in matrix form for Gurobi...
             // m_linprog_b.resize(2 * pSize);
             // m_linprog_b.segment(0, pSize).setZero();
             // m_linprog_b.segment(pSize, pSize).fill(p_max);
@@ -366,6 +367,7 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             // m_linprog_A.setFromTriplets(linprog_A.nz.begin(),
             //                             linprog_A.nz.end());
             // m_linprog_A.makeCompressed();
+            p_max = p_max; // Get rid of "unused" warning
 
             m_linprog_beq.resize(4);
             m_linprog_beq.setZero();
