@@ -37,8 +37,9 @@ int main(int argc, char *argv[])
     SolverLibrary<Real> solvers(matlabInterface);
 
     MeshlessFEM_t fem(csgTree, settings, solvers);
+    ResultsCollector_t results;
 
-    CSGWindow window(fem, settings, solvers);
+    CSGWindow window(fem, settings, solvers, results);
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
 

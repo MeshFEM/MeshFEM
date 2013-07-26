@@ -20,13 +20,11 @@
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
 #include "SolverLibrary.hh"
-#include "ResultsCollector.hh"
 
 CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
-                     SolverLibrary<Scalar> &solvers)
+                     SolverLibrary<Scalar> &solvers,
+                     ResultsCollector_t &results)
 {
-    ResultsCollector_t resultsCollector;
-
     g_vsWidget = new ViewSettingsWidget(vsettings);
     g_vsWidget->setWindowTitle("View Settings");
 
@@ -40,7 +38,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     treeView->setModel(treeModel);
 
     controller = new CSGWindowController(treeModel, treeView, &fem.model(),
-                                         femView, fem);
+                                         femView, fem, results);
 
     ModelForm *modelForm = new ModelForm(controller);
     QWidget *sideBar = new QWidget();

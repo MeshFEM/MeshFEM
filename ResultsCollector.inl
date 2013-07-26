@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <cassert>
+#include <iostream>
 #include <boost/algorithm/string.hpp>
 
 // A single result can consist of up to a scalar AND vector field per:
@@ -86,47 +87,78 @@ public:
     void add(const std::string &name, Result *result) {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, name, boost::is_any_of(":"));
-        for (std::string &str : nameComponents) {
+        for (std::string &str : nameComponents)
             boost::trim(str);
-            add(nameComponents.begin(), nameComponents.end(), result);
-        }
+        add(nameComponents.begin(), nameComponents.end(), result);
+    }
+
+    const Result *getResult(const std::string &name) const {
+        std::vector<std::string> nameComponents;
+        boost::split(nameComponents, name, boost::is_any_of(":"));
+        for (std::string &str : nameComponents)
+            boost::trim(str);
+        return getResult(nameComponents.begin(), nameComponents.end());
     }
 
 private:
+    // Insert a result object into the result tree with edges indicated by the
+    // sequence of strings curr..end
     void add(std::vector<std::string>::const_iterator curr,
              std::vector<std::string>::const_iterator end, Result *result) {
         if (curr == end) {
             setResult(result);
         }
         else {
-            ResultTree *newNode = new ResultTree(this);
-            m_children.insert(make_pair(*curr, newNode));
-            newNode->add(++curr, end, result);
+            auto existing = m_children.find(*curr);
+            if (existing != m_children.end()) {
+                existing->second->add(++curr, end, result);
+            }
+            else {
+                ResultTree *newNode = new ResultTree(this);
+                m_children.insert(make_pair(*curr, newNode));
+                newNode->add(++curr, end, result);
+            }
         }
     }
+
+    const Result *getResult(std::vector<std::string>::const_iterator curr,
+                            std::vector<std::string>::const_iterator end) const
+    {
+        if (curr == end)
+            return getResult();
+        auto existing = m_children.find(*curr);
+        if (existing == m_children.end())
+            throw std::runtime_error(std::string("result not found!"));
+        return existing->second->getResult(++curr, end);
+    }
+
 public:
 
     // Set a result, overwriting any existing one.
-    // Note: only leaves are allowed to hold results.
     void setResult(Result *r) {
-        assert(m_children.size() == 0);
-        if (m_result != NULL)
-            delete m_result;
+        // Originally I thought only leaves should hold results, but it might be
+        // useful to have non-terminal results hold results too...
+        // assert(m_children.size() == 0);
+        delete m_result;
         m_result = r;
+    }
+
+    // Get the result stored at this node.
+    const Result *getResult() const {
+        if (m_result == NULL)
+            throw std::runtime_error(std::string("result not found!"));
+        return m_result;
     }
 
     // Recursively destroy this tree's contents.
     void clear() {
-        if (m_result != NULL) {
-            assert(m_children.size() == 0);
-            delete m_result;
-            m_result = NULL;
-        }
-        else {
-            for (std::pair<const std::string, ResultTree *> c : m_children)
-                delete c.second;
-            m_children.clear();
-        }
+        delete m_result;
+        m_result = NULL;
+
+        for (std::pair<const std::string, ResultTree *> c : m_children)
+            delete c.second;
+
+        m_children.clear();
     }
 
     int indexOfChild(const ResultTree *c) const {
@@ -137,6 +169,16 @@ public:
             ++pos;
         }
         return -1;
+    }
+
+
+    void print(int indent = 0) const {
+        for (const auto &entryPair : m_children) {
+            for (size_t i = 0; i < indent; ++i)
+                std::cout << "    ";
+            std::cout << entryPair.first  << std::endl;
+            entryPair.second->print(indent + 1);
+        }
     }
 
     ~ResultTree() {
@@ -150,17 +192,19 @@ private:
 };
 
 template<typename T>
-std::string addNamedEntry(const std::string &nameSuggestion,
-                          std::map<std::string, T> &collection, const T &entry)
+inline std::string addNamedEntry(const std::string &nameSuggestion,
+                                 std::map<std::string, T> &collection,
+                                 const T &entry)
 {
     std::string name;
     auto it = collection.find();
     if (it == collection.end())  {
         name = nameSuggestion;
-        collection.insert(make_pair(nameSuggestion, entry));
+        collection[name] = entry;
     }
     else {
         if (it->second == entry) {
+            // If the entry already is present, keep it
             name = nameSuggestion;
         }
         else {
@@ -168,7 +212,7 @@ std::string addNamedEntry(const std::string &nameSuggestion,
             for (auto existing: collection)
                 keys.push_back(existing.first);
             name = uniqueName(nameSuggestion, keys);
-            collection.insert(make_pair(name, entry));
+            collection[name] = entry;
         }
     }
 
@@ -177,14 +221,28 @@ std::string addNamedEntry(const std::string &nameSuggestion,
 
 template<typename Generator>
 std::string ResultsCollector<Generator>::
-addModel(const std::string &nameSuggestion, const Model &model)
+addModel(const std::string &nameSuggestion, const Model &model,
+         const BBox_t &gridBBox)
 {
-    return addNamedEntry(nameSuggestion, m_models, model);
+    std::string name = addNamedEntry(nameSuggestion, m_models,
+                                     std::make_pair(model, gridBBox));
+
+    // Select the newly added model if none was selected
+    if (m_selectedModel.size() == 0)
+        m_selectedModel = name;
+
+    return name;
 }
 
 template<typename Generator>
 std::string ResultsCollector<Generator>::
 addSettings(const std::string &nameSuggestion, const AnalysisSettings &settings)
 {
-    return addNamedEntry(nameSuggestion, m_settings, settings);
+    std::string name = addNamedEntry(nameSuggestion, m_settings, settings);
+
+    // Select the newly added settings if none was selected
+    if (m_selectedSettings.size() == 0)
+        m_selectedSettings = name;
+
+    return name;
 }

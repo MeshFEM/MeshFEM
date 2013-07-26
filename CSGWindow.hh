@@ -15,6 +15,7 @@
 #include "GlobalTypes.hh"
 #include "CSGWindowController.hh"
 #include "MeshlessFEM.hh"
+#include "ResultsCollector.hh"
 
 #include "AnalysisSettings.hh"
 #include "ViewSettings.hh"
@@ -29,7 +30,8 @@ class CSGWindow : public QMainWindow
 
 public:
     CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
-              SolverLibrary<Scalar> &solvers);
+              SolverLibrary<Scalar> &solvers,
+              ResultsCollector_t &results);
     ~CSGWindow() { delete controller; }
 
 private slots:

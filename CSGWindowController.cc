@@ -30,8 +30,7 @@ void CSGWindowController::changedSidebarTab(int newTab) {
         m_state = CONTROLLER_STATE_MODEL;
     }
     else {
-        // The model might have changed--notify m_fem
-        m_fem.modelChanged();
+        modelChanged();
         emit modesUpdated(&m_fem);
         emit weakRegionsUpdated(&m_fem);
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
@@ -177,8 +176,7 @@ void CSGWindowController::loadCSG()
         }
 
         m_csgTreeModel->csgTreeUpdated();
-        m_fem.modelChanged();
-        m_femView->modelChanged();
+        modelChanged();
         // If we're in the analysis state, we must update the modes and return
         // to the element grid display
         if (m_state == CONTROLLER_STATE_ANALYSIS) {
@@ -188,6 +186,13 @@ void CSGWindowController::loadCSG()
         }
     }
 }
+
+void CSGWindowController::modelChanged(bool refitGrid)
+{
+    m_fem.modelChanged(refitGrid);
+    m_femView->modelChanged();
+}
+
 
 void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
 {
@@ -480,7 +485,7 @@ void CSGWindowController::runShapeOptimization()
         params[i] = old + delta;
 
         m_csgTree->setParameters(params);
-        m_fem.modelChanged();
+        modelChanged();
         Scalar weaknessPerturb;
         success = m_fem.weaknessAnalysis(weaknessPerturb);
         assert(success);
@@ -498,7 +503,7 @@ void CSGWindowController::runShapeOptimization()
     cout << "gradient: " << grad << endl;
     
     m_csgTree->setParameters(params);
-    m_fem.modelChanged();
+    modelChanged();
 }
 
 
@@ -533,7 +538,7 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         }
 
         m_csgTree->setParameters(translated);
-        m_fem.modelChanged(false);
+        modelChanged(false);
 
         QString cwPath, cwPercentilePath;
         cwPath.sprintf("ftranslation_%f_%f.cw", (float) settings.xTranslation,
@@ -557,7 +562,7 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
                 }
 
                 m_csgTree->setParameters(translated);
-                m_fem.modelChanged(false);
+                modelChanged(false);
 
                 QString cwPath, cwPercentilePath;
                 cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
@@ -609,7 +614,7 @@ runForceTranslationTest(const AnalysisSettings &settings)
         }
 
         m_csgTree->setParameters(translated);
-        m_fem.modelChanged(false);
+        modelChanged(false);
 
         QString simPath;
         simPath.sprintf("sim_ftranslation_%f_%f.msh",
@@ -631,7 +636,7 @@ runForceTranslationTest(const AnalysisSettings &settings)
                 }
 
                 m_csgTree->setParameters(translated);
-                m_fem.modelChanged(false);
+                modelChanged(false);
 
                 QString simPath;
                 simPath.sprintf("sim_translation_%i_%i.msh", xStep, yStep);

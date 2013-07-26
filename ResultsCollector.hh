@@ -18,32 +18,45 @@
 #include <map>
 #include <string>
 #include <cassert>
+#include <stdexcept>
 #include "AnalysisSettings.hh"
 
 
 template<typename Generator>
 class ResultsCollector {
     typedef typename Generator::Model Model;
+    typedef typename std::pair<Model, BBox_t> RModel;
 public:
     class ResultTree;
     class Result;
 
-    std::string addModel(const std::string &nameSuggestion, const Model &model);
+    // Note: the "model" a ResultsCollector stores includes the computation grid
+    // bounding box as well as the model itself (storing bounding boxes is
+    // needed for translation tests, for instance). These together represent the
+    // full simulated geometry.
+    std::string addModel(const std::string &nameSuggestion, const Model &model,
+                         const BBox_t &gridBBox);
     std::string addSettings(const std::string &nameSuggestion,
                             const AnalysisSettings &settings);
 
-    bool selectModel(const std::string &name) {
-        if (m_models.find(name) != m_models.end())
-            return false;
+    void selectModel(const std::string &name) {
+        if (m_models.find(name) == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + name);
         m_selectedModel = name;
-        return true;
     }
 
-    bool selectSettings(const std::string &name) {
-        if (m_settings.find(name) != m_settings.end())
-            return false;
+    void selectSettings(const std::string &name) {
+        if (m_settings.find(name) == m_settings.end())
+            throw std::runtime_error(std::string("settings not found: ") + name);
         m_selectedSettings = name;
-        return true;
+    }
+
+    void getModel(const std::string &name, Model &model, BBox_t &gridBBox) {
+        auto model_it = m_models.find(name);
+        if (model_it == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + name);
+        model = model_it->second.first;
+        gridBBox = model_it->second.second;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -76,9 +89,20 @@ public:
         // Destroy this collection's dynamically allocated contents
         for (auto &entry : m_models_settings_collection) {
             std::map<std::string, ResultTree *> &scollection = entry.second;
-            for (auto e2 : scollection) {
+            for (auto &e2 : scollection) {
                 ResultTree *t = e2.second;
                 delete t;
+            }
+        }
+    }
+
+    void print() const {
+        for (const auto &entry : m_models_settings_collection) {
+            std::map<std::string, ResultTree *> &scollection = entry.second;
+            std::cout << entry.first << std::endl;
+            for (const auto &e2 : scollection) {
+                std::cout << "    " << e2.first << std::endl;
+                e2.second->print(2);
             }
         }
     }
@@ -88,7 +112,7 @@ public:
     }
 
 private:
-    std::map<std::string, Model> m_models;
+    std::map<std::string, RModel> m_models;
     std::map<std::string, AnalysisSettings> m_settings;
     std::map<std::string, std::map<std::string, ResultTree *> > 
                 m_models_settings_collection;

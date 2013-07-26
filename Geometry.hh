@@ -67,6 +67,10 @@ struct BBox {
         return result;
     }
 
+    bool operator==(const BBox &b) {
+        return ((minCorner == b.minCorner) && (maxCorner == b.maxCorner));
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     /*! Determine whether there is any overlap with a circle.
     //  Adapted from:

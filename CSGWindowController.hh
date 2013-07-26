@@ -24,10 +24,11 @@ class CSGWindowController : public QObject {
 public:
     CSGWindowController(CSGTreeModel *treeModel, QTreeView *treeView,
                         CSGTree_t *tree, FEMView2D *femView,
-                        MeshlessFEM_t &fem)
+                        MeshlessFEM_t &fem, ResultsCollector_t &results)
         : m_state(CONTROLLER_STATE_MODEL),
           m_csgTreeModel(treeModel), m_csgTreeView(treeView),
-          m_csgTree(tree), m_femView(femView), m_fem(fem) { }
+          m_csgTree(tree), m_femView(femView), m_fem(fem),
+          m_results(results) { }
 
     QTreeView *csgTreeView()  { return m_csgTreeView; }
 
@@ -39,6 +40,8 @@ public slots:
     void saveBoundaryPolygon();
     void loadCSG();
     void saveCSG();
+
+    void modelChanged(bool refitGrid = true);
 
     // Analysis actions
     void elementGridChanged(const AnalysisSettings &settings);
@@ -79,11 +82,12 @@ signals:
     
 private:
     enum { CONTROLLER_STATE_MODEL, CONTROLLER_STATE_ANALYSIS } m_state;
-    CSGTreeModel  *m_csgTreeModel;
-    QTreeView     *m_csgTreeView;
-    CSGTree_t     *m_csgTree;
-    FEMView2D     *m_femView;
-    MeshlessFEM_t &m_fem;
+    CSGTreeModel        *m_csgTreeModel;
+    QTreeView           *m_csgTreeView;
+    CSGTree_t           *m_csgTree;
+    FEMView2D           *m_femView;
+    MeshlessFEM_t       &m_fem;
+    ResultsCollector_t  &m_results;
 
     typedef CSGTree_t::CSGNode CSGNode;
 };

@@ -40,6 +40,10 @@ public:
         m_bbox = bbox;
     }
 
+    BBox_t getBoudingBox() const {
+        return m_bbox;
+    }
+
     size_t interiorCols() const { return m_Nx; }
     size_t interiorRows() const { return m_Ny; }
 
