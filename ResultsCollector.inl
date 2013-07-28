@@ -17,7 +17,6 @@
 #include <vector>
 #include <cassert>
 #include <iostream>
-#include <boost/algorithm/string.hpp>
 
 // A single result can consist of up to a scalar AND vector field per:
 //      node

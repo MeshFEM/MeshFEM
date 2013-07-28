@@ -19,6 +19,7 @@
 #include <string>
 #include <cassert>
 #include <stdexcept>
+#include <boost/algorithm/string.hpp>
 #include "AnalysisSettings.hh"
 
 
@@ -51,12 +52,66 @@ public:
         m_selectedSettings = name;
     }
 
-    void getModel(const std::string &name, Model &model, BBox_t &gridBBox) {
+    void getModel(const std::string &name, Model &model,
+                  BBox_t &gridBBox) const {
         auto model_it = m_models.find(name);
         if (model_it == m_models.end())
             throw std::runtime_error(std::string("model not found: ") + name);
         model = model_it->second.first;
         gridBBox = model_it->second.second;
+    }
+
+    // Gets a reference to the currently selected model
+    void getModel(Model &model, BBox_t &gridBBox) const {
+        getModel(m_selectedModel, model, gridBBox);
+    }
+
+    // Checks if a model differs from the currently selected model.
+    bool modelIsDifferent(const Model &m, const BBox_t &b) const {
+        if (m_selectedModel.size() == 0)
+            return true;
+        else {
+            auto mit = m_models.find(m_selectedModel);
+            if (mit == m_models.end())
+                return true;
+            return (mit->second.first == m) && (mit->second.second == b);
+        }
+    }
+
+    // Path consists of model_name:settings_name:name
+    const Result *getResultWithPath(const std::string &path) const {
+        std::vector<std::string> nameComponents;
+        boost::split(nameComponents, path, boost::is_any_of(":"));
+        for (std::string &str : nameComponents)
+            boost::trim(str);
+        if (nameComponents.size() < 3) {
+            throw std::runtime_error(std::string("Invalid path: ") + path);
+        }
+        auto it = nameComponents.begin();
+        std::string model    = *(it++);
+        std::string settings = *(it++);
+
+        auto mit = m_models.find(model);
+        if (mit == m_models.end())
+            throw std::runtime_error(std::string("collection not found: " +
+                        model + ":" + settings));
+        auto sit = mit->second.find(settings);
+        if (sit == m_settings.end())
+            throw std::runtime_error(std::string("collection not found: " +
+                        model + ":" + settings));
+        return sit->second.getResult(it, nameComponents.end());
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Get a result from the the collection (for the currently selected model
+    //  and settings).
+    //  @param[in]  name    result's name in the collection
+    //  @return     result pointer
+    *///////////////////////////////////////////////////////////////////////////
+    const Result *getResult(const std::string &name) const {
+        return getResultWithPath(m_selectedModel + ":" + m_selectedSettings +
+                                 ":" + name);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -120,6 +175,7 @@ private:
                 m_settings_models_collection;
 
     std::string m_selectedModel, m_selectedSettings;
+    std::string m_last_result; // The last result added (model:settings:name)
 };
 
 #include "ResultsCollector.inl"
