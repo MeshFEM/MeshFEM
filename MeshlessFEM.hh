@@ -297,15 +297,14 @@ public:
 
     bool simulate(RC *rc = NULL);
 
-    int weakRegionExtraction();
+    int weakRegionExtraction(RC *rc = NULL);
 
     // TODO: remove this hacky stuff!
     void selectWeakRegion(size_t i) {
         m_selectedWeakRegion = i;
     }
 
-    bool weaknessAnalysis(Real &weaknessCriterion, const char *cwPath = NULL,
-                          const char *cwPercentilePath = NULL);
+    bool weaknessAnalysis(Real &weaknessCriterion, RC *rc = NULL);
 
     SMField elementStressTensors(const VField &displacement);
     SField  computeStressTensorNorms(const SMField &stressField);

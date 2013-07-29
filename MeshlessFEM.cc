@@ -924,7 +924,7 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
 //   0: success
 //   1: success, and modes were updated
 template<typename Model>
-int MeshlessFEM<Model>::weakRegionExtraction()
+int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
 {
     bool recomputedModes = false;
     if (m_modes.size() == 0) {
@@ -935,7 +935,6 @@ int MeshlessFEM<Model>::weakRegionExtraction()
 
     m_weakRegions.clear();
     m_weakRegionStressNorms.clear();
-    std::vector<Real> weakRegionVolumes;
 
     const ElementGrid &grid = elementGrid();
     for (size_t m = numRigidModes(); m < m_modes.size(); ++m) {
@@ -1022,26 +1021,30 @@ int MeshlessFEM<Model>::weakRegionExtraction()
         }
     }
 
-    // weakRegionVolumes.assign(m_weakRegions.size(), 0.0);
-    // for (size_t r = 0; r < m_weakRegions.size(); ++r) {
-    //     const Region &region = m_weakRegions[r];
-    //     for (size_t i = 0; i < region.size(); ++i) {
-    //         weakRegionVolumes[i] += m_elementData[region[i]].volume();
-    //     }
-    // }
+    if (rc != NULL) {
+        // Record the weak regions in the results collector.
+        for (size_t i = 0; i < m_weakRegionStressNorms.size(); ++i) {
+            typedef typename RC::Result Result;
+            Result *r = new Result(
+                    Result::RESULT_PER_ELEM, m_weakRegionStressNorms[i]);
+            rc->setResult(appendToString("Weak Regions:Region ", i), r);
+        }
+    }
 
     return recomputedModes ? 1 : 0;
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
-        const char *cwPath, const char *cwPercentilePath) {
+bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
+{
+        // const char *cwPath, const char *cwPercentilePath) {
+    typedef typename RC::Result Result;
     if (combinedWeaknessIsCached()) {
         weaknessCriterion = m_weaknessCriterion;
         return true;
     }
 
-    int ret = weakRegionExtraction();
+    int ret = weakRegionExtraction(rc);
     if (ret < 0)
         return false;
 
@@ -1074,6 +1077,17 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
 
         SMField stressTensors = elementStressTensors(optU);
         SField  optStress = computeStressTensorNorms(stressTensors);
+
+        if (rc != NULL) {
+            Result *r = new Result(
+                    Result::RESULT_PER_BOUNDARY, m_pressures);
+            rc->setResult(appendToString("Weak Regions:Opt Pressure ", i), r);
+
+            r = new Result(Result::RESULT_PER_ELEM, optStress,
+                            Result::RESULT_PER_NODE, optU);
+            rc->setResult(
+                    appendToString("Weak Regions::Opt Displacement ", i), r);
+        }
 
         m_combinedWeakness.maxRelax(optStress);
     }
@@ -1142,6 +1156,12 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
         cout << "Equalized " << eqCount << "/" << numElems << " elements" << endl;
     }
 
+    if (rc != NULL) {
+        Result *r = new Result(
+                Result::RESULT_PER_ELEM, m_combinedWeakness);
+        rc->setResult("Combined Weakness", r);
+    }
+
     // MatlabSolver<Real> *matsolver = dynamic_cast<MatlabSolver<Real> *>(solver);
     // if (matsolver) {
     //     matsolver->getMatlabInterface()->SetEngineRealMatrix("cw",
@@ -1193,26 +1213,26 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion,
     // solver->setDenseMatrix("cwp", percentile.rows(),
     //         1, percentile.data(), true);
 
-    if (cwPath) {
-        std::ofstream cwFile(cwPath);
-        if (!cwFile.is_open()) {
-            std::cout << "Failed to open output file '"
-                      << cwPath << '\'' << std::endl;
-        }
-        else{
-            cwFile << m_combinedWeakness;
-        }
-    }
-    if (cwPercentilePath) {
-        std::ofstream cwpFile(cwPercentilePath);
-        if (!cwpFile.is_open()) {
-            std::cout << "Failed to open output file '"
-                      << cwPercentilePath << '\'' << std::endl;
-        }
-        else{
-            cwpFile << percentile;
-        }
-    }
+    // if (cwPath) {
+    //     std::ofstream cwFile(cwPath);
+    //     if (!cwFile.is_open()) {
+    //         std::cout << "Failed to open output file '"
+    //                   << cwPath << '\'' << std::endl;
+    //     }
+    //     else{
+    //         cwFile << m_combinedWeakness;
+    //     }
+    // }
+    // if (cwPercentilePath) {
+    //     std::ofstream cwpFile(cwPercentilePath);
+    //     if (!cwpFile.is_open()) {
+    //         std::cout << "Failed to open output file '"
+    //                   << cwPercentilePath << '\'' << std::endl;
+    //     }
+    //     else{
+    //         cwpFile << percentile;
+    //     }
+    // }
 
     return true;
 }

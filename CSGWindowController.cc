@@ -411,7 +411,9 @@ void CSGWindowController::runWeakRegionExtraction()
 void CSGWindowController::runWeaknessAnalysis()
 {
     Scalar weakness;
-    bool success = m_fem.weaknessAnalysis(weakness);
+    prepareResultsCollector();
+    bool success = m_fem.weaknessAnalysis(weakness, &m_results);
+    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Weakness Analysis Failed",
@@ -562,8 +564,8 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         cwPercentilePath.sprintf("ftranslation_%f_%f.cwp",
                 (float) settings.xTranslation, (float) settings.yTranslation);
 
-        bool success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
-                                              cwPercentilePath.toAscii());
+        prepareResultsCollector();
+        bool success = m_fem.weaknessAnalysis(weakness, &m_results);
         assert(success);
     }
     else {
@@ -584,8 +586,8 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
                 cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
                 cwPercentilePath.sprintf("translation_%i_%i.cwp", xStep, yStep);
 
-                bool success = m_fem.weaknessAnalysis(weakness, cwPath.toAscii(),
-                                                      cwPercentilePath.toAscii());
+                prepareResultsCollector();
+                bool success = m_fem.weaknessAnalysis(weakness, &m_results);
 
                 // weaknessGrids->push_back(make_pair(m_fem.elementGrid(),
                 //             m_fem.combinedWeakness()));
