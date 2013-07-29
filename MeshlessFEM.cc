@@ -928,7 +928,7 @@ int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
 {
     bool recomputedModes = false;
     if (m_modes.size() == 0) {
-        if (!modalAnalysis())
+        if (!modalAnalysis(rc))
             return -1;
         recomputedModes = true;
     }
@@ -1081,12 +1081,13 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
         if (rc != NULL) {
             Result *r = new Result(
                     Result::RESULT_PER_BOUNDARY, m_pressures);
-            rc->setResult(appendToString("Weak Regions:Opt Pressure ", i), r);
+            rc->setResult(appendToString("Weak Regions:Region ", i)
+                        + ":Opt Pressure", r);
 
             r = new Result(Result::RESULT_PER_ELEM, optStress,
                             Result::RESULT_PER_NODE, optU);
-            rc->setResult(
-                    appendToString("Weak Regions::Opt Displacement ", i), r);
+            rc->setResult(appendToString("Weak Regions:Region ", i)
+                        + ":Opt Displacement", r);
         }
 
         m_combinedWeakness.maxRelax(optStress);
