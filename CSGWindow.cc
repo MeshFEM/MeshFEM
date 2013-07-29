@@ -12,6 +12,7 @@
 #include "FEMView.hh"
 #include <QtGui>
 
+#include "CSGWindowController.hh"
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
 #include "ModelForm.hh"
@@ -37,8 +38,9 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     treeView->setModel(treeModel);
 
-    controller = new CSGWindowController(treeModel, treeView, &fem.model(),
-                                         femView, fem, results);
+    controller = new CSGWindowController(this, treeModel, treeView,
+                                        &fem.model(), settings, femView, fem,
+                                        results);
 
     ModelForm *modelForm = new ModelForm(controller);
     QWidget *sideBar = new QWidget();
@@ -136,6 +138,11 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
 
     // tb->addAction(uiActionGroup);
     addToolBar(tb);
+}
+
+CSGWindow::~CSGWindow()
+{
+    delete controller;
 }
 
 void CSGWindow::showViewSettings()

@@ -21,7 +21,7 @@ typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
 typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_INTERSECT = 2,
                CSG_NODE_UNION = 3, CSG_NODE_SUBTRACT = 4 } CSGNodeType;
 
-template<typename Vector>
+template<typename _Vector>
 class CSGTree {
 
 public:
@@ -31,8 +31,8 @@ public:
     class CSGPrimitive;
     class CSGRectangleNode;
     class CSGEllipseNode;
-    typedef BBox<Vector> BBox_t;
-    typedef Vector                  Vector_t;
+    typedef BBox<_Vector> BBox_t;
+    typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
     typedef BoundaryPoint<Vector> _BoundaryPoint;
 

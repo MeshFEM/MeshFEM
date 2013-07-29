@@ -10,7 +10,7 @@ INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson
 INCLUDEPATH += . /opt/local/include /opt/local/include/freetype2
 INCLUDEPATH += /Applications/MATLAB_R2013a.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
-LIBS += -L/opt/local/lib -lqjson -lftgl
+LIBS += -L/opt/local/lib -lqjson -lftgl -lboost_regex
 # Bring in umfpack and dependencies (BLAS)
 LIBS += -lumfpack -lSuiteSparse -framework Accelerate
 LIBS += -L/Library/gurobi550/mac64/lib/ -lgurobi55

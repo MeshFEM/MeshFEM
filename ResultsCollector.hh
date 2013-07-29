@@ -5,8 +5,11 @@
 //        Collects CSGFEM simulation/weakness analysis results for different
 //        models/settings.
 //
-//        Note: stores copies of the distinct model and settings used to
-//        generate the results.
+//        Also stores copies of the distinct model and settings used to
+//        generate the results. Only those models and settings that actually
+//        have results attached are kept (though the selected model is never
+//        removed because results may be added to it).
+//        
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -134,11 +137,19 @@ public:
         // existing)
         assert(msc_entry == smc_entry);
         if (msc_entry == NULL) {
-            msc_entry = smc_entry = new ResultsCollector();
+            msc_entry = smc_entry = new ResultTree();
         }
 
         msc_entry->setResult(name, result);
+
+        m_lastResult = m_selectedModel + ":" + m_selectedSettings + ":" + name;
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Delete all models/settings for which no results are recorded
+    //  (except the currently selected pair)
+    *///////////////////////////////////////////////////////////////////////////
+    void clean();
 
     void clear() {
         // Destroy this collection's dynamically allocated contents
@@ -153,7 +164,7 @@ public:
 
     void print() const {
         for (const auto &entry : m_models_settings_collection) {
-            std::map<std::string, ResultTree *> &scollection = entry.second;
+            const std::map<std::string, ResultTree *> &scollection = entry.second;
             std::cout << entry.first << std::endl;
             for (const auto &e2 : scollection) {
                 std::cout << "    " << e2.first << std::endl;
@@ -175,7 +186,7 @@ private:
                 m_settings_models_collection;
 
     std::string m_selectedModel, m_selectedSettings;
-    std::string m_last_result; // The last result added (model:settings:name)
+    std::string m_lastResult; // The last result added (model:settings:name)
 };
 
 #include "ResultsCollector.inl"

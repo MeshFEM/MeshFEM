@@ -13,13 +13,14 @@
 
 #include <QMainWindow>
 #include "GlobalTypes.hh"
-#include "CSGWindowController.hh"
 #include "MeshlessFEM.hh"
 #include "ResultsCollector.hh"
 
 #include "AnalysisSettings.hh"
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
+
+class CSGWindowController;
 struct AnalysisSettings;
 struct ViewSettings;
 class  ViewSettingsWidget;
@@ -32,7 +33,7 @@ public:
     CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
               SolverLibrary<Scalar> &solvers,
               ResultsCollector_t &results);
-    ~CSGWindow() { delete controller; }
+    ~CSGWindow();
 
 private slots:
     void showViewSettings();

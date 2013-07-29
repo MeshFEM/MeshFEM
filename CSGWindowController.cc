@@ -136,11 +136,14 @@ void CSGWindowController::saveBoundaryPolygon()
 
 void CSGWindowController::saveCSG()
 {
-    QString fileName = QFileDialog::getSaveFileName(0, "Save Object (.csg)",
-            QString(), "Text files (*.csg)");
+    QString path = QString::fromStdString(m_csgPath);
+    QString fileName = QFileDialog::getSaveFileName(m_window,
+            "Save Object (.csg)", path,
+            "Text files (*.csg)");
     if (fileName.length() > 0) {
         try {
             writeCSGFile(fileName.toAscii(), *m_csgTree);
+            m_csgPath = fileName.toStdString();
         }
         catch (std::exception &e)
         {
@@ -155,16 +158,16 @@ void CSGWindowController::saveCSG()
 
 void CSGWindowController::loadCSG()
 {
-    QString fileName = QFileDialog::getOpenFileName(0, "Open Object (.csg)",
-            QString(), "Text files (*.csg)");
+    QString path = QString::fromStdString(m_csgPath);
+    QString fileName = QFileDialog::getOpenFileName(m_window,
+            "Open Object (.csg)", path,
+            "Text files (*.csg)");
     if (fileName.length() > 0) {
         m_csgTreeModel->csgTreeAboutToUpdate();
 
         try {
-            CSGTree_t loadedCSG;
-            parseCSGFile(fileName.toAscii(), loadedCSG);
-            *m_csgTree = loadedCSG;
-            assert(*m_csgTree == loadedCSG);
+            parseCSGFile(fileName.toAscii(), *m_csgTree);
+            m_csgPath = fileName.toStdString();
         }
         catch (std::exception &e)
         {
@@ -242,9 +245,20 @@ modalAnalysisSettingsChanged(const AnalysisSettings &settings)
     emit weakRegionsUpdated(&m_fem);
 }
 
+// Prepare the results collector for adding results by inserting the current
+// model/settings.
+void CSGWindowController::prepareResultsCollector() {
+    m_settingsName = m_results.addSettings(m_settingsName, m_settings);
+    m_modelName = m_results.addModel(m_modelName, *m_csgTree,
+                            m_fem.elementGrid().getBoudingBox());
+}
+
 void CSGWindowController::runModalAnalysis()
 {
-    bool success = m_fem.modalAnalysis();
+    prepareResultsCollector();
+
+    bool success = m_fem.modalAnalysis(&m_results);
+    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Modal analysis Failed",
@@ -355,7 +369,9 @@ void CSGWindowController::loadPressure()
 
 void CSGWindowController::runSimulation()
 {
-    bool success = m_fem.simulate();
+    prepareResultsCollector();
+    bool success = m_fem.simulate(&m_results);
+    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Simulation Failed",
@@ -621,7 +637,9 @@ runForceTranslationTest(const AnalysisSettings &settings)
                        (float) settings.xTranslation,
                        (float) settings.yTranslation);
 
-        bool success = m_fem.simulate(simPath.toAscii());
+        // bool success = m_fem.simulate(simPath.toAscii());
+        prepareResultsCollector();
+        bool success = m_fem.simulate(&m_results);
         assert(success);
     }
     else {
@@ -641,7 +659,9 @@ runForceTranslationTest(const AnalysisSettings &settings)
                 QString simPath;
                 simPath.sprintf("sim_translation_%i_%i.msh", xStep, yStep);
 
-                bool success = m_fem.simulate(simPath.toAscii());
+                // bool success = m_fem.simulate(simPath.toAscii());
+                prepareResultsCollector();
+                bool success = m_fem.simulate(&m_results);
 
                 assert(success);
             }
@@ -665,7 +685,9 @@ runFunctionRadiusTest(const AnalysisSettings &settings)
         QString simPath;
         simPath.sprintf("sim_radius_%f.msh", rScale);
 
-        bool success = m_fem.simulate(simPath.toAscii());
+        // bool success = m_fem.simulate(simPath.toAscii());
+        prepareResultsCollector();
+        bool success = m_fem.simulate(&m_results);
         assert(success);
     }
 }
@@ -696,7 +718,9 @@ runRefinementTest(const AnalysisSettings &settings)
         simPath.sprintf("sim_refinement_%i_%i.msh", (int) newSettings.Nx,
                         (int) newSettings.Ny);
 
-        bool success = m_fem.simulate(simPath.toAscii());
+        prepareResultsCollector();
+        // bool success = m_fem.simulate(simPath.toAscii());
+        bool success = m_fem.simulate(&m_results);
         assert(success);
     }
 

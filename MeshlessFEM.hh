@@ -31,12 +31,15 @@
 #include <algorithm>
 #include <Eigen/Sparse>
 
+template<typename Generator>
+class ResultsCollector;
+
 template<typename _Model>
 class MeshlessFEM {
 public:
     typedef _Model Model;
-    typedef typename Model::Vector_t Vector;
-    typedef typename Model::Real   Real;
+    typedef typename Model::Vector   Vector;
+    typedef typename Model::Real     Real;
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
     typedef Eigen::Matrix<Real, 4, 1> DType;
     typedef ScalarField<Real>         SField;
@@ -54,6 +57,8 @@ public:
     // Sparse Matrices
     typedef TripletMatrix<Triplet<Real> > TMatrix;
     typedef Eigen::SparseMatrix<Real> SparseMatrix;
+
+    typedef ResultsCollector<MeshlessFEM<_Model> > RC;
 
     class ElementData;
     class PerElementLaplacianDensity;
@@ -283,48 +288,14 @@ public:
         m_nodeFixed[i] = fixed;
     }
 
-    bool modalAnalysis();
+    bool modalAnalysis(RC *rc = NULL);
 
     // Rebuild all boundary force blurring functions
     // @param[in] r    scale factor determining blur kernel radius. The actual
     //                 radius will be r * cellSize
     void buildBoundaryFunctions(Real r = 1.0);
 
-    bool simulate(const char *mshPath = NULL) {
-        TMatrix K, F, R, N, A;
-        m_assembleStiffnessMatrix(K);
-        m_assembleLoadMatrix(F);
-        m_assembleRigidModeMatrix(R);
-        m_assembleNMatrix(N);
-        m_assembleAMatrix(A);
-        // Note: the following aren't actually needed for simulation
-        TMatrix B, VD;
-        m_assembleBMatrix(B);
-        m_assembleVDMatrix(VD);
-        Solver<Real> *solver = m_solvers.solver();
-        solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
-                                  m_pointwisePressureBound);
-        solver->simulate(m_pressures, m_simulatedDisplacement);
-
-        m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
-        m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
-
-        if (mshPath) {
-            size_t numNodes = elementGrid().numNodes();
-            VectorField<Real, 3> disp3Vector(numNodes);
-            disp3Vector.clear();
-            for (size_t i = 0; i < numNodes; ++i) {
-                disp3Vector(i)[0] = m_simulatedDisplacement(i)[0];
-                disp3Vector(i)[1] = m_simulatedDisplacement(i)[1];
-            }
-            MSHWriter<ElementGrid> mshOut(mshPath, elementGrid());
-            mshOut.addField("sim u", disp3Vector, MSHWriter<ElementGrid>::PER_NODE);
-            mshOut.addField("sim stress norms", m_simulatedStressNorms,
-                            MSHWriter<ElementGrid>::PER_ELEMENT);
-        }
-
-        return true;
-    }
+    bool simulate(RC *rc = NULL);
 
     int weakRegionExtraction();
 

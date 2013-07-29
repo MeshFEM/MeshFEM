@@ -15,7 +15,10 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <sstream>
+#include <string>
 #include <boost/format.hpp>
+#include <boost/regex.hpp>
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Generate a permutation that puts a collection of values in sorted order:
@@ -48,23 +51,45 @@ void sortPermutation(const Container &values, std::vector<size_t> &p,
 //  @return     generated name
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Collection>
-std::string uniqueName(const std::string &suggestion, const Collection &names)
+std::string uniqueName(std::string suggestion, const Collection &names)
 {
     if (find(names.begin(), names.end(), suggestion) == names.end())
         return suggestion;
 
-    boost::format formatter("%s (%i)");
-    
-    std::string newName;
-    bool found = false;
-    for (int i = 0; !found && (i <= (int) names.size()); ++i) {
-        newName = (i == 0) ? suggestion
-                           : boost::str(formatter % suggestion % i);
-        found = (find(names.begin(), names.end(), newName) == names.end());
+    // Trim any potential (#) suffix from the suggested name
+    boost::regex pattern("(.*)\\s\\([0-9]+\\)$");
+    boost::smatch match;
+    if (boost::regex_search(suggestion, match, pattern)) {
+        suggestion = std::string(match[1].first, match[1].second);
     }
 
-    assert(found);
+    boost::format formatter("%s (%i)");
+    
+    bool unique = false;
+    std::string newName;
+    for (int i = 0; !unique && (i <= (int) names.size()); ++i) {
+        newName = (i == 0) ? suggestion
+                           : boost::str(formatter % suggestion % i);
+        unique = (find(names.begin(), names.end(), newName) == names.end());
+    }
+
+    assert(unique);
     return newName;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a new string by appending an object/type to an existing string.
+//  @tparam     T   object type
+//  @param[in]  str existing string
+//  @param[in]  t   object to append
+//  @return     created string
+*///////////////////////////////////////////////////////////////////////////////
+template<typename T>
+std::string appendToString(const std::string &str, const T &t)
+{
+    std::stringstream ss;
+    ss << str << t;
+    return ss.str();
 }
 
 #endif // UTILS_HH

@@ -67,7 +67,7 @@ struct BBox {
         return result;
     }
 
-    bool operator==(const BBox &b) {
+    bool operator==(const BBox &b) const {
         return ((minCorner == b.minCorner) && (maxCorner == b.maxCorner));
     }
 

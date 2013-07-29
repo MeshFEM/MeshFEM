@@ -3,6 +3,7 @@
 #include <vector>
 #include <queue>
 #include "MeshlessFEM.hh"
+#include "ResultsCollector.hh"
 #include "QMatlabInterface.hh"
 
 using namespace std;
@@ -765,7 +766,7 @@ void MeshlessFEM<Model>::m_assembleVDMatrix(TMatrix &VD)
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::modalAnalysis()
+bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
 {
     bool success;
     Solver<Real> *solver = m_solvers.solver();
@@ -857,11 +858,67 @@ bool MeshlessFEM<Model>::modalAnalysis()
         for (size_t i = 0; i < numModes; ++i)
             m_modalStressNorms.push_back(
                     computeStressTensorNorms(m_modalStressTensors[i]));
+
+        if (rc != NULL) {
+            // Record the modes/modal stresses in the results collector.
+            for (size_t i = 0; i < numModes; ++i) {
+                typedef typename RC::Result Result;
+                Result *r = new Result(
+                    Result::RESULT_PER_ELEM, m_modalStressNorms[i],
+                    Result::RESULT_PER_NODE, mode(i));
+                rc->setResult(appendToString("Modes:Mode ", i), r);
+            }
+        }
     }
 
     return success;
 }
 
+template<typename Model>
+bool MeshlessFEM<Model>::simulate(RC *rc) {
+    TMatrix K, F, R, N, A;
+    m_assembleStiffnessMatrix(K);
+    m_assembleLoadMatrix(F);
+    m_assembleRigidModeMatrix(R);
+    m_assembleNMatrix(N);
+    m_assembleAMatrix(A);
+    // Note: the following aren't actually needed for simulation
+    TMatrix B, VD;
+    m_assembleBMatrix(B);
+    m_assembleVDMatrix(VD);
+    Solver<Real> *solver = m_solvers.solver();
+    solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
+                              m_pointwisePressureBound);
+    solver->simulate(m_pressures, m_simulatedDisplacement);
+
+    m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
+    m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
+
+    if (rc != NULL) {
+        // Record the displacements/stresses in the results collector.
+        typedef typename RC::Result Result;
+        Result *r = new Result(
+                Result::RESULT_PER_ELEM, m_simulatedStressNorms,
+                Result::RESULT_PER_NODE, m_simulatedDisplacement);
+        rc->setResult("Simulation", r);
+    }
+
+    // if (mshPath) {
+    //     size_t numNodes = elementGrid().numNodes();
+    //     VectorField<Real, 3> disp3Vector(numNodes);
+    //     disp3Vector.clear();
+    //     for (size_t i = 0; i < numNodes; ++i) {
+    //         disp3Vector(i)[0] = m_simulatedDisplacement(i)[0];
+    //         disp3Vector(i)[1] = m_simulatedDisplacement(i)[1];
+    //     }
+    //     MSHWriter<ElementGrid> mshOut(mshPath, elementGrid());
+    //     mshOut.addField("sim u", disp3Vector, MSHWriter<ElementGrid>::PER_NODE);
+    //     mshOut.addField("sim stress norms", m_simulatedStressNorms,
+    //                     MSHWriter<ElementGrid>::PER_ELEMENT);
+    // }
+
+    return true;
+}
 // Return Values
 //  -1: modal analysis failure
 //   0: success
