@@ -84,6 +84,7 @@ signals:
     void csgNodesSelected(const NodeList &nList);
     void modesUpdated(const MeshlessFEM_t *fem);
     void weakRegionsUpdated(const MeshlessFEM_t *fem);
+    void resultsUpdated();
     
 private:
     void prepareResultsCollector();

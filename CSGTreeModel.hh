@@ -15,7 +15,7 @@
 #include <QModelIndex>
 #include <QVariant>
 
-#include <CSGTree.hh>
+#include "CSGTree.hh"
 #include "GlobalTypes.hh"
 
 

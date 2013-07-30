@@ -19,6 +19,7 @@
 #include "AnalysisSettings.hh"
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
+#include "ResultsWindow/ResultsWindow.hh"
 
 class CSGWindowController;
 struct AnalysisSettings;
@@ -37,11 +38,13 @@ public:
 
 private slots:
     void showViewSettings();
+    void showResultsWindow();
 
 private:
     CSGWindowController *controller;
     ViewSettings vsettings;
     ViewSettingsWidget *g_vsWidget;
+    ResultsWindow *g_resultsWindow;
 };
 
 #endif // CSGWINDOW_HH

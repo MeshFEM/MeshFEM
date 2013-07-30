@@ -34,6 +34,8 @@ public:
     class ResultTree;
     class Result;
 
+    typedef enum { KEY_ORDER_MODEL_SETTINGS, KEY_ORDER_SETTINGS_MODEL } KeyOrder;
+
     // Note: the "model" a ResultsCollector stores includes the computation grid
     // bounding box as well as the model itself (storing bounding boxes is
     // needed for translation tests, for instance). These together represent the
@@ -151,6 +153,25 @@ public:
     *///////////////////////////////////////////////////////////////////////////
     void clean();
 
+    template<typename Visitor>
+    void dfs(KeyOrder order, Visitor &v) {
+        auto &topLevel = (order == KEY_ORDER_MODEL_SETTINGS) ?
+                        m_models_settings_collection :
+                        m_settings_models_collection;
+
+        for (auto &e1 : topLevel) {
+            v.preVisit(e1.first);
+            std::map<std::string, ResultTree *> &scollection = e1.second;
+            for (auto &e2 : scollection) {
+                v.preVisit(e2.first);
+                ResultTree *t = e2.second;
+                t->dfs(v);
+                v.postVisit();
+            }
+            v.postVisit();
+        }
+    }
+
     void clear() {
         // Destroy this collection's dynamically allocated contents
         for (auto &entry : m_models_settings_collection) {
@@ -160,6 +181,11 @@ public:
                 delete t;
             }
         }
+
+        m_models.clear();
+        m_settings.clear();
+        m_models_settings_collection.clear();
+        m_settings_models_collection.clear();
     }
 
     void print() const {

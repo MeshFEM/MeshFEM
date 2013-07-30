@@ -258,7 +258,6 @@ void CSGWindowController::runModalAnalysis()
     prepareResultsCollector();
 
     bool success = m_fem.modalAnalysis(&m_results);
-    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Modal analysis Failed",
@@ -269,6 +268,7 @@ void CSGWindowController::runModalAnalysis()
     }
     emit modesUpdated(&m_fem);
     emit weakRegionsUpdated(&m_fem);
+    emit resultsUpdated();
 }
 
 void CSGWindowController::configureSimulation()
@@ -371,7 +371,6 @@ void CSGWindowController::runSimulation()
 {
     prepareResultsCollector();
     bool success = m_fem.simulate(&m_results);
-    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Simulation Failed",
@@ -383,6 +382,7 @@ void CSGWindowController::runSimulation()
     }
     else {
         m_femView->setGUIState(FEMView2D::SIM_RESULT_STATE);
+        emit resultsUpdated();
     }
 }
 
@@ -413,7 +413,6 @@ void CSGWindowController::runWeaknessAnalysis()
     Scalar weakness;
     prepareResultsCollector();
     bool success = m_fem.weaknessAnalysis(weakness, &m_results);
-    m_results.print();
     if (!success) {
         QMessageBox mbox(QMessageBox::Critical,
                 "Weakness Analysis Failed",
@@ -426,6 +425,7 @@ void CSGWindowController::runWeaknessAnalysis()
     emit modesUpdated(&m_fem);
     emit weakRegionsUpdated(&m_fem);
     m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
+    emit resultsUpdated();
 }
 
 void CSGWindowController::dumpModalData()

@@ -29,6 +29,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     g_vsWidget = new ViewSettingsWidget(vsettings);
     g_vsWidget->setWindowTitle("View Settings");
 
+    g_resultsWindow = new ResultsWindow(results);
+
     FEMView2D *femView = new FEMView2D(fem, vsettings);
     femView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
@@ -85,10 +87,14 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     // View Menu
     QMenu *viewMenu = menuBar()->addMenu("View");
     QAction *viewSettingsAction = new QAction("View Settings", this);
+    QAction *resultsWindowAction = new QAction("Results Window", this);
     viewSettingsAction->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_V);
     viewMenu->addAction(viewSettingsAction);
+    viewMenu->addAction(resultsWindowAction);
     QObject::connect(viewSettingsAction, SIGNAL(triggered()),
                      this, SLOT(showViewSettings()));
+    QObject::connect(resultsWindowAction, SIGNAL(triggered()),
+                     this, SLOT(showResultsWindow()));
 
     // GUI connections
     QObject::connect(controller, SIGNAL(csgNodesSelected(const NodeList &)),
@@ -121,6 +127,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      analysisForm, SLOT(weakRegionsUpdated(const MeshlessFEM_t *)));
     QObject::connect(g_vsWidget, SIGNAL(viewSettingsUpdated()),
                      femView, SLOT(viewSettingsUpdated()));
+    QObject::connect(controller, SIGNAL(resultsUpdated()),
+                     g_resultsWindow, SLOT(resultsUpdated()));
 
     setCentralWidget(splitter);
 
@@ -143,6 +151,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
 CSGWindow::~CSGWindow()
 {
     delete controller;
+    delete g_vsWidget;
+    delete g_resultsWindow;
 }
 
 void CSGWindow::showViewSettings()
@@ -150,4 +160,11 @@ void CSGWindow::showViewSettings()
     g_vsWidget->show();
     g_vsWidget->raise();
     g_vsWidget->activateWindow();
+}
+
+void CSGWindow::showResultsWindow()
+{
+    g_resultsWindow->show();
+    g_resultsWindow->raise();
+    g_resultsWindow->activateWindow();
 }

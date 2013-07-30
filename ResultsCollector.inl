@@ -143,6 +143,16 @@ public:
         m_children.clear();
     }
 
+    
+    template<typename Visitor>
+    void dfs(Visitor &v) {
+        for (std::pair<const std::string, ResultTree *> &c : m_children) {
+            v.preVisit(c.first);
+            c.second->dfs(v);
+            v.postVisit();
+        }
+    }
+
     int indexOfChild(const ResultTree *c) const {
         int pos = 0;
         for (const auto &entryPair : m_children) {
@@ -273,6 +283,9 @@ addSettings(const std::string &nameSuggestion, const AnalysisSettings &settings)
 template<typename Generator>
 void ResultsCollector<Generator>::clean()
 {
+    // TODO: Also remove entries from m_models_settings_collection and
+    //       m_settings_models_collection.
+
     // Delete non-existent models
     for (auto it = m_models.begin(); it != m_models.end(); /* nop */) {
         const std::string &name = it->first;
