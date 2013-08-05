@@ -9,69 +9,50 @@
 //  Created:  07/29/2013 19:31:19
 ////////////////////////////////////////////////////////////////////////////////
 #include "ResultsWindow.hh"
-#include "MeshlessFEM.hh"
-#include "ResultsCollector.hh"
+#include "ResultTreeView.hh"
+#include "ResultsWindowController.hh"
 
-#include <QTreeWidget>
+#include <QPushButton>
 #include <QHeaderView>
-#include <QList>
 #include <QVBoxLayout>
-#include <stack>
-#include <cassert>
+#include <QHBoxLayout>
+
+using namespace std;
 
 ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     : QWidget(parent), m_resultsCollection(rc)
 {
-    setWindowTitle("Results");
+    m_controller = new ResultsWindowController(*this);
+
+    setWindowTitle("Results Browser");
     QVBoxLayout *layout = new QVBoxLayout();
-    g_treeView = new QTreeWidget();
+    g_treeView = new ResultTreeView();
     g_treeView->setColumnCount(1);
     g_treeView->header()->close();
+    g_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    g_deleteButton = new QPushButton("Delete Selection");
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->addWidget(g_deleteButton);
+
     layout->addWidget(g_treeView);
+    layout->addLayout(buttonLayout);
+    layout->setContentsMargins(0, 0, 0, 0);
     setLayout(layout);
-    resultsUpdated();
-}
 
-class TreeWidgetItemGenerator {
-public:
-    void preVisit(const std::string &name) {
-        QTreeWidgetItem *newItem = NULL;
-        if (!m_parentStack.empty()) {
-            newItem = new QTreeWidgetItem(m_parentStack.top(),
-                    QStringList(QString::fromStdString(name)));
-        }
-        else {
-            newItem = new QTreeWidgetItem((QTreeWidgetItem *) NULL,
-                    QStringList(QString::fromStdString(name)));
-        }
-        m_parentStack.push(newItem);
-        items.append(newItem);
-    }
+    QObject::connect(g_treeView, SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)),
+                     m_controller, SLOT(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)));
+    QObject::connect(g_treeView, SIGNAL(itemSelectionChanged()),
+                     m_controller, SLOT(itemSelectionChanged()));
+    QObject::connect(g_treeView, SIGNAL(itemActivated(QTreeWidgetItem *, int)),
+                     m_controller, SLOT(itemActivated(QTreeWidgetItem *, int)));
+    QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
+                     m_controller, SLOT(itemChanged(QTreeWidgetItem *, int)));
 
-    void postVisit() {
-        assert(!m_parentStack.empty());
-        m_parentStack.pop();
-    }
-
-    // Note, these will be owned by the tree view, so they needn't be cleaned up
-    // by a destructor.
-    QList<QTreeWidgetItem *> items;
-
-private:
-    std::stack<QTreeWidgetItem *> m_parentStack;
-};
-
-void ResultsWindow::resultsUpdated()
-{
-    // TODO: perform tree diff and make minimal changes.
-    g_treeView->clear();
-
-    TreeWidgetItemGenerator tgen;
-    m_resultsCollection.dfs(ResultsCollector_t::KEY_ORDER_MODEL_SETTINGS, tgen);
-    g_treeView->insertTopLevelItems(0, tgen.items);
+    m_controller->resultsUpdated();
 }
 
 ResultsWindow::~ResultsWindow()
 {
-
+    delete m_controller;
 }

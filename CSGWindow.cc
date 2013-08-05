@@ -128,7 +128,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     QObject::connect(g_vsWidget, SIGNAL(viewSettingsUpdated()),
                      femView, SLOT(viewSettingsUpdated()));
     QObject::connect(controller, SIGNAL(resultsUpdated()),
-                     g_resultsWindow, SLOT(resultsUpdated()));
+                     g_resultsWindow->controller(), SLOT(resultsUpdated()));
 
     setCentralWidget(splitter);
 

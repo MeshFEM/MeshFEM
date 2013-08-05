@@ -17,8 +17,42 @@
 #include <cassert>
 #include <sstream>
 #include <string>
+#include <ctype.h>
+#include <cstdlib>
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Compare c-strings containing positive integers in a reasonable way.
+//  @param[in]  a, b        strings to compare
+//  @return     positive if a > b, negative if a < b, 0 if a == b.
+*///////////////////////////////////////////////////////////////////////////////
+inline int strcmp_nat(const char *a, const char *b) {
+    while ((*a != 0) || (*b != 0)) {
+        int ca = tolower(*a), cb = tolower(*b);
+        if (isdigit(ca) && isdigit(cb)) {
+            int ia = atoi(a), ib = atoi(b);
+            if (ia != ib) return ia - ib;
+            while (isdigit(*++a)); // Scan past a digits
+            while (isdigit(*++b)); // Scan past b digits
+        }
+        else {
+            if (ca != cb) return ca - cb;
+            ++a, ++b;
+        }
+    }
+
+    return 0;
+}
+
+struct NaturalLess {
+    bool operator()(const std::string &a, const std::string &b) {
+        return (strcmp_nat(a.c_str(), b.c_str()) < 0);
+    }
+    bool operator()(const char *a, const char *b) {
+        return (strcmp_nat(a, b) < 0);
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Generate a permutation that puts a collection of values in sorted order:

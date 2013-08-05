@@ -147,7 +147,7 @@ public:
     template<typename Visitor>
     void dfs(Visitor &v) {
         for (std::pair<const std::string, ResultTree *> &c : m_children) {
-            v.preVisit(c.first);
+            v.preVisit(c.first, c.second->hasResult());
             c.second->dfs(v);
             v.postVisit();
         }
@@ -215,13 +215,13 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     Result *m_result;
     ResultTree *m_parent;
-    std::map<std::string, ResultTree *> m_children;
+    std::map<std::string, ResultTree *, NaturalLess> m_children;
 };
 
 template<typename T>
 inline std::string addNamedEntry(const std::string &nameSuggestion,
-                                 std::map<std::string, T> &collection,
-                                 const T &entry)
+             std::map<std::string, T> &collection,
+             const T &entry)
 {
     std::string name = nameSuggestion;
 

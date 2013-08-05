@@ -12,24 +12,29 @@
 #define RESULTS_WINDOW_HH
 
 #include <QWidget>
+#include <map>
 #include "GlobalTypes.hh"
+#include "ResultsWindowController.hh"
 
-class QTreeWidget;
+class ResultTreeView;
+class QPushButton;
 
 class ResultsWindow : public QWidget
 {
     Q_OBJECT
 
-public slots:
-    void resultsUpdated();
-
 public:
     ResultsWindow(ResultsCollector_t &rc, QWidget *parent = NULL);
+    ResultsWindowController *controller() { return m_controller; }
     ~ResultsWindow();
 
 private:
+    ResultsWindowController *m_controller;
     ResultsCollector_t &m_resultsCollection;
-    QTreeWidget *g_treeView;
+    ResultTreeView *g_treeView;
+    QPushButton *g_deleteButton;
+
+    friend class ResultsWindowController;
 };
 
 #endif // RESULTS_WINDOW_HH

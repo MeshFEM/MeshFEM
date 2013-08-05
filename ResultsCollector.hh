@@ -23,6 +23,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <boost/algorithm/string.hpp>
+#include "utils.hh"
 #include "AnalysisSettings.hh"
 
 
@@ -83,7 +84,8 @@ public:
         }
     }
 
-    // Path consists of model_name:settings_name:name
+    // Path always has the format model_name:settings_name:name
+    // (Despite the fact DFS can visit in settings:model order).
     const Result *getResultWithPath(const std::string &path) const {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, path, boost::is_any_of(":"));
@@ -107,7 +109,6 @@ public:
         return sit->second.getResult(it, nameComponents.end());
     }
 
-
     ////////////////////////////////////////////////////////////////////////////
     /*! Get a result from the the collection (for the currently selected model
     //  and settings).
@@ -117,6 +118,14 @@ public:
     const Result *getResult(const std::string &name) const {
         return getResultWithPath(m_selectedModel + ":" + m_selectedSettings +
                                  ":" + name);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Get the path of the last result inserted.
+    //  @return     string holding the path of the last result inserted
+    *///////////////////////////////////////////////////////////////////////////
+    std::string lastResultPath() const {
+        return m_lastResult;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -153,6 +162,10 @@ public:
     *///////////////////////////////////////////////////////////////////////////
     void clean();
 
+    // Visit each node of the result collection tree. Visitor's preVisit takes
+    // two arguments:
+    //  1) Node name (std::string)
+    //  2) whether this node holds a result (bool)
     template<typename Visitor>
     void dfs(KeyOrder order, Visitor &v) {
         auto &topLevel = (order == KEY_ORDER_MODEL_SETTINGS) ?
@@ -160,10 +173,10 @@ public:
                         m_settings_models_collection;
 
         for (auto &e1 : topLevel) {
-            v.preVisit(e1.first);
-            std::map<std::string, ResultTree *> &scollection = e1.second;
+            v.preVisit(e1.first, false);
+            std::map<std::string, ResultTree *, NaturalLess> &scollection = e1.second;
             for (auto &e2 : scollection) {
-                v.preVisit(e2.first);
+                v.preVisit(e2.first, false);
                 ResultTree *t = e2.second;
                 t->dfs(v);
                 v.postVisit();
@@ -175,7 +188,7 @@ public:
     void clear() {
         // Destroy this collection's dynamically allocated contents
         for (auto &entry : m_models_settings_collection) {
-            std::map<std::string, ResultTree *> &scollection = entry.second;
+            std::map<std::string, ResultTree *, NaturalLess> &scollection = entry.second;
             for (auto &e2 : scollection) {
                 ResultTree *t = e2.second;
                 delete t;
@@ -186,6 +199,7 @@ public:
         m_settings.clear();
         m_models_settings_collection.clear();
         m_settings_models_collection.clear();
+        m_lastResult.clear();
     }
 
     void print() const {
@@ -206,9 +220,9 @@ public:
 private:
     std::map<std::string, RModel> m_models;
     std::map<std::string, AnalysisSettings> m_settings;
-    std::map<std::string, std::map<std::string, ResultTree *> > 
-                m_models_settings_collection;
-    std::map<std::string, std::map<std::string, ResultTree *> >
+    std::map<std::string, std::map<std::string, ResultTree *, NaturalLess>, NaturalLess> 
+                m_models_settings_collection;                            
+    std::map<std::string, std::map<std::string, ResultTree *, NaturalLess>, NaturalLess>
                 m_settings_models_collection;
 
     std::string m_selectedModel, m_selectedSettings;
