@@ -18,7 +18,8 @@
 AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                            CSGWindowController *controller,
                            SolverLibrary<Scalar> &solvers, QWidget *parent)
-    : QWidget(parent), m_settings(settings), m_solvers(solvers)
+    : QWidget(parent), m_settings(settings), m_solvers(solvers),
+      m_settingGUIFromSettings(false)
 {
     // Construct all widgets
     g_solverSelector = new QComboBox();
@@ -314,6 +315,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 }
 
 void AnalysisForm::m_setGUIFromSettings() {
+    m_settingGUIFromSettings = true;
+
     m_solvers.selectSolver(m_settings.solver);
     g_solverSelector->setCurrentIndex(m_solvers.selectedIndex());
     g_nxStepper->setValue(m_settings.Nx);
@@ -356,9 +359,17 @@ void AnalysisForm::m_setGUIFromSettings() {
         g_xTranslationStepper->setEnabled(false);
         g_yTranslationStepper->setEnabled(false);
     }
+
+    m_settingGUIFromSettings = false;
 }
 
 void AnalysisForm::m_readSettingsFromGUI() {
+    // Never read settings from the gui controls while we're setting the GUI
+    // controls... (Setting the controls will spawn signals that in turn call
+    // this function).
+    if (m_settingGUIFromSettings)
+        return;
+
     m_solvers.selectSolver(g_solverSelector->currentIndex());
     m_settings.solver = m_solvers.selectedName();
     m_settings.Nx = g_nxStepper->value();
@@ -532,4 +543,8 @@ void AnalysisForm::frtestButtonClicked() {
 
 void AnalysisForm::reftestButtonClicked() {
     emit runRefinementTest(m_settings);
+}
+
+void AnalysisForm::reloadSettings() {
+    m_setGUIFromSettings();
 }

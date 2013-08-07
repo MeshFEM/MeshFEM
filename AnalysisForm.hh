@@ -34,6 +34,7 @@ public:
 public slots:
     void modesUpdated(const MeshlessFEM_t *fem);
     void weakRegionsUpdated(const MeshlessFEM_t *fem);
+    void reloadSettings();
 
 private slots:
     void solverControlsChanged(int);
@@ -121,5 +122,6 @@ private:
 
     void m_setGUIFromSettings();
     void m_readSettingsFromGUI();
+    bool m_settingGUIFromSettings;
 };
 #endif // ANALYSIS_FORM_HH

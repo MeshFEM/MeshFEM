@@ -130,6 +130,12 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     QObject::connect(controller, SIGNAL(resultsUpdated()),
                      g_resultsWindow->controller(), SLOT(resultsUpdated()));
 
+    QObject::connect(g_resultsWindow->controller(),
+                     SIGNAL(resultSelected(const std::string &)),
+                     controller, SLOT(resultSelected(const std::string &)));
+    QObject::connect(controller, SIGNAL(reloadSettings()),
+                     analysisForm, SLOT(reloadSettings()));
+
     setCentralWidget(splitter);
 
     QToolBar *tb = new QToolBar("Mouse Mode");

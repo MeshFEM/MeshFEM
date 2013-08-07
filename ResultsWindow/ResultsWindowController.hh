@@ -31,6 +31,9 @@ public slots:
 
     void resultsUpdated();
     void selectResult(const std::string &path);
+
+signals:
+    void resultSelected(const std::string &path);
     
 public:
     ResultsWindowController(ResultsWindow &window)

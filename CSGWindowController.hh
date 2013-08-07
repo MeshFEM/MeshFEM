@@ -77,6 +77,8 @@ public slots:
     void runFunctionRadiusTest(const AnalysisSettings &settings);
     void runRefinementTest(const AnalysisSettings &settings);
 
+    void resultSelected(const std::string &path);
+
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =
@@ -85,6 +87,7 @@ signals:
     void modesUpdated(const MeshlessFEM_t *fem);
     void weakRegionsUpdated(const MeshlessFEM_t *fem);
     void resultsUpdated();
+    void reloadSettings();
     
 private:
     void prepareResultsCollector();

@@ -5,11 +5,15 @@
 //        Collects CSGFEM simulation/weakness analysis results for different
 //        models/settings.
 //
+//        Results are identified using a colon-separated "path" of the format:
+//              model_name:settings_name:result_name
+//        where colons in result_name allow results to be organized in
+//        "folders."
+//
 //        Also stores copies of the distinct model and settings used to
 //        generate the results. Only those models and settings that actually
 //        have results attached are kept (though the selected model is never
 //        removed because results may be added to it).
-//        
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -26,6 +30,22 @@
 #include "utils.hh"
 #include "AnalysisSettings.hh"
 
+////////////////////////////////////////////////////////////////////////////////
+// Path operations
+////////////////////////////////////////////////////////////////////////////////
+inline std::string getModelPathComponent(const std::string &path) {
+    std::vector<std::string> nameComponents;
+    boost::split(nameComponents, path, boost::is_any_of(":"));
+    assert(nameComponents.size() > 1);
+    return nameComponents[0];
+}
+
+inline std::string getSettingsPathComponent(const std::string &path) {
+    std::vector<std::string> nameComponents;
+    boost::split(nameComponents, path, boost::is_any_of(":"));
+    assert(nameComponents.size() > 1);
+    return nameComponents[1];
+}
 
 template<typename Generator>
 class ResultsCollector {
@@ -58,6 +78,15 @@ public:
         m_selectedSettings = name;
     }
 
+    bool modelDiffers(const std::string &name, const Model &model,
+                      const BBox_t &gridBBox) const {
+        auto model_it = m_models.find(name);
+        if (model_it == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + name);
+        return !((model == model_it->second.first) &&
+                 (gridBBox == model_it->second.second));
+    }
+
     void getModel(const std::string &name, Model &model,
                   BBox_t &gridBBox) const {
         auto model_it = m_models.find(name);
@@ -65,6 +94,22 @@ public:
             throw std::runtime_error(std::string("model not found: ") + name);
         model = model_it->second.first;
         gridBBox = model_it->second.second;
+    }
+
+    void getSettings(const std::string &name, AnalysisSettings &settings) const
+    {
+        auto settings_it = m_settings.find(name);
+        if (settings_it == m_settings.end())
+            throw std::runtime_error(std::string("settings not found: ") + name);
+        settings = settings_it->second;
+    }
+
+    bool settingsDiffer(const std::string &name,
+                        const AnalysisSettings &settings) const {
+        auto settings_it = m_settings.find(name);
+        if (settings_it == m_settings.end())
+            throw std::runtime_error(std::string("settings not found: ") + name);
+        return !(settings == settings_it->second);
     }
 
     // Gets a reference to the currently selected model

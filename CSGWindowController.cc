@@ -729,3 +729,21 @@ runRefinementTest(const AnalysisSettings &settings)
     m_fem.configureElements(settings);
     m_fem.setPressures(pressures);
 }
+
+void CSGWindowController::resultSelected(const string &resultPath)
+{
+    std::string modelName = getModelPathComponent(resultPath);
+    std::string settingsName = getSettingsPathComponent(resultPath);
+
+    BBox_t bbox = m_fem.elementGrid().getBoudingBox();
+    if (m_results.modelDiffers(modelName, m_fem.model(), bbox)) {
+        m_results.getModel(modelName, m_fem.model(), bbox);
+        m_fem.elementGrid().setBoundingBox(bbox);
+        modelChanged(false);
+    }
+
+    if (m_results.settingsDiffer(settingsName, m_settings)) {
+        m_results.getSettings(settingsName, m_settings);
+        emit reloadSettings();
+    }
+}

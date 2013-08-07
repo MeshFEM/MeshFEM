@@ -92,6 +92,12 @@ void ResultsWindowController::selectResult(QTreeWidgetItem *item)
             QFont font = item->font(0);
             font.setBold(true);
             item->setFont(0, font);
+
+            ResultTreeWidgetItem *ri =
+                dynamic_cast<ResultTreeWidgetItem *>(item);
+            assert(ri);
+
+            emit resultSelected(ri->path());
         }
 
         m_currentResultItem = item;
