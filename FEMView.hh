@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <FTGL/ftgl.h>
 
 #include <OpenGL/OpenGL.h>
@@ -27,6 +28,7 @@ extern "C" {
 
 #include "GlobalTypes.hh"
 #include "MeshlessFEM.hh"
+#include "ResultsCollector.hh"
 #include "ViewSettings.hh"
 #include "colors.hh"
 
@@ -35,13 +37,12 @@ class FEMView2D : public QGLWidget
     Q_OBJECT
 
 public:
-    typedef enum {MODEL_STATE = 0, ELEMENTS_STATE = 1,
-                  SIM_SETUP_STATE = 2, SIM_RESULT_STATE = 3,
-                  FORCES_STATE = 4, MODE_STATE = 5, WEAK_REGION_STATE = 6,
-                  COMBINED_WEAKNESS_STATE = 7 }
-            GUIState;
+    typedef enum { MODEL_STATE = 0, ELEMENTS_STATE = 1,
+                   PRESSURE_DRAW_STATE = 2, RESULT_STATE = 3 } GUIState;
+
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
+    typedef ResultsCollector_t::Result Result;
 
     FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
               QWidget *parent = NULL);
@@ -62,16 +63,32 @@ public:
             CALL_CL_GUARDED(clReleaseMemObject, (m_overlayTexBuf));
     }
 
+    bool isVibrating() const {
+        return (m_guiState == RESULT_STATE) &&
+               (m_result) && (m_result->hasNodeVField()) && 
+               (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE);
+    }
+
     void setGUIState(GUIState state) {
         m_guiState = state;
         m_gesture = NONE;
         update();
 
-        if (m_guiState == MODE_STATE) {
+        if (isVibrating()) {
             m_timer.start(1000.0 / 60, this);
         }
         else {
             m_timer.stop();
+        }
+    }
+
+    void displayResult(std::shared_ptr<const Result> r) {
+        m_result = r;
+        if (m_result) {
+            setGUIState(RESULT_STATE);
+        }
+        else if (m_guiState == RESULT_STATE) {
+            setGUIState(ELEMENTS_STATE);
         }
     }
 
@@ -83,16 +100,6 @@ public:
         m_pressurePaintValue = value;
     }
 
-    void selectDeformation(size_t i) {
-        assert(i < m_fem.numModes());
-        m_selectedDeformation = i;
-    }
-
-    void selectWeakRegion(size_t i) {
-        assert(i < m_fem.numWeakRegions());
-        m_selectedWeakRegion = i;
-    }
-    
 public slots:
     void csgNodesSelected(const NodeList &nList);
     void viewSettingsUpdated();
@@ -207,7 +214,15 @@ private:
     void m_clRenderCSGNode(CSGNode *node, cl_mem texBuf, const QColor &fg);
 
     typedef enum {DRAW_CELLS, DRAW_NODES, DRAW_EDGES} DrawOp;
-    void drawObjectTextureCells(const VField &deformation = VField(),
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Draw all elements textured with a rendering of the element's part of the
+    //  model. Also, color with the passed scalar field, if available.
+    //  @param[in]  deformation     optional per-node displacement
+    //  @param[in]  elemScalarField optional per-elem scalar field for shading
+    //  @return     true if shading was done (and color legend is needed)
+    *///////////////////////////////////////////////////////////////////////////
+    bool drawObjectTextureCells(const VField &deformation = VField(),
                   const SField &elemScalarField = SField());
     void drawGrid(DrawOp op, const VField &deformation = VField(),
                   const SField &elemScalarField = SField());
@@ -215,6 +230,8 @@ private:
             const QColor &color = QColor(0, 0, 0),
             const QColor &selColor = QColor(0, 255, 0));
     void draw();
+    bool m_drawResult();
+    bool m_drawElements();
     void m_drawObject();
     void m_drawSelectedObjects();
     void m_rerenderObject();
@@ -242,8 +259,7 @@ private:
 
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
-    size_t m_selectedDeformation;
-    size_t m_selectedWeakRegion;
+    std::shared_ptr<const Result> m_result;
 
     size_t m_selectedBoundaryPoint;
     Scalar m_pressurePaintValue;

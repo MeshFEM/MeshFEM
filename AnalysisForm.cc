@@ -46,9 +46,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_numModesStepper = new QSpinBox();
     g_laplacianModesCheck = new QCheckBox();
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
-    g_dumpModalDataButton = new QPushButton("Dump Modal Data (.msh)");
-    g_dumpModalDataButton->setEnabled(false);
-    g_modeSelector = new QComboBox();
 
     g_useMarchingSquaresCheck = new QCheckBox();
     g_boundaryPointStepper = new QDoubleSpinBox();
@@ -71,7 +68,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_numWeakRegionsStepper = new QSpinBox();
     g_weaknessCutoffStepper = new QDoubleSpinBox();
     g_weakRegionExtractionButton = new QPushButton("Extract Weak Regions");
-    g_weakRegionSelector = new QComboBox();
     g_pressureBoundStepper = new QDoubleSpinBox();
     g_forceBoundStepper = new QDoubleSpinBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
@@ -91,9 +87,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_forceTranslationTestButton = new QPushButton("Force Translation Test");
     g_functionRadiusTestButton = new QPushButton("Function Radius Test");
     g_refinementTestButton = new QPushButton("Refinement Test");
-
-    modesUpdated(NULL);
-    weakRegionsUpdated(NULL);
 
     QGroupBox *solverGroup = new QGroupBox("Solvers");
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
@@ -142,8 +135,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_numModesStepper->setMinimum(1);
     g_numModesStepper->setMaximum(50);
     modalForm->addRow(g_modalAnalysisButton);
-    modalForm->addRow(g_dumpModalDataButton);
-    modalForm->addRow(g_modeSelector);
     modalAnalysisGroup->setLayout(modalForm);
 
     // Simulation
@@ -169,7 +160,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     weakForm->addRow("Weak Regions/Mode", g_numWeakRegionsStepper);
     weakForm->addRow("Weak Region Cutoff", g_weaknessCutoffStepper);
     weakForm->addRow(g_weakRegionExtractionButton);
-    weakForm->addRow(g_weakRegionSelector);
     weakForm->addRow("Pressure Bound", g_pressureBoundStepper);
     weakForm->addRow("Total Force Bound", g_forceBoundStepper);
     weakForm->addRow("Equalize Weakness", g_equalizeCombinedWeaknessCheck);
@@ -219,14 +209,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_modalAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runModalAnalysis()));
-    QObject::connect(g_dumpModalDataButton, SIGNAL(clicked()),
-                     controller, SLOT(dumpModalData()));
     QObject::connect(g_numModesStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(modalAnalysisControlsChanged(int)));
     QObject::connect(g_laplacianModesCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(modalAnalysisControlsChanged(int)));
-    QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
-                     controller, SLOT(modeSelectionChanged(int)));
 
     QObject::connect(g_useMarchingSquaresCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(boundaryPointControlsChanged(int)));
@@ -252,8 +238,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
     QObject::connect(g_weakRegionExtractionButton, SIGNAL(clicked()),
                      controller, SLOT(runWeakRegionExtraction()));
-    QObject::connect(g_weakRegionSelector, SIGNAL(currentIndexChanged(int)),
-                     controller, SLOT(weakRegionSelectionChanged(int)));
     QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runWeaknessAnalysis()));
     QObject::connect(g_pressureBoundStepper, SIGNAL(valueChanged(double)),
@@ -262,11 +246,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
     QObject::connect(g_equalizeCombinedWeaknessCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(weaknessAnalysisControlsChanged(int)));
-
-    QObject::connect(g_modeSelector, SIGNAL(currentIndexChanged(int)),
-                     this, SLOT(someSelectorChanged(int)));
-    QObject::connect(g_weakRegionSelector, SIGNAL(currentIndexChanged(int)),
-                     this, SLOT(someSelectorChanged(int)));
 
     QObject::connect(g_optimizeShapeButton, SIGNAL(clicked()),
                      controller, SLOT(runShapeOptimization()));
@@ -407,46 +386,6 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.yTranslation = g_yTranslationStepper->value();
 }
 
-void AnalysisForm::modesUpdated(const MeshlessFEM_t *fem) {
-    size_t numModes = (fem != NULL) ? fem->numModes() : 0;
-    g_modeSelector->clear();
-    g_modeSelector->addItem("Select Mode");
-
-    if (numModes > 0) {
-        QString label;
-        for (size_t m = 0; m < numModes; ++m) {
-            Scalar lambda = fem->eigenvalue(m);
-            label.sprintf("Mode %i (Lambda = %f)", (int) m, (float) lambda);
-            g_modeSelector->addItem(label);
-        }
-        g_modeSelector->setEnabled(true);
-        g_dumpModalDataButton->setEnabled(true);
-    }
-    else {
-        g_modeSelector->setEnabled(false);
-        g_dumpModalDataButton->setEnabled(false);
-    }
-}
-
-void AnalysisForm::weakRegionsUpdated(const MeshlessFEM_t *fem) {
-    size_t numWeakRegions = (fem != NULL) ? fem->numWeakRegions() : 0;
-    /// std::cout << "weak regions updated (now there are " << numWeakRegions << ")" << std::endl;
-    g_weakRegionSelector->clear();
-    g_weakRegionSelector->addItem("Select Weak Region");
-
-    if (numWeakRegions > 0) {
-        QString label;
-        for (size_t r = 0; r < numWeakRegions; ++r) {
-            label.sprintf("Region %i", (int) r);
-            g_weakRegionSelector->addItem(label);
-        }
-        g_weakRegionSelector->setEnabled(true);
-    }
-    else {
-        g_weakRegionSelector->setEnabled(false);
-    }
-}
-
 void AnalysisForm::solverControlsChanged(int) {
     m_readSettingsFromGUI();
     // Changing the solver doesn't invalidate anything, so we needn't emit a
@@ -495,22 +434,6 @@ void AnalysisForm::weaknessAnalysisControlsChanged(int) {
 void AnalysisForm::weaknessAnalysisControlsChanged(double) {
     m_readSettingsFromGUI();
     emit weaknessAnalysisSettingsChanged(m_settings);
-}
-
-// We want the mode/weak region selector combo boxes to be mutually exclusive.
-void AnalysisForm::someSelectorChanged(int newIdx) {
-    // We only might need to enforce mutual exclusion when an actual selection
-    // is made.
-    if (newIdx == 0)
-        return;
-    QComboBox *selector = dynamic_cast<QComboBox *>(QObject::sender());
-    assert(selector);
-    if (selector == g_modeSelector) {
-        g_weakRegionSelector->setCurrentIndex(0);
-    }
-    if (selector == g_weakRegionSelector) {
-        g_modeSelector->setCurrentIndex(0);
-    }
 }
 
 void AnalysisForm::ttestControlsChanged(int) {

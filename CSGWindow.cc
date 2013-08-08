@@ -121,10 +121,6 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      SIGNAL(weaknessAnalysisSettingsChanged(const AnalysisSettings &)),
                      controller,
                      SLOT(weaknessAnalysisSettingsChanged(const AnalysisSettings &)));
-    QObject::connect(controller, SIGNAL(modesUpdated(const MeshlessFEM_t *)),
-                     analysisForm, SLOT(modesUpdated(const MeshlessFEM_t *)));
-    QObject::connect(controller, SIGNAL(weakRegionsUpdated(const MeshlessFEM_t *)),
-                     analysisForm, SLOT(weakRegionsUpdated(const MeshlessFEM_t *)));
     QObject::connect(g_vsWidget, SIGNAL(viewSettingsUpdated()),
                      femView, SLOT(viewSettingsUpdated()));
     QObject::connect(controller, SIGNAL(resultsUpdated()),

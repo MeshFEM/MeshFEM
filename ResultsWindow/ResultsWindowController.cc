@@ -13,6 +13,7 @@
 #include <cassert>
 #include <string>
 #include <stack>
+#include <memory>
 #include <QList>
 #include <stdexcept>
 
@@ -29,7 +30,7 @@ using namespace std;
 class ResultTreeWidgetItem : public QTreeWidgetItem
 {
 public:
-    ResultTreeWidgetItem(ResultsWindowController &controller,
+    ResultTreeWidgetItem(shared_ptr<ResultsWindowController> controller,
             QTreeWidgetItem *parent, const QStringList &strings,
             int type = QTreeWidgetItem::Type)
         : QTreeWidgetItem(parent, strings, type), m_controller(controller) { }
@@ -44,20 +45,14 @@ public:
     }
 
     ~ResultTreeWidgetItem() {
-        m_controller.itemDeleted(this);
+        shared_ptr<ResultsWindowController> c = m_controller.lock();
+        if (c) {
+            c->itemDeleted(this);
+        }
     }
 private:
-    ResultsWindowController &m_controller;
+    weak_ptr<ResultsWindowController> m_controller;
 };
-
-void ResultsWindowController::currentItemChanged(QTreeWidgetItem *current,
-                                                 QTreeWidgetItem *previous)
-{
-}
-
-void ResultsWindowController::itemSelectionChanged()
-{
-}
 
 // Select the result with a particular path.
 void ResultsWindowController::selectResult(const string &path)
@@ -157,8 +152,10 @@ public:
     //  @param[in]  modelMajorDFS   whether the DFS will visit model nodes first
     //                              (as opposed to setting nodes)
     *///////////////////////////////////////////////////////////////////////////
-    TreeWidgetItemGenerator(ResultsWindowController &c, bool modelMajorDFS)
+    TreeWidgetItemGenerator(shared_ptr<ResultsWindowController> c,
+                            bool modelMajorDFS)
         : m_controller(c), m_modelMajorDFS(modelMajorDFS) { }
+
     void preVisit(const string &name, bool hasResult) {
         ResultTreeWidgetItem *newItem = NULL;
         QTreeWidgetItem *p = m_parentStack.empty() ? NULL : m_parentStack.top();
@@ -195,7 +192,7 @@ public:
     QList<QTreeWidgetItem *> items;
 
 private:
-    ResultsWindowController &m_controller;
+    shared_ptr<ResultsWindowController> m_controller;
     stack<ResultTreeWidgetItem *> m_parentStack;
     QStringList m_pathStack;
     bool m_modelMajorDFS;
@@ -205,7 +202,7 @@ void ResultsWindowController::resultsUpdated()
 {
     m_window.g_treeView->clear();
 
-    TreeWidgetItemGenerator tgen(*this, true);
+    TreeWidgetItemGenerator tgen(m_window.m_controller, true);
     m_window.m_resultsCollection.dfs(
             ResultsCollector_t::KEY_ORDER_MODEL_SETTINGS, tgen);
     foreach(QTreeWidgetItem *i, tgen.items) {

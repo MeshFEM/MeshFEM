@@ -10,7 +10,7 @@ INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson
 INCLUDEPATH += . /opt/local/include /opt/local/include/freetype2
 INCLUDEPATH += /Applications/MATLAB_R2013a.app/extern/include/
 LIBS += -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
-LIBS += -L/opt/local/lib -lqjson -lftgl -lboost_regex
+LIBS += -L/opt/local/lib -lqjson -lftgl
 # Bring in umfpack and dependencies (BLAS)
 LIBS += -lumfpack -lSuiteSparse -framework Accelerate
 LIBS += -L/Library/gurobi550/mac64/lib/ -lgurobi55
@@ -22,6 +22,13 @@ QT += opengl
 CONFIG += release
 # CONFIG += debug
 
+# # clang++ version
+# QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++
+# QMAKE_CXXFLAGS += -isystem /opt/local/
+# QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
+# LIBS += -stdlib=libc++
+
+# g++ version:
 QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=gnu++11
 QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
 

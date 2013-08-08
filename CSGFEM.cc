@@ -18,7 +18,28 @@
 #include <map>
 #include <string>
 
+#include <iostream>
+#include <stdexcept>
+
 using namespace std;
+
+class MyApplication : public QApplication
+{
+public:
+    MyApplication(int &argc, char **argv)
+        : QApplication(argc, argv) { }
+
+    bool notify(QObject *receiver, QEvent *event) {
+        bool done = true;
+        try {
+            done = QApplication::notify(receiver, event);
+        }
+        catch (const exception &ex) {
+            cout << "Exception caught during signal: " << ex.what() << endl;
+        }
+        return done;
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
@@ -28,7 +49,7 @@ using namespace std;
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    MyApplication app(argc, argv);
     CSGTree_t csgTree;
     AnalysisSettings settings;
 

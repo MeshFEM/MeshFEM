@@ -19,8 +19,8 @@
 #include <string>
 #include <ctype.h>
 #include <cstdlib>
+#include <regex>
 #include <boost/format.hpp>
-#include <boost/regex.hpp>
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Compare c-strings containing positive integers in a reasonable way.
@@ -46,10 +46,10 @@ inline int strcmp_nat(const char *a, const char *b) {
 }
 
 struct NaturalLess {
-    bool operator()(const std::string &a, const std::string &b) {
+    bool operator()(const std::string &a, const std::string &b) const {
         return (strcmp_nat(a.c_str(), b.c_str()) < 0);
     }
-    bool operator()(const char *a, const char *b) {
+    bool operator()(const char *a, const char *b) const {
         return (strcmp_nat(a, b) < 0);
     }
 };
@@ -91,9 +91,9 @@ std::string uniqueName(std::string suggestion, const Collection &names)
         return suggestion;
 
     // Trim any potential (#) suffix from the suggested name
-    boost::regex pattern("(.*)\\s\\([0-9]+\\)$");
-    boost::smatch match;
-    if (boost::regex_search(suggestion, match, pattern)) {
+    std::regex pattern("(.*)\\s\\([0-9]+\\)$");
+    std::smatch match;
+    if (std::regex_search(suggestion, match, pattern)) {
         suggestion = std::string(match[1].first, match[1].second);
     }
 

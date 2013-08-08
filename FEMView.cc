@@ -49,7 +49,8 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
       m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
-      m_fem(fem), m_selectedBoundaryPoint(-1LL), m_pressurePaintValue(0.1),
+      m_fem(fem), m_result(NULL),
+      m_selectedBoundaryPoint(-1LL), m_pressurePaintValue(0.1),
       m_guiState(MODEL_STATE), m_gesture(NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
@@ -273,12 +274,12 @@ struct CSGTreeFlattener {
             CSGRectangleNode *r = dynamic_cast<CSGRectangleNode *>(node);
             assert(r);
             Vector dim = .5 * r->getDimensions();
-            p.center.x        = r->getCenter()[0];
-            p.center.y        = r->getCenter()[1];
-            p.rect.half_dim.x = dim[0];
-            p.rect.half_dim.y = dim[1];
-            p.rect.rotationCosSin.x = cos(-r->getRotationRad());
-            p.rect.rotationCosSin.y = sin(-r->getRotationRad());
+            p.center.s[0]        = r->getCenter()[0];
+            p.center.s[1]        = r->getCenter()[1];
+            p.rect.half_dim.s[0] = dim[0];
+            p.rect.half_dim.s[1] = dim[1];
+            p.rect.rotationCosSin.s[0] = cos(-r->getRotationRad());
+            p.rect.rotationCosSin.s[1] = sin(-r->getRotationRad());
         }
 
         else if (type == CSG_NODE_ELLIPSE) {
@@ -287,10 +288,10 @@ struct CSGTreeFlattener {
             CSGEllipseNode *e = dynamic_cast<CSGEllipseNode *>(node);
             assert(e);
             Vector focus = e->getFocus();
-            p.center.x                   = e->getCenter()[0];
-            p.center.y                   = e->getCenter()[1];
-            p.ellipse.focus.x            = focus[0];
-            p.ellipse.focus.y            = focus[1];
+            p.center.s[0]                   = e->getCenter()[0];
+            p.center.s[1]                   = e->getCenter()[1];
+            p.ellipse.focus.s[0]            = focus[0];
+            p.ellipse.focus.s[1]            = focus[1];
             p.ellipse.double_majorRadius = 2.0 * e->getMajorRadius();
         }
     }
@@ -436,7 +437,14 @@ void FEMView2D::m_drawWorldVertex(const Vector &v)
     glVertex2f(x, y);
 }
 
-void FEMView2D::drawObjectTextureCells(const VField &deformation,
+////////////////////////////////////////////////////////////////////////////////
+/*! Draw all elements textured with a rendering of the element's part of the
+//  model. Also, color with the passed scalar field, if available.
+//  @param[in]  deformation     optional per-node displacement
+//  @param[in]  elemScalarField optional per-elem scalar field for shading
+//  @return     true if shading was done (and color legend is needed)
+*///////////////////////////////////////////////////////////////////////////////
+bool FEMView2D::drawObjectTextureCells(const VField &deformation,
                          const SField &elemScalarField)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
@@ -505,6 +513,7 @@ void FEMView2D::drawObjectTextureCells(const VField &deformation,
     glUseProgram(0);
 
     // glDisable(GL_TEXTURE_2D);
+    return hasEScalarField;
 }
 
 void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
@@ -646,132 +655,14 @@ void FEMView2D::draw()
         m_drawObject();
         m_drawSelectedObjects();
     }
-    else if (m_guiState == MODE_STATE) {
-        VField deformation;
-        if (m_selectedDeformation < m_fem.numModes()) {
-            deformation = m_fem.mode(m_selectedDeformation);
-            // Scale deformation so that the maximum displacement doesn't exceed
-            // a fraction of the window size
-            Scalar relMag = .125;
-            Scalar maxX = 0.0, maxY = 0.0;
-            size_t numNodes = m_fem.elementGrid().numNodes();
-            assert((size_t) deformation.domainSize() == numNodes);
-            for (size_t i = 0; i < numNodes; ++i) {
-                maxX = std::max((Scalar) std::abs(deformation(i)[0]), maxX);
-                maxY = std::max((Scalar) std::abs(deformation(i)[1]), maxY);
-            }
 
-            Vector frameDim = m_frameMax - m_frameMin;
-            Scalar xMag = (maxX > 1e-6) ? relMag * (frameDim[0] / maxX) : 1.0;
-            Scalar yMag = (maxY > 1e-6) ? relMag * (frameDim[1] / maxY) : 1.0;
-
-            Scalar magnitude = std::min(xMag, yMag);
-
-            deformation *= magnitude * sin(m_displacementPhase);
-        }
-
-        if (m_viewSettings.showStressesDuringDeformation) {
-            const SField &stressNorms =
-                    m_fem.modalStressNorms(m_selectedDeformation);
-            m_scalarColorMap.setAlpha(0.5f);
-            usedColormap = true;
-            drawObjectTextureCells(deformation, stressNorms);
-        }
-        else {
-            drawObjectTextureCells(deformation);
-        }
-
-        // drawGrid(DRAW_CELLS, deformation, stressNorms);
-
-        if (m_viewSettings.showGridOverResults) {
-            drawGrid(DRAW_EDGES, deformation);
-            drawGrid(DRAW_NODES, deformation);
-        }
+    else if (m_guiState == RESULT_STATE) {
+        usedColormap |= m_drawResult();
     }
     else if (m_guiState == ELEMENTS_STATE) {
-        drawObjectTextureCells();
-        drawGrid(DRAW_CELLS);
-        drawGrid(DRAW_EDGES);
-        drawGrid(DRAW_NODES);
-
-        // // Draw non-element cells
-        // glColor4f(0.0, 0.0, 0.0, .25f);
-        // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        // for (size_t i = 0; i < grid.numCells(); ++i) {
-        //     m_drawWorldBox(grid.cellBoundingBox(i));
-        // }
-        // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        if (m_viewSettings.showQuadraturePoints) {
-            // Draw quadrature points
-            glPointSize(1.0f);
-            glColor3f(1.0, 1.0, 0);
-            glBegin(GL_POINTS);
-
-            for (unsigned int i = 0; i < grid.numElements(); ++i) {
-                BBox_t b = grid.elementBoundingBox(i);
-                std::vector<Vector> qpoints =
-                    m_fem.quadrature().quadraturePoints(b);
-                for (unsigned int p = 0; p < qpoints.size(); ++p) {
-                    m_drawWorldVertex(qpoints[p]);
-                }
-            }
-            glEnd();
-        }
-
-        drawBoundary();
-
-        // Visualize cubic kernel around selected point
-        if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
-            const MeshlessFEM_t::BoundaryFunction &phi =
-                m_fem.boundaryFunction(m_selectedBoundaryPoint);
-            Scalar radius = phi.supportRadius();
-            // Highlight all elements overlapping the basis function's support
-            std::vector<size_t> elems;
-            grid.elementsAroundPoint(phi.center(), radius, elems);
-            glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
-            for (size_t i = 0; i < elems.size(); ++i)
-                m_drawWorldBox(grid.elementBoundingBox(elems[i]));
-            
-            // Draw a sub-grid of quads around the point, spanning
-            // the full basis function's support
-            glBegin(GL_QUADS);
-                #define KERNEL_VIS_SUBDIV 10
-                Scalar subdivWidth = 2 * radius / KERNEL_VIS_SUBDIV;
-                Scalar scale = phi.maxNormalizationFactor();
-                for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
-                    Scalar minY = phi.center()[1] - radius +
-                                  subdivWidth * i;
-                    Scalar maxY = minY + subdivWidth;
-                    for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
-                        Scalar minX = phi.center()[0] - radius +
-                                      subdivWidth * j;
-                        Scalar maxX = minX + subdivWidth;
-
-                        Scalar x, y;
-                        glColor4f(0.0f, 1.0f, 0.0f,
-                                  scale * phi(Vector(minX, minY)));
-                        getScreenCoords(minX, minY, x, y);
-                        glVertex2f(x, y);
-                        glColor4f(0.0f, 1.0f, 0.0f,
-                                  scale * phi(Vector(maxX, minY)));
-                        getScreenCoords(maxX, minY, x, y);
-                        glVertex2f(x, y);
-                        glColor4f(0.0f, 1.0f, 0.0f,
-                                  scale * phi(Vector(maxX, maxY)));
-                        getScreenCoords(maxX, maxY, x, y);
-                        glVertex2f(x, y);
-                        glColor4f(0.0f, 1.0f, 0.0f,
-                                  scale * phi(Vector(minX, maxY)));
-                        getScreenCoords(minX, maxY, x, y);
-                        glVertex2f(x, y);
-                    }
-                }
-            glEnd();
-            
-        }
+        usedColormap |= m_drawElements();
     }
-    else if (m_guiState == SIM_SETUP_STATE) {
+    else if (m_guiState == PRESSURE_DRAW_STATE) {
         drawObjectTextureCells();
         // drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
@@ -791,53 +682,167 @@ void FEMView2D::draw()
 
         drawBoundary(true, QColor(255, 160, 0));
     }
-    else if (m_guiState == SIM_RESULT_STATE) {
-        const VField &deformation = m_fem.simulationDisplacement();
-        if (m_viewSettings.showStressesDuringDeformation) {
-            const SField &stressNorms = m_fem.simulationStressNorms();;
-            m_scalarColorMap.setAlpha(0.5f);
-            usedColormap = true;
-            drawObjectTextureCells(deformation, stressNorms);
-        }
-        else {
-            drawObjectTextureCells(deformation);
-        }
 
-        if (m_viewSettings.showGridOverResults) {
-            drawGrid(DRAW_EDGES, deformation);
-            drawGrid(DRAW_NODES, deformation);
-        }
-    }
-    else if (m_guiState == WEAK_REGION_STATE) {
-        if (m_selectedWeakRegion < m_fem.numWeakRegions()) {
-            const SField &stressNorms =
-                m_fem.weakRegionStressNorms(m_selectedWeakRegion);
-            m_scalarColorMap.setAlpha(1.0f);
-            drawObjectTextureCells(VField(), stressNorms);
-            usedColormap = true;
-        }
-        if (m_viewSettings.showGridOverResults) {
-            drawGrid(DRAW_EDGES);
-        }
-    }
-    else if (m_guiState == COMBINED_WEAKNESS_STATE) {
-        if (m_fem.combinedWeakness().size() == grid.numElements()) {
-            const SField &cWeak = m_fem.combinedWeakness();
-            m_scalarColorMap.setAlpha(1.0f);
-            drawObjectTextureCells(VField(), cWeak);
-            usedColormap = true;
-        }
-        if (m_viewSettings.showGridOverResults) {
-            drawGrid(DRAW_EDGES);
-        }
-    }
-
-    float colorBarWidth = 300;
-    // Horizontally center colorbar
-    float colorbarX = .5 * (m_width - colorBarWidth);
     
-    if (usedColormap && m_viewSettings.showColorbar)
+    if (usedColormap && m_viewSettings.showColorbar) {
+        float colorBarWidth = 300;
+        // Horizontally center colorbar
+        float colorbarX = .5 * (m_width - colorBarWidth);
+
         m_drawColorbar(colorbarX, 5, colorBarWidth, 35);
+    }
+}
+
+bool FEMView2D::m_drawResult()
+{
+    assert(m_result);
+
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+
+    const SField &sfield = m_result->getScalarField(Result::PER_ELEM);
+
+    size_t numNodes = m_fem.elementGrid().numNodes();
+    size_t numElems = m_fem.elementGrid().numElements();
+
+    VField vfield = m_result->getVectorField(Result::PER_NODE);
+    VField deformation;
+
+    Scalar vecScale = 1.0;
+
+    if (m_result->hasNodeVField() & m_viewSettings.autofitVectorField) {
+        // Scale vector field so that the maximum displacement doesn't
+        // exceed a certain fraction of the window size
+        Scalar relMag = .125;
+        Scalar maxX = 0.0, maxY = 0.0;
+        assert((size_t) vfield.domainSize() == numNodes);
+        for (size_t i = 0; i < numNodes; ++i) {
+            maxX = std::max((Scalar) std::abs(deformation(i)[0]), maxX);
+            maxY = std::max((Scalar) std::abs(deformation(i)[1]), maxY);
+        }
+
+        Vector frameDim = m_frameMax - m_frameMin;
+        Scalar xMag = (maxX > 1e-6) ? relMag * (frameDim[0] / maxX) : 1.0;
+        Scalar yMag = (maxY > 1e-6) ? relMag * (frameDim[1] / maxY) : 1.0;
+
+        vecScale = std::min(xMag, yMag);
+    }
+
+    if (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE)
+        vfield *= vecScale * sin(m_displacementPhase);
+    else
+        vfield *= vecScale;
+
+    if (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_DEFORM ||
+        m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE) {
+        deformation = vfield;
+    }
+
+    m_scalarColorMap.setAlpha(0.5f);
+    bool usedColormap = drawObjectTextureCells(deformation, sfield);
+
+    if ((m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_ARROW) &&
+        (vfield.domainSize() == numNodes)) {
+        for (size_t i = 0; i < numNodes; ++i) {
+            Vector p = grid.nodePosition(i);
+            Vector v = vfield(i);
+            m_drawWorldArrow(p, v);
+        }
+    }
+
+    if (m_viewSettings.showGridOverResults) {
+        drawGrid(DRAW_EDGES, deformation);
+        drawGrid(DRAW_NODES, deformation);
+    }
+
+    return usedColormap;
+}
+
+bool FEMView2D::m_drawElements()
+{
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+
+    drawObjectTextureCells();
+    drawGrid(DRAW_CELLS);
+    drawGrid(DRAW_EDGES);
+    drawGrid(DRAW_NODES);
+
+    // // Draw non-element cells
+    // glColor4f(0.0, 0.0, 0.0, .25f);
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // for (size_t i = 0; i < grid.numCells(); ++i) {
+    //     m_drawWorldBox(grid.cellBoundingBox(i));
+    // }
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    if (m_viewSettings.showQuadraturePoints) {
+        // Draw quadrature points
+        glPointSize(1.0f);
+        glColor3f(1.0, 1.0, 0);
+        glBegin(GL_POINTS);
+
+        for (unsigned int i = 0; i < grid.numElements(); ++i) {
+            BBox_t b = grid.elementBoundingBox(i);
+            std::vector<Vector> qpoints =
+                m_fem.quadrature().quadraturePoints(b);
+            for (unsigned int p = 0; p < qpoints.size(); ++p) {
+                m_drawWorldVertex(qpoints[p]);
+            }
+        }
+        glEnd();
+    }
+
+    drawBoundary();
+
+    // Visualize cubic kernel around selected point
+    if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
+        const MeshlessFEM_t::BoundaryFunction &phi =
+            m_fem.boundaryFunction(m_selectedBoundaryPoint);
+        Scalar radius = phi.supportRadius();
+        // Highlight all elements overlapping the basis function's support
+        std::vector<size_t> elems;
+        grid.elementsAroundPoint(phi.center(), radius, elems);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
+        for (size_t i = 0; i < elems.size(); ++i)
+            m_drawWorldBox(grid.elementBoundingBox(elems[i]));
+        
+        // Draw a sub-grid of quads around the point, spanning
+        // the full basis function's support
+        glBegin(GL_QUADS);
+            #define KERNEL_VIS_SUBDIV 10
+            Scalar subdivWidth = 2 * radius / KERNEL_VIS_SUBDIV;
+            Scalar scale = phi.maxNormalizationFactor();
+            for (int i = 0; i < KERNEL_VIS_SUBDIV; ++i) {
+                Scalar minY = phi.center()[1] - radius +
+                              subdivWidth * i;
+                Scalar maxY = minY + subdivWidth;
+                for (int j = 0; j < KERNEL_VIS_SUBDIV; ++j) {
+                    Scalar minX = phi.center()[0] - radius +
+                                  subdivWidth * j;
+                    Scalar maxX = minX + subdivWidth;
+
+                    Scalar x, y;
+                    glColor4f(0.0f, 1.0f, 0.0f,
+                              scale * phi(Vector(minX, minY)));
+                    getScreenCoords(minX, minY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f,
+                              scale * phi(Vector(maxX, minY)));
+                    getScreenCoords(maxX, minY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f,
+                              scale * phi(Vector(maxX, maxY)));
+                    getScreenCoords(maxX, maxY, x, y);
+                    glVertex2f(x, y);
+                    glColor4f(0.0f, 1.0f, 0.0f,
+                              scale * phi(Vector(minX, maxY)));
+                    getScreenCoords(minX, maxY, x, y);
+                    glVertex2f(x, y);
+                }
+            }
+        glEnd();
+    }
+
+    return false;
 }
 
 void FEMView2D::m_drawColorbar(float x, float y, float width, float height)
@@ -959,7 +964,7 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
         m_prevMouseLoc = event->pos();
         m_gesture = DRAGGING;
     }
-    else if (m_guiState == SIM_SETUP_STATE) {
+    else if (m_guiState == PRESSURE_DRAW_STATE) {
         if (event->button() == Qt::LeftButton) {
             bool erase = event->modifiers() & Qt::AltModifier;
             paintPressure(qtToScreenCoords(event->pos()), erase);
@@ -985,7 +990,7 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         m_rerenderOverlay();
         update();
     }
-    else if (m_guiState == SIM_SETUP_STATE) {
+    else if (m_guiState == PRESSURE_DRAW_STATE) {
         bool leftButton  = event->buttons() & Qt::LeftButton,
              rightButton = event->buttons() & Qt::RightButton;
         if (leftButton && !rightButton) {

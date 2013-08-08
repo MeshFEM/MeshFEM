@@ -32,8 +32,6 @@ public:
                  SolverLibrary<Scalar> &solvers, QWidget *parent = NULL);
 
 public slots:
-    void modesUpdated(const MeshlessFEM_t *fem);
-    void weakRegionsUpdated(const MeshlessFEM_t *fem);
     void reloadSettings();
 
 private slots:
@@ -47,7 +45,6 @@ private slots:
     void materialControlsChanged(double);
     void weaknessAnalysisControlsChanged(int);
     void weaknessAnalysisControlsChanged(double);
-    void someSelectorChanged(int);
     void ttestControlsChanged(int);
     void ttestControlsChanged(double);
     void ttestButtonClicked();
@@ -90,8 +87,6 @@ private:
     QSpinBox *g_numModesStepper;
     QCheckBox *g_laplacianModesCheck;
     QPushButton *g_modalAnalysisButton;
-    QPushButton *g_dumpModalDataButton;
-    QComboBox *g_modeSelector;
 
     // Simulation settings
     QCheckBox *g_useMarchingSquaresCheck;
@@ -107,7 +102,6 @@ private:
     QSpinBox *g_numWeakRegionsStepper;
     QDoubleSpinBox *g_weaknessCutoffStepper;
     QPushButton *g_weakRegionExtractionButton;
-    QComboBox *g_weakRegionSelector;
     QDoubleSpinBox *g_pressureBoundStepper, *g_forceBoundStepper;
     QCheckBox *g_equalizeCombinedWeaknessCheck;
 

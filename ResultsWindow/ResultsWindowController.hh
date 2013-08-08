@@ -22,9 +22,6 @@ class ResultsWindowController : public QObject
     Q_OBJECT
 
 public slots:
-    void currentItemChanged(QTreeWidgetItem *current,
-                            QTreeWidgetItem *previous);
-    void itemSelectionChanged();
     void itemActivated(QTreeWidgetItem *item, int col);
     void itemChanged(QTreeWidgetItem *item, int col);
     void itemDeleted(QTreeWidgetItem *item);

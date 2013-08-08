@@ -12,6 +12,7 @@
 #include "ResultTreeView.hh"
 #include "ResultsWindowController.hh"
 
+#include <QtGui>
 #include <QPushButton>
 #include <QHeaderView>
 #include <QVBoxLayout>
@@ -20,10 +21,9 @@
 using namespace std;
 
 ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
-    : QWidget(parent), m_resultsCollection(rc)
+    : QWidget(parent), m_controller(new ResultsWindowController(*this)),
+      m_resultsCollection(rc)
 {
-    m_controller = new ResultsWindowController(*this);
-
     setWindowTitle("Results Browser");
     QVBoxLayout *layout = new QVBoxLayout();
     g_treeView = new ResultTreeView();
@@ -31,28 +31,28 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     g_treeView->header()->close();
     g_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
-    g_deleteButton = new QPushButton("Delete Selection");
+    g_deleteButton = new QPushButton("Delete");
+    g_mshButton = new QPushButton("Write .MSH");
+    g_flipbookButton = new QPushButton("Flipbook");
+
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(g_deleteButton);
+    buttonLayout->addWidget(g_mshButton);
+    buttonLayout->addWidget(g_flipbookButton);
 
     layout->addWidget(g_treeView);
     layout->addLayout(buttonLayout);
     layout->setContentsMargins(0, 0, 0, 0);
     setLayout(layout);
 
-    QObject::connect(g_treeView, SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)),
-                     m_controller, SLOT(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)));
-    QObject::connect(g_treeView, SIGNAL(itemSelectionChanged()),
-                     m_controller, SLOT(itemSelectionChanged()));
     QObject::connect(g_treeView, SIGNAL(itemActivated(QTreeWidgetItem *, int)),
-                     m_controller, SLOT(itemActivated(QTreeWidgetItem *, int)));
+                     controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
-                     m_controller, SLOT(itemChanged(QTreeWidgetItem *, int)));
+                     controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
 
     m_controller->resultsUpdated();
 }
 
 ResultsWindow::~ResultsWindow()
 {
-    delete m_controller;
 }

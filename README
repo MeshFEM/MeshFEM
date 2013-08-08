@@ -5,5 +5,8 @@ To build on Mac OS X
    qmake -spec ../build_specs/macx-g++47 -o Makefile ../CSGFEM.pro
    make
 
+   Or, for clang:
+   qmake -spec /opt/local/share/qt4/mkspecs/unsupported/macx-clang ../CSGFEM.pro
+
 *Should* be cross platform, but different build rules must be written for the
 different platforms.

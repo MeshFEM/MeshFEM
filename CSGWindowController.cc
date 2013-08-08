@@ -31,8 +31,6 @@ void CSGWindowController::changedSidebarTab(int newTab) {
     }
     else {
         modelChanged();
-        emit modesUpdated(&m_fem);
-        emit weakRegionsUpdated(&m_fem);
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
         m_state = CONTROLLER_STATE_ANALYSIS;
     }
@@ -180,11 +178,9 @@ void CSGWindowController::loadCSG()
 
         m_csgTreeModel->csgTreeUpdated();
         modelChanged();
-        // If we're in the analysis state, we must update the modes and return
-        // to the element grid display
+        // If we're in the analysis state, we must return to the element grid
+        // display
         if (m_state == CONTROLLER_STATE_ANALYSIS) {
-            emit modesUpdated(&m_fem);
-            emit weakRegionsUpdated(&m_fem);
             m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
         }
     }
@@ -204,8 +200,6 @@ void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
     if (m_fem.configureElements(settings))
         m_femView->update();
     // Configuring the elements clears all modes and weak regions
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -216,8 +210,6 @@ boundaryPointSettingsChanged(const AnalysisSettings &settings)
     m_fem.configureBoundaryPoints(settings);
     m_femView->update();
     // Currently, configuring the boundary points clears all modes
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -229,8 +221,6 @@ matrixOrMaterialSettingsChanged(const AnalysisSettings &settings)
     m_fem.configureMaterial(settings);
     m_fem.configureMatrices(settings);
     // Configuring modal analysis settings clears all modes
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::
@@ -241,8 +231,6 @@ modalAnalysisSettingsChanged(const AnalysisSettings &settings)
     m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     m_fem.configureModalAnalysis(settings);
     // Configuring modal analysis settings clears all modes
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
 }
 
 // Prepare the results collector for adding results by inserting the current
@@ -266,14 +254,12 @@ void CSGWindowController::runModalAnalysis()
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
     }
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
     emit resultsUpdated();
 }
 
 void CSGWindowController::configureSimulation()
 {
-    m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
+    m_femView->setGUIState(FEMView2D::PRESSURE_DRAW_STATE);
 }
 
 void CSGWindowController::savePressure()
@@ -354,7 +340,7 @@ void CSGWindowController::loadPressure()
             if (!bpFile)
                 throw std::runtime_error(std::string("Error reading file"));
 
-            m_femView->setGUIState(FEMView2D::SIM_SETUP_STATE);
+            m_femView->setGUIState(FEMView2D::PRESSURE_DRAW_STATE);
         }
         catch (std::exception &e)
         {
@@ -381,7 +367,6 @@ void CSGWindowController::runSimulation()
         m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
     }
     else {
-        m_femView->setGUIState(FEMView2D::SIM_RESULT_STATE);
         emit resultsUpdated();
     }
 }
@@ -396,16 +381,11 @@ weaknessAnalysisSettingsChanged(const AnalysisSettings &settings)
 {
     m_fem.configureWeaknessAnalysis(settings);
     m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
-    emit weakRegionsUpdated(&m_fem);
 }
 
 void CSGWindowController::runWeakRegionExtraction()
 {
     int ret = m_fem.weakRegionExtraction();
-    if (ret >= 0)
-        emit weakRegionsUpdated(&m_fem);
-    if (ret == 1)
-        emit modesUpdated(&m_fem);
 }
 
 void CSGWindowController::runWeaknessAnalysis()
@@ -422,69 +402,38 @@ void CSGWindowController::runWeaknessAnalysis()
         mbox.exec();
     }
 
-    emit modesUpdated(&m_fem);
-    emit weakRegionsUpdated(&m_fem);
-    m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
     emit resultsUpdated();
 }
 
-void CSGWindowController::dumpModalData()
-{
-    QString fileName = QFileDialog::getSaveFileName(0, "Save Modal Data (.msh)",
-            QString(), "Text files (*.msh)");
-    if (fileName.length() > 0) {
-        typedef MSHWriter<MeshlessFEM_t::ElementGrid> MSHWriter_t;
-        MSHWriter_t mshOut(fileName.toAscii(), m_fem.elementGrid());
-        if (mshOut) {
-            VectorField<double, 3> modal3Vector(m_fem.elementGrid().numNodes());
-            modal3Vector.clear();
-            for (size_t i = 0; i < m_fem.numModes(); ++i) {
-                char name[64];
-                const MeshlessFEM_t::VField &mode = m_fem.mode(i);
-                assert(mode.domainSize() == modal3Vector.domainSize());
-
-                for (size_t j = 0; j < mode.domainSize(); ++i) {
-                    modal3Vector(j)[0] = mode(j)[0];
-                    modal3Vector(j)[1] = mode(j)[1];
-                }
-
-                snprintf(name, 64, "modal displacement %i", (int) i);
-                mshOut.addField(name, modal3Vector, MSHWriter_t::PER_NODE);
-                snprintf(name, 64, "modal stress norm %i", (int) i);
-                mshOut.addField(name, m_fem.modalStressNorms(i),
-                                MSHWriter_t::PER_ELEMENT);
-            }
-        }
-    }
-}
-
-void CSGWindowController::modeSelectionChanged(int index)
-{
-    if (index > 0) {
-        m_femView->selectDeformation(index - 1);
-        m_femView->setGUIState(FEMView2D::MODE_STATE);
-    }
-    else {
-        // Only revert GUI state if we "own" it
-        if (m_femView->getGUIState() == FEMView2D::MODE_STATE)
-            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
-    }
-}
-
-void CSGWindowController::weakRegionSelectionChanged(int index)
-{
-    if (index > 0) {
-        m_femView->selectWeakRegion(index - 1);
-        m_femView->setGUIState(FEMView2D::WEAK_REGION_STATE);
-        m_fem.selectWeakRegion(index - 1);
-
-    }
-    else {
-        // Only revert GUI state if we "own" it
-        if (m_femView->getGUIState() == FEMView2D::WEAK_REGION_STATE)
-            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
-    }
-}
+// void CSGWindowController::dumpModalData()
+// {
+//     QString fileName = QFileDialog::getSaveFileName(0, "Save Modal Data (.msh)",
+//             QString(), "Text files (*.msh)");
+//     if (fileName.length() > 0) {
+//         typedef MSHWriter<MeshlessFEM_t::ElementGrid> MSHWriter_t;
+//         MSHWriter_t mshOut(fileName.toAscii(), m_fem.elementGrid());
+//         if (mshOut) {
+//             VectorField<double, 3> modal3Vector(m_fem.elementGrid().numNodes());
+//             modal3Vector.clear();
+//             for (size_t i = 0; i < m_fem.numModes(); ++i) {
+//                 char name[64];
+//                 const MeshlessFEM_t::VField &mode = m_fem.mode(i);
+//                 assert(mode.domainSize() == modal3Vector.domainSize());
+// 
+//                 for (size_t j = 0; j < mode.domainSize(); ++i) {
+//                     modal3Vector(j)[0] = mode(j)[0];
+//                     modal3Vector(j)[1] = mode(j)[1];
+//                 }
+// 
+//                 snprintf(name, 64, "modal displacement %i", (int) i);
+//                 mshOut.addField(name, modal3Vector, MSHWriter_t::PER_NODE);
+//                 snprintf(name, 64, "modal stress norm %i", (int) i);
+//                 mshOut.addField(name, m_fem.modalStressNorms(i),
+//                                 MSHWriter_t::PER_ELEMENT);
+//             }
+//         }
+//     }
+// }
 
 void CSGWindowController::runShapeOptimization()
 {
@@ -603,7 +552,6 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
     // repeat experiments.
 
     // m_fem.modelChanged(false);
-    m_femView->setGUIState(FEMView2D::COMBINED_WEAKNESS_STATE);
     m_femView->modelChanged();
 
     // m_csgTree->setParameters(params);
@@ -746,4 +694,6 @@ void CSGWindowController::resultSelected(const string &resultPath)
         m_results.getSettings(settingsName, m_settings);
         emit reloadSettings();
     }
+
+    m_femView->displayResult(m_results.getResultWithPath(resultPath));
 }

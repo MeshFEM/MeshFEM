@@ -3,7 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //        Collects CSGFEM simulation/weakness analysis results for different
-//        models/settings.
+//        models/settings. The collection assumes ownership of all results
+//        stored within it.
 //
 //        Results are identified using a colon-separated "path" of the format:
 //              model_name:settings_name:result_name
@@ -26,6 +27,7 @@
 #include <string>
 #include <cassert>
 #include <stdexcept>
+#include <memory>
 #include <boost/algorithm/string.hpp>
 #include "utils.hh"
 #include "AnalysisSettings.hh"
@@ -131,7 +133,8 @@ public:
 
     // Path always has the format model_name:settings_name:name
     // (Despite the fact DFS can visit in settings:model order).
-    const Result *getResultWithPath(const std::string &path) const {
+    std::shared_ptr<const Result>
+    getResultWithPath(const std::string &path) const {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, path, boost::is_any_of(":"));
         for (std::string &str : nameComponents)
@@ -139,19 +142,19 @@ public:
         if (nameComponents.size() < 3) {
             throw std::runtime_error(std::string("Invalid path: ") + path);
         }
-        auto it = nameComponents.begin();
-        std::string model    = *(it++);
-        std::string settings = *(it++);
+        auto name_it = nameComponents.begin();
+        std::string model    = *(name_it++);
+        std::string settings = *(name_it++);
 
-        auto mit = m_models.find(model);
-        if (mit == m_models.end())
+        auto mit = m_models_settings_collection.find(model);
+        if (mit == m_models_settings_collection.end())
             throw std::runtime_error(std::string("collection not found: " +
                         model + ":" + settings));
         auto sit = mit->second.find(settings);
-        if (sit == m_settings.end())
+        if (sit == mit->second.end())
             throw std::runtime_error(std::string("collection not found: " +
                         model + ":" + settings));
-        return sit->second.getResult(it, nameComponents.end());
+        return sit->second->getResult(name_it, nameComponents.end());
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -160,7 +163,7 @@ public:
     //  @param[in]  name    result's name in the collection
     //  @return     result pointer
     *///////////////////////////////////////////////////////////////////////////
-    const Result *getResult(const std::string &name) const {
+    std::shared_ptr<const Result> getResult(const std::string &name) const {
         return getResultWithPath(m_selectedModel + ":" + m_selectedSettings +
                                  ":" + name);
     }

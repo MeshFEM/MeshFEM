@@ -13,6 +13,7 @@
 
 #include <QWidget>
 #include <map>
+#include <memory>
 #include "GlobalTypes.hh"
 #include "ResultsWindowController.hh"
 
@@ -25,14 +26,15 @@ class ResultsWindow : public QWidget
 
 public:
     ResultsWindow(ResultsCollector_t &rc, QWidget *parent = NULL);
-    ResultsWindowController *controller() { return m_controller; }
+    ResultsWindowController * controller() { return m_controller.get(); }
+
     ~ResultsWindow();
 
 private:
-    ResultsWindowController *m_controller;
+    std::shared_ptr<ResultsWindowController> m_controller;
     ResultsCollector_t &m_resultsCollection;
     ResultTreeView *g_treeView;
-    QPushButton *g_deleteButton;
+    QPushButton *g_deleteButton, *g_mshButton, *g_flipbookButton;
 
     friend class ResultsWindowController;
 };

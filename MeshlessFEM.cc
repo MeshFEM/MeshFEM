@@ -863,9 +863,8 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
             // Record the modes/modal stresses in the results collector.
             for (size_t i = 0; i < numModes; ++i) {
                 typedef typename RC::Result Result;
-                Result *r = new Result(
-                    Result::RESULT_PER_ELEM, m_modalStressNorms[i],
-                    Result::RESULT_PER_NODE, mode(i));
+                Result *r = new Result(Result::PER_ELEM, m_modalStressNorms[i],
+                                       Result::PER_NODE, mode(i));
                 rc->setResult(appendToString("Modes:Mode ", i), r);
             }
         }
@@ -897,9 +896,8 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
     if (rc != NULL) {
         // Record the displacements/stresses in the results collector.
         typedef typename RC::Result Result;
-        Result *r = new Result(
-                Result::RESULT_PER_ELEM, m_simulatedStressNorms,
-                Result::RESULT_PER_NODE, m_simulatedDisplacement);
+        Result *r = new Result(Result::PER_ELEM, m_simulatedStressNorms,
+                               Result::PER_NODE, m_simulatedDisplacement);
         rc->setResult("Simulation", r);
     }
 
@@ -1025,8 +1023,8 @@ int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
         // Record the weak regions in the results collector.
         for (size_t i = 0; i < m_weakRegionStressNorms.size(); ++i) {
             typedef typename RC::Result Result;
-            Result *r = new Result(
-                    Result::RESULT_PER_ELEM, m_weakRegionStressNorms[i]);
+            Result *r = new Result(Result::PER_ELEM,
+                                   m_weakRegionStressNorms[i]);
             rc->setResult(appendToString("Weak Regions:Region ", i), r);
         }
     }
@@ -1079,13 +1077,12 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
         SField  optStress = computeStressTensorNorms(stressTensors);
 
         if (rc != NULL) {
-            Result *r = new Result(
-                    Result::RESULT_PER_BOUNDARY, m_pressures);
+            Result *r = new Result(Result::PER_BDRY, m_pressures);
             rc->setResult(appendToString("Weak Regions:Region ", i)
                         + ":Opt Pressure", r);
 
-            r = new Result(Result::RESULT_PER_ELEM, optStress,
-                            Result::RESULT_PER_NODE, optU);
+            r = new Result(Result::PER_ELEM, optStress,
+                           Result::PER_NODE, optU);
             rc->setResult(appendToString("Weak Regions:Region ", i)
                         + ":Opt Displacement", r);
         }
@@ -1158,8 +1155,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     }
 
     if (rc != NULL) {
-        Result *r = new Result(
-                Result::RESULT_PER_ELEM, m_combinedWeakness);
+        Result *r = new Result(Result::PER_ELEM, m_combinedWeakness);
         rc->setResult("Combined Weakness", r);
     }
 

@@ -15,7 +15,9 @@
 #include "utils.hh"
 #include <string>
 #include <vector>
+#include <map>
 #include <cassert>
+#include <memory>
 #include <iostream>
 
 // A single result can consist of up to a scalar AND vector field per:
@@ -27,44 +29,74 @@ template<typename Generator>
 class ResultsCollector<Generator>::Result
 {
 public:
-    typedef enum { RESULT_PER_NODE = 0, RESULT_PER_ELEM = 1,
-                   RESULT_PER_BOUNDARY = 2, RESULT_NUM_TYPES } ResultType;
+    typedef enum { PER_NODE = 0, PER_ELEM = 1,
+                   PER_BDRY = 2, NUM_DOMAINS } ResultDomain;
+
+    typedef enum {
+        NODE_SCALAR = (1 << 0), ELEM_SCALAR = (1 << 1), BDRY_SCALAR = (1 << 2),
+        NODE_VECTOR = (1 << 3), ELEM_VECTOR = (1 << 4), BDRY_VECTOR = (1 << 5)
+    } ResultType;
+
+    typedef enum {
+        NODE_VECTOR_ELEM_SCALAR = NODE_VECTOR | ELEM_SCALAR,
+    } ResultCompoundType;
+
     typedef typename Generator::SField SField;
     typedef typename Generator::VField VField;
+
     Result() { init(); }
-    Result(ResultType stype, const SField &sfield) {
+    Result(ResultDomain stype, const SField &sfield) {
         init(); setScalarField(stype, sfield);
     }
 
-    Result(ResultType vtype, const VField &vfield) {
+    Result(ResultDomain vtype, const VField &vfield) {
         init(); setVectorField(vtype, vfield);
     }
 
-    Result(ResultType stype, const SField &sfield,
-           ResultType vtype, const VField &vfield) {
+    Result(ResultDomain stype, const SField &sfield,
+           ResultDomain vtype, const VField &vfield) {
         init(); setScalarField(stype, sfield);
                 setVectorField(vtype, vfield);
     }
 
-public:
-    void setVectorField(ResultType type, const VField &vfield) {
-        assert(type < RESULT_NUM_TYPES);
+    void setVectorField(ResultDomain type, const VField &vfield) {
+        assert(type < NUM_DOMAINS);
         m_vfields[type] = vfield;
         m_hasVField[type] = true;
     }
 
-    void setScalarField(ResultType type, const SField &sfield) {
-        assert(type < RESULT_NUM_TYPES);
+    void setScalarField(ResultDomain type, const SField &sfield) {
+        assert(type < NUM_DOMAINS);
         m_sfields[type] = sfield;
         m_hasSField[type] = true;
     }
 
+    const VField &getVectorField(ResultDomain type) const {
+        return m_vfields[type];
+    }
+
+    const SField &getScalarField(ResultDomain type) const {
+        return m_sfields[type];
+    }
+
+    unsigned char resultType() const {
+    return ((m_hasSField[PER_NODE] ? NODE_SCALAR : 0) |
+            (m_hasSField[PER_ELEM] ? ELEM_SCALAR : 0) |
+            (m_hasSField[PER_BDRY] ? BDRY_SCALAR : 0) |
+            (m_hasVField[PER_NODE] ? NODE_VECTOR : 0) |
+            (m_hasVField[PER_ELEM] ? ELEM_VECTOR : 0) |
+            (m_hasVField[PER_BDRY] ? BDRY_VECTOR : 0));
+    }
+
+    bool hasElemSField() const { return m_hasSField[PER_ELEM]; }
+    bool hasNodeVField() const { return m_hasVField[PER_NODE]; }
+
 private:
     void init() {
-        m_sfields.assign((size_t) RESULT_NUM_TYPES, SField());
-        m_vfields.assign((size_t) RESULT_NUM_TYPES, VField());
-        m_hasSField.assign((size_t) RESULT_NUM_TYPES, false);
-        m_hasVField.assign((size_t) RESULT_NUM_TYPES, false);
+        m_sfields.assign((size_t) NUM_DOMAINS, SField());
+        m_vfields.assign((size_t) NUM_DOMAINS, VField());
+        m_hasSField.assign((size_t) NUM_DOMAINS, false);
+        m_hasVField.assign((size_t) NUM_DOMAINS, false);
     }
 
     std::vector<bool> m_hasSField, m_hasVField;
@@ -91,7 +123,7 @@ public:
         setResult(nameComponents.begin(), nameComponents.end(), result);
     }
 
-    const Result *getResult(const std::string &name) const {
+    std::shared_ptr<const Result> getResult(const std::string &name) const {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, name, boost::is_any_of(":"));
         for (std::string &str : nameComponents)
@@ -99,24 +131,20 @@ public:
         return getResult(nameComponents.begin(), nameComponents.end());
     }
 
-    // Set a result, overwriting any existing one.
+    // Set a result, releasing any existing one and assuming ownership.
     void setResult(Result *r) {
-        // Originally I thought only leaves should hold results, but it might be
-        // useful to have non-terminal results hold results too...
-        // assert(m_children.size() == 0);
-        delete m_result;
-        m_result = r;
+        m_result = std::shared_ptr<Result>(r);
     }
 
     // Get the result stored at this node.
-    const Result *getResult() const {
-        if (m_result == NULL)
+    std::shared_ptr<const Result> getResult() const {
+        if (m_result == nullptr)
             throw std::runtime_error(std::string("result not found!"));
         return m_result;
     }
 
     bool hasResult() const {
-        return (m_result != NULL);
+        return (m_result != nullptr);
     }
 
     // Get the count of all results in this collection (recursive)
@@ -134,8 +162,7 @@ public:
 
     // Recursively destroy this tree's contents.
     void clear() {
-        delete m_result;
-        m_result = NULL;
+        m_result.reset();
 
         for (std::pair<const std::string, ResultTree *> &c : m_children)
             delete c.second;
@@ -166,7 +193,7 @@ public:
 
     void print(int indent = 0) const {
         for (const auto &entryPair : m_children) {
-            for (size_t i = 0; i < indent; ++i)
+            for (int i = 0; i < indent; ++i)
                 std::cout << "    ";
             std::cout << entryPair.first  << std::endl;
             entryPair.second->print(indent + 1);
@@ -199,8 +226,9 @@ private:
         }
     }
 
-    const Result *getResult(std::vector<std::string>::const_iterator curr,
-                            std::vector<std::string>::const_iterator end) const
+    std::shared_ptr<const Result>
+    getResult(std::vector<std::string>::const_iterator curr,
+              std::vector<std::string>::const_iterator end) const
     {
         if (curr == end)
             return getResult();
@@ -213,9 +241,11 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     // Members
     ////////////////////////////////////////////////////////////////////////////
-    Result *m_result;
+    std::shared_ptr<Result> m_result;
     ResultTree *m_parent;
     std::map<std::string, ResultTree *, NaturalLess> m_children;
+
+    friend class ResultsCollector<Generator>;
 };
 
 template<typename T>

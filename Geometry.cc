@@ -1,10 +1,12 @@
 #include <cmath>
-#include <tr1/cmath> // For elliptic integrals
+// Switched to boost for elliptic integrals since they didn't make it into C++11
+// from tr1 :(
+#include <boost/math/special_functions/ellint_2.hpp>
+
 #include <algorithm>
 #include "Geometry.hh"
 #include <iostream>
 
-using namespace std::tr1;
 
 #define NUM_NEWTON_ITERATIONS 5
 
@@ -40,7 +42,7 @@ void ellipseParameterPoints(Real s, Real a, Real b,
     Real bSq = b * b;
     Real kSq = 1 - bSq / aSq;
     Real k = sqrt(kSq);
-    Real perimeter = 4 * a * comp_ellint_2(k);
+    Real perimeter = 4 * a * boost::math::ellint_2(k);
     int N = ceil(perimeter / s);
     Real segmentArcLen = perimeter / N;
     pointAreas = segmentArcLen;
@@ -62,7 +64,7 @@ void ellipseParameterPoints(Real s, Real a, Real b,
         Real s_target = i * segmentArcLen;
 
         for (size_t j = 0; j < NUM_NEWTON_ITERATIONS; ++j) {
-            Real s_t = a * ellint_2(k, t);
+            Real s_t = a * boost::math::ellint_2(k, t);
             Real sin_t = sin(t);
             Real s_prime = a * sqrt(1 - kSq * sin_t * sin_t);
             t += (s_target - s_t) / s_prime;

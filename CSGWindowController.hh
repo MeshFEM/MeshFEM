@@ -66,9 +66,6 @@ public slots:
     void weaknessAnalysisSettingsChanged(const AnalysisSettings &settings);
     void runWeakRegionExtraction();
     void runWeaknessAnalysis();
-    void dumpModalData();
-    void modeSelectionChanged(int index);
-    void weakRegionSelectionChanged(int index);
 
     // Shape optimization actions
     void runShapeOptimization();
@@ -84,8 +81,6 @@ signals:
             QItemSelectionModel::SelectionFlags command =
             QItemSelectionModel::ClearAndSelect);
     void csgNodesSelected(const NodeList &nList);
-    void modesUpdated(const MeshlessFEM_t *fem);
-    void weakRegionsUpdated(const MeshlessFEM_t *fem);
     void resultsUpdated();
     void reloadSettings();
     
