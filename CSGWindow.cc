@@ -129,6 +129,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     QObject::connect(g_resultsWindow->controller(),
                      SIGNAL(resultSelected(const std::string &)),
                      controller, SLOT(resultSelected(const std::string &)));
+    QObject::connect(g_resultsWindow->controller(), SIGNAL(resultDeslected()),
+                     controller, SLOT(resultDeslected()));
     QObject::connect(controller, SIGNAL(reloadSettings()),
                      analysisForm, SLOT(reloadSettings()));
 

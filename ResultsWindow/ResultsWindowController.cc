@@ -95,8 +95,13 @@ void ResultsWindowController::selectResult(QTreeWidgetItem *item)
             emit resultSelected(ri->path());
         }
 
+        if (item == NULL) {
+            emit resultDeslected();
+        }
+
         m_currentResultItem = item;
     }
+
     m_autoAdjustingChecks = false;
 }
 
@@ -157,10 +162,9 @@ public:
         : m_controller(c), m_modelMajorDFS(modelMajorDFS) { }
 
     void preVisit(const string &name, bool hasResult) {
-        ResultTreeWidgetItem *newItem = NULL;
         QTreeWidgetItem *p = m_parentStack.empty() ? NULL : m_parentStack.top();
-        newItem = new ResultTreeWidgetItem(m_controller, p,
-                QStringList(QString::fromStdString(name)));
+        ResultTreeWidgetItem *newItem = new ResultTreeWidgetItem(m_controller,
+                p, QStringList(QString::fromStdString(name)));
 
         // All results should have a checkbox
         if (hasResult)

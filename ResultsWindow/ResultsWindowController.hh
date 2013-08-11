@@ -30,6 +30,7 @@ public slots:
     void selectResult(const std::string &path);
 
 signals:
+    void resultDeslected();
     void resultSelected(const std::string &path);
     
 public:

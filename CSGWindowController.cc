@@ -507,12 +507,6 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         m_csgTree->setParameters(translated);
         modelChanged(false);
 
-        QString cwPath, cwPercentilePath;
-        cwPath.sprintf("ftranslation_%f_%f.cw", (float) settings.xTranslation,
-                       (float) settings.yTranslation);
-        cwPercentilePath.sprintf("ftranslation_%f_%f.cwp",
-                (float) settings.xTranslation, (float) settings.yTranslation);
-
         prepareResultsCollector();
         bool success = m_fem.weaknessAnalysis(weakness, &m_results);
         assert(success);
@@ -546,11 +540,6 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         }
     }
 
-    // m_femView->loadGridFields(weaknessGrids);
-
-    // Note the grid must now be manually recreated from the bounding box to
-    // repeat experiments.
-
     // m_fem.modelChanged(false);
     m_femView->modelChanged();
 
@@ -570,10 +559,13 @@ runForceTranslationTest(const AnalysisSettings &settings)
     assert(params.size() % 5 == 0);
     size_t numPrimitives = params.size() / 5;
 
+    std::string baseName = m_modelName;
+    boost::format formatter("%s + (%f, %f)");
+
     if (settings.fixedTranslation) {
         Vector offset(cellSize[0] * settings.xTranslation,
                       cellSize[1] * settings.yTranslation);
-        std::cout << "Offset: " << offset << endl;
+
         for (size_t p = 0; p < numPrimitives; ++p) {
             translated[5 * p + 0] = params[5 * p + 0] + offset[0];
             translated[5 * p + 1] = params[5 * p + 1] + offset[1];
@@ -582,10 +574,8 @@ runForceTranslationTest(const AnalysisSettings &settings)
         m_csgTree->setParameters(translated);
         modelChanged(false);
 
-        QString simPath;
-        simPath.sprintf("sim_ftranslation_%f_%f.msh",
-                       (float) settings.xTranslation,
-                       (float) settings.yTranslation);
+        m_modelName = boost::str(formatter % baseName % settings.xTranslation %
+                                 settings.yTranslation);
 
         // bool success = m_fem.simulate(simPath.toAscii());
         prepareResultsCollector();
@@ -596,7 +586,6 @@ runForceTranslationTest(const AnalysisSettings &settings)
         for (int xStep = 0; xStep < TRANS_TEST_STEPS; ++xStep) {
             for (int yStep = 0; yStep < TRANS_TEST_STEPS; ++yStep) {
                 Vector offset(cellDelta[0] * xStep, cellDelta[1] * yStep);
-                std::cout << "Offset: " << offset << endl;
                 
                 for (size_t p = 0; p < numPrimitives; ++p) {
                     translated[5 * p + 0] = params[5 * p + 0] + offset[0];
@@ -606,8 +595,8 @@ runForceTranslationTest(const AnalysisSettings &settings)
                 m_csgTree->setParameters(translated);
                 modelChanged(false);
 
-                QString simPath;
-                simPath.sprintf("sim_translation_%i_%i.msh", xStep, yStep);
+                m_modelName = boost::str(formatter % baseName % offset[0] %
+                                         offset[1]);
 
                 // bool success = m_fem.simulate(simPath.toAscii());
                 prepareResultsCollector();
@@ -617,6 +606,10 @@ runForceTranslationTest(const AnalysisSettings &settings)
             }
         }
     }
+
+    m_modelName = baseName;
+
+    emit resultsUpdated();
 }
 
 void CSGWindowController::
@@ -643,30 +636,31 @@ runFunctionRadiusTest(const AnalysisSettings &settings)
 }
 
 void CSGWindowController::
-runRefinementTest(const AnalysisSettings &settings)
+runRefinementTest()
 {
     vector<Scalar> pressures(m_fem.numBoundaryPoints());
     for (size_t i = 0; i < pressures.size(); ++i) {
         pressures[i] = m_fem.pressure(i);
     }
 
-    const int REFINEMENT_TEST_STEPS = 40;
+    const int REFINEMENT_TEST_STEPS = 10;
     Scalar minScale = 0.1;
     Scalar maxScale = 8.0;
     Scalar scaleDelta = (maxScale - minScale) / REFINEMENT_TEST_STEPS;
+    boost::format formatter("%s (x %f)");
     
-    AnalysisSettings newSettings = settings;
+    AnalysisSettings oldSettings = m_settings;
+    string oldSettingsName = m_settingsName;
+
     Scalar scale = minScale;
     for (size_t i = 0; i < REFINEMENT_TEST_STEPS; ++i) {
         scale += scaleDelta;
-        newSettings.Nx = settings.Nx * scale;
-        newSettings.Ny = settings.Ny * scale;
-        m_fem.configureElements(newSettings);
+        m_settings.Nx = oldSettings.Nx * scale;
+        m_settings.Ny = oldSettings.Ny * scale;
+        m_fem.configureElements(m_settings);
         m_fem.setPressures(pressures);
 
-        QString simPath;
-        simPath.sprintf("sim_refinement_%i_%i.msh", (int) newSettings.Nx,
-                        (int) newSettings.Ny);
+        m_settingsName = boost::str(formatter % oldSettingsName % scale);
 
         prepareResultsCollector();
         // bool success = m_fem.simulate(simPath.toAscii());
@@ -674,8 +668,12 @@ runRefinementTest(const AnalysisSettings &settings)
         assert(success);
     }
 
-    m_fem.configureElements(settings);
+    m_settingsName = oldSettingsName;
+
+    m_fem.configureElements(oldSettings);
     m_fem.setPressures(pressures);
+
+    emit resultsUpdated();
 }
 
 void CSGWindowController::resultSelected(const string &resultPath)
@@ -696,4 +694,9 @@ void CSGWindowController::resultSelected(const string &resultPath)
     }
 
     m_femView->displayResult(m_results.getResultWithPath(resultPath));
+}
+
+void CSGWindowController::resultDeslected()
+{
+    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
 }

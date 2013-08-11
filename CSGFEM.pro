@@ -22,15 +22,15 @@ QT += opengl
 CONFIG += release
 # CONFIG += debug
 
-# # clang++ version
-# QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++
-# QMAKE_CXXFLAGS += -isystem /opt/local/
-# QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
-# LIBS += -stdlib=libc++
-
-# g++ version:
-QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=gnu++11
+# clang++ version
+QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++
+QMAKE_CXXFLAGS += -isystem /opt/local/
 QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
+LIBS += -stdlib=libc++
+
+# # g++ version:
+# QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=gnu++11
+# QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
 
 # QMAKE_CXXFLAGS += -D_D_GLIBCXX_DEBUG
 

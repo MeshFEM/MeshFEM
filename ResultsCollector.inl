@@ -204,7 +204,6 @@ public:
         clear();
     }
 
-private:
     // Insert a result object into the result tree with edges indicated by the
     // sequence of strings curr..end
     void setResult(std::vector<std::string>::const_iterator curr,
@@ -238,14 +237,14 @@ private:
         return existing->second->getResult(++curr, end);
     }
 
+private:
     ////////////////////////////////////////////////////////////////////////////
     // Members
     ////////////////////////////////////////////////////////////////////////////
     std::shared_ptr<Result> m_result;
     ResultTree *m_parent;
-    std::map<std::string, ResultTree *, NaturalLess> m_children;
-
-    friend class ResultsCollector<Generator>;
+    std::map<std::string, ResultsCollector<Generator>::ResultTree *,
+             NaturalLess> m_children;
 };
 
 template<typename T>

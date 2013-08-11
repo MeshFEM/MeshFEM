@@ -270,8 +270,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      controller, SLOT(runForceTranslationTest(const AnalysisSettings &)));
     QObject::connect(this, SIGNAL(runFunctionRadiusTest(const AnalysisSettings &)),
                      controller, SLOT(runFunctionRadiusTest(const AnalysisSettings &)));
-    QObject::connect(this, SIGNAL(runRefinementTest(const AnalysisSettings &)),
-                     controller, SLOT(runRefinementTest(const AnalysisSettings &)));
+    QObject::connect(this, SIGNAL(runRefinementTest()),
+                     controller, SLOT(runRefinementTest()));
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
@@ -465,7 +465,7 @@ void AnalysisForm::frtestButtonClicked() {
 }
 
 void AnalysisForm::reftestButtonClicked() {
-    emit runRefinementTest(m_settings);
+    emit runRefinementTest();
 }
 
 void AnalysisForm::reloadSettings() {

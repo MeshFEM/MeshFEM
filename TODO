@@ -1,0 +1,13 @@
+Implement:
+    Entity selection in elements state
+        (select node, boundary point, element with left mouse button)
+    Result Deletion
+    Result browsing hotkeys (advance to next/prev result of the same type)
+    Result/Settings Major Tree + flattened version
+    MSH writer (multiple MSH needed for model changes).
+
+    Fix bug when simultaneously changing models and settings
+
+    ***Zoom/Pan*** in viewer (but keep aspect ratio... tricky).
+
+    Debug cut cell stress computation... why is it so high?

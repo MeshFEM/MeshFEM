@@ -61,7 +61,7 @@ signals:
     void runTranslationTest(const AnalysisSettings &settings);
     void runForceTranslationTest(const AnalysisSettings &settings);
     void runFunctionRadiusTest(const AnalysisSettings &settings);
-    void runRefinementTest(const AnalysisSettings &settings);
+    void runRefinementTest();
 
 private:
     AnalysisSettings &m_settings;
