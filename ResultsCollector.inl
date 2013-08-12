@@ -184,7 +184,6 @@ public:
     }
 
     ~ResultTree() {
-        std::cout << "Result tree node destroyed!" << std::endl;
         clear();
     }
 

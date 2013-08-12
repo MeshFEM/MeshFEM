@@ -18,17 +18,18 @@ struct ViewSettings {
     ViewSettings()
         : showQuadraturePoints(false), autofitVectorField(false),
           showGridOverResults(true), showStressesDuringDeformation(true),
-          showColorbar(true), colormap(COLORMAP_JET), colormapRangeAuto(true)
+          vfDisplayStyle(VFIELD_DEFORM), showColorbar(true),
+          colormap(COLORMAP_JET), colormapRangeAuto(true)
     { }
 
     typedef enum { VFIELD_DEFORM = 0, VFIELD_VIBRATE = 1, VFIELD_ARROW = 2 }
-            VFieldDisplayMode;
+            VFieldDisplayStyle;
     bool showQuadraturePoints;
     bool autofitVectorField;
     bool showGridOverResults;
     bool showStressesDuringDeformation;
+    VFieldDisplayStyle vfDisplayStyle;
     bool showColorbar;
-    VFieldDisplayMode vfDisplayMode;
 
     CMapName colormap;
     bool colormapRangeAuto;

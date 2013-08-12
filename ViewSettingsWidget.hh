@@ -37,8 +37,9 @@ private:
     QCheckBox *g_showQuadraturePointsCheck,
               *g_showGridOverResultsCheck,
               *g_showStressesDuringDeformationCheck,
-              *g_showColorbar;
-    QComboBox *g_colormapSelector;
+              *g_fitVectorFieldsCheck,
+              *g_showColorbarCheck;
+    QComboBox *g_vfieldStyleSelector, *g_colormapSelector;
     QDoubleSpinBox *g_colormapMinStepper, *g_colormapMaxStepper;
     QCheckBox *g_colormapAutoRangeCheck;
 

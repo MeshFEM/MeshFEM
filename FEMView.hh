@@ -94,7 +94,7 @@ private:
     bool isVibrating() const {
         return (m_guiState == STATE_RESULT) &&
                (m_result) && (m_result->hasNodeVField()) && 
-               (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE);
+               (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE);
     }
 
     void setGUIState(GUIState state) {
@@ -102,14 +102,8 @@ private:
         m_gesture = NONE;
         m_select.clear();
 
+        viewSettingsUpdated();
         update();
-
-        if (isVibrating()) {
-            m_timer.start(1000.0 / 60, this);
-        }
-        else {
-            m_timer.stop();
-        }
     }
 
     void displayResult(std::shared_ptr<const Result> r) {
@@ -258,7 +252,7 @@ private:
     void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
     void m_drawWorldArrow(const Vector &p, const Vector &n,
-                          Scalar length = 1.0);
+                          Scalar length = 1.0, bool rescale = false);
     void m_drawWorldVertex(const Vector &v);
     void m_drawColorbar(float x, float y, float width, float height);
 

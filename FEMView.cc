@@ -74,6 +74,12 @@ void FEMView2D::csgNodesSelected(const NodeList &nList)
 void FEMView2D::viewSettingsUpdated()
 {
     m_scalarColorMap.selectMap(m_viewSettings.colormap);
+
+    if (isVibrating())
+        m_timer.start(1000.0 / 60, this);
+    else
+        m_timer.stop();
+
     update();
 }
     
@@ -394,10 +400,10 @@ void FEMView2D::m_drawWorldBox(const BBox_t &b)
 }
 
 void FEMView2D::m_drawWorldArrow(const Vector &p, const Vector &n,
-                                 Scalar length)
+                                 Scalar length, bool rescale)
 {
     // Draw unit vectors "length" pixels long
-    Scalar scale = length * getPixelSize();
+    Scalar scale = rescale ? length * getPixelSize() : 1.0;
     Vector tip = p + scale * n;
 
     glBegin(GL_LINES);
@@ -601,13 +607,14 @@ void FEMView2D::drawBoundary(bool pressureField,
     glColor3ub(color.red(), color.green(), color.blue());
     for (size_t i = 0; i < bndPts.size(); ++i) {
         Scalar scale = pressureField ? 800 * m_fem.pressure(i) : 15.0;
-        m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n);
+        m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n, 1.0, true);
     }
     
     if (hasSelect) {
         glColor3ub(selColor.red(), selColor.green(), selColor.blue());
         Scalar scale = pressureField ? 800 * m_fem.pressure(selIndex) : 15.0;
-        m_drawWorldArrow(bndPts[selIndex].p, scale * bndPts[selIndex].n);
+        m_drawWorldArrow(bndPts[selIndex].p, scale * bndPts[selIndex].n,
+                         1.0, true);
     }
 }
 
@@ -617,7 +624,7 @@ void FEMView2D::drawSelection(const VField &deformation)
     ElementGrid2D_t::AdjacencyVec corners;
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
 
-    glColor3f(255, 160, 0);
+    glColor3ub(255, 160, 0);
     if ((m_select.type() == SelectionTool::NODE) &&
         (m_select.index() < grid.numNodes())) {
         glPointSize(5.0f);
@@ -763,15 +770,15 @@ bool FEMView2D::m_drawResult()
 
     Scalar vecScale = 1.0;
 
-    if (m_result->hasNodeVField() & m_viewSettings.autofitVectorField) {
+    if (m_result->hasNodeVField() && m_viewSettings.autofitVectorField) {
         // Scale vector field so that the maximum displacement doesn't
         // exceed a certain fraction of the window size
         Scalar relMag = .125;
         Scalar maxX = 0.0, maxY = 0.0;
         assert((size_t) vfield.domainSize() == numNodes);
         for (size_t i = 0; i < numNodes; ++i) {
-            maxX = std::max((Scalar) std::abs(deformation(i)[0]), maxX);
-            maxY = std::max((Scalar) std::abs(deformation(i)[1]), maxY);
+            maxX = std::max((Scalar) std::abs(vfield(i)[0]), maxX);
+            maxY = std::max((Scalar) std::abs(vfield(i)[1]), maxY);
         }
 
         Vector frameDim = m_frameMax - m_frameMin;
@@ -781,21 +788,31 @@ bool FEMView2D::m_drawResult()
         vecScale = std::min(xMag, yMag);
     }
 
-    if (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE)
+    if (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)
         vfield *= vecScale * sin(m_displacementPhase);
     else
         vfield *= vecScale;
 
-    if (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_DEFORM ||
-        m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE) {
+    if (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_DEFORM ||
+        m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE) {
         deformation = vfield;
     }
 
     m_scalarColorMap.setAlpha(0.5f);
     bool usedColormap = drawObjectTextureCells(deformation, sfield);
 
-    if ((m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_ARROW) &&
+    if ((m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_ARROW) &&
         (vfield.domainSize() == numNodes)) {
+        glLineWidth(3.0);
+        glColor3f(1.0, 1.0, 1.0);
+        for (size_t i = 0; i < numNodes; ++i) {
+            Vector p = grid.nodePosition(i);
+            Vector v = vfield(i);
+            m_drawWorldArrow(p, v);
+        }
+
+        glLineWidth(1.0);
+        glColor3f(0.0, 0.0, 0.0);
         for (size_t i = 0; i < numNodes; ++i) {
             Vector p = grid.nodePosition(i);
             Vector v = vfield(i);

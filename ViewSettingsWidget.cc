@@ -11,7 +11,9 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     g_showQuadraturePointsCheck = new QCheckBox();
     g_showGridOverResultsCheck = new QCheckBox();
     g_showStressesDuringDeformationCheck = new QCheckBox();
-    g_showColorbar = new QCheckBox();
+    g_fitVectorFieldsCheck = new QCheckBox();
+    g_vfieldStyleSelector = new QComboBox();
+    g_showColorbarCheck = new QCheckBox();
     g_colormapSelector = new QComboBox();
     g_colormapMinStepper = new QDoubleSpinBox();
     g_colormapMaxStepper = new QDoubleSpinBox();
@@ -20,8 +22,14 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     form->addRow("Show Quadrature Points", g_showQuadraturePointsCheck);
     form->addRow("Show Grid Over Results", g_showGridOverResultsCheck);
     form->addRow("Show Stresses During Deformation", g_showStressesDuringDeformationCheck);
-    form->addRow("Show colorbar", g_showColorbar);
+    form->addRow("Auto-Fit Vector Fields", g_fitVectorFieldsCheck);
+    form->addRow("Vector Field Style", g_vfieldStyleSelector);
+    form->addRow("Show colorbar", g_showColorbarCheck);
     form->addRow("Colormap", g_colormapSelector);
+
+    g_vfieldStyleSelector->addItem("Deform");
+    g_vfieldStyleSelector->addItem("Vibrate");
+    g_vfieldStyleSelector->addItem("Arrows");
 
     g_colormapSelector->addItem("Jet");
     g_colormapSelector->addItem("Combined Weakness");
@@ -44,7 +52,11 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showStressesDuringDeformationCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
-    QObject::connect(g_showColorbar, SIGNAL(stateChanged(int)),
+    QObject::connect(g_fitVectorFieldsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
+    QObject::connect(g_vfieldStyleSelector, SIGNAL(currentIndexChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
+    QObject::connect(g_showColorbarCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_colormapSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
@@ -60,7 +72,12 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
     g_showQuadraturePointsCheck->setChecked(m_viewSettings.showQuadraturePoints);
     g_showGridOverResultsCheck->setChecked(m_viewSettings.showGridOverResults);
     g_showStressesDuringDeformationCheck->setChecked(m_viewSettings.showStressesDuringDeformation);
-    g_showColorbar->setChecked(m_viewSettings.showColorbar);
+
+    g_fitVectorFieldsCheck->setChecked(m_viewSettings.autofitVectorField);
+    // Note: assumes VFieldDisplayStyle enum index matches combo box index
+    g_vfieldStyleSelector->setCurrentIndex(m_viewSettings.vfDisplayStyle);
+
+    g_showColorbarCheck->setChecked(m_viewSettings.showColorbar);
     // Note: assumes CMapName enum index matches combo box index
     g_colormapSelector->setCurrentIndex(m_viewSettings.colormap);
     g_colormapAutoRangeCheck->setChecked(m_viewSettings.colormapRangeAuto);
@@ -75,7 +92,13 @@ void ViewSettingsWidget::m_readSettingsFromGUI() {
     m_viewSettings.showQuadraturePoints = g_showQuadraturePointsCheck->isChecked();
     m_viewSettings.showGridOverResults = g_showGridOverResultsCheck->isChecked();
     m_viewSettings.showStressesDuringDeformation = g_showStressesDuringDeformationCheck->isChecked();
-    m_viewSettings.showColorbar = g_showColorbar->isChecked();
+
+    m_viewSettings.autofitVectorField = g_fitVectorFieldsCheck->isChecked();
+    // Note: assumes VFieldDisplayStyle enum index matches combo box index
+    m_viewSettings.vfDisplayStyle = (ViewSettings::VFieldDisplayStyle)
+                    g_vfieldStyleSelector->currentIndex();
+
+    m_viewSettings.showColorbar = g_showColorbarCheck->isChecked();
     // Note: assumes CMapName enum index matches combo box index
     m_viewSettings.colormap = (CMapName) g_colormapSelector->currentIndex();
     m_viewSettings.colormapRangeAuto = g_colormapAutoRangeCheck->isChecked();
