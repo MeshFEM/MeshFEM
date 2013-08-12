@@ -224,6 +224,28 @@ void ResultsWindowController::resultsUpdated()
     m_window.activateWindow();
 }
 
+void ResultsWindowController::deleteSelection()
+{
+    auto items = m_window.g_treeView->selectedItems();
+
+    if (items.size() == 0)
+        return;
+
+    // Changing the results content should deselect the active result
+    if (m_currentResultItem) {
+        selectResult(NULL);
+    }
+
+    vector<string> pathsForDeletion;
+    foreach(QTreeWidgetItem *i, items) {
+        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+        pathsForDeletion.push_back(ri->path());
+    }
+
+    m_window.m_resultsCollection.removeResultsWithPaths(pathsForDeletion);
+    emit resultsUpdated();
+}
+
 ResultsWindowController::~ResultsWindowController()
 {
 }

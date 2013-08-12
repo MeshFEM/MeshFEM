@@ -23,6 +23,8 @@
 #ifndef RESULTS_COLLECTOR_HH
 #define RESULTS_COLLECTOR_HH
 
+#include <vector>
+#include <algorithm>
 #include <map>
 #include <string>
 #include <cassert>
@@ -189,14 +191,14 @@ public:
         assert(m_models.find(m_selectedModel) != m_models.end());
         assert(m_settings.find(m_selectedSettings) != m_settings.end());
         // Note: pointers are default-initialized to NULL
-        ResultTree *&msc_entry = m_models_settings_collection[m_selectedModel][m_selectedSettings];
-        ResultTree *&smc_entry = m_settings_models_collection[m_selectedSettings][m_selectedModel];
+        _RTPtr &msc_entry = m_models_settings_collection[m_selectedModel][m_selectedSettings];
+        _RTPtr &smc_entry = m_settings_models_collection[m_selectedSettings][m_selectedModel];
 
         // Both collections better hold the same pointer (whether NULL or
         // existing)
         assert(msc_entry == smc_entry);
-        if (msc_entry == NULL) {
-            msc_entry = smc_entry = new ResultTree();
+        if (msc_entry == nullptr) {
+            msc_entry = smc_entry = _RTPtr(new ResultTree());
         }
 
         msc_entry->setResult(name, result);
@@ -210,6 +212,74 @@ public:
     *///////////////////////////////////////////////////////////////////////////
     void clean();
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Remove all the results specified in paths.
+    //  @param[in]  paths   paths of results to remove
+    *///////////////////////////////////////////////////////////////////////////
+    void removeResultsWithPaths(std::vector<std::string> paths) {
+        m_lastResult.clear();
+
+        // ASCII sort of paths in descending order gives us a topological sort.
+        // (So we never try to delete a child after its parent)
+        std::sort(paths.begin(), paths.end(), std::greater<std::string>());
+
+        for (const std::string &path : paths) {
+            std::vector<std::string> nameComponents;
+            boost::split(nameComponents, path, boost::is_any_of(":"));
+            for (std::string &str : nameComponents)
+                boost::trim(str);
+
+            std::runtime_error e_invalid(std::string("Removal path invalid!"));
+            const std::string &mname = nameComponents[0];
+
+            auto mscit = m_models_settings_collection.find(mname);
+            if (mscit == m_models_settings_collection.end())
+                throw e_invalid;
+
+            _InnerMapType &imap = mscit->second;
+            if (nameComponents.size() > 1) {
+                const std::string &sname = nameComponents[1];
+                auto scit = imap.find(sname);
+                if (scit == imap.end())
+                    throw e_invalid;
+                else {
+                    if (nameComponents.size() > 2) {
+                        // Remove a subtree of the (model, setting) results tree
+                        scit->second->remove(nameComponents.begin() + 2,
+                                             nameComponents.end());
+                    }
+                    else {
+                        // Delete the results tree for a (model, setting)
+                        imap.erase(scit);
+
+                        // Delete the associated results tree in the
+                        // settings->model collections (it must exist...)
+                        auto &mc = m_settings_models_collection.at(sname);
+                        auto mcit = mc.find(mname);
+                        assert(mcit != mc.end());
+                        mc.erase(mcit);
+                    }
+                }
+            }
+            else {
+                // Deleting all result trees for a model
+                m_models_settings_collection.erase(mscit);
+
+                // Delete all the associated result trees in the settings->model
+                // collections
+                for (auto &smc_val : m_settings_models_collection) {
+                    auto mcit = smc_val.second.find(mname);
+                    if (mcit != smc_val.second.end())
+                        smc_val.second.erase(mcit);
+                }
+            }
+        }
+
+        // We might want to remove models and settings now that results have
+        // been removed.
+        clean();
+    }
+
     // Visit each node of the result collection tree. Visitor's preVisit takes
     // two arguments:
     //  1) Node name (std::string)
@@ -222,10 +292,10 @@ public:
 
         for (auto &e1 : topLevel) {
             v.preVisit(e1.first, false);
-            std::map<std::string, ResultTree *, NaturalLess> &scollection = e1.second;
+            _InnerMapType &scollection = e1.second;
             for (auto &e2 : scollection) {
                 v.preVisit(e2.first, false);
-                ResultTree *t = e2.second;
+                _RTPtr t = e2.second;
                 t->dfs(v);
                 v.postVisit();
             }
@@ -234,15 +304,7 @@ public:
     }
 
     void clear() {
-        // Destroy this collection's dynamically allocated contents
-        for (auto &entry : m_models_settings_collection) {
-            std::map<std::string, ResultTree *, NaturalLess> &scollection = entry.second;
-            for (auto &e2 : scollection) {
-                ResultTree *t = e2.second;
-                delete t;
-            }
-        }
-
+        // Smart pointers now make clean-up easy!
         m_models.clear();
         m_settings.clear();
         m_models_settings_collection.clear();
@@ -252,7 +314,7 @@ public:
 
     void print() const {
         for (const auto &entry : m_models_settings_collection) {
-            const std::map<std::string, ResultTree *> &scollection = entry.second;
+            const _InnerMapType &scollection = entry.second;
             std::cout << entry.first << std::endl;
             for (const auto &e2 : scollection) {
                 std::cout << "    " << e2.first << std::endl;
@@ -266,12 +328,13 @@ public:
     }
 
 private:
+    typedef std::shared_ptr<ResultTree>       _RTPtr;
+    typedef std::shared_ptr<const ResultTree> _ConstRTPtr;
+    typedef std::map<std::string, _RTPtr, NaturalLess> _InnerMapType;
+    typedef std::map<std::string, _InnerMapType>       _OuterMapType;
     std::map<std::string, RModel> m_models;
     std::map<std::string, AnalysisSettings> m_settings;
-    std::map<std::string, std::map<std::string, ResultTree *, NaturalLess>, NaturalLess> 
-                m_models_settings_collection;                            
-    std::map<std::string, std::map<std::string, ResultTree *, NaturalLess>, NaturalLess>
-                m_settings_models_collection;
+    _OuterMapType m_models_settings_collection, m_settings_models_collection;
 
     std::string m_selectedModel, m_selectedSettings;
     std::string m_lastResult; // The last result added (model:settings:name)

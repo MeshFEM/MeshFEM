@@ -28,6 +28,7 @@ public slots:
 
     void resultsUpdated();
     void selectResult(const std::string &path);
+    void deleteSelection();
 
 signals:
     void resultDeslected();

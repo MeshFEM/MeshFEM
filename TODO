@@ -1,6 +1,12 @@
 Implement:
     Entity selection in elements state
         (select node, boundary point, element with left mouse button)
+        Also in results state: display result value
+
+    Vector field view modes selector (Vibrate, displacmeent
+        Fit vs. absolute scale.
+
+    Boundary pressure view mode
     Result Deletion
     Result browsing hotkeys (advance to next/prev result of the same type)
     Result/Settings Major Tree + flattened version

@@ -50,6 +50,9 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
 
+    QObject::connect(g_deleteButton, SIGNAL(clicked()),
+                     controller(), SLOT(deleteSelection()));
+
     m_controller->resultsUpdated();
 }
 

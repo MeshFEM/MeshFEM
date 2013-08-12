@@ -15,6 +15,7 @@
 #include "utils.hh"
 #include <string>
 #include <vector>
+#include <list>
 #include <map>
 #include <cassert>
 #include <memory>
@@ -107,13 +108,9 @@ private:
 template<typename Generator>
 class ResultsCollector<Generator>::ResultTree
 {
-private:
-    ResultTree(ResultTree *parent)
-        : m_result(NULL), m_parent(parent) { }
-    
 public:
     ResultTree()
-        : m_result(NULL), m_parent(NULL) { }
+        : m_result(NULL) { }
 
     void setResult(const std::string &name, Result *result) {
         std::vector<std::string> nameComponents;
@@ -153,7 +150,7 @@ public:
         if (hasResult())
             count = 1;
             
-        for (const std::pair<const std::string, ResultTree *> &c : m_children) {
+        for (const typename _ChildMap::value_type &c : m_children) {
             count += c.second->numResults();
         }
 
@@ -161,35 +158,21 @@ public:
     }
 
     // Recursively destroy this tree's contents.
+    // Made super easy now by smart pointers
     void clear() {
         m_result.reset();
-
-        for (std::pair<const std::string, ResultTree *> &c : m_children)
-            delete c.second;
-
         m_children.clear();
     }
 
     
     template<typename Visitor>
     void dfs(Visitor &v) {
-        for (std::pair<const std::string, ResultTree *> &c : m_children) {
+        for (typename _ChildMap::value_type &c : m_children) {
             v.preVisit(c.first, c.second->hasResult());
             c.second->dfs(v);
             v.postVisit();
         }
     }
-
-    int indexOfChild(const ResultTree *c) const {
-        int pos = 0;
-        for (const auto &entryPair : m_children) {
-            if (entryPair.second == c)
-                return pos;
-            ++pos;
-        }
-        return -1;
-    }
-
 
     void print(int indent = 0) const {
         for (const auto &entryPair : m_children) {
@@ -201,6 +184,7 @@ public:
     }
 
     ~ResultTree() {
+        std::cout << "Result tree node destroyed!" << std::endl;
         clear();
     }
 
@@ -218,23 +202,43 @@ public:
                 existing->second->setResult(++curr, end, result);
             }
             else {
-                ResultTree *newNode = new ResultTree(this);
+                _RTPtr newNode(new ResultTree());
                 m_children.insert(make_pair(*curr, newNode));
                 newNode->setResult(++curr, end, result);
             }
         }
     }
 
+    void remove(std::vector<std::string>::const_iterator curr,
+                std::vector<std::string>::const_iterator end)
+    {
+        assert(curr != end);
+        auto child_it = m_children.find(*curr);
+        if (child_it == m_children.end())
+            throw std::runtime_error(std::string("Removal path invalid!"));
+        if (++curr == end)
+            m_children.erase(child_it);
+        else
+            child_it->second->remove(curr, end);
+    }
+
+    _ConstRTPtr
+    getSubtree(std::vector<std::string>::const_iterator curr,
+               std::vector<std::string>::const_iterator end) const
+    {
+        assert(curr != end);
+        auto child_it = m_children.find(*curr);
+        if (child_it == m_children.end())
+            throw std::runtime_error(std::string("Path not found!"));
+        return (++curr == end) ? child_it->second :
+                                 child_it->second->getSubtree(curr, end);
+    }
+
     std::shared_ptr<const Result>
     getResult(std::vector<std::string>::const_iterator curr,
               std::vector<std::string>::const_iterator end) const
     {
-        if (curr == end)
-            return getResult();
-        auto existing = m_children.find(*curr);
-        if (existing == m_children.end())
-            throw std::runtime_error(std::string("result not found!"));
-        return existing->second->getResult(++curr, end);
+        return getSubtree(curr, end)->getResult();
     }
 
 private:
@@ -242,9 +246,9 @@ private:
     // Members
     ////////////////////////////////////////////////////////////////////////////
     std::shared_ptr<Result> m_result;
-    ResultTree *m_parent;
-    std::map<std::string, ResultsCollector<Generator>::ResultTree *,
-             NaturalLess> m_children;
+
+    typedef std::map<std::string, _RTPtr, NaturalLess> _ChildMap;
+    _ChildMap m_children;
 };
 
 template<typename T>
@@ -312,8 +316,15 @@ addSettings(const std::string &nameSuggestion, const AnalysisSettings &settings)
 template<typename Generator>
 void ResultsCollector<Generator>::clean()
 {
-    // TODO: Also remove entries from m_models_settings_collection and
-    //       m_settings_models_collection.
+    auto innerMapResultCount = [](const _InnerMapType &m) -> size_t {
+            size_t count = 0;
+            for (const auto &entry : m) {
+                count += entry.second->numResults();
+            }
+            return count;
+        };
+
+    std::list<std::string> deletedModels, deletedSettings;
 
     // Delete non-existent models
     for (auto it = m_models.begin(); it != m_models.end(); /* nop */) {
@@ -322,16 +333,12 @@ void ResultsCollector<Generator>::clean()
         // Only remove the non-selected models
         if (name != m_selectedModel) {
             auto mit = m_models_settings_collection.find(name);
-            if (mit == m_models_settings_collection.end()) {
+            if (mit == m_models_settings_collection.end())
                 remove = true;
-            }
-            else {
-                size_t count = 0;
-                for (auto &ms_entry : mit->second)
-                    count += ms_entry.second->numResults();
-                remove = (count == 0);
-            }
+            else
+                remove = (innerMapResultCount(mit->second) == 0);
         }
+        deletedModels.push_back(name);
         if (remove)
             it = m_models.erase(it);
         else
@@ -345,20 +352,19 @@ void ResultsCollector<Generator>::clean()
         // Only remove the non-selected settings
         if (name != m_selectedSettings) {
             auto sit = m_settings_models_collection.find(name);
-            if (sit == m_settings_models_collection.end()) {
+            if (sit == m_settings_models_collection.end())
                 remove = true;
-            }
-            else {
-                size_t count = 0;
-                for (auto &sm_entry : sit->second)
-                    count += sm_entry.second->numResults();
-                remove = (count == 0);
-            }
+            else
+                remove = (innerMapResultCount(sit->second) == 0);
         }
+        deletedSettings.push_back(name);
         if (remove)
             it = m_settings.erase(it);
         else
             ++it;
     }
     
+    // TODO: To fully clean up, it would be nice to delete all empty model:setting and
+    // setting:model collections. However, these don't take up much space, and
+    // finding them could be a bit expensive.
 }

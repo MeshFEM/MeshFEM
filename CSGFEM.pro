@@ -24,7 +24,7 @@ CONFIG += release
 
 # clang++ version
 QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++
-QMAKE_CXXFLAGS += -isystem /opt/local/
+QMAKE_CXXFLAGS += -isystem /opt/local/include/QtGui/ -isystem /opt/local/include/eigen3/
 QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
 LIBS += -stdlib=libc++
 
