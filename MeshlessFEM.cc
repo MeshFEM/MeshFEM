@@ -1305,8 +1305,6 @@ void MeshlessFEM<Model>::m_invalidateCache() {
         m_pressures.resizeDomain(m_boundaryPoints.size());
     }
 
-    m_nodeFixed.assign(elementGrid().numNodes(), false);
-
     m_weakRegions.clear();
     m_weakRegionStressNorms.clear();
 

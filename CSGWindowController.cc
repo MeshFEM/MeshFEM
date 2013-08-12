@@ -26,12 +26,12 @@ using namespace std;
 
 void CSGWindowController::changedSidebarTab(int newTab) {
     if (newTab == 0) {
-        m_femView->setGUIState(FEMView2D::MODEL_STATE);
+        m_femView->setGUIState(FEMView2D::STATE_MODEL);
         m_state = CONTROLLER_STATE_MODEL;
     }
     else {
         modelChanged();
-        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
         m_state = CONTROLLER_STATE_ANALYSIS;
     }
 }
@@ -181,7 +181,7 @@ void CSGWindowController::loadCSG()
         // If we're in the analysis state, we must return to the element grid
         // display
         if (m_state == CONTROLLER_STATE_ANALYSIS) {
-            m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+            m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
         }
     }
 }
@@ -196,7 +196,7 @@ void CSGWindowController::modelChanged(bool refitGrid)
 void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
 {
     // When the grid changes, we must go back to the element state.
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     if (m_fem.configureElements(settings))
         m_femView->update();
     // Configuring the elements clears all modes and weak regions
@@ -206,7 +206,7 @@ void CSGWindowController::
 boundaryPointSettingsChanged(const AnalysisSettings &settings)
 {
     // Go back to the element state.
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     m_fem.configureBoundaryPoints(settings);
     m_femView->update();
     // Currently, configuring the boundary points clears all modes
@@ -217,7 +217,7 @@ matrixOrMaterialSettingsChanged(const AnalysisSettings &settings)
 {
     // When the material settings change, we must go back to the element
     // state.
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     m_fem.configureMaterial(settings);
     m_fem.configureMatrices(settings);
     // Configuring modal analysis settings clears all modes
@@ -228,7 +228,7 @@ modalAnalysisSettingsChanged(const AnalysisSettings &settings)
 {
     // When the modal analysis settings change, we must go back to the element
     // state.
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     m_fem.configureModalAnalysis(settings);
     // Configuring modal analysis settings clears all modes
 }
@@ -259,7 +259,7 @@ void CSGWindowController::runModalAnalysis()
 
 void CSGWindowController::configureSimulation()
 {
-    m_femView->setGUIState(FEMView2D::PRESSURE_DRAW_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_PRESSURE_DRAW);
 }
 
 void CSGWindowController::savePressure()
@@ -340,7 +340,7 @@ void CSGWindowController::loadPressure()
             if (!bpFile)
                 throw std::runtime_error(std::string("Error reading file"));
 
-            m_femView->setGUIState(FEMView2D::PRESSURE_DRAW_STATE);
+            m_femView->setGUIState(FEMView2D::STATE_PRESSURE_DRAW);
         }
         catch (std::exception &e)
         {
@@ -364,7 +364,7 @@ void CSGWindowController::runSimulation()
                 QMessageBox::Ok);
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
-        m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+        m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     }
     else {
         emit resultsUpdated();
@@ -380,7 +380,7 @@ void CSGWindowController::
 weaknessAnalysisSettingsChanged(const AnalysisSettings &settings)
 {
     m_fem.configureWeaknessAnalysis(settings);
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
 }
 
 void CSGWindowController::runWeakRegionExtraction()
@@ -698,5 +698,5 @@ void CSGWindowController::resultSelected(const string &resultPath)
 
 void CSGWindowController::resultDeslected()
 {
-    m_femView->setGUIState(FEMView2D::ELEMENTS_STATE);
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
 }

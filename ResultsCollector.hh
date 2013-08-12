@@ -219,8 +219,8 @@ public:
     void removeResultsWithPaths(std::vector<std::string> paths) {
         m_lastResult.clear();
 
-        // ASCII sort of paths in descending order gives us a topological sort.
-        // (So we never try to delete a child after its parent)
+        // ASCII sort of paths in descending order gives us a topological sort
+        // (So we never try to delete a child after its parent).
         std::sort(paths.begin(), paths.end(), std::greater<std::string>());
 
         for (const std::string &path : paths) {

@@ -37,8 +37,36 @@ class FEMView2D : public QGLWidget
     Q_OBJECT
 
 public:
-    typedef enum { MODEL_STATE = 0, ELEMENTS_STATE = 1,
-                   PRESSURE_DRAW_STATE = 2, RESULT_STATE = 3 } GUIState;
+    typedef enum { STATE_MODEL = 0, STATE_ELEMENTS = 1,
+                   STATE_PRESSURE_DRAW = 2, STATE_RESULT = 3 } GUIState;
+
+    struct SelectionTool {
+        typedef enum { NONE = 0, NODE, ELEM, BOUNDARY, NUM_TYPES } SelType;
+
+        SelectionTool()
+            : m_selType(NONE), m_mode(NODE)
+        { }
+
+        SelType type() const { return m_selType; }
+        size_t  index() const { return m_selIndex; }
+        SelType mode() const { return m_mode; }
+        void clear() { m_selType = NONE; }
+
+        void cycleMode() {
+            m_mode = (SelType) ((m_mode + 1) % NUM_TYPES);
+            if (m_mode == NONE) m_mode = NODE;
+        }
+
+        void select(size_t index) {
+            m_selIndex = index;
+            m_selType = m_mode;
+        }
+
+private:
+        size_t m_selIndex;
+        SelType m_selType;
+        SelType m_mode;
+    };
 
     typedef MeshlessFEM_t::SField SField;
     typedef MeshlessFEM_t::VField VField;
@@ -64,7 +92,7 @@ public:
     }
 
     bool isVibrating() const {
-        return (m_guiState == RESULT_STATE) &&
+        return (m_guiState == STATE_RESULT) &&
                (m_result) && (m_result->hasNodeVField()) && 
                (m_viewSettings.vfDisplayMode == ViewSettings::VFIELD_VIBRATE);
     }
@@ -72,6 +100,8 @@ public:
     void setGUIState(GUIState state) {
         m_guiState = state;
         m_gesture = NONE;
+        m_select.clear();
+
         update();
 
         if (isVibrating()) {
@@ -85,10 +115,10 @@ public:
     void displayResult(std::shared_ptr<const Result> r) {
         m_result = r;
         if (m_result) {
-            setGUIState(RESULT_STATE);
+            setGUIState(STATE_RESULT);
         }
-        else if (m_guiState == RESULT_STATE) {
-            setGUIState(ELEMENTS_STATE);
+        else if (m_guiState == STATE_RESULT) {
+            setGUIState(STATE_ELEMENTS);
         }
     }
 
@@ -116,29 +146,18 @@ protected:
     void initializeGL();
     void resizeGL(int width, int height);
     void paintGL();
+    template<typename Collection>
+    void getClosest(const Collection &points, const Vector &pt,
+                    size_t &closest, Scalar &sDist);
     void paintPressure(const Vector &screenPt, bool erase = false);
-    void paintFixedNodes(const Vector &screenPt, bool subtract = false);
+    void performSelection(const Vector &screenPt);
     void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
     void keyPressEvent(QKeyEvent *event) {
-        if (event->key() == Qt::Key_Down)
-            --m_selectedBoundaryPoint;
-        if (event->key() == Qt::Key_Up)
-            ++m_selectedBoundaryPoint;
-        if (event->key() == Qt::Key_Escape)
-            m_selectedBoundaryPoint = -1LL;
-
-        // Replace all invalid selected indexes with -1
-        size_t numBPs = m_fem.boundaryPoints().size();
-        if (m_selectedBoundaryPoint >= numBPs)
-            m_selectedBoundaryPoint = -1LL;
-        else {
-            std::cout << "Boundary point " << m_selectedBoundaryPoint << ": "
-                      << m_fem.boundaryPoints()[m_selectedBoundaryPoint].info()
-                      << std::endl;
-        }
+        if (event->key() == Qt::Key_S)
+            m_select.cycleMode();
 
         update();
     }
@@ -229,6 +248,7 @@ private:
     void drawBoundary(bool pressureField = false,
             const QColor &color = QColor(0, 0, 0),
             const QColor &selColor = QColor(0, 255, 0));
+    void drawSelection(const VField &deformation = VField());
     void draw();
     bool m_drawResult();
     bool m_drawElements();
@@ -260,8 +280,9 @@ private:
     MeshlessFEM_t &m_fem;
     NodeList m_selectedObjects;
     std::shared_ptr<const Result> m_result;
+    VField m_activeDeformation;
 
-    size_t m_selectedBoundaryPoint;
+    SelectionTool m_select;
     Scalar m_pressurePaintValue;
 
     GUIState m_guiState;

@@ -8,6 +8,8 @@ Implement:
 
     Boundary pressure view mode
     Result Deletion
+        Rewrite clear() so empty result nodes removed from the display
+
     Result browsing hotkeys (advance to next/prev result of the same type)
     Result/Settings Major Tree + flattened version
     MSH writer (multiple MSH needed for model changes).

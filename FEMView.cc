@@ -50,8 +50,8 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
       m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
       m_fem(fem), m_result(NULL),
-      m_selectedBoundaryPoint(-1LL), m_pressurePaintValue(0.1),
-      m_guiState(MODEL_STATE), m_gesture(NONE),
+      m_pressurePaintValue(0.1),
+      m_guiState(STATE_MODEL), m_gesture(NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
@@ -516,6 +516,7 @@ bool FEMView2D::drawObjectTextureCells(const VField &deformation,
     return hasEScalarField;
 }
 
+
 void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
                          const SField &elemScalarField)
 {
@@ -554,8 +555,7 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
             grid.elementCorners(i, corners);
             for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
                 Vector p = grid.nodePosition(corners[c]);
-                if (hasDeformation)
-                    p += deformation(corners[c]);
+                if (hasDeformation) p += deformation(corners[c]);
                 m_drawWorldVertex(p);
             }
         }
@@ -583,25 +583,78 @@ void FEMView2D::drawBoundary(bool pressureField,
 
     glBegin(GL_POINTS);
     const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
-    for (size_t i = 0; i < bndPts.size(); ++i) {
-        if (i == m_selectedBoundaryPoint)
-            glColor3ub(selColor.red(), selColor.green(), selColor.blue());
-        else
-            glColor3ub(color.red(), color.green(), color.blue());
+    glColor3ub(color.red(), color.green(), color.blue());
+    for (size_t i = 0; i < bndPts.size(); ++i)
         m_drawWorldVertex(bndPts[i].p);
+    // Draw selected boundary point
+
+    bool hasSelect = (m_select.type() == SelectionTool::BOUNDARY) &&
+                     (m_select.index() < bndPts.size());
+    size_t selIndex = m_select.index();
+    if (hasSelect) {
+        glColor3ub(selColor.red(), selColor.green(), selColor.blue());
+        m_drawWorldVertex(bndPts[selIndex].p);
     }
+
     glEnd();
 
+    glColor3ub(color.red(), color.green(), color.blue());
     for (size_t i = 0; i < bndPts.size(); ++i) {
-        if (i == m_selectedBoundaryPoint)
-            glColor3ub(selColor.red(), selColor.green(), selColor.blue());
-        else
-            glColor3ub(color.red(), color.green(), color.blue());
         Scalar scale = pressureField ? 800 * m_fem.pressure(i) : 15.0;
         m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n);
     }
+    
+    if (hasSelect) {
+        glColor3ub(selColor.red(), selColor.green(), selColor.blue());
+        Scalar scale = pressureField ? 800 * m_fem.pressure(selIndex) : 15.0;
+        m_drawWorldArrow(bndPts[selIndex].p, scale * bndPts[selIndex].n);
+    }
 }
 
+void FEMView2D::drawSelection(const VField &deformation)
+{
+    ElementGrid2D_t &grid = m_fem.elementGrid();
+    ElementGrid2D_t::AdjacencyVec corners;
+    bool hasDeformation = deformation.domainSize() == grid.numNodes();
+
+    glColor3f(255, 160, 0);
+    if ((m_select.type() == SelectionTool::NODE) &&
+        (m_select.index() < grid.numNodes())) {
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        Vector p = grid.nodePosition(m_select.index());
+        if (hasDeformation) p += deformation(m_select.index());
+        m_drawWorldVertex(p);
+        glEnd();
+    }
+
+    if ((m_select.type() == SelectionTool::ELEM) &&
+        (m_select.index() < grid.numElements())) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glLineWidth(3.0);
+        glBegin(GL_QUADS);
+        grid.elementCorners(m_select.index(), corners);
+        for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
+            Vector p = grid.nodePosition(corners[c]);
+            if (hasDeformation) p += deformation(corners[c]);
+            m_drawWorldVertex(p);
+        }
+        glEnd();
+
+        glColor3f(0.0, 0.0, 0.0);
+        glLineWidth(1.0);
+        glBegin(GL_QUADS);
+        grid.elementCorners(m_select.index(), corners);
+        for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
+            Vector p = grid.nodePosition(corners[c]);
+            if (hasDeformation) p += deformation(corners[c]);
+            m_drawWorldVertex(p);
+        }
+
+        glEnd();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+}
 
 void FEMView2D::m_rerenderObject()
 {
@@ -649,20 +702,22 @@ void FEMView2D::draw()
     glEnable(GL_POINT_SMOOTH);
     bool usedColormap = false;
 
+    m_activeDeformation.clear();
+
     ElementGrid2D_t &grid = m_fem.elementGrid();
 
-    if (m_guiState == MODEL_STATE) {
+    if (m_guiState == STATE_MODEL) {
         m_drawObject();
         m_drawSelectedObjects();
     }
 
-    else if (m_guiState == RESULT_STATE) {
+    else if (m_guiState == STATE_RESULT) {
         usedColormap |= m_drawResult();
     }
-    else if (m_guiState == ELEMENTS_STATE) {
+    else if (m_guiState == STATE_ELEMENTS) {
         usedColormap |= m_drawElements();
     }
-    else if (m_guiState == PRESSURE_DRAW_STATE) {
+    else if (m_guiState == STATE_PRESSURE_DRAW) {
         drawObjectTextureCells();
         // drawGrid(DRAW_CELLS);
         drawGrid(DRAW_EDGES);
@@ -670,10 +725,7 @@ void FEMView2D::draw()
         glPointSize(5.0f);
         glBegin(GL_POINTS);
         for (unsigned int i = 0; i < grid.numNodes(); ++i) {
-            if (m_fem.nodeIsFixed(i))
-                glColor3f(1.0f, 0.0f, 0.0f);
-            else
-                glColor3f(0.0f, 0.0f, 0.0f);
+            glColor3f(0.0f, 0.0f, 0.0f);
 
             Vector p = grid.nodePosition(i);
             m_drawWorldVertex(p);
@@ -683,7 +735,6 @@ void FEMView2D::draw()
         drawBoundary(true, QColor(255, 160, 0));
     }
 
-    
     if (usedColormap && m_viewSettings.showColorbar) {
         float colorBarWidth = 300;
         // Horizontally center colorbar
@@ -705,7 +756,10 @@ bool FEMView2D::m_drawResult()
     size_t numElems = m_fem.elementGrid().numElements();
 
     VField vfield = m_result->getVectorField(Result::PER_NODE);
-    VField deformation;
+
+    // The result deformation is recorded in m_activeDeformation
+    // so node offsets can be used elsewhere (e.g. selection).
+    VField &deformation = m_activeDeformation;
 
     Scalar vecScale = 1.0;
 
@@ -754,6 +808,8 @@ bool FEMView2D::m_drawResult()
         drawGrid(DRAW_NODES, deformation);
     }
 
+    drawSelection(deformation);
+
     return usedColormap;
 }
 
@@ -794,9 +850,10 @@ bool FEMView2D::m_drawElements()
     drawBoundary();
 
     // Visualize cubic kernel around selected point
-    if (m_selectedBoundaryPoint < m_fem.boundaryPoints().size()) {
+    if  ((m_select.type() == SelectionTool::BOUNDARY) &&
+        (m_select.index() < m_fem.boundaryPoints().size())) {
         const MeshlessFEM_t::BoundaryFunction &phi =
-            m_fem.boundaryFunction(m_selectedBoundaryPoint);
+            m_fem.boundaryFunction(m_select.index());
         Scalar radius = phi.supportRadius();
         // Highlight all elements overlapping the basis function's support
         std::vector<size_t> elems;
@@ -841,6 +898,8 @@ bool FEMView2D::m_drawElements()
             }
         glEnd();
     }
+
+    drawSelection();
 
     return false;
 }
@@ -911,45 +970,122 @@ void FEMView2D::paintGL()
     draw();
 }
 
-#define PAINT_DIST_THRESHOLD 30.0
-void FEMView2D::paintPressure(const Vector &screenPt, bool erase)
-{
-    const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
-    size_t closest = 0;
-    Scalar closestDist = std::numeric_limits<Scalar>::max();
-    for (size_t i = 0; i < bndPts.size(); ++i) {
-        Vector screenBP;
-        getScreenCoords(bndPts[i].p, screenBP);
-        Scalar dist = (screenPt - screenBP).norm();
-        if (dist < closestDist) {
+////////////////////////////////////////////////////////////////////////////////
+// Selection/painting tools
+////////////////////////////////////////////////////////////////////////////////
+// Pixel-space distance threshold for selection/painting
+#define SELECT_DIST_THRESHOLD 30.0
+
+// Gets the closest point in a collection and its distance in screen coordinates
+template<typename Collection>
+void FEMView2D::getClosest(const Collection &points, const Vector &pt,
+                           size_t &closest, Scalar &sDist) {
+    closest = 0;
+    sDist = std::numeric_limits<Scalar>::max();
+    for (size_t i = 0; i < points.size(); ++i) {
+        Vector candidate;
+        getScreenCoords(points(i), candidate);
+        Scalar dist = (pt - candidate).norm();
+        if (dist < sDist) {
             closest = i;
-            closestDist = dist;
+            sDist = dist;
         }
     }
-    if (closestDist < PAINT_DIST_THRESHOLD) {
+}
+
+// Selection points are boundary points 
+struct BPCollect {
+    BPCollect(const std::vector<BoundaryPoint_t> &bp) : m_bp(bp) { }
+    size_t size() const { return m_bp.size(); }
+    Vector operator()(size_t i) const { assert(i < size()); return m_bp[i].p; }
+private:
+    const std::vector<BoundaryPoint_t> &m_bp;
+};
+
+// Selection points are nodes 
+struct NDCollect {
+    typedef MeshlessFEM_t::VField VField;
+    NDCollect(const ElementGrid2D_t &grid,
+              const VField &deformation = VField())
+        : m_grid(grid), m_deformation(deformation) { }
+    size_t size() const { return m_grid.numNodes(); }
+
+    Vector operator()(size_t i) const {
+        return (m_deformation.domainSize() == size())
+            ? m_grid.nodePosition(i) + m_deformation(i)
+            : m_grid.nodePosition(i);
+    }
+
+private:
+    const ElementGrid2D_t &m_grid;
+    const VField &m_deformation;
+};
+
+// Selection points are element barycenters 
+struct ELCollect {
+    typedef MeshlessFEM_t::VField VField;
+    ELCollect(const ElementGrid2D_t &grid,
+              const VField &deformation = VField())
+        : m_grid(grid), m_deformation(deformation) { }
+    size_t size() const { return m_grid.numElements(); }
+    Vector operator()(size_t i) const {
+        ElementGrid2D_t::AdjacencyVec corners;
+        m_grid.elementCorners(i, corners);
+
+        Vector center(Vector::Zero());
+        Scalar weight = 1.0 / corners.rows();
+        bool hasDeformation = m_deformation.domainSize() == m_grid.numNodes();
+        for (size_t c = 0; c < (size_t) corners.rows(); ++c) {
+            center += weight * m_grid.nodePosition(corners[c]);
+            if (hasDeformation) center += weight * m_deformation(corners[c]);
+        }
+
+        BBox_t b = m_grid.elementBoundingBox(i);
+
+        return center;
+    }
+
+private:
+    const ElementGrid2D_t &m_grid;
+    const VField &m_deformation;
+};
+
+void FEMView2D::paintPressure(const Vector &screenPt, bool erase)
+{
+    size_t closest = 0;
+    Scalar closestDist;
+    getClosest(BPCollect(m_fem.boundaryPoints()), screenPt,
+              closest, closestDist);
+
+    if (closestDist < SELECT_DIST_THRESHOLD) {
         m_fem.pressure(closest) = erase ? 0.0 : m_pressurePaintValue;
         update();
     }
 }
 
-void FEMView2D::paintFixedNodes(const Vector &screenPt, bool subtract)
+void FEMView2D::performSelection(const Vector &screenPt)
 {
-    ElementGrid2D_t &grid = m_fem.elementGrid();
     size_t closest = 0;
     Scalar closestDist = std::numeric_limits<Scalar>::max();
-    for (unsigned int i = 0; i < grid.numNodes(); ++i) {
-        Vector screenNP;
-        getScreenCoords(grid.nodePosition(i), screenNP);
-        Scalar dist = (screenPt - screenNP).norm();
-        if (dist < closestDist) {
-            closest = i;
-            closestDist = dist;
-        }
+
+    if (m_select.mode() == SelectionTool::NODE) {
+        getClosest(NDCollect(m_fem.elementGrid(), m_activeDeformation),
+                   screenPt, closest, closestDist);
     }
-    if (closestDist < PAINT_DIST_THRESHOLD) {
-        m_fem.setNodeFixed(closest, !subtract);
-        update();
+    else if (m_select.mode() == SelectionTool::ELEM) {
+        getClosest(ELCollect(m_fem.elementGrid(), m_activeDeformation),
+                   screenPt, closest, closestDist);
     }
+    else if (m_select.mode() == SelectionTool::BOUNDARY) {
+        getClosest(BPCollect(m_fem.boundaryPoints()), screenPt,
+                   closest, closestDist);
+    }
+    if (closestDist < SELECT_DIST_THRESHOLD)
+        m_select.select(closest);
+    else
+        m_select.clear();
+
+    update();
 }
 
 void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
@@ -960,19 +1096,19 @@ void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
 
 void FEMView2D::mousePressEvent(QMouseEvent *event)
 {
-    if (m_guiState == MODEL_STATE) {
+    if (m_guiState == STATE_MODEL) {
         m_prevMouseLoc = event->pos();
         m_gesture = DRAGGING;
     }
-    else if (m_guiState == PRESSURE_DRAW_STATE) {
+    else if (m_guiState == STATE_PRESSURE_DRAW) {
         if (event->button() == Qt::LeftButton) {
             bool erase = event->modifiers() & Qt::AltModifier;
             paintPressure(qtToScreenCoords(event->pos()), erase);
         }
-        else if (event->button() == Qt::RightButton) {
-            bool subtract = event->modifiers() & Qt::AltModifier;
-            paintFixedNodes(qtToScreenCoords(event->pos()), subtract);
-        }
+    }
+    else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT)) {
+        if (event->button() == Qt::LeftButton)
+            performSelection(qtToScreenCoords(event->pos()));
     }
 }
 
@@ -981,7 +1117,11 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
     Vector start, end;
     getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
     getWorldCoords(-event->pos().y(), event->pos().x(), end[0], end[1]);
-    if ((m_guiState == MODEL_STATE) && m_gesture == DRAGGING) {
+
+    bool leftButton  = event->buttons() & Qt::LeftButton,
+         rightButton = event->buttons() & Qt::RightButton;
+
+    if ((m_guiState == STATE_MODEL) && m_gesture == DRAGGING) {
         for (NodeList::iterator it = m_selectedObjects.begin();
                                 it != m_selectedObjects.end(); ++it) {
             (*it)->applyTranslation(end - start);
@@ -990,17 +1130,15 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         m_rerenderOverlay();
         update();
     }
-    else if (m_guiState == PRESSURE_DRAW_STATE) {
-        bool leftButton  = event->buttons() & Qt::LeftButton,
-             rightButton = event->buttons() & Qt::RightButton;
+    else if (m_guiState == STATE_PRESSURE_DRAW) {
         if (leftButton && !rightButton) {
             bool erase = event->modifiers() & Qt::AltModifier;
             paintPressure(qtToScreenCoords(event->pos()), erase);
         }
-        else if (rightButton && !leftButton) {
-            bool subtract = event->modifiers() & Qt::AltModifier;
-            paintFixedNodes(qtToScreenCoords(event->pos()), subtract);
-        }
+    }
+    else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT)) {
+        if (leftButton && !rightButton)
+            performSelection(qtToScreenCoords(event->pos()));
     }
     m_prevMouseLoc = event->pos();
 }

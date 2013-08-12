@@ -279,15 +279,6 @@ public:
         return m_simulatedStressNorms;
     }
 
-    // Fixed/unfixed status of nodes
-    bool nodeIsFixed(size_t i) const {
-        assert(i < m_nodeFixed.size());
-        return m_nodeFixed[i];
-    }
-    void setNodeFixed(size_t i, bool fixed) {
-        m_nodeFixed[i] = fixed;
-    }
-
     bool modalAnalysis(RC *rc = NULL);
 
     // Rebuild all boundary force blurring functions
@@ -317,8 +308,6 @@ private:
     std::vector<BoundaryFunction> m_boundaryFunctions;
     /** Pressures for simulation */
     SField                        m_pressures;
-    /** Fixed nodes for simulation */
-    std::vector<bool>             m_nodeFixed;
     VField                        m_simulatedDisplacement;
     SMField                       m_simulatedStressTensors;
     SField                        m_simulatedStressNorms;
