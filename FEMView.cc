@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <limits>
+#include <boost/format.hpp>
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
@@ -782,10 +783,14 @@ bool FEMView2D::m_drawResult()
         }
 
         Vector frameDim = m_frameMax - m_frameMin;
-        Scalar xMag = (maxX > 1e-6) ? relMag * (frameDim[0] / maxX) : 1.0;
-        Scalar yMag = (maxY > 1e-6) ? relMag * (frameDim[1] / maxY) : 1.0;
+        Scalar xMag = (maxX > 1e-12) ? relMag * (frameDim[0] / maxX) : 1.0;
+        Scalar yMag = (maxY > 1e-12) ? relMag * (frameDim[1] / maxY) : 1.0;
 
         vecScale = std::min(xMag, yMag);
+
+        // We also want to support upscaling the arrows...
+        if (vecScale >= 1.0)
+            vecScale = std::max(xMag, yMag);
     }
 
     if (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)
@@ -826,6 +831,33 @@ bool FEMView2D::m_drawResult()
     }
 
     drawSelection(deformation);
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Display selected results.
+    ////////////////////////////////////////////////////////////////////////////
+    if (m_result->hasNodeVField() && (m_select.type() == SelectionTool::NODE)) {
+        size_t i = m_select.index();
+        assert(i < vfield.domainSize());
+
+        Vector v = vfield(i);
+        boost::format fmt("Node %i result vector: [%lf, %lf] (mag: %lf)");
+        std::string s = boost::str(fmt  % (int) i % v[0] % v[1] % v.norm());
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glRasterPos2i(5, 5);
+        m_font.Render(s.c_str());
+    }
+
+    bool hasElemScalarField = sfield.domainSize() == numElems;
+    if (hasElemScalarField && (m_select.type() == SelectionTool::ELEM)) {
+        size_t i = m_select.index();
+        assert(i < sfield.domainSize());
+
+        boost::format fmt("Elem %i result scalar: %lf");
+        std::string s = boost::str(fmt  % (int) i % sfield(i));
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glRasterPos2i(5, 5);
+        m_font.Render(s.c_str());
+    }
 
     return usedColormap;
 }

@@ -433,6 +433,19 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             return true;
         }
 
+        void getVolumeForceForPressures(const SField &p, VField &f)
+        {
+            DVector p_vec(p.domainSize());
+            for (size_t i = 0; i < p.domainSize(); ++i)
+                p_vec[i] = p[i];
+
+            DVector f_vec = m_SFNA * p_vec;
+            // f_vec has a trailing padding of 3 zeros added by S.
+            // These must be omitted.
+            f = VField(f_vec.head(f_vec.rows() - 3));
+        }
+
+
         virtual ~MatlabEigenSolver() { }
 
     protected:

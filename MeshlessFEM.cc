@@ -896,6 +896,19 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
     if (rc != NULL) {
         // Record the displacements/stresses in the results collector.
         typedef typename RC::Result Result;
+
+        // MatlabEigenSolver variants provide access to the blurred volume
+        // force. If that's what we're using, save this force for debugging.
+        MatlabEigenSolver<Real> *s =
+                dynamic_cast<MatlabEigenSolver<Real> *>(solver);
+        if (s) {
+            VField volForce;
+            s->getVolumeForceForPressures(m_pressures, volForce);
+            Result *f_r = new Result(Result::PER_ELEM, m_simulatedStressNorms,
+                                     Result::PER_NODE, volForce);
+            rc->setResult("Blurred Boundary Forces", f_r);
+        }
+
         Result *r = new Result(Result::PER_ELEM, m_simulatedStressNorms,
                                Result::PER_NODE, m_simulatedDisplacement);
         rc->setResult("Simulation", r);

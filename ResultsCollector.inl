@@ -91,6 +91,7 @@ public:
 
     bool hasElemSField() const { return m_hasSField[PER_ELEM]; }
     bool hasNodeVField() const { return m_hasVField[PER_NODE]; }
+    bool hasBdryVField() const { return m_hasVField[PER_BDRY]; }
 
 private:
     void init() {
