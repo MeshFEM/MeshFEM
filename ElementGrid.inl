@@ -21,25 +21,27 @@ void ElementGrid2D<Model>::update(bool refitGrid)
         setBoundingBox(m_model.boundingBox());
 
     m_elementForCell.assign(numCells(), -1);
+    m_elementOverlap.clear();
     std::vector<bool> isFullCell(numCells(), false);
     size_t numElements = 0;
+    std::vector<Vector> qPoints;
     for (size_t r = 0; r < rows(); ++r) {
         for (size_t c = 0; c < cols(); ++c) {
             size_t cell = get1DCellIndex(r, c);
             BBox_t b = cellBoundingBox(r, c);
-            std::vector<Vector> quadraturePoints =
-                                m_quadrature.quadraturePoints(b);
+            m_quadrature.quadraturePoints(b, qPoints);
             size_t insideCount = 0;
-            for (size_t pi = 0; pi < quadraturePoints.size(); ++pi) {
-                if (m_model.isInside(quadraturePoints[pi]))
+            for (size_t pi = 0; pi < qPoints.size(); ++pi) {
+                if (m_model.isInside(qPoints[pi]))
                     ++insideCount;
             }
-            double fracIn = ((double) insideCount) / quadraturePoints.size();
-            isFullCell[cell] = (insideCount == quadraturePoints.size());
+            Scalar fracIn = ((Scalar) insideCount) / qPoints.size();
+            isFullCell[cell] = (insideCount == qPoints.size());
             // A cell is an element if all quadrature points fall inside the
             // object, or if the fraction exceeds the cell overlap threshold.
             if (isFullCell[cell] || (fracIn > m_cellOverlapThreshold)) {
                 m_elementForCell[cell] = numElements++;
+                m_elementOverlap.push_back(fracIn);
             }
         }
     }

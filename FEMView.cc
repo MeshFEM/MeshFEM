@@ -885,12 +885,12 @@ bool FEMView2D::m_drawElements()
         glColor3f(1.0, 1.0, 0);
         glBegin(GL_POINTS);
 
+        std::vector<Vector> qPoints;
         for (unsigned int i = 0; i < grid.numElements(); ++i) {
             BBox_t b = grid.elementBoundingBox(i);
-            std::vector<Vector> qpoints =
-                m_fem.quadrature().quadraturePoints(b);
-            for (unsigned int p = 0; p < qpoints.size(); ++p) {
-                m_drawWorldVertex(qpoints[p]);
+            m_fem.quadrature().quadraturePoints(b, qPoints);
+            for (unsigned int p = 0; p < qPoints.size(); ++p) {
+                m_drawWorldVertex(qPoints[p]);
             }
         }
         glEnd();
@@ -1088,8 +1088,6 @@ struct ELCollect {
             center += weight * m_grid.nodePosition(corners[c]);
             if (hasDeformation) center += weight * m_deformation(corners[c]);
         }
-
-        BBox_t b = m_grid.elementBoundingBox(i);
 
         return center;
     }

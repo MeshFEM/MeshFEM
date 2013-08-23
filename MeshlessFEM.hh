@@ -417,6 +417,8 @@ public:
     // e_xx = d u_x / dx = u_0_x d phi_0 / dx + u_1_x d phi_1 / dx + ...
     // e_yy = d u_y / dy = u_0_y d phi_0 / dy + u_1_y d phi_1 / dy + ...
     // e_xy = .5 * (d u_y / dx + d u_x / dy) = u_0_x d phi_0 / dy + ...
+    //
+    // This is the average strain tensor over the element.
     template<typename Tensor>
     void displacementToStrain(const VField &displacements,
                               const CornerVec &corners, Tensor &strain) const
@@ -437,6 +439,8 @@ public:
 
     // Compute non-engineering stress tensor for linear elasticity:
     // sigma = D * B * u = D * displacementToStress
+    //
+    // This is the average stress tensor over the element.
     template<typename Tensor>
     void displacementToStress(const VField &displacements,
                               const CornerVec &corners, const DType &d,
@@ -447,7 +451,8 @@ public:
         strainToStress(strain, d, stress);
     }
 
-    // Compute non-engineering stress tensor for linear elasticity:
+    // Compute the stress associated with a given strain, applying the
+    // elasticity tensor:
     // D = d00 d01   0 =  d0 d1   0 
     //     d10 d11   0    d1 d2   0
     //     0   0   d22    0   0   d3
@@ -461,6 +466,8 @@ public:
     }
 
     // Compute energy induced in this element by a displacement.
+    // Note: for a more accurate energy computation we should instead store the
+    // average element stiffness matrix (avg(B^T D B) != avg(B)^T D avg(B)).
     Real displacementToEnergy(const VField &displacements,
                               const CornerVec &corners, const DType &d) const
     {
@@ -470,10 +477,11 @@ public:
         strainToStress(strain, d, stress);
 
         return (strain[0] * stress[0] + strain[1] * stress[1] +
-            2 * strain[2] * stress[2]) * m_volume;
+            2 * strain[2] * stress[2]) * volume();
     }
     
 private:
+    // The gradients of displacement, averaged over the cell.
     GradPhis m_gradPhis;
     Real m_volume;
 };

@@ -4,6 +4,10 @@ Debug cut cell stress computation... why is it so high?
 Implement:
     Change scale of the auto-fit vector field feature.
         (slider controlling fraction of view to restrict arrow length).
+    Fix bug when simultaneously changing models and settings
+
+    Fix auto-fit (handle up and downscale cases correctly, make relative to
+                  object bounding box)
     
     Boundary pressure view mode
     Rewrite ResultCollection clear() so empty result nodes removed from the display
@@ -11,7 +15,5 @@ Implement:
     Result browsing hotkeys (advance to next/prev result of the same type)
     Result/Settings Major Tree + flattened version
     MSH writer (multiple MSH needed for model changes).
-
-    Fix bug when simultaneously changing models and settings
 
     ***Zoom/Pan*** in viewer (but keep aspect ratio... tricky).

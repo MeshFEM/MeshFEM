@@ -54,6 +54,8 @@ public:
         m_method = b ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
     }
 
+    void quadraturePoints(const BBox<Vector2D> &b,
+                          std::vector<Vector2D> &qp) const;
     std::vector<Vector2D> quadraturePoints(const BBox<Vector2D> &b) const;
 
     template<typename Func>

@@ -10,13 +10,21 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "Quadrature.hh"
 
+void Quadrature2D::quadraturePoints(const BBox<Vector2D> &b,
+                                    std::vector<Vector2D> &qp) const
+{
+    int n = m_referenceQuadraturePoints.size();
+    qp.clear();
+    qp.reserve(n);
+    for (int i = 0; i < n; ++i)
+        qp.push_back(b.interpolatePoint(m_referenceQuadraturePoints[i]));
+}
+
 std::vector<Vector2D>
 Quadrature2D::quadraturePoints(const BBox<Vector2D> &b) const
 {
-    std::vector<Vector2D> points(m_referenceQuadraturePoints);
-    int n = numPoints();
-    for (int i = 0; i < n; ++i)
-        points[i] = b.interpolatePoint(points[i]);
+    std::vector<Vector2D> points;
+    quadraturePoints(b, points);
     return points;
 }
 
@@ -24,8 +32,8 @@ void Quadrature2D::m_generateReferenceQuadratureNodes(int numPoints)
 {
     assert(numPoints > 0);
 
-    m_referenceQuadraturePoints.resize(0);
-    m_referenceQuadratureWeights.resize(0);
+    m_referenceQuadraturePoints.clear();
+    m_referenceQuadratureWeights.clear();
     m_referenceQuadraturePoints.reserve(numPoints);
     m_referenceQuadratureWeights.reserve(numPoints);
 

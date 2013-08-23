@@ -88,6 +88,12 @@ public:
         return cellBoundingBox(m_cellForElement[i]);
     }
 
+    Scalar elementOverlap(size_t i) const
+    {
+        assert(i < m_elementOverlap.size());
+        return m_elementOverlap[i];
+    }
+
     Vector nodePosition(size_t i) const
     {
         assert(i < m_vertexForNode.size());
@@ -201,6 +207,7 @@ private:
     IndexVector m_nodeForVertex, m_vertexForNode,
                 m_elementForCell, m_cellForElement;
     std::vector<bool> m_isFullElement;
+    std::vector<Scalar>m_elementOverlap;
 
     const Quadrature2D &m_quadrature;
     const Model &m_model;
