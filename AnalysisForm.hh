@@ -77,6 +77,8 @@ private:
     QCheckBox *g_gaussQuadratureCheck;
     QDoubleSpinBox *g_cellOverlapStepper;
 
+    QCheckBox *g_exactFullElementsCheck, *g_antialiasedElementsCheck;
+
     // Matrix/material settings
     QComboBox *g_massMatrixSelector;
     QDoubleSpinBox *g_youngModulusStepper;

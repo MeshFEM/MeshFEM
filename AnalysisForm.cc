@@ -38,6 +38,9 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_cellOverlapStepper->setMaximum(1.0);
     g_cellOverlapStepper->setSingleStep(.05);
 
+    g_exactFullElementsCheck = new QCheckBox();
+    g_antialiasedElementsCheck = new QCheckBox();
+
     g_massMatrixSelector = new QComboBox();
     g_youngModulusStepper = new QDoubleSpinBox();
     g_poissonRatioStepper = new QDoubleSpinBox();
@@ -113,6 +116,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     eqForm->addRow("Cell Overlap Threshold", g_cellOverlapStepper);
+    eqForm->addRow("Exact Full Cell Integrals", g_exactFullElementsCheck);
+    eqForm->addRow("Antialiased Cut Cells", g_antialiasedElementsCheck);
     elementsQuadratureGroup->setLayout(eqForm);
 
     // Material/Matrix Settings
@@ -197,6 +202,11 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(elementGridControlsChanged(int)));
     QObject::connect(g_cellOverlapStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(elementGridControlsChanged(double)));
+
+    QObject::connect(g_exactFullElementsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
+    QObject::connect(g_antialiasedElementsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(elementGridControlsChanged(int)));
 
     QObject::connect(g_massMatrixSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(matrixControlsChanged(int)));
@@ -305,6 +315,9 @@ void AnalysisForm::m_setGUIFromSettings() {
                                        GAUSS_QUADRATURE);
     g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
 
+    g_exactFullElementsCheck->setChecked(m_settings.exactFullElements);
+    g_antialiasedElementsCheck->setChecked(m_settings.antialiasedElements);
+
     g_laplacianModesCheck->setChecked(m_settings.laplacianModes);
     g_numModesStepper->setValue(m_settings.numModes);
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
@@ -361,6 +374,9 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.laplacianModes = g_laplacianModesCheck->isChecked();
     m_settings.numModes = g_numModesStepper->value();
     m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
+
+    m_settings.exactFullElements = g_exactFullElementsCheck->isChecked();
+    m_settings.antialiasedElements = g_antialiasedElementsCheck->isChecked();
 
     // Note: assumes MassMatrixType enum index matches combo box index
     m_settings.massMatrixType =

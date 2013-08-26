@@ -88,8 +88,17 @@ public:
     }
 
 
+    // Return true if the grid changes as a result of the settings change
     bool configureElements(const AnalysisSettings &settings) {
         bool changed = false;
+
+        if ((m_exactFullElements != settings.exactFullElements) ||
+            (m_antialiasedElements != settings.antialiasedElements)) {
+            m_exactFullElements = settings.exactFullElements;
+            m_antialiasedElements = settings.antialiasedElements;
+            changed = true;
+        }
+
         if (quadrature().numPoints() != settings.quadraturePoints) {
             quadrature().setNumPoints(settings.quadraturePoints);
             changed = true;
@@ -311,6 +320,7 @@ private:
     VField                        m_simulatedDisplacement;
     SMField                       m_simulatedStressTensors;
     SField                        m_simulatedStressNorms;
+    bool m_exactFullElements, m_antialiasedElements;
     bool m_useMarchingSquaresBoundary;
     Real m_boundaryPointSpacing, m_boundaryKernelRadius;
     bool m_stiffnessCached, m_massCached, m_displacementStrainCached;

@@ -58,6 +58,9 @@ public:
                           std::vector<Vector2D> &qp) const;
     std::vector<Vector2D> quadraturePoints(const BBox<Vector2D> &b) const;
 
+    // For each quadrature point, calls f.accumulate() passing in the sample
+    // point along with the corresponding reference point (in the canonical
+    // element) and weight (scaled by the ref->element jacobian determinant)
     template<typename Func>
     void integrate(Func &f, const BBox<Vector2D> &b) const {
         int n = numPoints();

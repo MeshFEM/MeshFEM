@@ -23,6 +23,7 @@ struct AnalysisSettings {
         : solver("Gurobi"),
           Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
           cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02), kernelRadius(1.0),
+          exactFullElements(true), antialiasedElements(false),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
@@ -41,6 +42,9 @@ struct AnalysisSettings {
     bool   useMSBoundary;
     double boundarySpacing;
     double kernelRadius;
+
+    bool exactFullElements; // Analytic integrals for elements when possible
+    bool antialiasedElements;
 
     MassMatrixType massMatrixType;
 
@@ -75,6 +79,8 @@ struct AnalysisSettings {
             (useMSBoundary == rhs.useMSBoundary) &&
             (boundarySpacing == rhs.boundarySpacing) &&
             (kernelRadius == rhs.kernelRadius) &&
+            (exactFullElements == rhs.exactFullElements) &&
+            (antialiasedElements == rhs.antialiasedElements) &&
             (massMatrixType == rhs.massMatrixType) &&
             (laplacianModes == rhs.laplacianModes) &&
             (numModes == rhs.numModes) &&

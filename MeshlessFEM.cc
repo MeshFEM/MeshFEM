@@ -24,11 +24,10 @@ public:
     typedef Eigen::Matrix<Real, 8, 8> value_type;
     // D: (d00, d01, d10, d11, d22)
     PerElementStiffnessDensity(const DType &d, const Model &model)
-        : m_model(model), m_d(d) { clear(); }
+        : m_model(model), m_d(d) { clear(); setDimensions(Vector::Zero()); }
 
     void clear() {
         result = value_type::Zero();
-        setDimensions(Vector::Zero());
     }
 
     void setDimensions(const Vector &dims) {
@@ -125,73 +124,76 @@ public:
             // double counting the off-diagonals.
             Real d00 = m_d[0], d01 = m_d[1], d10 = m_d[1], d11 = m_d[2], d22 = .5 * m_d[3];
 
-            Real invW = 1.0 / m_dimensions[0];
-            Real invH = 1.0 / m_dimensions[1];
+            Real w = m_dimensions[0];
+            Real h = m_dimensions[1];
+            Real invVol = 1.0 / (w * h);
+            Real wSq = w * w;
+            Real hSq = h * h;
 
-            fullCellResult(0, 0) = invW * invW * d00 / 3.0 + invH * invH * d22 / 3.0;
-            fullCellResult(0, 1) = invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(0, 2) = -invW * invW * d00 / 3.0 + invH * invH * d22 / 6.0;
-            fullCellResult(0, 3) = invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(0, 4) = -invW * invW * d00 / 6.0 - invH * invH * d22 / 6.0;
-            fullCellResult(0, 5) = -invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(0, 6) = invW * invW * d00 / 6.0 - invH * invH * d22 / 3.0;
-            fullCellResult(0, 7) = -invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(1, 0) = invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(1, 1) = invH * invH * d11 / 3.0 + invW * invW * d22 / 3.0;
-            fullCellResult(1, 2) = -invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(1, 3) = invH * invH * d11 / 6.0 - invW * invW * d22 / 3.0;
-            fullCellResult(1, 4) = -invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(1, 5) = -invH * invH * d11 / 6.0 - invW * invW * d22 / 6.0;
-            fullCellResult(1, 6) = invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(1, 7) = -invH * invH * d11 / 3.0 + invW * invW * d22 / 6.0;
-            fullCellResult(2, 0) = -invW * invW * d00 / 3.0 + invH * invH * d22 / 6.0;
-            fullCellResult(2, 1) = -invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(2, 2) = invW * invW * d00 / 3.0 + invH * invH * d22 / 3.0;
-            fullCellResult(2, 3) = -invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(2, 4) = invW * invW * d00 / 6.0 - invH * invH * d22 / 3.0;
-            fullCellResult(2, 5) = invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(2, 6) = -invW * invW * d00 / 6.0 - invH * invH * d22 / 6.0;
-            fullCellResult(2, 7) = invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(3, 0) = invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(3, 1) = invH * invH * d11 / 6.0 - invW * invW * d22 / 3.0;
-            fullCellResult(3, 2) = -invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(3, 3) = invH * invH * d11 / 3.0 + invW * invW * d22 / 3.0;
-            fullCellResult(3, 4) = -invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(3, 5) = -invH * invH * d11 / 3.0 + invW * invW * d22 / 6.0;
-            fullCellResult(3, 6) = invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(3, 7) = -invH * invH * d11 / 6.0 - invW * invW * d22 / 6.0;
-            fullCellResult(4, 0) = -invW * invW * d00 / 6.0 - invH * invH * d22 / 6.0;
-            fullCellResult(4, 1) = -invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(4, 2) = invW * invW * d00 / 6.0 - invH * invH * d22 / 3.0;
-            fullCellResult(4, 3) = -invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(4, 4) = invW * invW * d00 / 3.0 + invH * invH * d22 / 3.0;
-            fullCellResult(4, 5) = invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(4, 6) = -invW * invW * d00 / 3.0 + invH * invH * d22 / 6.0;
-            fullCellResult(4, 7) = invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(5, 0) = -invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(5, 1) = -invH * invH * d11 / 6.0 - invW * invW * d22 / 6.0;
-            fullCellResult(5, 2) = invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(5, 3) = -invH * invH * d11 / 3.0 + invW * invW * d22 / 6.0;
-            fullCellResult(5, 4) = invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(5, 5) = invH * invH * d11 / 3.0 + invW * invW * d22 / 3.0;
-            fullCellResult(5, 6) = -invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(5, 7) = invH * invH * d11 / 6.0 - invW * invW * d22 / 3.0;
-            fullCellResult(6, 0) = invW * invW * d00 / 6.0 - invH * invH * d22 / 3.0;
-            fullCellResult(6, 1) = invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(6, 2) = -invW * invW * d00 / 6.0 - invH * invH * d22 / 6.0;
-            fullCellResult(6, 3) = invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(6, 4) = -invW * invW * d00 / 3.0 + invH * invH * d22 / 6.0;
-            fullCellResult(6, 5) = -invW * d01 * invH / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(6, 6) = invW * invW * d00 / 3.0 + invH * invH * d22 / 3.0;
-            fullCellResult(6, 7) = -invW * d01 * invH / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(7, 0) = -invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(7, 1) = -invH * invH * d11 / 3.0 + invW * invW * d22 / 6.0;
-            fullCellResult(7, 2) = invH * d10 * invW / 4.0 + invW * d22 * invH / 4.0;
-            fullCellResult(7, 3) = -invH * invH * d11 / 6.0 - invW * invW * d22 / 6.0;
-            fullCellResult(7, 4) = invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(7, 5) = invH * invH * d11 / 6.0 - invW * invW * d22 / 3.0;
-            fullCellResult(7, 6) = -invH * d10 * invW / 4.0 - invW * d22 * invH / 4.0;
-            fullCellResult(7, 7) = invH * invH * d11 / 3.0 + invW * invW * d22 / 3.0;
+            fullCellResult(0, 0) = invVol * (d00 * hSq + d22 * wSq) / 3.0;
+            fullCellResult(0, 1) = d01 / 4.0 + d22 / 4.0;
+            fullCellResult(0, 2) = -invVol * (2.0 * d00 * hSq - d22 * wSq) / 6.0;
+            fullCellResult(0, 3) = d01 / 4.0 - d22 / 4.0;
+            fullCellResult(0, 4) = -invVol * (d00 * hSq + d22 * wSq) / 6.0;
+            fullCellResult(0, 5) = -d01 / 4.0 - d22 / 4.0;
+            fullCellResult(0, 6) = invVol * (d00 * hSq - 2.0 * d22 * wSq) / 6.0;
+            fullCellResult(0, 7) = -d01 / 4.0 + d22 / 4.0;
+            fullCellResult(1, 0) = d10 / 4.0 + d22 / 4.0;
+            fullCellResult(1, 1) = invVol * (d11 * wSq + d22 * hSq) / 3.0;
+            fullCellResult(1, 2) = -d10 / 4.0 + d22 / 4.0;
+            fullCellResult(1, 3) = invVol * (d11 * wSq - 2.0 * d22 * hSq) / 6.0;
+            fullCellResult(1, 4) = -d10 / 4.0 - d22 / 4.0;
+            fullCellResult(1, 5) = -invVol * (d11 * wSq + d22 * hSq) / 6.0;
+            fullCellResult(1, 6) = d10 / 4.0 - d22 / 4.0;
+            fullCellResult(1, 7) = -invVol * (2.0 * d11 * wSq - d22 * hSq) / 6.0;
+            fullCellResult(2, 0) = -invVol * (2.0 * d00 * hSq - d22 * wSq) / 6.0;
+            fullCellResult(2, 1) = -d01 / 4.0 + d22 / 4.0;
+            fullCellResult(2, 2) = invVol * (d00 * hSq + d22 * wSq) / 3.0;
+            fullCellResult(2, 3) = -d01 / 4.0 - d22 / 4.0;
+            fullCellResult(2, 4) = invVol * (d00 * hSq - 2.0 * d22 * wSq) / 6.0;
+            fullCellResult(2, 5) = d01 / 4.0 - d22 / 4.0;
+            fullCellResult(2, 6) = -invVol * (d00 * hSq + d22 * wSq) / 6.0;
+            fullCellResult(2, 7) = d01 / 4.0 + d22 / 4.0;
+            fullCellResult(3, 0) = d10 / 4.0 - d22 / 4.0;
+            fullCellResult(3, 1) = invVol * (d11 * wSq - 2.0 * d22 * hSq) / 6.0;
+            fullCellResult(3, 2) = -d10 / 4.0 - d22 / 4.0;
+            fullCellResult(3, 3) = invVol * (d11 * wSq + d22 * hSq) / 3.0;
+            fullCellResult(3, 4) = -d10 / 4.0 + d22 / 4.0;
+            fullCellResult(3, 5) = -invVol * (2.0 * d11 * wSq - d22 * hSq) / 6.0;
+            fullCellResult(3, 6) = d10 / 4.0 + d22 / 4.0;
+            fullCellResult(3, 7) = -invVol * (d11 * wSq + d22 * hSq) / 6.0;
+            fullCellResult(4, 0) = -invVol * (d00 * hSq + d22 * wSq) / 6.0;
+            fullCellResult(4, 1) = -d01 / 4.0 - d22 / 4.0;
+            fullCellResult(4, 2) = invVol * (d00 * hSq - 2.0 * d22 * wSq) / 6.0;
+            fullCellResult(4, 3) = -d01 / 4.0 + d22 / 4.0;
+            fullCellResult(4, 4) = invVol * (d00 * hSq + d22 * wSq) / 3.0;
+            fullCellResult(4, 5) = d01 / 4.0 + d22 / 4.0;
+            fullCellResult(4, 6) = -invVol * (2.0 * d00 * hSq - d22 * wSq) / 6.0;
+            fullCellResult(4, 7) = d01 / 4.0 - d22 / 4.0;
+            fullCellResult(5, 0) = -d10 / 4.0 - d22 / 4.0;
+            fullCellResult(5, 1) = -invVol * (d11 * wSq + d22 * hSq) / 6.0;
+            fullCellResult(5, 2) = d10 / 4.0 - d22 / 4.0;
+            fullCellResult(5, 3) = -invVol * (2.0 * d11 * wSq - d22 * hSq) / 6.0;
+            fullCellResult(5, 4) = d10 / 4.0 + d22 / 4.0;
+            fullCellResult(5, 5) = invVol * (d11 * wSq + d22 * hSq) / 3.0;
+            fullCellResult(5, 6) = -d10 / 4.0 + d22 / 4.0;
+            fullCellResult(5, 7) = invVol * (d11 * wSq - 2.0 * d22 * hSq) / 6.0;
+            fullCellResult(6, 0) = invVol * (d00 * hSq - 2.0 * d22 * wSq) / 6.0;
+            fullCellResult(6, 1) = d01 / 4.0 - d22 / 4.0;
+            fullCellResult(6, 2) = -invVol * (d00 * hSq + d22 * wSq) / 6.0;
+            fullCellResult(6, 3) = d01 / 4.0 + d22 / 4.0;
+            fullCellResult(6, 4) = -invVol * (2.0 * d00 * hSq - d22 * wSq) / 6.0;
+            fullCellResult(6, 5) = -d01 / 4.0 + d22 / 4.0;
+            fullCellResult(6, 6) = invVol * (d00 * hSq + d22 * wSq) / 3.0;
+            fullCellResult(6, 7) = -d01 / 4.0 - d22 / 4.0;
+            fullCellResult(7, 0) = -d10 / 4.0 + d22 / 4.0;
+            fullCellResult(7, 1) = -invVol * (2.0 * d11 * wSq - d22 * hSq) / 6.0;
+            fullCellResult(7, 2) = d10 / 4.0 + d22 / 4.0;
+            fullCellResult(7, 3) = -invVol * (d11 * wSq + d22 * hSq) / 6.0;
+            fullCellResult(7, 4) = d10 / 4.0 - d22 / 4.0;
+            fullCellResult(7, 5) = invVol * (d11 * wSq - 2.0 * d22 * hSq) / 6.0;
+            fullCellResult(7, 6) = -d10 / 4.0 - d22 / 4.0;
+            fullCellResult(7, 7) = invVol * (d11 * wSq + d22 * hSq) / 3.0;
 
             m_fullCellIntegralCached = true;
         }
@@ -270,18 +272,17 @@ private:
     value_type result;
 };
 
-// Average grad phi over the element.
+// Averaged (not integrated) grad phi over the element.
 template<typename Model>
 class MeshlessFEM<Model>::PerElementGradPhi
 {
 public:
     // D: (d00, d01, d10, d11, d22)
     PerElementGradPhi(const Model &model)
-        : m_model(model) { clear(); }
+        : m_model(model) { clear(); setDimensions(Vector::Zero()); }
 
     void clear() {
         result = GradPhis::Zero();
-        setDimensions(Vector::Zero());
     }
 
     void setDimensions(const Vector &dims) {
@@ -437,20 +438,37 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(TMatrix &K)
     K.nz.reserve(nnz);
 
     for (size_t e = 0; e < elemGrid.numElements(); ++e) {
-        stiff.clear();
         BBox_t b = elemGrid.elementBoundingBox(e);
-        stiff.setDimensions(b.dimensions());
-        q.integrate(stiff, b);
         elemGrid.elementCorners(e, cornerIndices);
-        for (size_t i = 0; i < 4; ++i) {
-            size_t vi = cornerIndices[i];
-            for (size_t j = 0; j < 4; ++j) {
-                size_t vj = cornerIndices[j];
-                // xx, xy, yy, yx
-                K.addNZ(2 * vi    , 2 * vj    , stiff(2 * i    , 2 * j    ));
-                K.addNZ(2 * vi    , 2 * vj + 1, stiff(2 * i    , 2 * j + 1));
-                K.addNZ(2 * vi + 1, 2 * vj + 1, stiff(2 * i + 1, 2 * j + 1));
-                K.addNZ(2 * vi + 1, 2 * vj    , stiff(2 * i + 1, 2 * j    ));
+        stiff.setDimensions(b.dimensions());
+        if ((m_exactFullElements && elemGrid.elementIsFull(e))
+                || m_antialiasedElements) {
+            Real rho = elemGrid.elementOverlap(e);
+            for (size_t i = 0; i < 4; ++i) {
+                size_t vi = cornerIndices[i];
+                for (size_t j = 0; j < 4; ++j) {
+                    size_t vj = cornerIndices[j];
+                    // xx, xy, yy, yx
+                    K.addNZ(2 * vi    , 2 * vj    , rho * stiff.fullCellIntegral(2 * i    , 2 * j    ));
+                    K.addNZ(2 * vi    , 2 * vj + 1, rho * stiff.fullCellIntegral(2 * i    , 2 * j + 1));
+                    K.addNZ(2 * vi + 1, 2 * vj + 1, rho * stiff.fullCellIntegral(2 * i + 1, 2 * j + 1));
+                    K.addNZ(2 * vi + 1, 2 * vj    , rho * stiff.fullCellIntegral(2 * i + 1, 2 * j    ));
+                }
+            }
+        }
+        else {
+            stiff.clear();
+            q.integrate(stiff, b);
+            for (size_t i = 0; i < 4; ++i) {
+                size_t vi = cornerIndices[i];
+                for (size_t j = 0; j < 4; ++j) {
+                    size_t vj = cornerIndices[j];
+                    // xx, xy, yy, yx
+                    K.addNZ(2 * vi    , 2 * vj    , stiff(2 * i    , 2 * j    ));
+                    K.addNZ(2 * vi    , 2 * vj + 1, stiff(2 * i    , 2 * j + 1));
+                    K.addNZ(2 * vi + 1, 2 * vj + 1, stiff(2 * i + 1, 2 * j + 1));
+                    K.addNZ(2 * vi + 1, 2 * vj    , stiff(2 * i + 1, 2 * j    ));
+                }
             }
         }
     }
@@ -487,7 +505,8 @@ void MeshlessFEM<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 }
 
 
-// Compute the quantities needed to evaluate strain/stress/energy from displacement.
+// Compute the quantities needed to evaluate (average) strain/stress/energy from
+// displacement.
 template<typename Model>
 void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
 {
@@ -499,14 +518,31 @@ void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
     if (m_elementData.size() != numElements) {
         m_elementData.resize(numElements);
     }
-    for (size_t e = 0; e < numElements; ++e) {
-        gradPhi.clear();
-        BBox_t b = elemGrid.elementBoundingBox(e);
-        gradPhi.setDimensions(b.dimensions());
-        q.integrate(gradPhi, b);
-        gradPhi.finalize();
-        m_elementData[e].setGradPhis(gradPhi);
-        m_elementData[e].setVolume(b.volume());
+
+    if (m_antialiasedElements) {
+        for (size_t e = 0; e < numElements; ++e) {
+            BBox_t b = elemGrid.elementBoundingBox(e);
+            gradPhi.setDimensions(b.dimensions());
+            Real rho = elemGrid.elementOverlap(e);
+            m_elementData[e].setGradPhis(rho * gradPhi.fullCellIntegral());
+            m_elementData[e].setVolume(b.volume());
+        }
+    }
+    else {
+        for (size_t e = 0; e < numElements; ++e) {
+            BBox_t b = elemGrid.elementBoundingBox(e);
+            gradPhi.setDimensions(b.dimensions());
+            m_elementData[e].setVolume(b.volume());
+            if (m_exactFullElements && (elemGrid.elementIsFull(e))) {
+                m_elementData[e].setGradPhis(gradPhi.fullCellIntegral());
+            }
+            else {
+                gradPhi.clear();
+                q.integrate(gradPhi, b);
+                gradPhi.finalize();
+                m_elementData[e].setGradPhis(gradPhi);
+            }
+        }
     }
 
     m_displacementStrainCached = true;

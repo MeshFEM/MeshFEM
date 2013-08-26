@@ -87,7 +87,6 @@ public:
     virtual Real supportRadius() const {
         return 2.0 * this->m_h;
     }
-
 };
 
 #endif // SPHKERNELS_HH
