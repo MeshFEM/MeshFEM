@@ -125,12 +125,13 @@ public:
         else if (changed) {
             // Even if the grid size doesn't change, a quadrature rule change
             // must trigger a grid update.
-            elementGrid().update();
+            grid.update();
         }
 
         if (changed) {
             m_invalidateCache();
         }
+
         return changed;
     }
 
@@ -185,8 +186,8 @@ public:
 
     // refitGrid determines whether the element grid should be fit inside the
     // new model bounding box.
-    void modelChanged(bool refitGrid = true) {
-        elementGrid().update(refitGrid);
+    void modelChanged() {
+        elementGrid().update();
         m_invalidateCache();
     }
 

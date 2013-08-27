@@ -47,13 +47,16 @@ public:
                   const Quadrature2D &q, const Model &model, size_t borderWidth)
         : Grid2D(Nx, Ny, model.boundingBox(), borderWidth),
           m_cellOverlapThreshold(cellOverlapThreshold), m_quadrature(q),
-          m_model(model)
+          m_model(model), m_boundingBoxLocked(false)
     {
-        update(true);
+        update();
     }
 
+    bool boundingBoxIsLocked() const { return m_boundingBoxLocked; }
+    void setBoundingBoxLocked(bool locked) { m_boundingBoxLocked = locked; }
+
     // Should be called whenever the grid size, quadrature, or model changes
-    void update(bool refitGrid = true);
+    void update();
 
     void setBorderWidth(size_t borderWidth) {
         Grid2D::setBorderWidth(borderWidth);
@@ -208,6 +211,8 @@ private:
                 m_elementForCell, m_cellForElement;
     std::vector<bool> m_isFullElement;
     std::vector<Scalar>m_elementOverlap;
+
+    bool m_boundingBoxLocked;
 
     const Quadrature2D &m_quadrature;
     const Model &m_model;

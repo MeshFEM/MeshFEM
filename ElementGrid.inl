@@ -15,9 +15,9 @@
 
 // Should be called whenever the quadrature or model changes
 template<typename Model>
-void ElementGrid2D<Model>::update(bool refitGrid)
+void ElementGrid2D<Model>::update()
 {
-    if (refitGrid)
+    if (!m_boundingBoxLocked)
         setBoundingBox(m_model.boundingBox());
 
     m_elementForCell.assign(numCells(), -1);

@@ -188,8 +188,11 @@ void CSGWindowController::loadCSG()
 
 void CSGWindowController::modelChanged(bool refitGrid)
 {
-    m_fem.modelChanged(refitGrid);
+    bool locked = m_fem.elementGrid().boundingBoxIsLocked();
+    m_fem.elementGrid().setBoundingBoxLocked(!refitGrid);
+    m_fem.modelChanged();
     m_femView->modelChanged();
+    m_fem.elementGrid().setBoundingBoxLocked(locked);
 }
 
 
@@ -540,7 +543,6 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         }
     }
 
-    // m_fem.modelChanged(false);
     m_femView->modelChanged();
 
     // m_csgTree->setParameters(params);
@@ -689,8 +691,11 @@ void CSGWindowController::resultSelected(const string &resultPath)
     }
 
     if (m_results.settingsDiffer(settingsName, m_settings)) {
+        bool locked = m_fem.elementGrid().boundingBoxIsLocked();
+        m_fem.elementGrid().setBoundingBoxLocked(true);
         m_results.getSettings(settingsName, m_settings);
         emit reloadSettings();
+        m_fem.elementGrid().setBoundingBoxLocked(locked);
     }
 
     m_femView->displayResult(m_results.getResultWithPath(resultPath));
