@@ -58,6 +58,19 @@ private:
     weak_ptr<ResultsWindowController> m_controller;
 };
 
+// Items in the filtered results list point to the original result item
+class FilterListWidgetItem : public QListWidgetItem
+{
+public:
+    FilterListWidgetItem(const char *path, ResultTreeWidgetItem *ri)
+        : QListWidgetItem(path), m_resultItem(ri) { }
+
+    const ResultTreeWidgetItem *resultItem() const { return m_resultItem; }
+    ResultTreeWidgetItem *resultItem() { return m_resultItem; }
+private:
+    ResultTreeWidgetItem *m_resultItem;
+};
+
 // Select the result with a particular path.
 void ResultsWindowController::selectResult(const string &path)
 {
@@ -106,6 +119,8 @@ void ResultsWindowController::selectResult(QTreeWidgetItem *item)
         m_currentResultItem = item;
     }
 
+    syncSearchChecks();
+
     m_autoAdjustingChecks = false;
 }
 
@@ -132,6 +147,42 @@ void ResultsWindowController::itemChanged(QTreeWidgetItem *item, int col)
             selectResult(NULL);
         }
     }
+}
+
+// Synchronize the search list checkboxes with the results tree.
+void ResultsWindowController::syncSearchChecks()
+{
+    bool oldAuto = m_autoAdjustingChecks;
+    m_autoAdjustingChecks = true;
+    for (int row = 0; row < m_window.g_filterView->count(); ++row) {
+        QListWidgetItem *i = m_window.g_filterView->item(row);
+        FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(i);
+        assert(fli);
+        fli->setCheckState(fli->resultItem()->checkState(0));
+    }
+    m_autoAdjustingChecks = oldAuto;
+}
+
+void ResultsWindowController::searchItemActivated(QListWidgetItem *item)
+{
+    item->setCheckState((item->checkState() == Qt::Checked) ?
+            Qt::Unchecked : Qt::Checked);
+}
+
+void ResultsWindowController::searchItemChanged(QListWidgetItem *item)
+{
+    if (m_autoAdjustingChecks) return;
+
+    if (item->checkState() == Qt::Checked) {
+        FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(item);
+        assert(fli);
+        selectResult(fli->resultItem());
+    }
+    else {
+        selectResult(NULL);
+    }
+
+    syncSearchChecks();
 }
 
 // Invalidate current item pointer when the pointed-to item is deleted.
@@ -277,7 +328,9 @@ void ResultsWindowController::runSearch()
             if (ri->isResultItem()) {
                 const string &path = pathItemPair.first;
                 if (regex_search(path, pattern)) {
-                    QListWidgetItem *item = new QListWidgetItem(path.c_str());
+                    FilterListWidgetItem *item =
+                        new FilterListWidgetItem(path.c_str(), ri);
+                    item->setCheckState(ri->checkState(0));
                     m_window.g_filterView->addItem(item);
                 }
             }

@@ -47,7 +47,7 @@ public:
                   const Quadrature2D &q, const Model &model, size_t borderWidth)
         : Grid2D(Nx, Ny, model.boundingBox(), borderWidth),
           m_cellOverlapThreshold(cellOverlapThreshold), m_quadrature(q),
-          m_model(model), m_boundingBoxLocked(false)
+          m_boundingBoxLocked(false), m_model(model)
     {
         update();
     }

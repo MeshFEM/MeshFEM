@@ -51,6 +51,7 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     QVBoxLayout *resultsFilterLayout = new QVBoxLayout();
     resultsFilterLayout->setContentsMargins(0, 0, 0, 0);
     g_filterView = new QListWidget();
+    g_filterView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     resultsFilterLayout->addWidget(g_filterView);
     QHBoxLayout *searchLayout = new QHBoxLayout();
     g_searchField = new QLineEdit();
@@ -82,6 +83,11 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
+
+    QObject::connect(g_filterView, SIGNAL(itemActivated(QListWidgetItem *)),
+                     controller(), SLOT(searchItemActivated(QListWidgetItem *)));
+    QObject::connect(g_filterView, SIGNAL(itemChanged(QListWidgetItem *)),
+                     controller(), SLOT(searchItemChanged(QListWidgetItem *)));
 
     QObject::connect(g_searchButton, SIGNAL(clicked()),
                      controller(), SLOT(runSearch()));

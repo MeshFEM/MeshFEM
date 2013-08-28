@@ -15,6 +15,7 @@
 #include <map>
 
 class QTreeWidgetItem;
+class QListWidgetItem;
 class ResultsWindow;
 
 class ResultsWindowController : public QObject
@@ -24,6 +25,8 @@ class ResultsWindowController : public QObject
 public slots:
     void itemActivated(QTreeWidgetItem *item, int col);
     void itemChanged(QTreeWidgetItem *item, int col);
+    void searchItemActivated(QListWidgetItem *item);
+    void searchItemChanged(QListWidgetItem *item);
     void itemDeleted(QTreeWidgetItem *item);
 
     void resultsUpdated();
@@ -44,6 +47,7 @@ public:
     ~ResultsWindowController();
 private:
     void selectResult(QTreeWidgetItem *item);
+    void syncSearchChecks();
 
     std::map<std::string, QTreeWidgetItem *> m_pathToItem;
 
