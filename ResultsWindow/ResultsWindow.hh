@@ -18,8 +18,10 @@
 #include "ResultsWindowController.hh"
 
 class ResultTreeView;
+class QListWidget;
 class QPushButton;
 class QCheckBox;
+class QLineEdit;
 
 class ResultsWindow : public QWidget
 {
@@ -35,8 +37,11 @@ private:
     std::shared_ptr<ResultsWindowController> m_controller;
     ResultsCollector_t &m_resultsCollection;
     ResultTreeView *g_treeView;
-    QPushButton *g_deleteButton, *g_mshButton, *g_flipbookButton;
+    QListWidget *g_filterView;
+    QPushButton *g_deleteButton, *g_mshButton, *g_flipbookButton,
+                *g_searchButton;
     QCheckBox *g_modelSettingsGrouping;
+    QLineEdit *g_searchField;
 
     friend class ResultsWindowController;
 };

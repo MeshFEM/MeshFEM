@@ -19,6 +19,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTabWidget>
+#include <QListWidget>
+#include <QLineEdit>
 
 using namespace std;
 
@@ -29,15 +31,15 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     setWindowTitle("Results Browser");
 
     QVBoxLayout *layout = new QVBoxLayout();
-    QVBoxLayout *resultsTreeLayout = new QVBoxLayout();
     QTabWidget *viewTab = new QTabWidget();
 
+    QVBoxLayout *resultsTreeLayout = new QVBoxLayout();
+    resultsTreeLayout->setContentsMargins(0, 0, 0, 0);
     g_treeView = new ResultTreeView();
     g_treeView->setColumnCount(1);
     g_treeView->header()->close();
     g_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     resultsTreeLayout->addWidget(g_treeView);
-    resultsTreeLayout->setContentsMargins(2, 2, 2, 2);
     QWidget *resultsTreeWidget = new QWidget();
     resultsTreeWidget->setLayout(resultsTreeLayout);
 
@@ -45,6 +47,22 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     g_modelSettingsGrouping->setChecked(true);
     resultsTreeLayout->addWidget(g_modelSettingsGrouping);
     viewTab->addTab(resultsTreeWidget, "Results Tree");
+
+    QVBoxLayout *resultsFilterLayout = new QVBoxLayout();
+    resultsFilterLayout->setContentsMargins(0, 0, 0, 0);
+    g_filterView = new QListWidget();
+    resultsFilterLayout->addWidget(g_filterView);
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    g_searchField = new QLineEdit();
+    g_searchButton = new QPushButton("Search");
+    g_searchButton->setDefault(true);
+    searchLayout->addWidget(g_searchField);
+    searchLayout->addWidget(g_searchButton);
+    resultsFilterLayout->addLayout(searchLayout);
+
+    QWidget *resultsFilterWidget = new QWidget();
+    resultsFilterWidget->setLayout(resultsFilterLayout);
+    viewTab->addTab(resultsFilterWidget, "Search");
 
     g_deleteButton = new QPushButton("Delete");
     g_mshButton = new QPushButton("Write .MSH");
@@ -64,6 +82,9 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
+
+    QObject::connect(g_searchButton, SIGNAL(clicked()),
+                     controller(), SLOT(runSearch()));
 
     QObject::connect(g_modelSettingsGrouping, SIGNAL(toggled(bool)),
                      controller(), SLOT(groupingCheckToggled(bool)));

@@ -30,6 +30,7 @@ public slots:
     void selectResult(const std::string &path);
     void deleteSelection();
     void groupingCheckToggled(bool);
+    void runSearch();
 
 signals:
     void resultDeslected();

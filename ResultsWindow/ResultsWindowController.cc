@@ -15,7 +15,11 @@
 #include <stack>
 #include <memory>
 #include <QList>
+#include <QListWidget>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <stdexcept>
+#include <regex>
 
 #include "ResultsWindowController.hh"
 #include "MeshlessFEM.hh"
@@ -36,7 +40,7 @@ public:
         : QTreeWidgetItem(parent, strings, type), m_controller(controller) { }
 
 
-    std::string path() const {
+    string path() const {
         return data(0, Qt::UserRole).toString().toStdString();
     }
 
@@ -210,6 +214,7 @@ private:
 
 void ResultsWindowController::resultsUpdated()
 {
+    m_window.g_filterView->clear();
     m_window.g_treeView->clear();
 
     TreeWidgetItemGenerator tgen(m_window.m_controller, m_modelMajorGrouping);
@@ -257,6 +262,36 @@ void ResultsWindowController::groupingCheckToggled(bool checked)
 {
     m_modelMajorGrouping = checked;
     resultsUpdated();
+}
+
+void ResultsWindowController::runSearch()
+{
+    m_window.g_filterView->clear();
+    QString searchPattern = m_window.g_searchField->text();
+    try {
+        regex pattern(searchPattern.toStdString());
+
+        for (auto &pathItemPair : m_pathToItem) {
+            ResultTreeWidgetItem *ri =
+                dynamic_cast<ResultTreeWidgetItem *>(pathItemPair.second);
+            if (ri->isResultItem()) {
+                const string &path = pathItemPair.first;
+                if (regex_search(path, pattern)) {
+                    QListWidgetItem *item = new QListWidgetItem(path.c_str());
+                    m_window.g_filterView->addItem(item);
+                }
+            }
+        }
+    }
+    catch (regex_error &e) {
+        string errorString("Parsing regex failed. ");
+        errorString += e.what();
+        
+        QMessageBox mbox(QMessageBox::Critical, "Regex Failed",
+                         errorString.c_str(), QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+    }
 }
 
 ResultsWindowController::~ResultsWindowController()
