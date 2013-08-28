@@ -22,12 +22,11 @@ struct AnalysisSettings {
     AnalysisSettings()
         : solver("Gurobi"),
           Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
-          cellOverlapThreshold(0.15), useMSBoundary(false), boundarySpacing(.02), kernelRadius(1.0),
+          cellOverlapThreshold(0.15), useMSBoundary(true), boundarySpacing(.02), kernelRadius(1.0),
           exactFullElements(true), antialiasedElements(false),
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), numModes(10), weakRegionsPerMode(5),
           weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
-          equalizeCombinedWeakness(true),
           fixedTranslation(false), xTranslation(0.0), yTranslation(0.0),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
@@ -57,7 +56,6 @@ struct AnalysisSettings {
     double weaknessCutoff;
     double totalForceBound;
     double pointwisePressureBound;
-    bool equalizeCombinedWeakness;
 
     // Translation Test
     bool fixedTranslation;
@@ -88,7 +86,6 @@ struct AnalysisSettings {
             (weaknessCutoff == rhs.weaknessCutoff) &&
             (totalForceBound == rhs.totalForceBound) &&
             (pointwisePressureBound == rhs.pointwisePressureBound) &&
-            (equalizeCombinedWeakness == rhs.equalizeCombinedWeakness) &&
             (fixedTranslation == rhs.fixedTranslation) &&
             (xTranslation == rhs.xTranslation) &&
             (yTranslation == rhs.yTranslation) &&
@@ -113,7 +110,6 @@ struct AnalysisSettings {
             ("weakness_cutoff", po::value<double>()->default_value(.95), "Stress norm percentile above which a cell is considered weak")
             ("total_force_bound", po::value<double>()->default_value(0.1), "F_tot: equality constraint for the total force")
             ("pointwise_pressure_bound", po::value<double>()->default_value(0.1), "p_max: maximum pressure at each boundary point")
-            ("equalize_combined_weakness", "Average partial cells' combined weakness with neighbor values.")
 
             ("young_modulus", po::value<double>()->default_value(1.0), "Material's young modulus")
             ("poisson_ratio", po::value<double>()->default_value(0.0), "Material's poisson ratio")

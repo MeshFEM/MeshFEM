@@ -74,7 +74,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_pressureBoundStepper = new QDoubleSpinBox();
     g_forceBoundStepper = new QDoubleSpinBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
-    g_equalizeCombinedWeaknessCheck = new QCheckBox();
     g_pressureBoundStepper->setSingleStep(.01);
     g_pressureBoundStepper->setMaximum(5.0);
     g_pressureBoundStepper->setValue(.1);
@@ -167,7 +166,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     weakForm->addRow(g_weakRegionExtractionButton);
     weakForm->addRow("Pressure Bound", g_pressureBoundStepper);
     weakForm->addRow("Total Force Bound", g_forceBoundStepper);
-    weakForm->addRow("Equalize Weakness", g_equalizeCombinedWeaknessCheck);
     weakForm->addRow(g_weaknessAnalysisButton);
     weakForm->addRow(g_optimizeShapeButton);
 
@@ -254,8 +252,6 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
     QObject::connect(g_forceBoundStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
-    QObject::connect(g_equalizeCombinedWeaknessCheck, SIGNAL(stateChanged(int)),
-                     this, SLOT(weaknessAnalysisControlsChanged(int)));
 
     QObject::connect(g_optimizeShapeButton, SIGNAL(clicked()),
                      controller, SLOT(runShapeOptimization()));
@@ -337,8 +333,6 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_forceBoundStepper->setValue(m_settings.totalForceBound);
     g_pressureBoundStepper->setValue(m_settings.pointwisePressureBound);
 
-    g_equalizeCombinedWeaknessCheck->setChecked(m_settings.equalizeCombinedWeakness);
-
     // translation test
     g_translationFixedCheckbox->setChecked(m_settings.fixedTranslation);
     g_xTranslationStepper->setValue(m_settings.xTranslation);
@@ -394,7 +388,6 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.totalForceBound = g_forceBoundStepper->value();
     m_settings.pointwisePressureBound = g_pressureBoundStepper->value();
-    m_settings.equalizeCombinedWeakness = g_equalizeCombinedWeaknessCheck->isChecked();
 
     // translation test
     m_settings.fixedTranslation = g_translationFixedCheckbox->isChecked();

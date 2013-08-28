@@ -4,7 +4,6 @@ Debug cut cell stress computation... why is it so high?
 Implement:
     Change scale of the auto-fit vector field feature.
         (slider controlling fraction of view to restrict arrow length).
-    Fix bug when simultaneously changing models and settings
 
     Fix auto-fit (handle up and downscale cases correctly, make relative to
                   object bounding box)

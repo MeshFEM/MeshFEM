@@ -19,6 +19,7 @@
 
 class ResultTreeView;
 class QPushButton;
+class QCheckBox;
 
 class ResultsWindow : public QWidget
 {
@@ -35,6 +36,7 @@ private:
     ResultsCollector_t &m_resultsCollection;
     ResultTreeView *g_treeView;
     QPushButton *g_deleteButton, *g_mshButton, *g_flipbookButton;
+    QCheckBox *g_modelSettingsGrouping;
 
     friend class ResultsWindowController;
 };

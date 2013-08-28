@@ -29,6 +29,7 @@ public slots:
     void resultsUpdated();
     void selectResult(const std::string &path);
     void deleteSelection();
+    void groupingCheckToggled(bool);
 
 signals:
     void resultDeslected();
@@ -37,7 +38,7 @@ signals:
 public:
     ResultsWindowController(ResultsWindow &window)
         : m_window(window), m_currentResultItem(NULL),
-          m_autoAdjustingChecks(false) { }
+          m_modelMajorGrouping(true), m_autoAdjustingChecks(false) { }
 
     ~ResultsWindowController();
 private:
@@ -47,6 +48,9 @@ private:
 
     ResultsWindow &m_window;
     QTreeWidgetItem *m_currentResultItem;
+
+    bool m_modelMajorGrouping;
+
     // Used to prevent the process of adjusting result check boxes from calling
     // itself recursively...
     // Note: this is not a thread-safe solution.

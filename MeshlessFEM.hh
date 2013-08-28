@@ -175,7 +175,6 @@ public:
         m_weaknessCutoff = settings.weaknessCutoff;
         m_pointwisePressureBound = settings.pointwisePressureBound;
         m_totalForceBound = settings.totalForceBound;
-        m_equalizeCombinedWeakness = settings.equalizeCombinedWeakness;
 
         // Only invalidate weakness-dependent parts of cache
         m_weakRegions.clear();
@@ -339,7 +338,6 @@ private:
 
     int m_weakRegionsPerMode;
     Real m_weaknessCutoff, m_pointwisePressureBound, m_totalForceBound;
-    bool m_equalizeCombinedWeakness;
     // Indices of elements in each weak region
     std::vector<Region> m_weakRegions;
     // (Modal) stress norms of elements in each weak region

@@ -480,10 +480,6 @@ void CSGWindowController::runShapeOptimization()
 void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
 {
     Scalar weakness;
-    // bool success = m_fem.weaknessAnalysis(weakness);
-    // cout << "Translation test" << endl << "----------------------" << endl;
-    // cout << weakness << endl;
-    // assert(success);
 
     Vector cellSize = m_fem.elementGrid().cellSize();
     const int TRANS_TEST_STEPS = 5;
@@ -495,8 +491,8 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
     assert(params.size() % 5 == 0);
     size_t numPrimitives = params.size() / 5;
 
-    // typedef std::pair<ElementGrid2D<CSGTree_t>, ScalarField<Scalar> > GridField;
-    // std::list<GridField> *weaknessGrids = new std::list<GridField>();
+    std::string baseName = m_modelName;
+    boost::format formatter("%s + (%f, %f)");
 
     if (settings.fixedTranslation) {
         Vector offset(cellSize[0] * settings.xTranslation,
@@ -509,6 +505,9 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
 
         m_csgTree->setParameters(translated);
         modelChanged(false);
+
+        m_modelName = boost::str(formatter % baseName % settings.xTranslation %
+                                 settings.yTranslation);
 
         prepareResultsCollector();
         bool success = m_fem.weaknessAnalysis(weakness, &m_results);
@@ -528,16 +527,12 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
                 m_csgTree->setParameters(translated);
                 modelChanged(false);
 
-                QString cwPath, cwPercentilePath;
-                cwPath.sprintf("translation_%i_%i.cw", xStep, yStep);
-                cwPercentilePath.sprintf("translation_%i_%i.cwp", xStep, yStep);
+                m_modelName = boost::str(formatter % baseName % offset[0] %
+                                         offset[1]);
 
                 prepareResultsCollector();
                 bool success = m_fem.weaknessAnalysis(weakness, &m_results);
 
-                // weaknessGrids->push_back(make_pair(m_fem.elementGrid(),
-                //             m_fem.combinedWeakness()));
-                            
                 assert(success);
             }
         }
@@ -545,7 +540,11 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
 
     m_femView->modelChanged();
 
+    m_modelName = baseName;
+
     // m_csgTree->setParameters(params);
+
+    emit resultsUpdated();
 }
 
 void CSGWindowController::

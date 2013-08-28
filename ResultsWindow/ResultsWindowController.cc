@@ -188,7 +188,13 @@ public:
     void postVisit() {
         assert(!m_parentStack.empty());
         m_parentStack.pop();
-        m_pathStack.removeLast();
+
+        // Handle the case when the search isn't model-major and the first two
+        // entries of the path stack are in the opposite order from the dfs.
+        if (!m_modelMajorDFS && (m_pathStack.size() == 2))
+            m_pathStack.removeFirst();
+        else
+            m_pathStack.removeLast();
     }
 
     // Note, these will be owned by the tree view, so they needn't be cleaned up
@@ -206,9 +212,10 @@ void ResultsWindowController::resultsUpdated()
 {
     m_window.g_treeView->clear();
 
-    TreeWidgetItemGenerator tgen(m_window.m_controller, true);
-    m_window.m_resultsCollection.dfs(
-            ResultsCollector_t::KEY_ORDER_MODEL_SETTINGS, tgen);
+    TreeWidgetItemGenerator tgen(m_window.m_controller, m_modelMajorGrouping);
+    m_window.m_resultsCollection.dfs(m_modelMajorGrouping ?
+            ResultsCollector_t::KEY_ORDER_MODEL_SETTINGS :
+            ResultsCollector_t::KEY_ORDER_SETTINGS_MODEL, tgen);
     foreach(QTreeWidgetItem *i, tgen.items) {
         ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
         assert(ri);
@@ -244,6 +251,12 @@ void ResultsWindowController::deleteSelection()
 
     m_window.m_resultsCollection.removeResultsWithPaths(pathsForDeletion);
     emit resultsUpdated();
+}
+
+void ResultsWindowController::groupingCheckToggled(bool checked)
+{
+    m_modelMajorGrouping = checked;
+    resultsUpdated();
 }
 
 ResultsWindowController::~ResultsWindowController()
