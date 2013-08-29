@@ -99,7 +99,7 @@ private:
 
     void setGUIState(GUIState state) {
         m_guiState = state;
-        m_gesture = NONE;
+        m_gesture = GESTURE_NONE;
         m_select.clear();
 
         viewSettingsUpdated();
@@ -147,6 +147,7 @@ protected:
     void performSelection(const Vector &screenPt);
     void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
+    void wheelEvent(QWheelEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *event);
     void keyPressEvent(QKeyEvent *event) {
@@ -158,22 +159,22 @@ protected:
 
     // Get the world coordinates corresponding to buffer coordinates
     void getWorldCoords(int r, int c, Scalar &x, Scalar &y) const {
-        Vector frameDim = m_frameMax - m_frameMin;
-        x = m_frameMin[0] + frameDim[0] * ((c + .5) / m_width);
-        y = m_frameMin[1] + frameDim[1] * ((r + .5) / m_height);
+        x = m_frameCenter[0] + m_frameDim[0] * (((c + .5) / m_width) - .5);
+        y = m_frameCenter[1] + m_frameDim[1] * (((r + .5) / m_height) - .5);
     }
 
+    // (minx, miny) -> (0.0, 0.0)
+    // (maxx, maxy) -> (1.0, 1.0)
     void getTextureCoordinates(Scalar x, Scalar y, Scalar &s, Scalar &t) const
     {
-        Vector frameDim = m_frameMax - m_frameMin;
-        s = (x - m_frameMin[0]) / frameDim[0];
-        t = (y - m_frameMin[1]) / frameDim[1];
+        s = (x - m_frameCenter[0]) / m_frameDim[0] + 0.5;
+        t = (y - m_frameCenter[1]) / m_frameDim[1] + 0.5;
     }
 
     // Get the size of a pixel in world coordinates
     // Assumes pixel box is square in world coordinates.
     Scalar getPixelSize() const {
-        return (m_frameMax[0] - m_frameMin[0]) / m_width;
+        return m_frameDim[0] / m_width;
     }
 
     // Non-rounded for opengl drawing
@@ -260,7 +261,7 @@ private:
     // Instance variables
     ////////////////////////////////////////////////////////////////////////////
     FTGLBitmapFont m_font;
-    Vector m_frameMin, m_frameMax;
+    Vector m_frameDim, m_frameCenter;
     int m_width, m_height, m_screenTop, m_screenLeft;
     GLuint m_modelTex, m_overlayTex;
     GLuint m_bilinearShader;
@@ -280,7 +281,7 @@ private:
     Scalar m_pressurePaintValue;
 
     GUIState m_guiState;
-    typedef enum {DRAGGING, NONE} MouseGesture;
+    typedef enum {GESTURE_DRAG, GESTURE_PAN, GESTURE_ZOOM, GESTURE_NONE} MouseGesture;
     MouseGesture m_gesture;
     QPoint m_prevMouseLoc;
 

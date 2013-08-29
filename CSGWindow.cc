@@ -135,21 +135,6 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      analysisForm, SLOT(reloadSettings()));
 
     setCentralWidget(splitter);
-
-    QToolBar *tb = new QToolBar("Mouse Mode");
-    QActionGroup *uiActionGroup = new QActionGroup(tb);
-    QAction *panZoomAction   = new QAction("Pan/Zoom",  uiActionGroup);
-    QAction *transformAction = new QAction("Transform", uiActionGroup);
-    QAction *selectAction    = new QAction("Select",    uiActionGroup);
-    panZoomAction->setCheckable(true);
-    selectAction->setCheckable(true);
-    transformAction->setCheckable(true);
-    panZoomAction->setChecked(true);
-
-    tb->addActions(uiActionGroup->actions());
-
-    // tb->addAction(uiActionGroup);
-    addToolBar(tb);
 }
 
 CSGWindow::~CSGWindow()

@@ -49,10 +49,10 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
                      QWidget *parent)
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
-      m_frameMin(-2, -1.5), m_frameMax(2, 1.5),
+      m_frameDim(4, 3), m_frameCenter(0, 0),
       m_fem(fem), m_result(NULL),
       m_pressurePaintValue(0.1),
-      m_guiState(STATE_MODEL), m_gesture(NONE),
+      m_guiState(STATE_MODEL), m_gesture(GESTURE_NONE),
       m_displacementPhase(0.0), m_viewSettings(vs),
       m_scalarColorMap(COLORMAP_JET),
       m_modelTexBuf(NULL), m_overlayTexBuf(NULL)
@@ -201,8 +201,7 @@ void FEMView2D::resizeGL(int width, int height)
 {
     // Largest possible viewing rectangle with the frame's aspect ratio
     // aspect = view width / height
-    float aspect = (m_frameMax[0] - m_frameMin[0]) /
-                   (m_frameMax[1] - m_frameMin[1]);
+    float aspect = m_frameDim[0] / m_frameDim[1];
     float proportionalWidth = aspect * height;
     if (proportionalWidth < width) {
         m_width  = proportionalWidth;
@@ -361,8 +360,10 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
         size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
                            (size_t) m_width};
 
-        float minX = m_frameMin[0], maxX = m_frameMax[0],
-              minY = m_frameMin[1], maxY = m_frameMax[1];
+        float minX = m_frameCenter[0] - .5f * m_frameDim[0],
+              maxX = m_frameCenter[0] + .5f * m_frameDim[0],
+              minY = m_frameCenter[1] - .5f * m_frameDim[1],
+              maxY = m_frameCenter[1] + .5f * m_frameDim[1];
         cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
                               fg.blue() / 255.0f, fg.alpha() / 255.0f}};
 
@@ -772,8 +773,8 @@ bool FEMView2D::m_drawResult()
     Scalar vecScale = 1.0;
 
     if (m_result->hasNodeVField() && m_viewSettings.autofitVectorField) {
-        // Scale vector field so that the maximum displacement doesn't
-        // exceed a certain fraction of the window size
+        // Scale vector field so that the maximum magnitude is a specified
+        // fraction of the window size
         Scalar relMag = .125;
         Scalar maxX = 0.0, maxY = 0.0;
         assert((size_t) vfield.domainSize() == numNodes);
@@ -782,9 +783,8 @@ bool FEMView2D::m_drawResult()
             maxY = std::max((Scalar) std::abs(vfield(i)[1]), maxY);
         }
 
-        Vector frameDim = m_frameMax - m_frameMin;
-        Scalar xMag = (maxX > 1e-12) ? relMag * (frameDim[0] / maxX) : 1.0;
-        Scalar yMag = (maxY > 1e-12) ? relMag * (frameDim[1] / maxY) : 1.0;
+        Scalar xMag = (maxX > 1e-12) ? relMag * (m_frameDim[0] / maxX) : 1.0;
+        Scalar yMag = (maxY > 1e-12) ? relMag * (m_frameDim[1] / maxY) : 1.0;
 
         vecScale = std::min(xMag, yMag);
 
@@ -1135,17 +1135,32 @@ void FEMView2D::performSelection(const Vector &screenPt)
     update();
 }
 
+void FEMView2D::wheelEvent(QWheelEvent *event)
+{
+    float degrees = event->delta() / 8;
+    m_frameDim *= pow(1.25, degrees / 15);
+
+    m_rerenderObject();
+    if (m_guiState == STATE_MODEL)
+        m_rerenderOverlay();
+    update();
+
+    event->accept();
+}
+
 void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
 {
     m_prevMouseLoc = event->pos();
-    m_gesture = NONE;
+    m_gesture = GESTURE_NONE;
 }
 
 void FEMView2D::mousePressEvent(QMouseEvent *event)
 {
     if (m_guiState == STATE_MODEL) {
-        m_prevMouseLoc = event->pos();
-        m_gesture = DRAGGING;
+        if (event->button() == Qt::LeftButton) {
+            m_prevMouseLoc = event->pos();
+            m_gesture = GESTURE_DRAG;
+        }
     }
     else if (m_guiState == STATE_PRESSURE_DRAW) {
         if (event->button() == Qt::LeftButton) {
@@ -1157,6 +1172,18 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
         if (event->button() == Qt::LeftButton)
             performSelection(qtToScreenCoords(event->pos()));
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Navigation gestures should work in all modes
+    ////////////////////////////////////////////////////////////////////////////
+    if (event->button() == Qt::MiddleButton) {
+        m_prevMouseLoc = event->pos();
+        m_gesture = GESTURE_ZOOM;
+    }
+    if (event->button() == Qt::RightButton) {
+        m_prevMouseLoc = event->pos();
+        m_gesture = GESTURE_PAN;
+    }
 }
 
 void FEMView2D::mouseMoveEvent(QMouseEvent *event)
@@ -1164,29 +1191,55 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
     Vector start, end;
     getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
     getWorldCoords(-event->pos().y(), event->pos().x(), end[0], end[1]);
+    bool handled = false;
 
-    bool leftButton  = event->buttons() & Qt::LeftButton,
-         rightButton = event->buttons() & Qt::RightButton;
-
-    if ((m_guiState == STATE_MODEL) && m_gesture == DRAGGING) {
-        for (NodeList::iterator it = m_selectedObjects.begin();
-                                it != m_selectedObjects.end(); ++it) {
-            (*it)->applyTranslation(end - start);
-        }
+    ////////////////////////////////////////////////////////////////////////////
+    // Navigation gestures should work in all modes
+    ////////////////////////////////////////////////////////////////////////////
+    if (m_gesture == GESTURE_PAN) {
+        // Coordinate system translates with inverse of pan
+        m_frameCenter += start - end;
         m_rerenderObject();
-        m_rerenderOverlay();
+        if (m_guiState == STATE_MODEL)
+            m_rerenderOverlay();
         update();
+        handled = true;
     }
-    else if (m_guiState == STATE_PRESSURE_DRAW) {
-        if (leftButton && !rightButton) {
-            bool erase = event->modifiers() & Qt::AltModifier;
-            paintPressure(qtToScreenCoords(event->pos()), erase);
+    if (m_gesture == GESTURE_ZOOM) {
+        float deltaYpx = event->pos().y() - m_prevMouseLoc.y();
+        m_frameDim *= pow(1.01, deltaYpx);
+        m_rerenderObject();
+        if (m_guiState == STATE_MODEL)
+            m_rerenderOverlay();
+        update();
+        handled = true;
+    }
+
+    if (!handled) {
+        bool leftButton  = event->buttons() & Qt::LeftButton;
+
+        if ((m_guiState == STATE_MODEL) && m_gesture == GESTURE_DRAG) {
+            for (NodeList::iterator it = m_selectedObjects.begin();
+                                    it != m_selectedObjects.end(); ++it) {
+                (*it)->applyTranslation(end - start);
+            }
+            m_rerenderObject();
+            m_rerenderOverlay();
+            update();
+        }
+        else if (m_guiState == STATE_PRESSURE_DRAW) {
+            if (leftButton) {
+                bool erase = event->modifiers() & Qt::AltModifier;
+                paintPressure(qtToScreenCoords(event->pos()), erase);
+            }
+        }
+        else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT))
+        {
+            if (leftButton)
+                performSelection(qtToScreenCoords(event->pos()));
         }
     }
-    else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT)) {
-        if (leftButton && !rightButton)
-            performSelection(qtToScreenCoords(event->pos()));
-    }
+
     m_prevMouseLoc = event->pos();
 }
 
