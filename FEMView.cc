@@ -1137,8 +1137,18 @@ void FEMView2D::performSelection(const Vector &screenPt)
 
 void FEMView2D::wheelEvent(QWheelEvent *event)
 {
+    // Expand around the mouse position (keep it fixed)
+    Vector pos, wPos;
+    qtToScreenCoords(event->pos(), pos);
+    getWorldCoords(pos[1], pos[0], wPos[0], wPos[1]);
+
+    // delta() returns eiths of degrees,
+    // scroll wheels are usually quantized into 15-degree increments.
     float degrees = event->delta() / 8;
-    m_frameDim *= pow(1.25, degrees / 15);
+    float scale = pow(1.25, degrees / 15);
+    // Adjust center to keep "wPos" at the same screen coordinates
+    m_frameCenter = wPos + scale * (m_frameCenter - wPos);
+    m_frameDim *= scale;
 
     m_rerenderObject();
     if (m_guiState == STATE_MODEL)
@@ -1150,7 +1160,7 @@ void FEMView2D::wheelEvent(QWheelEvent *event)
 
 void FEMView2D::mouseReleaseEvent(QMouseEvent *event)
 {
-    m_prevMouseLoc = event->pos();
+    qtToScreenCoords(event->pos(), m_prevMouseLoc);
     m_gesture = GESTURE_NONE;
 }
 
@@ -1158,7 +1168,7 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
 {
     if (m_guiState == STATE_MODEL) {
         if (event->button() == Qt::LeftButton) {
-            m_prevMouseLoc = event->pos();
+            qtToScreenCoords(event->pos(), m_prevMouseLoc);
             m_gesture = GESTURE_DRAG;
         }
     }
@@ -1177,11 +1187,11 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
     // Navigation gestures should work in all modes
     ////////////////////////////////////////////////////////////////////////////
     if (event->button() == Qt::MiddleButton) {
-        m_prevMouseLoc = event->pos();
+        qtToScreenCoords(event->pos(), m_prevMouseLoc);
         m_gesture = GESTURE_ZOOM;
     }
     if (event->button() == Qt::RightButton) {
-        m_prevMouseLoc = event->pos();
+        qtToScreenCoords(event->pos(), m_prevMouseLoc);
         m_gesture = GESTURE_PAN;
     }
 }
@@ -1189,8 +1199,10 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
 void FEMView2D::mouseMoveEvent(QMouseEvent *event)
 {
     Vector start, end;
-    getWorldCoords(-m_prevMouseLoc.y(), m_prevMouseLoc.x(), start[0], start[1]);
-    getWorldCoords(-event->pos().y(), event->pos().x(), end[0], end[1]);
+    getWorldCoords(m_prevMouseLoc[1], m_prevMouseLoc[0], start[0], start[1]);
+    Vector endScreen;
+    qtToScreenCoords(event->pos(), endScreen);
+    getWorldCoords(endScreen[1], endScreen[0], end[0], end[1]);
     bool handled = false;
 
     ////////////////////////////////////////////////////////////////////////////
@@ -1206,7 +1218,7 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         handled = true;
     }
     if (m_gesture == GESTURE_ZOOM) {
-        float deltaYpx = event->pos().y() - m_prevMouseLoc.y();
+        float deltaYpx = endScreen[1] - m_prevMouseLoc[1];
         m_frameDim *= pow(1.01, deltaYpx);
         m_rerenderObject();
         if (m_guiState == STATE_MODEL)
@@ -1240,7 +1252,7 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
         }
     }
 
-    m_prevMouseLoc = event->pos();
+    m_prevMouseLoc = endScreen;
 }
 
 void FEMView2D::mouseDoubleClickEvent(QMouseEvent *event)

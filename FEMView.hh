@@ -100,7 +100,6 @@ private:
     void setGUIState(GUIState state) {
         m_guiState = state;
         m_gesture = GESTURE_NONE;
-        m_select.clear();
 
         viewSettingsUpdated();
         update();
@@ -130,10 +129,15 @@ public slots:
 
     // To be called, for instance, when new .csg is loaded.
     void modelChanged() {
+        m_select.clear();
         m_selectedObjects.clear();
         m_rerenderObject();
         m_rerenderOverlay();
         update();
+    }
+
+    void elementsChanged() {
+        m_select.clear();
     }
 
 protected:
@@ -283,7 +287,7 @@ private:
     GUIState m_guiState;
     typedef enum {GESTURE_DRAG, GESTURE_PAN, GESTURE_ZOOM, GESTURE_NONE} MouseGesture;
     MouseGesture m_gesture;
-    QPoint m_prevMouseLoc;
+    Vector m_prevMouseLoc;
 
     QBasicTimer m_timer;
     Scalar m_displacementPhase;

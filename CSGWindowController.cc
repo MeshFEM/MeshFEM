@@ -201,7 +201,7 @@ void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
     // When the grid changes, we must go back to the element state.
     m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     if (m_fem.configureElements(settings))
-        m_femView->update();
+        m_femView->elementsChanged();
     // Configuring the elements clears all modes and weak regions
 }
 
