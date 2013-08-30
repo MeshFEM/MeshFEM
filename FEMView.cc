@@ -20,6 +20,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
+#include <vector>
 #include <stdexcept>
 #include <limits>
 #include <boost/format.hpp>
@@ -765,6 +767,7 @@ bool FEMView2D::m_drawResult()
     size_t numElems = grid.numElements();
 
     VField vfield = m_result->getVectorField(Result::PER_NODE);
+    SField bsfield = m_result->getScalarField(Result::PER_BDRY);
 
     // The result deformation is recorded in m_activeDeformation
     // so node offsets can be used elsewhere (e.g. selection).
@@ -772,6 +775,7 @@ bool FEMView2D::m_drawResult()
 
     Scalar vecScale = 1.0;
 
+    Scalar objectSize = grid.getBoudingBox().dimensions().sum() / 2.0;
     if (m_result->hasNodeVField() && m_viewSettings.autofitVectorField) {
         // Scale vector field so that the maximum magnitude is a specified
         // fraction of the object size
@@ -780,7 +784,6 @@ bool FEMView2D::m_drawResult()
         for (size_t i = 0; i < numNodes; ++i)
             maxNorm = std::max(vfield(i).norm(), maxNorm);
 
-        Scalar objectSize = grid.getBoudingBox().dimensions().maxCoeff();
         vecScale = (maxNorm > 1e-9) ?
             m_viewSettings.autofitMagnitude * (objectSize / maxNorm) : 1.0;
     }
@@ -795,9 +798,27 @@ bool FEMView2D::m_drawResult()
         deformation = vfield;
     }
 
+    // Draw the object, posisbly shaded with an element scalar field and
+    // deformed by a nodal vector field.
     m_scalarColorMap.setAlpha(0.5f);
     bool usedColormap = drawObjectTextureCells(deformation, sfield);
 
+    // Visualize boundary scalar fields as scaled arrows.
+    if (m_result->hasBdrySField()) {
+        const std::vector<BoundaryPoint_t> &bndPts = m_fem.boundaryPoints();
+        assert((size_t) bsfield.domainSize() == bndPts.size());
+
+        Scalar maxMag = std::max(std::abs(bsfield.max()),
+                                 std::abs(bsfield.min()));
+        Scalar scale =
+            (m_viewSettings.autofitMagnitude * objectSize) / maxMag;
+
+        glColor3ub(255, 160, 0);
+        for (size_t i = 0; i < bndPts.size(); ++i)
+            m_drawWorldArrow(bndPts[i].p, scale * bsfield[i] * bndPts[i].n);
+    }
+
+    // Draw the per-node vector field arrows, if necessary
     if ((m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_ARROW) &&
         (vfield.domainSize() == numNodes)) {
         glLineWidth(3.0);
