@@ -14,6 +14,7 @@
 
 class QComboBox;
 class QCheckBox;
+class QSlider;
 class QDoubleSpinBox;
 struct ViewSettings;
 
@@ -39,6 +40,7 @@ private:
               *g_showStressesDuringDeformationCheck,
               *g_fitVectorFieldsCheck,
               *g_showColorbarCheck;
+    QSlider *g_autofitMagnitudeSlider;
     QComboBox *g_vfieldStyleSelector, *g_colormapSelector;
     QDoubleSpinBox *g_colormapMinStepper, *g_colormapMaxStepper;
     QCheckBox *g_colormapAutoRangeCheck;

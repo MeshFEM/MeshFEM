@@ -17,15 +17,16 @@
 struct ViewSettings {
     ViewSettings()
         : showQuadraturePoints(false), autofitVectorField(false),
-          showGridOverResults(true), showStressesDuringDeformation(true),
-          vfDisplayStyle(VFIELD_DEFORM), showColorbar(true),
-          colormap(COLORMAP_JET), colormapRangeAuto(true)
+          autofitMagnitude(.125), showGridOverResults(true),
+          showStressesDuringDeformation(true), vfDisplayStyle(VFIELD_DEFORM),
+          showColorbar(true), colormap(COLORMAP_JET), colormapRangeAuto(true)
     { }
 
     typedef enum { VFIELD_DEFORM = 0, VFIELD_VIBRATE = 1, VFIELD_ARROW = 2 }
             VFieldDisplayStyle;
     bool showQuadraturePoints;
     bool autofitVectorField;
+    Scalar autofitMagnitude;
     bool showGridOverResults;
     bool showStressesDuringDeformation;
     VFieldDisplayStyle vfDisplayStyle;

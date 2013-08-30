@@ -761,8 +761,8 @@ bool FEMView2D::m_drawResult()
 
     const SField &sfield = m_result->getScalarField(Result::PER_ELEM);
 
-    size_t numNodes = m_fem.elementGrid().numNodes();
-    size_t numElems = m_fem.elementGrid().numElements();
+    size_t numNodes = grid.numNodes();
+    size_t numElems = grid.numElements();
 
     VField vfield = m_result->getVectorField(Result::PER_NODE);
 
@@ -774,23 +774,15 @@ bool FEMView2D::m_drawResult()
 
     if (m_result->hasNodeVField() && m_viewSettings.autofitVectorField) {
         // Scale vector field so that the maximum magnitude is a specified
-        // fraction of the window size
-        Scalar relMag = .125;
-        Scalar maxX = 0.0, maxY = 0.0;
+        // fraction of the object size
+        Scalar maxNorm = 0.0;
         assert((size_t) vfield.domainSize() == numNodes);
-        for (size_t i = 0; i < numNodes; ++i) {
-            maxX = std::max((Scalar) std::abs(vfield(i)[0]), maxX);
-            maxY = std::max((Scalar) std::abs(vfield(i)[1]), maxY);
-        }
+        for (size_t i = 0; i < numNodes; ++i)
+            maxNorm = std::max(vfield(i).norm(), maxNorm);
 
-        Scalar xMag = (maxX > 1e-12) ? relMag * (m_frameDim[0] / maxX) : 1.0;
-        Scalar yMag = (maxY > 1e-12) ? relMag * (m_frameDim[1] / maxY) : 1.0;
-
-        vecScale = std::min(xMag, yMag);
-
-        // We also want to support upscaling the arrows...
-        if (vecScale >= 1.0)
-            vecScale = std::max(xMag, yMag);
+        Scalar objectSize = grid.getBoudingBox().dimensions().maxCoeff();
+        vecScale = (maxNorm > 1e-9) ?
+            m_viewSettings.autofitMagnitude * (objectSize / maxNorm) : 1.0;
     }
 
     if (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)

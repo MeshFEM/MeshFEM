@@ -4,14 +4,20 @@
 #include "ViewSettings.hh"
 #include "colors.hh"
 
+using namespace std;
+
 ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     : QWidget(parent), m_viewSettings(settings)
 {
     QFormLayout *form = new QFormLayout();
+    // Allow the slider to expand to the full width.
+    form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+
     g_showQuadraturePointsCheck = new QCheckBox();
     g_showGridOverResultsCheck = new QCheckBox();
     g_showStressesDuringDeformationCheck = new QCheckBox();
     g_fitVectorFieldsCheck = new QCheckBox();
+    g_autofitMagnitudeSlider = new QSlider(Qt::Horizontal);
     g_vfieldStyleSelector = new QComboBox();
     g_showColorbarCheck = new QCheckBox();
     g_colormapSelector = new QComboBox();
@@ -19,13 +25,20 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     g_colormapMaxStepper = new QDoubleSpinBox();
     g_colormapAutoRangeCheck = new QCheckBox("Auto");
 
+    g_autofitMagnitudeSlider->setSizePolicy(QSizePolicy::MinimumExpanding,
+                                            QSizePolicy::Fixed);
+
     form->addRow("Show Quadrature Points", g_showQuadraturePointsCheck);
     form->addRow("Show Grid Over Results", g_showGridOverResultsCheck);
     form->addRow("Show Stresses During Deformation", g_showStressesDuringDeformationCheck);
     form->addRow("Auto-Fit Vector Fields", g_fitVectorFieldsCheck);
+    form->addRow("Auto-Fit Magnitude", g_autofitMagnitudeSlider);
     form->addRow("Vector Field Style", g_vfieldStyleSelector);
     form->addRow("Show colorbar", g_showColorbarCheck);
     form->addRow("Colormap", g_colormapSelector);
+
+    g_autofitMagnitudeSlider->setMinimum(1);
+    g_autofitMagnitudeSlider->setMaximum(1000);
 
     g_vfieldStyleSelector->addItem("Deform");
     g_vfieldStyleSelector->addItem("Vibrate");
@@ -44,6 +57,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     form->addRow("Colormap range", colormapRangeLayout);
 
     setLayout(form);
+    layout()->setSizeConstraint(QLayout::SetFixedSize);
+
     m_setGUIFromSettings();
 
     QObject::connect(g_showQuadraturePointsCheck, SIGNAL(stateChanged(int)),
@@ -53,6 +68,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     QObject::connect(g_showStressesDuringDeformationCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_fitVectorFieldsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
+    QObject::connect(g_autofitMagnitudeSlider, SIGNAL(valueChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_vfieldStyleSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
@@ -74,6 +91,9 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
     g_showStressesDuringDeformationCheck->setChecked(m_viewSettings.showStressesDuringDeformation);
 
     g_fitVectorFieldsCheck->setChecked(m_viewSettings.autofitVectorField);
+    g_autofitMagnitudeSlider->setValue(m_viewSettings.autofitMagnitude *
+                                       g_autofitMagnitudeSlider->maximum());
+
     // Note: assumes VFieldDisplayStyle enum index matches combo box index
     g_vfieldStyleSelector->setCurrentIndex(m_viewSettings.vfDisplayStyle);
 
@@ -86,6 +106,7 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
     g_colormapMaxStepper->setEnabled(!m_viewSettings.colormapRangeAuto);
     g_colormapMinStepper->setValue(m_viewSettings.colormapRangeMin);
     g_colormapMaxStepper->setValue(m_viewSettings.colormapRangeMax);
+    
 }
 
 void ViewSettingsWidget::m_readSettingsFromGUI() {
@@ -94,6 +115,9 @@ void ViewSettingsWidget::m_readSettingsFromGUI() {
     m_viewSettings.showStressesDuringDeformation = g_showStressesDuringDeformationCheck->isChecked();
 
     m_viewSettings.autofitVectorField = g_fitVectorFieldsCheck->isChecked();
+    m_viewSettings.autofitMagnitude = g_autofitMagnitudeSlider->value() /
+        ((Scalar) g_autofitMagnitudeSlider->maximum());
+
     // Note: assumes VFieldDisplayStyle enum index matches combo box index
     m_viewSettings.vfDisplayStyle = (ViewSettings::VFieldDisplayStyle)
                     g_vfieldStyleSelector->currentIndex();
