@@ -185,6 +185,9 @@ void ResultsWindowController::syncSearchChecks()
         FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(i);
         assert(fli);
         fli->setCheckState(fli->resultItem()->checkState(0));
+        if (fli->checkState() == Qt::Checked) {
+            m_window.g_filterView->scrollToItem(fli);
+        }
     }
     m_autoAdjustingChecks = oldAuto;
 }
@@ -230,8 +233,10 @@ void ResultsWindowController::searchSelectionChanged()
         QListWidgetItem *i = m_window.g_filterView->item(row);
         FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(i);
         assert(fli);
-        if (fli->isSelected())
+        if (fli->isSelected()) {
             fli->resultItem()->setSelected(true);
+            m_window.g_treeView->scrollToItem(fli->resultItem());
+        }
     }
 
     m_synchingResultSelections = false;
@@ -364,13 +369,34 @@ void ResultsWindowController::deleteSelection()
 
 void ResultsWindowController::dumpRaw()
 {
-    auto items = m_window.g_treeView->selectedItems();
+    QList<QTreeWidgetItem *> items = m_window.g_treeView->selectedItems();
 
     if (items.size() == 0)
         return;
 
     QString dir = QFileDialog::getExistingDirectory(0,
             "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
+
+    try {
+        foreach(QTreeWidgetItem *i, items) {
+            ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+            assert(ri);
+            if (ri->isResultItem()) {
+                string path = dir.toStdString() + "/" + ri->path();
+                shared_ptr<const ResultsCollector_t::Result> r =
+                    m_window.m_resultsCollection.getResultWithPath(ri->path());
+                r->dump(path);
+            }
+        }
+    }
+    catch (std::exception &e) {
+        string errorString("Dumping Results Failed: ");
+        errorString += e.what();
+        QMessageBox mbox(QMessageBox::Critical, "Dumping Results Failed",
+                         errorString.c_str(), QMessageBox::Ok);
+        mbox.setDefaultButton(QMessageBox::Ok);
+        mbox.exec();
+    }
 }
 
 void ResultsWindowController::groupingCheckToggled(bool checked)

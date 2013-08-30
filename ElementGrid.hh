@@ -46,8 +46,9 @@ public:
     ElementGrid2D(size_t Nx, size_t Ny, double cellOverlapThreshold,
                   const Quadrature2D &q, const Model &model, size_t borderWidth)
         : Grid2D(Nx, Ny, model.boundingBox(), borderWidth),
-          m_cellOverlapThreshold(cellOverlapThreshold), m_quadrature(q),
-          m_boundingBoxLocked(false), m_model(model)
+          m_cellOverlapThreshold(cellOverlapThreshold), m_boundingBoxLocked(false),
+          m_quadrature(q),
+          m_model(model)
     {
         update();
     }

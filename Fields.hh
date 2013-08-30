@@ -18,9 +18,13 @@
 #ifndef FIELDS_HH
 #define FIELDS_HH
 #include <Eigen/Dense>
+#include <string>
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <stdexcept>
 
 template<typename Real, size_t t_dim>
 class VectorField {
@@ -72,6 +76,23 @@ public:
         clear();
     }
 
+    void dump(const std::string &path) const {
+        std::ofstream of(path);
+        if (!of.is_open())
+            throw std::runtime_error(std::string("Couldn't open '") +
+                        path + "' for writing.");
+        of << std::scientific << std::setprecision(16);
+        size_t N = domainSize();
+        for (size_t i = 0; i < N; ++i) {
+            ConstValueType v = (*this)(i);
+            of << v[0];
+            for (size_t j = 1; j < t_dim; ++j) {
+                of << '\t' << v[j];
+            }
+            of << std::endl;
+        }
+    }
+
 protected:
     /** Data storage */
     ArrayType m_values;
@@ -110,6 +131,18 @@ public:
     // this = max(this, b)
     void maxRelax(const ScalarField<Real> &b) {
         m_values = m_values.cwiseMax(b.m_values);
+    }
+
+    void dump(const std::string &path) const {
+        std::ofstream of(path);
+        if (!of.is_open())
+            throw std::runtime_error(std::string("Couldn't open '") +
+                        path + "' for writing.");
+        of << std::scientific << std::setprecision(16);
+        size_t N = size();
+        for (size_t i = 0; i < N; ++i) {
+            of << (*this)[i] << std::endl;
+        }
     }
 
 private:

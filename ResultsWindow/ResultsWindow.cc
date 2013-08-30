@@ -67,7 +67,7 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
 
     g_deleteButton = new QPushButton("Delete");
     g_mshButton = new QPushButton("Dump .MSH");
-    g_rawButton = new QPushButton("Dump .txt");
+    g_rawButton = new QPushButton("Dump raw");
     g_flipbookButton = new QPushButton("Flipbook");
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();

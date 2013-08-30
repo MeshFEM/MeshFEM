@@ -94,6 +94,24 @@ public:
     bool hasBdrySField() const { return m_hasSField[PER_BDRY]; }
     bool hasBdryVField() const { return m_hasVField[PER_BDRY]; }
 
+    // Dump result data to raw ASCII text file(s) at
+    //      basename.extension
+    // where extension is determined by the field type (esfield, nvfield, etc.)
+    void dump(const std::string &basename) const {
+        static const char domainLabels[NUM_DOMAINS] = { 'n', 'e', 'b' };
+        std::string path;
+        for (int i = 0; i < NUM_DOMAINS; ++i) {
+            if (m_hasSField[i]) {
+                path = basename + "." + domainLabels[i] + std::string("sfield");
+                m_sfields[i].dump(path);
+            }
+            if (m_hasVField[i]) {
+                path = basename + "." + domainLabels[i] + std::string("vfield");
+                m_vfields[i].dump(path);
+            }
+        }
+    }
+
 private:
     void init() {
         m_sfields.assign((size_t) NUM_DOMAINS, SField());
