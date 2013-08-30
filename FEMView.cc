@@ -639,7 +639,7 @@ void FEMView2D::drawSelection(const VField &deformation)
         glEnd();
     }
 
-    if ((m_select.type() == SelectionTool::ELEM) &&
+    else if ((m_select.type() == SelectionTool::ELEM) &&
         (m_select.index() < grid.numElements())) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glLineWidth(3.0);
@@ -664,6 +664,17 @@ void FEMView2D::drawSelection(const VField &deformation)
 
         glEnd();
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
+    // Draw boundary point selection if there is no deformation (we don't know
+    // how to displace boundary points).
+    else if ((m_select.type() == SelectionTool::BOUNDARY) &&
+             (m_select.index() < m_fem.numBoundaryPoints()) &&
+             !hasDeformation) {
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        m_drawWorldVertex(m_fem.boundaryPoints()[m_select.index()].p);
+        glEnd();
     }
 }
 
@@ -848,28 +859,37 @@ bool FEMView2D::m_drawResult()
     ////////////////////////////////////////////////////////////////////////////
     // Display selected results.
     ////////////////////////////////////////////////////////////////////////////
+    using boost::format;
+    std::string resultString;
     if (m_result->hasNodeVField() && (m_select.type() == SelectionTool::NODE)) {
         size_t i = m_select.index();
         assert(i < vfield.domainSize());
-
         Vector v = vfield(i);
-        boost::format fmt("Node %i result vector: [%lf, %lf] (mag: %lf)");
-        std::string s = boost::str(fmt  % (int) i % v[0] % v[1] % v.norm());
-        glColor3f(0.0f, 0.0f, 0.0f);
-        glRasterPos2i(5, 5);
-        m_font.Render(s.c_str());
+        resultString = boost::str(format(
+            "Node %i vector: [%lf, %lf] (mag: %lf)") %
+            (int) i % v[0] % v[1] % v.norm());
     }
 
     bool hasElemScalarField = sfield.domainSize() == numElems;
     if (hasElemScalarField && (m_select.type() == SelectionTool::ELEM)) {
         size_t i = m_select.index();
         assert(i < sfield.domainSize());
+        resultString = boost::str(format("Elem %i scalar: %lf") 
+                % (int) i % sfield[i]);
+    }
 
-        boost::format fmt("Elem %i result scalar: %lf");
-        std::string s = boost::str(fmt  % (int) i % sfield(i));
+    if (m_result->hasBdrySField() &&
+        (m_select.type() == SelectionTool::BOUNDARY)) {
+        size_t i = m_select.index();
+        assert(i < bsfield.domainSize());
+        resultString = boost::str(format("Boundary point %i scalar: %lf")
+                % (int) i % bsfield[i]);
+    }
+
+    if (resultString.length()) {
         glColor3f(0.0f, 0.0f, 0.0f);
         glRasterPos2i(5, 5);
-        m_font.Render(s.c_str());
+        m_font.Render(resultString.c_str());
     }
 
     return usedColormap;

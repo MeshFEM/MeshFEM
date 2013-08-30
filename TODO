@@ -1,6 +1,3 @@
-================================================================================
-Debug cut cell stress computation... why is it so high?
-================================================================================
 Implement:
     Rewrite ResultCollection clear() so empty result nodes removed from the display
 
