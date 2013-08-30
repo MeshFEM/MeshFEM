@@ -66,12 +66,14 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     viewTab->addTab(resultsFilterWidget, "Search");
 
     g_deleteButton = new QPushButton("Delete");
-    g_mshButton = new QPushButton("Write .MSH");
+    g_mshButton = new QPushButton("Dump .MSH");
+    g_rawButton = new QPushButton("Dump .txt");
     g_flipbookButton = new QPushButton("Flipbook");
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(g_deleteButton);
     buttonLayout->addWidget(g_mshButton);
+    buttonLayout->addWidget(g_rawButton);
     buttonLayout->addWidget(g_flipbookButton);
 
     layout->addWidget(viewTab);
@@ -83,6 +85,11 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
+
+    QObject::connect(g_treeView, SIGNAL(itemSelectionChanged()),
+                     controller(), SLOT(selectionChanged()));
+    QObject::connect(g_filterView, SIGNAL(itemSelectionChanged()),
+                     controller(), SLOT(searchSelectionChanged()));
 
     QObject::connect(g_filterView, SIGNAL(itemActivated(QListWidgetItem *)),
                      controller(), SLOT(searchItemActivated(QListWidgetItem *)));
@@ -96,6 +103,8 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(groupingCheckToggled(bool)));
     QObject::connect(g_deleteButton, SIGNAL(clicked()),
                      controller(), SLOT(deleteSelection()));
+    QObject::connect(g_rawButton, SIGNAL(clicked()),
+                     controller(), SLOT(dumpRaw()));
 
     m_controller->resultsUpdated();
 }

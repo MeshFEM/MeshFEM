@@ -38,8 +38,8 @@ private:
     ResultsCollector_t &m_resultsCollection;
     ResultTreeView *g_treeView;
     QListWidget *g_filterView;
-    QPushButton *g_deleteButton, *g_mshButton, *g_flipbookButton,
-                *g_searchButton;
+    QPushButton *g_deleteButton, *g_mshButton, *g_rawButton,
+                *g_flipbookButton, *g_searchButton;
     QCheckBox *g_modelSettingsGrouping;
     QLineEdit *g_searchField;
 

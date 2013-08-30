@@ -18,6 +18,7 @@
 #include <QListWidget>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QFileDialog>
 #include <stdexcept>
 #include <regex>
 
@@ -149,6 +150,31 @@ void ResultsWindowController::itemChanged(QTreeWidgetItem *item, int col)
     }
 }
 
+void ResultsWindowController::selectionChanged()
+{
+    if (m_synchingResultSelections)
+        return;
+
+    m_synchingResultSelections = true;
+
+    // Make sure only result nodes are selected...
+    foreach (QTreeWidgetItem *i, m_window.g_treeView->selectedItems()) {
+        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+        assert(ri);
+        ri->setSelected(ri->isResultItem());
+    }
+
+    // Sync the search list items
+    for (int row = 0; row < m_window.g_filterView->count(); ++row) {
+        QListWidgetItem *i = m_window.g_filterView->item(row);
+        FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(i);
+        assert(fli);
+        fli->setSelected(fli->resultItem()->isSelected());
+    }
+
+    m_synchingResultSelections = false;
+}
+
 // Synchronize the search list checkboxes with the results tree.
 void ResultsWindowController::syncSearchChecks()
 {
@@ -184,6 +210,33 @@ void ResultsWindowController::searchItemChanged(QListWidgetItem *item)
 
     syncSearchChecks();
 }
+
+void ResultsWindowController::searchSelectionChanged()
+{
+    if (m_synchingResultSelections)
+        return;
+
+    m_synchingResultSelections = true;
+
+    // Clear tree selection
+    foreach (QTreeWidgetItem *i, m_window.g_treeView->selectedItems()) {
+        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+        assert(ri);
+        ri->setSelected(false);
+    }
+
+    // Sync the tree selection
+    for (int row = 0; row < m_window.g_filterView->count(); ++row) {
+        QListWidgetItem *i = m_window.g_filterView->item(row);
+        FilterListWidgetItem *fli = dynamic_cast<FilterListWidgetItem *>(i);
+        assert(fli);
+        if (fli->isSelected())
+            fli->resultItem()->setSelected(true);
+    }
+
+    m_synchingResultSelections = false;
+}
+
 
 // Invalidate current item pointer when the pointed-to item is deleted.
 // Also, update the path->item dictionary
@@ -307,6 +360,17 @@ void ResultsWindowController::deleteSelection()
 
     m_window.m_resultsCollection.removeResultsWithPaths(pathsForDeletion);
     emit resultsUpdated();
+}
+
+void ResultsWindowController::dumpRaw()
+{
+    auto items = m_window.g_treeView->selectedItems();
+
+    if (items.size() == 0)
+        return;
+
+    QString dir = QFileDialog::getExistingDirectory(0,
+            "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
 }
 
 void ResultsWindowController::groupingCheckToggled(bool checked)

@@ -764,6 +764,29 @@ void FEMView2D::draw()
 
         m_drawColorbar(colorbarX, 5, colorBarWidth, 35);
     }
+
+    if (m_guiState != STATE_MODEL) {
+        std::string selModeString;
+        switch (m_select.mode()) {
+            case SelectionTool::NODE:
+                selModeString = "Selection: Node";
+                break;
+            case SelectionTool::ELEM:
+                selModeString = "Selection: Element";
+                break;
+            case SelectionTool::BOUNDARY:
+                selModeString = "Selection: Boundary";
+                break;
+            default:
+                break;
+        }
+
+        if (selModeString.length()) {
+            glColor3f(0.0f, 0.0f, 0.0f);
+            glRasterPos2i(5, m_height - m_font.LineHeight());
+            m_font.Render(selModeString.c_str());
+        }
+    }
 }
 
 bool FEMView2D::m_drawResult()
