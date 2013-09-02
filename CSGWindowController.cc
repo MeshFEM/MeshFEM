@@ -20,6 +20,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits>
+#include <QtGui>
 #include <QMessageBox>
 
 using namespace std;
@@ -193,8 +194,13 @@ void CSGWindowController::modelChanged(bool refitGrid)
     m_fem.modelChanged();
     m_femView->modelChanged();
     m_fem.elementGrid().setBoundingBoxLocked(locked);
+    validateNames();
 }
 
+void CSGWindowController::settingsChanged()
+{
+    validateNames();
+}
 
 void CSGWindowController::elementGridChanged(const AnalysisSettings &settings)
 {
@@ -703,4 +709,26 @@ void CSGWindowController::resultSelected(const string &resultPath)
 void CSGWindowController::resultDeslected()
 {
     m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
+}
+
+void CSGWindowController::modelNameEdited(const QString &name)
+{
+    m_modelName = name.toStdString();
+    validateNames();
+}
+
+void CSGWindowController::settingsNameEdited(const QString &name)
+{
+    m_settingsName = name.toStdString();
+    validateNames();
+}
+
+void CSGWindowController::validateNames()
+{
+    bool modelConflict = m_results.modelNameConflict(m_modelName, m_fem.model(),
+                                    m_fem.elementGrid().getBoudingBox());
+    bool settingsConflict = m_results.settingsNameConflict(m_settingsName,
+                                                           m_settings);
+    std::cout << "Validated names: " << modelConflict << ", " << settingsConflict << std::endl;
+    emit nameConflictsUpdated(modelConflict, settingsConflict);
 }

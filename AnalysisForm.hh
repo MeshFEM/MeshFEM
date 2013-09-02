@@ -23,6 +23,7 @@ class QuadraturePointsSpinBox;
 class QCheckBox;
 class QPushButton;
 class QComboBox;
+class QLineEdit;
 
 class AnalysisForm : public QWidget
 {
@@ -33,6 +34,7 @@ public:
 
 public slots:
     void reloadSettings();
+    void nameConflictsUpdated(bool modelConflict, bool settingsConflict);
 
 private slots:
     void solverControlsChanged(int);
@@ -53,6 +55,7 @@ private slots:
     void reftestButtonClicked();
 
 signals:
+    void settingsChanged();
     void eqSettingsChanged(const AnalysisSettings &settings);
     void bpSettingsChanged(const AnalysisSettings &settings);
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
@@ -66,6 +69,10 @@ signals:
 private:
     AnalysisSettings &m_settings;
     SolverLibrary<Scalar> &m_solvers;
+
+    // Names section
+    QLineEdit *g_modelNameEdit;
+    QLineEdit *g_settingsNameEdit;
 
     // Solver selection
     QComboBox *g_solverSelector;

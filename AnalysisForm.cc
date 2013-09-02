@@ -22,6 +22,9 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
       m_settingGUIFromSettings(false)
 {
     // Construct all widgets
+    g_modelNameEdit = new QLineEdit();
+    g_settingsNameEdit = new QLineEdit();
+
     g_solverSelector = new QComboBox();
 
     g_nxStepper = new QSpinBox();
@@ -90,12 +93,20 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_functionRadiusTestButton = new QPushButton("Function Radius Test");
     g_refinementTestButton = new QPushButton("Refinement Test");
 
+    QGroupBox *namesGroup = new QGroupBox("Names");
     QGroupBox *solverGroup = new QGroupBox("Solvers");
     QGroupBox *elementsQuadratureGroup = new QGroupBox("Elements and Quadrature");
     QGroupBox *materialGroup = new QGroupBox("Materials and Matrices");
     QGroupBox *modalAnalysisGroup = new QGroupBox("Modal Analysis");
     QGroupBox *simulationGroup = new QGroupBox("Simulation");
     QGroupBox *weaknessAnalysisGroup = new QGroupBox("Weakness Analysis");
+
+    // Names group
+    QFormLayout *namesForm = new QFormLayout();
+    namesForm->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+    namesForm->addRow("Model", g_modelNameEdit);
+    namesForm->addRow("Settings", g_settingsNameEdit);
+    namesGroup->setLayout(namesForm);
 
     // Solver Config
     QFormLayout *solverForm = new QFormLayout();
@@ -111,7 +122,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     rowColLayout->addWidget(g_nyStepper);
     rowColLayout->addWidget(g_nxStepper);
     eqForm->addRow("Grid Rows/Cols", rowColLayout);
-    eqForm->addRow("Border width", g_borderWidthStepper);
+    eqForm->addRow("Border Width", g_borderWidthStepper);
     eqForm->addRow("Gauss Quadrature", g_gaussQuadratureCheck);
     eqForm->addRow("Quadrature Points", g_quadraturePointsStepper);
     eqForm->addRow("Cell Overlap Threshold", g_cellOverlapStepper);
@@ -186,6 +197,13 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Connections
     assert(controller);
+    QObject::connect(g_modelNameEdit, SIGNAL(textEdited(const QString &)),
+                     controller, SLOT(modelNameEdited(const QString &)));
+    QObject::connect(g_settingsNameEdit, SIGNAL(textEdited(const QString &)),
+                     controller, SLOT(settingsNameEdited(const QString &)));
+    QObject::connect(controller, SIGNAL(nameConflictsUpdated(bool, bool)),
+                     this, SLOT(nameConflictsUpdated(bool, bool)));
+
     QObject::connect(g_solverSelector, SIGNAL(currentIndexChanged(int)),
             this, SLOT(solverControlsChanged(int)));
     QObject::connect(g_nxStepper, SIGNAL(valueChanged(int)),
@@ -281,6 +299,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Layout all the groups
     QVBoxLayout *layout = new QVBoxLayout();
+    layout->addWidget(namesGroup);
     layout->addWidget(solverGroup);
     layout->addWidget(elementsQuadratureGroup);
     layout->addWidget(materialGroup);
@@ -404,45 +423,54 @@ void AnalysisForm::solverControlsChanged(int) {
 void AnalysisForm::elementGridControlsChanged(int) {
     m_readSettingsFromGUI();
     emit eqSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::elementGridControlsChanged(double) {
     elementGridControlsChanged((int) 0);
+    emit settingsChanged();
 }
 
 void AnalysisForm::boundaryPointControlsChanged(double) {
     m_readSettingsFromGUI();
     emit bpSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::boundaryPointControlsChanged(int) {
     m_readSettingsFromGUI();
     emit bpSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::modalAnalysisControlsChanged(int) {
     m_readSettingsFromGUI();
     emit modalAnalysisSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::matrixControlsChanged(int) {
     m_readSettingsFromGUI();
     emit matrixOrMaterialSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::materialControlsChanged(double) {
     m_readSettingsFromGUI();
     emit matrixOrMaterialSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::weaknessAnalysisControlsChanged(int) {
     m_readSettingsFromGUI();
     emit weaknessAnalysisSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::weaknessAnalysisControlsChanged(double) {
     m_readSettingsFromGUI();
     emit weaknessAnalysisSettingsChanged(m_settings);
+    emit settingsChanged();
 }
 
 void AnalysisForm::ttestControlsChanged(int) {
@@ -459,6 +487,7 @@ void AnalysisForm::ttestControlsChanged(int) {
 
 void AnalysisForm::ttestControlsChanged(double) {
     m_readSettingsFromGUI();
+    emit settingsChanged();
 }
 
 void AnalysisForm::ttestButtonClicked() {
@@ -479,4 +508,16 @@ void AnalysisForm::reftestButtonClicked() {
 
 void AnalysisForm::reloadSettings() {
     m_setGUIFromSettings();
+}
+
+void AnalysisForm::nameConflictsUpdated(bool modelConflict,
+                                        bool settingsConflict)
+{
+    QPalette conflictPalette, noConflictPalette;
+    conflictPalette.setColor(QPalette::Text, Qt::red);
+
+    g_modelNameEdit->setPalette(modelConflict ? conflictPalette
+                                              : noConflictPalette);
+    g_settingsNameEdit->setPalette(settingsConflict ? conflictPalette
+                                                    : noConflictPalette);
 }

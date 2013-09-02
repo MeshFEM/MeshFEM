@@ -70,6 +70,22 @@ public:
     std::string addSettings(const std::string &nameSuggestion,
                             const AnalysisSettings &settings);
 
+    // Checks if there is a conflict between a given (name, model) pair and the
+    // results dictionary.
+    // There is a conflict iff a different model of the same name has results in
+    // the database (i.e. addModel() would generate a "uniquified" version of
+    // "name").
+    bool modelNameConflict(const std::string &name, const Model &model,
+                           const BBox_t &gridBBox);
+
+    // Checks if there is a conflict between a given (name, settings) pair and
+    // the results dictionary.
+    // There is a conflict iff a different settings of the same name has results
+    // in the database (i.e. addModel() would generate a "uniquified" version of
+    // "name").
+    bool settingsNameConflict(const std::string &name,
+                              const AnalysisSettings &settings);
+
     void selectModel(const std::string &name) {
         if (m_models.find(name) == m_models.end())
             throw std::runtime_error(std::string("model not found: ") + name);

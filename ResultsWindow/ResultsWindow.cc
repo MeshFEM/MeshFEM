@@ -56,7 +56,6 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     QHBoxLayout *searchLayout = new QHBoxLayout();
     g_searchField = new QLineEdit();
     g_searchButton = new QPushButton("Search");
-    g_searchButton->setDefault(true);
     searchLayout->addWidget(g_searchField);
     searchLayout->addWidget(g_searchButton);
     resultsFilterLayout->addLayout(searchLayout);
@@ -81,6 +80,8 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     setLayout(layout);
 
+    QObject::connect(viewTab, SIGNAL(currentChanged(int)),
+                     controller(), SLOT(browserTabChanged(int)));
     QObject::connect(g_treeView, SIGNAL(itemActivated(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
@@ -96,6 +97,8 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     QObject::connect(g_filterView, SIGNAL(itemChanged(QListWidgetItem *)),
                      controller(), SLOT(searchItemChanged(QListWidgetItem *)));
 
+    QObject::connect(g_searchField, SIGNAL(returnPressed()),
+                     g_searchButton, SLOT(click()));
     QObject::connect(g_searchButton, SIGNAL(clicked()),
                      controller(), SLOT(runSearch()));
 

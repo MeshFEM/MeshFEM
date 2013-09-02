@@ -20,6 +20,9 @@
 #include "MeshlessFEM.hh"
 #include "AnalysisSettings.hh"
 
+class QTreeView;
+class QString;
+
 class CSGWindowController : public QObject {
     Q_OBJECT
 
@@ -47,6 +50,7 @@ public slots:
     void saveCSG();
 
     void modelChanged(bool refitGrid = true);
+    void settingsChanged();
 
     // Analysis actions
     void elementGridChanged(const AnalysisSettings &settings);
@@ -77,6 +81,9 @@ public slots:
     void resultSelected(const std::string &path);
     void resultDeslected();
 
+    void modelNameEdited(const QString &);
+    void settingsNameEdited(const QString &);
+
 signals:
     void csgTreeApplyModifiedSelection(const QItemSelection &selection,
             QItemSelectionModel::SelectionFlags command =
@@ -84,9 +91,11 @@ signals:
     void csgNodesSelected(const NodeList &nList);
     void resultsUpdated();
     void reloadSettings();
+    void nameConflictsUpdated(bool modelConflict, bool settingsConflict);
     
 private:
     void prepareResultsCollector();
+    void validateNames();
 
     enum { CONTROLLER_STATE_MODEL, CONTROLLER_STATE_ANALYSIS } m_state;
     CSGWindow           *m_window;

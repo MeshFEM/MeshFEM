@@ -24,6 +24,7 @@ class ResultsWindowController : public QObject
     Q_OBJECT
 
 public slots:
+    void browserTabChanged(int);
     void itemActivated(QTreeWidgetItem *item, int col);
     void itemChanged(QTreeWidgetItem *item, int col);
     void selectionChanged();

@@ -30,6 +30,13 @@
 
 using namespace std;
 
+void ResultsWindowController::browserTabChanged(int newTab) {
+    if (newTab == 1) {
+        // When search tab is selected, focus on the search field
+        m_window.g_searchField->setFocus();
+    }
+}
+
 // Special QTreeWidgetItem that knows when it is deleted so we can make sure to
 // invalidate ResultsWindowController's current result item pointer.
 class ResultTreeWidgetItem : public QTreeWidgetItem
@@ -412,6 +419,8 @@ void ResultsWindowController::runSearch()
     try {
         regex pattern(searchPattern.toStdString());
 
+        FilterListWidgetItem *firstItem = nullptr;
+
         for (auto &pathItemPair : m_pathToItem) {
             ResultTreeWidgetItem *ri =
                 dynamic_cast<ResultTreeWidgetItem *>(pathItemPair.second);
@@ -422,9 +431,14 @@ void ResultsWindowController::runSearch()
                         new FilterListWidgetItem(path.c_str(), ri);
                     item->setCheckState(ri->checkState(0));
                     m_window.g_filterView->addItem(item);
+
+                    if (firstItem == nullptr) firstItem = item;
                 }
             }
         }
+
+        if (firstItem) firstItem->setSelected(true);
+        m_window.g_filterView->setFocus();
     }
     catch (regex_error &e) {
         string errorString("Parsing regex failed. ");

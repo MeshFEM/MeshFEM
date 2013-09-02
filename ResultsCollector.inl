@@ -271,24 +271,20 @@ private:
 };
 
 template<typename T>
-inline std::string addNamedEntry(const std::string &nameSuggestion,
+inline std::string generateEntryName(const std::string &nameSuggestion,
              std::map<std::string, T> &collection,
              const T &entry)
 {
     std::string name = nameSuggestion;
 
     auto it = collection.find(name);
-    if (it == collection.end())  {
-        collection[name] = entry;
-    }
-    else {
+    if (it != collection.end()) {
         // Only create a new entry if the existing one differs.
         if (!(it->second == entry)) {
             std::vector<std::string> keys;
             for (auto existing: collection)
                 keys.push_back(existing.first);
             name = uniqueName(nameSuggestion, keys);
-            collection[name] = entry;
         }
     }
 
@@ -300,14 +296,18 @@ std::string ResultsCollector<Generator>::
 addModel(const std::string &nameSuggestion, const Model &model,
          const BBox_t &gridBBox)
 {
-    std::string name = addNamedEntry(nameSuggestion, m_models,
-                                     std::make_pair(model, gridBBox));
+    // Delete the previously selected model if no results were added.
+    // This allows overwriting of an existing model of the same name with no
+    // results.
+    m_selectedModel.clear();
+    clean();
+
+    RModel entry(model, gridBBox);
+    std::string name = generateEntryName(nameSuggestion, m_models, entry);
+    m_models[name] = entry;
 
     // Select the newly added model
     m_selectedModel = name;
-
-    // Possibly delete the previously selected model if no results were added.
-    clean();
 
     return name;
 }
@@ -316,17 +316,36 @@ template<typename Generator>
 std::string ResultsCollector<Generator>::
 addSettings(const std::string &nameSuggestion, const AnalysisSettings &settings)
 {
-    std::string name = addNamedEntry(nameSuggestion, m_settings, settings);
+    // Delete the previously selected settings if no results were added.
+    // This allows overwriting of an existing settings of the same name with no
+    // results.
+    m_selectedSettings.clear();
+    clean();
+
+    std::string name = generateEntryName(nameSuggestion, m_settings, settings);
+    m_settings[name] = settings;
 
     // Select the newly added settings
     m_selectedSettings = name;
 
-    // Possibly delete the previously selected settings if no results were
-    // added.
-    clean();
-
     return name;
 }
+
+template<typename Generator>
+bool ResultsCollector<Generator>::modelNameConflict(const std::string &name,
+        const Model &model, const BBox_t &gridBBox)
+{
+    return (generateEntryName(name, m_models,
+                              std::make_pair(model, gridBBox)) != name);
+}
+
+template<typename Generator>
+bool ResultsCollector<Generator>::settingsNameConflict(const std::string &name,
+        const AnalysisSettings &settings)
+{
+    return (generateEntryName(name, m_settings, settings) != name);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Delete all models/settings for which no results are recorded

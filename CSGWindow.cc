@@ -89,6 +89,7 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     QAction *viewSettingsAction = new QAction("View Settings", this);
     QAction *resultsWindowAction = new QAction("Results Window", this);
     viewSettingsAction->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_V);
+    resultsWindowAction->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_R);
     viewMenu->addAction(viewSettingsAction);
     viewMenu->addAction(resultsWindowAction);
     QObject::connect(viewSettingsAction, SIGNAL(triggered()),
@@ -101,6 +102,8 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      femView, SLOT(csgNodesSelected(const NodeList &)));
     QObject::connect(sideBarTab, SIGNAL(currentChanged(int)),
                      controller, SLOT(changedSidebarTab(int)));
+    QObject::connect(analysisForm, SIGNAL(settingsChanged()),
+                     controller, SLOT(settingsChanged()));
     QObject::connect(analysisForm,
                      SIGNAL(eqSettingsChanged(const AnalysisSettings &)),
                      controller,
