@@ -36,7 +36,7 @@ public:
           m_csgTreeModel(treeModel), m_csgTreeView(treeView),
           m_csgTree(tree), m_settings(settings), m_femView(femView), m_fem(fem),
           m_results(results), m_modelName("Untitled Model"),
-          m_settingsName("Untitled Settings") { }
+          m_settingsName("Default") { }
 
     QTreeView *csgTreeView()  { return m_csgTreeView; }
 
@@ -81,6 +81,8 @@ public slots:
     void resultSelected(const std::string &path);
     void resultDeslected();
 
+    const std::string &modelName() const { return m_modelName; }
+    const std::string &settingsName() const { return m_settingsName; }
     void modelNameEdited(const QString &);
     void settingsNameEdited(const QString &);
 
@@ -92,6 +94,8 @@ signals:
     void resultsUpdated();
     void reloadSettings();
     void nameConflictsUpdated(bool modelConflict, bool settingsConflict);
+    void namesUpdated(const std::string &modelName,
+                      const std::string &settingsName);
     
 private:
     void prepareResultsCollector();
@@ -108,7 +112,6 @@ private:
     ResultsCollector_t  &m_results;
     std::string          m_modelName;
     std::string          m_settingsName;
-    std::string          m_csgPath;
 
     typedef CSGTree_t::CSGNode CSGNode;
 };

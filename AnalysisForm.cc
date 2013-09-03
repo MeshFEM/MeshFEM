@@ -15,6 +15,8 @@
 #include "SolverLibrary.hh"
 #include <iostream>
 
+using namespace std;
+
 AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                            CSGWindowController *controller,
                            SolverLibrary<Scalar> &solvers, QWidget *parent)
@@ -111,7 +113,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Solver Config
     QFormLayout *solverForm = new QFormLayout();
     solverForm->addRow("Solver", g_solverSelector);
-    for (const std::string &name: solvers.names()) {
+    for (const string &name: solvers.names()) {
         g_solverSelector->addItem(name.c_str());
     }
     solverGroup->setLayout(solverForm);
@@ -194,15 +196,18 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     // Initialize all the GUI values
     m_setGUIFromSettings();
+    assert(controller);
+    namesUpdated(controller->modelName(), controller->settingsName());
 
     // Connections
-    assert(controller);
     QObject::connect(g_modelNameEdit, SIGNAL(textEdited(const QString &)),
                      controller, SLOT(modelNameEdited(const QString &)));
     QObject::connect(g_settingsNameEdit, SIGNAL(textEdited(const QString &)),
                      controller, SLOT(settingsNameEdited(const QString &)));
     QObject::connect(controller, SIGNAL(nameConflictsUpdated(bool, bool)),
                      this, SLOT(nameConflictsUpdated(bool, bool)));
+    QObject::connect(controller, SIGNAL(namesUpdated(const std::string &, const std::string &)),
+                     this, SLOT(namesUpdated(const std::string &, const std::string &)));
 
     QObject::connect(g_solverSelector, SIGNAL(currentIndexChanged(int)),
             this, SLOT(solverControlsChanged(int)));
@@ -520,4 +525,11 @@ void AnalysisForm::nameConflictsUpdated(bool modelConflict,
                                               : noConflictPalette);
     g_settingsNameEdit->setPalette(settingsConflict ? conflictPalette
                                                     : noConflictPalette);
+}
+
+void AnalysisForm::namesUpdated(const string &modelName,
+                                const string &settingsName)
+{
+    g_modelNameEdit->setText(QString::fromStdString(modelName));
+    g_settingsNameEdit->setText(QString::fromStdString(settingsName));
 }

@@ -1,4 +1,8 @@
 Implement:
+    Model + settings browser
+    Model, settings name text fields in analysis tab.
+    Result dump basename simplification (don't output model/setting name if they're unique)
+
     Rewrite ResultCollection clear() so empty result nodes removed from the display
 
     MSH writer (multiple MSH needed for model changes).

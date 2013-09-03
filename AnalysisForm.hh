@@ -12,6 +12,7 @@
 #define ANALYSIS_FORM_HH
 
 #include <QWidget>
+#include <string>
 #include "AnalysisSettings.hh"
 
 class CSGWindowController;
@@ -35,6 +36,8 @@ public:
 public slots:
     void reloadSettings();
     void nameConflictsUpdated(bool modelConflict, bool settingsConflict);
+    void namesUpdated(const std::string &modelName,
+                      const std::string &settingsName);
 
 private slots:
     void solverControlsChanged(int);

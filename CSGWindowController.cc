@@ -135,14 +135,13 @@ void CSGWindowController::saveBoundaryPolygon()
 
 void CSGWindowController::saveCSG()
 {
-    QString path = QString::fromStdString(m_csgPath);
+    QString path = QString();
     QString fileName = QFileDialog::getSaveFileName(m_window,
             "Save Object (.csg)", path,
             "Text files (*.csg)");
     if (fileName.length() > 0) {
         try {
             writeCSGFile(fileName.toAscii(), *m_csgTree);
-            m_csgPath = fileName.toStdString();
         }
         catch (std::exception &e)
         {
@@ -157,7 +156,7 @@ void CSGWindowController::saveCSG()
 
 void CSGWindowController::loadCSG()
 {
-    QString path = QString::fromStdString(m_csgPath);
+    QString path = QString();
     QString fileName = QFileDialog::getOpenFileName(m_window,
             "Open Object (.csg)", path,
             "Text files (*.csg)");
@@ -166,7 +165,12 @@ void CSGWindowController::loadCSG()
 
         try {
             parseCSGFile(fileName.toAscii(), *m_csgTree);
-            m_csgPath = fileName.toStdString();
+            QFileInfo fi(fileName);
+            string modelName = fi.completeBaseName().toStdString();
+            if (m_modelName != modelName) {
+                m_modelName = modelName;
+                emit namesUpdated(m_modelName, m_settingsName);
+            }
         }
         catch (std::exception &e)
         {
@@ -704,6 +708,14 @@ void CSGWindowController::resultSelected(const string &resultPath)
     }
 
     m_femView->displayResult(m_results.getResultWithPath(resultPath));
+
+    if ((m_modelName != modelName) || (m_settingsName != settingsName)) {
+        m_modelName = modelName;
+        m_settingsName = settingsName;
+        emit namesUpdated(modelName, settingsName);
+    }
+
+    validateNames();
 }
 
 void CSGWindowController::resultDeslected()
@@ -729,6 +741,7 @@ void CSGWindowController::validateNames()
                                     m_fem.elementGrid().getBoudingBox());
     bool settingsConflict = m_results.settingsNameConflict(m_settingsName,
                                                            m_settings);
-    std::cout << "Validated names: " << modelConflict << ", " << settingsConflict << std::endl;
+    // std::cout << "Validated names: " << modelConflict << ", "
+    //           << settingsConflict << std::endl;
     emit nameConflictsUpdated(modelConflict, settingsConflict);
 }
