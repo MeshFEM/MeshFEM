@@ -107,6 +107,14 @@ public:
                  (gridBBox == model_it->second.second));
     }
 
+    std::vector<std::string> getModelNames() const {
+        std::vector<std::string> names;
+        names.reserve(m_models.size());
+        for (const auto &entry : m_models)
+            names.push_back(entry.first);
+        return names;
+    }
+
     void getModel(const std::string &name, Model &model,
                   BBox_t &gridBBox) const {
         auto model_it = m_models.find(name);
@@ -114,6 +122,14 @@ public:
             throw std::runtime_error(std::string("model not found: ") + name);
         model = model_it->second.first;
         gridBBox = model_it->second.second;
+    }
+
+    std::vector<std::string> getSettingsNames() const {
+        std::vector<std::string> names;
+        names.reserve(m_models.size());
+        for (const auto &entry : m_settings)
+            names.push_back(entry.first);
+        return names;
     }
 
     void getSettings(const std::string &name, AnalysisSettings &settings) const
@@ -229,7 +245,7 @@ public:
     void clean();
 
     ////////////////////////////////////////////////////////////////////////////
-    /*! Remove all the results specified in paths.
+    /*! Remove all the results specified in paths (including descendants).
     //  @param[in]  paths   paths of results to remove
     *///////////////////////////////////////////////////////////////////////////
     void removeResultsWithPaths(std::vector<std::string> paths) {

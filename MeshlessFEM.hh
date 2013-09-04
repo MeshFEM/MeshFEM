@@ -252,10 +252,6 @@ public:
         return m_combinedWeakness;
     }
 
-    bool combinedWeaknessIsCached() const {
-        return (m_combinedWeakness.size() == elementGrid().numElements());
-    }
-
     const BoundaryFunction &boundaryFunction(size_t i) {
         if (m_boundaryFunctions.size() != m_boundaryPoints.size())
             buildBoundaryFunctions(m_boundaryKernelRadius);

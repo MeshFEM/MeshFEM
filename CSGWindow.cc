@@ -128,6 +128,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      femView, SLOT(viewSettingsUpdated()));
     QObject::connect(controller, SIGNAL(resultsUpdated()),
                      g_resultsWindow->controller(), SLOT(resultsUpdated()));
+    QObject::connect(controller, SIGNAL(modelsUpdated()),
+                     g_resultsWindow->controller(), SLOT(modelsUpdated()));
+    QObject::connect(controller, SIGNAL(settingsUpdated()),
+                     g_resultsWindow->controller(), SLOT(settingsUpdated()));
 
     QObject::connect(g_resultsWindow->controller(),
                      SIGNAL(resultSelected(const std::string &)),

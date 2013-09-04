@@ -35,6 +35,8 @@ public slots:
 
     void itemDeleted(QTreeWidgetItem *item);
 
+    void modelsUpdated();
+    void settingsUpdated();
     void resultsUpdated();
     void selectResult(const std::string &path);
     void deleteSelection();

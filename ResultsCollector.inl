@@ -177,6 +177,27 @@ public:
         return count;
     }
 
+    // Remove all child subtrees with no results, and report if this subtree
+    // should be removed.
+    bool prune() {
+        if (hasResult()) {
+            return false;
+        }
+        
+        bool shouldPruneRoot = true;
+        for (auto ci = m_children.begin(); ci != m_children.end(); /* nop */) {
+            if (ci->second->prune()) {
+                ci = m_children.erase(ci);
+            }
+            else {
+                shouldPruneRoot = false;
+                ++ci;
+            }
+        }
+
+        return shouldPruneRoot;
+    }
+
     // Recursively destroy this tree's contents.
     // Made super easy now by smart pointers
     void clear() {
@@ -354,29 +375,59 @@ bool ResultsCollector<Generator>::settingsNameConflict(const std::string &name,
 template<typename Generator>
 void ResultsCollector<Generator>::clean()
 {
-    auto innerMapResultCount = [](const _InnerMapType &m) -> size_t {
-            size_t count = 0;
-            for (const auto &entry : m) {
-                count += entry.second->numResults();
+    // Prune empty result subtrees from models->settings hierarchy
+    for (auto mscit = m_models_settings_collection.begin();
+              mscit != m_models_settings_collection.end(); /* nop */) {
+        bool pruneModel = true;
+        _InnerMapType &sc = mscit->second;
+        for (auto scit = sc.begin(); scit != sc.end(); /* nop */) {
+            // Delete the settings entry if it has no results under this model
+            if (scit->second->prune()) {
+                scit = sc.erase(scit);
             }
-            return count;
-        };
+            else {
+                ++scit;
+                // There is at least one result for this model
+                pruneModel = false;
+            }
+        }
+        // Delete the model collection, model if it has no results.
+        if (pruneModel)
+            mscit = m_models_settings_collection.erase(mscit);
+        else
+            ++mscit;
+    }
 
-    std::list<std::string> deletedModels, deletedSettings;
+    // Prune empty result subtrees from settings->models hierarchy
+    for (auto smcit = m_settings_models_collection.begin();
+              smcit != m_settings_models_collection.end(); /* nop */) {
+        bool pruneSettings = true;
+        _InnerMapType &mc = smcit->second;
+        for (auto mcit = mc.begin(); mcit != mc.end(); /* nop */) {
+            // Delete the model entry if it has no results under these settings
+            if (mcit->second->prune()) {
+                mcit = mc.erase(mcit);
+            }
+            else {
+                ++mcit;
+                // There is at least one result for these settings
+                pruneSettings = false;
+            }
+        }
+        // Delete the settings collection, settings if it has no results.
+        if (pruneSettings)
+            smcit = m_settings_models_collection.erase(smcit);
+        else
+            ++smcit;
+    }
 
     // Delete non-existent models
     for (auto it = m_models.begin(); it != m_models.end(); /* nop */) {
         const std::string &name = it->first;
-        bool remove = false;
         // Only remove the non-selected models
-        if (name != m_selectedModel) {
-            auto mit = m_models_settings_collection.find(name);
-            if (mit == m_models_settings_collection.end())
-                remove = true;
-            else
-                remove = (innerMapResultCount(mit->second) == 0);
-        }
-        deletedModels.push_back(name);
+        bool remove = (name != m_selectedModel) &&
+            (m_models_settings_collection.find(name) ==
+             m_models_settings_collection.end());
         if (remove)
             it = m_models.erase(it);
         else
@@ -386,23 +437,13 @@ void ResultsCollector<Generator>::clean()
     // Delete non-existent settings.
     for (auto it = m_settings.begin(); it != m_settings.end(); /* nop */) {
         const std::string &name = it->first;
-        bool remove = false;
         // Only remove the non-selected settings
-        if (name != m_selectedSettings) {
-            auto sit = m_settings_models_collection.find(name);
-            if (sit == m_settings_models_collection.end())
-                remove = true;
-            else
-                remove = (innerMapResultCount(sit->second) == 0);
-        }
-        deletedSettings.push_back(name);
+        bool remove = (name != m_selectedSettings) &&
+            (m_settings_models_collection.find(name) ==
+             m_settings_models_collection.end());
         if (remove)
             it = m_settings.erase(it);
         else
             ++it;
     }
-    
-    // TODO: To fully clean up, it would be nice to delete all empty model:setting and
-    // setting:model collections. However, these don't take up much space, and
-    // finding them could be a bit expensive.
 }

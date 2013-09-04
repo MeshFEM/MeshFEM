@@ -11,6 +11,7 @@
 #include <iostream>
 #include <QTreeWidgetItem>
 #include <cassert>
+#include <vector>
 #include <string>
 #include <stack>
 #include <memory>
@@ -164,12 +165,12 @@ void ResultsWindowController::selectionChanged()
 
     m_synchingResultSelections = true;
 
-    // Make sure only result nodes are selected...
-    foreach (QTreeWidgetItem *i, m_window.g_treeView->selectedItems()) {
-        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
-        assert(ri);
-        ri->setSelected(ri->isResultItem());
-    }
+    // // Make sure only result nodes are selected...
+    // foreach (QTreeWidgetItem *i, m_window.g_treeView->selectedItems()) {
+    //     ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+    //     assert(ri);
+    //     ri->setSelected(ri->isResultItem());
+    // }
 
     // Sync the search list items
     for (int row = 0; row < m_window.g_filterView->count(); ++row) {
@@ -347,9 +348,31 @@ void ResultsWindowController::resultsUpdated()
 
     selectResult(m_window.m_resultsCollection.lastResultPath());
 
+    // When the results update, the models/settings lists should have changed.
+    modelsUpdated();
+    settingsUpdated();
+
     m_window.show();
     m_window.raise();
     m_window.activateWindow();
+}
+
+void ResultsWindowController::modelsUpdated()
+{
+    vector<string> names = m_window.m_resultsCollection.getModelNames();
+    m_window.g_modelListView->clear();
+    for (const string &name : names) {
+        m_window.g_modelListView->addItem(new QListWidgetItem(name.c_str()));
+    }
+}
+
+void ResultsWindowController::settingsUpdated()
+{
+    vector<string> names = m_window.m_resultsCollection.getSettingsNames();
+    m_window.g_settingsListView->clear();
+    for (const string &name : names) {
+        m_window.g_settingsListView->addItem(new QListWidgetItem(name.c_str()));
+    }
 }
 
 void ResultsWindowController::deleteSelection()
@@ -371,14 +394,22 @@ void ResultsWindowController::deleteSelection()
     }
 
     m_window.m_resultsCollection.removeResultsWithPaths(pathsForDeletion);
-    emit resultsUpdated();
+    resultsUpdated();
 }
 
 void ResultsWindowController::dumpRaw()
 {
     QList<QTreeWidgetItem *> items = m_window.g_treeView->selectedItems();
 
-    if (items.size() == 0)
+    int resultCount = 0;
+
+    foreach (QTreeWidgetItem *i, items) {
+        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+        assert(ri);
+        if (ri->isResultItem()) ++resultCount;
+    }
+
+    if (resultCount == 0)
         return;
 
     QString dir = QFileDialog::getExistingDirectory(0,

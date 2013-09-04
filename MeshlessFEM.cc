@@ -1190,10 +1190,6 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
 {
         // const char *cwPath, const char *cwPercentilePath) {
     typedef typename RC::Result Result;
-    if (combinedWeaknessIsCached()) {
-        weaknessCriterion = m_weaknessCriterion;
-        return true;
-    }
 
     int ret = weakRegionExtraction(rc);
     if (ret < 0)

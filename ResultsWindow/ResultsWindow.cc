@@ -46,6 +46,18 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     g_modelSettingsGrouping = new QCheckBox("Model -> Settings Grouping");
     g_modelSettingsGrouping->setChecked(true);
     resultsTreeLayout->addWidget(g_modelSettingsGrouping);
+
+    QHBoxLayout *r_buttonLayout = new QHBoxLayout();
+    QPushButton *r_deleteButton = new QPushButton("Delete");
+    QPushButton *r_mshButton = new QPushButton("Dump .MSH");
+    QPushButton *r_rawButton = new QPushButton("Dump raw");
+    QPushButton *r_flipbookButton = new QPushButton("Flipbook");
+    r_buttonLayout->addWidget(r_deleteButton);
+    r_buttonLayout->addWidget(r_mshButton);
+    r_buttonLayout->addWidget(r_rawButton);
+    r_buttonLayout->addWidget(r_flipbookButton);
+    resultsTreeLayout->addLayout(r_buttonLayout);
+
     viewTab->addTab(resultsTreeWidget, "Results Tree");
 
     QVBoxLayout *resultsFilterLayout = new QVBoxLayout();
@@ -55,28 +67,44 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     resultsFilterLayout->addWidget(g_filterView);
     QHBoxLayout *searchLayout = new QHBoxLayout();
     g_searchField = new QLineEdit();
-    g_searchButton = new QPushButton("Search");
+    QPushButton *g_searchButton = new QPushButton("Search");
     searchLayout->addWidget(g_searchField);
     searchLayout->addWidget(g_searchButton);
+
     resultsFilterLayout->addLayout(searchLayout);
+
+    QPushButton *s_deleteButton = new QPushButton("Delete");
+    QPushButton *s_mshButton = new QPushButton("Dump .MSH");
+    QPushButton *s_rawButton = new QPushButton("Dump raw");
+    QPushButton *s_flipbookButton = new QPushButton("Flipbook");
+    QHBoxLayout *s_buttonLayout = new QHBoxLayout();
+    s_buttonLayout->addWidget(s_deleteButton);
+    s_buttonLayout->addWidget(s_mshButton);
+    s_buttonLayout->addWidget(s_rawButton);
+    s_buttonLayout->addWidget(s_flipbookButton);
+    resultsFilterLayout->addLayout(s_buttonLayout);
 
     QWidget *resultsFilterWidget = new QWidget();
     resultsFilterWidget->setLayout(resultsFilterLayout);
     viewTab->addTab(resultsFilterWidget, "Search");
 
-    g_deleteButton = new QPushButton("Delete");
-    g_mshButton = new QPushButton("Dump .MSH");
-    g_rawButton = new QPushButton("Dump raw");
-    g_flipbookButton = new QPushButton("Flipbook");
+    QWidget *modelsWidget = new QWidget();
+    g_modelListView = new QListWidget();
+    QVBoxLayout *modelLayout = new QVBoxLayout();
+    modelLayout->addWidget(g_modelListView);
+    modelLayout->setContentsMargins(0, 0, 0, 0);
+    modelsWidget->setLayout(modelLayout);
+    viewTab->addTab(modelsWidget, "Models");
 
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addWidget(g_deleteButton);
-    buttonLayout->addWidget(g_mshButton);
-    buttonLayout->addWidget(g_rawButton);
-    buttonLayout->addWidget(g_flipbookButton);
+    QWidget *settingsWidget = new QWidget();
+    g_settingsListView = new QListWidget();
+    QVBoxLayout *settingsLayout = new QVBoxLayout();
+    settingsLayout->addWidget(g_settingsListView);
+    settingsLayout->setContentsMargins(0, 0, 0, 0);
+    settingsWidget->setLayout(settingsLayout);
+    viewTab->addTab(settingsWidget, "Settings");
 
     layout->addWidget(viewTab);
-    layout->addLayout(buttonLayout);
     layout->setContentsMargins(0, 0, 0, 0);
     setLayout(layout);
 
@@ -104,9 +132,14 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
 
     QObject::connect(g_modelSettingsGrouping, SIGNAL(toggled(bool)),
                      controller(), SLOT(groupingCheckToggled(bool)));
-    QObject::connect(g_deleteButton, SIGNAL(clicked()),
+
+    QObject::connect(r_deleteButton, SIGNAL(clicked()),
                      controller(), SLOT(deleteSelection()));
-    QObject::connect(g_rawButton, SIGNAL(clicked()),
+    QObject::connect(r_rawButton, SIGNAL(clicked()),
+                     controller(), SLOT(dumpRaw()));
+    QObject::connect(s_deleteButton, SIGNAL(clicked()),
+                     controller(), SLOT(deleteSelection()));
+    QObject::connect(s_rawButton, SIGNAL(clicked()),
                      controller(), SLOT(dumpRaw()));
 
     m_controller->resultsUpdated();
