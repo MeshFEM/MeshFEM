@@ -114,16 +114,21 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(itemActivated(QTreeWidgetItem *, int)));
     QObject::connect(g_treeView, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
                      controller(), SLOT(itemChanged(QTreeWidgetItem *, int)));
-
     QObject::connect(g_treeView, SIGNAL(itemSelectionChanged()),
                      controller(), SLOT(selectionChanged()));
-    QObject::connect(g_filterView, SIGNAL(itemSelectionChanged()),
-                     controller(), SLOT(searchSelectionChanged()));
 
     QObject::connect(g_filterView, SIGNAL(itemActivated(QListWidgetItem *)),
                      controller(), SLOT(searchItemActivated(QListWidgetItem *)));
     QObject::connect(g_filterView, SIGNAL(itemChanged(QListWidgetItem *)),
                      controller(), SLOT(searchItemChanged(QListWidgetItem *)));
+    QObject::connect(g_filterView, SIGNAL(itemSelectionChanged()),
+                     controller(), SLOT(searchSelectionChanged()));
+
+    QObject::connect(g_modelListView, SIGNAL(itemActivated(QListWidgetItem *)),
+                     controller(), SLOT(modelItemActivated(QListWidgetItem *)));
+    QObject::connect(g_settingsListView, SIGNAL(itemActivated(QListWidgetItem *)),
+                     controller(), SLOT(settingsItemActivated(QListWidgetItem *)));
+
 
     QObject::connect(g_searchField, SIGNAL(returnPressed()),
                      g_searchButton, SLOT(click()));

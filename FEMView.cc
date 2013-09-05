@@ -458,6 +458,7 @@ bool FEMView2D::drawObjectTextureCells(const VField &deformation,
                          const SField &elemScalarField)
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
+
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
     bool hasEScalarField = elemScalarField.domainSize() == grid.numElements();
 
@@ -921,6 +922,8 @@ bool FEMView2D::m_drawResult()
 bool FEMView2D::m_drawElements()
 {
     ElementGrid2D_t &grid = m_fem.elementGrid();
+    if (grid.numElements() == 0)
+        return false;
 
     drawObjectTextureCells();
     drawGrid(DRAW_CELLS);

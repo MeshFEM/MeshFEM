@@ -691,36 +691,52 @@ void CSGWindowController::resultSelected(const string &resultPath)
 {
     std::string modelName = getModelPathComponent(resultPath);
     std::string settingsName = getSettingsPathComponent(resultPath);
-
-    BBox_t bbox = m_fem.elementGrid().getBoudingBox();
-    if (m_results.modelDiffers(modelName, m_fem.model(), bbox)) {
-        m_results.getModel(modelName, m_fem.model(), bbox);
-        m_fem.elementGrid().setBoundingBox(bbox);
-        modelChanged(false);
-    }
-
-    if (m_results.settingsDiffer(settingsName, m_settings)) {
-        bool locked = m_fem.elementGrid().boundingBoxIsLocked();
-        m_fem.elementGrid().setBoundingBoxLocked(true);
-        m_results.getSettings(settingsName, m_settings);
-        emit reloadSettings();
-        m_fem.elementGrid().setBoundingBoxLocked(locked);
-    }
+    modelSelected(modelName);
+    settingsSelected(settingsName);
 
     m_femView->displayResult(m_results.getResultWithPath(resultPath));
-
-    if ((m_modelName != modelName) || (m_settingsName != settingsName)) {
-        m_modelName = modelName;
-        m_settingsName = settingsName;
-        emit namesUpdated(modelName, settingsName);
-    }
-
-    validateNames();
 }
 
 void CSGWindowController::resultDeslected()
 {
     m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
+}
+
+void CSGWindowController::modelSelected(const string &name) {
+    BBox_t bbox = m_fem.elementGrid().getBoudingBox();
+    if (m_results.modelDiffers(name, m_fem.model(), bbox)) {
+        m_results.getModel(name, m_fem.model(), bbox);
+        m_fem.elementGrid().setBoundingBox(bbox);
+        modelChanged(false);
+    }
+
+    if (m_modelName != name) {
+        m_modelName = name;
+        emit namesUpdated(m_modelName, m_settingsName);
+    }
+
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
+
+    validateNames();
+}
+
+void CSGWindowController::settingsSelected(const string &name) {
+    if (m_results.settingsDiffer(name, m_settings)) {
+        bool locked = m_fem.elementGrid().boundingBoxIsLocked();
+        m_fem.elementGrid().setBoundingBoxLocked(true);
+        m_results.getSettings(name, m_settings);
+        emit reloadSettings();
+        m_fem.elementGrid().setBoundingBoxLocked(locked);
+    }
+
+    if (m_settingsName != name) {
+        m_settingsName = name;
+        emit namesUpdated(m_modelName, m_settingsName);
+    }
+
+    m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
+
+    validateNames();
 }
 
 void CSGWindowController::modelNameEdited(const QString &name)

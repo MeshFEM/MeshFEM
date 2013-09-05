@@ -33,6 +33,9 @@ public slots:
     void searchItemChanged(QListWidgetItem *item);
     void searchSelectionChanged();
 
+    void modelItemActivated(QListWidgetItem *item);
+    void settingsItemActivated(QListWidgetItem *item);
+
     void itemDeleted(QTreeWidgetItem *item);
 
     void modelsUpdated();
@@ -47,6 +50,8 @@ public slots:
 signals:
     void resultDeslected();
     void resultSelected(const std::string &path);
+    void modelSelected(const std::string &name);
+    void settingsSelected(const std::string &name);
     
 public:
     ResultsWindowController(ResultsWindow &window)

@@ -80,6 +80,8 @@ public slots:
 
     void resultSelected(const std::string &path);
     void resultDeslected();
+    void modelSelected(const std::string &path);
+    void settingsSelected(const std::string &path);
 
     const std::string &modelName() const { return m_modelName; }
     const std::string &settingsName() const { return m_settingsName; }

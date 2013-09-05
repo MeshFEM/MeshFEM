@@ -250,6 +250,13 @@ void ResultsWindowController::searchSelectionChanged()
     m_synchingResultSelections = false;
 }
 
+void ResultsWindowController::modelItemActivated(QListWidgetItem *item) {
+    emit modelSelected(item->text().toStdString());
+}
+
+void ResultsWindowController::settingsItemActivated(QListWidgetItem *item) {
+    emit settingsSelected(item->text().toStdString());
+}
 
 // Invalidate current item pointer when the pointed-to item is deleted.
 // Also, update the path->item dictionary
