@@ -28,6 +28,7 @@
 #include "ResultsCollector.hh"
 #include "ResultsWindow.hh"
 #include "ResultTreeView.hh"
+#include "Flipbook.hh"
 
 using namespace std;
 
@@ -132,6 +133,20 @@ void ResultsWindowController::selectResult(QTreeWidgetItem *item)
 
     m_autoAdjustingChecks = false;
 }
+
+vector<string> ResultsWindowController::selectedResultPaths() const {
+    vector<string> paths;
+
+    QList<QTreeWidgetItem *> items = m_window.g_treeView->selectedItems();
+
+    foreach (QTreeWidgetItem *i, items) {
+        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
+        assert(ri);
+        if (ri->isResultItem()) paths.push_back(ri->path());
+    }
+    return paths;
+}
+
 
 void ResultsWindowController::itemActivated(QTreeWidgetItem *item, int col)
 {
@@ -406,35 +421,22 @@ void ResultsWindowController::deleteSelection()
 
 void ResultsWindowController::dumpRaw()
 {
-    QList<QTreeWidgetItem *> items = m_window.g_treeView->selectedItems();
-
-    int resultCount = 0;
-
-    foreach (QTreeWidgetItem *i, items) {
-        ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
-        assert(ri);
-        if (ri->isResultItem()) ++resultCount;
-    }
-
-    if (resultCount == 0)
+    vector<string> paths = selectedResultPaths();
+    if (paths.empty())
         return;
 
     QString dir = QFileDialog::getExistingDirectory(0,
             "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
 
     try {
-        foreach(QTreeWidgetItem *i, items) {
-            ResultTreeWidgetItem *ri = dynamic_cast<ResultTreeWidgetItem *>(i);
-            assert(ri);
-            if (ri->isResultItem()) {
-                string path = dir.toStdString() + "/" + ri->path();
-                shared_ptr<const ResultsCollector_t::Result> r =
-                    m_window.m_resultsCollection.getResultWithPath(ri->path());
-                r->dump(path);
-            }
+        for (const string &rpath : paths) {
+            string fpath = dir.toStdString() + "/" + rpath;
+            shared_ptr<const ResultsCollector_t::Result> r =
+                m_window.m_resultsCollection.getResultWithPath(rpath);
+            r->dump(fpath);
         }
     }
-    catch (std::exception &e) {
+    catch (exception &e) {
         string errorString("Dumping Results Failed: ");
         errorString += e.what();
         QMessageBox mbox(QMessageBox::Critical, "Dumping Results Failed",
@@ -442,6 +444,19 @@ void ResultsWindowController::dumpRaw()
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
     }
+}
+
+void ResultsWindowController::generateFlipbook()
+{
+    vector<string> paths = selectedResultPaths();
+    if (paths.empty())
+        return;
+
+    QString dir = QFileDialog::getExistingDirectory(0,
+            "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
+
+    Flipbook flip(dir.toStdString(), &m_window.m_resultsCollection, paths);
+    emit requestFlipbook(flip);
 }
 
 void ResultsWindowController::groupingCheckToggled(bool checked)

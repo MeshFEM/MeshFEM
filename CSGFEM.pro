@@ -36,7 +36,7 @@ LIBS += -stdlib=libc++
 
 # Input
 HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
-           FEMView.hh CSGWindow.hh \
+           FEMView.hh Flipbook.hh CSGWindow.hh \
            GlobalTypes.hh \
            CSGWindowController.hh \
            Geometry.hh \

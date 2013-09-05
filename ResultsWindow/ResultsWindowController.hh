@@ -11,6 +11,7 @@
 #ifndef RESULTS_WINDOW_CONTROLLER_HH
 #define RESULTS_WINDOW_CONTROLLER_HH
 #include <QObject>
+#include <vector>
 #include <string>
 #include <map>
 
@@ -18,6 +19,7 @@ class QTreeWidgetItem;
 class QListWidgetItem;
 class QItemSelection;
 class ResultsWindow;
+class Flipbook;
 
 class ResultsWindowController : public QObject
 {
@@ -44,6 +46,7 @@ public slots:
     void selectResult(const std::string &path);
     void deleteSelection();
     void dumpRaw();
+    void generateFlipbook();
     void groupingCheckToggled(bool);
     void runSearch();
 
@@ -52,6 +55,7 @@ signals:
     void resultSelected(const std::string &path);
     void modelSelected(const std::string &name);
     void settingsSelected(const std::string &name);
+    void requestFlipbook(const Flipbook &f);
     
 public:
     ResultsWindowController(ResultsWindow &window)
@@ -62,6 +66,7 @@ public:
     ~ResultsWindowController();
 private:
     void selectResult(QTreeWidgetItem *item);
+    std::vector<std::string> selectedResultPaths() const;
     void syncSearchChecks();
 
     std::map<std::string, QTreeWidgetItem *> m_pathToItem;

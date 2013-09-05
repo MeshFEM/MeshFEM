@@ -1,5 +1,9 @@
 Implement:
+    Flipbook animation.
     Model + settings browser
     Result dump basename simplification (don't output model/setting name if they're unique)
 
     MSH writer (multiple MSH needed for model changes).
+
+Debug drastically different combined weakness:
+    (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$

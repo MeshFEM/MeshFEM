@@ -28,6 +28,7 @@
 
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
+#include "Flipbook.hh"
 // #include "timing.h"
 
 #define MAX_NODES 128
@@ -766,6 +767,15 @@ void FEMView2D::draw()
         m_drawColorbar(colorbarX, 5, colorBarWidth, 35);
     }
 
+    // Screenshot this bad boy
+    if (m_flipbook.active()) {
+        m_flipbook.snapshot(this);
+        m_flipbook.advance();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // GUI Overlays not to be included in screenshots
+    ////////////////////////////////////////////////////////////////////////////
     if (m_guiState != STATE_MODEL) {
         std::string selModeString;
         switch (m_select.mode()) {
@@ -823,7 +833,11 @@ bool FEMView2D::m_drawResult()
             m_viewSettings.autofitMagnitude * (objectSize / maxNorm) : 1.0;
     }
 
-    if (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)
+    // Don't allow vibration mode when generating result flipbooks
+    bool vibrating = (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)
+        && (!m_flipbook.active());
+
+    if (vibrating)
         vfield *= vecScale * sin(m_displacementPhase);
     else
         vfield *= vecScale;

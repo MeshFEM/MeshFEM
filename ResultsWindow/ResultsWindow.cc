@@ -142,10 +142,14 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
                      controller(), SLOT(deleteSelection()));
     QObject::connect(r_rawButton, SIGNAL(clicked()),
                      controller(), SLOT(dumpRaw()));
+    QObject::connect(r_flipbookButton, SIGNAL(clicked()),
+                     controller(), SLOT(generateFlipbook()));
     QObject::connect(s_deleteButton, SIGNAL(clicked()),
                      controller(), SLOT(deleteSelection()));
     QObject::connect(s_rawButton, SIGNAL(clicked()),
                      controller(), SLOT(dumpRaw()));
+    QObject::connect(s_flipbookButton, SIGNAL(clicked()),
+                     controller(), SLOT(generateFlipbook()));
 
     m_controller->resultsUpdated();
 }

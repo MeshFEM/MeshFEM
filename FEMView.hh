@@ -31,6 +31,7 @@ extern "C" {
 #include "ResultsCollector.hh"
 #include "ViewSettings.hh"
 #include "colors.hh"
+#include "Flipbook.hh"
 
 class FEMView2D : public QGLWidget
 {
@@ -140,6 +141,11 @@ public slots:
         m_select.clear();
     }
 
+    void requestFlipbook(const Flipbook &f) {
+        m_flipbook = f;
+        m_flipbookTimer.start(0, this);
+    }
+
 protected:
     void initializeGL();
     void resizeGL(int width, int height);
@@ -221,6 +227,13 @@ protected:
             }
             update();
         }
+        else if (event->timerId() == m_flipbookTimer.timerId()) {
+            if (m_flipbook.active()) {
+                displayResult(m_flipbook.currentResult());
+            }
+            else
+                m_flipbookTimer.stop();
+        }
         else {
             // Pass up the unhandled timer event
             QGLWidget::timerEvent(event);
@@ -289,8 +302,9 @@ private:
     MouseGesture m_gesture;
     Vector m_prevMouseLoc;
 
-    QBasicTimer m_timer;
+    QBasicTimer m_timer, m_flipbookTimer;
     Scalar m_displacementPhase;
+    Flipbook m_flipbook;
 
     const ViewSettings &m_viewSettings;
     ColorMap<RGBColorf, Scalar> m_scalarColorMap;
