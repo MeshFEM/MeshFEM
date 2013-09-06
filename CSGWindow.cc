@@ -11,6 +11,7 @@
 #include "CSGWindow.hh"
 #include "FEMView.hh"
 #include <QtGui>
+#include <memory>
 
 #include "CSGWindowController.hh"
 #include "CSGTree.hh"
@@ -134,12 +135,16 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      controller, SLOT(resultSelected(const std::string &)));
     QObject::connect(g_resultsWindow->controller(), SIGNAL(resultDeslected()),
                      controller, SLOT(resultDeslected()));
+    QObject::connect(g_resultsWindow->controller(), SIGNAL(modelSelected(const std::string &)),
+                     controller, SLOT(modelSelected(const std::string &)));
+    QObject::connect(g_resultsWindow->controller(), SIGNAL(settingsSelected(const std::string &)),
+                     controller, SLOT(settingsSelected(const std::string &)));
     QObject::connect(controller, SIGNAL(reloadSettings()),
                      analysisForm, SLOT(reloadSettings()));
 
     QObject::connect(g_resultsWindow->controller(),
-                     SIGNAL(requestFlipbook(const Flipbook &)),
-                     femView, SLOT(requestFlipbook(const Flipbook &)));
+                     SIGNAL(attachFlipbook(std::shared_ptr<Flipbook>)),
+                     femView, SLOT(attachFlipbook(std::shared_ptr<Flipbook>)));
 
     setCentralWidget(splitter);
 }

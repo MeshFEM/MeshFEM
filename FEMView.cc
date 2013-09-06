@@ -768,9 +768,9 @@ void FEMView2D::draw()
     }
 
     // Screenshot this bad boy
-    if (m_flipbook.active()) {
-        m_flipbook.snapshot(this);
-        m_flipbook.advance();
+    if (m_flipbook && m_flipbook->active()) {
+        m_flipbook->snapshot(this);
+        m_flipbook->advance();
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -834,8 +834,9 @@ bool FEMView2D::m_drawResult()
     }
 
     // Don't allow vibration mode when generating result flipbooks
-    bool vibrating = (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE)
-        && (!m_flipbook.active());
+    
+    bool vibrating = (m_viewSettings.vfDisplayStyle == ViewSettings::VFIELD_VIBRATE);
+    vibrating &= !(m_flipbook && m_flipbook->active());
 
     if (vibrating)
         vfield *= vecScale * sin(m_displacementPhase);

@@ -4,6 +4,10 @@
 /*! @file
 //      Assists in the generation of "flipbooks," renderings of a list of
 //      results.
+//
+//      Flipbooks are driven by the ResultsWindowController (since it must be
+//      able to trigger the results selection), but the actual image output is
+//      triggered by FEMView's draw() routine.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

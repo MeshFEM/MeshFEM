@@ -141,9 +141,8 @@ public slots:
         m_select.clear();
     }
 
-    void requestFlipbook(const Flipbook &f) {
+    void attachFlipbook(std::shared_ptr<Flipbook> f) {
         m_flipbook = f;
-        m_flipbookTimer.start(0, this);
     }
 
 protected:
@@ -227,13 +226,6 @@ protected:
             }
             update();
         }
-        else if (event->timerId() == m_flipbookTimer.timerId()) {
-            if (m_flipbook.active()) {
-                displayResult(m_flipbook.currentResult());
-            }
-            else
-                m_flipbookTimer.stop();
-        }
         else {
             // Pass up the unhandled timer event
             QGLWidget::timerEvent(event);
@@ -302,9 +294,9 @@ private:
     MouseGesture m_gesture;
     Vector m_prevMouseLoc;
 
-    QBasicTimer m_timer, m_flipbookTimer;
+    QBasicTimer m_timer;
     Scalar m_displacementPhase;
-    Flipbook m_flipbook;
+    std::shared_ptr<Flipbook> m_flipbook;
 
     const ViewSettings &m_viewSettings;
     ColorMap<RGBColorf, Scalar> m_scalarColorMap;

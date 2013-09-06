@@ -27,8 +27,8 @@ struct AnalysisSettings {
           massMatrixType(MASS_QUARTER_CELL),
           laplacianModes(false), consistentSigns(true), numModes(10),
           weakRegionsPerMode(5), weaknessCutoff(.95), abstrace(true), plusMinusObjective(true),
-          totalForceBound(.1), pointwisePressureBound(.1), fixedTranslation(false),
-          xTranslation(0.0), yTranslation(0.0),
+          totalForceBound(.1), pointwisePressureBound(.1),
+          fixedTranslation(false), xTranslation(0.0), yTranslation(0.0),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     std::string solver;

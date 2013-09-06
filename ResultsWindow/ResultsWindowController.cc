@@ -22,6 +22,8 @@
 #include <QFileDialog>
 #include <stdexcept>
 #include <regex>
+#include <QBasicTimer>
+#include <QTimerEvent>
 
 #include "ResultsWindowController.hh"
 #include "MeshlessFEM.hh"
@@ -455,8 +457,23 @@ void ResultsWindowController::generateFlipbook()
     QString dir = QFileDialog::getExistingDirectory(0,
             "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
 
-    Flipbook flip(dir.toStdString(), &m_window.m_resultsCollection, paths);
-    emit requestFlipbook(flip);
+    m_flipbook = std::shared_ptr<Flipbook>(new Flipbook(dir.toStdString(),
+                &m_window.m_resultsCollection, paths));
+    m_flipbookTimer.start(0, this);
+    emit attachFlipbook(m_flipbook);
+}
+
+void ResultsWindowController::timerEvent(QTimerEvent *event) {
+    if (event->timerId() == m_flipbookTimer.timerId()) {
+        if (m_flipbook && m_flipbook->active())
+            selectResult(m_flipbook->path());
+        else
+            m_flipbookTimer.stop();
+    }
+    else {
+        // Pass up the unhandled timer event
+        QObject::timerEvent(event);
+    }
 }
 
 void ResultsWindowController::groupingCheckToggled(bool checked)
