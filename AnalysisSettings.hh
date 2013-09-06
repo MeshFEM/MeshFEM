@@ -25,9 +25,10 @@ struct AnalysisSettings {
           cellOverlapThreshold(0.15), useMSBoundary(true), boundarySpacing(.02), kernelRadius(1.0),
           exactFullElements(true), antialiasedElements(false),
           massMatrixType(MASS_QUARTER_CELL),
-          laplacianModes(false), numModes(10), weakRegionsPerMode(5),
-          weaknessCutoff(.95), totalForceBound(.1), pointwisePressureBound(.1),
-          fixedTranslation(false), xTranslation(0.0), yTranslation(0.0),
+          laplacianModes(false), consistentSigns(true), numModes(10),
+          weakRegionsPerMode(5), weaknessCutoff(.95), abstrace(true), plusMinusObjective(true),
+          totalForceBound(.1), pointwisePressureBound(.1), fixedTranslation(false),
+          xTranslation(0.0), yTranslation(0.0),
           young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
 
     std::string solver;
@@ -48,12 +49,14 @@ struct AnalysisSettings {
     MassMatrixType massMatrixType;
 
     // True: use laplacian eigenfunctions instead of true stiffness eigenvectors
-    bool laplacianModes;
+    bool laplacianModes, consistentSigns;
     size_t numModes;
 
     // Optimization Settings
     size_t weakRegionsPerMode;
     double weaknessCutoff;
+    bool abstrace;
+    bool plusMinusObjective;
     double totalForceBound;
     double pointwisePressureBound;
 
@@ -81,9 +84,12 @@ struct AnalysisSettings {
             (antialiasedElements == rhs.antialiasedElements) &&
             (massMatrixType == rhs.massMatrixType) &&
             (laplacianModes == rhs.laplacianModes) &&
+            (consistentSigns == rhs.consistentSigns) &&
             (numModes == rhs.numModes) &&
             (weakRegionsPerMode == rhs.weakRegionsPerMode) &&
             (weaknessCutoff == rhs.weaknessCutoff) &&
+            (abstrace == rhs.abstrace) &&
+            (plusMinusObjective == rhs.plusMinusObjective) &&
             (totalForceBound == rhs.totalForceBound) &&
             (pointwisePressureBound == rhs.pointwisePressureBound) &&
             (fixedTranslation == rhs.fixedTranslation) &&

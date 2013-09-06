@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iomanip>
 #include <stdexcept>
+#include <cmath>
 
 template<typename Real, size_t t_dim>
 class VectorField {
@@ -102,6 +103,7 @@ template<typename Real>
 class ScalarField : public VectorField<Real, 1> {
 public:
     using typename VectorField<Real, 1>::FlattenedType;
+    typedef Real value_type;
 
     ScalarField(const FlattenedType &values)
         : VectorField<Real, 1>(values) { }
@@ -116,6 +118,14 @@ public:
 
     Real min() const { return m_values.minCoeff(); }
     Real max() const { return m_values.maxCoeff(); }
+    // Return the magnitude of the entry with maximum magnitude
+    Real maxMag() const { return std::max(std::abs(min()), std::abs(max())); }
+    // Return the (signed) entry with maximum magnitude
+    Real signedMaxMag() const {
+        Real minVal = min(), maxVal = max();
+        return (std::abs(minVal) > std::abs(maxVal)) ? minVal : maxVal;
+    }
+
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
     template<size_t dim>
@@ -265,6 +275,11 @@ public:
 
     SymmetricMatrix operator()(size_t i) {
         return SymmetricMatrix(m_values.col(i));
+    }
+
+    SymmetricMatrixField &operator*=(Real scalar) {
+        m_values *= scalar;
+        return *this;
     }
 
     const ArrayType &data() const { return m_values; }

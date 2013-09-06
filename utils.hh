@@ -12,6 +12,7 @@
 #define UTILS_HH
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include <string>
 #include <cassert>
@@ -52,6 +53,27 @@ struct NaturalLess {
     bool operator()(const char *a, const char *b) const {
         return (strcmp_nat(a, b) < 0);
     }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Wraps a vector-like container's accessors to make it retrieve the absolute
+//  value.
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Container>
+class AbsWrapper {
+public:
+    typedef typename Container::value_type value_type;
+    AbsWrapper(const Container &values)
+        : m_values(values) { }
+
+    size_t size() const { return m_values.size(); }
+    
+    value_type operator[](size_t i) const {
+        return std::abs(m_values[i]);
+    }
+    
+private:
+    const Container &m_values;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

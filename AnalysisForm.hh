@@ -97,7 +97,7 @@ private:
 
     // Modal analysis settings
     QSpinBox *g_numModesStepper;
-    QCheckBox *g_laplacianModesCheck;
+    QCheckBox *g_laplacianModesCheck, *g_consistentSignsCheck;
     QPushButton *g_modalAnalysisButton;
 
     // Simulation settings
@@ -115,7 +115,7 @@ private:
     QDoubleSpinBox *g_weaknessCutoffStepper;
     QPushButton *g_weakRegionExtractionButton;
     QDoubleSpinBox *g_pressureBoundStepper, *g_forceBoundStepper;
-    QCheckBox *g_equalizeCombinedWeaknessCheck;
+    QCheckBox *g_abstraceCheck, *g_plusMinusObjectiveCheck;
 
     QPushButton *g_weaknessAnalysisButton;
     QPushButton *g_optimizeShapeButton;

@@ -167,12 +167,15 @@ public:
     void configureModalAnalysis(const AnalysisSettings &settings) {
         m_numRequestedModes = settings.numModes;
         m_laplacianModes = settings.laplacianModes;
+        m_consistentSigns = settings.consistentSigns;
         m_invalidateCache();
     }
 
     void configureWeaknessAnalysis(const AnalysisSettings &settings) {
         m_weakRegionsPerMode = settings.weakRegionsPerMode;
         m_weaknessCutoff = settings.weaknessCutoff;
+        m_abstrace = settings.abstrace;
+        m_plusMinusObjective = settings.plusMinusObjective;
         m_pointwisePressureBound = settings.pointwisePressureBound;
         m_totalForceBound = settings.totalForceBound;
 
@@ -303,7 +306,8 @@ public:
     bool weaknessAnalysis(Real &weaknessCriterion, RC *rc = NULL);
 
     SMField elementStressTensors(const VField &displacement);
-    SField  computeStressTensorNorms(const SMField &stressField);
+    SField  computeStressTensorNorms(const SMField &stressField,
+                                     bool signedNorm = false);
 
 private:
     Quadrature2D *m_quadrature;
@@ -326,8 +330,11 @@ private:
     SolverLibrary<Real> &m_solvers;
     int m_numRequestedModes;
     bool m_laplacianModes;
+    bool m_consistentSigns;
+    bool m_abstrace, m_plusMinusObjective;
     std::vector<VField> m_modes;
     std::vector<SMField> m_modalStressTensors;
+    // **Signed** modal stress norms (negative for compression)
     std::vector<SField>  m_modalStressNorms;
     std::vector<Real> m_eigenvalues;
     std::vector<ElementData> m_elementData;

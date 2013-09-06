@@ -53,6 +53,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     g_numModesStepper = new QSpinBox();
     g_laplacianModesCheck = new QCheckBox();
+    g_consistentSignsCheck = new QCheckBox();
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
 
     g_useMarchingSquaresCheck = new QCheckBox();
@@ -76,6 +77,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_numWeakRegionsStepper = new QSpinBox();
     g_weaknessCutoffStepper = new QDoubleSpinBox();
     g_weakRegionExtractionButton = new QPushButton("Extract Weak Regions");
+    g_abstraceCheck = new QCheckBox();
+    g_plusMinusObjectiveCheck = new QCheckBox();
     g_pressureBoundStepper = new QDoubleSpinBox();
     g_forceBoundStepper = new QDoubleSpinBox();
     g_weaknessAnalysisButton = new QPushButton("Weakness Analysis");
@@ -149,6 +152,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QFormLayout *modalForm = new QFormLayout();
     modalForm->addRow("Number of Modes", g_numModesStepper);
     modalForm->addRow("Laplacian Modes", g_laplacianModesCheck);
+    modalForm->addRow("Consistent Modal Signs", g_consistentSignsCheck);
     g_numModesStepper->setMinimum(1);
     g_numModesStepper->setMaximum(50);
     modalForm->addRow(g_modalAnalysisButton);
@@ -177,6 +181,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     weakForm->addRow("Weak Regions/Mode", g_numWeakRegionsStepper);
     weakForm->addRow("Weak Region Cutoff", g_weaknessCutoffStepper);
     weakForm->addRow(g_weakRegionExtractionButton);
+    weakForm->addRow("Abs Trace", g_abstraceCheck);
+    weakForm->addRow("+/- Objective", g_plusMinusObjectiveCheck);
     weakForm->addRow("Pressure Bound", g_pressureBoundStepper);
     weakForm->addRow("Total Force Bound", g_forceBoundStepper);
     weakForm->addRow(g_weaknessAnalysisButton);
@@ -244,6 +250,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(modalAnalysisControlsChanged(int)));
     QObject::connect(g_laplacianModesCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(modalAnalysisControlsChanged(int)));
+    QObject::connect(g_consistentSignsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(modalAnalysisControlsChanged(int)));
 
     QObject::connect(g_useMarchingSquaresCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(boundaryPointControlsChanged(int)));
@@ -271,6 +279,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      controller, SLOT(runWeakRegionExtraction()));
     QObject::connect(g_weaknessAnalysisButton, SIGNAL(clicked()),
                      controller, SLOT(runWeaknessAnalysis()));
+    QObject::connect(g_abstraceCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(weaknessAnalysisControlsChanged(int)));
+    QObject::connect(g_plusMinusObjectiveCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(weaknessAnalysisControlsChanged(int)));
     QObject::connect(g_pressureBoundStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(weaknessAnalysisControlsChanged(double)));
     QObject::connect(g_forceBoundStepper, SIGNAL(valueChanged(double)),
@@ -339,6 +351,7 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_antialiasedElementsCheck->setChecked(m_settings.antialiasedElements);
 
     g_laplacianModesCheck->setChecked(m_settings.laplacianModes);
+    g_consistentSignsCheck->setChecked(m_settings.consistentSigns);
     g_numModesStepper->setValue(m_settings.numModes);
     g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
     g_useMarchingSquaresCheck->setChecked(m_settings.useMSBoundary);
@@ -353,6 +366,8 @@ void AnalysisForm::m_setGUIFromSettings() {
 
     g_numWeakRegionsStepper->setValue(m_settings.weakRegionsPerMode);
     g_weaknessCutoffStepper->setValue(m_settings.weaknessCutoff);
+    g_abstraceCheck->setChecked(m_settings.abstrace);
+    g_plusMinusObjectiveCheck->setChecked(m_settings.plusMinusObjective);
 
     g_forceBoundStepper->setValue(m_settings.totalForceBound);
     g_pressureBoundStepper->setValue(m_settings.pointwisePressureBound);
@@ -390,6 +405,7 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.quadraturePoints = g_quadraturePointsStepper->value();
 
     m_settings.laplacianModes = g_laplacianModesCheck->isChecked();
+    m_settings.consistentSigns = g_consistentSignsCheck->isChecked();
     m_settings.numModes = g_numModesStepper->value();
     m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
 
@@ -409,6 +425,8 @@ void AnalysisForm::m_readSettingsFromGUI() {
 
     m_settings.weakRegionsPerMode = g_numWeakRegionsStepper->value();
     m_settings.weaknessCutoff = g_weaknessCutoffStepper->value();
+    m_settings.abstrace = g_abstraceCheck->isChecked();
+    m_settings.plusMinusObjective = g_plusMinusObjectiveCheck->isChecked();
 
     m_settings.totalForceBound = g_forceBoundStepper->value();
     m_settings.pointwisePressureBound = g_pressureBoundStepper->value();

@@ -7,3 +7,17 @@ Implement:
 
 Debug drastically different combined weakness:
     (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$
+
+
+Observations:
+    Every element in a (stiffness) weak region should have roughly the same max
+    stress sign if stress is smooth. We could also force it to if needed.
+    Therefore, "abstrace" maybe isn't needed to avoid cancellation.
+
+    There is a "preferred" sign from the perspective of stress optimization
+    (flipping pressures isn't allowed). Modal analysis has no such preference,
+    so we should try both +/- weightings for the entire weak region.
+
+==> Thoughts:
+    Split up weak regions into sign-coherent regions.
+    Test both + and - objectives.

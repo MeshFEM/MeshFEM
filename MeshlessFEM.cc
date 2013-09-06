@@ -571,17 +571,35 @@ MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
     return stressTensorField;
 }
 
+////////////////////////////////////////////////////////////////////////////
+/*! Compute the stress tensor L2 norms (maximum eigenvalue magnitude)
+//  @param[in]  signedNorm  preserve signs of eigenvalues (so element
+//                          compression gives negative stress "norm").
+//                          Defaults to false.
+//  @return     per-element scalar field of stress tensor norms
+*///////////////////////////////////////////////////////////////////////////
 template<typename Model>
 typename MeshlessFEM<Model>::SField
-MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField)
+MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField,
+                                             bool signedNorm)
 {
     size_t numMats = stressField.domainSize();
     VField eigenvalues = m_solvers.solver()->symm2x2Eigenvalues(stressField);
     assert(eigenvalues.domainSize() == numMats);
     SField result(numMats);
 
-    for (size_t i = 0; i < numMats; ++i)
-        result[i] = std::max(fabs(eigenvalues(i)[0]), fabs(eigenvalues(i)[1]));
+    if (signedNorm) {
+        for (size_t i = 0; i < numMats; ++i) {
+            result[i] = (fabs(eigenvalues(i)[0]) > fabs(eigenvalues(i)[1])) ?
+                eigenvalues(i)[0] : eigenvalues(i)[1];
+        }
+    }
+    else {
+        for (size_t i = 0; i < numMats; ++i) {
+            result[i] = std::max(fabs(eigenvalues(i)[0]),
+                                 fabs(eigenvalues(i)[1]));
+        }
+    }
 
     return result;
 }
@@ -994,10 +1012,20 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
         for (size_t i = 0; i < numModes; ++i)
             m_modalStressTensors.push_back(elementStressTensors(mode(i)));
 
-        // Compute modal stress norms
-        for (size_t i = 0; i < numModes; ++i)
+        // Compute (signed) modal stress norms, optionally choosing signs for
+        // modes so that the largest stress becomes a compression (for
+        // consistency across eigensolves).
+        for (size_t i = 0; i < numModes; ++i) {
             m_modalStressNorms.push_back(
-                    computeStressTensorNorms(m_modalStressTensors[i]));
+                    computeStressTensorNorms(m_modalStressTensors[i], true));
+            if (m_consistentSigns) {
+                if (m_modalStressNorms.back().signedMaxMag() > 0) {
+                    m_modalStressNorms.back() *= -1.0;
+                    m_modalStressTensors[i] *= -1.0;
+                    m_modes[i] *= -1.0;
+                }
+            }
+        }
 
         if (rc != NULL) {
             // Record the modes/modal stresses in the results collector.
@@ -1095,7 +1123,7 @@ int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
         assert(stressNorms.size() == grid.numElements());
 
         std::vector<size_t> sortedElements;
-        sortPermutation(stressNorms, sortedElements);
+        sortPermutation(AbsWrapper<SField>(stressNorms), sortedElements);
 
         // Everything above the cutoff percentile is a weak region
         size_t cutoff = m_weaknessCutoff * sortedElements.size();
@@ -1218,25 +1246,35 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     DVector w;
     for (size_t i = 0; i < numWeakRegions(); ++i) {
         m_assembleWVector(w, i);
-        solver->optimizeObjective(w, m_pressures);
-        VField optU(numNodes);
-        solver->simulate(m_pressures, optU);
+        for (int pass = 0; pass < 2; ++pass) {
+            if ((pass > 0) && !m_plusMinusObjective)
+                break;
 
-        SMField stressTensors = elementStressTensors(optU);
-        SField  optStress = computeStressTensorNorms(stressTensors);
+            if (pass == 1)
+                w *= -1.0;
 
-        if (rc != NULL) {
-            Result *r = new Result(Result::PER_BDRY, m_pressures);
-            rc->setResult(appendToString("Weak Regions:Region ", i)
-                        + ":Opt Pressure", r);
+            solver->optimizeObjective(w, m_pressures);
+            VField optU(numNodes);
+            solver->simulate(m_pressures, optU);
 
-            r = new Result(Result::PER_ELEM, optStress,
-                           Result::PER_NODE, optU);
-            rc->setResult(appendToString("Weak Regions:Region ", i)
-                        + ":Opt Displacement", r);
+            SMField stressTensors = elementStressTensors(optU);
+            SField  optStress = computeStressTensorNorms(stressTensors);
+
+            if (rc != NULL) {
+                Result *r = new Result(Result::PER_BDRY, m_pressures);
+                string regionName = appendToString("Weak Regions:Region ", i);
+                string pmName;
+                if (m_plusMinusObjective)
+                    pmName = (pass == 0) ? " (+)" : " (-)";
+                rc->setResult(regionName + ":Opt Pressure" + pmName, r);
+
+                r = new Result(Result::PER_ELEM, optStress,
+                        Result::PER_NODE, optU);
+                rc->setResult(regionName + ":Opt Displacement" + pmName, r);
+            }
+
+            m_combinedWeakness.maxRelax(optStress);
         }
-
-        m_combinedWeakness.maxRelax(optStress);
     }
 
     if (rc != NULL) {
@@ -1328,6 +1366,10 @@ void MeshlessFEM<Model>::m_assembleWVector(DVector &w, size_t regionIdx) const {
         assert(weights.size() == numElems);
         for (size_t i = 0; i < numElems; ++i) {
             Real weight = weights[i];
+            // In abstrace mode, we use the modal stress sign to choose between
+            // maximizing +trace or -trace on a per-element basis. Not in
+            // abstrace mode, we always optimize
+            if (!m_abstrace) weight = std::abs(weight);
             w[3 * i + 0] = weight;
             w[3 * i + 1] = weight;
             w[3 * i + 2] = 0;
