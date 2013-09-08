@@ -504,9 +504,9 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
     std::string baseName = m_modelName;
     boost::format formatter("%s + (%f, %f)");
 
-    if (settings.fixedTranslation) {
-        Vector offset(cellSize[0] * settings.xTranslation,
-                      cellSize[1] * settings.yTranslation);
+    if (settings.Bool("fixedTranslation")) {
+        Vector offset(cellSize[0] * settings.Real("xTranslation"),
+                      cellSize[1] * settings.Real("yTranslation"));
         std::cout << "Offset: " << offset << endl;
         for (size_t p = 0; p < numPrimitives; ++p) {
             translated[5 * p + 0] = params[5 * p + 0] + offset[0];
@@ -516,8 +516,8 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
         m_csgTree->setParameters(translated);
         modelChanged(false);
 
-        m_modelName = boost::str(formatter % baseName % settings.xTranslation %
-                                 settings.yTranslation);
+        m_modelName = boost::str(formatter % baseName % settings.Real("xTranslation") %
+                                 settings.Real("yTranslation"));
 
         prepareResultsCollector();
         bool success = m_fem.weaknessAnalysis(weakness, &m_results);
@@ -573,9 +573,9 @@ runForceTranslationTest(const AnalysisSettings &settings)
     std::string baseName = m_modelName;
     boost::format formatter("%s + (%f, %f)");
 
-    if (settings.fixedTranslation) {
-        Vector offset(cellSize[0] * settings.xTranslation,
-                      cellSize[1] * settings.yTranslation);
+    if (settings.Bool("fixedTranslation")) {
+        Vector offset(cellSize[0] * settings.Real("xTranslation"),
+                      cellSize[1] * settings.Real("yTranslation"));
 
         for (size_t p = 0; p < numPrimitives; ++p) {
             translated[5 * p + 0] = params[5 * p + 0] + offset[0];
@@ -585,8 +585,8 @@ runForceTranslationTest(const AnalysisSettings &settings)
         m_csgTree->setParameters(translated);
         modelChanged(false);
 
-        m_modelName = boost::str(formatter % baseName % settings.xTranslation %
-                                 settings.yTranslation);
+        m_modelName = boost::str(formatter % baseName % settings.Real("xTranslation") %
+                                 settings.Real("yTranslation"));
 
         // bool success = m_fem.simulate(simPath.toAscii());
         prepareResultsCollector();
@@ -666,8 +666,8 @@ runRefinementTest()
     Scalar scale = minScale;
     for (size_t i = 0; i < REFINEMENT_TEST_STEPS; ++i) {
         scale += scaleDelta;
-        m_settings.Nx = oldSettings.Nx * scale;
-        m_settings.Ny = oldSettings.Ny * scale;
+        m_settings.Int("Nx") = oldSettings.Int("Nx") * scale;
+        m_settings.Int("Ny") = oldSettings.Int("Ny") * scale;
         m_fem.configureElements(m_settings);
         m_fem.setPressures(pressures);
 

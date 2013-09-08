@@ -3,6 +3,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Stores (and saves/parses) all the settings for CSGFEM.
+//
+//      These are now stored as a boost::variant-based database. This allows
+//      more easy maintenance/saving/flexible queries at the cost of slightly
+//      more verbose access (must use type-specifying accessors) and less
+//      compile-time checks.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -11,6 +16,7 @@
 #ifndef ANALYSIS_SETTINGS_HH
 #define ANALYSIS_SETTINGS_HH
 #include <boost/program_options.hpp>
+#include <boost/variant.hpp>
 #include <string>
 
 namespace po = boost::program_options;
@@ -19,86 +25,92 @@ namespace po = boost::program_options;
 #include "Quadrature.hh"
 
 struct AnalysisSettings {
-    AnalysisSettings()
-        : solver("Gurobi"),
-          Nx(40), Ny(40), borderWidth(1), quadrature(UNIFORM_QUADRATURE), quadraturePoints(81),
-          cellOverlapThreshold(0.15), useMSBoundary(true), boundarySpacing(.02), kernelRadius(1.0),
-          exactFullElements(true), antialiasedElements(false),
-          massMatrixType(MASS_QUARTER_CELL),
-          laplacianModes(false), consistentSigns(true), numModes(10),
-          weakRegionsPerMode(5), weaknessCutoff(.95), abstrace(true), plusMinusObjective(true),
-          totalForceBound(.1), pointwisePressureBound(.1),
-          fixedTranslation(false), xTranslation(0.0), yTranslation(0.0),
-          young_modulus(1.0), poisson_ratio(0.0), density(1.0) { }
+    typedef boost::variant<std::string, int, double, bool> Variant;
+public:
+    // Note: these must match the Variant typedef order.
+    typedef enum {
+        TYPE_STRING = 0,
+        TYPE_INT = 1,
+        TYPE_REAL = 2,
+        TYPE_BOOL = 3
+    } Type;
 
-    std::string solver;
+    AnalysisSettings() {
+        // Be careful with initialization literal types here... they determine
+        // the setting's type, and need to match exactly to avoid overload
+        // ambiguity.
+        m_values["solver"] = Variant(std::string("Gurobi"));
+        m_values["Nx"] = Variant((int) 40);
+        m_values["Ny"] = Variant((int) 40);
+        m_values["borderWidth"] = Variant((int) 1);
+        m_values["quadrature"] = Variant((int) UNIFORM_QUADRATURE);
+        m_values["quadraturePoints"] = Variant((int) 81);
 
-    // Element settings
-    size_t Nx, Ny;
-    size_t borderWidth;
-    QuadratureMethod quadrature;
-    size_t quadraturePoints;
-    double cellOverlapThreshold;
-    bool   useMSBoundary;
-    double boundarySpacing;
-    double kernelRadius;
+        m_values["cellOverlapThreshold"] = Variant((double) 0.15);
+        m_values["useMSBoundary"] = Variant((bool) true);
+        m_values["boundarySpacing"] = Variant((double) .02);
+        m_values["kernelRadius"] = Variant((double) 1.0);
 
-    bool exactFullElements; // Analytic integrals for elements when possible
-    bool antialiasedElements;
+        m_values["exactFullElements"] = Variant((bool) true);
+        m_values["antialiasedElements"] = Variant((bool) false);
 
-    MassMatrixType massMatrixType;
+        m_values["massMatrixType"] = Variant((int) MASS_QUARTER_CELL);
 
-    // True: use laplacian eigenfunctions instead of true stiffness eigenvectors
-    bool laplacianModes, consistentSigns;
-    size_t numModes;
+        m_values["laplacianModes"] = Variant((bool) false);
+        m_values["consistentSigns"] = Variant((bool) true);
+        m_values["numModes"] = Variant((int) 10);
 
-    // Optimization Settings
-    size_t weakRegionsPerMode;
-    double weaknessCutoff;
-    bool abstrace;
-    bool plusMinusObjective;
-    double totalForceBound;
-    double pointwisePressureBound;
+        m_values["weakRegionsPerMode"] = Variant((int) 5);
+        m_values["weaknessCutoff"] = Variant((double) 0.95);
+        m_values["abstrace"] = Variant((bool) true);
+        m_values["plusMinusObjective"] = Variant((bool) true);
 
-    // Translation Test
-    bool fixedTranslation;
-    double xTranslation, yTranslation; // unused only if fixedTranslation
+        m_values["totalForceBound"] = Variant((double) 0.1);
+        m_values["pointwisePressureBound"] = Variant((double) 0.1);
 
-    // Material Settings
-    double young_modulus, poisson_ratio, density;
+        m_values["fixedTranslation"] = Variant((bool) false);
+        m_values["xTranslation"] = Variant((double) 0.0);
+        m_values["yTranslation"] = Variant((double) 0.0);
+
+        m_values["young_modulus"] = Variant((double) 1.0);
+        m_values["poisson_ratio"] = Variant((double) 0.0);
+        m_values["density"] = Variant((double) 1.0);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Accessors
+    // Throw exceptions if settings name isn't found, or if wrong typed accessor
+    // is called.
+    ////////////////////////////////////////////////////////////////////////////
+    bool          Bool(const std::string &name) const { return boost::get<bool>(m_values.at(name)); }
+    int            Int(const std::string &name) const { return boost::get<int>(m_values.at(name)); }
+    int           Enum(const std::string &name) const { return Int(name); }
+    double        Real(const std::string &name) const { return boost::get<double>(m_values.at(name)); }
+    const std::string String(const std::string &name) const { return boost::get<std::string>(m_values.at(name)); }
+
+    bool        &   Bool(const std::string &name) { return boost::get<bool>(m_values.at(name)); }
+    int         &    Int(const std::string &name) { return boost::get<int>(m_values.at(name)); }
+    int         &   Enum(const std::string &name) { return Int(name); }
+    double      &   Real(const std::string &name) { return boost::get<double>(m_values.at(name)); }
+    std::string & String(const std::string &name) { return boost::get<std::string>(m_values.at(name)); }
 
     // Memberwise comparator
     bool operator==(const AnalysisSettings &rhs) const {
-        // Make sure new members haven't been added...
-        // BOOST_STATIC_ASSERT((sizeof(AnalysisSettings) == 176)
-        //         && "Settings members changed without updating comparator!");
+        for (const auto &rpair : rhs.m_values) {
+            auto it = m_values.find(rpair.first);
+            if (it == m_values.end())
+                return false;
 
-        return ((solver == rhs.solver) && (Nx == rhs.Nx) && (Ny == rhs.Ny) &&
-            (borderWidth == rhs.borderWidth) && (quadrature == rhs.quadrature) &&
-            (quadraturePoints == rhs.quadraturePoints) &&
-            (cellOverlapThreshold == rhs.cellOverlapThreshold) &&
-            (useMSBoundary == rhs.useMSBoundary) &&
-            (boundarySpacing == rhs.boundarySpacing) &&
-            (kernelRadius == rhs.kernelRadius) &&
-            (exactFullElements == rhs.exactFullElements) &&
-            (antialiasedElements == rhs.antialiasedElements) &&
-            (massMatrixType == rhs.massMatrixType) &&
-            (laplacianModes == rhs.laplacianModes) &&
-            (consistentSigns == rhs.consistentSigns) &&
-            (numModes == rhs.numModes) &&
-            (weakRegionsPerMode == rhs.weakRegionsPerMode) &&
-            (weaknessCutoff == rhs.weaknessCutoff) &&
-            (abstrace == rhs.abstrace) &&
-            (plusMinusObjective == rhs.plusMinusObjective) &&
-            (totalForceBound == rhs.totalForceBound) &&
-            (pointwisePressureBound == rhs.pointwisePressureBound) &&
-            (fixedTranslation == rhs.fixedTranslation) &&
-            (xTranslation == rhs.xTranslation) &&
-            (yTranslation == rhs.yTranslation) &&
-            (young_modulus == rhs.young_modulus) &&
-            (poisson_ratio == rhs.poisson_ratio) &&
-            (density == rhs.density));
+            if (!(it->second == rpair.second))
+                return false;
+        }
+        return true;
     }
+
+    Type type(const std::string &name) const { return (Type) get(name).which(); }
+
+    Variant &get(const std::string &name) { return m_values.at(name); }
+    const Variant &get(const std::string &name) const { return m_values.at(name); }
 
     void getOptions(po::options_description &opts) const {
         opts.add_options()
@@ -122,6 +134,8 @@ struct AnalysisSettings {
             ("density", po::value<double>()->default_value(1.0), "Material's density")
         ;
     }
+private:
+    std::map<std::string, Variant> m_values;
 };
 
 #endif // ANALYSIS_SETTINGS_HH

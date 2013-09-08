@@ -769,6 +769,7 @@ void FEMView2D::draw()
 
     // Screenshot this bad boy
     if (m_flipbook && m_flipbook->active()) {
+        glFinish();
         m_flipbook->snapshot(this);
         m_flipbook->advance();
     }

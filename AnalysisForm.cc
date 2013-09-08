@@ -338,45 +338,45 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 void AnalysisForm::m_setGUIFromSettings() {
     m_settingGUIFromSettings = true;
 
-    m_solvers.selectSolver(m_settings.solver);
+    m_solvers.selectSolver(m_settings.String("solver"));
     g_solverSelector->setCurrentIndex(m_solvers.selectedIndex());
-    g_nxStepper->setValue(m_settings.Nx);
-    g_nyStepper->setValue(m_settings.Ny);
-    g_borderWidthStepper->setValue(m_settings.borderWidth);
-    g_gaussQuadratureCheck->setChecked(m_settings.quadrature ==
+    g_nxStepper->setValue(m_settings.Int("Nx"));
+    g_nyStepper->setValue(m_settings.Int("Ny"));
+    g_borderWidthStepper->setValue(m_settings.Int("borderWidth"));
+    g_gaussQuadratureCheck->setChecked(m_settings.Enum("quadrature") ==
                                        GAUSS_QUADRATURE);
-    g_quadraturePointsStepper->setValue(m_settings.quadraturePoints);
+    g_quadraturePointsStepper->setValue(m_settings.Int("quadraturePoints"));
 
-    g_exactFullElementsCheck->setChecked(m_settings.exactFullElements);
-    g_antialiasedElementsCheck->setChecked(m_settings.antialiasedElements);
+    g_exactFullElementsCheck->setChecked(m_settings.Bool("exactFullElements"));
+    g_antialiasedElementsCheck->setChecked(m_settings.Bool("antialiasedElements"));
 
-    g_laplacianModesCheck->setChecked(m_settings.laplacianModes);
-    g_consistentSignsCheck->setChecked(m_settings.consistentSigns);
-    g_numModesStepper->setValue(m_settings.numModes);
-    g_cellOverlapStepper->setValue(m_settings.cellOverlapThreshold);
-    g_useMarchingSquaresCheck->setChecked(m_settings.useMSBoundary);
-    g_boundaryPointStepper->setValue(m_settings.boundarySpacing);
-    g_kernelRadiusStepper->setValue(m_settings.kernelRadius);
+    g_laplacianModesCheck->setChecked(m_settings.Bool("laplacianModes"));
+    g_consistentSignsCheck->setChecked(m_settings.Bool("consistentSigns"));
+    g_numModesStepper->setValue(m_settings.Int("numModes"));
+    g_cellOverlapStepper->setValue(m_settings.Real("cellOverlapThreshold"));
+    g_useMarchingSquaresCheck->setChecked(m_settings.Bool("useMSBoundary"));
+    g_boundaryPointStepper->setValue(m_settings.Real("boundarySpacing"));
+    g_kernelRadiusStepper->setValue(m_settings.Real("kernelRadius"));
 
     // Note: assumes MassMatrixType enum index matches combo box index
-    g_massMatrixSelector->setCurrentIndex(m_settings.massMatrixType);
-    g_youngModulusStepper->setValue(m_settings.young_modulus);
-    g_poissonRatioStepper->setValue(m_settings.poisson_ratio);
-    g_densityStepper->setValue(m_settings.density);
+    g_massMatrixSelector->setCurrentIndex(m_settings.Enum("massMatrixType"));
+    g_youngModulusStepper->setValue(m_settings.Real("young_modulus"));
+    g_poissonRatioStepper->setValue(m_settings.Real("poisson_ratio"));
+    g_densityStepper->setValue(m_settings.Real("density"));
 
-    g_numWeakRegionsStepper->setValue(m_settings.weakRegionsPerMode);
-    g_weaknessCutoffStepper->setValue(m_settings.weaknessCutoff);
-    g_abstraceCheck->setChecked(m_settings.abstrace);
-    g_plusMinusObjectiveCheck->setChecked(m_settings.plusMinusObjective);
+    g_numWeakRegionsStepper->setValue(m_settings.Int("weakRegionsPerMode"));
+    g_weaknessCutoffStepper->setValue(m_settings.Real("weaknessCutoff"));
+    g_abstraceCheck->setChecked(m_settings.Bool("abstrace"));
+    g_plusMinusObjectiveCheck->setChecked(m_settings.Bool("plusMinusObjective"));
 
-    g_forceBoundStepper->setValue(m_settings.totalForceBound);
-    g_pressureBoundStepper->setValue(m_settings.pointwisePressureBound);
+    g_forceBoundStepper->setValue(m_settings.Real("totalForceBound"));
+    g_pressureBoundStepper->setValue(m_settings.Real("pointwisePressureBound"));
 
     // translation test
-    g_translationFixedCheckbox->setChecked(m_settings.fixedTranslation);
-    g_xTranslationStepper->setValue(m_settings.xTranslation);
-    g_yTranslationStepper->setValue(m_settings.yTranslation);
-    if (m_settings.fixedTranslation) {
+    g_translationFixedCheckbox->setChecked(m_settings.Bool("fixedTranslation"));
+    g_xTranslationStepper->setValue(m_settings.Real("xTranslation"));
+    g_yTranslationStepper->setValue(m_settings.Real("yTranslation"));
+    if (m_settings.Bool("fixedTranslation")) {
         g_xTranslationStepper->setEnabled(true);
         g_yTranslationStepper->setEnabled(true);
     }
@@ -396,45 +396,45 @@ void AnalysisForm::m_readSettingsFromGUI() {
         return;
 
     m_solvers.selectSolver(g_solverSelector->currentIndex());
-    m_settings.solver = m_solvers.selectedName();
-    m_settings.Nx = g_nxStepper->value();
-    m_settings.Ny = g_nyStepper->value();
-    m_settings.borderWidth = g_borderWidthStepper->value();
-    m_settings.quadrature = g_gaussQuadratureCheck->isChecked()
+    m_settings.String("solver") = m_solvers.selectedName();
+    m_settings.Int("Nx") = g_nxStepper->value();
+    m_settings.Int("Ny") = g_nyStepper->value();
+    m_settings.Int("borderWidth") = g_borderWidthStepper->value();
+    m_settings.Enum("quadrature") = g_gaussQuadratureCheck->isChecked()
                                     ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
-    m_settings.quadraturePoints = g_quadraturePointsStepper->value();
+    m_settings.Int("quadraturePoints") = g_quadraturePointsStepper->value();
 
-    m_settings.laplacianModes = g_laplacianModesCheck->isChecked();
-    m_settings.consistentSigns = g_consistentSignsCheck->isChecked();
-    m_settings.numModes = g_numModesStepper->value();
-    m_settings.cellOverlapThreshold = g_cellOverlapStepper->value();
+    m_settings.Bool("laplacianModes") = g_laplacianModesCheck->isChecked();
+    m_settings.Bool("consistentSigns") = g_consistentSignsCheck->isChecked();
+    m_settings.Int("numModes") = g_numModesStepper->value();
+    m_settings.Real("cellOverlapThreshold") = g_cellOverlapStepper->value();
 
-    m_settings.exactFullElements = g_exactFullElementsCheck->isChecked();
-    m_settings.antialiasedElements = g_antialiasedElementsCheck->isChecked();
+    m_settings.Bool("exactFullElements") = g_exactFullElementsCheck->isChecked();
+    m_settings.Bool("antialiasedElements") = g_antialiasedElementsCheck->isChecked();
 
     // Note: assumes MassMatrixType enum index matches combo box index
-    m_settings.massMatrixType =
+    m_settings.Enum("massMatrixType") =
         (MassMatrixType) g_massMatrixSelector->currentIndex();
-    m_settings.young_modulus = g_youngModulusStepper->value();
-    m_settings.poisson_ratio = g_poissonRatioStepper->value();
-    m_settings.density       = g_densityStepper->value();
+    m_settings.Real("young_modulus") = g_youngModulusStepper->value();
+    m_settings.Real("poisson_ratio") = g_poissonRatioStepper->value();
+    m_settings.Real("density")       = g_densityStepper->value();
 
-    m_settings.useMSBoundary   = g_useMarchingSquaresCheck->isChecked();
-    m_settings.boundarySpacing = g_boundaryPointStepper->value();
-    m_settings.kernelRadius    = g_kernelRadiusStepper->value();
+    m_settings.Bool("useMSBoundary")   = g_useMarchingSquaresCheck->isChecked();
+    m_settings.Real("boundarySpacing") = g_boundaryPointStepper->value();
+    m_settings.Real("kernelRadius")    = g_kernelRadiusStepper->value();
 
-    m_settings.weakRegionsPerMode = g_numWeakRegionsStepper->value();
-    m_settings.weaknessCutoff = g_weaknessCutoffStepper->value();
-    m_settings.abstrace = g_abstraceCheck->isChecked();
-    m_settings.plusMinusObjective = g_plusMinusObjectiveCheck->isChecked();
+    m_settings.Int("weakRegionsPerMode") = g_numWeakRegionsStepper->value();
+    m_settings.Real("weaknessCutoff") = g_weaknessCutoffStepper->value();
+    m_settings.Bool("abstrace") = g_abstraceCheck->isChecked();
+    m_settings.Bool("plusMinusObjective") = g_plusMinusObjectiveCheck->isChecked();
 
-    m_settings.totalForceBound = g_forceBoundStepper->value();
-    m_settings.pointwisePressureBound = g_pressureBoundStepper->value();
+    m_settings.Real("totalForceBound") = g_forceBoundStepper->value();
+    m_settings.Real("pointwisePressureBound") = g_pressureBoundStepper->value();
 
     // translation test
-    m_settings.fixedTranslation = g_translationFixedCheckbox->isChecked();
-    m_settings.xTranslation = g_xTranslationStepper->value();
-    m_settings.yTranslation = g_yTranslationStepper->value();
+    m_settings.Bool("fixedTranslation") = g_translationFixedCheckbox->isChecked();
+    m_settings.Real("xTranslation") = g_xTranslationStepper->value();
+    m_settings.Real("yTranslation") = g_yTranslationStepper->value();
 }
 
 void AnalysisForm::solverControlsChanged(int) {

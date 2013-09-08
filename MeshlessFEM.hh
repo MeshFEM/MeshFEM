@@ -72,11 +72,11 @@ public:
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
           m_displacementStrainCached(false), m_solvers(solvers)
     {
-        m_quadrature = new Quadrature2D(settings.quadraturePoints,
-                                        settings.quadrature);
-        m_elementGrid = new ElementGrid(settings.Nx, settings.Ny,
-                settings.cellOverlapThreshold, *m_quadrature, model,
-                settings.borderWidth);
+        m_quadrature = new Quadrature2D(settings.Int("quadraturePoints"),
+                                        (QuadratureMethod) settings.Enum("quadrature"));
+        m_elementGrid = new ElementGrid(settings.Int("Nx"), settings.Int("Ny"),
+                settings.Real("cellOverlapThreshold"), *m_quadrature, model,
+                settings.Int("borderWidth"));
 
         m_selectedWeakRegion = -1L;
         
@@ -92,34 +92,35 @@ public:
     bool configureElements(const AnalysisSettings &settings) {
         bool changed = false;
 
-        if ((m_exactFullElements != settings.exactFullElements) ||
-            (m_antialiasedElements != settings.antialiasedElements)) {
-            m_exactFullElements = settings.exactFullElements;
-            m_antialiasedElements = settings.antialiasedElements;
+        if ((m_exactFullElements != settings.Bool("exactFullElements")) ||
+            (m_antialiasedElements != settings.Bool("antialiasedElements"))) {
+            m_exactFullElements = settings.Bool("exactFullElements");
+            m_antialiasedElements = settings.Bool("antialiasedElements");
             changed = true;
         }
 
-        if (quadrature().numPoints() != settings.quadraturePoints) {
-            quadrature().setNumPoints(settings.quadraturePoints);
+        if (quadrature().numPoints() != settings.Int("quadraturePoints")) {
+            quadrature().setNumPoints(settings.Int("quadraturePoints"));
             changed = true;
         }
-        if (quadrature().getQuadratureMethod() != settings.quadrature) {
-            quadrature().setUsingGaussQuadrature(settings.quadrature);
+        if (quadrature().getQuadratureMethod() != settings.Enum("quadrature")) {
+            quadrature().setUsingGaussQuadrature(settings.Enum("quadrature"));
             changed = true;
         }
         ElementGrid &grid = elementGrid();
-        if (grid.getCellOverlapThreshold() != settings.cellOverlapThreshold) {
-            grid.setCellOverlapThreshold(settings.cellOverlapThreshold);
+        if (grid.getCellOverlapThreshold() != settings.Real("cellOverlapThreshold")) {
+            grid.setCellOverlapThreshold(settings.Real("cellOverlapThreshold"));
             changed = true;
         }
         size_t oldNx, oldNy;
         grid.getGridSize(oldNx, oldNy);
-        if ((settings.Nx != oldNx) || (settings.Ny != oldNy)) {
-            grid.setGridSize(settings.Nx, settings.Ny);
+        if (((size_t) settings.Int("Nx") != oldNx) ||
+            ((size_t) settings.Int("Ny") != oldNy)) {
+            grid.setGridSize(settings.Int("Nx"), settings.Int("Ny"));
             changed = true;
         }
-        if (settings.borderWidth != grid.getBorderWidth()) {
-            grid.setBorderWidth(settings.borderWidth);
+        if (settings.Int("borderWidth") != grid.getBorderWidth()) {
+            grid.setBorderWidth(settings.Int("borderWidth"));
             changed = true;
         }
         else if (changed) {
@@ -136,22 +137,22 @@ public:
     }
 
     void configureBoundaryPoints(const AnalysisSettings &settings) {
-        m_useMarchingSquaresBoundary = settings.useMSBoundary;
-        m_boundaryPointSpacing = settings.boundarySpacing;
-        m_boundaryKernelRadius = settings.kernelRadius;
+        m_useMarchingSquaresBoundary = settings.Bool("useMSBoundary");
+        m_boundaryPointSpacing = settings.Real("boundarySpacing");
+        m_boundaryKernelRadius = settings.Real("kernelRadius");
         m_invalidateCache();
     }
 
     void configureMatrices(const AnalysisSettings &settings) {
-        m_massMatrixType = settings.massMatrixType;
+        m_massMatrixType = (MassMatrixType) settings.Enum("massMatrixType");
         m_invalidateCache();
     }
 
     void configureMaterial(const AnalysisSettings &settings) {
         // Isotropic
-        Real E  = settings.young_modulus;
-        Real nu = settings.poisson_ratio;
-        m_density = settings.density;
+        Real E  = settings.Real("young_modulus");
+        Real nu = settings.Real("poisson_ratio");
+        m_density = settings.Real("density");
 
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
@@ -165,19 +166,19 @@ public:
     }
 
     void configureModalAnalysis(const AnalysisSettings &settings) {
-        m_numRequestedModes = settings.numModes;
-        m_laplacianModes = settings.laplacianModes;
-        m_consistentSigns = settings.consistentSigns;
+        m_numRequestedModes = settings.Int("numModes");
+        m_laplacianModes = settings.Bool("laplacianModes");
+        m_consistentSigns = settings.Bool("consistentSigns");
         m_invalidateCache();
     }
 
     void configureWeaknessAnalysis(const AnalysisSettings &settings) {
-        m_weakRegionsPerMode = settings.weakRegionsPerMode;
-        m_weaknessCutoff = settings.weaknessCutoff;
-        m_abstrace = settings.abstrace;
-        m_plusMinusObjective = settings.plusMinusObjective;
-        m_pointwisePressureBound = settings.pointwisePressureBound;
-        m_totalForceBound = settings.totalForceBound;
+        m_weakRegionsPerMode = settings.Int("weakRegionsPerMode");
+        m_weaknessCutoff = settings.Real("weaknessCutoff");
+        m_abstrace = settings.Bool("abstrace");
+        m_plusMinusObjective = settings.Bool("plusMinusObjective");
+        m_pointwisePressureBound = settings.Real("pointwisePressureBound");
+        m_totalForceBound = settings.Real("totalForceBound");
 
         // Only invalidate weakness-dependent parts of cache
         m_weakRegions.clear();

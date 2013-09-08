@@ -174,7 +174,7 @@ typedef MeshlessFEM<CSGTree_t>   MeshlessFEM_t;
 typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
 typedef ResultsCollector<MeshlessFEM_t> ResultsCollector_t;
 
-typedef enum {GAUSS_QUADRATURE, UNIFORM_QUADRATURE} QuadratureMethod;
+typedef enum {GAUSS_QUADRATURE = 0, UNIFORM_QUADRATURE = 1} QuadratureMethod;
 typedef enum {MASS_FULL = 0, MASS_LUMPED = 1, MASS_QUARTER_CELL = 2}
              MassMatrixType;
 
