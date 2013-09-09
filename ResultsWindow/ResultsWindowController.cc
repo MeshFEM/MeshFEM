@@ -31,6 +31,7 @@
 #include "ResultsWindow.hh"
 #include "ResultTreeView.hh"
 #include "Flipbook.hh"
+#include "FlipbookDialog.hh"
 
 using namespace std;
 
@@ -454,13 +455,22 @@ void ResultsWindowController::generateFlipbook()
     if (paths.empty())
         return;
 
-    QString dir = QFileDialog::getExistingDirectory(0,
+    FlipbookDialog *fdialog = new FlipbookDialog(&m_window);
+    fdialog->setModal(true);
+    int result = fdialog->exec();
+
+    if (result) {
+        QString dir = QFileDialog::getExistingDirectory(0,
             "Result Output Directory", QString(), QFileDialog::ShowDirsOnly);
 
-    m_flipbook = std::shared_ptr<Flipbook>(new Flipbook(dir.toStdString(),
-                &m_window.m_resultsCollection, paths));
-    m_flipbookTimer.start(0, this);
-    emit attachFlipbook(m_flipbook);
+        if (dir.length() == 0)
+            return;
+
+        m_flipbook = std::shared_ptr<Flipbook>(new Flipbook(dir.toStdString(),
+                    &m_window.m_resultsCollection, paths));
+        m_flipbookTimer.start(0, this);
+        emit attachFlipbook(m_flipbook);
+    }
 }
 
 void ResultsWindowController::timerEvent(QTimerEvent *event) {

@@ -50,7 +50,7 @@ HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            CSGFile.hh SPHKernels.hh \
            ResultsCollector.hh ResultsWindow/ResultsWindow.hh \
            ResultsWindow/ResultsWindowController.hh \
-           ResultsWindow/ResultTreeView.hh \
+           ResultsWindow/ResultTreeView.hh ResultsWindow/FlipbookDialog.hh \
            cl-helper.h
 
 
@@ -61,4 +61,5 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
            ViewSettingsWidget.cc Geometry.cc \
            ResultsWindow/ResultsWindow.cc ResultsWindow/ResultsWindowController.cc \
+           ResultsWindow/FlipbookDialog.cc \
            cl-helper.c

@@ -112,6 +112,14 @@ public:
     Variant &get(const std::string &name) { return m_values.at(name); }
     const Variant &get(const std::string &name) const { return m_values.at(name); }
 
+    std::vector<std::string> getNames() const {
+        std::vector<std::string> keys;
+        for (const auto &pair : m_values) {
+            keys.push_back(pair.first);
+        }
+        return keys;
+    }
+
     void getOptions(po::options_description &opts) const {
         opts.add_options()
             ("Nx", po::value<int>()->default_value(40), "Grid rows")
