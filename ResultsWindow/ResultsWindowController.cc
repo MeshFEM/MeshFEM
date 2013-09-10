@@ -468,6 +468,10 @@ void ResultsWindowController::generateFlipbook()
 
         m_flipbook = std::shared_ptr<Flipbook>(new Flipbook(dir.toStdString(),
                     &m_window.m_resultsCollection, paths));
+
+        m_flipbook->writeFlipperJSON(fdialog->title(),
+                                     fdialog->selectedSettingNames());
+
         m_flipbookTimer.start(0, this);
         emit attachFlipbook(m_flipbook);
     }

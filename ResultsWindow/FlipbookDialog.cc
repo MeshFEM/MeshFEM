@@ -63,6 +63,24 @@ void FlipbookDialog::generateSettingItems()
     }
 }
 
+string FlipbookDialog::title() const {
+    return g_titleEdit->text().toStdString();
+}
+
+vector<string> FlipbookDialog::selectedSettingNames() const {
+    vector<string> names;
+
+    int numItems = g_settingList->count();
+    for (size_t i = 0; i < numItems; ++i) {
+        QListWidgetItem *item = g_settingList->item(i);
+        if (item->checkState() == Qt::Checked) {
+            names.push_back(item->text().toStdString());
+        }
+    }
+
+    return names;
+}
+
 FlipbookDialog::~FlipbookDialog()
 {
 

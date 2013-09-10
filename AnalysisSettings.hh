@@ -18,11 +18,13 @@
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
 #include <string>
+#include <cassert>
 
 namespace po = boost::program_options;
 
 #include "GlobalTypes.hh"
 #include "Quadrature.hh"
+#include "utils.hh"
 
 struct AnalysisSettings {
     typedef boost::variant<std::string, int, double, bool> Variant;
@@ -86,13 +88,29 @@ public:
     int            Int(const std::string &name) const { return boost::get<int>(m_values.at(name)); }
     int           Enum(const std::string &name) const { return Int(name); }
     double        Real(const std::string &name) const { return boost::get<double>(m_values.at(name)); }
-    const std::string String(const std::string &name) const { return boost::get<std::string>(m_values.at(name)); }
+    const std::string &String(const std::string &name) const { return boost::get<std::string>(m_values.at(name)); }
 
     bool        &   Bool(const std::string &name) { return boost::get<bool>(m_values.at(name)); }
     int         &    Int(const std::string &name) { return boost::get<int>(m_values.at(name)); }
     int         &   Enum(const std::string &name) { return Int(name); }
     double      &   Real(const std::string &name) { return boost::get<double>(m_values.at(name)); }
     std::string & String(const std::string &name) { return boost::get<std::string>(m_values.at(name)); }
+
+    std::string displayString(const std::string &name) const {
+        switch (type(name)) {
+            case TYPE_STRING:
+                return String(name);
+            case TYPE_INT:
+                return toString(Int(name));
+            case TYPE_BOOL:
+                return Bool(name) ? "true" : "false";
+            case TYPE_REAL:
+                return toString(Real(name));
+            default:
+                assert(false);
+        }
+        return "";
+    }
 
     // Memberwise comparator
     bool operator==(const AnalysisSettings &rhs) const {

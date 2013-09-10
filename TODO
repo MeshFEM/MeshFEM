@@ -1,7 +1,9 @@
 Implement:
-    Flipbook animation.
-    Model + settings browser
-    Result dump basename simplification (don't output model/setting name if they're unique)
+  - Flipbook .js writing
+  - Fix ellipse boundary points (non marching squares version)
+  - Try refinement with non-MS boundary, but scaling force blur radius
+    proportionally to grid
+  - Parameter sweeps (maybe)
 
     MSH writer (multiple MSH needed for model changes).
 

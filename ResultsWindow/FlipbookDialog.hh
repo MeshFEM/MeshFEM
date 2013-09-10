@@ -23,6 +23,9 @@ class FlipbookDialog : public QDialog
 public:
     FlipbookDialog(QWidget *parent = 0);
 
+    std::string title() const;
+    std::vector<std::string> selectedSettingNames() const;
+
     ~FlipbookDialog();
 
 private:

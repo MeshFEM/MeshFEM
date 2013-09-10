@@ -148,4 +148,46 @@ std::string appendToString(const std::string &str, const T &t)
     return ss.str();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a new string by converting an object/type to a string (using the
+//  output stream operator).
+//  @tparam     T   object type
+//  @param[in]  t   object to convert
+//  @return     created string
+*///////////////////////////////////////////////////////////////////////////////
+template<typename T>
+std::string toString(const T &t)
+{
+    std::stringstream ss;
+    ss << t;
+    return ss.str();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a new copy of str with all single quotes and backslashes escaped.
+*///////////////////////////////////////////////////////////////////////////////
+inline std::string escapedString(const std::string &str)
+{
+    size_t n = str.length();
+    size_t resultSize = 0;
+    std::string result;
+
+    for (size_t i = 0; i < n; ++i) {
+        char c = str[i];
+        if (c == '\\' || c == '\'')
+            ++resultSize;
+        ++resultSize;
+    }
+
+    result.reserve(resultSize);
+    for (size_t i = 0; i < n; ++i) {
+        char c = str[i];
+        if (c == '\\' || c == '\'')
+            result += '\\';
+        result += c;
+    }
+
+    return result;
+}
+
 #endif // UTILS_HH
