@@ -1,5 +1,5 @@
 Implement:
-  - Flipbook .js writing
+  - Non-bluring point force version.
   - Fix ellipse boundary points (non marching squares version)
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid

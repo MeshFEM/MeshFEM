@@ -222,7 +222,6 @@ boundaryPointSettingsChanged(const AnalysisSettings &settings)
     m_femView->setGUIState(FEMView2D::STATE_ELEMENTS);
     m_fem.configureBoundaryPoints(settings);
     m_femView->update();
-    // Currently, configuring the boundary points clears all modes
 }
 
 void CSGWindowController::

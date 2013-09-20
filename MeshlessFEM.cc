@@ -571,13 +571,13 @@ MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
     return stressTensorField;
 }
 
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 /*! Compute the stress tensor L2 norms (maximum eigenvalue magnitude)
 //  @param[in]  signedNorm  preserve signs of eigenvalues (so element
-//                          compression gives negative stress "norm").
+//  compression gives negative stress "norm").
 //                          Defaults to false.
 //  @return     per-element scalar field of stress tensor norms
-*///////////////////////////////////////////////////////////////////////////
+*///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
 typename MeshlessFEM<Model>::SField
 MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField,

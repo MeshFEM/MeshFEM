@@ -102,6 +102,7 @@ private:
 
     // Simulation settings
     QCheckBox *g_useMarchingSquaresCheck;
+    QSpinBox *g_newtonIterationsStepper;
     QDoubleSpinBox *g_boundaryPointStepper;
     QDoubleSpinBox *g_kernelRadiusStepper;
     QPushButton *g_configureSimulationButton;

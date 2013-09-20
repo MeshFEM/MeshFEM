@@ -140,6 +140,7 @@ public:
         m_useMarchingSquaresBoundary = settings.Bool("useMSBoundary");
         m_boundaryPointSpacing = settings.Real("boundarySpacing");
         m_boundaryKernelRadius = settings.Real("kernelRadius");
+        extern size_t NUM_NEWTON_ITERATIONS;
         m_invalidateCache();
     }
 

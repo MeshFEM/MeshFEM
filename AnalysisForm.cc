@@ -57,6 +57,10 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
 
     g_useMarchingSquaresCheck = new QCheckBox();
+    g_newtonIterationsStepper = new QSpinBox();
+    g_newtonIterationsStepper->setMinimum(1);
+    g_newtonIterationsStepper->setMaximum(100);
+    g_newtonIterationsStepper->setValue(5);
     g_boundaryPointStepper = new QDoubleSpinBox();
     g_boundaryPointStepper->setMinimum(0.01);
     g_boundaryPointStepper->setMaximum(1.0);
@@ -161,6 +165,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Simulation
     QFormLayout *simForm = new QFormLayout();
     simForm->addRow("Marching Squares Boundary", g_useMarchingSquaresCheck);
+    simForm->addRow("Newton Spacing Iterations", g_newtonIterationsStepper);
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     simForm->addRow("Blur Kernel Radius Scale", g_kernelRadiusStepper);
     QHBoxLayout *simButtonLayout = new QHBoxLayout();
@@ -254,6 +259,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(modalAnalysisControlsChanged(int)));
 
     QObject::connect(g_useMarchingSquaresCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(boundaryPointControlsChanged(int)));
+    QObject::connect(g_newtonIterationsStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(boundaryPointControlsChanged(int)));
     QObject::connect(g_boundaryPointStepper, SIGNAL(valueChanged(double)),
                      this, SLOT(boundaryPointControlsChanged(double)));
@@ -462,6 +469,10 @@ void AnalysisForm::boundaryPointControlsChanged(double) {
 
 void AnalysisForm::boundaryPointControlsChanged(int) {
     m_readSettingsFromGUI();
+
+    extern size_t NUM_NEWTON_ITERATIONS;
+    NUM_NEWTON_ITERATIONS = g_newtonIterationsStepper->value();
+
     emit bpSettingsChanged(m_settings);
     emit settingsChanged();
 }

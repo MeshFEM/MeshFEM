@@ -69,7 +69,7 @@ class Solver {
             VField result(numMats);
 
             for (size_t i = 0; i < numMats; ++i) {
-                Real a = symMatField(i)[0], b = symMatField(i)[1],
+                Real a = symMatField(i)[0], b = symMatField(i)[2],
                      c = symMatField(i)[1];
                 // Characteristic polynomial:
                 // (a - lambda) * (c - lambda) - b * b

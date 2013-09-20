@@ -6,9 +6,9 @@
 #include <algorithm>
 #include "Geometry.hh"
 #include <iostream>
+#include <iomanip>
 
-
-#define NUM_NEWTON_ITERATIONS 5
+size_t NUM_NEWTON_ITERATIONS = 5;
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Returns parameter values 't' generating N evenly (arc-length) spaced points
@@ -41,6 +41,7 @@ void ellipseParameterPoints(Real s, Real a, Real b,
     Real aSq = a * a;
     Real bSq = b * b;
     Real kSq = 1 - bSq / aSq;
+
     Real k = sqrt(kSq);
     Real perimeter = 4 * a * boost::math::ellint_2(k);
     int N = ceil(perimeter / s);
