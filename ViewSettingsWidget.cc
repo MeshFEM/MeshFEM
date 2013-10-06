@@ -13,6 +13,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     // Allow the slider to expand to the full width.
     form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
+    g_signedDistanceCheck = new QCheckBox();
     g_showQuadraturePointsCheck = new QCheckBox();
     g_hilightCutCellsCheck = new QCheckBox();
     g_showGridOverResultsCheck = new QCheckBox();
@@ -29,6 +30,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     g_autofitMagnitudeSlider->setSizePolicy(QSizePolicy::MinimumExpanding,
                                             QSizePolicy::Fixed);
 
+    form->addRow("Visualize Signed Distance", g_signedDistanceCheck);
     form->addRow("Show Quadrature Points", g_showQuadraturePointsCheck);
     form->addRow("Highlight Cut Cells", g_hilightCutCellsCheck);
     form->addRow("Show Grid Over Results", g_showGridOverResultsCheck);
@@ -63,6 +65,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 
     m_setGUIFromSettings();
 
+    QObject::connect(g_signedDistanceCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showQuadraturePointsCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_hilightCutCellsCheck, SIGNAL(stateChanged(int)),
@@ -90,6 +94,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 }
 
 void ViewSettingsWidget::m_setGUIFromSettings() {
+    g_signedDistanceCheck->setChecked(m_viewSettings.signedDistanceView);
     g_showQuadraturePointsCheck->setChecked(m_viewSettings.showQuadraturePoints);
     g_hilightCutCellsCheck->setChecked(m_viewSettings.highlightCutCells);
     g_showGridOverResultsCheck->setChecked(m_viewSettings.showGridOverResults);
@@ -115,6 +120,7 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
 }
 
 void ViewSettingsWidget::m_readSettingsFromGUI() {
+    m_viewSettings.signedDistanceView = g_signedDistanceCheck->isChecked();
     m_viewSettings.showQuadraturePoints = g_showQuadraturePointsCheck->isChecked();
     m_viewSettings.highlightCutCells = g_hilightCutCellsCheck->isChecked();
     m_viewSettings.showGridOverResults = g_showGridOverResultsCheck->isChecked();

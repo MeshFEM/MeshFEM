@@ -16,7 +16,8 @@
 
 struct ViewSettings {
     ViewSettings()
-        : showQuadraturePoints(false), highlightCutCells(true),
+        : signedDistanceView(false),
+          showQuadraturePoints(false), highlightCutCells(true),
           autofitVectorField(false), autofitMagnitude(.125),
           showGridOverResults(true), showStressesDuringDeformation(true),
           vfDisplayStyle(VFIELD_DEFORM), showColorbar(true),
@@ -25,6 +26,7 @@ struct ViewSettings {
 
     typedef enum { VFIELD_DEFORM = 0, VFIELD_VIBRATE = 1, VFIELD_ARROW = 2 }
             VFieldDisplayStyle;
+    bool signedDistanceView;
     bool showQuadraturePoints;
     bool highlightCutCells;
 

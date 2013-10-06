@@ -53,6 +53,7 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
       m_frameDim(40, 30), m_frameCenter(0, 0),
+      m_objectDirty(true), m_overlayDirty(true),
       m_fem(fem), m_result(NULL),
       m_pressurePaintValue(0.1),
       m_guiState(STATE_MODEL), m_gesture(GESTURE_NONE),
@@ -71,13 +72,14 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
 void FEMView2D::csgNodesSelected(const NodeList &nList)
 {
     m_selectedObjects = nList;
-    m_rerenderOverlay();
+    m_setObjectAndOverlayNeedsDisplay();
     update();
 }
 
 void FEMView2D::viewSettingsUpdated()
 {
     m_scalarColorMap.selectMap(m_viewSettings.colormap);
+    m_setObjectAndOverlayNeedsDisplay(); // Rendering kernel could've changed...
 
     if (isVibrating())
         m_timer.start(1000.0 / 60, this);
@@ -154,6 +156,11 @@ void FEMView2D::initializeGL()
     assert(knl_text != NULL);
     m_renderKernel = kernel_from_string(m_clContext, knl_text,
                                         "RenderCSG", NULL);
+    free(knl_text);
+    knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/RenderCSGSignedDistance.cl");
+    assert(knl_text != NULL);
+    m_renderSDKernel = kernel_from_string(m_clContext, knl_text,
+                                        "RenderCSGSignedDistance", NULL);
     free(knl_text);
     knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/ClearTexture.cl");
     assert(knl_text != NULL);
@@ -233,8 +240,7 @@ void FEMView2D::resizeGL(int width, int height)
     m_overlayTexBuf = clCreateFromGLTexture(m_clContext, CL_MEM_WRITE_ONLY,
                                             GL_TEXTURE_2D, 0, m_overlayTex, &err);
 
-    m_rerenderObject();
-    m_rerenderOverlay();
+    m_setObjectAndOverlayNeedsDisplay();
 
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
@@ -367,25 +373,33 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
         cl_float4 fgColor = {{fg.red() / 255.0f, fg.green() / 255.0f,
                               fg.blue() / 255.0f, fg.alpha() / 255.0f}};
 
-        SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
-                minX, maxX, minY, maxY, numNodes, numPrimitives,
-                m_nodeBuf, m_primBuf, fgColor);
+        if (m_viewSettings.signedDistanceView) {
+            SET_11_KERNEL_ARGS(m_renderSDKernel, texBuf, m_width, m_height,
+                    minX, maxX, minY, maxY, numNodes, numPrimitives,
+                    m_nodeBuf, m_primBuf);
+            CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderSDKernel,
+                        /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+        }
+        else {
+            SET_12_KERNEL_ARGS(m_renderKernel, texBuf, m_width, m_height,
+                    minX, maxX, minY, maxY, numNodes, numPrimitives,
+                    m_nodeBuf, m_primBuf, fgColor);
+            CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
+                        /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
+        }
 
-        // get_timestamp(&start);
-        CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_renderKernel,
-                    /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
         CALL_CL_GUARDED(clEnqueueReleaseGLObjects, (m_clQueue, 1,
                     &texBuf, 0, NULL, NULL));
 
         CALL_CL_GUARDED(clFinish, (m_clQueue));
     }
-    // get_timestamp(&end);
-    // std::cout << "Kernel ran in " << timestamp_diff_in_seconds(start, end)
-    //           << std::endl;
 }
 
 void FEMView2D::m_drawObject()
 {
+    if (m_objectDirty)
+        m_rerenderObject();
+
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
     drawQuad(0, 0, m_width, m_height);
@@ -419,6 +433,9 @@ void FEMView2D::m_drawWorldArrow(const Vector &p, const Vector &n,
 
 void FEMView2D::m_drawSelectedObjects()
 {
+    if (m_overlayDirty)
+        m_rerenderOverlay();
+
     QColor selectedObjectColor(128, 128, 128, 128);
 
     glBindTexture(GL_TEXTURE_2D, m_overlayTex);
@@ -455,6 +472,9 @@ void FEMView2D::m_drawWorldVertex(const Vector &v)
 bool FEMView2D::drawObjectTextureCells(const VField &deformation,
                          const SField &elemScalarField)
 {
+    if (m_objectDirty)
+        m_rerenderObject();
+
     ElementGrid2D_t &grid = m_fem.elementGrid();
 
     bool hasDeformation = deformation.domainSize() == grid.numNodes();
@@ -685,6 +705,7 @@ void FEMView2D::m_rerenderObject()
     glFinish();
     m_clClearCSGRender(m_modelTexBuf);
     m_clRenderCSGNode(NULL, m_modelTexBuf, modelColor);
+    m_objectDirty = false;
 }
 
 void FEMView2D::m_rerenderOverlay()
@@ -711,6 +732,8 @@ void FEMView2D::m_rerenderOverlay()
     for (size_t i = 0; i < unionGlueNodes.size(); ++i) {
         delete unionGlueNodes[i];
     }
+
+    m_overlayDirty = false;
 }
 
 void FEMView2D::draw()
@@ -1225,9 +1248,7 @@ void FEMView2D::wheelEvent(QWheelEvent *event)
     m_frameCenter = wPos + scale * (m_frameCenter - wPos);
     m_frameDim *= scale;
 
-    m_rerenderObject();
-    if (m_guiState == STATE_MODEL)
-        m_rerenderOverlay();
+    m_setObjectAndOverlayNeedsDisplay();
     update();
 
     event->accept();
@@ -1286,18 +1307,14 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
     if (m_gesture == GESTURE_PAN) {
         // Coordinate system translates with inverse of pan
         m_frameCenter += start - end;
-        m_rerenderObject();
-        if (m_guiState == STATE_MODEL)
-            m_rerenderOverlay();
+        m_setObjectAndOverlayNeedsDisplay();
         update();
         handled = true;
     }
     if (m_gesture == GESTURE_ZOOM) {
         float deltaYpx = endScreen[1] - m_prevMouseLoc[1];
         m_frameDim *= pow(1.01, deltaYpx);
-        m_rerenderObject();
-        if (m_guiState == STATE_MODEL)
-            m_rerenderOverlay();
+        m_setObjectAndOverlayNeedsDisplay();
         update();
         handled = true;
     }
@@ -1310,8 +1327,7 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
                                     it != m_selectedObjects.end(); ++it) {
                 (*it)->applyTranslation(end - start);
             }
-            m_rerenderObject();
-            m_rerenderOverlay();
+            m_setObjectAndOverlayNeedsDisplay();
             update();
         }
         else if (m_guiState == STATE_PRESSURE_DRAW) {

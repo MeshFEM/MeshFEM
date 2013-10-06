@@ -78,6 +78,7 @@ private:
     ~FEMView2D() {
         // Clean up OpenCL stuff
         CALL_CL_GUARDED(clReleaseKernel, (m_renderKernel));
+        CALL_CL_GUARDED(clReleaseKernel, (m_renderSDKernel));
         CALL_CL_GUARDED(clReleaseKernel, (m_clearKernel));
         CALL_CL_GUARDED(clReleaseCommandQueue, (m_clQueue));
         CALL_CL_GUARDED(clReleaseContext, (m_clContext));
@@ -132,8 +133,7 @@ public slots:
     void modelChanged() {
         m_select.clear();
         m_selectedObjects.clear();
-        m_rerenderObject();
-        m_rerenderOverlay();
+        m_setObjectAndOverlayNeedsDisplay();
         update();
     }
 
@@ -258,6 +258,8 @@ private:
     bool m_drawElements();
     void m_drawObject();
     void m_drawSelectedObjects();
+    void m_setObjectAndOverlayNeedsDisplay() { m_objectDirty = true;
+                                               m_overlayDirty = true; }
     void m_rerenderObject();
     void m_rerenderOverlay();
     void m_drawWorldBox(const BBox_t &b);
@@ -272,6 +274,7 @@ private:
     FTGLBitmapFont m_font;
     Vector m_frameDim, m_frameCenter;
     int m_width, m_height, m_screenTop, m_screenLeft;
+    bool m_objectDirty, m_overlayDirty;
     GLuint m_modelTex, m_overlayTex;
     GLuint m_bilinearShader;
     // Vertex coordinate attributes for bilinear displacement shader.
@@ -305,8 +308,7 @@ private:
     // OpenCL stuff
     ////////////////////////////////////////////////////////////////////////////
     cl_context       m_clContext;
-    cl_kernel        m_renderKernel;
-    cl_kernel        m_clearKernel;
+    cl_kernel        m_renderKernel, m_renderSDKernel, m_clearKernel;
     cl_command_queue m_clQueue;
     cl_mem           m_nodeBuf, m_primBuf;
     cl_mem           m_nodeHostBuf, m_primHostBuf;

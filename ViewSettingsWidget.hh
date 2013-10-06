@@ -35,7 +35,8 @@ public:
 private:
     ViewSettings &m_viewSettings;
 
-    QCheckBox *g_showQuadraturePointsCheck,
+    QCheckBox *g_signedDistanceCheck,
+              *g_showQuadraturePointsCheck,
               *g_hilightCutCellsCheck,
               *g_showGridOverResultsCheck,
               *g_showStressesDuringDeformationCheck,
