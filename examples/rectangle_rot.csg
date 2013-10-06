@@ -2,6 +2,6 @@
     "name": "Rectangle",
     "type": "rectangle",
     "center": [0, 0],
-    "dimensions": [3.0, 0.6],
+    "dimensions": [30, 6],
     "rotation": 45
 }

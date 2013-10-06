@@ -31,7 +31,7 @@ class Flipbook {
 public:
     typedef ResultsCollector_t::Result Result;
 
-    Flipbook() : m_results(NULL), m_frame(0) { }
+    Flipbook() : m_results(NULL), m_frame(0), m_masked(true) { }
 
     Flipbook(const std::string &directory,
              const ResultsCollector_t *rc,
@@ -39,7 +39,9 @@ public:
         : m_directory(directory), m_results(rc), m_resultPaths(resultPaths),
           m_frame(0) { }
 
-    bool active() const { return m_frame < m_resultPaths.size(); }
+    void setMasked(bool masked) { m_masked = masked; }
+    bool active() const { return !m_masked &&
+                                 (m_frame < m_resultPaths.size()); }
 
     void advance() { if (active()) ++m_frame; }
 
@@ -82,7 +84,7 @@ public:
         }
 
         jsonOut << "title = '" << escapedString(title) << "';" << std::endl;
-        jsonOut << "statistics = ['model'";
+        jsonOut << "statistics = ['model', 'result max', 'result min'";
         for (size_t s = 0; s < settingNames.size(); ++s) {
             jsonOut << ", '" << escapedString(settingNames[s]) << "'";
         }
@@ -96,6 +98,11 @@ public:
 
             jsonOut << ", 'model': '"
                     << escapedString(getModelPathComponent(path(f))) << "'";
+            jsonOut << ", 'result max': '"
+                    << m_results->getResultWithPath(path(f))->getMaxScalar(Result::PER_ELEM) << "'";
+            jsonOut << ", 'result min': '"
+                    << m_results->getResultWithPath(path(f))->getMinScalar(Result::PER_ELEM) << "'";
+
             AnalysisSettings settings;
             m_results->getSettings(getSettingsPathComponent(path(f)), settings);
 
@@ -116,6 +123,7 @@ private:
     const ResultsCollector_t *m_results;
     std::vector<std::string> m_resultPaths;
     size_t m_frame;
+    bool m_masked;
 };
 
 #endif // FLIPBOOK_HH

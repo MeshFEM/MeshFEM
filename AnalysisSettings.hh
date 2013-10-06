@@ -51,7 +51,7 @@ public:
 
         m_values["useMSBoundary"] = Variant((bool) true);
         m_values["blurPointForces"] = Variant((bool) true);
-        m_values["boundarySpacing"] = Variant((double) .02);
+        m_values["boundarySpacing"] = Variant((double) .15);
         m_values["kernelRadius"] = Variant((double) 1.0);
 
         m_values["exactFullElements"] = Variant((bool) true);

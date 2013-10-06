@@ -52,7 +52,7 @@ FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
                      QWidget *parent)
     : QGLWidget(parent),
       m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
-      m_frameDim(4, 3), m_frameCenter(0, 0),
+      m_frameDim(40, 30), m_frameCenter(0, 0),
       m_fem(fem), m_result(NULL),
       m_pressurePaintValue(0.1),
       m_guiState(STATE_MODEL), m_gesture(GESTURE_NONE),
@@ -202,18 +202,15 @@ void FEMView2D::initializeGL()
 
 void FEMView2D::resizeGL(int width, int height)
 {
-    // Largest possible viewing rectangle with the frame's aspect ratio
-    // aspect = view width / height
-    float aspect = m_frameDim[0] / m_frameDim[1];
-    float proportionalWidth = aspect * height;
-    if (proportionalWidth < width) {
-        m_width  = proportionalWidth;
-        m_height = height;
-    }
-    else {
-        m_width = width;
-        m_height = width / aspect;
-    }
+    // Always keep square pixels (m_frameDim must have same aspect ratio as
+    // width:height).
+    // The frame width always stays fixed, so scale the frame height
+    // accordingly..
+    float heightToWidth = height / ((float) width);
+    float proportionalHeight = m_frameDim[0] * heightToWidth;
+    m_frameDim[1] = proportionalHeight;
+    m_height = height;
+    m_width = width;
 
     // Allocate empty textures
     glBindTexture(GL_TEXTURE_2D, m_modelTex);

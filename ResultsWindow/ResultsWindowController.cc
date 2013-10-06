@@ -472,6 +472,11 @@ void ResultsWindowController::generateFlipbook()
         m_flipbook->writeFlipperJSON(fdialog->title(),
                                      fdialog->selectedSettingNames());
 
+        // Kickstart the flipbook (ensure the first flipbook result selection
+        // triggers a redraw). Masking is required to prevent selectResult(NULL)
+        // from being confused for the first frame.
+        selectResult(NULL);
+        m_flipbook->setMasked(true);
         m_flipbookTimer.start(0, this);
         emit attachFlipbook(m_flipbook);
     }
@@ -479,8 +484,10 @@ void ResultsWindowController::generateFlipbook()
 
 void ResultsWindowController::timerEvent(QTimerEvent *event) {
     if (event->timerId() == m_flipbookTimer.timerId()) {
-        if (m_flipbook && m_flipbook->active())
+        m_flipbook->setMasked(false);
+        if (m_flipbook && m_flipbook->active()) {
             selectResult(m_flipbook->path());
+        }
         else
             m_flipbookTimer.stop();
     }

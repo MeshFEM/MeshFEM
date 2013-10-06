@@ -1,10 +1,19 @@
 Implement:
   - Non-bluring point force version.
+  - Fix bug where flipbook rendering sometimes isn't triggered until the
+    view/result selection manually changes...
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid
   - Parameter sweeps (maybe)
 
     MSH writer (multiple MSH needed for model changes).
+
+For presentation:
+    Show convergence of stress for convex objects under isometric transformation (ideally)
+    Show problem around reentrant corner (box with upper right corner cut out)
+    Visualize signed distance function
+    Visualized blurred object
+    Show behavior of blurred object.
 
 Debug drastically different combined weakness:
     (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$

@@ -2,6 +2,6 @@
     "name": "Ellipse",
     "type": "ellipse",
     "center": [0, 0],
-    "dimensions": [1.2, 1.8],
+    "dimensions": [12, 18],
     "rotation": 0
 }

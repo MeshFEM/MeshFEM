@@ -80,6 +80,14 @@ public:
         return m_sfields[type];
     }
 
+    typename SField::value_type getMaxScalar(ResultDomain type) const {
+        return m_sfields[type].max();
+    }
+
+    typename SField::value_type getMinScalar(ResultDomain type) const {
+        return m_sfields[type].min();
+    }
+
     unsigned char resultType() const {
     return ((m_hasSField[PER_NODE] ? NODE_SCALAR : 0) |
             (m_hasSField[PER_ELEM] ? ELEM_SCALAR : 0) |
