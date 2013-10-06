@@ -14,6 +14,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
     form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
     g_showQuadraturePointsCheck = new QCheckBox();
+    g_hilightCutCellsCheck = new QCheckBox();
     g_showGridOverResultsCheck = new QCheckBox();
     g_showStressesDuringDeformationCheck = new QCheckBox();
     g_fitVectorFieldsCheck = new QCheckBox();
@@ -29,6 +30,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
                                             QSizePolicy::Fixed);
 
     form->addRow("Show Quadrature Points", g_showQuadraturePointsCheck);
+    form->addRow("Highlight Cut Cells", g_hilightCutCellsCheck);
     form->addRow("Show Grid Over Results", g_showGridOverResultsCheck);
     form->addRow("Show Stresses During Deformation", g_showStressesDuringDeformationCheck);
     form->addRow("Auto-Fit Vector Fields", g_fitVectorFieldsCheck);
@@ -63,6 +65,8 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 
     QObject::connect(g_showQuadraturePointsCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
+    QObject::connect(g_hilightCutCellsCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showGridOverResultsCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(m_guiIntChanged(int)));
     QObject::connect(g_showStressesDuringDeformationCheck, SIGNAL(stateChanged(int)),
@@ -87,6 +91,7 @@ ViewSettingsWidget::ViewSettingsWidget(ViewSettings &settings, QWidget *parent)
 
 void ViewSettingsWidget::m_setGUIFromSettings() {
     g_showQuadraturePointsCheck->setChecked(m_viewSettings.showQuadraturePoints);
+    g_hilightCutCellsCheck->setChecked(m_viewSettings.highlightCutCells);
     g_showGridOverResultsCheck->setChecked(m_viewSettings.showGridOverResults);
     g_showStressesDuringDeformationCheck->setChecked(m_viewSettings.showStressesDuringDeformation);
 
@@ -111,6 +116,7 @@ void ViewSettingsWidget::m_setGUIFromSettings() {
 
 void ViewSettingsWidget::m_readSettingsFromGUI() {
     m_viewSettings.showQuadraturePoints = g_showQuadraturePointsCheck->isChecked();
+    m_viewSettings.highlightCutCells = g_hilightCutCellsCheck->isChecked();
     m_viewSettings.showGridOverResults = g_showGridOverResultsCheck->isChecked();
     m_viewSettings.showStressesDuringDeformation = g_showStressesDuringDeformationCheck->isChecked();
 

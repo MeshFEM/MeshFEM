@@ -101,7 +101,7 @@ private:
     QPushButton *g_modalAnalysisButton;
 
     // Simulation settings
-    QCheckBox *g_useMarchingSquaresCheck;
+    QCheckBox *g_useMarchingSquaresCheck, *g_blurForcesCheck;
     QSpinBox *g_newtonIterationsStepper;
     QDoubleSpinBox *g_boundaryPointStepper;
     QDoubleSpinBox *g_kernelRadiusStepper;

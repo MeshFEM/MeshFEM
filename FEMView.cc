@@ -560,8 +560,10 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
                 }
                 else {
                     glColor4f(.8f, .8f, .8f, .5f);
-                    if (!grid.elementIsFull(i)) 
+                    if (m_viewSettings.highlightCutCells &&
+                       !grid.elementIsFull(i)) {
                         glColor4f(.8f, 0.0f, 0.0f, .5f);
+                    }
                 }
             }
             grid.elementCorners(i, corners);
@@ -904,7 +906,8 @@ bool FEMView2D::m_drawResult()
     if (m_result->hasNodeVField() && (m_select.type() == SelectionTool::NODE)) {
         size_t i = m_select.index();
         assert(i < vfield.domainSize());
-        Vector v = vfield(i);
+        // Read the vector from the unscaled vector field.
+        Vector v = m_result->getVectorField(Result::PER_NODE)(i);
         resultString = boost::str(format(
             "Node %i vector: [%lf, %lf] (mag: %lf)") %
             (int) i % v[0] % v[1] % v.norm());

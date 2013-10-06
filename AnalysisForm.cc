@@ -57,6 +57,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_modalAnalysisButton = new QPushButton("Modal Analysis");
 
     g_useMarchingSquaresCheck = new QCheckBox();
+    g_blurForcesCheck = new QCheckBox();
     g_newtonIterationsStepper = new QSpinBox();
     g_newtonIterationsStepper->setMinimum(1);
     g_newtonIterationsStepper->setMaximum(100);
@@ -165,6 +166,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     // Simulation
     QFormLayout *simForm = new QFormLayout();
     simForm->addRow("Marching Squares Boundary", g_useMarchingSquaresCheck);
+    simForm->addRow("Point -> Volume Force", g_blurForcesCheck);
     simForm->addRow("Newton Spacing Iterations", g_newtonIterationsStepper);
     simForm->addRow("Boundary Point Spacing", g_boundaryPointStepper);
     simForm->addRow("Blur Kernel Radius Scale", g_kernelRadiusStepper);
@@ -259,6 +261,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
                      this, SLOT(modalAnalysisControlsChanged(int)));
 
     QObject::connect(g_useMarchingSquaresCheck, SIGNAL(stateChanged(int)),
+                     this, SLOT(boundaryPointControlsChanged(int)));
+    QObject::connect(g_blurForcesCheck, SIGNAL(stateChanged(int)),
                      this, SLOT(boundaryPointControlsChanged(int)));
     QObject::connect(g_newtonIterationsStepper, SIGNAL(valueChanged(int)),
                      this, SLOT(boundaryPointControlsChanged(int)));
@@ -362,6 +366,7 @@ void AnalysisForm::m_setGUIFromSettings() {
     g_numModesStepper->setValue(m_settings.Int("numModes"));
     g_cellOverlapStepper->setValue(m_settings.Real("cellOverlapThreshold"));
     g_useMarchingSquaresCheck->setChecked(m_settings.Bool("useMSBoundary"));
+    g_blurForcesCheck->setChecked(m_settings.Bool("blurPointForces"));
     g_boundaryPointStepper->setValue(m_settings.Real("boundarySpacing"));
     g_kernelRadiusStepper->setValue(m_settings.Real("kernelRadius"));
 
@@ -427,6 +432,7 @@ void AnalysisForm::m_readSettingsFromGUI() {
     m_settings.Real("density")       = g_densityStepper->value();
 
     m_settings.Bool("useMSBoundary")   = g_useMarchingSquaresCheck->isChecked();
+    m_settings.Bool("blurPointForces")   = g_blurForcesCheck->isChecked();
     m_settings.Real("boundarySpacing") = g_boundaryPointStepper->value();
     m_settings.Real("kernelRadius")    = g_kernelRadiusStepper->value();
 

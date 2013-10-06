@@ -65,7 +65,12 @@ void ellipseParameterPoints(Real s, Real a, Real b,
         Real s_target = i * segmentArcLen;
 
         for (size_t j = 0; j < NUM_NEWTON_ITERATIONS; ++j) {
-            Real s_t = a * boost::math::ellint_2(k, t);
+            Real s_t;
+            if (std::abs(t - M_PI) > 1e-12)
+                s_t = a * boost::math::ellint_2(k, t);
+            else
+                s_t = 2 * a * boost::math::ellint_2(k);
+
             Real sin_t = sin(t);
             Real s_prime = a * sqrt(1 - kSq * sin_t * sin_t);
             t += (s_target - s_t) / s_prime;
