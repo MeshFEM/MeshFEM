@@ -120,6 +120,7 @@ __kernel void RenderCSGSignedDistance(write_only image2d_t img,
         float dist = computeStack[0];
         clamp(dist, -1.0, 1.0);
 
+        // Poor man's hsv-based map: -1:blue, 1.0: red
         float4 color;
         if (dist < -0.5) {
             // Dist [-1.0, -.5):

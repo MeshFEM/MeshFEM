@@ -1,7 +1,5 @@
 Implement:
   - Non-bluring point force version.
-  - Fix bug where flipbook rendering sometimes isn't triggered until the
-    view/result selection manually changes...
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid
   - Parameter sweeps (maybe)
@@ -14,6 +12,8 @@ For presentation:
     Visualize signed distance function
     Visualized blurred object
     Show behavior of blurred object.
+
+Investigate R-functions for continuous signed distance function
 
 Debug drastically different combined weakness:
     (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$

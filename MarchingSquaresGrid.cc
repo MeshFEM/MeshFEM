@@ -124,14 +124,36 @@ m_extractPolygon(const Model &model, size_t ci,
                 a = model.signedDistance(vertexPosition(corners[0]));
                 b = model.signedDistance(vertexPosition(corners[3]));
                 s = a / (a - b); // Approximate zero crossing
-                assert(s <= 1.0 && s >= 0.0);
+                if (!(s <= 1.0 && s >= 0.0)) {
+                    Vector va(vertexPosition(corners[0])),
+                           vb(vertexPosition(corners[3]));
+                    std::cout << "left zero crossing guess error for (" << va[0] << ", " << va[1]
+                              << ") -> (" << vb[0] << ", " << vb[1] << "): s = " << s
+                              << ", a = " << a << ", b = " << b << std::endl;
+                    s = 0.5;
+                }
                 newPoint = Vector(0, s);
                 break;
             case MS_DOWN:
                 --row;
                 a = model.signedDistance(vertexPosition(corners[0]));
                 b = model.signedDistance(vertexPosition(corners[1]));
+                if (!(s <= 1.0 && s >= 0.0)) {
+                    Vector va(vertexPosition(corners[0])),
+                           vb(vertexPosition(corners[1]));
+                    std::cout << "zero crossing guess error: s = " << s
+                              << ", a = " << a << ", b = " << b << std::endl;
+                    s = 0.5;
+                }
                 s = a / (a - b); // Approximate zero crossing
+                if (!(s <= 1.0 && s >= 0.0)) {
+                    Vector va(vertexPosition(corners[0])),
+                           vb(vertexPosition(corners[3]));
+                    std::cout << "down zero crossing guess error for (" << va[0] << ", " << va[1]
+                              << ") -> (" << vb[0] << ", " << vb[1] << "): s = " << s
+                              << ", a = " << a << ", b = " << b << std::endl;
+                    s = 0.5;
+                }
                 newPoint = Vector(s, 0);
                 break;
             case MS_RIGHT:
@@ -139,6 +161,14 @@ m_extractPolygon(const Model &model, size_t ci,
                 a = model.signedDistance(vertexPosition(corners[1]));
                 b = model.signedDistance(vertexPosition(corners[2]));
                 s = a / (a - b); // Approximate zero crossing
+                if (!(s <= 1.0 && s >= 0.0)) {
+                    Vector va(vertexPosition(corners[1])),
+                           vb(vertexPosition(corners[2]));
+                    std::cout << "right zero crossing guess error for (" << va[0] << ", " << va[1]
+                              << ") -> (" << vb[0] << ", " << vb[1] << "): s = " << s
+                              << ", a = " << a << ", b = " << b << std::endl;
+                    s = 0.5;
+                }
                 newPoint = Vector(1.0, s);
                 break;
             case MS_UP:
@@ -146,6 +176,14 @@ m_extractPolygon(const Model &model, size_t ci,
                 a = model.signedDistance(vertexPosition(corners[3]));
                 b = model.signedDistance(vertexPosition(corners[2]));
                 s = a / (a - b); // Approximate zero crossing
+                if (!(s <= 1.0 && s >= 0.0)) {
+                    Vector va(vertexPosition(corners[3])),
+                           vb(vertexPosition(corners[2]));
+                    std::cout << "up zero crossing guess error for (" << va[0] << ", " << va[1]
+                              << ") -> (" << vb[0] << ", " << vb[1] << "): s = " << s
+                              << ", a = " << a << ", b = " << b << std::endl;
+                    s = 0.5;
+                }
                 newPoint = Vector(s, 1.0);
                 break;
             default:

@@ -923,6 +923,8 @@ bool FEMView2D::m_drawResult()
     ////////////////////////////////////////////////////////////////////////////
     using boost::format;
     std::string resultString;
+    bool hasElemScalarField = sfield.domainSize() == numElems;
+
     if (m_result->hasNodeVField() && (m_select.type() == SelectionTool::NODE)) {
         size_t i = m_select.index();
         assert(i < vfield.domainSize());
@@ -933,15 +935,14 @@ bool FEMView2D::m_drawResult()
             (int) i % v[0] % v[1] % v.norm());
     }
 
-    bool hasElemScalarField = sfield.domainSize() == numElems;
-    if (hasElemScalarField && (m_select.type() == SelectionTool::ELEM)) {
+    else if (hasElemScalarField && (m_select.type() == SelectionTool::ELEM)) {
         size_t i = m_select.index();
         assert(i < sfield.domainSize());
         resultString = boost::str(format("Elem %i scalar: %lf") 
                 % (int) i % sfield[i]);
     }
 
-    if (m_result->hasBdrySField() &&
+    else if (m_result->hasBdrySField() &&
         (m_select.type() == SelectionTool::BOUNDARY)) {
         size_t i = m_select.index();
         assert(i < bsfield.domainSize());
@@ -1044,6 +1045,30 @@ bool FEMView2D::m_drawElements()
                 }
             }
         glEnd();
+    }
+
+    using boost::format;
+    std::string resultString;
+    if (m_select.type() == SelectionTool::ELEM) {
+        ElementGrid2D_t::AdjacencyVec corners;
+        size_t i = m_select.index();
+        grid.elementCorners(i, corners);
+        resultString = boost::str(format("Elem %i nodes: [%i, %i, %i, %i]")
+                % (int) i % (int) corners[0] %  (int) corners[1]
+                % (int) corners[2] % (int) corners[3]);
+    }
+    else if (m_select.type() == SelectionTool::NODE) {
+        ElementGrid2D_t::AdjacencyVec corners;
+        size_t i = m_select.index();
+        Vector p = grid.nodePosition(i);
+        resultString = boost::str(format("Node %i position: [%f, %f]")
+                % (int) i % (float) p[0] % (float) p[1]);
+    }
+
+    if (resultString.length()) {
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glRasterPos2i(5, 5);
+        m_font.Render(resultString.c_str());
     }
 
     drawSelection();
