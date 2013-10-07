@@ -623,6 +623,187 @@ private:
     bool m_vertical;
 };
 
+// Note: for pie slices, dimensions are actually (radius, angle)
+// Angle must be in radians, [0, 2 * pi]
+template<typename Vector>
+class CSGTree<Vector>::CSGPieSliceNode : public CSGTree<Vector>::CSGPrimitive
+{
+    using CSGTree<Vector>::CSGPrimitive::m_c;
+public:
+    CSGPieSliceNode(Vector center, const Vector &dimensions, Real rot = 0)
+        : CSGPrimitive(center, dimensions, rot)
+    { }
+
+    Real getAngle()  const { return this->m_dim[1]; }
+    Real getRadius() const { return this->m_dim[0]; }
+
+    std::string defaultName() const { return "Pie Slice"; }
+
+    CSGNodeType nodeType() const { return CSG_NODE_PIE_SLICE; }
+
+    bool isInside(const Vector &test) const {
+        Vector p = test - m_c;
+        Real ptheta = atan2(p[1], p[0]);
+        Real diff = fmod(ptheta - this->getRotationRad(), 2 * M_PI);
+        if (diff < 0) diff += 2 * M_PI;
+        return ((diff < getAngle()) && (p.norm() < getRadius()));
+    }
+
+    Real signedDistance(const Vector &test) const {
+        Vector p = test - m_c;
+        Real ptheta = atan2(p[1], p[0]);
+        Real diff = fmod(ptheta - this->getRotationRad(), 2 * M_PI);
+        if (diff < 0) diff += 2 * M_PI;
+        Real wangle = getAngle();
+        Real plen = p.norm();
+        Real r = getRadius();
+
+        // Determine the angle to the closest border
+        Real angleDist = std::min(fabs(diff - wangle), diff);
+        angleDist = std::min(angleDist, (Real) (2 * M_PI - diff));
+
+        // Compute unsigned border distance by decomposing into
+        // distances perpendicular and parallel to the wedge border.
+        Real borderDist = Vector(std::max(plen - r, (Real) 0.0),
+                                 plen * sin(angleDist)).norm();
+        if (diff < wangle) {
+            // Inside the wedge angle, the distance is the max of
+            // the radial and (-border dist)
+            // (an intersection operation)
+            return std::max(plen - r, -borderDist);
+        }
+        else {
+            // Outside the wedge angle, the distance is the border
+            // dist.
+            return borderDist;
+        }
+    }
+
+    // Boundary points are evenly spread around perimeter
+    // r * ( a + 2), where a is the wedge angle in radians
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
+        std::vector<_BoundaryPoint> bndPts;
+        Real a = fmod(getAngle(), 2 * M_PI);
+        Real r = getRadius();
+        if (a < 0) a += 2 * M_PI;
+        Real arclen = r * a;
+        Real perimeter = arclen + 2 * r;
+        size_t N = ceil(perimeter / pointSpacing);
+
+        size_t Narc = ceil(N * (arclen / perimeter));
+        assert(Narc > 1);
+
+        // the "minangle" border will include the origin point, so prefer to
+        // give it more points.
+        size_t Nminborder = ceil((N - Narc) / 2.0);
+        size_t Nmaxborder = N - Narc - Nminborder;
+
+        // Compute the segment lengths (for points interior to the arc, the
+        // minangle border, and the maxangle border respectively)
+        Real arcSegmentLen = arclen / (Narc - 1);
+        Real minBorderSegmentLen = r / (Nminborder);
+        Real maxBorderSegmentLen = r / (Nmaxborder + 1);
+
+        // Do the Narc - 2 interal points for the arc
+        Real angleDelta = a / (Narc - 1);
+        Real currAngle = this->getRotationRad();
+        for (size_t i = 1; i < Narc - 1; ++i) {
+            currAngle += angleDelta;
+            Vector n(cos(currAngle), sin(currAngle));
+            bndPts.push_back(_BoundaryPoint(r * n + m_c, n, arcSegmentLen));
+        }
+
+        Real minAngle = this->getRotationRad();
+        minAngle = fmod(minAngle, 2 * M_PI);
+        if (minAngle < 0) minAngle += 2 * M_PI;
+        Real maxAngle = minAngle + a;
+
+        // Do the arc endpoints. Note, the arc always meets the end lines at 90
+        // degrees, so the "averaged normal" is a 45 degree rotation of the
+        // arc's normal.
+        Real c45 = cos(M_PI / 4), s45 = sin(M_PI / 4);
+        Vector n(cos(minAngle), sin(minAngle));
+        Vector p = r * n + m_c;
+        // Rotate minangle corner's normal clockwise by 45 degrees
+        n = Vector(n[0] * c45 + n[1] * s45, -n[0] * s45 + n[1] * c45);
+        bndPts.push_back(_BoundaryPoint(p, n,
+                    .5 * (arcSegmentLen + minBorderSegmentLen)));
+        n = Vector(cos(maxAngle), sin(maxAngle));
+        p = r * n + m_c;
+        // Rotate maxangle corner's normal ccw by 45 degrees
+        n = Vector(n[0] * c45 - n[1] * s45, n[0] * s45 + n[1] * c45);
+        bndPts.push_back(_BoundaryPoint(p, n,
+                    .5 * (arcSegmentLen + maxBorderSegmentLen)));
+
+        // Do the Nminborder - 1 interior points
+        // Normal vector is a downward unit vector rotated by minAngle.
+        n = Vector(sin(minAngle), -cos(minAngle));
+        for (size_t i = 1; i < Nminborder; ++i) {
+            p = (i * minBorderSegmentLen) * Vector(-n[1], n[0]) + m_c;
+            bndPts.push_back(_BoundaryPoint(p, n, minBorderSegmentLen));
+        }
+
+        // Do the Nmaxborder interior points
+        // Normal vector is an upward unit vector rotated by maxAngle
+        n = Vector(-sin(maxAngle), cos(maxAngle));
+        for (size_t i = 1; i <= Nmaxborder; ++i) {
+            p = (i * maxBorderSegmentLen) * Vector(n[1], -n[0]) + m_c;
+            bndPts.push_back(_BoundaryPoint(p, n, maxBorderSegmentLen));
+        }
+        
+        // Do the reentrant corner point.
+        // Normal vector is midway between min and max edges.
+        Real theta = .5 * (2 * M_PI - a) + maxAngle;
+        bndPts.push_back(_BoundaryPoint(m_c, Vector(cos(theta), sin(theta)),
+                    .5 * (minBorderSegmentLen + maxBorderSegmentLen)));
+
+        return bndPts;
+    }
+
+    BBox_t boundingBox() const {
+        Real minAngle = this->getRotationRad();
+        minAngle = fmod(minAngle, 2 * M_PI);
+        if (minAngle < 0) minAngle += 2 * M_PI;
+        Real maxAngle = minAngle + getAngle();
+
+        Vector minV(cos(minAngle), sin(minAngle)), maxV;
+        maxV = minV;
+
+        Real currAngle = minAngle;
+        currAngle = (M_PI / 2) * ceil(currAngle / (M_PI / 2));
+
+        while (currAngle < maxAngle) {
+            Vector cs(cos(currAngle), sin(currAngle));
+            minV = minV.cwiseMin(cs);
+            maxV = maxV.cwiseMax(cs);
+            currAngle += M_PI / 2;
+        }
+
+        Vector cs(cos(maxAngle), sin(maxAngle));
+        minV = getRadius() * minV.cwiseMin(cs) + this->m_c;
+        maxV = getRadius() * maxV.cwiseMax(cs) + this->m_c;
+
+        std::vector<Vector> corners(4);
+        corners[0] = Vector(minV[0], minV[1]);
+        corners[1] = Vector(maxV[0], minV[1]);
+        corners[2] = Vector(maxV[0], maxV[1]);
+        corners[3] = Vector(minV[0], maxV[1]);
+
+        BBox_t b(corners[0], corners[0]);
+        for (int i = 1; i < 4; ++i)
+            b.unionBox(BBox_t(corners[i], corners[i]));
+
+        return b;
+    }
+
+    virtual CSGNode *copy() const {
+        return new CSGPieSliceNode(this->getCenter(), this->getDimensions(),
+                                  this->getRotation());
+    }
+
+    ~CSGPieSliceNode() { }
+};
+
 template<typename Functor, typename CSGNode>
 void dfsWorker(Functor &f, CSGNode *node)
 {

@@ -31,17 +31,19 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
     typedef typename _CSGTree::CSGBoolNode      CSGBoolNode;
     typedef typename _CSGTree::CSGRectangleNode CSGRectangleNode;
     typedef typename _CSGTree::CSGEllipseNode   CSGEllipseNode;
+    typedef typename _CSGTree::CSGPieSliceNode  CSGPieSliceNode;
 
     QString name = nodeData["name"].toString();
     QString type = nodeData["type"].toString();
 
-    enum {N_OP, N_RECT, N_ELLIPSE} node_type;
+    enum {N_OP, N_RECT, N_ELLIPSE, N_PIESLICE} node_type;
     CSGOperation op;
     if (type == "intersect")      { node_type = N_OP; op = INTERSECT; }
     else if (type == "union")     { node_type = N_OP; op = UNION; }
     else if (type == "subtract")  { node_type = N_OP; op = SUBTRACT; }
     else if (type == "rectangle") { node_type = N_RECT; }
     else if (type == "ellipse")   { node_type = N_ELLIPSE; }
+    else if (type == "pieslice")  { node_type = N_PIESLICE; }
     else {
         throw std::runtime_error(std::string("Illegal CSG node type: ") +
                                  type.toStdString());
@@ -67,7 +69,8 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
 
         node = new CSGBoolNode(op, left, right);
     }
-    else if ((node_type == N_RECT) || (node_type == N_ELLIPSE)) {
+    else if ((node_type == N_RECT) || (node_type == N_ELLIPSE) ||
+             (node_type == N_PIESLICE)) {
         Vector center, dimensions;
         bool ok;
         int nComponentsRead = 0;
@@ -101,6 +104,8 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
             node = new CSGRectangleNode(center, dimensions, rot);
         else if (node_type == N_ELLIPSE)
             node = new CSGEllipseNode(center, dimensions, rot);
+        else if (node_type == N_PIESLICE)
+            node = new CSGPieSliceNode(center, dimensions, rot);
         else
             assert(false);
     }
@@ -151,6 +156,7 @@ void writeNode(QTextStream &os, int indentLevel,
         case CSG_NODE_SUBTRACT:  type = "subtract";  isPrim = false; break;
         case CSG_NODE_RECT:      type = "rectangle"; isPrim = true; break;
         case CSG_NODE_ELLIPSE:   type = "ellipse";   isPrim = true; break;
+        case CSG_NODE_PIE_SLICE: type = "pieslice";  isPrim = true; break;
         default: assert(false);
     }
 

@@ -1,5 +1,7 @@
 Implement:
   - Non-bluring point force version.
+  - Make pressure viewing configure the simulation
+  - Prepend highest weakness to region name so they sort better...
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid
   - Parameter sweeps (maybe)
@@ -7,11 +9,35 @@ Implement:
     MSH writer (multiple MSH needed for model changes).
 
 For presentation:
+    Review weakness analysis.
+    Review structure optimization texts/problem formulation
+    Motivation: don't mesh
+        - meshing problem is hard, at the very least time consuimg
+        - Results are mesh-dependent, we want a way to control this.
+
+    Go over derivation of my meshfree FEM
+    Visualize bilinear basis functions, boundary force blur functions.
+    Quadrature (exact for full elements)
+        - Display quadrature points for a cut cell.
+
     Show convergence of stress for convex objects under isometric transformation (ideally)
     Show problem around reentrant corner (box with upper right corner cut out)
-    Visualize signed distance function
+    Also implement a circular arc?
     Visualized blurred object
     Show behavior of blurred object.
+
+    Problems:
+        Combined weakness is a discontinuous function of parameters
+            (show object moving relative to quadrature points.)
+        Computation noise caused by singularities.
+
+    Work-arounds:
+        Visualize signed distance function
+        Visualize "blurred" object
+        ==> now weakness *should* be a continuous function of the parameters
+            + ideally we can make it differentiable
+
+        Try averaging over a fixed area (see if this converges)
 
 Investigate R-functions for continuous signed distance function
 

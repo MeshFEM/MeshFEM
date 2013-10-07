@@ -44,6 +44,9 @@ typedef struct _CSGPrimitiveData {
             cl_float2 focus;
             float double_majorRadius;
         } ellipse;
+        struct {
+            float radius, angle, rotation;
+        } pieslice;
     };
 } CSGPrimitiveData;
 
@@ -305,6 +308,18 @@ struct CSGTreeFlattener {
             p.ellipse.focus.s[0]            = focus[0];
             p.ellipse.focus.s[1]            = focus[1];
             p.ellipse.double_majorRadius = 2.0 * e->getMajorRadius();
+        }
+
+        else if (type == CSG_NODE_PIE_SLICE) {
+            assert(numPrimitives < MAX_PRIMITIVES);
+            CSGPrimitiveData &p = primitiveData[numPrimitives++];
+            CSGPieSliceNode *pn = dynamic_cast<CSGPieSliceNode *>(node);
+            assert(pn);
+            p.center.s[0]       = pn->getCenter()[0];
+            p.center.s[1]       = pn->getCenter()[1];
+            p.pieslice.radius   = pn->getRadius();
+            p.pieslice.angle    = pn->getAngle();
+            p.pieslice.rotation = pn->getRotationRad();
         }
     }
 

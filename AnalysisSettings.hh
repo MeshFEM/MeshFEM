@@ -49,7 +49,7 @@ public:
         m_values["quadraturePoints"] = Variant((int) 81);
         m_values["cellOverlapThreshold"] = Variant((double) 0.15);
 
-        m_values["useMSBoundary"] = Variant((bool) true);
+        m_values["useMSBoundary"] = Variant((bool) false);
         m_values["blurPointForces"] = Variant((bool) true);
         m_values["boundarySpacing"] = Variant((double) .15);
         m_values["kernelRadius"] = Variant((double) 1.0);

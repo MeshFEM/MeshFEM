@@ -1,13 +1,15 @@
 #define MAX_STACK       32
 #define MAX_NODES       128
 #define MAX_PRIMITIVES  64
+#define PI 3.14159265358979323842624339f
 
 ////////////////////////////////////////////////////////////////////////////////
 // CSG Tree Types
 // Note: These must match the C++ side!
 ////////////////////////////////////////////////////////////////////////////////
-typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_INTERSECT = 2,
-               CSG_NODE_UNION = 3, CSG_NODE_SUBTRACT = 4 } CSGNodeType;
+typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_PIE_SLICE = 2,
+               CSG_NODE_INTERSECT = 3, CSG_NODE_UNION = 4,
+               CSG_NODE_SUBTRACT = 5 } CSGNodeType;
 typedef struct _CSGPrimitiveData {
     float2 center;
     union {
@@ -19,6 +21,9 @@ typedef struct _CSGPrimitiveData {
             float2 focus;
             float  double_majorRadius;
         } ellipse;
+        struct {
+            float radius, angle, rotation;
+        } pieslice;
     };
 } CSGPrimitiveData;
 
@@ -82,6 +87,18 @@ __kernel void RenderCSG(write_only image2d_t img, const int w, const int h,
                     ++stackHead;
                     ++pOffset;
                     break;
+                }
+                case CSG_NODE_PIE_SLICE:
+                {
+                    CSGPrimitiveData prim = lpdata[pOffset];
+                    float2 pLocal = p - prim.center;
+                    float ptheta = atan2(pLocal[1], pLocal[0]);
+                    float diff = fmod(ptheta - prim.pieslice.rotation, 2 * PI);
+                    if (diff < 0) diff += 2 * PI;
+                    computeStack[stackHead] = ((diff < prim.pieslice.angle) &&
+                            (length(pLocal) < prim.pieslice.radius));
+                    ++stackHead;
+                    ++pOffset;
                 }
                 case CSG_NODE_UNION:
                     computeStack[stackHead - 2] = computeStack[stackHead - 2] ||
