@@ -146,7 +146,7 @@
         \item That derivation was for general basis functions.
  \pause \item My 2D implementation uses bilinear quad elements. \\
               These have a quadratic basis function at each corner:
-              $$
+ \pause       $$
                   \phi_0 = (1 - x)(1 - y) \quad \phi_1 = x(1 - y) \quad \phi_2 = xy \quad \phi_3 = (1 - x)y
               $$
 
@@ -165,8 +165,8 @@
             \end{align*}
 
     \begin{itemize}
-        \item The stiffness matrix integral can be broken down into per-element integrals:
-            \begin{align*}
+\pause  \item The stiffness matrix integral can be broken down into per-element integrals:
+\pause      \begin{align*}
                 K = \int_{\Omega} \! B^T D B \, \mathrm{d}x =
                 \sum_e \int_{\Omega \cap e} \! B_e^T D B_e \, \mathrm{d}x := \sum_e K_e
             \end{align*}
@@ -182,7 +182,7 @@
             \begin{figure}
                 \includegraphics[width=.4\textwidth]{images/cut_cell.png}
             \end{figure}
-        \item Here we compute the integral
+ \pause \item Here we compute the integral
             $$
             \int_{\Omega \cap e} \! B_e^T D B_e \, \mathrm{d}x = 
             \int_{e} \! I_\Omega B_e^T D B_e \, \mathrm{d}x
@@ -280,7 +280,7 @@
         \includegraphics[width=.5\textwidth]{images/top_opt.png}
         \source{Wikipedia}
     \end{figure}
-    \item But, we can use our CSG representation to combine sizing/shape/topology optimization
+    \pause \item But, we can use our CSG representation to combine sizing/shape/topology optimization
     \end{itemize}
 \end{frame}
 
@@ -312,7 +312,7 @@
             \includegraphics[width=.35\textwidth]{images/discontinuity1.png} \quad
             \includegraphics[width=.35\textwidth]{images/discontinuity2.png}
         \end{figure}
-        (simulation geometry only changes when different quadrature points are covered)
+        (``Perceived'' geometry only changes when different quadrature points are covered)
     \end{itemize}
 \end{frame}
 
@@ -325,10 +325,10 @@
          \caption{At a ``re-entrant'' (concave) corner, stress is infinite.}
          \source{concreteconstruction.net}
      \end{figure}
-    \item As the grid refines around these areas, stress diverges.
-    \item Small changes in how corners overlap the grid can vary cell stress
+\pause \item As the grid refines around these areas, stress diverges.
+\pause \item Small changes in how corners overlap the grid can vary cell stress
           averages dramatically $\Rightarrow$ amplifies discontinuity in W.
-    \item Note: boundary-conforming (e.g. tet) meshes don't have this problem
+\pause \item Note: boundary-conforming (e.g. tet) meshes don't have this problem
         since the corner isn't interior.
     \end{itemize}
 \end{frame}
