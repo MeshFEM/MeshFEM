@@ -13,7 +13,9 @@ For presentation:
     Review structure optimization texts/problem formulation
     Motivation: don't mesh
         - meshing problem is hard, at the very least time consuimg
-        - Results are mesh-dependent, we want a way to control this.
+        - It turns out results mesh-dependent, so meshing the same object in
+          different ways gives very different results. We need to study this
+          carefully.
 
     Go over derivation of my meshfree FEM
     Visualize bilinear basis functions, boundary force blur functions.

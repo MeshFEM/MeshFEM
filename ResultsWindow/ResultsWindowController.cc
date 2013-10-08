@@ -25,6 +25,7 @@
 #include <QBasicTimer>
 #include <QTimerEvent>
 
+#include "utils.hh"
 #include "ResultsWindowController.hh"
 #include "MeshlessFEM.hh"
 #include "ResultsCollector.hh"
@@ -510,8 +511,7 @@ void ResultsWindowController::runSearch()
     try {
         regex pattern(searchPattern.toStdString());
 
-        FilterListWidgetItem *firstItem = nullptr;
-
+        map<string, FilterListWidgetItem *, NaturalLess> searchResults;
         for (auto &pathItemPair : m_pathToItem) {
             ResultTreeWidgetItem *ri =
                 dynamic_cast<ResultTreeWidgetItem *>(pathItemPair.second);
@@ -521,15 +521,23 @@ void ResultsWindowController::runSearch()
                     FilterListWidgetItem *item =
                         new FilterListWidgetItem(path.c_str(), ri);
                     item->setCheckState(ri->checkState(0));
-                    m_window.g_filterView->addItem(item);
-
-                    if (firstItem == nullptr) firstItem = item;
+                    searchResults[path] = item;
                 }
             }
         }
 
-        if (firstItem) firstItem->setSelected(true);
-        m_window.g_filterView->setFocus();
+        
+        FilterListWidgetItem *firstItem = nullptr;
+        for (const auto &pair : searchResults) {
+            m_window.g_filterView->addItem(pair.second);
+            if (firstItem == nullptr) firstItem = pair.second;
+        }
+        
+
+        if (firstItem) {
+            firstItem->setSelected(true);
+            m_window.g_filterView->setFocus();
+        }
     }
     catch (regex_error &e) {
         string errorString("Parsing regex failed. ");
