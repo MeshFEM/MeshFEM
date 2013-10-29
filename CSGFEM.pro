@@ -3,6 +3,7 @@
 ######################################################################
 
 TEMPLATE = app
+LANGUAGE = C++
 # TARGET = 
 DEPENDPATH += .
 INCLUDEPATH += /Library/gurobi550/mac64/include/
@@ -19,15 +20,16 @@ LIBS += -framework OpenCL
 QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
 
 QT += opengl
-CONFIG += release
+CONFIG += release precompile_header
+PRECOMPILED_HEADER = precompile.hh
 # CONFIG += debug
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.7
 
 # clang++ version
-QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++
+QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++ -Winvalid-pch
 QMAKE_CXXFLAGS += -isystem /opt/local/include/QtGui/ -isystem /opt/local/include/eigen3/
-QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
+# QMAKE_CFLAGS +=   -DOS_OBJECT_USE_OBJC=0 -std=c99
 LIBS += -stdlib=libc++
 
 # # g++ version:
