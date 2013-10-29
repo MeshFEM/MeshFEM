@@ -55,10 +55,10 @@ void QMatlabInterface::appendNotification(const char *note, bool error)
     QString noteStr = Qt::escape(QString(note));
     if (error)
         noteStr.sprintf("<b><font color='red'>%s</font></b><br>",
-                        (const char *)noteStr.toAscii());
+                        (const char *)noteStr.toLatin1());
     else
         noteStr.sprintf("<b>%s</b><br>",
-                        (const char *)noteStr.toAscii());
+                        (const char *)noteStr.toLatin1());
 
     QTextCursor cursor = g_outputView->textCursor();
     cursor.movePosition(QTextCursor::End);
@@ -74,7 +74,7 @@ void QMatlabInterface::commandEntered(QString cmd)
         cmd.replace(exitFinder, "");
     }
 
-    Eval(cmd.toAscii());
+    Eval(cmd.toLatin1());
 
     if (hasExit) {
         appendNotification("WARNING: exit command disabled", true);

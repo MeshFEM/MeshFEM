@@ -41,7 +41,7 @@ public:
                 note.sprintf("Added variable '%s'", name);
             else
                 note.sprintf("ERROR: failed to add variable '%s'", name);
-            appendNotification(note.toAscii(), !success);
+            appendNotification(note.toLatin1(), !success);
         }
 
         return success;
@@ -54,7 +54,7 @@ public:
         if (m_echo) {
             QString note;
             note.sprintf(">> %s\n", command);
-            appendNotification(note.toAscii(), false);
+            appendNotification(note.toLatin1(), false);
             appendText(output_str.c_str());
             if (ret) {
                 appendNotification(error_str.c_str(), true);

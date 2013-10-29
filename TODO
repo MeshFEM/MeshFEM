@@ -8,31 +8,6 @@ Implement:
 
     MSH writer (multiple MSH needed for model changes).
 
-For presentation:
-    Review weakness analysis.
-    Review structure optimization texts/problem formulation
-    Motivation: don't mesh
-        - meshing problem is hard, at the very least time consuimg
-        - It turns out results mesh-dependent, so meshing the same object in
-          different ways gives very different results. We need to study this
-          carefully.
-
-    Go over derivation of my meshfree FEM
-    Visualize bilinear basis functions, boundary force blur functions.
-    Quadrature (exact for full elements)
-        - Display quadrature points for a cut cell.
-
-    Show convergence of stress for convex objects under isometric transformation (ideally)
-    Show problem around reentrant corner (box with upper right corner cut out)
-    Also implement a circular arc?
-    Visualized blurred object
-    Show behavior of blurred object.
-
-    Problems:
-        Combined weakness is a discontinuous function of parameters
-            (show object moving relative to quadrature points.)
-        Computation noise caused by singularities.
-
     Work-arounds:
         Visualize signed distance function
         Visualize "blurred" object
@@ -41,7 +16,9 @@ For presentation:
 
         Try averaging over a fixed area (see if this converges)
 
-Investigate R-functions for continuous signed distance function
+- Investigate R-functions for continuous signed distance function
+- Compare compliance, von mises stress, and max stress fields (what should we be
+  using as a criterion?
 
 Debug drastically different combined weakness:
     (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$

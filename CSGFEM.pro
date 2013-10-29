@@ -3,7 +3,7 @@
 ######################################################################
 
 TEMPLATE = app
-TARGET = 
+# TARGET = 
 DEPENDPATH += .
 INCLUDEPATH += /Library/gurobi550/mac64/include/
 INCLUDEPATH += . /opt/local/include/eigen3 /opt/local/include/qjson

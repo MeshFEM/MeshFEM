@@ -10,7 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "CSGWindow.hh"
 #include "FEMView.hh"
-#include <QtGui>
+#include <QSplitter>
+#include <QTreeView>
+#include <QVBoxLayout>
+#include <QScrollArea>
+#include <QMenu>
+#include <QMenuBar>
+
 #include <memory>
 
 #include "CSGWindowController.hh"

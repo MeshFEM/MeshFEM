@@ -4,6 +4,10 @@
 /*! @file
 //      Implements writing/reading .csg files. These are JSON files describing
 //      a CSG tree.
+//      Uses Boost property trees to parse but not to write! Boost's property
+//      trees are untyped (all values are converted to strings) and have a hacky
+//      implementation of arrays (anonymous nodes). This is okay for reading,
+//      but it would produce garbage output.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -14,17 +18,40 @@
 
 #include "GlobalTypes.hh"
 #include "CSGTree.hh"
-#include <qjson/parser.h>
-#include <QFile>
-#include <QString>
-#include <QTextStream>
-#include <QVariantMap>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/foreach.hpp>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
+#include <string>
 #include <cassert>
 
+using boost::property_tree::ptree;
+
 template<typename Vector>
-typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
+void parseVector(const ptree &pt, Vector &v)
+{
+    int nComponentsRead = 0;
+    BOOST_FOREACH(const ptree::value_type &val, pt) {
+        if (!val.first.empty()) {
+            nComponentsRead = -1; break;
+        }
+        try {
+            if (nComponentsRead < v.size())
+                v[nComponentsRead] = val.second.get_value<double>();
+            ++nComponentsRead;
+        }
+        catch (...) { nComponentsRead = -1; break; }
+    }
+
+    if (nComponentsRead != v.size()) {
+        throw std::runtime_error(std::string("Error parsing vector"));
+    }
+}
+
+template<typename Vector>
+typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
 {
     typedef           CSGTree<Vector>           _CSGTree;
     typedef typename _CSGTree::CSGNode          CSGNode;
@@ -33,8 +60,8 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
     typedef typename _CSGTree::CSGEllipseNode   CSGEllipseNode;
     typedef typename _CSGTree::CSGPieSliceNode  CSGPieSliceNode;
 
-    QString name = nodeData["name"].toString();
-    QString type = nodeData["type"].toString();
+    std::string name = pt.get<std::string>("name");
+    std::string type = pt.get<std::string>("type");
 
     enum {N_OP, N_RECT, N_ELLIPSE, N_PIESLICE} node_type;
     CSGOperation op;
@@ -45,20 +72,24 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
     else if (type == "ellipse")   { node_type = N_ELLIPSE; }
     else if (type == "pieslice")  { node_type = N_PIESLICE; }
     else {
-        throw std::runtime_error(std::string("Illegal CSG node type: ") +
-                                 type.toStdString());
+        throw std::runtime_error(std::string("Illegal CSG node type: ") + type);
     }
 
     CSGNode *node;
     if (node_type == N_OP) {
-        QVariantMap lSubtree = nodeData["left"].toMap();
-        QVariantMap rSubtree = nodeData["right"].toMap();
-        if (lSubtree.empty() || rSubtree.empty())
-            throw std::runtime_error(std::string("Missing left or right subtree."));
-        CSGNode *left, *right;
-        left = parseNode<Vector>(lSubtree);
+        ptree ltree, rtree;
         try {
-            right = parseNode<Vector>(rSubtree);
+            ltree = pt.get_child("left");
+            rtree = pt.get_child("right");
+        }
+        catch (boost::property_tree::ptree_bad_path &e) {
+            throw std::runtime_error(std::string("Missing left or right subtree"));
+        }
+
+        CSGNode *left, *right;
+        left = parseNode<Vector>(ltree);
+        try {
+            right = parseNode<Vector>(rtree);
         }
         catch (...) {
             // Destroy completed left subtree if there was an error parsing the
@@ -72,33 +103,12 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
     else if ((node_type == N_RECT) || (node_type == N_ELLIPSE) ||
              (node_type == N_PIESLICE)) {
         Vector center, dimensions;
-        bool ok;
-        int nComponentsRead = 0;
-        foreach (QVariant coordinate, nodeData["center"].toList()) {
-            if (nComponentsRead < 2) {
-                center[nComponentsRead] = coordinate.toDouble(&ok);
-                if (!ok) { break; }
-            }
-            ++nComponentsRead;
-        }
-        if ((!ok) || (nComponentsRead != 2)) {
-            throw std::runtime_error(std::string("Error parsing center."));
-        }
-        nComponentsRead = 0;
-        foreach (QVariant coordinate, nodeData["dimensions"].toList()) {
-            if (nComponentsRead < 2) {
-                dimensions[nComponentsRead] = coordinate.toDouble(&ok);
-                if (!ok) { break; }
-            }
-            ++nComponentsRead;
-        }
-        if ((!ok) || (nComponentsRead != 2)) {
-            throw std::runtime_error(std::string("Error parsing dimensions."));
-        }
+        parseVector(pt.get_child("center"), center);
+        parseVector(pt.get_child("dimensions"), dimensions);
 
-        double rot = nodeData["rotation"].toDouble(&ok);
-        if (!ok)
-            throw std::runtime_error(std::string("Error parsing rotation."));
+        double rot;
+        try { rot = pt.get<double>("rotation"); }
+        catch (...) { throw std::runtime_error("Error parsing rotation."); }
         
         if (node_type == N_RECT)
             node = new CSGRectangleNode(center, dimensions, rot);
@@ -113,33 +123,22 @@ typename CSGTree<Vector>::CSGNode *parseNode(const QVariantMap &nodeData)
         assert(false);
     }
 
-    node->setName(name.toStdString());
+    node->setName(name);
     return node;
 }
 
 template<typename Vector>
 void parseCSGFile(const char *path, CSGTree<Vector> &csgTree)
 {
-    QFile file(path);
-    bool success = file.open(QIODevice::ReadOnly | QIODevice::Text);
-    if (!success)
-        throw std::runtime_error("Couldn't open file.");
+    boost::property_tree::ptree pt;
+    read_json(path, pt);
 
-    QTextStream in(&file);
-    QString jsonContent = in.readAll();
-    QJson::Parser parser;
-    bool ok;
-    QVariantMap result = parser.parse(jsonContent.toUtf8(),
-                                      &ok).toMap();
-    if (!ok)
-        throw std::runtime_error("JSON parser failed.");
-    
-    typename CSGTree<Vector>::CSGNode *node = parseNode<Vector>(result);
+    typename CSGTree<Vector>::CSGNode *node = parseNode<Vector>(pt);
     csgTree.setRoot(node);
 }
 
 template<typename Vector>
-void writeNode(QTextStream &os, int indentLevel,
+void writeNode(std::ofstream &os, int indentLevel,
                const typename CSGTree<Vector>::CSGNode *node)
 {
     typedef           CSGTree<Vector>           _CSGTree;
@@ -147,7 +146,7 @@ void writeNode(QTextStream &os, int indentLevel,
     typedef typename _CSGTree::CSGBoolNode      CSGBoolNode;
     typedef typename _CSGTree::CSGPrimitive     CSGPrimitive;
 
-    QString indent(4 * indentLevel, ' ');
+    std::string indent(4 * indentLevel, ' ');
     const char *type;
     bool isPrim;
     switch (node->nodeType()) {
@@ -160,49 +159,46 @@ void writeNode(QTextStream &os, int indentLevel,
         default: assert(false);
     }
 
-    os << indent << "\"name\": \"" << node->name().c_str() << "\"," << endl;
-    os << indent << "\"type\": \""  << type << "\"," << endl;
+    os << indent << "\"name\": \"" << node->name() << "\"," << std::endl;
+    os << indent << "\"type\": \""  << type << "\"," << std::endl;
 
     if (isPrim) {
         const CSGPrimitive *pNode = dynamic_cast<const CSGPrimitive *>(node);
         assert(pNode != NULL);
         Vector v = pNode->getCenter();
         os << indent << "\"center\": ["  << v[0] << ", " << v[1] << "],"
-           << endl;
+           << std::endl;
         v = pNode->getDimensions();
         os << indent << "\"dimensions\": ["  << v[0] << ", " << v[1] << "],"
-           << endl;
-        os << indent << "\"rotation\": " << pNode->getRotation() << endl;
+           << std::endl;
+        os << indent << "\"rotation\": " << pNode->getRotation() << std::endl;
     }
     else {
         const CSGBoolNode *bNode = dynamic_cast<const CSGBoolNode *>(node);
         assert(bNode != NULL);
-        os << indent << "\"left\": {" << endl;
+        os << indent << "\"left\": {" << std::endl;
         writeNode<Vector>(os, indentLevel + 1, bNode->child(0));
-        os << indent << "}," << endl;
-        os << indent << "\"right\": {" << endl;
+        os << indent << "}," << std::endl;
+        os << indent << "\"right\": {" << std::endl;
         writeNode<Vector>(os, indentLevel + 1, bNode->child(1));
-        os << indent << "}" << endl;
+        os << indent << "}" << std::endl;
     }
 }
 
 template<typename Vector>
 void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
 {
-    QFile file(path);
-    bool success = file.open(QIODevice::WriteOnly | QIODevice::Text);
-    if (!success)
+    std::ofstream file(path);
+    if (!file.is_open())
         throw std::runtime_error("Couldn't open csg output file.");
 
-    QTextStream os(&file);
-
-    os << '{' << endl;
+    os << '{' << std::endl;
     
     if (csgTree.numRoots() > 0) {
         writeNode<Vector>(os, 1, csgTree.root(0));
     }
 
-    os << '}' << endl;
+    os << '}' << std::endl;
 
 }
 

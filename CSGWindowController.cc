@@ -115,11 +115,11 @@ void CSGWindowController::saveBoundaryPolygon()
     QString fileName = QFileDialog::getSaveFileName(0,
             "Save Boundary Polygon (.poly)", QString(), "Text files (*.poly)");
     if (fileName.length() > 0) {
-        ofstream polygonOut(fileName.toAscii());
+        ofstream polygonOut(fileName.toLatin1());
         if (!polygonOut.is_open()) {
             QString errorMsg;
             errorMsg.sprintf("Error: couldn't open file '%s' for writing.",
-                             (const char *) fileName.toAscii());
+                             (const char *) fileName.toLatin1());
 
             QMessageBox mbox(QMessageBox::Critical,
                     "Save Boundary Polygon Failed",
@@ -141,7 +141,7 @@ void CSGWindowController::saveCSG()
             "Text files (*.csg)");
     if (fileName.length() > 0) {
         try {
-            writeCSGFile(fileName.toAscii(), *m_csgTree);
+            writeCSGFile(fileName.toLatin1(), *m_csgTree);
         }
         catch (std::exception &e)
         {
@@ -164,7 +164,7 @@ void CSGWindowController::loadCSG()
         m_csgTreeModel->csgTreeAboutToUpdate();
 
         try {
-            parseCSGFile(fileName.toAscii(), *m_csgTree);
+            parseCSGFile(fileName.toLatin1(), *m_csgTree);
             QFileInfo fi(fileName);
             string modelName = fi.completeBaseName().toStdString();
             if (m_modelName != modelName) {
@@ -423,7 +423,7 @@ void CSGWindowController::runWeaknessAnalysis()
 //             QString(), "Text files (*.msh)");
 //     if (fileName.length() > 0) {
 //         typedef MSHWriter<MeshlessFEM_t::ElementGrid> MSHWriter_t;
-//         MSHWriter_t mshOut(fileName.toAscii(), m_fem.elementGrid());
+//         MSHWriter_t mshOut(fileName.toLatin1(), m_fem.elementGrid());
 //         if (mshOut) {
 //             VectorField<double, 3> modal3Vector(m_fem.elementGrid().numNodes());
 //             modal3Vector.clear();
@@ -587,7 +587,7 @@ runForceTranslationTest(const AnalysisSettings &settings)
         m_modelName = boost::str(formatter % baseName % settings.Real("xTranslation") %
                                  settings.Real("yTranslation"));
 
-        // bool success = m_fem.simulate(simPath.toAscii());
+        // bool success = m_fem.simulate(simPath.toLatin1());
         prepareResultsCollector();
         bool success = m_fem.simulate(&m_results);
         assert(success);
@@ -608,7 +608,7 @@ runForceTranslationTest(const AnalysisSettings &settings)
                 m_modelName = boost::str(formatter % baseName % offset[0] %
                                          offset[1]);
 
-                // bool success = m_fem.simulate(simPath.toAscii());
+                // bool success = m_fem.simulate(simPath.toLatin1());
                 prepareResultsCollector();
                 bool success = m_fem.simulate(&m_results);
 
@@ -638,7 +638,7 @@ runFunctionRadiusTest(const AnalysisSettings &settings)
         QString simPath;
         simPath.sprintf("sim_radius_%f.msh", rScale);
 
-        // bool success = m_fem.simulate(simPath.toAscii());
+        // bool success = m_fem.simulate(simPath.toLatin1());
         prepareResultsCollector();
         bool success = m_fem.simulate(&m_results);
         assert(success);
@@ -673,7 +673,7 @@ runRefinementTest()
         m_settingsName = boost::str(formatter % oldSettingsName % scale);
 
         prepareResultsCollector();
-        // bool success = m_fem.simulate(simPath.toAscii());
+        // bool success = m_fem.simulate(simPath.toLatin1());
         bool success = m_fem.simulate(&m_results);
         assert(success);
     }

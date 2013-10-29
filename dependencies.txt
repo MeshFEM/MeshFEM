@@ -1,6 +1,5 @@
 Matlab Engine
 Qt
-qjson
 opencl
 opengl
 FTGL
