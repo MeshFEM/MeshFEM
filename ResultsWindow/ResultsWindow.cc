@@ -12,7 +12,6 @@
 #include "ResultTreeView.hh"
 #include "ResultsWindowController.hh"
 
-#include <QtGui>
 #include <QPushButton>
 #include <QCheckBox>
 #include <QHeaderView>

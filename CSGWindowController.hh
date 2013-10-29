@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef CSGWINDOW_CONTROLLER_HH
 #define CSGWINDOW_CONTROLLER_HH
-#include <QtGui>
 #include <string>
 #include "CSGWindow.hh"
 #include "CSGTreeModel.hh"
@@ -19,6 +18,9 @@
 #include "FEMView.hh"
 #include "MeshlessFEM.hh"
 #include "AnalysisSettings.hh"
+
+#include <QObject>
+#include <QItemSelection>
 
 class QTreeView;
 class QString;

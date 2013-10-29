@@ -8,7 +8,7 @@
 //  Company:  New York University
 //  Created:  01/29/2013 16:17:36
 ////////////////////////////////////////////////////////////////////////////////
-#include <QtGui>
+#include <QModelIndex>
 #include "CSGTreeModel.hh"
 #include <cassert>
 #include <iostream>

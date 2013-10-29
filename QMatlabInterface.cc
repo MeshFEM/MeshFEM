@@ -12,7 +12,8 @@
 
 #include <cstring>
 #include <cstdio>
-#include <QtGui>
+#include <QTextEdit>
+#include <QVBoxLayout>
 
 QMatlabInterface::QMatlabInterface(QWidget *parent)
     : QWidget(parent), MatlabInterface(), m_echo(true)
@@ -52,7 +53,11 @@ void QMatlabInterface::appendText(const char *text)
 
 void QMatlabInterface::appendNotification(const char *note, bool error)
 {
+#if QT_VERSION >= 0x050000
+    QString noteStr = QString(note).toHtmlEscaped();
+#else
     QString noteStr = Qt::escape(QString(note));
+#endif
     if (error)
         noteStr.sprintf("<b><font color='red'>%s</font></b><br>",
                         (const char *)noteStr.toLatin1());

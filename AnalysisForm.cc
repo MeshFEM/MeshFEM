@@ -9,11 +9,15 @@
 //  Created:  02/02/2013 00:47:54
 ////////////////////////////////////////////////////////////////////////////////
 #include "AnalysisForm.hh"
-#include <QtGui>
 #include "QuadraturePointsSpinBox.hh"
 #include "CSGWindowController.hh"
 #include "SolverLibrary.hh"
 #include <iostream>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QPushButton>
+#include <QGroupBox>
+#include <QFormLayout>
 
 using namespace std;
 

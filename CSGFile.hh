@@ -188,8 +188,8 @@ void writeNode(std::ofstream &os, int indentLevel,
 template<typename Vector>
 void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
 {
-    std::ofstream file(path);
-    if (!file.is_open())
+    std::ofstream os(path);
+    if (!os.is_open())
         throw std::runtime_error("Couldn't open csg output file.");
 
     os << '{' << std::endl;

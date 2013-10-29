@@ -20,8 +20,10 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits>
-#include <QtGui>
 #include <QMessageBox>
+#include <QTreeview>
+#include <QFileDialog>
+
 
 using namespace std;
 

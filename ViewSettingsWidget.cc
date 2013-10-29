@@ -1,4 +1,9 @@
-#include <QtGui>
+#include <QFormLayout>
+#include <QCheckBox>
+#include <QSlider>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QLabel>
 
 #include "ViewSettingsWidget.hh"
 #include "ViewSettings.hh"

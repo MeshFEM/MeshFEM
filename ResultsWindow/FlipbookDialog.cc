@@ -10,9 +10,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "FlipbookDialog.hh"
 #include "AnalysisSettings.hh"
-#include <QtGui>
 #include <vector>
 #include <string>
+#include <QVBoxLayout>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QGroupBox>
+#include <QDialogButtonBox>
 
 using namespace std;
 

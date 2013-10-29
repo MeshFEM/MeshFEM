@@ -12,7 +12,6 @@
 //      01/28/2013  Julian Panetta    Initial Revision
 ////////////////////////////////////////////////////////////////////////////////
 #include "FEMView.hh"
-#include <QtGui>
 #include <QGLWidget>
 #include <QColor>
 #include <cassert>

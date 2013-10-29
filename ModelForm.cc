@@ -12,6 +12,7 @@
 
 #include <QTreeView>
 #include <QPushButton>
+#include <QVBoxLayout>
 #include "CSGWindowController.hh"
 #include "CSGTreeModel.hh"
 
