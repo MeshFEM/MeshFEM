@@ -11,6 +11,7 @@
 #ifndef QCOMMAND_LINE_HH
 #define QCOMMAND_LINE_HH
 
+#include <QObject>
 #include <QLineEdit>
 #include <QKeyEvent>
 

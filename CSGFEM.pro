@@ -39,7 +39,7 @@ LIBS += -stdlib=libc++
 # QMAKE_CXXFLAGS += -D_D_GLIBCXX_DEBUG
 
 # Input
-HEADERS += CSGTree.hh CSGTree.inl CSGTreeModel.hh \
+HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            FEMView.hh Flipbook.hh CSGWindow.hh \
            GlobalTypes.hh \
            CSGWindowController.hh \

@@ -13,6 +13,7 @@
 #ifndef INTEGRATION_POINTS_SPIN_BOX_HH
 #define INTEGRATION_POINTS_SPIN_BOX_HH
 
+#include <QObject>
 #include <QSpinBox>
 #include <QLineEdit>
 #include <cmath>

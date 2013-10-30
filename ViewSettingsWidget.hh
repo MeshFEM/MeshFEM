@@ -10,6 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef VIEW_SETTINGS_WIDGET_HH
 #define VIEW_SETTINGS_WIDGET_HH
+
+#include <QObject>
 #include <QWidget>
 
 class QComboBox;

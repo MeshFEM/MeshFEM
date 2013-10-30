@@ -11,6 +11,7 @@
 #ifndef ANALYSIS_FORM_HH
 #define ANALYSIS_FORM_HH
 
+#include <QObject>
 #include <QWidget>
 #include <string>
 #include "AnalysisSettings.hh"

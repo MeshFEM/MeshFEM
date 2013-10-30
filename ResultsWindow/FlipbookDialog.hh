@@ -11,7 +11,9 @@
 #ifndef FLIPBOOK_DIALOG_HH
 #define FLIPBOOK_DIALOG_HH
 
+#include <QObject>
 #include <QDialog>
+
 class QWidget;
 class QLineEdit;
 class QListWidget;

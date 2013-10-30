@@ -13,6 +13,7 @@
 
 #include "MatlabInterface/MatlabInterface.h"
 #include "QCommandLine.hh"
+#include <QObject>
 #include <QWidget>
 #include <iostream>
 #include <string>

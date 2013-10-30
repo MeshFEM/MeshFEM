@@ -11,6 +11,7 @@
 #ifndef MODEL_FORM_HH
 #define MODEL_FORM_HH
 
+#include <QObject>
 #include <QWidget>
 
 class CSGWindowController;

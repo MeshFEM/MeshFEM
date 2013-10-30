@@ -1,6 +1,7 @@
 #ifndef RESULT_TREE_VIEW_HH
 #define RESULT_TREE_VIEW_HH
 
+#include <QObject>
 #include <QTreeWidget>
 #include <QKeyEvent>
 

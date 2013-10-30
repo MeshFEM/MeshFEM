@@ -11,6 +11,7 @@
 #ifndef FEMVIEW_HH
 #define FEMVIEW_HH
 
+#include <QObject>
 #include <QGLWidget>
 #include <QBasicTimer>
 #include <QTimerEvent>

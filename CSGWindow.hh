@@ -11,6 +11,7 @@
 #ifndef CSGWINDOW_HH
 #define CSGWINDOW_HH
 
+#include <QObject>
 #include <QMainWindow>
 #include "GlobalTypes.hh"
 #include "MeshlessFEM.hh"

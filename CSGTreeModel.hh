@@ -11,6 +11,7 @@
 #ifndef CSGTREE_MODEL_HH
 #define CSGTREE_MODEL_HH
 
+#include <QObject>
 #include <QAbstractItemModel>
 #include <QModelIndex>
 #include <QVariant>
