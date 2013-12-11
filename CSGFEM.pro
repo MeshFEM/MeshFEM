@@ -55,8 +55,7 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            ResultsCollector.hh ResultsWindow/ResultsWindow.hh \
            ResultsWindow/ResultsWindowController.hh \
            ResultsWindow/ResultTreeView.hh ResultsWindow/FlipbookDialog.hh \
-           cl-helper.h \
-           TestQGLWidget.hh
+           cl-helper.h
 
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
