@@ -47,8 +47,8 @@ __kernel void RenderCSG(write_only image2d_t img, const int w, const int h,
         lpdata[i] = primitiveData[i];
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    int row = get_global_id(0);
-    int col = get_global_id(1);
+    int col = get_global_id(0);
+    int row = get_global_id(1);
     if ((row < h) && (col < w)) {
         // Stack holds is inside checks for completed CSG Subtrees
         bool computeStack[MAX_STACK];

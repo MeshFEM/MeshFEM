@@ -175,20 +175,6 @@ void FEMView2D::initializeGL()
     glDisable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
     
-    glGenTextures(1, &m_modelTex);
-    glBindTexture(GL_TEXTURE_2D, m_modelTex);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-
-    glGenTextures(1, &m_overlayTex);
-    glBindTexture(GL_TEXTURE_2D, m_overlayTex);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-
     // TODO: make these paths relative to the application bundle and copy the
     // shaders in the build rules
     readShader("/Users/jpanetta/Research/CSGFEM/Shaders/BilinearShader.vert",
@@ -209,6 +195,20 @@ void FEMView2D::initializeGL()
     glUseProgram(0);
 }
 
+inline void regenTexture(GLuint &tex)
+{
+    if (glIsTexture(tex)) {
+        glDeleteTextures(1, &tex);
+    }
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void FEMView2D::resizeGL(int width, int height)
 {
     // Always keep square pixels (m_frameDim must have same aspect ratio as
@@ -221,12 +221,15 @@ void FEMView2D::resizeGL(int width, int height)
     m_height = height;
     m_width = width;
 
+    regenTexture(m_modelTex);
+    regenTexture(m_overlayTex);
+
     // Allocate empty textures
     glBindTexture(GL_TEXTURE_2D, m_modelTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_width, m_height, 0, GL_RGBA,
             GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, m_overlayTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_width, m_height, 0, GL_RGBA,
             GL_UNSIGNED_BYTE, NULL);
 
     cl_int err;
@@ -332,8 +335,8 @@ void FEMView2D::m_clClearCSGRender(cl_mem texBuf)
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
             (m_clQueue, 1, &texBuf, 0, NULL, NULL));
     size_t ldim[] = {128, 1};
-    size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
-                       (size_t) m_width};
+    size_t gdim[] = {(((size_t) m_width + ldim[0]) / ldim[0]) * ldim[0],
+                       (size_t) m_height};
     SET_3_KERNEL_ARGS(m_clearKernel, texBuf, m_width, m_height);
     CALL_CL_GUARDED(clEnqueueNDRangeKernel, (m_clQueue, m_clearKernel,
                 /* Dimensions */ 2, NULL, gdim, ldim, 0, NULL, NULL));
@@ -377,8 +380,8 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
         clEnqueueUnmapMemObject(m_clQueue, m_primHostBuf, pdata, 0, NULL, NULL);
 
         size_t ldim[] = {128, 1};
-        size_t gdim[] = {(((size_t) m_height + ldim[0]) / ldim[0]) * ldim[0],
-                           (size_t) m_width};
+        size_t gdim[] = {(((size_t) m_width + ldim[0]) / ldim[0]) * ldim[0],
+                           (size_t) m_height};
 
         float minX = m_frameCenter[0] - .5f * m_frameDim[0],
               maxX = m_frameCenter[0] + .5f * m_frameDim[0],
