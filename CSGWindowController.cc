@@ -296,7 +296,8 @@ void CSGWindowController::savePressure()
                 // Note: Python StructAys uses negative pressures, so our bp
                 // format takes this convention.
                 Scalar p = -m_fem.pressure(i);
-                bpFile << bpts[i].p[0] << "\t" << bpts[i].p[1] << p << endl;
+                bpFile << bpts[i].p[0] << '\t' << bpts[i].p[1] << '\t'
+                       << p << endl;
             }
         }
         catch (std::exception &e)

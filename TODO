@@ -1,12 +1,12 @@
 Implement:
-  - Non-bluring point force version.
+*** MSH writer (multiple MSH needed for model changes).
+*** Non-bluring point force version.
+
   - Make pressure viewing configure the simulation
   - Prepend highest weakness to region name so they sort better...
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid
   - Parameter sweeps (maybe)
-
-    MSH writer (multiple MSH needed for model changes).
 
     Work-arounds:
         Visualize signed distance function
@@ -16,13 +16,8 @@ Implement:
 
         Try averaging over a fixed area (see if this converges)
 
-- Investigate R-functions for continuous signed distance function
 - Compare compliance, von mises stress, and max stress fields (what should we be
   using as a criterion?
-
-Debug drastically different combined weakness:
-    (0.000000, 0.012000|0.004375, 0.000000)\):Default x 4:.*Region [0-9]*$
-
 
 Observations:
     Every element in a (stiffness) weak region should have roughly the same max
