@@ -130,7 +130,7 @@ void CSGWindowController::saveBoundaryPolygon()
             mbox.exec();
         }
         else {
-            polygonOut << polygons[0];
+            polygonOut << polygons;
         }
     }
 }

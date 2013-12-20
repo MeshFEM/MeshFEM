@@ -113,7 +113,14 @@ struct Polygon {
     void addPoint(const Vector &p) {
         points.push_back(p);
     }
-    
+
+    const Vector &operator[](size_t i) const
+    {
+        return points[i];
+    }
+
+    size_t size() const { return points.size(); }
+
     std::vector<Vector> points;
 };
 
@@ -134,6 +141,48 @@ std::ostream &operator<<(std::ostream &os, const Polygon<Vector> &p)
         os << i << " " << i << " " << (i + 1) % p.points.size() << std::endl;
     }
     // # of holes
+    os << 0 << std::endl;
+
+    return os;
+}
+
+// Output a polygon soup in the .poly format.
+// Note: this is missing the holes information.
+template<typename Vector>
+std::ostream &operator<<(std::ostream &os,
+                         const std::vector<Polygon<Vector> > &ps)
+{
+    size_t numPolys = ps.size(), numPoints = 0;
+    for (size_t i = 0; i < numPolys; ++i)
+        numPoints += ps[i].size();
+
+    // # Vertices   dimension   # of attributes     # of boundary markers
+    os << numPoints << " 2 0 0" << std::endl;
+
+    // Vertex number, x, y
+    size_t idx = 0;
+    for (size_t p = 0; p < numPolys; ++p) {
+        const Polygon<Vector> &poly = ps[p];
+        for (size_t i = 0; i < poly.size(); ++i) {
+            os << idx++ << " " << poly[i][0] << " " << poly[i][1] << std::endl;
+        }
+    }
+
+    // # of segments    # of boundary markers
+    os << numPoints << " 0" << std::endl;
+    // Segment number, endpoint, endpoint
+    size_t polyStart = 0;
+    for (size_t p = 0; p < numPolys; ++p) {
+        size_t polySize = ps[p].size();
+        for (size_t i = 0; i < polySize; ++i) {
+            size_t start = polyStart + i;
+            size_t end = polyStart + ((i + 1) % polySize);
+            os << start << " " << start << " " << end << std::endl;
+        }
+        polyStart += polySize;
+    }
+
+    // # of holes (note: wrong!)
     os << 0 << std::endl;
 
     return os;
