@@ -329,10 +329,10 @@ public:
         return fullCellResult;
     }
 
-    void finalize() {
+    void finalize(Real rho = 1.0) {
         // We accumulated the integral, not the average--divide by the
         // integration domain.
-        result /= m_dimensions[0] * m_dimensions[1];
+        result /= rho * m_dimensions[0] * m_dimensions[1];
     }
 
     Real operator()(size_t i, size_t j) const {
@@ -539,7 +539,11 @@ void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
             else {
                 gradPhi.clear();
                 q.integrate(gradPhi, b);
-                gradPhi.finalize();
+                // TODO: remove rho, or document so we know gradPhi is no
+                // longer an average over the cell, but rather an average over
+                // the non-void cell portion.
+                Real rho = elemGrid.elementOverlap(e);
+                gradPhi.finalize(rho);
                 m_elementData[e].setGradPhis(gradPhi);
             }
         }
@@ -1080,6 +1084,15 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
         Result *r = new Result(Result::PER_ELEM, m_simulatedStressNorms,
                                Result::PER_NODE, m_simulatedDisplacement);
         rc->setResult("Simulation", r);
+
+        // Element volume scalar field for debug
+        // SField volumes(elementGrid().numElements());
+        // for (size_t i = 0; i < volumes.size(); ++i) {
+        //     volumes[i] = elementGrid().elementOverlap(i);
+        // }
+
+        // r = new Result(Result::PER_ELEM, volumes);
+        // rc->setResult("Element Volume", r);
     }
 
     // if (mshPath) {
