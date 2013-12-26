@@ -1,6 +1,6 @@
 #define MAX_STACK       32
-#define MAX_NODES       128
-#define MAX_PRIMITIVES  64
+#define MAX_NODES       256
+#define MAX_PRIMITIVES  128
 #define PI 3.14159265358979323842624339f
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -32,11 +32,14 @@ csgTree = {'name': 'Rectangle',
            'rotation': 0}
 
 holesFile = open(options.name + ".holes", 'w')
+numHoles = gridDim[0] * gridDim[1]
+holeIdx = 0
+holesFile.write("%i\n" % numHoles)
 for i in range(gridDim[0]):
     for j in range(gridDim[1]):
         center = cellSize * (i + .5, j + .5) - halfSize
         # Print centers so James knows inside/outside
-        holesFile.write("%f %f\n" % (center[0], center[1]))
+        holesFile.write("%i %f %f\n" % (holeIdx, center[0], center[1]))
         holePrimitive = {'name': 'Hole ' + str((i, j)),
                          'type': 'ellipse',
                          'center': tuple(center),
@@ -46,6 +49,7 @@ for i in range(gridDim[0]):
                    'type': 'subtract',
                    'left': csgTree,
                    'right': holePrimitive}
+        holeIdx = holeIdx + 1
 holesFile.close()
 
 import json
