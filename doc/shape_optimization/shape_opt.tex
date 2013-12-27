@@ -428,7 +428,7 @@ invalidate the derivations.
     $$
     Using the major symmetry $C_{ijkl} = C_{klij}$ and the fact $C_{ijkl}$ is constant, this is:
     $$
-    \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_l} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} C_{ijkl} \phi_i}.
+    \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_l} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} \phi_i}.
     $$
     Reinterpreting in coordinate-free notation, gives the desired formula, (\ref{eqn:IBP_2}).
     \section{Derivative of a Surface Integral}
@@ -470,7 +470,7 @@ invalidate the derivations.
     \nabla \tilde{h}(p, x) \cdot \tilde{n} + \tilde{h}(p, x)\div \tilde{n}$ on
     the left and exchanging the order of differentiation on the right:
     $$
-    \sint{\left[\pder{\tilde{h}(p, n)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+    \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
     + \vint{\div \left[\pder{\tilde{h}}{p_i}(p, x)\tilde{n} + \tilde{h}(p, x) \pder{\tilde{n}}{p_i} \right]},
     $$
     where we replaced tilde quantities evaluated on the boundary with there
@@ -481,13 +481,13 @@ invalidate the derivations.
     drop the last term\footnote{I do not have a proof for this, but it seems
     sensible...}. Applying Gauss' theorem:
     $$
-    \sint{\left[\pder{\tilde{h}(p, n)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+    \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
     + \sint{\left[\pder{\tilde{h}}{p_i}(p, x)\tilde{n}\right] \cdot \hat{n}},
     $$
     so finally we get the identity:
     \begin{equation}
      \pder{}{p_i} \sint{h(p, x)} =
-        \sint{\left[\pder{\tilde{h}(p, n)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+        \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
         + \sint{\pder{h}{p_i}(p, x)}.
         \label{eqn:surface_derivative}
     \end{equation}
@@ -498,7 +498,7 @@ invalidate the derivations.
     normal motion), and the third handles the parameterized changes of $h$ (in
     our case, the changes in the design-dependent load).
 
-    If we can define $\tilde{h}$ so that $\evalat{\pder{\tilde{h}(p, n)}{\hat{n}}}{\boundary} = 0$
+    If we can define $\tilde{h}$ so that $\evalat{\pder{\tilde{h}(p, x)}{\hat{n}}}{\boundary} = 0$
     (the most natural choice, which should be possible to do in a
     neighborhood though I don't have a proof), then the first term
     vanishes and we are left with:
