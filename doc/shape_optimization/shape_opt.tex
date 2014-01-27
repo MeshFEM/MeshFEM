@@ -108,9 +108,10 @@ adjoint method is a tool to sidestep that computation.
 
 Following the traditional adjoint method derivation \cite{ambrad:website}, we
 write the Lagrangian for the PDE-constrained optimization. We introduce
-Lagrange multipliers $\lambda\colon \overline{\Omega}(p) \to \mathbb{R}^n$ for the Neumann
-constraints (\ref{eqn:state}), but set $\lambda = 0$ on $\Gamma_D$  since we do
-not need a term in the Lagrangian for the Dirichlet condition (we will always
+Lagrange multipliers $\lambda\colon \overline{\Omega}(p) \to \mathbb{R}^n$ for
+the volume and Neumann boundary constraints in (\ref{eqn:state}), but set $\lambda
+= 0$ on $\Gamma_D$  since we do not need a term in the Lagrangian for the
+Dirichlet condition (we will always
 have $u$ and all its perturbations vanish on the fixed $\Gamma_D$). The
 Lagrangian is thus:
 $$
@@ -152,9 +153,10 @@ in terms of strains and integrating by parts:
     \mathcal{L}(p, u, \lambda) = \vint{j(x, \sigma(u))} &- \vint{\lambda \cdot \left(\div \left[ C:\epsilon(u)\right] + f(p)\right)}
     + \sint{\lambda \cdot \left(\left[C : \epsilon(u)\right] \hat{n} - g(p)\right)} \notag \\
     = \vint{j(x, \sigma(u))} &+ \overbrace{\vint{\epsilon(\lambda) : C : \epsilon(u)}
-- \cancel{\sint{\lambda \cdot \left[C:\epsilon(u)\right]\hat{n}}}}^{\text{from I.B.P. identity (\ref{eqn:IBP_1}) in Appendix \ref{sec:IBP}}} \notag \\
+- \cancel{\sint{\lambda \cdot \left[C:\epsilon(u)\right]\hat{n}}}}^{\text{from I.B.P. identity (\ref{eqn:IBP_1}) in Appendix \ref{sec:IBP}}}
+- \vint{\lambda \cdot f(p)} \notag \\
         &+ \cancel{\sint{\lambda \cdot \left[C:\epsilon(u)\right]\hat{n}}}
-         - \vint{\lambda \cdot f(p)} - \sint{\lambda \cdot g(p)} \notag \\
+         - \sint{\lambda \cdot g(p)} \notag \\
     = \vint{j(x, \sigma(u))} &+ \vint{\epsilon(\lambda) : C : \epsilon(u)} - \vint{\lambda \cdot f(p)} - \sint{\lambda \cdot g(p)}
     \label{eqn:lagrangian}
 \end{align}
@@ -176,13 +178,13 @@ the rank 2 tensor of partial derivatives of $j$ wrt. $\sigma_{ij}$, we get by th
 Integrating by parts (see (\ref{eqn:IBP_2}) in Appendix \ref{sec:IBP}) to move the strain operator off $\phi$ we get:
 \begin{align*}
     \left<\pder{\mathcal{L}}{u}(p, u, \lambda), \phi \right> &=
-    \vint{\left(\div C : \left[j'\big(x, \sigma(u)\big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
+    -\vint{\left(\div C : \left[j'\big(x, \sigma(u)\big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
     + \sint{\left(C : \left[j'\big(x, \sigma(u)\big)+ \epsilon(\lambda)\right]\right) \hat{n} \cdot \phi}
 \end{align*}
 Finally, we derive the adjoint equation by plugging in $u_*(p)$ and requiring
 this derivative to be zero:
 $$
-\vint{\left(\div C : \left[j'\Big(x, \sigma\big(u_*(p)\big)\Big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
+- \vint{\left(\div C : \left[j'\Big(x, \sigma\big(u_*(p)\big)\Big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
 + \sint{\left(C : \left[j'\Big(x, \sigma\big(u_*(p)\big)\Big)+ \epsilon(\lambda)\right]\right) \hat{n} \cdot \phi}
 \overset{!}{=} 0.
 $$
@@ -190,7 +192,7 @@ For this to be true for all $\phi = 0$ on $\Gamma_D$, we must have:
 \begin{align}
     \begin{mycases}
         -\div \sigma(\lambda) = \div \left[C: j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] & \text{in}\, \shape \\
-        \sigma(\lambda) \hat{n} = \left[C : j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] \hat{n} & \text{on}\, \Gamma_N(p) \\
+        -\sigma(\lambda) \hat{n} = \left[C : j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] \hat{n} & \text{on}\, \Gamma_N(p) \\
         \lambda = 0 & \text{on}\, \Gamma_D
     \end{mycases}
 \end{align}
@@ -280,17 +282,20 @@ $$
 \Phi(p, x(p)) = 0 \quad \Longrightarrow \quad \pder{\Phi(p, x(p))}{p_i} = 0 =
 \pder{\Phi}{p_i}(p, x(p)) + \nabla \Phi \cdot v_i(p)\
 $$
-Recalling the basic level set result, $\hat{n} = \frac{\nabla \Phi}{\norm{\nabla \Phi}}$:
+Recalling the basic level set result, $\hat{n} = -\frac{\nabla \Phi}{\norm{\nabla \Phi}}$:
 $$
-\norm{\nabla \Phi} \hat{n} \cdot v_i(p) = -\pder{\Phi}{p_i}(p, x(p))  \quad \Longrightarrow \quad
-\hat{n} \cdot v_i(p) = \frac{-1}{\norm{\nabla \Phi}} \pder{\Phi}{p_i}(p, x(p)).
+-\norm{\nabla \Phi} \hat{n} \cdot v_i(p) = -\pder{\Phi}{p_i}(p, x(p))  \quad \Longrightarrow \quad
+\hat{n} \cdot v_i(p) = \frac{1}{\norm{\nabla \Phi}} \pder{\Phi}{p_i}(p, x(p)).
 $$
 This equation gives us the normal velocity for points on any boundary of the object.
 
 \section{Getting Rid of $\Gamma_D$}
 \label{sec:no_dirichlet}
 The fixed Dirichlet boundary $\Gamma_D$ is incompatible with our goals.
-Unfortunately, all of the literature seems to rely on this boundary condition.
+Unfortunately, all existing literature seems to rely on this boundary condition;
+though \cite{Allaire2008909} mentions that ``an equilibrium condition on g'' is
+needed in the absence of the Dirichlet boundary, they do not discuss how to keep
+the adjoint problem well-posed.
 Ideally, we would instead use the no-rigid-motion constraints from our
 Worst-case Structural Analysis paper and allow the entire boundary to evolve:
 \begin{align}
@@ -353,7 +358,8 @@ stress-based objectives is:
     \item Computing the divergence of the tensor field
           $C: j'\Big(x, \sigma\big(u_*(p)\big)\Big)$. This is likely to have numerical
           robustness/accuracy issues due to cancellation.
-    \item Predicting how volume forces or surface tractions change with boundary movement.
+    \item Predicting how worst-case volume forces or surface tractions change
+        with boundary movement.
 \end{itemize}
 
 The additional theory questions/points that need to be addressed are:
@@ -428,7 +434,7 @@ invalidate the derivations.
     $$
     Using the major symmetry $C_{ijkl} = C_{klij}$ and the fact $C_{ijkl}$ is constant, this is:
     $$
-    \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_l} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} \phi_i}.
+    \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_j} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} \phi_i}.
     $$
     Reinterpreting in coordinate-free notation, gives the desired formula, (\ref{eqn:IBP_2}).
     \section{Derivative of a Surface Integral}
@@ -461,7 +467,7 @@ invalidate the derivations.
     they discuss using ``transfinite interpolation'' with approximate distance
     fields.
     
-    Applying Reynold's transport theorem the derivative becomes:
+    Applying Reynold's transport theorem, the derivative becomes:
     $$
     \sint{\div \big[\tilde{h}(p, x)\tilde{n} \big] \big( v_i(p) \cdot \hat{n} \big)}
 + \vint{\pder{}{p_i} \div \big[\tilde{h}(p, x)\tilde{n} \big]}
@@ -504,7 +510,7 @@ invalidate the derivations.
     vanishes and we are left with:
     \begin{equation}
      \pder{}{p_i} \sint{h(p, x)} =
-     \sint{h(p, x) H * \big(v_i(p) \cdot \hat{n}\big)}
+     \sint{h(p, x) H v_i(p) \cdot \hat{n}}
         + \sint{\pder{h}{p_i}(p, x)}.
         \label{eqn:surface_derivative_simple}
     \end{equation}
