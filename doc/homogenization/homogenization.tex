@@ -12,6 +12,7 @@
 \usepackage{outlines}
 \usepackage[font={sf,it}, labelfont={sf,bf}, labelsep=space, belowskip=5pt]{caption}
 \usepackage{hyperref}
+\usepackage{minted}
 
 \usepackage{fancyhdr}
 \usepackage[title]{appendix}
@@ -181,6 +182,9 @@ A^*_p = A + \left( \prod_{i=1}^p (1 - \theta_i) \right)
 \end{align}
 $(B - A)^{-1}$ can be precomputed, so each iteration involves a single $3 \times
 3$ matrix inverse after accumulating the linear combination of $f_A(e_i)$.
+
+The code to perform the search is:
+\inputminted[linenos,fontsize=\footnotesize]{matlab}{sequentialLaminates.m}
 
 \section{Visualization}
 The homogenized tensor is a point in $\mathbb{R}^9$. Unfortunately, this is very

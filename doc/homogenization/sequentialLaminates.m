@@ -12,7 +12,7 @@
 %                       (0, 1)
 % @param[in] Ne         number of evenly spaced angles of directions, e, to try
 %                       in [0, 2pi) 
-% @return AStars        (Nt * Ne)^p homogenized elasticity tensors,
+% @return    AStars     (Nt * Ne)^p homogenized elasticity tensors,
 %                       with the ith flattened tensor in AStars(:, :, i)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
@@ -44,8 +44,7 @@ function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
 
     for eIt = 1:(Ne^p)
         for thetaIt = 1:(Nt^p)
-            % disp([thetaSteps', eSteps']);
-
+            % Evaluate the linear combination of fA(e_i)s
             fAComb = zeros(3);
             for i = 1:p
                 fACoeff = theta(i);
@@ -55,6 +54,7 @@ function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
                 fAComb = fAComb + fACoeff * fA(:, :, i);
             end
 
+            % Solve for A^*_p
             angleProd = 1;
             for i = 1:p
                 angleProd = angleProd * (1 - theta(i));
