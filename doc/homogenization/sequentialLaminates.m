@@ -35,8 +35,10 @@ function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
 
     eSteps = ones(p, 1);
     thetaSteps = ones(p, 1);
-    fA = zeros(3, 3, p);
-    theta = zeros(p, 1);
+    % Initialize fA(e_i) and theta_i with the first choice
+    % (e_i = [1, 0], theta_i = 1/(Nt + 1))
+    fA = repmat(fAGen([1; 0]), [1, 1, p]);
+    theta = (1 / (Nt + 1)) * ones(p, 1);
 
     BmAinv = (B - A)^-1;
 
