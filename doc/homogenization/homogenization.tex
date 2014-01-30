@@ -1,0 +1,154 @@
+\documentclass[10pt]{article}
+
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{upgreek}
+\usepackage{amsthm}
+\usepackage{fullpage}
+\usepackage{graphicx}
+\usepackage{cancel}
+\usepackage{subfigure}
+\usepackage{mathrsfs}
+\usepackage{outlines}
+\usepackage[font={sf,it}, labelfont={sf,bf}, labelsep=space, belowskip=5pt]{caption}
+\usepackage{hyperref}
+
+\usepackage{fancyhdr}
+\usepackage[title]{appendix}
+
+\DeclareMathOperator{\sgn}{sgn}
+
+\pagestyle{fancy}
+\headheight 24pt
+\headsep    12pt
+\lhead{Exploration of Homogenization}
+\fancyfoot[C]{} % hide the default page number at the bottom
+\lfoot{}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand\footrulewidth{0.4pt}
+\providecommand{\abs}[1]{\lvert#1\rvert}
+\providecommand{\norm}[1]{\lVert#1\rVert}
+\providecommand{\dx}{\, \mathrm{d}x}
+% \providecommand{\vint}[2]{\int_{#1} \! #2 \, \mathrm{d}x}
+% \providecommand{\sint}[2]{\int_{\partial #1} \! #2 \, \mathrm{d}A}
+\renewcommand{\div}{\nabla \cdot}
+\providecommand{\shape}{\Omega(p)}
+\providecommand{\boundary}{\partial \shape}
+\providecommand{\vint}[1]{\int_{\shape} \! #1 \, \mathrm{d}x}
+\providecommand{\sint}[1]{\int_{\boundary} \! #1 \, \mathrm{d}A}
+\providecommand{\pder}[2]{\frac{\partial #1}{\partial #2}}
+\providecommand{\tder}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+\providecommand{\evalat}[2]{\left.#1\right|_{#2}}
+\newcommand{\defeq}{\vcentcolon=}
+\newtheorem{lemma}{Lemma}
+
+\makeatletter
+\usepackage{mathtools}
+\newcases{mycases}{\quad}{%
+  \hfil$\m@th\displaystyle{##}$}{$\m@th\displaystyle{##}$\hfil}{\lbrace}{.}
+\makeatother
+
+\title{Homogenization of Sequential Laminates}
+\author{Julian Panetta}
+
+% BEGIN DOCUMENT
+\begin{document}
+
+\maketitle
+
+We explore the space of possible homogenized elasticity tensors of sequential
+laminates of two isotropic base materials in $2D$. All formulas and definitions
+come from \cite{allaire2002shape}. Let $A$ and $B$ be the materials' elasticity
+tensors, specified by Lam\'e parameters $\mu_A,\ \lambda_A,\ \mu_B,\ $ and
+$\lambda_B$. We then sequentially perform $p$ steps of lamination of $B$
+with layers of $A$ in directions $e_i \in \mathbb{R}^2$ with densities
+$\theta_i \in (0, 1)$ ($\theta_i = 0$ and $\theta_i = 1$ mean a homogenous
+material and aren't considered).
+
+The resulting homogenized elasticity tensor, $A^*_p$ is given by:
+\begin{align}
+\label{eqn:Astar}
+\left(\prod_{i=1}^p 1 - \theta_i \right)\left(A^*_p - A\right)^{-1} =
+\left(B - A\right)^{-1} + \sum_{i = 1}^p
+    \left( \theta_i \prod_{j = 1}^{i - 1} 1 - \theta_j\right) f_A(e_i)
+\end{align}
+
+Where $f_A$ is defined by its action on a symmetric stress tensor $\sigma$:
+\begin{align}
+f_A(e) \sigma \defeq \frac{1}{2\mu_A} \left(\sigma e e^T + e e^T \sigma \right)
+    + \left(\frac{1}{2 \mu_A  + \lambda_A} - \frac{1}{\mu_A}\right)\left(
+    (e^T \sigma e) e e^T \right)
+\label{eqn:fAdef}
+\end{align}
+or, in index notation, with $F \defeq f_A(e)$:
+$$
+F_{ijkl} \sigma_{kl} = \frac{1}{2\mu_A} \left(\sigma_{im} e_m e_j + \sigma_{jm} e_m e_i \right)
+    + \left(\frac{1}{2 \mu_A  + \lambda_A} - \frac{1}{\mu_A}\right)\left(
+    \sigma_{mn} e_m e_n e_i e_j \right).
+$$
+By inspection (easily verified), we see that one possible such tensor is:
+$$
+\overline{F}_{ijkl} = \frac{1}{2 \mu_A} (\delta_{ki} e_l e_j + \delta_{kj} e_l e_i) +
+\left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
+$$
+However, this is not the only possible tensor because definition (\ref{eqn:fAdef}) is
+incomplete. Since $f_A(e)$ is only defined by its
+action on symmetric matrices, the exact $F_{ijkl}$ is not completely specified;
+really only the sum $F_{ijkl} + F_{ijlk}$ is pinned down. This is because each
+of those terms sees the same numbers in the contraction: $2 F_{ijkl} \sigma_{kl} =
+F_{ijkl} (\sigma_{kl} + \sigma_{lk}) =
+F_{ijkl} \sigma_{kl} + F_{ijkl}\sigma_{lk} =
+F_{ijkl} \sigma_{kl} + F_{ijlk}\sigma_{kl} =  
+(F_{ijkl} + F_{ijlk})\sigma_{kl}$.
+Thus we can choose the single tensor that is symmetric in $k$ and $l$: $F_{ijkl}
+= \frac{1}{2}(\overline{F}_{ijkl} + \overline{F}_{ijlk})$. Together with the
+fact that $f_A$ always maps to symmetric matrices (transposing the
+RHS of (\ref{eqn:fAdef}) gives the same expression), this means our chosen
+$F_{ijkl}$ has the same minor symmetries as an elasticity tensor. This is more
+than just a convenience: since $A^*_p$, $A$, and $B$ are all symmetric in their
+minors, (\ref{eqn:Astar}) seems to require $f_A$ have the same symmetry. The
+full expression for $f_A$ in tensor notation is:
+$$
+F_{ijkl} = 
+\frac{1}{4 \mu_A} (\delta_{ki} e_l e_j + \delta_{kj} e_l e_i + \delta_{li} e_k e_j + \delta_{lj} e_k e_i) +
+\left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
+$$
+
+Since $F_{ijkl}$ is a linear map from symmetric matrices to symmetric matrices,
+we can express it using the traditional Voigt notation. This allows us to do the
+same for $A$, $B$, and $A^*_p$ in (\ref{eqn:Astar}) so that the tensor inverses
+simply become $3\times3$ matrix inverses. The matrix version of $f_A(e)$ is:
+
+$$
+\mathcal{F} = \begin{pmatrix} F_{1111} & F_{1122} & F_{1112} \\ 
+                              F_{2211} & F_{2222} & F_{2212} \\
+                              F_{1211} & F_{1222} & F_{1212} \end{pmatrix}
+= \frac{1}{4 \mu_A}
+ \begin{pmatrix}  e_1^2     &  0         &  2 e_1 e_2   \\
+                  0         &  4 e_2^2   &  2 e_1 e_2   \\
+                  2 e_1 e_2 &  2 e_1 e_2 &  e_1^2+e_2^2 \end{pmatrix}
++ \left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)
+  \begin{pmatrix} e_1^4 & e_1^2 e_2^2 & e_1^3 e_2 \\ 
+                              e_1^2 e_2^2 & e_2^4 & e_1 e_2^3 \\
+                              e_1^3 e_2 & e_1 e_2^3 & e_1^2 e_2^2 \end{pmatrix}
+$$
+
+% From Mathematica:
+% FirstMat_{1111}= 4 e_1^2
+% FirstMat_{1122}= 0
+% FirstMat_{1112}= 2 e_1 e_2
+% FirstMat_{2211}= 0
+% FirstMat_{2222}= 4 e_2^2
+% FirstMat_{2212}= 2 e_1 e_2
+% FirstMat_{1211}= 2 e_1 e_2
+% FirstMat_{1222}= 2 e_1 e_2
+% FirstMat_{1212}= e_1^2+e_2^2
+
+
+
+
+\bibliographystyle{plain}
+\bibliography{References}
+
+\end{document}
