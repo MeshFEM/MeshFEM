@@ -57,26 +57,27 @@
 
 \maketitle
 
-We explore the space of possible homogenized elasticity tensors of sequential
-laminates of two isotropic base materials in $2D$. All formulas and definitions
+We attempt to visualize the space of possible homogenized elasticity tensors of
+sequential laminates of two isotropic base materials in $2D$. All definitions
 come from \cite{allaire2002shape}. Let $A$ and $B$ be the materials' elasticity
 tensors, specified by Lam\'e parameters $\mu_A,\ \lambda_A,\ \mu_B,\ $ and
-$\lambda_B$. We then sequentially perform $p$ steps of lamination of $B$
-with layers of $A$ in directions $e_i \in \mathbb{R}^2$ with densities
-$\theta_i \in (0, 1)$ ($\theta_i = 0$ and $\theta_i = 1$ mean a homogenous
-material and aren't considered).
+$\lambda_B$. We then sequentially perform $p$ steps of lamination of $B$ with
+layers of $A$ in directions $e_i \in \mathbb{R}^2$ and with densities $\theta_i \in
+(0, 1)$ ($\theta_i = 0$ and $\theta_i = 1$ mean a homogenous material and aren't
+considered).
 
+\section{Formula Derivations}
 The resulting homogenized elasticity tensor, $A^*_p$ is given by:
 \begin{align}
 \label{eqn:Astar}
-\left(\prod_{i=1}^p 1 - \theta_i \right)\left(A^*_p - A\right)^{-1} =
+\left(\prod_{i=1}^p (1 - \theta_i) \right)\left(A^*_p - A\right)^{-1} =
 \left(B - A\right)^{-1} + \sum_{i = 1}^p
-    \left( \theta_i \prod_{j = 1}^{i - 1} 1 - \theta_j\right) f_A(e_i)
+\left( \theta_i \prod_{j = 1}^{i - 1} (1 - \theta_j)\right) f_A(e_i)
 \end{align}
 
 Where $f_A$ is defined by its action on a symmetric stress tensor $\sigma$:
 \begin{align}
-f_A(e) \sigma \defeq \frac{1}{2\mu_A} \left(\sigma e e^T + e e^T \sigma \right)
+f_A(e) \sigma \defeq \frac{1}{2\mu_A} \left(\sigma e e^T + e e^T \sigma^T \right)
     + \left(\frac{1}{2 \mu_A  + \lambda_A} - \frac{1}{\mu_A}\right)\left(
     (e^T \sigma e) e e^T \right)
 \label{eqn:fAdef}
@@ -90,13 +91,13 @@ $$
 By inspection (easily verified), we see that one possible such tensor is:
 $$
 \overline{F}_{ijkl} = \frac{1}{2 \mu_A} (\delta_{ki} e_l e_j + \delta_{kj} e_l e_i) +
-\left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
+\left(\frac{1}{2 \mu_A + \lambda_A} - \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
 $$
 However, this is not the only possible tensor because definition (\ref{eqn:fAdef}) is
 incomplete. Since $f_A(e)$ is only defined by its
 action on symmetric matrices, the exact $F_{ijkl}$ is not completely specified;
 really only the sum $F_{ijkl} + F_{ijlk}$ is pinned down. This is because each
-of those terms sees the same numbers in the contraction: $2 F_{ijkl} \sigma_{kl} =
+of those terms gets the same weight in the contraction: $2 F_{ijkl} \sigma_{kl} =
 F_{ijkl} (\sigma_{kl} + \sigma_{lk}) =
 F_{ijkl} \sigma_{kl} + F_{ijkl}\sigma_{lk} =
 F_{ijkl} \sigma_{kl} + F_{ijlk}\sigma_{kl} =  
@@ -108,15 +109,17 @@ RHS of (\ref{eqn:fAdef}) gives the same expression), this means our chosen
 $F_{ijkl}$ has the same minor symmetries as an elasticity tensor. This is more
 than just a convenience: since $A^*_p$, $A$, and $B$ are all symmetric in their
 minors, (\ref{eqn:Astar}) seems to require $f_A$ have the same symmetry. The
-full expression for $f_A$ in tensor notation is:
+full expression for $f_A$ in index notation is:
 $$
 F_{ijkl} = 
 \frac{1}{4 \mu_A} (\delta_{ki} e_l e_j + \delta_{kj} e_l e_i + \delta_{li} e_k e_j + \delta_{lj} e_k e_i) +
-\left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
+\left(\frac{1}{2 \mu_A + \lambda_A} - \frac{1}{\mu_A}\right)(e_i e_j e_k e_l).
 $$
 
 Since $F_{ijkl}$ is a linear map from symmetric matrices to symmetric matrices,
-we can express it using the traditional Voigt notation. This allows us to do the
+we can express it using a variant of Voigt notation where strain is represented
+as the vector $(\epsilon_{11}, \epsilon_{22}, \epsilon_{12})^T$ (i.e.
+non-engineering strain). This allows us to do the
 same for $A$, $B$, and $A^*_p$ in (\ref{eqn:Astar}) so that the tensor inverses
 simply become $3\times3$ matrix inverses. The matrix version of $f_A(e)$ is:
 
@@ -124,16 +127,6 @@ $$
 \mathcal{F} = \begin{pmatrix} F_{1111} & F_{1122} & F_{1112} \\ 
                               F_{2211} & F_{2222} & F_{2212} \\
                               F_{1211} & F_{1222} & F_{1212} \end{pmatrix}
-= \frac{1}{4 \mu_A}
- \begin{pmatrix}  e_1^2     &  0         &  2 e_1 e_2   \\
-                  0         &  4 e_2^2   &  2 e_1 e_2   \\
-                  2 e_1 e_2 &  2 e_1 e_2 &  e_1^2+e_2^2 \end{pmatrix}
-+ \left(\frac{1}{2 \mu_A + \lambda_A} + \frac{1}{\mu_A}\right)
-  \begin{pmatrix} e_1^4 & e_1^2 e_2^2 & e_1^3 e_2 \\ 
-                              e_1^2 e_2^2 & e_2^4 & e_1 e_2^3 \\
-                              e_1^3 e_2 & e_1 e_2^3 & e_1^2 e_2^2 \end{pmatrix}
-$$
-
 % From Mathematica:
 % FirstMat_{1111}= 4 e_1^2
 % FirstMat_{1122}= 0
@@ -144,9 +137,57 @@ $$
 % FirstMat_{1211}= 2 e_1 e_2
 % FirstMat_{1222}= 2 e_1 e_2
 % FirstMat_{1212}= e_1^2+e_2^2
+= \frac{1}{4 \mu_A}
+ \begin{pmatrix}  4 e_1^2   &  0         &  2 e_1 e_2   \\
+                  0         &  4 e_2^2   &  2 e_1 e_2   \\
+                  2 e_1 e_2 &  2 e_1 e_2 &  e_1^2+e_2^2 \end{pmatrix}
++ \left(\frac{1}{2 \mu_A + \lambda_A} - \frac{1}{\mu_A}\right)
+  \begin{pmatrix} e_1^4 & e_1^2 e_2^2 & e_1^3 e_2 \\ 
+                              e_1^2 e_2^2 & e_2^4 & e_1 e_2^3 \\
+                              e_1^3 e_2 & e_1 e_2^3 & e_1^2 e_2^2 \end{pmatrix}
+$$
+It is finally apparent that $fA(e)$ has the same major symmetry as an elasticity
+tensor: $\mathcal{F} = \mathcal{F}^T$. This is important since it ensures
+the required major symmetry in homogenized elasticity tensor $A^*_p$ by
+(\ref{eqn:Astar}).
 
+Isotropic elasticity tensors implement the linear Hooke's law $\sigma = \lambda
+tr(\epsilon) I + 2 \mu \epsilon$. Thus, in our notation, $A$ and $B$ are:
+$$
+    A = \begin{pmatrix}
+        \lambda_A + 2 \mu_A & \lambda_A         & 0 \\
+        \lambda_A         & \lambda_A + 2 \mu_A & 0 \\
+        0               & 0               & 2 \mu_A
+        \end{pmatrix},\quad
+    B = \begin{pmatrix}
+        \lambda_B + 2 \mu_B & \lambda_B         & 0 \\
+        \lambda_B         & \lambda_B + 2 \mu_B & 0 \\
+        0               & 0               & 2 \mu_B
+        \end{pmatrix}.
+$$
 
+\section{Numerical Exploration}
+Here we numerically explore the homogenized elasticity tensors $A^*_p$ by
+trying $N_\theta$ evenly spaced values for $\theta_i$ and $e_i = (\cos(\alpha_i),\
+\sin(\alpha_i))^T$ for $N_e$ evenly spaced angles $\alpha \in [0, 2\pi)$. We also try
+$p = 1, 2, 3 \dots$ lamination steps. When $p$ steps are employed, the total
+number of parameter combinations is $(N_\theta * N_e)^p$. For each combination
+we need to evaluate the following expression:
+\begin{align}
+\label{eqn:AstarSolve}
+A^*_p = A + \left( \prod_{i=1}^p (1 - \theta_i) \right)
+\left[\left(B - A\right)^{-1} + \sum_{i = 1}^p
+\left( \theta_i \prod_{j = 1}^{i - 1} (1 - \theta_j)\right) f_A(e_i)\right]^{-1}
+\end{align}
+$(B - A)^{-1}$ can be precomputed, so each iteration involves a single $3 \times
+3$ matrix inverse after accumulating the linear combination of $f_A(e_i)$.
 
+\section{Visualization}
+The homogenized tensor is a point in $\mathbb{R}^9$. Unfortunately, this is very
+hard to visualize. To simplify things, we consider only tensors approximating
+isotropic tensors since those are a 2D subspace that is easily parameterized and
+visualized. Thus we can plot on a $(\lambda, \mu)$ plane. We color points based
+on $p$ value.
 
 \bibliographystyle{plain}
 \bibliography{References}
