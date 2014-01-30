@@ -170,10 +170,11 @@ $$
 \section{Numerical Exploration}
 Here we numerically explore the homogenized elasticity tensors $A^*_p$ by
 trying $N_\theta$ evenly spaced values for $\theta_i$ and $e_i = (\cos(\alpha_i),\
-\sin(\alpha_i))^T$ for $N_e$ evenly spaced angles $\alpha \in [0, 2\pi)$. We also try
-$p = 1, 2, 3 \dots$ lamination steps. When $p$ steps are employed, the total
-number of parameter combinations is $(N_\theta * N_e)^p$. For each combination
-we need to evaluate the following expression:
+\sin(\alpha_i))^T$ for $N_e$ evenly spaced angles $\alpha \in [0, \pi)$; we only
+need to cover half the unit circle because $-e_i$ gives the same
+laminate as $e_i$. We also try $p = 1, 2, 3 \dots$ lamination steps. When $p$
+steps are employed, the total number of parameter combinations is $(N_\theta *
+N_e)^p$. For each combination we need to evaluate the following expression:
 \begin{align}
 \label{eqn:AstarSolve}
 A^*_p = A + \left( \prod_{i=1}^p (1 - \theta_i) \right)

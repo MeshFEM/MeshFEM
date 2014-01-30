@@ -11,7 +11,7 @@
 % @param[in] Nt         number of evenly spaced proportions, theta, to try in
 %                       (0, 1)
 % @param[in] Ne         number of evenly spaced angles, alpha, of directions, e,
-%                       to try in [0, 2pi) 
+%                       to try in [0, pi) 
 % @return    AStars     (Nt * Ne)^p homogenized elasticity tensors,
 %                       with the nth flattened tensor in AStars(:, :, n)
 %            params     nth tensor's choices for alpha_i, theta_i with
@@ -67,7 +67,7 @@ function [AStars, params] = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
                 angleProd = angleProd * (1 - theta(i));
             end
             AStars(:, :, (eIt-1) * NtP + thetaIt) = A + angleProd * (BmAinv + fAComb)^-1;
-            params(   :, (eIt-1) * NtP + thetaIt) = [(eSteps-1)*2*pi/Ne; theta];
+            params(   :, (eIt-1) * NtP + thetaIt) = [(eSteps-1)*pi/Ne; theta];
 
             % Increment the collection of p "theta indices", also updating theta
             for i = 1:p
@@ -87,10 +87,10 @@ function [AStars, params] = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
             eSteps(i) = eSteps(i) + 1;
             if eSteps(i) > Ne
                 eSteps(i) = 1;
-                alphai = (eSteps(i) - 1) * 2 * pi / Ne;
+                alphai = (eSteps(i) - 1) * pi / Ne;
                 fA(:, :, i) = fAGen([cos(alphai); sin(alphai)]);
             else
-                alphai = (eSteps(i) - 1) * 2 * pi / Ne;
+                alphai = (eSteps(i) - 1) * pi / Ne;
                 fA(:, :, i) = fAGen([cos(alphai); sin(alphai)]);
                 break;
             end
