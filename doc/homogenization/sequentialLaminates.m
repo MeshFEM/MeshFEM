@@ -10,42 +10,47 @@
 % @param[in] p          number of lamination steps
 % @param[in] Nt         number of evenly spaced proportions, theta, to try in
 %                       (0, 1)
-% @param[in] Ne         number of evenly spaced angles of directions, e, to try
-%                       in [0, 2pi) 
+% @param[in] Ne         number of evenly spaced angles, alpha, of directions, e,
+%                       to try in [0, 2pi) 
 % @return    AStars     (Nt * Ne)^p homogenized elasticity tensors,
-%                       with the ith flattened tensor in AStars(:, :, i)
+%                       with the nth flattened tensor in AStars(:, :, n)
+%            params     nth tensor's choices for alpha_i, theta_i with
+%                       params(:, n) =
+%                                 (alpha_1, ..., alpha_p, theta_1, ... theta_p)'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
+function [AStars, params] = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
     A = [lamA+2*muA, lamA,       0;
          lamA,       lamA+2*muA, 0;
          0,          0,          2*muA]
     B = [lamB+2*muB, lamB,       0;
          lamB,       lamB+2*muB, 0;
          0,          0,          2*muB]
+    function fA = fAGen(e)
+        e1e1 = e(1) * e(1); e2e2 = e(2) * e(2); e1e2 = e(1) * e(2);
+        fA = (1 / (4 * muA)) * [4*e1e1, 0,           2*e1e2;
+                                0,           4*e2e2, 2*e1e2;
+                                2*e1e2,      2*e1e2, e1e1+e2e2] + ...
+            (1 / (2 * muA + lamA) - 1 / muA) * [e1e1*e1e1, e1e1*e2e2, e1e1*e1e2;
+                                                e1e1*e2e2, e2e2*e2e2, e1e2*e2e2;
+                                                e1e1*e1e2, e1e2*e2e2, e1e1*e2e2];
+    end
 
-    fA1 = @(e) [4*e(1)*e(1), 0,           2*e(1)*e(2);
-                0,           4*e(2)*e(2), 2*e(1)*e(2);
-                2*e(1)*e(2), 2*e(1)*e(2), e(1)*e(1)+e(2)*e(2)];
-
-    fA2 = @(e) [e(1)*e(1)*e(1)*e(1), e(1)*e(1)*e(2)*e(2), e(1)*e(1)*e(1)*e(2);
-                e(1)*e(1)*e(2)*e(2), e(2)*e(2)*e(2)*e(2), e(1)*e(2)*e(2)*e(2);
-                e(1)*e(1)*e(1)*e(2), e(1)*e(2)*e(2)*e(2), e(1)*e(1)*e(2)*e(2)];
-
-    fAGen = @(e) fA1(e) / (4 * muA) + (1 / (2 * muA + lamA) - 1 / muA) * fA2(e);
-
-    eSteps = ones(p, 1);
-    thetaSteps = ones(p, 1);
     % Initialize fA(e_i) and theta_i with the first choice
     % (e_i = [1, 0], theta_i = 1/(Nt + 1))
+    eSteps = ones(p, 1);
+    thetaSteps = ones(p, 1);
     fA = repmat(fAGen([1; 0]), [1, 1, p]);
-    theta = (1 / (Nt + 1)) * ones(p, 1);
+    theta = (1 / (Nt + 1)) * thetaSteps;
 
     BmAinv = (B - A)^-1;
 
-    AStars = zeros(3, 3, Ne^p*Nt^p);
+    NeP = Ne^p;
+    NtP = Nt^p;
+    AStars = zeros(3, 3, NeP*NtP);
+    params = zeros(2 * p, NeP*NtP);
 
-    for eIt = 1:(Ne^p)
-        for thetaIt = 1:(Nt^p)
+    for eIt = 1:NeP
+        for thetaIt = 1:NtP
             % Evaluate the linear combination of fA(e_i)s
             fAComb = zeros(3);
             for i = 1:p
@@ -61,9 +66,10 @@ function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
             for i = 1:p
                 angleProd = angleProd * (1 - theta(i));
             end
-            AStars(:, :, eIt * thetaIt) = A + angleProd * (BmAinv + fAComb)^-1;
+            AStars(:, :, (eIt-1) * NtP + thetaIt) = A + angleProd * (BmAinv + fAComb)^-1;
+            params(   :, (eIt-1) * NtP + thetaIt) = [(eSteps-1)*2*pi/Ne; theta];
 
-            % Increment the collection of p "theta indices"
+            % Increment the collection of p "theta indices", also updating theta
             for i = 1:p
                 thetaSteps(i) = thetaSteps(i) + 1;
                 if thetaSteps(i) > Nt
@@ -76,7 +82,7 @@ function AStars = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
             end
         end
 
-        % Increment the collection of p "e indices"
+        % Increment the collection of p "e indices", also updating fA
         for i = 1:p
             eSteps(i) = eSteps(i) + 1;
             if eSteps(i) > Ne
