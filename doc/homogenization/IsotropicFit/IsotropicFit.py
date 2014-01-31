@@ -2,17 +2,12 @@
 
 import argparse
 import numpy as np
-from numpy.linalg import lstsq
+from numpy.linalg import lstsq, norm
 
 from MaterialTensor import random_tensor
 from MaterialTensor import random_isotropic_tensor
 from MaterialTensor import load_tensor
-from PointPlot import point_plot
 from timethis import timethis
-
-@timethis
-def vectorize_tensor(tensor):
-    return tensor.ravel(order="C");
 
 @timethis
 def vectorize_tensors(tensors):
@@ -36,18 +31,17 @@ def get_isotropic_parameter_matrix(tensor_size):
         raise NotImplementedError("Only 2D is supported for now.");
 
 @timethis
-def fit_isotropic_material_tensor(tensor):
-    shape = tensor.shape;
-    coeff_mat = get_isotropic_parameter_matrix(shape[0]);
+def compute_tensor_norms(tensors):
+    fro_norm = norm(tensors, ord='fro', axis=(0,1));
+    return fro_norm;
 
-    rhs = vectorize_tensor(tensor);
-
-    x, err, rank, s_val = lstsq(coeff_mat, rhs);
-    if err[0] < 1e-12:
-        #print(tensor);
-        #print("mu={x[0]}\tlambda={x[1]}\terr={err[0]}".format(x=x, err=err));
-        pass;
-    return x, err[0];
+@timethis
+def compute_isotropic_tensor_norms(dim, params):
+    Lambda = params[0,:];
+    Mu = params[1,:];
+    norms = np.sqrt(np.square(Mu * 2 + Lambda) * 2 +\
+            np.square(Mu * 2) + np.square(Lambda) * 2);
+    return norms;
 
 @timethis
 def fit_isotropic_material_tensors(tensors):
@@ -55,91 +49,59 @@ def fit_isotropic_material_tensors(tensors):
     coeff_mat = get_isotropic_parameter_matrix(shape[0]);
     rhs = vectorize_tensors(tensors);
     x, err, rank, s_val = lstsq(coeff_mat, rhs);
+    input_norms = compute_tensor_norms(tensors);
+    output_norms = compute_isotropic_tensor_norms(2, x);
+    err = np.divide(np.sqrt(err), output_norms);
     return x, err;
-
-@timethis
-def process_random_tensors(n):
-    Lambda = [];
-    Mu = [];
-    Err =  [];
-    for i in range(n):
-        A = random_tensor(dim);
-        #A = random_isotropic_tensor(dim);
-        param, err = fit_isotropic_material_tensor(A);
-
-        Lambda.append(param[0]);
-        Mu.append(param[1]);
-        Err.append(err);
-    return np.array(Lambda), np.array(Mu), np.array(Err);
-
-@timethis
-def process_tensors_old(filename):
-    Lambda = [];
-    Mu = [];
-    Err =  [];
-    A_stars = load_tensor(filename);
-    num_tensors = A_stars.shape[2];
-    for i in range(num_tensors):
-        A = A_stars[:,:, i];
-        param, err = fit_isotropic_material_tensor(A);
-
-        Lambda.append(param[0]);
-        Mu.append(param[1]);
-        Err.append(err);
-    return np.array(Lambda), np.array(Mu), np.array(Err);
 
 @timethis
 def process_tensors(filename):
     A_stars, angles, ratios = load_tensor(filename);
     num_tensors = A_stars.shape[2];
     params, err = fit_isotropic_material_tensors(A_stars);
-    return params[0], params[1], err, angles, ratios;
+    err = err.reshape((1, -1));
+    num_laminates = angles.shape[0];
+
+    fields = np.hstack((params.T, err.T, angles.T, ratios.T));
+    field_names = ["Lambda", "Mu", "Error"] +\
+            ["Angle_{}".format(i) for i in range(num_laminates)] +\
+            ["Ratio_{}".format(i) for i in range(num_laminates)];
+    return field_names, fields;
+
+@timethis
+def dump_csv(csv_file, column_names, data):
+    num_rows = data.shape[0];
+    num_cols = data.shape[1];
+    template = ",".join(["{}" for i in range(num_cols)]) + "\n";
+    with open(csv_file, 'w') as fout:
+        fout.write(template.format(*column_names));
+        for i in range(num_rows):
+            fout.write(template.format(*data[i]));
 
 def parse_args():
     parser = argparse.ArgumentParser(description =\
             "Check whether material tensor is isotropic");
-    parser.add_argument("--random", help="Test N random tensors.", type=int,
-            default=0);
-    parser.add_argument("-T", "--tensor-file", help="Specifies the tensor file",
+    parser.add_argument("tensors", help="Specifies the tensor file",
             default=None);
-    parser.add_argument("-F1", "--facet1", help="Group by this facet",
-            default=None);
-    parser.add_argument("-F2", "--facet2", help="Group by this facet",
-            default=None);
-    parser.add_argument("--prefix", help="Prefix of the output", default="");
-    parser.add_argument("--error", help="Error bound", type=float, default=1.0)
+    parser.add_argument("-o", "--output", help="Output csv file", required=True);
     args = parser.parse_args();
     return args;
 
 def main():
     args = parse_args();
-    n = args.random;
-    dim = 2;
-    err_bound = args.error;
-    if args.random > 0:
-        Lambda, Mu, Err = process_random_tensors(args.random);
-    elif args.tensor_file is not None:
-        Lambda, Mu, Err, angles, ratios = process_tensors(args.tensor_file);
-    else:
-        raise RuntimeError("Please specify either --random or --matrices");
+    if args.tensors is not None:
+        field_names, fields = process_tensors(args.tensors);
 
+    Err = fields[:,2];
     print("{} tensors processed.".format(len(Err)));
     print("Ave error = {}".format(np.average(Err)));
     print("Max error = {}".format(np.max(Err)));
     print("Min error = {}".format(np.min(Err)));
 
-    Lambda = Lambda[Err < err_bound];
-    Mu     = Mu    [Err < err_bound];
-    Err    = Err   [Err < err_bound];
+    assert(field_names[2] == "Error");
+    fields = fields[fields[:,2].argsort()[::-1]];
 
-    print("{} tensors with error < {}".format(len(Err), err_bound));
-
-    if len(Err) == 0:
-        print("All matrices are not isotropic!  (with error >= {})".format(err_bound));
-    else:
-        point_plot(Lambda, Mu, Err, angles, ratios,
-                xlab="Lambda", ylab="Mu", wlab="Error", err_bound=err_bound,
-                facet_1 = args.facet1, facet_2 = args.facet2, prefix=args.prefix);
+    dump_csv(args.output, field_names, fields);
 
     timethis.summarize();
 
