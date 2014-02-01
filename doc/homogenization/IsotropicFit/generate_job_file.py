@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import argparse
+import json
 import os
 import os.path
+
 from ColumnRanges import extract_column_ranges
 
 def get_ranges(directory):
@@ -18,25 +20,37 @@ def get_ranges(directory):
     min_val, max_val = extract_column_ranges(csv_files);
     return min_val, max_val;
 
-def generate_job_commands(directory, err_bound, rank, Ne, Nt, csv_file):
+def generate_config_files(directory, err_bound, rank, Ne, Nt, csv_file,
+        config_output_dir, plot_output_dir):
+    config_files = [];
     min_val, max_val = get_ranges(directory);
-    base_command = "./SinglePlot.py --rank {} -E {} --Ne {} --Nt {}".format(
-            rank, err_bound, Ne, Nt);
-    index_setting = "--angle-index {} --ratio-index {} --laminate-index {}";
-    range_setting = "--xmin={} --xmax={} --ymin={} --ymax={}".format(
-            min_val[0], max_val[1], min_val[1], max_val[1]);
-
-    commands = [];
     for rank_i in range(rank):
         for angle_i in range(Ne):
             for ratio_i in range(Nt):
-                command = "{} {} {} {}".format(
-                        base_command,
-                        index_setting.format(angle_i, ratio_i, rank_i),
-                        range_setting,
-                        csv_file);
-                commands.append(command);
-    return commands;
+                config = {
+                        "prefix":"",
+                        "rank":rank,
+                        "error_bound":err_bound,
+                        "csv_file": csv_file,
+                        "num_angles": Ne,
+                        "num_ratios": Nt,
+                        "angle_index": angle_i,
+                        "ratio_index": ratio_i,
+                        "laminate_index": rank_i,
+                        "xmin": min_val[0],
+                        "xmax": max_val[0],
+                        "ymin": min_val[1],
+                        "ymax": max_val[1],
+                        "out_dir": plot_output_dir
+                        };
+                config_file = "p{}_{}x{}_layer{}_alpha{}_theta{}.config"\
+                        .format(rank, Ne, Nt, rank_i, angle_i, ratio_i);
+                config_file = os.path.join(config_output_dir, config_file);
+                with open(config_file, 'w') as fout:
+                    json.dump(config, fout, indent=4);
+                config_files.append(config_file);
+    return config_files;
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=\
@@ -50,16 +64,25 @@ def parse_args():
             type=int, required=True);
     parser.add_argument("--rank", help="number of laminations",
             type=int, required=True);
+    parser.add_argument("--config-outdir", help="output directory for config files")
+    parser.add_argument("--plot-outdir", help="output directory for plots");
     parser.add_argument("csv_file", help="target csv file");
     args = parser.parse_args();
     return args;
 
 def main():
     args = parse_args();
-    commands = generate_job_commands(args.directory, args.error_bound,
-            args.rank, args.Ne, args.Nt, args.csv_file);
-    for cmd in commands:
-        print(cmd);
+    config_files = generate_config_files(
+            args.directory, args.error_bound,
+            args.rank, args.Ne, args.Nt, args.csv_file,
+            args.config_outdir, args.plot_outdir);
+
+    basename, ext = os.path.splitext(args.csv_file);
+    path, name = os.path.split(basename);
+    job_file = os.path.join(args.config_outdir, name + ".job");
+    with open(job_file, 'w') as fout:
+        for config_file in config_files:
+            fout.write("{}\n".format(config_file));
 
 if __name__ == "__main__":
     main();

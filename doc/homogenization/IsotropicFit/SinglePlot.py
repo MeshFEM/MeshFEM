@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import json
 import numpy as np
 from mako.template import Template
 from mako.runtime import Context
@@ -12,10 +13,47 @@ from ColumnRanges import extract_column_ranges
 TMP_DIR = "./";
 EPS = 1e-3;
 
+def load_config(config_file):
+    with open(config_file, 'r') as fin:
+        config = json.load(fin);
+    return config;
+
+@timethis
+def generate_R_script_from_config(config_file):
+    config = load_config(config_file);
+    def get_config(name, default=None):
+        if name in config:
+            return config[name];
+        else:
+            return default;
+
+    prefix    = get_config("prefix");
+    rank      = get_config("rank");
+    err_bound = get_config("error_bound");
+    csv_file  = get_config("csv_file");
+
+    Ne = get_config("num_angles");
+    Nt = get_config("num_ratios");
+
+    angle_index    = get_config("angle_index", -1);
+    ratio_index    = get_config("ratio_index", -1);
+    laminate_index = get_config("laminate_index");
+
+    xmin = get_config("xmin", 1);
+    xmax = get_config("xmax",-1);
+    ymin = get_config("ymin", 1);
+    ymax = get_config("ymax",-1);
+
+    out_dir = get_config("out_dir", "./");
+
+    return generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
+            angle_index, ratio_index, laminate_index,
+            xmin, xmax, ymin, ymax, out_dir);
+
 @timethis
 def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         angle_index, ratio_index, laminate_index,
-        xmin, xmax, ymin, ymax):
+        xmin, xmax, ymin, ymax, out_dir):
     r_template = Template(filename="plot.mako");
     r_file = os.path.join(TMP_DIR, "plot.r");
     if prefix == "":
@@ -23,6 +61,7 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
     else:
         prefix = "{}_p{}_e{}_layer{}".format(prefix, rank, err_bound,
                 laminate_index);
+    prefix = os.path.join(out_dir, prefix);
 
     with open(r_file, 'w') as fout:
         r_template.get_def("header").render_context(Context(
@@ -65,54 +104,23 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
 
     return r_file;
 
+
 @timethis
-def plot(csv_file, prefix, rank, err_bound, Ne, Nt,
-        angle_index, ratio_index, laminate_index,
-        xmin, xmax, ymin, ymax):
-    r_file = generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
-            angle_index, ratio_index, laminate_index, xmin, xmax, ymin, ymax);
+def plot(config_file):
+    r_file = generate_R_script_from_config(config_file);
     command = "Rscript {}".format(r_file);
     check_call(command.split());
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Plot csv files");
-    parser.add_argument("csv_file", help="target csv file");
-
-    # Global setting
-    parser.add_argument("--rank", help="number of laminations",
-            type=int, required=True);
-    parser.add_argument("--prefix", help="prefix of output file",
-            default="");
-    parser.add_argument("-E", "--error-bound",
-            help="only plot data within this error bound", type=float,
-            default=0.1);
-    parser.add_argument("--Ne", help="number of discrete angles", type=int);
-    parser.add_argument("--Nt", help="number of discrete material ratios",
-            type=int);
-
-    # Index setting
-    parser.add_argument("--angle-index", help="select angle to plot", type=int,
-            default=-1);
-    parser.add_argument("--ratio-index", help="select material ratio to plot", type=int,
-            default=-1);
-    parser.add_argument("--laminate-index", help="select laminate to plot", type=int,
-            default=0);
-
-    # Range settings
-    # By default xmin > xmax and ymin > ymax, so range is not used.
-    parser.add_argument("--xmin", help="minimum of x", type=float, default= 1.0);
-    parser.add_argument("--xmax", help="maximum of x", type=float, default=-1.0);
-    parser.add_argument("--ymin", help="minimum of y", type=float, default= 1.0);
-    parser.add_argument("--ymax", help="maximum of y", type=float, default=-1.0);
+    parser.add_argument("config_file", help="Plot configuration file");
     args = parser.parse_args();
     return args;
 
 def main():
     args = parse_args();
-    plot(args.csv_file, args.prefix, args.rank, args.error_bound,
-            args.Ne, args.Nt,
-            args.angle_index, args.ratio_index, args.laminate_index,
-            args.xmin, args.xmax, args.ymin, args.ymax);
+    plot(args.config_file);
     timethis.summarize();
 
 if __name__ == "__main__":
