@@ -26,33 +26,53 @@ def generate_R_script(csv_file, prefix, rank, err_bound):
         r_template.get_def("point_plot").render_context(Context(
             fout, x_col = "Lambda", y_col = "Mu", w_col = "Error",
             title = "Rank-{} Laminates (Error < {})\n".format(rank, err_bound) +\
-                    "Lambda vs Mu",
-            out_name = "{}_param.pdf".format(prefix),
-            facet_1 = None, facet_2 = None));
+                    "Lambda vs Mu"));
+        r_template.get_def("save_plot").render_context(Context(
+            fout, width=10, height=6,
+            out_name = "{}_param.pdf".format(prefix)));
 
+        # Histogram of residual errors
         r_template.get_def("histogram").render_context(Context(
             fout, w_col = "Error",
             title = "Rank-{} Laminates (Error < {})\n".format(rank, err_bound) +\
-                    "Fitting error",
-            out_name = "{}_error.pdf".format(prefix),
-            facet_1 = None, facet_2 = None));
+                    "Fitting error"));
+        r_template.get_def("save_plot").render_context(Context(
+            fout, width=10, height=6,
+            out_name = "{}_error.pdf".format(prefix)));
 
         for p in range(rank):
+            extended_prefix = "{}_alpha{}_theta{}".format(prefix, p, p);
+            # Plat data points with facets
             r_template.get_def("point_plot").render_context(Context(
                 fout, x_col = "Lambda", y_col = "Mu", w_col = "Error",
                 title = "Rank-{} Laminates (Error < {})\n".format(rank, err_bound) +\
-                        "Lambda vs Mu given alpha{} (row) and theta{} (col)".format(p,p),
-                out_name = "{}_alpha{}_theta{}_param.pdf".format(prefix, p, p),
+                        "Lambda vs Mu given alpha{} (row) and theta{} (col)".format(p,p)));
+
+            r_template.get_def("add_facet").render_context(Context(
+                fout, 
                 facet_1 = "Angle_{}".format(p),
                 facet_2 = "Ratio_{}".format(p)));
 
+            r_template.get_def("save_plot").render_context(Context(
+                fout, width=20, height=12,
+                out_name = "{}_param.pdf".format(extended_prefix)));
+
+            # Histogram with facets
             r_template.get_def("histogram").render_context(Context(
                 fout, w_col = "Error",
                 title = "Rank-{} Laminates (Error < {})\n".format(rank, err_bound) +\
                         "Fitting error given alpha{} (row) and theta{} (col)".format(p,p),
-                out_name = "{}_alpha{}_theta{}_error.pdf".format(prefix, p, p),
+                out_name = "{}_alpha{}_theta{}_error.pdf".format(
+                    prefix, p, p)));
+
+            r_template.get_def("add_facet").render_context(Context(
+                fout, 
                 facet_1 = "Angle_{}".format(p),
                 facet_2 = "Ratio_{}".format(p)));
+
+            r_template.get_def("save_plot").render_context(Context(
+                fout, width=20, height=12,
+                out_name = "{}_error.pdf".format(extended_prefix)));
 
     return r_file;
 
