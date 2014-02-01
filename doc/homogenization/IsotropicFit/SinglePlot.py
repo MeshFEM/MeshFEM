@@ -56,11 +56,13 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         xmin, xmax, ymin, ymax, out_dir):
     r_template = Template(filename="plot.mako");
     if prefix == "":
-        prefix = "p{}_{}x{}_e{}_layer{}".format(
-                rank, Ne, Nt, err_bound, laminate_index);
+        prefix = "p{}_{}x{}_e{}_layer{}_alpha{}_theta{}".format(
+                rank, Ne, Nt, err_bound, laminate_index,
+                angle_index, ratio_index);
     else:
-        prefix = "{}_p{}_{}x{}_e{}_layer{}".format(
-                prefix, rank, Ne, Nt, err_bound, laminate_index);
+        prefix = "{}_p{}_{}x{}_e{}_layer{}_alpha{}_theta{}".format(
+                prefix, rank, Ne, Nt, err_bound, laminate_index,
+                angle_index, ratio_index);
     prefix = os.path.join(out_dir, prefix);
     r_file = "{}_param.r".format(prefix);
 

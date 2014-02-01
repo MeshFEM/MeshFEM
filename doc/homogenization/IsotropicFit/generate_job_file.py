@@ -43,8 +43,8 @@ def generate_config_files(directory, err_bound, rank, Ne, Nt, csv_file,
                         "ymax": max_val[1],
                         "out_dir": plot_output_dir
                         };
-                config_file = "p{}_{}x{}_layer{}_alpha{}_theta{}.config"\
-                        .format(rank, Ne, Nt, rank_i, angle_i, ratio_i);
+                config_file = "p{}_{}x{}_e{}_layer{}_alpha{}_theta{}.config"\
+                        .format(rank, Ne, Nt, err_bound, rank_i, angle_i, ratio_i);
                 config_file = os.path.join(config_output_dir, config_file);
                 with open(config_file, 'w') as fout:
                     json.dump(config, fout, indent=4);
