@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+from datetime import datetime
 import json
 import numpy as np
 from mako.template import Template
@@ -54,8 +55,9 @@ def generate_R_script_from_config(config_file):
 def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         angle_index, ratio_index, laminate_index,
         xmin, xmax, ymin, ymax, out_dir):
+    stamp = datetime.now().isoformat();
     r_template = Template(filename="plot.mako");
-    r_file = os.path.join(TMP_DIR, "plot.r");
+    r_file = os.path.join(TMP_DIR, "plot_{}.r".format(stamp));
     if prefix == "":
         prefix = "p{}_e{}_layer{}".format(rank, err_bound, laminate_index);
     else:
@@ -110,6 +112,7 @@ def plot(config_file):
     r_file = generate_R_script_from_config(config_file);
     command = "Rscript {}".format(r_file);
     check_call(command.split());
+    os.remove(r_file);
 
 
 def parse_args():
