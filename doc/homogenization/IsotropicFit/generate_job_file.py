@@ -23,6 +23,11 @@ def get_ranges(directory):
 def generate_config_files(directory, err_bound, rank, Ne, Nt, csv_file,
         config_output_dir, plot_output_dir):
     config_files = [];
+
+    csv_file = os.path.abspath(csv_file);
+    config_otuput_dir = os.path.abspath(config_output_dir);
+    plot_output_dir = os.path.abspath(plot_output_dir);
+
     min_val, max_val = get_ranges(directory);
     for rank_i in range(rank):
         for angle_i in range(Ne):
