@@ -56,13 +56,11 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         xmin, xmax, ymin, ymax, out_dir):
     r_template = Template(filename="plot.mako");
     if prefix == "":
-        prefix = "p{}_{}x{}_e{}_layer{}_alpha{}_theta{}".format(
-                rank, Ne, Nt, err_bound, laminate_index,
-                angle_index, ratio_index);
+        prefix = "p{}_{}x{}_e{}_layer{}".format(
+                rank, Ne, Nt, err_bound, laminate_index);
     else:
-        prefix = "{}_p{}_{}x{}_e{}_layer{}_alpha{}_theta{}".format(
-                prefix, rank, Ne, Nt, err_bound, laminate_index,
-                angle_index, ratio_index);
+        prefix = "{}_p{}_{}x{}_e{}_layer{}".format(
+                prefix, rank, Ne, Nt, err_bound, laminate_index);
     prefix = os.path.join(out_dir, prefix);
     r_file = "{}_param.r".format(prefix);
 
@@ -75,7 +73,7 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         if angle_index >= 0:
             angle = pi / Ne * angle_index; 
             subtitle += " angle={} ".format(angle)
-            prefix += "_angle{}".format(angle_index);
+            prefix += "_alpha{}".format(angle_index);
             r_template.get_def("filter_data").render_context(Context(
                 fout, field_name = "Angle_{}".format(laminate_index),
                 upper_bound = angle + EPS,
@@ -84,7 +82,7 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         if ratio_index >= 0:
             ratio = 1.0 / (Ne+1) * (ratio_index + 1);
             subtitle += " ratio={} ".format(ratio)
-            prefix += "_ratio{}".format(ratio_index);
+            prefix += "_theta{}".format(ratio_index);
             r_template.get_def("filter_data").render_context(Context(
                 fout, field_name = "Ratio_{}".format(laminate_index),
                 upper_bound = ratio + EPS,
