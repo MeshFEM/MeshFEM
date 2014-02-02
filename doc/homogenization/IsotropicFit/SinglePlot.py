@@ -10,13 +10,25 @@ from subprocess import check_call
 from timethis import timethis
 from ColumnRanges import extract_column_ranges
 
-TMP_DIR = "./";
+TMP_DIR = "/tmp/";
 EPS = 1e-3;
 
 def load_config(config_file):
     with open(config_file, 'r') as fin:
         config = json.load(fin);
     return config;
+
+def update_prefix(prefix, rank, err_bound, Ne, Nt,
+        angle_index, ratio_index, laminate_index):
+    if len(prefix) > 0:
+        prefix += "_"
+    prefix = prefix + "p{}_{}x{}_e{}_layer{}".format(
+            rank, Ne, Nt, err_bound, laminate_index);
+    if angle_index >= 0:
+        prefix += "_alpha{}".format(angle_index);
+    if ratio_index >= 0:
+        prefix += "_theta{}".format(ratio_index);
+    return prefix;
 
 @timethis
 def generate_R_script_from_config(config_file):
@@ -55,14 +67,10 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         angle_index, ratio_index, laminate_index,
         xmin, xmax, ymin, ymax, out_dir):
     r_template = Template(filename="plot.mako");
-    if prefix == "":
-        prefix = "p{}_{}x{}_e{}_layer{}".format(
-                rank, Ne, Nt, err_bound, laminate_index);
-    else:
-        prefix = "{}_p{}_{}x{}_e{}_layer{}".format(
-                prefix, rank, Ne, Nt, err_bound, laminate_index);
-    prefix = os.path.join(out_dir, prefix);
-    r_file = "{}_param.r".format(prefix);
+    prefix = update_prefix(prefix, rank, err_bound, Ne, Nt,
+            angle_index, ratio_index, laminate_index);
+    r_file = os.path.join(TMP_DIR, prefix + "_param.r");
+    out_name = os.path.join(TMP_DIR, prefix + "_param.pdf");
 
     with open(r_file, 'w') as fout:
         r_template.get_def("header").render_context(Context(
@@ -73,7 +81,6 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         if angle_index >= 0:
             angle = pi / Ne * angle_index; 
             subtitle += " angle={} ".format(angle)
-            prefix += "_alpha{}".format(angle_index);
             r_template.get_def("filter_data").render_context(Context(
                 fout, field_name = "Angle_{}".format(laminate_index),
                 upper_bound = angle + EPS,
@@ -82,7 +89,6 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
         if ratio_index >= 0:
             ratio = 1.0 / (Ne+1) * (ratio_index + 1);
             subtitle += " ratio={} ".format(ratio)
-            prefix += "_theta{}".format(ratio_index);
             r_template.get_def("filter_data").render_context(Context(
                 fout, field_name = "Ratio_{}".format(laminate_index),
                 upper_bound = ratio + EPS,
@@ -101,15 +107,18 @@ def generate_R_script(csv_file, prefix, rank, err_bound, Ne, Nt,
 
         r_template.get_def("save_plot").render_context(Context(
             fout, width=10, height=6,
-            out_name = "{}_param.pdf".format(prefix)));
+            out_name = out_name));
 
-    return r_file;
+    return r_file, out_name, out_dir;
 
 
 @timethis
 def plot(config_file):
-    r_file = generate_R_script_from_config(config_file);
+    r_file, out_name, out_dir = generate_R_script_from_config(config_file);
     command = "Rscript {}".format(r_file);
+    check_call(command.split());
+    assert(os.path.exists(out_name));
+    command = "mv {} {}/.".format(out_name, out_dir)
     check_call(command.split());
 
 
