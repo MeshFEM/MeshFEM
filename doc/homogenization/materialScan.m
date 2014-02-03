@@ -15,16 +15,20 @@ function materialScan(Ne, Nv)
     Erange = Erange(2:end);
     vrange = vrange(2:end-1);
 
+    lambda = @(E, v) (E * v)/((1 + v) * (1 - v));
+    mu     = @(E, v) E / (2 * (1 + v));
+    kappa  = @(E, v) E / (2 * (1 - v));
+
     EA = 1;
     for vA = vrange
-        lamA = (EA * vA)/((1 + vA) * (1 - 2 * vA));
-        muA  = EA/(2 * (1 + vA));
-        kA   = EA/(3 * (1 - 2 * vA));
+        lamA = lambda(EA, vA);
+        muA  = mu(EA, vA);
+        kA   = kappa(EA, vA);
         for EB = Erange
             for vB = vrange
-                lamB = (EB * vB)/((1 + vB) * (1 - 2 * vB));
-                muB  = EB/(2 * (1 + vB));
-                kB   = EB/(3 * (1 - 2 * vB));
+                lamB = lambda(EB, vB);
+                muB  = mu(EB, vB);
+                kB   = kappa(EB, vB);
                 [vA EB vB]
                 % Check material pair. We can't have A == B because EB > EA.
                 if ((kA > kB) || (muA > muB))

@@ -42,6 +42,7 @@ function [AStars, params] = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
     fA = repmat(fAGen([1; 0]), [1, 1, p]);
     theta = (1 / (Nt + 1)) * thetaSteps;
 
+    assert(abs(det(B - A)) > 1e-3, 'singular B - A');
     BmAinv = (B - A)^-1;
 
     NeP = Ne^p;
@@ -66,6 +67,7 @@ function [AStars, params] = sequentialLaminates(lamA, muA, lamB, muB, p, Nt, Ne)
             for i = 1:p
                 angleProd = angleProd * (1 - theta(i));
             end
+            assert(abs(det(BmAinv + fAComb)) > 1e-3, 'singular BmAinv + fAComb');
             AStars(:, :, (eIt-1) * NtP + thetaIt) = A + angleProd * (BmAinv + fAComb)^-1;
             params(   :, (eIt-1) * NtP + thetaIt) = [(eSteps-1)*pi/Ne; theta];
 
