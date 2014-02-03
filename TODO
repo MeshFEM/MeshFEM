@@ -1,0 +1,33 @@
+Implement:
+*** MSH writer (multiple MSH needed for model changes).
+*** Non-bluring point force version.
+
+  - Make pressure viewing configure the simulation
+  - Prepend highest weakness to region name so they sort better...
+  - Try refinement with non-MS boundary, but scaling force blur radius
+    proportionally to grid
+  - Parameter sweeps (maybe)
+
+    Work-arounds:
+        Visualize signed distance function
+        Visualize "blurred" object
+        ==> now weakness *should* be a continuous function of the parameters
+            + ideally we can make it differentiable
+
+        Try averaging over a fixed area (see if this converges)
+
+- Compare compliance, von mises stress, and max stress fields (what should we be
+  using as a criterion?
+
+Observations:
+    Every element in a (stiffness) weak region should have roughly the same max
+    stress sign if stress is smooth. We could also force it to if needed.
+    Therefore, "abstrace" maybe isn't needed to avoid cancellation.
+
+    There is a "preferred" sign from the perspective of stress optimization
+    (flipping pressures isn't allowed). Modal analysis has no such preference,
+    so we should try both +/- weightings for the entire weak region.
+
+==> Thoughts:
+    Split up weak regions into sign-coherent regions.
+    Test both + and - objectives.
