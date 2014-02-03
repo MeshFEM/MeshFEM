@@ -187,15 +187,18 @@ $(B - A)^{-1}$ can be precomputed, so each iteration involves a single $3 \times
 We also need to search over parameters for $\lambda_A$, $\mu_A$, $\lambda_B$,
 and $\mu_B$, satisfying $\mu_A \le \mu_B$ and $\kappa_A \le \kappa_B$, where
 $$
- \kappa = \lambda + 2\frac{\mu_A}{N}.
+ \kappa = \lambda + 2\frac{\mu}{N} = \lambda + \mu
 $$
 This search is more easily analyzed by changing parameters to Young's modulus,
 $E$, and Poisson ratio, $\nu$:
 $$
-\lambda = \frac{E \nu}{(1 + \nu)(1 - 2\nu)}, \quad
 \mu = \frac{E}{2(1 + \nu)}, \quad
-\kappa = \frac{E}{3(1 - 2\nu)}.
+\kappa = \frac{E}{2(1 - \nu)}, \quad
+\lambda = \kappa - \mu = \frac{E(1 + \nu) - E(1 - \nu)}{2(1 + \nu)(1 - \nu)}
+= \frac{E \nu}{(1 + \nu)(1 - \nu)}.
+% \lambda = \frac{E \nu}{(1 + \nu)(1 - 2\nu)}.
 $$
+where the $2D$ conversion formulas were taken from \cite{jasiuk}.
 The first thing we notice is that $\lambda, \mu \propto E$. This means $A$ and
 $B$ are also $\propto$ $E_A$ and $E_B$ respectively, and $f_A(e) \propto
 \frac{1}{E_A}$ by (\ref{eqn:fAdef}).
