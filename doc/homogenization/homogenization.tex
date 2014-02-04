@@ -9,7 +9,7 @@
 \usepackage{cancel}
 \usepackage{subfigure}
 \usepackage{mathrsfs}
-\usepackage{outlines}
+%\usepackage{outlines}
 \usepackage[font={sf,it}, labelfont={sf,bf}, labelsep=space, belowskip=5pt]{caption}
 \usepackage{hyperref}
 \usepackage{minted}
@@ -234,6 +234,91 @@ this is very hard to visualize. To simplify things, we consider only tensors
 approximating isotropic tensors since those are a 2D subspace that is easily
 parameterized and visualized. Thus we can plot on a $(\lambda, \mu)$ plane. We
 color points based on $p$ value.
+
+\section{Results}
+For each homogenized material tensor $A^*_p$, we find the best fitting isotropic
+material tensor, $A_{\textrm{fit}}$, in the least square sense.  
+The residual error, $E_{\textrm{fit}}$, is define as
+$$
+E_{\textrm{fit}} = \frac{\|A^*_p -
+A_{\textrm{fit}}\|_{\textrm{fro}}}{\|A_{\textrm{fit}}\|_{\textrm{fro}}}
+$$
+The corresponding isotropic material properties can be extracted from
+$A_{\textrm{fit}}$.
+
+\begin{figure}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_error}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e0.01_young_poisson_error}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e0.005_young_poisson_error}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e0.001_young_poisson_error}.png}
+\caption{ Homogenized material tensors for rank-3 laminates visualized in Young's
+modulus vs Poisso ratio space.  Top left: all tensors are plotted.  Top right:
+$E_{\textrm{fit}} < 0.01$.  Bottom left: $E_{\textrm{fit}} < 0.005$.  Bottom
+right: $E_{\textrm{fit}} < 0.001$. }
+\label{fig:rank3_error}
+\end{figure}
+
+As shown in Figure \ref{fig:rank3_error} (top left), all sampled rank-3 material
+tensors are plotted where $E_{\textrm{fit}}$ maps to color.  They occupies a
+crecent shape region with one end correponding to $A$, and the other end can be
+extrapolated to $B$.  Unsupprisingly most samples are concentrated near the
+the weaker base material $A$.  As we filter out samples with large errors,
+Figure \ref{fig:rank3_error} top right and bottom, we see that the lower arc of
+the crecent has the lowest fitting error.
+
+\begin{figure}
+\includegraphics[width=0.49\textwidth]{{images/p2_e1.0_young_poisson_ratio}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_ratio}.png}
+\caption{Homogenized material tensor of rank-2 (left) and rank-3 (right)
+laminates visualized in Young's modulus vs Poisson ratio space.  Total material
+ratio is ploted.  Notice that material ratio determines the Young's modulus of
+the composite material.}
+\label{fig:ratio}
+\end{figure}
+
+We also notice that the ratio of material dictates the Young's modulus of the
+homogenized material.  Figure \ref{fig:ratio} shows all sampled material tensors
+for rank-2 and rank-3 laminates with color representing the ratio of material
+$A$.  All laminates with the same ratio of material A have roughly the same
+Young's modulus.  Their Poisson ratios, howver, are different depending on their
+lamination directions.
+
+\begin{figure}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_error}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_error_3.0}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_error_4.0}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_error_5.0}.png}
+\caption{Homogenized material tensors of rank-3 laminates with different base
+material $B$.  Color maps to fitting error. Top left: $E_B = 2$, Top right: $E_B
+= 3$, Bottom left: $E_B = 4$, Bottom right: $E_B = 5$}
+\label{fig:material_B}
+\end{figure}
+
+As we varies the base materials (Figure \ref{fig:material_B}), we observe that
+the space occupies by homogenized material tensor remains crecent.  The more
+isotropic samples points still concentrates near the lower arc of the crecent.
+
+\begin{figure}
+\includegraphics[width=0.49\textwidth]{{images/p2_e1.0_young_poisson_angle}.png}
+\includegraphics[width=0.49\textwidth]{{images/p3_e1.0_young_poisson_angle}.png}
+\caption{The effect of relative lamination direction is shown here for rank-2
+laminates (left) and rank-3 laminates (right).  For rank-3 laminates, we use the
+relative lamination direction of the first 2 layers.}
+\label{fig:angle_diff}
+\end{figure}
+
+For rank-2 laminates, we also explore the effect of the relative lamination
+direction between the two layer on the resulting material.  Here relative
+lamination direction is defined as $\alpha_{\textrm{diff}}$:
+$$
+\alpha_{\textrm{diff}} = \min(\abs{\alpha_0 - \alpha_1}, \pi - \abs{\alpha_0 -
+\alpha_1})
+$$
+This quantity is visualized in Figure \ref{fig:angle_diff} (left).  Each
+relative angle seems to determine an arc in the crecent space.  We also
+attempted to visualize relative lamination direction of the first 2 layers for
+rank-3 laminates (Figure \ref{fig:angle_diff} right), but result does not reveal
+much.
 
 \bibliographystyle{plain}
 \bibliography{References}
