@@ -24,7 +24,8 @@ def process_tensors(filename):
     angles = material.angles;
     ratios = material.ratios;
 
-    num_laminates = angles.shape[1];
+    num_angles = angles.shape[1];
+    num_ratios = ratios.shape[1];
     num_samples = angles.shape[0];
 
     base_A_young = np.ones((num_samples, 1)) * material.base_A_young;
@@ -38,8 +39,8 @@ def process_tensors(filename):
     field_names = ["Young_A", "Young_B", "Poisson_A", "Poisson_B",
             "Lambda", "Mu", "Youngs_modulus", "Poisson_ratio",
             "Bulk_modulus", "Error"] +\
-            ["Angle_{}".format(i) for i in range(num_laminates)] +\
-            ["Ratio_{}".format(i) for i in range(num_laminates)];
+            ["Angle_{}".format(i) for i in range(num_angles)] +\
+            ["Ratio_{}".format(i) for i in range(num_ratios)];
     assert(len(field_names) == fields.shape[1]);
 
     return field_names, fields;
