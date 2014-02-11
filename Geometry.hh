@@ -15,6 +15,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <cmath>
 
 template<typename Vector>
 struct BBox {
@@ -95,6 +96,43 @@ struct BBox {
 
         return (c_prime - boxHalfDims).squaredNorm() <= r * r;
     }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Fast 2D rotation class. This is useful because Eigen's Rotation2D was
+//  killing performance (isInside tests in particular)
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real, typename Vector>
+class FastRotation2D {
+public:
+    FastRotation2D(Real radians) { setAngle(radians); }
+
+    void setAngle(Real radians) {
+        m_angle = radians;
+        m_cos = cos(radians);
+        m_sin = sin(radians);
+    }
+
+    void setDegrees(Real degrees) {
+        setAngle((M_PI * degrees) / 180.0);
+    }
+
+    // Apply the rotation
+    Vector operator()(const Vector &v) const {
+        return Vector(m_cos * v[0] - m_sin * v[1], m_cos * v[1] + m_sin * v[0]);
+    }
+
+    // Apply the inverse rotation
+    Vector inverse(const Vector &v) const {
+        return Vector(m_cos * v[0] + m_sin * v[1], m_cos * v[1] - m_sin * v[0]);
+    }
+
+    // Accessors
+    Real deg() const { return (180.0 * m_angle) / M_PI; }
+    Real rad() const { return m_angle; }
+
+private:
+    Real m_angle, m_cos, m_sin;
 };
 
 template<typename T>

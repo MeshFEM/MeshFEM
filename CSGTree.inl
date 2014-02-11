@@ -114,7 +114,7 @@ public:
 
     CSGPrimitive(Vector center, Vector dimensions, Real rot = 0.0)
         : m_c(center), m_dim(dimensions), m_rot_inv(0) {
-        setRotation(rot);
+        m_rot_inv.setDegrees(-rot);
     }
 
     virtual ~CSGPrimitive() { }
@@ -125,17 +125,16 @@ public:
     void setCenter(const Vector &c) { m_c = c; }
     void setDimensions(const Vector &dim) { m_dim = dim; }
 
-    Real getRotation() const { return -m_deg(m_rot_inv.angle()); }
-    Real getRotationRad() const { return -m_rot_inv.angle(); }
-    void setRotation(Real r) { m_rot_inv.angle() = -m_rad(r); }
-    void setRotationRad(Real r) { m_rot_inv.angle() = -r; }
+    Real getRotation() const { return -m_rot_inv.deg(); }
+    Real getRotationRad() const { return -m_rot_inv.rad(); }
+    void setRotation(Real r) { m_rot_inv.setDegrees(-r); }
+    void setRotationRad(Real r) { m_rot_inv.setAngle(-r); }
 
     Vector toLocalCoords(const Vector &p) const {
-        return m_rot_inv * (p - m_c);
+        return m_rot_inv(p - m_c);
     }
 
     BBox_t boundingBox() const {
-        Eigen::Rotation2D<Real> rot = m_rot_inv.inverse();
         int n = m_dim.size();
         int nCorners = 1 << n;
         std::vector<Vector> corners(nCorners);
@@ -146,7 +145,7 @@ public:
             }
 
             // Apply rotation and offset
-            corners[i] = rot * corners[i] + m_c;
+            corners[i] = m_rot_inv.inverse(corners[i]) + m_c;
         }
 
         BBox_t b(corners[0], corners[0]);
@@ -168,11 +167,7 @@ public:
 
 protected:
     Vector m_c, m_dim;
-    Eigen::Rotation2D<Real> m_rot_inv;
-
-private:
-    Real m_deg(Real angle) const { return 180.0 * (angle / M_PI); }
-    Real m_rad(Real angle) const { return M_PI  * (angle / 180.0); }
+    FastRotation2D<Real, Vector> m_rot_inv;
 };
 
 template<typename Vector>
@@ -376,6 +371,7 @@ class CSGTree<Vector>::CSGRectangleNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
     typedef BoundaryPoint<Vector> _BoundaryPoint;
+    using CSGTree<Vector>::CSGPrimitive::m_rot_inv;
 public:
     CSGRectangleNode(const Vector &center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
@@ -391,7 +387,8 @@ public:
 
     bool isInside(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
-        return (l.cwiseAbs().array() <= (.5 * this->m_dim).array()).all();
+        return (fabs(l[0]) <= .5 * this->m_dim[0]) && 
+               (fabs(l[1]) <= .5 * this->m_dim[1]);
     }
 
     Real signedDistance(const Vector &p) const {
@@ -488,11 +485,10 @@ public:
         bndPts[1].a += .5 * segmentLength;
         
         // Transorm all boundary points
-        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
         for (size_t i = 0; i < bndPts.size(); ++i) {
             _BoundaryPoint &bp = bndPts[i];
-            bp.p = rot * bp.p + this->m_c; 
-            bp.n = rot * bp.n;
+            bp.p = m_rot_inv.inverse(bp.p) + this->m_c; 
+            bp.n = m_rot_inv.inverse(bp.n);
         }
 
         // Verify the point areas sum to the perimeter
@@ -518,6 +514,7 @@ class CSGTree<Vector>::CSGEllipseNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
     typedef BoundaryPoint<Vector> _BoundaryPoint;
+    using CSGTree<Vector>::CSGPrimitive::m_rot_inv;
 public:
     CSGEllipseNode(Vector center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
@@ -540,8 +537,7 @@ public:
 
     Vector getFocus() const {
         Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
-        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
-        return rot * f;
+        return m_rot_inv.inverse(f);
     }
 
     Real getMajorRadius() const {
@@ -583,8 +579,6 @@ public:
         std::vector<_BoundaryPoint> bndPts;
         bndPts.reserve(N);
 
-        Eigen::Rotation2D<Real> rot = this->m_rot_inv.inverse();
-
         for (size_t i = 0; i < N; ++i) {
             Real t = parameterValues[i];
             // Parametrization always assumes major axis is in the x direction.
@@ -602,8 +596,8 @@ public:
                 n = Vector(-n[1], n[0]);
             }
 
-            p = rot * p + this->m_c;
-            n = rot * n;
+            p = m_rot_inv.inverse(p) + this->m_c;
+            n = m_rot_inv.inverse(n);
 
             bndPts.push_back(_BoundaryPoint(p, n, pointAreas));
         }
@@ -804,6 +798,12 @@ public:
     ~CSGPieSliceNode() { }
 };
 
+template<typename Real>
+Real fast_fmod(Real x, Real mod)
+{
+    return x - ((int) (x / mod)) * mod;
+}
+
 // Note: for laminates, dimensions are actually (epsilon, theta), where epsilon
 // is the spacing between slice centers and theta is the thickness of each slice
 // (in [0, 1]).
@@ -827,7 +827,7 @@ public:
     bool isInside(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
         Real epsilon = getEpsilon();
-        Real xEpsilon = fmod(std::abs(l[0]), epsilon);
+        Real xEpsilon = fast_fmod(std::abs(l[0]), epsilon);
         return (xEpsilon < epsilon * getTheta() / 2.0) ||
                (xEpsilon > epsilon * (1 -  getTheta() / 2.0));
     }
@@ -835,7 +835,7 @@ public:
     Real signedDistance(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
         Real epsilon = getEpsilon();
-        Real xEpsilon = fmod(std::abs(l[0]), epsilon);
+        Real xEpsilon = fast_fmod(std::abs(l[0]), epsilon);
         return std::min(xEpsilon - epsilon * getTheta() / 2.0,
                         epsilon * (1 -  getTheta() / 2.0) - xEpsilon);
     }
