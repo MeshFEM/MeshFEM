@@ -16,6 +16,7 @@
 #include <QScrollArea>
 #include <QMenu>
 #include <QMenuBar>
+#include <QDir>
 
 #include <memory>
 
@@ -38,7 +39,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
 
     g_resultsWindow = new ResultsWindow(results);
 
-    FEMView2D *femView = new FEMView2D(fem, vsettings);
+    QDir dir = QDir(QCoreApplication::applicationDirPath());
+    dir.cdUp();
+    std::string resourcePath = dir.absolutePath().toStdString() + "/Resources";
+    FEMView2D *femView = new FEMView2D(fem, vsettings, resourcePath);
     femView->setMinimumSize(100, 100);
     QSplitter *splitter = new QSplitter();
 

@@ -67,3 +67,30 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            ResultsWindow/ResultsWindow.cc ResultsWindow/ResultsWindowController.cc \
            ResultsWindow/FlipbookDialog.cc \
            cl-helper.c
+
+# Install the resources. The executable expects to find them in
+# "$(executable_dir)/../Resources" since this is compatible with the way a Mac
+# OS X bundle is organized.
+# The rules below install the resources when "Make install" is run.
+macx {
+    # Mac-OSX Specific bundle creation. 
+
+    # Unfortunately, qmake appears to be broken... the below commands create
+    # targets in the makefile that copy the files, but the targets never get
+    # called...
+    # KERNEL_FILES.files = Kernels
+    # KERNEL_FILES.path = Contents/Resources
+    # SHADER_FILES.files = Shaders
+    # SHADER_FILES.path = Contents/Resources
+    # FONT_FILES.files = fonts
+    # FONT_FILES.path = Contents/Resources
+    # QMAKE_BUNDLE_DATA += KERNEL_FILES SHADER_FILES FONT_FILES
+
+    KERNEL_FILES.files = Kernels
+    KERNEL_FILES.path = $$OUT_PWD/CSGFEM.app/Contents/Resources
+    SHADER_FILES.files = Shaders
+    SHADER_FILES.path = $$OUT_PWD/CSGFEM.app/Contents/Resources
+    FONT_FILES.files = fonts
+    FONT_FILES.path = $$OUT_PWD/CSGFEM.app/Contents/Resources
+    INSTALLS += KERNEL_FILES SHADER_FILES FONT_FILES
+}

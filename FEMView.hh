@@ -20,6 +20,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <FTGL/ftgl.h>
 
 #include <OpenGL/OpenGL.h>
@@ -75,7 +76,7 @@ private:
     typedef ResultsCollector_t::Result Result;
 
     FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
-              QWidget *parent = NULL);
+              const std::string &resourcePath, QWidget *parent = NULL);
     ~FEMView2D() {
         // Clean up OpenCL stuff
         CALL_CL_GUARDED(clReleaseKernel, (m_renderKernel));
@@ -278,6 +279,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     // Instance variables
     ////////////////////////////////////////////////////////////////////////////
+    std::string m_resourcePath;
     FTGLBitmapFont m_font;
     Vector m_frameDim, m_frameCenter;
     int m_width, m_height, m_screenTop, m_screenLeft;

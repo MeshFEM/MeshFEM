@@ -55,9 +55,11 @@ typedef struct _CSGPrimitiveData {
 
 
 FEMView2D::FEMView2D(MeshlessFEM_t &fem, const ViewSettings &vs,
+                     const std::string &resourcePath,
                      QWidget *parent)
     : QGLWidget(parent),
-      m_font("/Users/jpanetta/Research/CSGFEM/fonts/Arial.ttf"),
+      m_resourcePath(resourcePath),
+      m_font((resourcePath + "/fonts/Arial.ttf").c_str()),
       m_frameDim(40, 30), m_frameCenter(0, 0),
       m_objectDirty(true), m_overlayDirty(true),
       m_fem(fem), m_result(NULL),
@@ -158,17 +160,17 @@ void FEMView2D::initializeGL()
                                NULL, &err);
 
     // Load and compile OpenCL Kernels
-    char *knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/RenderCSG.cl");
+    char *knl_text = read_file((m_resourcePath + "/Kernels/RenderCSG.cl").c_str());
     assert(knl_text != NULL);
     m_renderKernel = kernel_from_string(m_clContext, knl_text,
                                         "RenderCSG", NULL);
     free(knl_text);
-    knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/RenderCSGSignedDistance.cl");
+    knl_text = read_file((m_resourcePath + "/Kernels/RenderCSGSignedDistance.cl").c_str());
     assert(knl_text != NULL);
     m_renderSDKernel = kernel_from_string(m_clContext, knl_text,
                                         "RenderCSGSignedDistance", NULL);
     free(knl_text);
-    knl_text = read_file("/Users/jpanetta/Research/CSGFEM/Kernels/ClearTexture.cl");
+    knl_text = read_file((m_resourcePath + "/Kernels/ClearTexture.cl").c_str());
     assert(knl_text != NULL);
     m_clearKernel = kernel_from_string(m_clContext, knl_text,
                                        "ClearTexture", NULL);
@@ -181,8 +183,8 @@ void FEMView2D::initializeGL()
     
     // TODO: make these paths relative to the application bundle and copy the
     // shaders in the build rules
-    readShader("/Users/jpanetta/Research/CSGFEM/Shaders/BilinearShader.vert",
-               "/Users/jpanetta/Research/CSGFEM/Shaders/BilinearShader.frag",
+    readShader((m_resourcePath + "/Shaders/BilinearShader.vert").c_str(),
+               (m_resourcePath + "/Shaders/BilinearShader.frag").c_str(),
                m_bilinearShader);
     glUseProgram(m_bilinearShader);
     m_vCoordLoc[0] = glGetAttribLocation(m_bilinearShader, "point0");

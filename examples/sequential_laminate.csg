@@ -35,7 +35,7 @@
                     "name": "Step 1",
                     "type": "laminate",
                     "center": [0, 0],
-                    "dimensions": [0.25, 0.25],
+                    "dimensions": [0.05, 0.25],
                     "rotation": 30
                 },
                 "right": {
