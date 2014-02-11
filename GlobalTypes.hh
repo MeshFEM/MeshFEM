@@ -18,6 +18,7 @@ typedef CSGTree_t::CSGGlueNode CSGGlueNode;
 typedef CSGTree_t::CSGRectangleNode CSGRectangleNode;
 typedef CSGTree_t::CSGEllipseNode CSGEllipseNode;
 typedef CSGTree_t::CSGPieSliceNode CSGPieSliceNode;
+typedef CSGTree_t::CSGLaminateNode CSGLaminateNode;
 typedef BBox<Vector> BBox_t;
 typedef Polygon<Vector> Polygon_t;
 typedef BoundaryPoint<Vector> BoundaryPoint_t;

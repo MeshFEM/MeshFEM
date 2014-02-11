@@ -46,6 +46,10 @@ typedef struct _CSGPrimitiveData {
         struct {
             float radius, angle, rotation;
         } pieslice;
+        struct {
+            float epsilon, theta;
+            cl_float2 rotationCosSin;
+        } laminate;
     };
 } CSGPrimitiveData;
 
@@ -322,6 +326,19 @@ struct CSGTreeFlattener {
             p.pieslice.radius   = pn->getRadius();
             p.pieslice.angle    = pn->getAngle();
             p.pieslice.rotation = pn->getRotationRad();
+        }
+
+        else if (type == CSG_NODE_LAMINATE) {
+            assert(numPrimitives < MAX_PRIMITIVES);
+            CSGPrimitiveData &p = primitiveData[numPrimitives++];
+            CSGLaminateNode *ln = dynamic_cast<CSGLaminateNode *>(node);
+            assert(ln);
+            p.center.s[0]       = ln->getCenter()[0];
+            p.center.s[1]       = ln->getCenter()[1];
+            p.laminate.epsilon  = ln->getEpsilon();
+            p.laminate.theta    = ln->getTheta();
+            p.laminate.rotationCosSin.s[0] = cos(-ln->getRotationRad());
+            p.laminate.rotationCosSin.s[1] = sin(-ln->getRotationRad());
         }
     }
 

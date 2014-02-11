@@ -18,9 +18,10 @@
 #include "Geometry.hh"
 
 typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
-typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_PIE_SLICE = 2,
-               CSG_NODE_INTERSECT = 3, CSG_NODE_UNION = 4,
-               CSG_NODE_SUBTRACT = 5 } CSGNodeType;
+typedef enum { CSG_NODE_INTERSECT = 0, CSG_NODE_UNION = 1,
+               CSG_NODE_SUBTRACT = 2, CSG_NODE_RECT = 3,
+               CSG_NODE_ELLIPSE = 4, CSG_NODE_PIE_SLICE = 5,
+               CSG_NODE_LAMINATE = 6 } CSGNodeType;
 
 template<typename _Vector>
 class CSGTree {
@@ -33,6 +34,7 @@ public:
     class CSGRectangleNode;
     class CSGEllipseNode;
     class CSGPieSliceNode;
+    class CSGLaminateNode;
     typedef BBox<_Vector> BBox_t;
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;

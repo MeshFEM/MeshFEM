@@ -8,9 +8,10 @@
 // CSG Tree Types
 // Note: These must match the C++ side!
 ////////////////////////////////////////////////////////////////////////////////
-typedef enum { CSG_NODE_RECT = 0, CSG_NODE_ELLIPSE = 1, CSG_NODE_PIE_SLICE = 2,
-               CSG_NODE_INTERSECT = 3, CSG_NODE_UNION = 4,
-               CSG_NODE_SUBTRACT = 5 } CSGNodeType;
+typedef enum { CSG_NODE_INTERSECT = 0, CSG_NODE_UNION = 1,
+               CSG_NODE_SUBTRACT = 2, CSG_NODE_RECT = 3,
+               CSG_NODE_ELLIPSE = 4, CSG_NODE_PIE_SLICE = 5,
+               CSG_NODE_LAMINATE = 6} CSGNodeType;
 typedef struct _CSGPrimitiveData {
     float2 center;
     union {
@@ -25,6 +26,10 @@ typedef struct _CSGPrimitiveData {
         struct {
             float radius, angle, rotation;
         } pieslice;
+        struct {
+            float epsilon, theta;
+            float2 rotationCosSin;
+        } laminate;
     };
 } CSGPrimitiveData;
 
@@ -138,6 +143,23 @@ __kernel void RenderCSGSignedDistance(write_only image2d_t img,
 
                     ++stackHead;
                     ++pOffset;
+                    break;
+                }
+                case CSG_NODE_LAMINATE:
+                {
+                    CSGPrimitiveData prim = lpdata[pOffset];
+                    float c = prim.laminate.rotationCosSin[0],
+                          s = prim.laminate.rotationCosSin[1];
+                    float2 pCenter = p - prim.center;
+                    float xEpsilon = fmod(fabs(c * pCenter[0] - s * pCenter[1]),
+                                          prim.laminate.epsilon);
+                    float halfEpsilonTheta = prim.laminate.epsilon *
+                                             prim.laminate.theta / 2;
+                    computeStack[stackHead] = min(xEpsilon - halfEpsilonTheta,
+                        prim.laminate.epsilon - halfEpsilonTheta - xEpsilon);
+                    ++stackHead;
+                    ++pOffset;
+                    break;
                 }
                 case CSG_NODE_UNION:
                     computeStack[stackHead - 2] = min(computeStack[stackHead - 2],

@@ -634,8 +634,8 @@ public:
         : CSGPrimitive(center, dimensions, rot)
     { }
 
-    Real getAngle()  const { return this->m_dim[1]; }
     Real getRadius() const { return this->m_dim[0]; }
+    Real getAngle()  const { return this->m_dim[1]; }
 
     std::string defaultName() const { return "Pie Slice"; }
 
@@ -789,8 +789,8 @@ public:
         corners[2] = Vector(maxV[0], maxV[1]);
         corners[3] = Vector(minV[0], maxV[1]);
 
-        BBox_t b(corners[0], corners[0]);
-        for (int i = 1; i < 4; ++i)
+        BBox_t b(this->m_c, this->m_c);
+        for (int i = 0; i < 4; ++i)
             b.unionBox(BBox_t(corners[i], corners[i]));
 
         return b;
@@ -804,6 +804,62 @@ public:
     ~CSGPieSliceNode() { }
 };
 
+// Note: for laminates, dimensions are actually (epsilon, theta), where epsilon
+// is the spacing between slice centers and theta is the thickness of each slice
+// (in [0, 1]).
+template<typename Vector>
+class CSGTree<Vector>::CSGLaminateNode : public CSGTree<Vector>::CSGPrimitive
+{
+    using CSGTree<Vector>::CSGPrimitive::m_c;
+public:
+    CSGLaminateNode(Vector center, const Vector &dimensions, Real rot = 0)
+        : CSGPrimitive(center, dimensions, rot)
+    { }
+
+    Real getEpsilon()  const { return this->m_dim[0]; }
+    Real getTheta() const { return this->m_dim[1]; }
+
+    std::string defaultName() const { return "Laminate"; }
+
+    CSGNodeType nodeType() const { return CSG_NODE_LAMINATE; }
+
+    // 
+    bool isInside(const Vector &p) const {
+        Vector l = this->toLocalCoords(p);
+        Real epsilon = getEpsilon();
+        Real xEpsilon = fmod(std::abs(l[0]), epsilon);
+        return (xEpsilon < epsilon * getTheta() / 2.0) ||
+               (xEpsilon > epsilon * (1 -  getTheta() / 2.0));
+    }
+
+    Real signedDistance(const Vector &p) const {
+        Vector l = this->toLocalCoords(p);
+        Real epsilon = getEpsilon();
+        Real xEpsilon = fmod(std::abs(l[0]), epsilon);
+        return std::min(xEpsilon - epsilon * getTheta() / 2.0,
+                        epsilon * (1 -  getTheta() / 2.0) - xEpsilon);
+    }
+
+    // Laminates are technically infinite, so it is impossible to generate a
+    // finite number of boundary points... better used marching squares!
+    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
+        std::vector<_BoundaryPoint> bndPts;
+        return bndPts;
+    }
+
+    // Return a large bounding box so that when we forget to intersect with
+    // something we don't break.
+    BBox_t boundingBox() const {
+        return BBox_t(Vector(-1000, -1000), Vector(1000, 1000));
+    }
+
+    virtual CSGNode *copy() const {
+        return new CSGLaminateNode(this->getCenter(), this->getDimensions(),
+                                   this->getRotation());
+    }
+
+    ~CSGLaminateNode() { }
+};
 template<typename Functor, typename CSGNode>
 void dfsWorker(Functor &f, CSGNode *node)
 {

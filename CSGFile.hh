@@ -59,11 +59,12 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
     typedef typename _CSGTree::CSGRectangleNode CSGRectangleNode;
     typedef typename _CSGTree::CSGEllipseNode   CSGEllipseNode;
     typedef typename _CSGTree::CSGPieSliceNode  CSGPieSliceNode;
+    typedef typename _CSGTree::CSGLaminateNode  CSGLaminateNode;
 
     std::string name = pt.get<std::string>("name");
     std::string type = pt.get<std::string>("type");
 
-    enum {N_OP, N_RECT, N_ELLIPSE, N_PIESLICE} node_type;
+    enum {N_OP, N_RECT, N_ELLIPSE, N_PIESLICE, N_LAMINATE} node_type;
     CSGOperation op;
     if (type == "intersect")      { node_type = N_OP; op = INTERSECT; }
     else if (type == "union")     { node_type = N_OP; op = UNION; }
@@ -71,6 +72,7 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
     else if (type == "rectangle") { node_type = N_RECT; }
     else if (type == "ellipse")   { node_type = N_ELLIPSE; }
     else if (type == "pieslice")  { node_type = N_PIESLICE; }
+    else if (type == "laminate")  { node_type = N_LAMINATE; }
     else {
         throw std::runtime_error(std::string("Illegal CSG node type: ") + type);
     }
@@ -101,7 +103,7 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
         node = new CSGBoolNode(op, left, right);
     }
     else if ((node_type == N_RECT) || (node_type == N_ELLIPSE) ||
-             (node_type == N_PIESLICE)) {
+             (node_type == N_PIESLICE) || (node_type == N_LAMINATE)) {
         Vector center, dimensions;
         parseVector(pt.get_child("center"), center);
         parseVector(pt.get_child("dimensions"), dimensions);
@@ -116,6 +118,8 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
             node = new CSGEllipseNode(center, dimensions, rot);
         else if (node_type == N_PIESLICE)
             node = new CSGPieSliceNode(center, dimensions, rot);
+        else if (node_type == N_LAMINATE)
+            node = new CSGLaminateNode(center, dimensions, rot);
         else
             assert(false);
     }
@@ -156,6 +160,7 @@ void writeNode(std::ofstream &os, int indentLevel,
         case CSG_NODE_RECT:      type = "rectangle"; isPrim = true; break;
         case CSG_NODE_ELLIPSE:   type = "ellipse";   isPrim = true; break;
         case CSG_NODE_PIE_SLICE: type = "pieslice";  isPrim = true; break;
+        case CSG_NODE_LAMINATE:  type = "laminate";  isPrim = true; break;
         default: assert(false);
     }
 
