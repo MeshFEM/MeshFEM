@@ -1,5 +1,8 @@
-Matlab Engine
 Qt
 opencl
 opengl
 FTGL
+Gurobi
+SuiteSparse (UmfPack)
+Matlab Engine
+Boost
