@@ -1,6 +1,10 @@
 Implement:
+*** Boundary conditions rectangle selector
+*** Model parameter fields
+*** Store cell classification (full, cut, empty) to accelerate results viewing
 *** MSH writer (multiple MSH needed for model changes).
 *** Non-bluring point force version.
+*** Multi-material simulation
 
   - Make pressure viewing configure the simulation
   - Prepend highest weakness to region name so they sort better...

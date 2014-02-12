@@ -659,8 +659,8 @@ class MeshlessFEM<Model>::BoundaryFunctionLoad
 public:
     typedef Eigen::Matrix<Real, 4, 1> value_type;
 
-    BoundaryFunctionLoad(const BoundaryFunction &psi)
-        : m_psi(psi) {
+    BoundaryFunctionLoad(const BoundaryFunction &psi, const Model &model)
+        : m_psi(psi), m_model(model) {
         clear();
     }
 
@@ -671,7 +671,7 @@ public:
     void accumulate(const Vector &sample,
                     const Vector &ref_sample, Real weight) {
         bool inSupport = m_psi.isInSupport(sample);
-        if (inSupport) {
+        if (inSupport && m_model.isInside(sample)) {
             Real psi = m_psi(sample);
 
             // Compute unscaled load (integral against each grid node function)
@@ -691,6 +691,7 @@ public:
 private:
     value_type m_load;
     const BoundaryFunction &m_psi;
+    const Model &m_model;
 };
 
 // Rebuild all boundary force blurring functions
@@ -743,7 +744,7 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
     // Fill out one column of the matrix at a time.
     for (size_t f = 0; f < F.n; ++f) {
         const BoundaryFunction &psi = boundaryFunction(f);
-        BoundaryFunctionLoad load(psi);
+        BoundaryFunctionLoad load(psi, model());
 
         elemGrid.elementsAroundPoint(psi.center(), psi.supportRadius(),
                                      support_elems);
