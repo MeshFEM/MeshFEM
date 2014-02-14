@@ -25,6 +25,8 @@
 #include "MarchingSquaresGrid.hh"
 #include "MSHWriter.hh"
 #include "utils.hh"
+#include "BoundaryConditions.hh"
+
 #include <cassert>
 #include <vector>
 #include <queue>
@@ -263,21 +265,11 @@ public:
         return m_boundaryFunctions[i];
     }
 
-    // Get the pressure on the ith boundary point
-    Real pressure(size_t i) const {
-        assert(i < m_pressures.domainSize());
-        return m_pressures[i];
+    BoundaryConditions<Vector> &boundaryConditions() {
+        return m_boundaryConditions;
     }
-    Real &pressure(size_t i) {
-        assert(i < m_pressures.domainSize());
-        return m_pressures[i];
-    }
-
-    template<typename PType>
-    void setPressures(const PType &p) {
-        assert(p.size() == m_pressures.size());
-        for (size_t i = 0; i < p.size(); ++i)
-            m_pressures[i] = p[i];
+    const BoundaryConditions<Vector> &boundaryConditions() const {
+        return m_boundaryConditions;
     }
 
     const VField &simulationDisplacement() const {
@@ -314,10 +306,11 @@ private:
     Quadrature2D *m_quadrature;
     Model &m_model;
     ElementGrid *m_elementGrid;
+
     std::vector<_BoundaryPoint>   m_boundaryPoints;
     std::vector<BoundaryFunction> m_boundaryFunctions;
-    /** Pressures for simulation */
-    SField                        m_pressures;
+    BoundaryConditions<Vector>    m_boundaryConditions;
+
     VField                        m_simulatedDisplacement;
     SMField                       m_simulatedStressTensors;
     SField                        m_simulatedStressNorms;

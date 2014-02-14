@@ -94,6 +94,8 @@ class Solver {
 
         // Simulate the application of given pressures
         virtual bool simulate(const SField &p, VField &u) = 0;
+        // Simulate the application of given forces
+        virtual bool simulate(const VField &f, VField &u) = 0;
 
         virtual ~Solver() { }
 };
@@ -233,7 +235,8 @@ class MatlabSolver : public Solver<Real> {
             eval("linprog_Aeq = [R * F * N * A; diag(A)'];");
             eval("linprog_beq = [zeros(3, 1); F_tot];");
             eval("VDBSt = VD * B * S';");
-            eval("SFNA = S * F * N * A;");
+            eval("SF = S * F;");
+            eval("SFNA = SF * N * A;");
 
             return true;
         }
@@ -260,6 +263,20 @@ class MatlabSolver : public Solver<Real> {
             setDenseMatrix("p", m_np, 1, p.data(), true);
 
             eval("u = S' * (C_s \\ (SFNA * p));");
+            assert(m_Kn % 2 == 0);
+            u.resizeDomain(m_Kn / 2);
+            getDenseMatrix("u", m_Kn, 1, u.data().data(), true);
+
+            return true;
+        }
+
+        // Simulate the application of given forces
+        virtual bool simulate(const VField &f, VField &u)
+        {
+            setDenseMatrix("f", f.dim() * f.domainSize(), 1,
+                           f.data().data(), true);
+
+            eval("u = S' * (C_s \\ (SF * f));");
             assert(m_Kn % 2 == 0);
             u.resizeDomain(m_Kn / 2);
             getDenseMatrix("u", m_Kn, 1, u.data().data(), true);
@@ -402,7 +419,8 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             B_mat.setFromTriplets(B.nz.begin(), B.nz.end());
             VD_mat.setFromTriplets(VD.nz.begin(), VD.nz.end());
             m_VDBSt_tr = (VD_mat * B_mat * m_S_tr).transpose();
-            m_SFNA = S * F_mat * N_mat * A_mat;
+            m_SF = S * F_mat;
+            m_SFNA = m_SF * N_mat * A_mat;
             m_SFNA_tr = m_SFNA.transpose();
 
             m_VDBSt_tr.makeCompressed();
@@ -433,6 +451,23 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             return true;
         }
 
+        // Simulate the application of forces
+        virtual bool simulate(const VField &f, VField &u)
+        {
+            DVector u_vec = m_S_tr * m_Cs_factors.solve(m_SF *
+                Eigen::Map<const DVector>(f.data().data(),
+                                          f.dim() * f.domainSize()));
+
+            if (m_Cs_factors.info() != Eigen::Success) {
+                std::cout << "Solve error" << std::endl;
+                return false;
+            }
+
+            u = VField(u_vec);
+
+            return true;
+        }
+
         void getVolumeForceForPressures(const SField &p, VField &f)
         {
             DVector p_vec(p.domainSize());
@@ -445,11 +480,19 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             f = VField(f_vec.head(f_vec.rows() - 3));
         }
 
+        void getVolumeForceForForces(const VField &bf, VField &f)
+        {
+            DVector f_vec = m_SF * Eigen::Map<const DVector>(bf.data().data(),
+                                          bf.dim() * bf.domainSize());
+            // f_vec has a trailing padding of 3 zeros added by S.
+            // These must be omitted.
+            f = VField(f_vec.head(f_vec.rows() - 3));
+        }
 
         virtual ~MatlabEigenSolver() { }
 
     protected:
-        SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr;
+        SparseMatrix m_S_tr, m_VDBSt_tr, m_SFNA, m_SFNA_tr, m_SF;
         // The constraints need to be specified in compressed row format.
         SparseMatrixCSR m_linprog_Aeq;
         DVector m_linprog_beq; // , m_linprog_b;

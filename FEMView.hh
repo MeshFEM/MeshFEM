@@ -117,7 +117,8 @@ private:
             // If we are viewing a boundary vector field, configure the
             // simulation to use the field as pressure variables.
             if (m_result->hasBdrySField()) {
-                m_fem.setPressures(m_result->getScalarField(Result::PER_BDRY));
+                m_fem.boundaryConditions().setPressures(
+                        m_result->getScalarField(Result::PER_BDRY));
             }
         }
         else if (m_guiState == STATE_RESULT) {

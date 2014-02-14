@@ -295,7 +295,7 @@ void CSGWindowController::savePressure()
             for (size_t i = 0; i < bpts.size(); ++i) {
                 // Note: Python StructAys uses negative pressures, so our bp
                 // format takes this convention.
-                Scalar p = -m_fem.pressure(i);
+                Scalar p = -m_fem.boundaryConditions().paintedPressure(i);
                 bpFile << bpts[i].p[0] << '\t' << bpts[i].p[1] << '\t'
                        << p << endl;
             }
@@ -350,7 +350,7 @@ void CSGWindowController::loadPressure()
                     throw std::runtime_error(std::string("Mapping not bijective"));
                 mapped[closest] = true;
                 // Note: Python StructAys uses negative pressures.
-                m_fem.pressure(closest) = -pressure;
+                m_fem.boundaryConditions().paintPressure(closest, -pressure);
             }
             if (!bpFile)
                 throw std::runtime_error(std::string("Error reading file"));
@@ -651,11 +651,6 @@ runFunctionRadiusTest(const AnalysisSettings &settings)
 void CSGWindowController::
 runRefinementTest()
 {
-    vector<Scalar> pressures(m_fem.numBoundaryPoints());
-    for (size_t i = 0; i < pressures.size(); ++i) {
-        pressures[i] = m_fem.pressure(i);
-    }
-
     const int REFINEMENT_TEST_STEPS = 10;
     Scalar minScale = 0.1;
     Scalar maxScale = 8.0;
@@ -671,7 +666,6 @@ runRefinementTest()
         m_settings.Int("Nx") = oldSettings.Int("Nx") * scale;
         m_settings.Int("Ny") = oldSettings.Int("Ny") * scale;
         m_fem.configureElements(m_settings);
-        m_fem.setPressures(pressures);
 
         m_settingsName = boost::str(formatter % oldSettingsName % scale);
 
@@ -684,7 +678,6 @@ runRefinementTest()
     m_settingsName = oldSettingsName;
 
     m_fem.configureElements(oldSettings);
-    m_fem.setPressures(pressures);
 
     emit resultsUpdated();
 }

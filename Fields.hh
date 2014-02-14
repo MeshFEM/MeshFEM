@@ -66,6 +66,14 @@ public:
         m_values = ArrayType::Zero(dim(), domainSize());
     }
 
+    // Normalize data so that the maximum column magnitude is 1.
+    void maxColumnNormalize() {
+        Real maxNorm = 0;
+        for (size_t i = 0; i < domainSize(); ++i)
+            maxNorm = std::max(maxNorm, m_values.col(i).norm());
+        m_values /= maxNorm;
+    }
+
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
 

@@ -1061,7 +1061,9 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
     Solver<Real> *solver = m_solvers.solver();
     solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
                               m_pointwisePressureBound);
-    solver->simulate(m_pressures, m_simulatedDisplacement);
+    VField forces;
+    m_boundaryConditions.getForces(m_boundaryPoints, forces);
+    solver->simulate(forces, m_simulatedDisplacement);
 
     m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
     m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
@@ -1076,7 +1078,7 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
                 dynamic_cast<MatlabEigenSolver<Real> *>(solver);
         if (s) {
             VField volForce;
-            s->getVolumeForceForPressures(m_pressures, volForce);
+            s->getVolumeForceForForces(forces, volForce);
             Result *f_r = new Result(Result::PER_ELEM, m_simulatedStressNorms,
                                      Result::PER_NODE, volForce);
             rc->setResult("Blurred Boundary Forces", f_r);
@@ -1258,6 +1260,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     m_combinedWeakness.clear();
 
     DVector w;
+    SField pressures;
     for (size_t i = 0; i < numWeakRegions(); ++i) {
         m_assembleWVector(w, i);
         for (int pass = 0; pass < 2; ++pass) {
@@ -1267,15 +1270,15 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
             if (pass == 1)
                 w *= -1.0;
 
-            solver->optimizeObjective(w, m_pressures);
+            solver->optimizeObjective(w, pressures);
             VField optU(numNodes);
-            solver->simulate(m_pressures, optU);
+            solver->simulate(pressures, optU);
 
             SMField stressTensors = elementStressTensors(optU);
             SField  optStress = computeStressTensorNorms(stressTensors);
 
             if (rc != NULL) {
-                Result *r = new Result(Result::PER_BDRY, m_pressures);
+                Result *r = new Result(Result::PER_BDRY, pressures);
                 string regionName = appendToString("Weak Regions:Region ", i);
                 string pmName;
                 if (m_plusMinusObjective)
@@ -1442,9 +1445,8 @@ void MeshlessFEM<Model>::m_invalidateCache() {
     // Only resize the pressures if necessary. If the number of boundary points
     // doesn't change, pressure values are retained. Otherwise, they are
     // cleared.
-    if (m_boundaryPoints.size() != m_pressures.size()) {
-        m_pressures.resizeDomain(m_boundaryPoints.size());
-    }
+    if (m_boundaryConditions.boundarySize() != m_boundaryPoints.size())
+        m_boundaryConditions.resizeBoundary(m_boundaryPoints.size());
 
     m_weakRegions.clear();
     m_weakRegionStressNorms.clear();

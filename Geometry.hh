@@ -48,6 +48,11 @@ struct BBox {
         return ((v - minCorner).array() / dimensions().array()).matrix();
     }
 
+    bool containsPoint(const Vector &p) const {
+        return (p.array() >= minCorner.array()).all() &&
+               (p.array() <= maxCorner.array()).all();
+    }
+
     Vector dimensions() const {
         return maxCorner - minCorner;
     }

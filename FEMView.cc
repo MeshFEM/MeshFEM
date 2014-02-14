@@ -666,16 +666,26 @@ void FEMView2D::drawBoundary(bool pressureField,
     glEnd();
 
     glColor3ub(color.red(), color.green(), color.blue());
+
+    VField tractions;
+    m_fem.boundaryConditions().getTractions(bndPts, tractions); 
+    tractions.maxColumnNormalize();
+
     for (size_t i = 0; i < bndPts.size(); ++i) {
-        Scalar scale = pressureField ? 800 * m_fem.pressure(i) : 15.0;
-        m_drawWorldArrow(bndPts[i].p, scale * bndPts[i].n, 1.0, true);
+        if (pressureField)
+            m_drawWorldArrow(bndPts[i].p, -45 * tractions(i), 1.0, true);
+        else
+            m_drawWorldArrow(bndPts[i].p, 15 * bndPts[i].n, 1.0, true);
     }
     
     if (hasSelect) {
         glColor3ub(selColor.red(), selColor.green(), selColor.blue());
-        Scalar scale = pressureField ? 800 * m_fem.pressure(selIndex) : 15.0;
-        m_drawWorldArrow(bndPts[selIndex].p, scale * bndPts[selIndex].n,
-                         1.0, true);
+        if (pressureField)
+            m_drawWorldArrow(bndPts[selIndex].p,
+                             -45 * tractions(selIndex), 1.0, true);
+        else
+            m_drawWorldArrow(bndPts[selIndex].p,
+                             15 * bndPts[selIndex].n, 1.0, true);
     }
 }
 
@@ -1264,7 +1274,13 @@ void FEMView2D::paintPressure(const Vector &screenPt, bool erase)
               closest, closestDist);
 
     if (closestDist < SELECT_DIST_THRESHOLD) {
-        m_fem.pressure(closest) = erase ? 0.0 : m_pressurePaintValue;
+        if (erase)
+            m_fem.boundaryConditions().erase(closest);
+        else {
+            m_fem.boundaryConditions().paintPressure(closest,
+                                                     m_pressurePaintValue);
+        }
+
         update();
     }
 }
