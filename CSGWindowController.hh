@@ -48,7 +48,7 @@ public slots:
     void csgTreeSelectionChanged(const QItemSelection &selected,
                                  const QItemSelection &deselected);
     void saveBoundaryPolygon();
-    void loadCSG();
+    void loadCSG(QString path = QString());
     void saveCSG();
 
     void modelChanged(bool refitGrid = true);
@@ -74,6 +74,7 @@ public slots:
     void runWeaknessAnalysis();
 
     // Shape optimization actions
+    void runSimulationSweep();
     void runShapeOptimization();
     void runTranslationTest(const AnalysisSettings &settings);
     void runForceTranslationTest(const AnalysisSettings &settings);

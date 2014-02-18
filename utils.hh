@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <regex>
 #include <boost/format.hpp>
+#include <boost/algorithm/string.hpp>
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Compare c-strings containing positive integers in a reasonable way.
@@ -188,6 +189,48 @@ inline std::string escapedString(const std::string &str)
     }
 
     return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Expand an encoded sequence of numbers in the MATLAB-esque format:
+//      1, 2:4, 1:10:20
+//  Invalid ranges, e.g. 1:-1:2, generate no elements just as in MATLAB
+//  @param[in]  range   encoded sequence
+//  @return     vector holding each sequence element
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real>
+inline std::vector<Real> expandRange(const std::string &range)
+{
+    std::vector<Real> sequence;
+    std::vector<std::string> components;
+    boost::split(components, range, boost::is_any_of(","));
+
+    for (size_t i = 0; i < components.size(); ++i) {
+        std::vector<std::string> parts;
+        boost::split(parts, components[i], boost::is_any_of(":"));
+        if (parts.size() == 1) {
+            sequence.push_back(std::stod(parts[0]));
+        }
+        else if (parts.size() < 4) {
+            Real first = std::stod(parts[0]);
+            Real step = 1.0;
+            Real last = std::stod(parts[1]);
+            if (parts.size() == 3) {
+                step = last;
+                last = std::stod(parts[2]);
+            }
+            if (step == 0)
+                continue;
+            if ((last - first) / step < 0)
+                continue;
+            for (Real a = first; (step > 0 && a <= last) ||
+                                 (step < 0 && a >= last); a += step) {
+                sequence.push_back(a);
+            }
+        }
+    }
+
+    return sequence; 
 }
 
 #endif // UTILS_HH

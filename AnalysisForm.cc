@@ -99,6 +99,7 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_forceBoundStepper->setValue(.1);
 
     g_optimizeShapeButton = new QPushButton("Optimize Shape");
+    g_simulationSweepButton = new QPushButton("Simulation Sweep...");
     g_xTranslationStepper = new QDoubleSpinBox();
     g_yTranslationStepper = new QDoubleSpinBox();
     g_translationFixedCheckbox = new QCheckBox();
@@ -185,6 +186,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     simForm->addRow(pressureButtonLayout);
 
     simForm->addRow("PressurePaint Value", g_pressurePaintValueStepper);
+
+    simForm->addRow(g_simulationSweepButton);
     simulationGroup->setLayout(simForm);
 
     // Weakness Analysis
@@ -305,6 +308,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_optimizeShapeButton, SIGNAL(clicked()),
                      controller, SLOT(runShapeOptimization()));
+    QObject::connect(g_simulationSweepButton, SIGNAL(clicked()),
+                     controller, SLOT(runSimulationSweep()));
     QObject::connect(g_translationFixedCheckbox, SIGNAL(stateChanged(int)),
                      this, SLOT(ttestControlsChanged(int)));
     QObject::connect(g_xTranslationStepper, SIGNAL(valueChanged(double)),
@@ -320,6 +325,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     QObject::connect(g_refinementTestButton, SIGNAL(clicked()),
                      this, SLOT(reftestButtonClicked()));
 
+    QObject::connect(this, SIGNAL(runSimulationSweep()),
+                     controller, SLOT(runSimulationSweep()));
     QObject::connect(this, SIGNAL(runTranslationTest(const AnalysisSettings &)),
                      controller, SLOT(runTranslationTest(const AnalysisSettings &)));
     QObject::connect(this, SIGNAL(runForceTranslationTest(const AnalysisSettings &)),

@@ -642,7 +642,7 @@ void FEMView2D::drawGrid(DrawOp op, const VField &deformation,
     }
 }
 
-void FEMView2D::drawBoundary(bool pressureField,
+void FEMView2D::drawBoundary(bool visualizeLoad,
         const QColor &color, const QColor &selColor)
 {
     // Draw boundary points
@@ -665,14 +665,22 @@ void FEMView2D::drawBoundary(bool pressureField,
 
     glEnd();
 
-    glColor3ub(color.red(), color.green(), color.blue());
+
+    if (visualizeLoad) {
+        for (size_t i = 0; i < m_fem.boundaryConditions().numConditions(); ++i){
+            const auto &condition = m_fem.boundaryConditions().condition(i);
+            glColor4ub(69, 155, 255, 127);
+            m_drawWorldBox(condition.region);
+        }
+    }
 
     VField tractions;
     m_fem.boundaryConditions().getTractions(bndPts, tractions); 
     tractions.maxColumnNormalize();
 
+    glColor3ub(color.red(), color.green(), color.blue());
     for (size_t i = 0; i < bndPts.size(); ++i) {
-        if (pressureField)
+        if (visualizeLoad)
             m_drawWorldArrow(bndPts[i].p, -45 * tractions(i), 1.0, true);
         else
             m_drawWorldArrow(bndPts[i].p, 15 * bndPts[i].n, 1.0, true);
@@ -680,7 +688,7 @@ void FEMView2D::drawBoundary(bool pressureField,
     
     if (hasSelect) {
         glColor3ub(selColor.red(), selColor.green(), selColor.blue());
-        if (pressureField)
+        if (visualizeLoad)
             m_drawWorldArrow(bndPts[selIndex].p,
                              -45 * tractions(selIndex), 1.0, true);
         else

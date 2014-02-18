@@ -15,6 +15,7 @@
 #include <vector>
 #include <cassert>
 #include <limits>
+#include <string>
 #include "Geometry.hh"
 
 typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
@@ -93,6 +94,9 @@ public:
     template<typename Functor>
     Functor dfs(Functor f, CSGNode *node = NULL);
 
+    template<typename Functor>
+    Functor dfs(Functor f, const CSGNode *node = NULL) const;
+
     size_t numRoots() const { return m_roots.size(); }
     const CSGNode *root(size_t i) const {
         assert(i < m_roots.size());
@@ -160,15 +164,40 @@ public:
         }
     };
 
-    std::vector<Real> getParameters() {
+    std::vector<Real> getParameters() const {
         std::vector<Real> params;
         dfs(CSGParameterGetter(params));
         return params;
     }
 
-    void setParameters(const std::vector<Real> &params)
-    {
+    void setParameters(const std::vector<Real> &params) {
         dfs(CSGParameterSetter(params));
+    }
+
+    struct CSGParameterNameGetter {
+        std::vector<std::string> &names;
+        CSGParameterNameGetter(std::vector<std::string> &names)
+            : names(names)
+        {
+            names.clear();
+        }
+        void preVisit(const CSGNode *) { }
+        void postVisit(const CSGNode *node) {
+            const CSGPrimitive *prim = dynamic_cast<const CSGPrimitive *>(node);
+            if (prim == NULL) return;
+            std::string basename = prim->name();
+            names.push_back(basename + ".center.x");
+            names.push_back(basename + ".center.y");
+            names.push_back(basename + ".dimensions.x");
+            names.push_back(basename + ".dimensions.y");
+            names.push_back(basename + ".rotation");
+        }
+    };
+
+    std::vector<std::string> getParameterNames() const {
+        std::vector<std::string> names;
+        dfs(CSGParameterNameGetter(names));
+        return names;
     }
 
     // Note: the tree takes ownership of node when node becomes root!

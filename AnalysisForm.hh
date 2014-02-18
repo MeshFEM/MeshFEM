@@ -65,6 +65,7 @@ signals:
     void matrixOrMaterialSettingsChanged(const AnalysisSettings &settings);
     void modalAnalysisSettingsChanged(const AnalysisSettings &settings);
     void weaknessAnalysisSettingsChanged(const AnalysisSettings &settings);
+    void runSimulationSweep();
     void runTranslationTest(const AnalysisSettings &settings);
     void runForceTranslationTest(const AnalysisSettings &settings);
     void runFunctionRadiusTest(const AnalysisSettings &settings);
@@ -121,6 +122,7 @@ private:
 
     QPushButton *g_weaknessAnalysisButton;
     QPushButton *g_optimizeShapeButton;
+    QPushButton *g_simulationSweepButton;
     QDoubleSpinBox *g_xTranslationStepper, *g_yTranslationStepper;
     QCheckBox *g_translationFixedCheckbox;
     QPushButton *g_translationTestButton;

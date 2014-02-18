@@ -21,6 +21,7 @@
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
 #include "ResultsWindow/ResultsWindow.hh"
+#include "CSGWindow.hh"
 
 class CSGWindowController;
 struct AnalysisSettings;
@@ -35,6 +36,8 @@ public:
     CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
               SolverLibrary<Scalar> &solvers,
               ResultsCollector_t &results);
+    CSGWindowController *getController() { return controller; }
+    const CSGWindowController *getController() const { return controller; }
     ~CSGWindow();
 
 private slots:

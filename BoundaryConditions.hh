@@ -2,21 +2,21 @@
 // BoundaryConditions.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//		Structure to track boundary conditions applied to the object. Currently
-//		only surface tractions/pressures are supported for two reasons:
+//      Structure to track boundary conditions applied to the object. Currently
+//      only surface tractions/pressures are supported for two reasons:
 //
-//		1) There is currently a disagreement on how volume forces should be
-//		   applied. DZ says volume forces not overlapping the object should
-//		   still deposit load on the grid points. JP wants to only integrate
-//		   load over the object.
+//      1) There is currently a disagreement on how volume forces should be
+//         applied. DZ says volume forces not overlapping the object should
+//         still deposit load on the grid points. JP wants to only integrate
+//         load over the object.
 //
-//		2) Exact Dirichlet boundary conditions are tricky since the object
-//		   doesn't conform to the grid. We could either prescribe a displacement
-//		   on all four corners of each boundary cell (thus fixing the boundary),
-//		   or we could go a more accurate but expensive route and use the
-//		   ``Kantorovich'' based method where we make our FEM basis functions
-//		   go to zero on the boundary (using a smoothed signed distance-like
-//		   function).
+//      2) Exact Dirichlet boundary conditions are tricky since the object
+//         doesn't conform to the grid. We could either prescribe a displacement
+//         on all four corners of each boundary cell (thus fixing the boundary),
+//         or we could go a more accurate but expensive route and use the
+//         ``Kantorovich'' based method where we make our FEM basis functions
+//         go to zero on the boundary (using a smoothed signed distance-like
+//         function).
 //
 //      Both tractions and pressures are stored in a single "union-like" Vector
 //      type; if a pressure is represented, its value is stored in the first
@@ -54,7 +54,23 @@ public:
         BBox<Vector> region;
         Type type;
         Vector value;
+
+        Condition(const BBox<Vector> &region, const Vector &t)
+            : region(region), type(CONDITION_TRACTION), value(t) { }
+        Condition(const BBox<Vector> &region, Real p)
+            : region(region), type(CONDITION_PRESSURE), value(p, 0) { }
     };
+
+    BoundaryConditions() {
+        // Bottom pressure
+        m_conditions.push_back(Condition(BBox<Vector>(
+                        Vector(-5.05, -3.0), Vector(5.05, -2.524)),
+                        0.1));
+        // Top pressure
+        m_conditions.push_back(Condition(BBox<Vector>(
+                        Vector(-5.05, 2.524), Vector(5.05, 3.0)),
+                        0.1));
+    }
 
     // Get the traction (not force!) acting on each boundary point
     void getTractions(const std::vector<_BoundaryPoint> &pt, VField &bt) const {

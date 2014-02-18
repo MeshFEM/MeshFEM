@@ -860,6 +860,7 @@ public:
 
     ~CSGLaminateNode() { }
 };
+
 template<typename Functor, typename CSGNode>
 void dfsWorker(Functor &f, CSGNode *node)
 {
@@ -874,6 +875,32 @@ void dfsWorker(Functor &f, CSGNode *node)
 template<typename Vector>
 template<typename Functor>
 Functor CSGTree<Vector>::dfs(Functor f, CSGNode *node)
+{
+    if (node == NULL) {
+        for (size_t i = 0; i < numRoots(); ++i) {
+            dfsWorker(f, root(i));
+        }
+    }
+    else {
+        dfsWorker(f, node);
+    }
+    return f;
+}
+
+template<typename Functor, typename CSGNode>
+void dfsWorker(Functor &f, const CSGNode *node)
+{
+    assert(node != NULL);
+    f.preVisit(node);
+    for (int i = 0; i < node->numChildren(); ++i) {
+        dfsWorker(f, node->child(i));
+    }
+    f.postVisit(node);
+}
+
+template<typename Vector>
+template<typename Functor>
+Functor CSGTree<Vector>::dfs(Functor f, const CSGNode *node) const
 {
     if (node == NULL) {
         for (size_t i = 0; i < numRoots(); ++i) {

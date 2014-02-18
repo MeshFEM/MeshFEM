@@ -14,6 +14,7 @@
 #include "QMatlabInterface.hh"
 #include "Solver.hh"
 #include "AnalysisSettings.hh"
+#include "CSGWindowController.hh"
 
 #include <map>
 #include <string>
@@ -66,6 +67,9 @@ int main(int argc, char *argv[])
 
     matlabInterface->show();
     window.show();
+
+    if (argc > 1)
+        window.getController()->loadCSG(QString(argv[1]));
 
     return app.exec();
 }

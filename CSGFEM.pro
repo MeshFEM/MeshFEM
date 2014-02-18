@@ -55,7 +55,8 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            ResultsCollector.hh ResultsWindow/ResultsWindow.hh \
            ResultsWindow/ResultsWindowController.hh \
            ResultsWindow/ResultTreeView.hh ResultsWindow/FlipbookDialog.hh \
-           cl-helper.h
+           ParameterSweepDialog.hh \
+           cl-helper.h ParameterSweep.hh
 
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
@@ -65,7 +66,7 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
            ViewSettingsWidget.cc Geometry.cc \
            ResultsWindow/ResultsWindow.cc ResultsWindow/ResultsWindowController.cc \
-           ResultsWindow/FlipbookDialog.cc \
+           ResultsWindow/FlipbookDialog.cc ParameterSweepDialog.cc \
            cl-helper.c
 
 # Install the resources. The executable expects to find them in

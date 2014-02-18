@@ -14,6 +14,7 @@
 #include "CSGFile.hh"
 #include "ElementGrid.hh"
 #include "Fields.hh"
+#include "ParameterSweepDialog.hh"
 #include <list>
 #include <vector>
 #include <fstream>
@@ -156,18 +157,18 @@ void CSGWindowController::saveCSG()
     }
 }
 
-void CSGWindowController::loadCSG()
+void CSGWindowController::loadCSG(QString path)
 {
-    QString path = QString();
-    QString fileName = QFileDialog::getOpenFileName(m_window,
-            "Open Object (.csg)", path,
-            "Text files (*.csg)");
-    if (fileName.length() > 0) {
+    if (path.length() == 0) {
+        path = QFileDialog::getOpenFileName(m_window, "Open Object (.csg)",
+                QString(), "Text files (*.csg)");
+    }
+    if (path.length() > 0) {
         m_csgTreeModel->csgTreeAboutToUpdate();
 
         try {
-            parseCSGFile(fileName.toLatin1(), *m_csgTree);
-            QFileInfo fi(fileName);
+            parseCSGFile(path.toLatin1(), *m_csgTree);
+            QFileInfo fi(path);
             string modelName = fi.completeBaseName().toStdString();
             if (m_modelName != modelName) {
                 m_modelName = modelName;
@@ -557,6 +558,53 @@ void CSGWindowController::runTranslationTest(const AnalysisSettings &settings)
     // m_csgTree->setParameters(params);
 
     emit resultsUpdated();
+}
+
+void CSGWindowController::runSimulationSweep() {
+    vector<string> settingsNames;
+    for (const string &name : m_settings.getNames()) {
+        if ((m_settings.type(name) == AnalysisSettings::TYPE_REAL)
+            || (m_settings.type(name) == AnalysisSettings::TYPE_INT))
+            settingsNames.push_back(name);
+    }
+
+    vector<string> csgParameterNames = m_csgTree->getParameterNames();
+
+    ParameterSweepDialog *pdialog =
+        new ParameterSweepDialog(m_modelName, m_settingsName, settingsNames,
+                                 csgParameterNames, m_window);
+    int ret = pdialog->exec();
+    if (ret) {
+        try {
+            vector<string> settingNames, settingRanges, csgParameterRanges;
+            vector<size_t> csgParameterIndices;
+            pdialog->selectedIdentifiersAndRanges(settingNames, settingRanges,
+                    csgParameterIndices, csgParameterRanges);
+
+            typedef ParameterSweep<Scalar> PS;
+
+            PS::SweepMode mode = (PS::SweepMode) pdialog->sweepMode();
+            std::string modelNameFormat = pdialog->modelNameFormat();
+            std::string settingsNameFormat = pdialog->settingsNameFormat();
+            assert((mode == PS::SWEEP_ZIP) || (mode == PS::SWEEP_PRODUCT));
+            PS ps(mode, settingNames, settingRanges, csgParameterIndices,
+                  csgParameterRanges);
+
+            do {
+                // Adjust settings/model and run simulation
+            } while (ps.advance());
+        }
+        catch (exception &e) {
+            string errorMsg("Sweep Configuration Failed: ");
+            errorMsg += e.what();
+
+            QMessageBox mbox(QMessageBox::Critical,
+                             "Sweep Configuration Failed",
+                             errorMsg.c_str(), QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
 }
 
 void CSGWindowController::
