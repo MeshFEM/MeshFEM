@@ -80,12 +80,15 @@ public:
         return m_sfields[type];
     }
 
-    typename SField::value_type getMaxScalar(ResultDomain type) const {
-        return m_sfields[type].max();
+    Real getMaxScalar(ResultDomain type) const { return m_sfields[type].max(); }
+    Real getMinScalar(ResultDomain type) const { return m_sfields[type].min(); }
+
+    Real getMaxVectorMagnitude(ResultDomain type) const {
+        return m_vfields[type].maxMag();
     }
 
-    typename SField::value_type getMinScalar(ResultDomain type) const {
-        return m_sfields[type].min();
+    Real getMinVectorMagnitude(ResultDomain type) const {
+        return m_vfields[type].minMag();
     }
 
     unsigned char resultType() const {

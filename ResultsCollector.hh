@@ -25,6 +25,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <utility>
 #include <map>
 #include <string>
 #include <cassert>
@@ -54,6 +55,7 @@ inline std::string getSettingsPathComponent(const std::string &path) {
 template<typename Generator>
 class ResultsCollector {
     typedef typename Generator::Model Model;
+    typedef typename Generator::Real Real;
     typedef typename std::pair<Model, BBox_t> RModel;
 public:
     class ResultTree;
@@ -138,6 +140,27 @@ public:
         if (settings_it == m_settings.end())
             throw std::runtime_error(std::string("settings not found: ") + name);
         settings = settings_it->second;
+    }
+
+    typedef std::pair<size_t, std::string> ModelParameterID;
+    std::vector<ModelParameterID> getModelParameterIDs(const std::string &name) const {
+        auto model_it = m_models.find(name);
+        if (model_it == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + name);
+        std::vector<std::string> pnames =
+            model_it->second.first.getParameterNames();
+        std::vector<ModelParameterID> params;
+        for (size_t i = 0; i < pnames.size(); ++i)
+            params.push_back(std::make_pair(i, pnames[i]));
+
+        return params;
+    }
+
+    std::vector<Real> getModelParameters(const std::string &name) const {
+        auto model_it = m_models.find(name);
+        if (model_it == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + name);
+        return model_it->second.first.getParameters();
     }
 
     bool settingsDiffer(const std::string &name,

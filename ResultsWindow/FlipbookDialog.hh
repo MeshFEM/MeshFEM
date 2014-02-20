@@ -13,6 +13,12 @@
 
 #include <QObject>
 #include <QDialog>
+#include <vector>
+
+#include "GlobalTypes.hh"
+#include "MeshlessFEM.hh"
+#include "ResultsCollector.hh"
+
 
 class QWidget;
 class QLineEdit;
@@ -23,18 +29,19 @@ class FlipbookDialog : public QDialog
     Q_OBJECT
 
 public:
-    FlipbookDialog(QWidget *parent = 0);
+    typedef ResultsCollector_t::ModelParameterID MPID;
+    FlipbookDialog(const std::vector<MPID> &mparams, QWidget *parent = 0);
 
     std::string title() const;
     std::vector<std::string> selectedSettingNames() const;
+    std::vector<MPID> selectedCSGParameterIDs() const;
 
     ~FlipbookDialog();
 
 private:
-    void generateSettingItems();
-
+    std::vector<MPID> m_modelParams;
     QLineEdit   *g_titleEdit;
-    QListWidget *g_settingList;
+    QListWidget *g_settingList, *g_csgParamList;
 };
 
 #endif // FLIPBOOK_DIALOG_HH

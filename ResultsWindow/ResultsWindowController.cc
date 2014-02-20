@@ -15,6 +15,8 @@
 #include <string>
 #include <stack>
 #include <memory>
+#include <algorithm>
+#include <iterator>
 #include <QList>
 #include <QListWidget>
 #include <QLineEdit>
@@ -456,7 +458,26 @@ void ResultsWindowController::generateFlipbook()
     if (paths.empty())
         return;
 
-    FlipbookDialog *fdialog = new FlipbookDialog(&m_window);
+    // Collect parameters common to all models.
+    // For a parameter to be in common both its index and name must match.
+    typedef ResultsCollector_t::ModelParameterID MPID;
+    vector<MPID> mparams, tmp;
+    bool first = true;
+    for (const string &path : paths) {
+        tmp = m_window.m_resultsCollection.getModelParameterIDs(
+                    getModelPathComponent(path));
+        if (first)
+            mparams = tmp;
+        else {
+            vector<MPID> intersect;
+            set_intersection(mparams.begin(), mparams.end(),
+                             tmp.begin(), tmp.end(), back_inserter(intersect));
+            mparams = intersect;
+        }
+        first = false;
+    }
+
+    FlipbookDialog *fdialog = new FlipbookDialog(mparams, &m_window);
     fdialog->setModal(true);
     int result = fdialog->exec();
 
@@ -471,7 +492,8 @@ void ResultsWindowController::generateFlipbook()
                     &m_window.m_resultsCollection, paths));
 
         m_flipbook->writeFlipperJSON(fdialog->title(),
-                                     fdialog->selectedSettingNames());
+                                     fdialog->selectedSettingNames(),
+                                     fdialog->selectedCSGParameterIDs());
 
         // Kickstart the flipbook (ensure the first flipbook result selection
         // triggers a redraw). Masking is required to prevent selectResult(NULL)

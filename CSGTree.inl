@@ -347,7 +347,9 @@ public:
 
 
     virtual CSGNode *copy() const {
-        return new CSGBoolNode(m_op, m_left->copy(), m_right->copy());
+        CSGNode *n = new CSGBoolNode(m_op, m_left->copy(), m_right->copy());
+        n->setName(this->name());
+        return n;
     }
 
     virtual bool operator==(const CSGNode &b) const {
@@ -501,8 +503,10 @@ public:
     }
 
     virtual CSGNode *copy() const {
-        return new CSGRectangleNode(this->getCenter(), this->getDimensions(),
-                                    this->getRotation());
+        CSGNode *n =  new CSGRectangleNode(this->getCenter(),
+                            this->getDimensions(), this->getRotation());
+        n->setName(this->name());
+        return n;
     }
 
     ~CSGRectangleNode() { }
@@ -606,8 +610,10 @@ public:
     }
 
     virtual CSGNode *copy() const {
-        return new CSGEllipseNode(this->getCenter(), this->getDimensions(),
-                                  this->getRotation());
+        CSGNode *n = new CSGEllipseNode(this->getCenter(),
+                this->getDimensions(), this->getRotation());
+        n->setName(this->name());
+        return n;
     }
 
     ~CSGEllipseNode() { }
@@ -791,8 +797,10 @@ public:
     }
 
     virtual CSGNode *copy() const {
-        return new CSGPieSliceNode(this->getCenter(), this->getDimensions(),
-                                  this->getRotation());
+        CSGNode *n = new CSGPieSliceNode(this->getCenter(),
+                    this->getDimensions(), this->getRotation());
+        n->setName(this->name());
+        return n;
     }
 
     ~CSGPieSliceNode() { }
@@ -854,8 +862,10 @@ public:
     }
 
     virtual CSGNode *copy() const {
-        return new CSGLaminateNode(this->getCenter(), this->getDimensions(),
-                                   this->getRotation());
+        CSGNode *n = new CSGLaminateNode(this->getCenter(),
+                    this->getDimensions(), this->getRotation());
+        n->setName(this->name());
+        return n;
     }
 
     ~CSGLaminateNode() { }

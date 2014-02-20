@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <stdexcept>
 #include <cmath>
+#include <limits>
 
 template<typename Real, size_t t_dim>
 class VectorField {
@@ -68,10 +69,21 @@ public:
 
     // Normalize data so that the maximum column magnitude is 1.
     void maxColumnNormalize() {
+        m_values /= maxMag();
+    }
+
+    Real maxMag() const {
         Real maxNorm = 0;
         for (size_t i = 0; i < domainSize(); ++i)
             maxNorm = std::max(maxNorm, m_values.col(i).norm());
-        m_values /= maxNorm;
+        return maxNorm;
+    }
+
+    Real minMag() const {
+        Real minNorm = std::numeric_limits<Real>::max();
+        for (size_t i = 0; i < domainSize(); ++i)
+            minNorm = std::min(minNorm, m_values.col(i).norm());
+        return minNorm;
     }
 
     const ArrayType &data() const { return m_values; }

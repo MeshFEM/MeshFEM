@@ -30,6 +30,7 @@
 class Flipbook {
 public:
     typedef ResultsCollector_t::Result Result;
+    typedef ResultsCollector_t::ModelParameterID MPID;
 
     Flipbook() : m_results(NULL), m_frame(0), m_masked(true) { }
 
@@ -75,7 +76,8 @@ public:
     }
 
     void writeFlipperJSON(const std::string &title,
-                          const std::vector<std::string> &settingNames) const {
+                          const std::vector<std::string> &settingNames,
+                          const std::vector<MPID> &parameterIDs) const {
         std::ofstream jsonOut(m_directory + "/frames.js");
         if (!jsonOut.is_open()) {
             std::cout << "Failed to open output file '"
@@ -84,24 +86,30 @@ public:
         }
 
         jsonOut << "title = '" << escapedString(title) << "';" << std::endl;
-        jsonOut << "statistics = ['model', 'result max', 'result min'";
-        for (size_t s = 0; s < settingNames.size(); ++s) {
+        jsonOut << "statistics = ['model', 'scalar max', 'scalar min', 'norm max', 'norm min'";
+        for (size_t s = 0; s < settingNames.size(); ++s)
             jsonOut << ", '" << escapedString(settingNames[s]) << "'";
-        }
+        for (size_t i = 0; i < parameterIDs.size(); ++i)
+            jsonOut << ", '" << escapedString(parameterIDs[i].second) << "'";
         jsonOut << "];" << std::endl;
         jsonOut << "variants = ['Plain'];" << std::endl;
         jsonOut << "frames = [" << std::endl;
         
         assert(m_results);
         for (size_t f = 0; f < m_resultPaths.size(); ++f) {
-            jsonOut << "    {'image': ['" << escapedString(imagePath(f)) << "']";
-
+            jsonOut << "    {'image': ['" << escapedString(path(f)) << ".png']";
+            
+            std::string modelName = getModelPathComponent(path(f));
             jsonOut << ", 'model': '"
-                    << escapedString(getModelPathComponent(path(f))) << "'";
-            jsonOut << ", 'result max': '"
+                    << escapedString(modelName) << "'";
+            jsonOut << ", 'scalar max': '"
                     << m_results->getResultWithPath(path(f))->getMaxScalar(Result::PER_ELEM) << "'";
-            jsonOut << ", 'result min': '"
+            jsonOut << ", 'scalar min': '"
                     << m_results->getResultWithPath(path(f))->getMinScalar(Result::PER_ELEM) << "'";
+            jsonOut << ", 'norm max': '"
+                    << m_results->getResultWithPath(path(f))->getMaxVectorMagnitude(Result::PER_NODE) << "'";
+            jsonOut << ", 'norm min': '"
+                    << m_results->getResultWithPath(path(f))->getMinVectorMagnitude(Result::PER_NODE) << "'";
 
             AnalysisSettings settings;
             m_results->getSettings(getSettingsPathComponent(path(f)), settings);
@@ -110,6 +118,14 @@ public:
                 std::string name = escapedString(settingNames[s]);
                 jsonOut << ", '" << name << "': '"
                         << settings.displayString(name) << "'";
+            }
+
+            std::vector<Scalar> params = m_results->getModelParameters(modelName);
+            for (size_t i = 0; i < parameterIDs.size(); ++i) {
+                std::string name = escapedString(parameterIDs[i].second);
+                size_t idx = parameterIDs[i].first;
+                assert(idx < params.size());
+                jsonOut << ", '" << name << "': '" << params[idx] << "'";
             }
 
             jsonOut << "}," << std::endl;

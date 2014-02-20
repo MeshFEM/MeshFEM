@@ -39,7 +39,7 @@ public:
 
     AnalysisSettings() {
         // Be careful with initialization literal types here... they determine
-3       // the setting's type, and need to match exactly to avoid overload
+        // the setting's type, and need to match exactly to avoid overload
         // ambiguity.
         m_values["solver"] = Variant(std::string("Gurobi"));
         m_values["Nx"] = Variant((int) 40);
