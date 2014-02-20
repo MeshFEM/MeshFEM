@@ -24,6 +24,7 @@
 #include <QMessageBox>
 #include <QTreeview>
 #include <QFileDialog>
+#include <boost/format.hpp>
 
 
 using namespace std;
@@ -581,18 +582,107 @@ void CSGWindowController::runSimulationSweep() {
             pdialog->selectedIdentifiersAndRanges(settingNames, settingRanges,
                     csgParameterIndices, csgParameterRanges);
 
-            typedef ParameterSweep<Scalar> PS;
+            boost::format modelNameFormat(pdialog->modelNameFormat());
+            boost::format settingsNameFormat(pdialog->settingsNameFormat());
+            modelNameFormat.exceptions(boost::io::all_error_bits ^
+                (boost::io::too_many_args_bit | boost::io::too_few_args_bit));
+            settingsNameFormat.exceptions(boost::io::all_error_bits ^
+                (boost::io::too_many_args_bit | boost::io::too_few_args_bit));
 
+            typedef ParameterSweep<Scalar> PS;
             PS::SweepMode mode = (PS::SweepMode) pdialog->sweepMode();
-            std::string modelNameFormat = pdialog->modelNameFormat();
-            std::string settingsNameFormat = pdialog->settingsNameFormat();
             assert((mode == PS::SWEEP_ZIP) || (mode == PS::SWEEP_PRODUCT));
             PS ps(mode, settingNames, settingRanges, csgParameterIndices,
                   csgParameterRanges);
 
+            bool running = true;
+            QString dir;
+            if (pdialog->operation() == ParameterSweepDialog::SWEEP_OP_SAVE) {
+                running = false;
+                dir = QFileDialog::getExistingDirectory(0,
+                    "Inputs Save Directory", QString(), QFileDialog::ShowDirsOnly);
+
+                if (dir.length() == 0)
+                    return;
+
+                // TODO: write boundary conditions!
+            }
+
+            // Get the current parameters--the sweep will apply diffs to these.
+            vector<Scalar> params = m_csgTree->getParameters();
+            AnalysisSettings settings = m_settings;
+            vector<Scalar> origParams(params);
+
+            int frame = 0;
             do {
-                // Adjust settings/model and run simulation
+                vector<Scalar> settingValues = ps.getSettingValues();
+                vector<Scalar> csgParamValues = ps.getCSGParameterValues();
+
+                assert(settingValues.size() == settingNames.size());
+                for (size_t i = 0; i < settingValues.size(); ++i) {
+                    const string &setting = settingNames[i];
+                    Scalar value = settingValues[i];
+                    switch (settings.type(setting)) {
+                        case AnalysisSettings::TYPE_REAL:
+                            settings.Real(setting) = value;
+                            break;
+                        case AnalysisSettings::TYPE_INT:
+                            value = std::round(value);
+                            settings.Int(setting) = (int) value;
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    modelNameFormat % value;
+                    settingsNameFormat % value;
+                }
+
+                assert(csgParamValues.size() == csgParameterIndices.size());
+                for (size_t i = 0; i < csgParamValues.size(); ++i) {
+                    Scalar value = csgParamValues[i];
+                    assert(csgParameterIndices[i] < params.size());
+                    params[csgParameterIndices[i]] = value;
+                    modelNameFormat % value;
+                    settingsNameFormat % value;
+                }
+                m_csgTree->setParameters(params);
+
+                string modelName = boost::str(modelNameFormat);
+                string settingsName = boost::str(settingsNameFormat);
+                cout << "(" << modelName << ", " << settingsName << ")" << endl;
+
+                if (running) {
+                    m_settings = settings;
+                    modelChanged();
+                    settingsChanged();
+                    m_fem.loadSettings(m_settings);
+
+                    m_modelName = modelName;
+                    m_settingsName = settingsName;
+                    prepareResultsCollector();
+
+                    bool success = m_fem.simulate(&m_results);
+                    assert(success);
+                }
+                else {
+                    // Save frame inputs
+                    QString baseName = dir + "/" + QString::number(frame); 
+                    writeCSGFile((baseName + ".csg").toLatin1(), *m_csgTree);
+                    ofstream infoFile((baseName + ".txt").toLatin1());
+                    infoFile << modelName << endl << settingsName << endl;
+                    // settings.write((baseName + ".settings").toLatin1());
+                }
+
+                ++frame;
             } while (ps.advance());
+
+            if (running) {
+                emit resultsUpdated();
+            }
+            else {
+                // Settings weren't altered, but CSG tree was
+                m_csgTree->setParameters(origParams);
+            }
         }
         catch (exception &e) {
             string errorMsg("Sweep Configuration Failed: ");

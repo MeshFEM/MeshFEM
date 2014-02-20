@@ -24,12 +24,16 @@ class QLineEdit;
 class QListWidget;
 class QFormLayout;
 class QComboBox;
+class QDialogButtonBox;
+class QAbstractButton;
 
 class ParameterSweepDialog : public QDialog
 {
     Q_OBJECT
 
 public:
+    typedef enum { SWEEP_OP_SAVE, SWEEP_OP_RUN } Operation;
+
     ParameterSweepDialog(const std::string &modelName,
                          const std::string &settingsName,
                          const std::vector<std::string> &settingNames, 
@@ -38,7 +42,9 @@ public:
 
     std::string modelNameFormat() const;
     std::string settingsNameFormat() const;
+    // 0: zip, 1: product
     int sweepMode() const;
+    Operation operation() const { return m_op; }
 
     void selectedIdentifiersAndRanges(std::vector<std::string> &settingNames,
                              std::vector<std::string> &settingRanges,
@@ -49,6 +55,7 @@ public:
 
 private slots:
     void itemChanged(QListWidgetItem *item);
+    void buttonClicked(QAbstractButton *button);
 
 private:
     void generateSettingItems();
@@ -56,7 +63,10 @@ private:
     QLineEdit   *g_modelNameEdit, *g_settingsNameEdit;
     QListWidget *g_settingsList, *g_csgParameterList;
     QFormLayout *g_rangesForm;
+    QDialogButtonBox *g_buttons;
     QComboBox   *g_sweepModeSelector;
+
+    Operation m_op;
 
     size_t m_numSettings, m_numParameters;
 

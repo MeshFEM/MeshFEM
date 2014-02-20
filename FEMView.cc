@@ -28,6 +28,8 @@
 #include "MeshlessFEM.hh"
 #include "ShaderCompiler.hh"
 #include "Flipbook.hh"
+#include "BoundaryConditionDialog.hh"
+
 // #include "timing.h"
 
 #define MAX_NODES 256
@@ -1274,23 +1276,54 @@ private:
     const VField &m_deformation;
 };
 
-void FEMView2D::paintPressure(const Vector &screenPt, bool erase)
+////////////////////////////////////////////////////////////////////////////
+/*! Changes the painted condition for a boundary point.
+//  @param[in]  screenPt    where to paint
+//  @param[in]  PaintOp     Painting operation (paint, zero-out, erase, or
+//                          toggle)
+//  @return     true if painted, false otherwise (useful for toggle)
+*///////////////////////////////////////////////////////////////////////////
+// @return  true if painted, false if erased
+bool FEMView2D::paintPressure(const Vector &screenPt, PaintOp op)
 {
     size_t closest = 0;
     Scalar closestDist;
     getClosest(BPCollect(m_fem.boundaryPoints()), screenPt,
               closest, closestDist);
 
+    bool painted = false;
     if (closestDist < SELECT_DIST_THRESHOLD) {
-        if (erase)
-            m_fem.boundaryConditions().erase(closest);
-        else {
-            m_fem.boundaryConditions().paintPressure(closest,
-                                                     m_pressurePaintValue);
+        switch (op) {
+            case PAINT_OP_PAINT:
+                m_fem.boundaryConditions().paintPressure(closest,
+                                                         m_pressurePaintValue);
+                painted = true;
+                break;
+            case PAINT_OP_ZERO:
+                m_fem.boundaryConditions().paintPressure(closest, 0);
+                break;
+            case PAINT_OP_ERASE:
+                m_fem.boundaryConditions().erase(closest);
+                break;
+            case PAINT_OP_TOGGLE:
+                if (std::abs(m_fem.boundaryConditions().
+                            paintedPressure(closest)) > 1e-8) {
+                    m_fem.boundaryConditions().paintPressure(closest, 0);
+                }
+                else {
+                    m_fem.boundaryConditions().paintPressure(closest,
+                            m_pressurePaintValue);
+                    painted = true;
+                }
+                break;
+            default:
+                assert(false);
         }
 
         update();
     }
+
+    return painted;
 }
 
 void FEMView2D::performSelection(const Vector &screenPt)
@@ -1355,8 +1388,32 @@ void FEMView2D::mousePressEvent(QMouseEvent *event)
     }
     else if (m_guiState == STATE_PRESSURE_DRAW) {
         if (event->button() == Qt::LeftButton) {
+            if (event->modifiers() & Qt::ShiftModifier) {
+                // Drag gesture
+                Vector worldPt;
+                qtToWorldCoords(event->pos(), worldPt);
+                qtToScreenCoords(event->pos(), m_prevMouseLoc);
+                std::vector<size_t> conditions =
+                    m_fem.boundaryConditions().conditions(worldPt);
+                if (conditions.size() > 0) {
+                    m_gesture = GESTURE_DRAG;
+                    m_dragID = conditions[0];
+                }
+            }
+            else if (event->modifiers() & Qt::AltModifier) {
+                // Erase gesture
+                qtToScreenCoords(event->pos(), m_prevMouseLoc);
+                paintPressure(m_prevMouseLoc, PAINT_OP_ERASE);
+                m_gesture = GESTURE_ERASE;
+            }
+            else {
+                // Paint gesture
+                qtToScreenCoords(event->pos(), m_prevMouseLoc);
+                bool ret = paintPressure(m_prevMouseLoc, PAINT_OP_TOGGLE);
+                m_gesture = ret ? GESTURE_PAINT : GESTURE_ZERO;
+            }
+
             bool erase = event->modifiers() & Qt::AltModifier;
-            paintPressure(qtToScreenCoords(event->pos()), erase);
         }
     }
     else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT)) {
@@ -1416,9 +1473,18 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
             update();
         }
         else if (m_guiState == STATE_PRESSURE_DRAW) {
-            if (leftButton) {
-                bool erase = event->modifiers() & Qt::AltModifier;
-                paintPressure(qtToScreenCoords(event->pos()), erase);
+            if (m_gesture == GESTURE_PAINT)
+                paintPressure(qtToScreenCoords(event->pos()), PAINT_OP_PAINT);
+            else if (m_gesture == GESTURE_ERASE)
+                paintPressure(qtToScreenCoords(event->pos()), PAINT_OP_ERASE);
+            else if (m_gesture == GESTURE_ZERO)
+                paintPressure(qtToScreenCoords(event->pos()), PAINT_OP_ZERO);
+            else if (m_gesture == GESTURE_DRAG) {
+                if (m_dragID < m_fem.boundaryConditions().numConditions()) {
+                    m_fem.boundaryConditions().condition(m_dragID).translate(
+                            end - start);
+                }
+                update();
             }
         }
         else if ((m_guiState == STATE_ELEMENTS) || (m_guiState == STATE_RESULT))
@@ -1433,5 +1499,20 @@ void FEMView2D::mouseMoveEvent(QMouseEvent *event)
 
 void FEMView2D::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    Q_UNUSED(event)
+    if (m_guiState == STATE_PRESSURE_DRAW) {
+        Vector worldPt;
+        qtToWorldCoords(event->pos(), worldPt);
+        std::vector<size_t> conditions =
+            m_fem.boundaryConditions().conditions(worldPt);
+        if (conditions.size() > 0) {
+            BoundaryConditionDialog bcDialog(m_fem.boundaryConditions(),
+                                             conditions[0]);
+            bcDialog.exec();
+        }
+        else {
+            BoundaryConditionDialog bcDialog(m_fem.boundaryConditions());
+            bcDialog.exec();
+        }
+    }
 }
+

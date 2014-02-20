@@ -89,6 +89,15 @@ public:
         configureWeaknessAnalysis(settings);
     }
 
+    void loadSettings(const AnalysisSettings &settings) {
+        configureElements(settings);
+        configureBoundaryPoints(settings);
+        configureMatrices(settings);
+        configureMaterial(settings);
+        configureModalAnalysis(settings);
+        configureWeaknessAnalysis(settings);
+    }
+
 
     // Return true if the grid changes as a result of the settings change
     bool configureElements(const AnalysisSettings &settings) {

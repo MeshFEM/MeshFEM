@@ -59,10 +59,15 @@ struct BBox {
 
     // Expands the bounding box around its center so that dimension i is
     // increased by factors[i].
-    void expand(Vector factors) {
+    void expand(const Vector &factors) {
         Vector delta = .5 * (factors.array() * dimensions().array());
         minCorner -= delta;
         maxCorner += delta;
+    }
+    
+    void translate(const Vector &t) {
+        minCorner += t;
+        maxCorner += t;
     }
 
     Real volume() const {

@@ -28,7 +28,7 @@ ParameterSweepDialog(const string &modelName, const string &settingsName,
                      const std::vector<std::string> &settingNames,
                      const std::vector<std::string> &csgParameterNames,
                      QWidget *parent)
-    : QDialog(parent)
+    : QDialog(parent), m_op(SWEEP_OP_RUN)
 {
     setWindowTitle("Parameter Sweep Configuration");
 
@@ -64,9 +64,10 @@ ParameterSweepDialog(const string &modelName, const string &settingsName,
     g_rangesForm->addRow("Sweep Mode", g_sweepModeSelector);
     layout->addWidget(rangesGroup);
 
-    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Save |
-            QDialogButtonBox::Cancel);
-    layout->addWidget(buttons);
+    g_buttons = new QDialogButtonBox(QDialogButtonBox::Cancel);
+    g_buttons->addButton("Run", QDialogButtonBox::AcceptRole);
+    g_buttons->addButton("Save Inputs...", QDialogButtonBox::ActionRole);
+    layout->addWidget(g_buttons);
 
     // Left top right bottom
     layout->setContentsMargins(0, 10, 0, 0);
@@ -94,8 +95,10 @@ ParameterSweepDialog(const string &modelName, const string &settingsName,
 
     m_numParameters = id;
 
-    QObject::connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
-    QObject::connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
+    QObject::connect(g_buttons, SIGNAL(accepted()), this, SLOT(accept()));
+    QObject::connect(g_buttons, SIGNAL(rejected()), this, SLOT(reject()));
+    QObject::connect(g_buttons, SIGNAL(clicked(QAbstractButton *)), this,
+                     SLOT(buttonClicked(QAbstractButton *)));
     QObject::connect(g_settingsList, SIGNAL(itemChanged(QListWidgetItem *)),
                      this, SLOT(itemChanged(QListWidgetItem *)));
     QObject::connect(g_csgParameterList, SIGNAL(itemChanged(QListWidgetItem *)),
@@ -170,5 +173,13 @@ void ParameterSweepDialog::itemChanged(QListWidgetItem *item)
         edit->deleteLater();
         label->deleteLater();
         m_rangeFields.erase(it);
+    }
+}
+
+void ParameterSweepDialog::buttonClicked(QAbstractButton *button)
+{
+    if (g_buttons->buttonRole(button) == QDialogButtonBox::ActionRole) {
+        m_op = SWEEP_OP_SAVE;
+        accept();
     }
 }

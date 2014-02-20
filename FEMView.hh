@@ -161,7 +161,9 @@ protected:
     template<typename Collection>
     void getClosest(const Collection &points, const Vector &pt,
                     size_t &closest, Scalar &sDist);
-    void paintPressure(const Vector &screenPt, bool erase = false);
+    typedef enum {PAINT_OP_PAINT, PAINT_OP_ZERO, PAINT_OP_ERASE,
+                  PAINT_OP_TOGGLE} PaintOp;
+    bool paintPressure(const Vector &screenPt, PaintOp op);
     void performSelection(const Vector &screenPt);
     void mouseReleaseEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
@@ -211,6 +213,12 @@ protected:
     void qtToScreenCoords(const QPoint &pt, Vector &spt) const {
         spt[0] = pt.x() + m_screenLeft;
         spt[1] = m_screenTop - pt.y();
+    }
+
+    void qtToWorldCoords(const QPoint &pt, Vector &wpt) const {
+        wpt[0] = pt.x() + m_screenLeft;
+        wpt[1] = m_screenTop - pt.y();
+        getWorldCoords(wpt[1], wpt[0], wpt[0], wpt[1]);
     }
 
     Vector qtToScreenCoords(const QPoint &pt) const {
@@ -303,8 +311,10 @@ private:
     Scalar m_pressurePaintValue;
 
     GUIState m_guiState;
-    typedef enum {GESTURE_DRAG, GESTURE_PAN, GESTURE_ZOOM, GESTURE_NONE} MouseGesture;
+    typedef enum { GESTURE_DRAG, GESTURE_PAN, GESTURE_ZOOM, GESTURE_PAINT,
+                   GESTURE_ZERO, GESTURE_ERASE, GESTURE_NONE } MouseGesture;
     MouseGesture m_gesture;
+    size_t m_dragID;
     Vector m_prevMouseLoc;
 
     QBasicTimer m_timer;

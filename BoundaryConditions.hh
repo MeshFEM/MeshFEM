@@ -59,6 +59,10 @@ public:
             : region(region), type(CONDITION_TRACTION), value(t) { }
         Condition(const BBox<Vector> &region, Real p)
             : region(region), type(CONDITION_PRESSURE), value(p, 0) { }
+
+        void translate(const Vector &t) {
+            region.translate(t);
+        }
     };
 
     BoundaryConditions() {
@@ -155,6 +159,16 @@ public:
     size_t numConditions() const { return m_conditions.size(); }
     Condition &condition(size_t i) { return m_conditions[i]; }
     const Condition &condition(size_t i) const { return m_conditions[i]; }
+
+    std::vector<size_t> conditions(const Vector &worldPt) const {
+        std::vector<size_t> overlapping;
+        for (size_t i = 0; i < numConditions(); ++i) {
+            if (m_conditions[i].region.containsPoint(worldPt))
+                overlapping.push_back(i);
+        }
+
+        return overlapping;
+    }
 
 private:
     std::vector<Condition> m_conditions;

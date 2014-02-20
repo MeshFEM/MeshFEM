@@ -125,7 +125,7 @@ public:
         m_csgCounters.assign(numCSGParameters(), 0);
     }
 
-    std::vector<Real> getSettingsValues() const {
+    std::vector<Real> getSettingValues() const {
         std::vector<Real> values(numSettings());
         for (size_t i = 0; i < numSettings(); ++i) {
             size_t vi = m_settingsCounters[i];
