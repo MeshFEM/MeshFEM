@@ -60,20 +60,25 @@ public:
         Condition(const BBox<Vector> &region, Real p)
             : region(region), type(CONDITION_PRESSURE), value(p, 0) { }
 
+        void setPressure(Real p) { type = CONDITION_PRESSURE; value[0] = p; }
+        void setTraction(Vector t) { type = CONDITION_TRACTION; value = t; }
+        Real   getPressure() const { return value[0]; }
+        Vector getTraction() const { return value; }
+
         void translate(const Vector &t) {
             region.translate(t);
         }
     };
 
     BoundaryConditions() {
-        // Bottom pressure
+        // Bottom traction
         m_conditions.push_back(Condition(BBox<Vector>(
-                        Vector(-5.05, -3.0), Vector(5.05, -2.524)),
-                        0.1));
-        // Top pressure
+                        Vector(-2.55, -3.0), Vector(2.55, -2.524)),
+                        Vector(0, 0.003)));
+        // Top traction
         m_conditions.push_back(Condition(BBox<Vector>(
-                        Vector(-5.05, 2.524), Vector(5.05, 3.0)),
-                        0.1));
+                        Vector(-2.55, 2.524), Vector(2.55, 3.0)),
+                        Vector(0, -0.003)));
     }
 
     // Get the traction (not force!) acting on each boundary point

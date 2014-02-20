@@ -12,23 +12,34 @@
 
 #include <QLineEdit>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QComboBox>
+#include <QToolButton>
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QDoubleValidator>
-#include <QComboBox>
 #include <QTabWidget>
 #include <cassert>
 
 BoundaryConditionDialog::BoundaryConditionDialog(BCs &c, int condition,
                                                  QWidget *parent)
-        : QDialog(parent), m_conditions(c), m_selectedCondition(condition)
+        : QDialog(parent), m_conditions(c), m_selectedCondition(-1)
 {
     setWindowTitle("Boundary Conditions");
 
     QVBoxLayout *layout = new QVBoxLayout();
-    g_conditionSelector = new QComboBox();
 
-    layout->addWidget(g_conditionSelector);
+    QHBoxLayout *managerLayout = new QHBoxLayout();
+    g_conditionSelector = new QComboBox();
+    QToolButton *addButton = new QToolButton();
+    QToolButton *removeButton = new QToolButton();
+    addButton->setText("+");
+    removeButton->setText("-");
+    managerLayout->addWidget(g_conditionSelector);
+    managerLayout->addWidget(addButton);
+    managerLayout->addWidget(removeButton);
+
+    layout->addLayout(managerLayout);
 
     QFormLayout *regionForm = new QFormLayout();
     regionForm->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
@@ -79,33 +90,78 @@ BoundaryConditionDialog::BoundaryConditionDialog(BCs &c, int condition,
 
     QObject::connect(g_conditionSelector, SIGNAL(currentIndexChanged(int)),
                      this, SLOT(selectedConditionChanged(int)));
+    QObject::connect(g_conditionSelector, SIGNAL(currentIndexChanged(int)),
+                     this, SLOT(selectedConditionChanged(int)));
+    QObject::connect(buttons, SIGNAL(accepted()), this, SLOT(okClicked()));
 
     for (size_t i = 0; i < m_conditions.numConditions(); ++i)
         g_conditionSelector->addItem("Condition " + QString::number(i + 1));
 
-    if (condition < m_conditions.numConditions())
-        g_conditionSelector->setCurrentIndex(condition);
+    // Select a valid condition
+    if (condition > (int) m_conditions.numConditions())
+        condition = -1;
+
+    if ((condition < 0) && (m_conditions.numConditions() > 0))
+        condition = 0;
+
+    if (condition >= 0)
+        selectCondition(condition);
+
     setLayout(layout);
 }
 
-void BoundaryConditionDialog::selectedConditionChanged(int newIdx) {
+void BoundaryConditionDialog::saveCondition() {
     if (m_selectedCondition >= 0) {
-        // Save old values
-    }
-    else {
-        const BCs::Condition &c = m_conditions.condition(newIdx);
-        g_regionMinX->setText(QString::number(c.region.minCorner[0]));
-        g_regionMaxX->setText(QString::number(c.region.maxCorner[0]));
-        g_regionMinY->setText(QString::number(c.region.minCorner[1]));
-        g_regionMaxY->setText(QString::number(c.region.maxCorner[1]));
-        
-        g_tractionPressureTab->setCurrentIndex(
-                (c.type == BCs::CONDITION_TRACTION) ? 0 : 1);
+        BCs::Condition &c = m_conditions.condition(m_selectedCondition);
+        c.region.minCorner[0] = g_regionMinX->text().toDouble();
+        c.region.maxCorner[0] = g_regionMaxX->text().toDouble();
+        c.region.minCorner[1] = g_regionMinY->text().toDouble();
+        c.region.maxCorner[1] = g_regionMaxY->text().toDouble();
 
-        g_tractionX->setText(QString::number(c.value[0]));
-        g_tractionY->setText(QString::number(c.value[1]));
-        g_pressure->setText(QString::number(c.value[0]));
+        switch (g_tractionPressureTab->currentIndex()) {
+            case 0:
+                c.setTraction(Vector(g_tractionX->text().toDouble(),
+                                     g_tractionY->text().toDouble()));
+                break;
+            case 1:
+                c.setPressure(g_pressure->text().toDouble());
+                break;
+            default:
+                assert(false);
+        }
     }
+}
+
+void BoundaryConditionDialog::selectCondition(int idx) {
+    saveCondition();
+
+    assert((size_t) idx < m_conditions.numConditions());
+
+    const BCs::Condition &c = m_conditions.condition(idx);
+    g_regionMinX->setText(QString::number(c.region.minCorner[0]));
+    g_regionMaxX->setText(QString::number(c.region.maxCorner[0]));
+    g_regionMinY->setText(QString::number(c.region.minCorner[1]));
+    g_regionMaxY->setText(QString::number(c.region.maxCorner[1]));
+    
+    g_tractionPressureTab->setCurrentIndex(
+            (c.type == BCs::CONDITION_TRACTION) ? 0 : 1);
+
+    g_tractionX->setText(QString::number(c.value[0]));
+    g_tractionY->setText(QString::number(c.value[1]));
+    g_pressure->setText(QString::number(c.value[0]));
+
+    m_selectedCondition = idx;
+    g_conditionSelector->setCurrentIndex(idx);
+}
+
+void BoundaryConditionDialog::okClicked() {
+    saveCondition();
+    accept();
+}
+
+void BoundaryConditionDialog::selectedConditionChanged(int newIdx) {
+    if (newIdx != m_selectedCondition)
+        selectCondition(newIdx);
 }
 
 BoundaryConditionDialog::~BoundaryConditionDialog() { }

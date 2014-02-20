@@ -34,8 +34,12 @@ public:
 
 private slots:
     void selectedConditionChanged(int newIdx);
+    void okClicked();
 
 private:
+    void saveCondition();
+    void selectCondition(int idx);
+
     QComboBox *g_conditionSelector;
 
     QLineEdit *g_regionMinX, *g_regionMaxX, *g_regionMinY, *g_regionMaxY;

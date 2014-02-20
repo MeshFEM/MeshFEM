@@ -1513,6 +1513,7 @@ void FEMView2D::mouseDoubleClickEvent(QMouseEvent *event)
             BoundaryConditionDialog bcDialog(m_fem.boundaryConditions());
             bcDialog.exec();
         }
+        update();
     }
 }
 

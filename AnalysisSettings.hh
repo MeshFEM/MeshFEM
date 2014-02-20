@@ -39,7 +39,7 @@ public:
 
     AnalysisSettings() {
         // Be careful with initialization literal types here... they determine
-        // the setting's type, and need to match exactly to avoid overload
+3       // the setting's type, and need to match exactly to avoid overload
         // ambiguity.
         m_values["solver"] = Variant(std::string("Gurobi"));
         m_values["Nx"] = Variant((int) 40);
@@ -51,7 +51,7 @@ public:
 
         m_values["useMSBoundary"] = Variant((bool) false);
         m_values["blurPointForces"] = Variant((bool) true);
-        m_values["boundarySpacing"] = Variant((double) .15);
+        m_values["boundarySpacing"] = Variant((double) .03);
         m_values["kernelRadius"] = Variant((double) 1.0);
 
         m_values["exactFullElements"] = Variant((bool) true);
