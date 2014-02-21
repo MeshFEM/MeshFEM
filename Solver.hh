@@ -14,6 +14,8 @@
 #include <vector>
 #include <iostream>
 #include <cassert>
+#include <stdexcept>
+#include <string>
 #include "Fields.hh"
 #include "GlobalTypes.hh"
 
@@ -366,8 +368,8 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             m_Cs_factors.compute(m_Cs);
 
             if (m_Cs_factors.info() != Eigen::Success) {
-                std::cout << "Factorization error" << std::endl;
-                return false;
+                throw std::runtime_error(
+                        std::string("UMFPack Factorization Failed"));
             }
 
             size_t pSize = A.n;

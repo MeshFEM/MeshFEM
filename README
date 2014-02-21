@@ -16,3 +16,15 @@ were brought in:
 
    Or, for clang:
    qmake -spec /opt/local/share/qt4/mkspecs/unsupported/macx-clang ../CSGFEM.pro
+
+================================================================================
+Results File Format
+================================================================================
+Nx Ny
+Grid_clasifications (Nx * Ny bytes)
+NumElements NumNodes NumBoundaryPts
+NumResults (NR)
+   { Result Name (name length, string)
+NR {     NumFields (NF)
+*  {     NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
+   {     *  {    FieldData
