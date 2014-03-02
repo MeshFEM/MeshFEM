@@ -629,6 +629,7 @@ void CSGWindowController::runSimulationSweep() {
         vector<Scalar> origParams(params);
 
         int frame = 0;
+        int failures = 0;
         do {
             vector<Scalar> settingValues = ps->getSettingValues();
             vector<Scalar> csgParamValues = ps->getCSGParameterValues();
@@ -680,14 +681,7 @@ void CSGWindowController::runSimulationSweep() {
                     m_fem.simulate(&m_results);
                 }
                 catch (exception &e) {
-                    string errorMsg("Simulation Failed: ");
-                    errorMsg += e.what();
-
-                    QMessageBox mbox(QMessageBox::Critical,
-                                     "Simulation Failed",
-                                     errorMsg.c_str(), QMessageBox::Ok);
-                    mbox.setDefaultButton(QMessageBox::Ok);
-                    mbox.exec();
+                    ++failures;
                 }
             }
             else {
@@ -703,6 +697,16 @@ void CSGWindowController::runSimulationSweep() {
         } while (ps->advance());
 
         if (running) {
+            if (failures > 0) {
+                QString errorMsg = QString::number(failures);
+                errorMsg += " simulations failed.";
+
+                QMessageBox mbox(QMessageBox::Critical, "Simulation Failed",
+                        errorMsg, QMessageBox::Ok);
+                mbox.setDefaultButton(QMessageBox::Ok);
+                mbox.exec();
+            }
+
             emit resultsUpdated();
         }
         else {

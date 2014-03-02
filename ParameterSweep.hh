@@ -46,23 +46,24 @@ public:
 
     // Settings referred to by name, CSG parameters by index.
     ParameterSweep(SweepMode mode,
-                   const std::vector<std::string> &settingsParameters,
+                   const std::vector<std::string> &settingParameters,
                    const std::vector<std::string> &settingsParameterRanges,
                    const std::vector<size_t>      &csgParameters,
                    const std::vector<std::string> &csgParameterRanges)
-        : m_mode(mode), m_csgParameters(csgParameters)
+        : m_mode(mode), m_settingParameters(settingParameters),
+          m_csgParameters(csgParameters)
     {
-        assert(settingsParameters.size() == settingsParameterRanges.size());
+        assert(settingParameters.size() == settingsParameterRanges.size());
         assert(csgParameters.size() == csgParameterRanges.size());
 
-        m_indepSettingParameters.reserve(settingsParameters.size());
-        m_settingValues.reserve(settingsParameters.size());
+        m_indepParameterID.assign(settingParameters.size(), -1);
+        m_settingValues.reserve(settingParameters.size());
 
         // Store the name of each dependent parameter's dependency
-        std::vector<std::string> dependencies;
+        std::vector<int> dependencies(settingParameters.size(), -1);
 
         size_t minSize = std::numeric_limits<size_t>::max(), maxSize = 0;
-        for (size_t i = 0; i < settingsParameters.size(); ++i) {
+        for (size_t i = 0; i < settingParameters.size(); ++i) {
             // Check if the setting parameter is dependent. This occurs when the
             // range string is another setting's name.
             std::regex wordPattern("\\s*([a-zA-Z_]\\S*)");
@@ -70,32 +71,39 @@ public:
             bool isDependent = std::regex_search(settingsParameterRanges[i],
                                                  match, wordPattern);
 
-            std::string setting = settingsParameters[i];
+            std::string setting = settingParameters[i];
 
             if (isDependent) {
-                m_dependentSettings.push_back(setting);
-                dependencies.push_back(match[0].str());
+                auto it = find(settingParameters.begin(),
+                               settingParameters.end(), match[1].str());
+                if (it == settingParameters.end()) {
+                    throw std::runtime_error(std::string("Unknown dependency: ")
+                                + match[1].str());
+                }
+                dependencies[i] = std::distance(settingParameters.begin(), it);
             }
             else {
-                m_indepSettingParameters.push_back(setting);
+                m_indepParameterID[i] = m_settingValues.size();
                 m_settingValues.push_back(expandRange<Real>(
                             settingsParameterRanges[i]));
-                minSize = std::min(minSize, m_settingValues[i].size());
-                maxSize = std::max(maxSize, m_settingValues[i].size());
+                minSize = std::min(minSize, m_settingValues.back().size());
+                maxSize = std::max(maxSize, m_settingValues.back().size());
             }
         }
-        
-        // Convert each dependency into an index into the indepedent settings.
-        m_dependencies.resize(dependencies.size());
+
+        // Resolve dependencies (in the future this could be smarter to allow
+        // nontrivial dependency chains).
         for (size_t i = 0; i < dependencies.size(); ++i) {
-            auto it = find(m_indepSettingParameters.begin(),
-                           m_indepSettingParameters.end(), dependencies[i]);
-            if (it == m_indepSettingParameters.end()) {
-                std::string error("Bad dependency: ");
-                throw std::runtime_error(error + dependencies[i]);
+            int dep = dependencies[i];
+            if (dep >= 0) {
+                assert(m_indepParameterID[i] == -1);
+                int resolvedID = m_indepParameterID[dep];
+                if (resolvedID < 0) {
+                    throw std::runtime_error(std::string("Dependent dependency ")
+                            + settingParameters[dep]);
+                }
+                m_indepParameterID[i] = resolvedID;
             }
-            m_dependencies[i] =
-                std::distance(m_indepSettingParameters.begin(), it);
         }
 
         m_csgValues.reserve(csgParameters.size());
@@ -121,7 +129,7 @@ public:
         bool advanced = false;
         if (m_mode == SWEEP_ZIP) {
             size_t minIdx = std::numeric_limits<size_t>::max(), maxIdx = 0;
-            for (size_t i = 0; i < numIndepSettings(); ++i) {
+            for (size_t i = 0; i < m_numIndepSettings(); ++i) {
                 if (m_settingsCounters[i] + 1 < m_numSettingValues(i)) {
                     ++m_settingsCounters[i];
                     advanced = true;
@@ -144,7 +152,7 @@ public:
             // rev(m_settingsCounters : m_csgCounters) conceptually makes up a
             // mixed-base number that we increment to advance...
             bool carry = true;
-            for (size_t i = 0; carry && (i < numIndepSettings()); ++i) {
+            for (size_t i = 0; carry && (i < m_numIndepSettings()); ++i) {
                 if (m_settingsCounters[i] + 1 < m_numSettingValues(i)) {
                     ++m_settingsCounters[i];
                     carry = false;
@@ -174,22 +182,19 @@ public:
     }
 
     void reset() {
-        m_settingsCounters.assign(numIndepSettings(), 0);
+        m_settingsCounters.assign(m_numIndepSettings(), 0);
         m_csgCounters.assign(numCSGParameters(), 0);
     }
 
     std::vector<Real> getSettingValues() const {
         std::vector<Real> values;
-        values.reserve(numIndepSettings());
-        for (size_t i = 0; i < numIndepSettings(); ++i) {
-            size_t vi = m_settingsCounters[i];
-            assert(vi < m_numSettingValues(i));
-            values.push_back(m_settingValues[i][vi]);
-        }
-
-        for (size_t depIdx : m_dependencies) {
-            assert(depIdx < values.size());
-            values.push_back(values[depIdx]);
+        values.reserve(numSettings());
+        for (size_t i = 0; i < numSettings(); ++i) {
+            size_t ii = m_indepParameterID[i];
+            assert(ii < m_settingsCounters.size());
+            size_t vi = m_settingsCounters[ii];
+            assert(vi < m_numSettingValues(ii));
+            values.push_back(m_settingValues[ii][vi]);
         }
 
         return values;
@@ -205,23 +210,17 @@ public:
         return values;
     }
 
-    std::vector<std::string> getSettingsNames() const {
-        std::vector<std::string> names;
-        names.reserve(numSettings());
-        names = m_indepSettingParameters;
-        names.insert(names.end(), m_dependentSettings.begin(),
-                                  m_dependentSettings.end());
-        return names;
-    }
+    std::vector<std::string> getSettingNames() const { return m_settingParameters; }
     std::vector<size_t> getCSGParameterIndices() const { return m_csgParameters; }
 
-    size_t numIndepSettings() const { return m_indepSettingParameters.size(); }
-    size_t numSettings()      const { return numIndepSettings() + m_dependentSettings.size(); }
+    size_t numSettings()      const { return m_settingParameters.size(); }
     size_t numCSGParameters() const { return m_csgParameters.size(); }
 
 private:
+    size_t m_numIndepSettings() const { return m_settingValues.size(); }
+    // Get the range size for independent setting i
     size_t m_numSettingValues(size_t i) const {
-        assert(i < numIndepSettings());
+        assert(i < m_numIndepSettings());
         return m_settingValues[i].size();
     }
 
@@ -231,7 +230,8 @@ private:
     }
 
     SweepMode m_mode;
-    std::vector<std::string>        m_indepSettingParameters;
+    std::vector<int>                m_indepParameterID;;
+    std::vector<std::string>        m_settingParameters;
     std::vector<std::vector<Real> > m_settingValues;
     std::vector<size_t>             m_csgParameters;
     std::vector<std::vector<Real> > m_csgValues;

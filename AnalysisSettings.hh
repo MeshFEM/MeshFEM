@@ -47,7 +47,7 @@ public:
         m_values["borderWidth"] = Variant((int) 1);
         m_values["quadrature"] = Variant((int) UNIFORM_QUADRATURE);
         m_values["quadraturePoints"] = Variant((int) 81);
-        m_values["cellOverlapThreshold"] = Variant((double) 0.15);
+        m_values["cellOverlapThreshold"] = Variant((double) 0.05);
 
         m_values["useMSBoundary"] = Variant((bool) false);
         m_values["blurPointForces"] = Variant((bool) true);
@@ -145,7 +145,7 @@ public:
             ("Ny", po::value<int>()->default_value(40), "Grid columns")
             ("quadrature", po::value<std::string>()->default_value("uniform"), "Quadrature type")
             ("quadrature_points", po::value<int>()->default_value(81), "Number of quadrature points")
-            ("cell_overlap_threshold", po::value<double>()->default_value(0.15), "Quad point fraction needed to qualify as a cell")
+            ("cell_overlap_threshold", po::value<double>()->default_value(0.05), "Quad point fraction needed to qualify as a cell")
             ("ms_boundary", "Use marching squares boundary")
             ("boundary_spacing", po::value<double>()->default_value(.02), "Boundary point spacing (when use_ms_boundary is false)")
             ("mass_matrix_type", po::value<std::string>()->default_value("quarter_cell"), "Type of mass matrix")
