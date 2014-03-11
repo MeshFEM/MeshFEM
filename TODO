@@ -1,4 +1,15 @@
 Implement:
+*** LP Parameters
+    "center": (p, r); p > 2, r \in [0, 1]
+    "dimensions": cell x, cell y
+        (use to rescale--lp hole is scaled into this)
+
+*** Make eigen+arpack-only solvers and only spawn QMatlabInterface/corresponding
+    solvers when selected.
+*** Implement settings file save/load
+*** Implement stand-alone simulation command line tool
+*** Implement results file format
+
 *** Improve parameter sweeps to support expressions in the swept parameters
     instead of just ranges (i.e. Nx = 2 * Ny
     Parse all expressions (ranges or otherwise)

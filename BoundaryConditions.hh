@@ -7,8 +7,8 @@
 //
 //      1) There is currently a disagreement on how volume forces should be
 //         applied. DZ says volume forces not overlapping the object should
-//         still deposit load on the grid points. JP wants to only integrate
-//         load over the object.
+//         deposit load on the grid points. JP wants to only integrate load over
+//         the object.
 //
 //      2) Exact Dirichlet boundary conditions are tricky since the object
 //         doesn't conform to the grid. We could either prescribe a displacement
@@ -43,12 +43,12 @@
 template<typename _Vector>
 class BoundaryConditions {
 public:
-    typedef _Vector                                       Vector;
-    typedef typename Vector::Scalar                       Real;
-    typedef BoundaryPoint<Vector>                         _BoundaryPoint;
-    typedef VectorField<Real, _Vector::RowsAtCompileTime> VField;
+    typedef _Vector                                          Vector;
+    typedef typename Vector::Scalar                          Real;
+    typedef BoundaryPoint<Vector>                            _BoundaryPoint;
+    typedef VectorField<Real, _Vector::RowsAtCompileTime>    VField;
     typedef enum { CONDITION_NONE, CONDITION_PRESSURE,
-                   CONDITION_TRACTION }                   Type;
+                   CONDITION_TRACTION, CONDITION_DIRICHLET } Type;
 
     struct Condition {
         BBox<Vector> region;
@@ -62,6 +62,8 @@ public:
 
         void setPressure(Real p) { type = CONDITION_PRESSURE; value[0] = p; }
         void setTraction(Vector t) { type = CONDITION_TRACTION; value = t; }
+        void setDirichlet() { type = CONDITION_DIRICHLET; }
+
         Real   getPressure() const { return value[0]; }
         Vector getTraction() const { return value; }
 
@@ -79,6 +81,18 @@ public:
         m_conditions.push_back(Condition(BBox<Vector>(
                         Vector(-2.55, 2.524), Vector(2.55, 3.0)),
                         Vector(0, -0.003)));
+    }
+
+    // Does the boundary point have a dirichlet constraint acting on it?
+    bool hasDirichlet(const Vector &p) const {
+        for (size_t j = 0; j < m_conditions.size(); ++j) {
+            const Condition &c = m_conditions[j];
+            if (c.type == CONDITION_DIRICHLET) {
+                if (c.region.containsPoint(p))
+                    return true;
+            }
+        }
+        return false;
     }
 
     // Get the traction (not force!) acting on each boundary point
@@ -121,6 +135,7 @@ public:
     // (Used for checking when this boundary condition object no longer
     //  matches with the object's boundary).
     size_t boundarySize() const { return m_paintedValues.size(); }
+
     void resizeBoundary(size_t size) {
         m_paintedTypes.assign(size, CONDITION_NONE);
         m_paintedValues.resize(size);

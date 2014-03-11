@@ -44,7 +44,7 @@ private:
 
     QLineEdit *g_regionMinX, *g_regionMaxX, *g_regionMinY, *g_regionMaxY;
     QLineEdit *g_tractionX, *g_tractionY, *g_pressure;
-    QTabWidget *g_tractionPressureTab;
+    QTabWidget *g_conditionTypeTab;
 
     // Reference to the condition we are editing.
     int m_selectedCondition;

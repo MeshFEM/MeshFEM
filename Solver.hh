@@ -89,7 +89,8 @@ class Solver {
         virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
-                Real F_tot, Real p_max) = 0;
+                Real F_tot, Real p_max,
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>()) = 0;
 
         // Run the actual weakness analysis
         virtual bool optimizeObjective(const DVector &w, SField &p) = 0;
@@ -211,7 +212,8 @@ class MatlabSolver : public Solver<Real> {
         virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
-                Real F_tot, Real p_max)
+                Real F_tot, Real p_max,
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
         {
             m_Kn = K.n;
             m_np = A.n;
@@ -347,15 +349,49 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
         virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
-                Real F_tot, Real p_max)
+                Real F_tot, Real p_max,
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
         {
-            // S = [I_Kn; zeros(3, Kn)]
-            // C_s = [K, R'; R, zeros(3)]
-            TMatrix T_S, Cs = K;
-            T_S.setIdentity(K.n);
-            T_S.m += 3;
-            Cs.append(R, TMatrix::APPEND_RIGHT, false, true);
-            Cs.append(R, TMatrix::APPEND_BELOW, true, false);
+            // Build C_s and S matrices for simulation. C_s is the matrix for
+            // Ku = f with extra rows/columns to implement the
+            // Lagrange-multipliers to enforcing either the no rigid
+            // motion or the Dirichlet constraints. S pads RHS vector f with a
+            // zero row for each constraint to get the RHS for the constrained
+            // system, and S' filters out the Lagrange multipliers from a
+            // solution:
+            //    S' (C_s \ S f) = S' [u; lambda] = u
+            TMatrix T_S, Cs;
+            if (dirichletIndices.size() == 0) {
+                // Since we don't have Dirichlet constriants, we need to apply
+                // the no rigid motion constraints.
+                // S = [I_Kn; zeros(3, Kn)]
+                // C_s = [K, R'; R, zeros(3)]
+                T_S.setIdentity(K.n);
+                T_S.m += 3;
+                Cs = K;
+                Cs.append(R, TMatrix::APPEND_RIGHT, false, true);
+                Cs.append(R, TMatrix::APPEND_BELOW, true, false);
+
+            }
+            else {
+                // Apply the Dirichlet constraints using Lagrange multipliers:
+                // S = [I_Kn; zeros(ND, Kn)]
+                // C_s = [K, DC'; DC, zeros(ND)]
+                // Where ND is the number of Dirichlet constraints and DC is the
+                // matrix picking out the constrained components (each row has
+                // a single nonzero entry of 1 in the constrained component's
+                // location).
+                size_t ND = dirichletIndices.size();
+                T_S.setIdentity(K.n);
+                T_S.m += ND;
+                TMatrix T_DC(ND, K.n);
+                T_DC.reserve(ND);
+                for (size_t i = 0; i < ND; ++i)
+                    T_DC.addNZ(i, dirichletIndices[i], 1.0);
+                Cs = K;
+                Cs.append(T_DC, TMatrix::APPEND_RIGHT, false, true);
+                Cs.append(T_DC, TMatrix::APPEND_BELOW, true, false);
+            }
 
             SparseMatrix S(T_S.m, T_S.n);
             S.setFromTriplets(T_S.nz.begin(), T_S.nz.end());
@@ -538,7 +574,8 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
         virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
-                Real F_tot, Real p_max)
+                Real F_tot, Real p_max,
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
         {
             bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
                     N, A, B, VD, F_tot, p_max);

@@ -40,8 +40,8 @@ template<typename _Model>
 class MeshlessFEM {
 public:
     typedef _Model Model;
-    typedef typename Model::Vector   Vector;
-    typedef typename Model::Real     Real;
+    typedef typename Model::Vector         Vector;
+    typedef typename Model::Real           Real;
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
     typedef Eigen::Matrix<Real, 4, 1> DType;
     typedef ScalarField<Real>         SField;
@@ -214,6 +214,8 @@ public:
         assert(m_elementGrid != NULL);
         return *m_elementGrid;
     }
+
+    size_t dim() const { return Vector::RowsAtCompileTime; }
 
     Model &model() {
         return m_model;

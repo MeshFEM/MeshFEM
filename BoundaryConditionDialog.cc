@@ -75,15 +75,19 @@ BoundaryConditionDialog::BoundaryConditionDialog(BCs &c, int condition,
     pressureForm->addRow("Pressure", g_pressure);
     g_pressure->setValidator(doubleValidator);
 
-    g_tractionPressureTab = new QTabWidget();
+    g_conditionTypeTab = new QTabWidget();
     QWidget *tractionWidget = new QWidget();
     tractionWidget->setLayout(tractionForm);
-    g_tractionPressureTab->addTab(tractionWidget, "Traction");
+    g_conditionTypeTab->addTab(tractionWidget, "Traction");
     QWidget *pressureWidget = new QWidget();
     pressureWidget->setLayout(pressureForm);
-    g_tractionPressureTab->addTab(pressureWidget, "Pressure");
+    g_conditionTypeTab->addTab(pressureWidget, "Pressure");
+    QWidget *dirichletWidget = new QWidget();
+    QLabel *dirichletInfo = new QLabel("(Nothing to configure for Dirichlet.)",
+                                       dirichletWidget);
+    g_conditionTypeTab->addTab(dirichletWidget, "Dirichlet");
 
-    layout->addWidget(g_tractionPressureTab);
+    layout->addWidget(g_conditionTypeTab);
 
     QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok);
     layout->addWidget(buttons);
@@ -118,13 +122,16 @@ void BoundaryConditionDialog::saveCondition() {
         c.region.minCorner[1] = g_regionMinY->text().toDouble();
         c.region.maxCorner[1] = g_regionMaxY->text().toDouble();
 
-        switch (g_tractionPressureTab->currentIndex()) {
+        switch (g_conditionTypeTab->currentIndex()) {
             case 0:
                 c.setTraction(Vector(g_tractionX->text().toDouble(),
                                      g_tractionY->text().toDouble()));
                 break;
             case 1:
                 c.setPressure(g_pressure->text().toDouble());
+                break;
+            case 2:
+                c.setDirichlet();
                 break;
             default:
                 assert(false);
@@ -143,8 +150,9 @@ void BoundaryConditionDialog::selectCondition(int idx) {
     g_regionMinY->setText(QString::number(c.region.minCorner[1]));
     g_regionMaxY->setText(QString::number(c.region.maxCorner[1]));
     
-    g_tractionPressureTab->setCurrentIndex(
-            (c.type == BCs::CONDITION_TRACTION) ? 0 : 1);
+    g_conditionTypeTab->setCurrentIndex(
+            (c.type == BCs::CONDITION_TRACTION) ? 0 :
+            (c.type == BCs::CONDITION_PRESSURE) ? 1 : 2);
 
     g_tractionX->setText(QString::number(c.value[0]));
     g_tractionY->setText(QString::number(c.value[1]));
