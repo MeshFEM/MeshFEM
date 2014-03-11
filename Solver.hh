@@ -361,6 +361,7 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             // solution:
             //    S' (C_s \ S f) = S' [u; lambda] = u
             TMatrix T_S, Cs;
+            std::cout << "Building Cs and S" << std::endl;
             if (dirichletIndices.size() == 0) {
                 // Since we don't have Dirichlet constriants, we need to apply
                 // the no rigid motion constraints.
@@ -522,9 +523,7 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
         {
             DVector f_vec = m_SF * Eigen::Map<const DVector>(bf.data().data(),
                                           bf.dim() * bf.domainSize());
-            // f_vec has a trailing padding of 3 zeros added by S.
-            // These must be omitted.
-            f = VField(f_vec.head(f_vec.rows() - 3));
+            f = VField(m_S_tr * f_vec); // Trim off constraint rows and convert
         }
 
         virtual ~MatlabEigenSolver() { }
@@ -578,7 +577,7 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
                 const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
         {
             bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
-                    N, A, B, VD, F_tot, p_max);
+                    N, A, B, VD, F_tot, p_max, dirichletIndices);
 
             m_pSize = A.n;
             

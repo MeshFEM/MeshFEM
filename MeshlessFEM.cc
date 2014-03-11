@@ -1062,16 +1062,13 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
 
     std::vector<size_t> dirichletIndices;
     const ElementGrid2D<Model> &elemGrid = elementGrid();
-    std::cout << "Dirichlet on: ";
     for (size_t i = 0; i < elemGrid.numNodes(); ++i) {
         if (m_boundaryConditions.hasDirichlet(elemGrid.nodePosition(i))) {
-            std::cout << i << ", ";
             // Add a constraint for each component of the fixed node's disp.
             for (size_t j = 0; j < dim(); ++j)
                 dirichletIndices.push_back(dim() * i + j);
         }
     }
-    cout << endl;
 
     solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
                               m_pointwisePressureBound, dirichletIndices);

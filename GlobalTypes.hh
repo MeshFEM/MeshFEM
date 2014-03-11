@@ -6,6 +6,8 @@
 #include <vector>
 #include <list>
 #include <cassert>
+#include <iostream>
+#include <fstream> 
 
 #include <Eigen/Dense>
 typedef Eigen::Vector2d                                       Vector;
@@ -162,6 +164,20 @@ struct TripletMatrix {
                 break;
             default:
                 assert(false);
+        }
+    }
+
+    void dump(const char *path) const {
+        std::ofstream outFile(path);
+        if (!outFile.is_open()) {
+            std::cout << "Failed to open output file '"
+                      << path << '\'' << std::endl;
+        }
+        else{
+            for (size_t i = 0; i < nnz(); ++i) {
+                outFile << nz[i].i << '\t' << nz[i].j << '\t'
+                        << nz[i].v << std::endl;
+            }  
         }
     }
 };
