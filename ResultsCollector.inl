@@ -134,6 +134,10 @@ private:
     std::vector<bool> m_hasSField, m_hasVField;
     std::vector<SField> m_sfields;
     std::vector<VField> m_vfields;
+    // Stores the type of each cell in a meshfree grid (to accelerate result
+    // viewing). This array's size must match the number of cells for it to be
+    // used.
+    std::vector<CellType> m_cellType;
 };
 
 template<typename Generator>

@@ -669,9 +669,13 @@ void CSGWindowController::runSimulationSweep() {
 
             if (running) {
                 m_settings = settings;
+                m_fem.elementGrid().setUpdatesEnabled(false);
                 modelChanged();
                 settingsChanged();
                 m_fem.loadSettings(m_settings);
+                m_fem.elementGrid().setUpdatesEnabled(true);
+                if (m_fem.elementGrid().updatePending())
+                    m_fem.elementGrid().update();
 
                 m_modelName = modelName;
                 m_settingsName = settingsName;
@@ -843,8 +847,12 @@ void CSGWindowController::resultSelected(const string &resultPath)
 {
     std::string modelName = getModelPathComponent(resultPath);
     std::string settingsName = getSettingsPathComponent(resultPath);
+    m_fem.elementGrid().setUpdatesEnabled(false);
     modelSelected(modelName);
     settingsSelected(settingsName);
+    m_fem.elementGrid().setUpdatesEnabled(true);
+    if (m_fem.elementGrid().updatePending())
+        m_fem.elementGrid().update(); // TODO: pass in cell types
 
     m_femView->displayResult(m_results.getResultWithPath(resultPath));
 }

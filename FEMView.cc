@@ -671,7 +671,12 @@ void FEMView2D::drawBoundary(bool visualizeLoad,
     if (visualizeLoad) {
         for (size_t i = 0; i < m_fem.boundaryConditions().numConditions(); ++i){
             const auto &condition = m_fem.boundaryConditions().condition(i);
-            glColor4ub(69, 155, 255, 127);
+            if (condition.type == CONDITION_DIRICHLET) {
+                glColor4ub(255, 155, 69, 127);
+            }
+            else {
+                glColor4ub(69, 155, 255, 127);
+            }
             m_drawWorldBox(condition.region);
         }
     }

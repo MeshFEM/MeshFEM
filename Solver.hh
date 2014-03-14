@@ -361,7 +361,6 @@ class MatlabEigenSolver : public MatlabSolver<Real> {
             // solution:
             //    S' (C_s \ S f) = S' [u; lambda] = u
             TMatrix T_S, Cs;
-            std::cout << "Building Cs and S" << std::endl;
             if (dirichletIndices.size() == 0) {
                 // Since we don't have Dirichlet constriants, we need to apply
                 // the no rigid motion constraints.

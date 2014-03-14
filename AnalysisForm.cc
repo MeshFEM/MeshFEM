@@ -558,6 +558,12 @@ void AnalysisForm::reftestButtonClicked() {
 }
 
 void AnalysisForm::reloadSettings() {
+    // Note, can cause multiple *Changed(m_settings) signals to be emitted (one
+    // per changed value), but all are called with the full updated settings
+    // object. This means, for example, if multiple grid settings are changed,
+    // the first change signal will fully reconfigure the grid, and all
+    // subsequent change signals won't cause MeshlessFEM to make changes. So as
+    // long as the recipients of these signals are smart, no extra work is done.
     m_setGUIFromSettings();
 }
 

@@ -40,6 +40,9 @@
 #include "Geometry.hh"
 #include "Fields.hh"
 
+typedef enum { CONDITION_NONE, CONDITION_PRESSURE,
+               CONDITION_TRACTION, CONDITION_DIRICHLET } Type;
+
 template<typename _Vector>
 class BoundaryConditions {
 public:
@@ -47,8 +50,6 @@ public:
     typedef typename Vector::Scalar                          Real;
     typedef BoundaryPoint<Vector>                            _BoundaryPoint;
     typedef VectorField<Real, _Vector::RowsAtCompileTime>    VField;
-    typedef enum { CONDITION_NONE, CONDITION_PRESSURE,
-                   CONDITION_TRACTION, CONDITION_DIRICHLET } Type;
 
     struct Condition {
         BBox<Vector> region;

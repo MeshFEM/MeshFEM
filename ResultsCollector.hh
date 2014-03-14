@@ -171,7 +171,7 @@ public:
         return !(settings == settings_it->second);
     }
 
-    // Gets a reference to the currently selected model
+    // Gets a copy of the currently selected model
     void getModel(Model &model, BBox_t &gridBBox) const {
         getModel(m_selectedModel, model, gridBBox);
     }

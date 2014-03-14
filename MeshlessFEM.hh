@@ -101,48 +101,55 @@ public:
 
     // Return true if the grid changes as a result of the settings change
     bool configureElements(const AnalysisSettings &settings) {
-        bool changed = false;
+        bool changed = false, changesPending = false;
 
         if ((m_exactFullElements != settings.Bool("exactFullElements")) ||
             (m_antialiasedElements != settings.Bool("antialiasedElements"))) {
             m_exactFullElements = settings.Bool("exactFullElements");
             m_antialiasedElements = settings.Bool("antialiasedElements");
-            changed = true;
+            changed |= false; // These don't affect grid
+            changesPending |= false;
         }
 
         if (quadrature().numPoints() != settings.Int("quadraturePoints")) {
             quadrature().setNumPoints(settings.Int("quadraturePoints"));
             changed = true;
+            changesPending = true;
         }
+
         if (quadrature().getQuadratureMethod() != settings.Enum("quadrature")) {
             quadrature().setUsingGaussQuadrature(settings.Enum("quadrature"));
             changed = true;
+            changesPending = true;
         }
+
         ElementGrid &grid = elementGrid();
         if (grid.getCellOverlapThreshold() != settings.Real("cellOverlapThreshold")) {
             grid.setCellOverlapThreshold(settings.Real("cellOverlapThreshold"));
             changed = true;
+            changesPending = false; // setCellOverlapThreshold updates
         }
+
+        if (settings.Int("borderWidth") != grid.getBorderWidth()) {
+            grid.setBorderWidth(settings.Int("borderWidth"));
+            changed = true;
+            changesPending = false; // setBorderWidth updates
+        }
+
         size_t oldNx, oldNy;
         grid.getGridSize(oldNx, oldNy);
         if (((size_t) settings.Int("Nx") != oldNx) ||
             ((size_t) settings.Int("Ny") != oldNy)) {
             grid.setGridSize(settings.Int("Nx"), settings.Int("Ny"));
             changed = true;
-        }
-        if (settings.Int("borderWidth") != grid.getBorderWidth()) {
-            grid.setBorderWidth(settings.Int("borderWidth"));
-            changed = true;
-        }
-        else if (changed) {
-            // Even if the grid size doesn't change, a quadrature rule change
-            // must trigger a grid update.
-            grid.update();
+            changesPending = false; // setGridSize updates
         }
 
-        if (changed) {
+        if (changesPending)
+            grid.update();
+
+        if (changed)
             m_invalidateCache();
-        }
 
         return changed;
     }

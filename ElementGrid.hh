@@ -38,6 +38,8 @@
 #include <Eigen/Dense>
 #include <vector>
 
+typedef enum { CELL_TYPE_FULL, CELL_TYPE_CUT, CELL_TYPE_EMPTY } CellType;
+
 template<typename Model>
 class ElementGrid2D : public Grid2D {
 public:
@@ -47,8 +49,8 @@ public:
                   const Quadrature2D &q, const Model &model, size_t borderWidth)
         : Grid2D(Nx, Ny, model.boundingBox(), borderWidth),
           m_cellOverlapThreshold(cellOverlapThreshold), m_boundingBoxLocked(false),
-          m_quadrature(q),
-          m_model(model)
+          m_updatesEnabled(true), m_updatePending(false),
+          m_quadrature(q), m_model(model)
     {
         update();
     }
@@ -56,8 +58,20 @@ public:
     bool boundingBoxIsLocked() const { return m_boundingBoxLocked; }
     void setBoundingBoxLocked(bool locked) { m_boundingBoxLocked = locked; }
 
-    // Should be called whenever the grid size, quadrature, or model changes
-    void update();
+    // Allow masking of update() calls. This allows us to avoid wasting time
+    // when multiple sequential changes are made and we don't want to update the
+    // grid in the intermediate states. In other words, a sequence of updates
+    // can be coalesced into a single update() call.
+    bool updatesEnabled() const { return m_updatesEnabled; }
+    void setUpdatesEnabled(bool enabled) { m_updatesEnabled = enabled; }
+    // Check whether a call to update() was masked. This is useful for seeing if
+    // there were actually updates coalesced as described above.
+    bool updatePending() const { return m_updatePending; }
+
+    // Should be called whenever the grid size, quadrature, or model changes.
+    // If cellTypes is passed and is of size numCells(), it is used to determine
+    // cell classification without running inside/outside queries (much faster!)
+    void update(const std::vector<CellType> &cellTypes = std::vector<CellType>());
 
     void setBorderWidth(size_t borderWidth) {
         Grid2D::setBorderWidth(borderWidth);
@@ -214,6 +228,7 @@ private:
     std::vector<Scalar>m_elementOverlap;
 
     bool m_boundingBoxLocked;
+    bool m_updatesEnabled, m_updatePending;
 
     const Quadrature2D &m_quadrature;
     const Model &m_model;

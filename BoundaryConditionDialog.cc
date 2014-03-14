@@ -151,8 +151,8 @@ void BoundaryConditionDialog::selectCondition(int idx) {
     g_regionMaxY->setText(QString::number(c.region.maxCorner[1]));
     
     g_conditionTypeTab->setCurrentIndex(
-            (c.type == BCs::CONDITION_TRACTION) ? 0 :
-            (c.type == BCs::CONDITION_PRESSURE) ? 1 : 2);
+            (c.type == CONDITION_TRACTION) ? 0 :
+            (c.type == CONDITION_PRESSURE) ? 1 : 2);
 
     g_tractionX->setText(QString::number(c.value[0]));
     g_tractionY->setText(QString::number(c.value[1]));

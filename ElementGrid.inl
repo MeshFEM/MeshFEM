@@ -15,8 +15,16 @@
 
 // Should be called whenever the quadrature or model changes
 template<typename Model>
-void ElementGrid2D<Model>::update()
+void ElementGrid2D<Model>::update(const std::vector<CellType> &cellTypes)
 {
+    m_updatePending = true;
+
+    if (!updatesEnabled())
+        return;
+
+    m_updatePending = false;
+
+    std::cout << "Updating elements" << std::endl;
     if (!m_boundingBoxLocked)
         setBoundingBox(m_model.boundingBox());
 

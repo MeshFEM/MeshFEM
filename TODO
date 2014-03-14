@@ -1,4 +1,5 @@
 Implement:
+*** Implement field sampler (place point in FEMView, samples from nearest point)
 *** LP Parameters
     "center": (p, r); p > 2, r \in [0, 1]
     "dimensions": cell x, cell y
