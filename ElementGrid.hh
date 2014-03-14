@@ -68,10 +68,10 @@ public:
     // there were actually updates coalesced as described above.
     bool updatePending() const { return m_updatePending; }
 
-    // Should be called whenever the grid size, quadrature, or model changes.
-    // If cellTypes is passed and is of size numCells(), it is used to determine
+    // Should be called whenever the grid size, quadrature, or model changes. If
+    // cellOverlaps is passed and is of size numCells(), it is used to determine
     // cell classification without running inside/outside queries (much faster!)
-    void update(const std::vector<CellType> &cellTypes = std::vector<CellType>());
+    void update(std::vector<Scalar> cellOverlaps = std::vector<Scalar>());
 
     void setBorderWidth(size_t borderWidth) {
         Grid2D::setBorderWidth(borderWidth);
@@ -110,6 +110,12 @@ public:
     {
         assert(i < m_elementOverlap.size());
         return m_elementOverlap[i];
+    }
+
+    void getCellOverlaps(std::vector<Scalar> &cellOverlaps) const {
+        cellOverlaps.assign(numCells(), 0.0);
+        for (size_t i = 0; i < numElements(); ++i)
+            cellOverlaps[m_cellForElement[i]] = elementOverlap(i);
     }
 
     Vector nodePosition(size_t i) const
@@ -206,8 +212,8 @@ public:
     }
 
     bool elementIsFull(size_t i) const {
-        assert(i < m_isFullElement.size());
-        return m_isFullElement[i];
+        assert(i < m_elementOverlap.size());
+        return m_elementOverlap[i] == 1.0;
     }
 
     ~ElementGrid2D() { };
@@ -221,11 +227,13 @@ private:
     // How much a cell must overlap the object to be considered an element.
     Scalar m_cellOverlapThreshold;
 
+    // Records whether 
+    std::vector<CellType> m_cellType;
+
     // Maps between node/vertex indices and element/cell indices
     IndexVector m_nodeForVertex, m_vertexForNode,
                 m_elementForCell, m_cellForElement;
-    std::vector<bool> m_isFullElement;
-    std::vector<Scalar>m_elementOverlap;
+    std::vector<Scalar> m_elementOverlap;
 
     bool m_boundingBoxLocked;
     bool m_updatesEnabled, m_updatePending;

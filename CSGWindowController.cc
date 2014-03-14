@@ -847,14 +847,34 @@ void CSGWindowController::resultSelected(const string &resultPath)
 {
     std::string modelName = getModelPathComponent(resultPath);
     std::string settingsName = getSettingsPathComponent(resultPath);
-    m_fem.elementGrid().setUpdatesEnabled(false);
+    MeshlessFEM_t::ElementGrid &grid = m_fem.elementGrid();
+    grid.setUpdatesEnabled(false);
     modelSelected(modelName);
     settingsSelected(settingsName);
-    m_fem.elementGrid().setUpdatesEnabled(true);
-    if (m_fem.elementGrid().updatePending())
-        m_fem.elementGrid().update(); // TODO: pass in cell types
+    grid.setUpdatesEnabled(true);
+    
+    std::shared_ptr<const ResultsCollector_t::Result> r =
+                m_results.getResultWithPath(resultPath);
 
-    m_femView->displayResult(m_results.getResultWithPath(resultPath));
+    if (grid.updatePending()) {
+        grid.update(r->cellOverlaps());
+        size_t expectedNodes = r->numNodes(), expectedElems = r->numElems();
+        bool rebuild = false;
+        if ((expectedNodes > 0) && (expectedNodes != grid.numNodes())) {
+            rebuild = true;
+            cout << "WARNING: result's cellTypes gave incompatible nodes! "
+                 << "Rebuilding element grid." << endl;
+        }
+        if ((expectedElems > 0) && (expectedElems != grid.numElements())) {
+            rebuild = true;
+            cout << "WARNING: result's cellTypes gave incompatible elems! "
+                 << "Rebuilding element grid." << endl;
+        }
+        if (rebuild)
+            grid.update();
+    }
+
+    m_femView->displayResult(r);
 }
 
 void CSGWindowController::resultDeslected()

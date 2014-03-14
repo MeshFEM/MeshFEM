@@ -15,7 +15,7 @@
 
 // Should be called whenever the quadrature or model changes
 template<typename Model>
-void ElementGrid2D<Model>::update(const std::vector<CellType> &cellTypes)
+void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
 {
     m_updatePending = true;
 
@@ -24,50 +24,54 @@ void ElementGrid2D<Model>::update(const std::vector<CellType> &cellTypes)
 
     m_updatePending = false;
 
-    std::cout << "Updating elements" << std::endl;
     if (!m_boundingBoxLocked)
         setBoundingBox(m_model.boundingBox());
+    
+    if (cellOverlaps.size() != numCells()) {
+        cellOverlaps.resize(numCells());
 
-    m_elementForCell.assign(numCells(), -1);
-    m_elementOverlap.clear();
-    std::vector<bool> isFullCell(numCells(), false);
-    size_t numElements = 0;
-    std::vector<Vector> qPoints;
-    for (size_t r = 0; r < rows(); ++r) {
-        for (size_t c = 0; c < cols(); ++c) {
-            size_t cell = get1DCellIndex(r, c);
-            BBox_t b = cellBoundingBox(r, c);
-            m_quadrature.quadraturePoints(b, qPoints);
-            size_t insideCount = 0;
-            for (size_t pi = 0; pi < qPoints.size(); ++pi) {
-                if (m_model.isInside(qPoints[pi]))
-                    ++insideCount;
-            }
-            Scalar fracIn = ((Scalar) insideCount) / qPoints.size();
-            isFullCell[cell] = (insideCount == qPoints.size());
-            // A cell is an element if all quadrature points fall inside the
-            // object, or if the fraction exceeds the cell overlap threshold.
-            if (isFullCell[cell] || (fracIn > m_cellOverlapThreshold)) {
-                m_elementForCell[cell] = numElements++;
-                m_elementOverlap.push_back(fracIn);
+        std::vector<Vector> qPoints;
+        for (size_t r = 0; r < rows(); ++r) {
+            for (size_t c = 0; c < cols(); ++c) {
+                BBox_t b = cellBoundingBox(r, c);
+                m_quadrature.quadraturePoints(b, qPoints);
+                size_t insideCount = 0;
+                for (size_t pi = 0; pi < qPoints.size(); ++pi) {
+                    if (m_model.isInside(qPoints[pi]))
+                        ++insideCount;
+                }
+                size_t cell = get1DCellIndex(r, c);
+                cellOverlaps[cell] = ((Scalar) insideCount) / qPoints.size();
             }
         }
     }
 
-    m_cellForElement.resize(numElements);
-    m_isFullElement.resize(numElements);
+    m_elementForCell.assign(numCells(), -1);
+    m_elementOverlap.clear();
+    size_t numElements = 0;
+    for (size_t r = 0; r < rows(); ++r) {
+        for (size_t c = 0; c < cols(); ++c) {
+            // A cell is an element if all quadrature points fall inside the
+            // object or if the fraction exceeds the cell overlap threshold.
+            size_t cell = get1DCellIndex(r, c);
+            Scalar overlap  = cellOverlaps[cell];
+            if ((overlap == 1.0) || (overlap > m_cellOverlapThreshold)) {
+                m_elementForCell[cell] = numElements++;
+                m_elementOverlap.push_back(overlap);
+            }
+        }
+    }
 
+    // Invert m_elementForCell to get m_cellForElement, mark nodes
+    m_cellForElement.resize(numElements);
+    AdjacencyVec cellVerts;
     const size_t numVerts = numVertices();
     std::vector<bool> isNode(numVerts);
-
-    // Invert m_elementForCell, mark nodes and full elements
-    AdjacencyVec cellVerts;
     for (size_t cell = 0; cell < m_elementForCell.size(); ++cell) {
         int e = m_elementForCell[cell];
         if (e >= 0) {
             assert((size_t) e < numElements);
             m_cellForElement[e] = cell;
-            m_isFullElement[e] = isFullCell[cell];
             cellVertices(cell, cellVerts);
             // All corners of an element cell are nodes.
             for (size_t i = 0; i < (size_t) cellVerts.rows(); ++i) {

@@ -20,6 +20,7 @@
 #include <cassert>
 #include <memory>
 #include <iostream>
+#include <stdexcept>
 
 // A single result can consist of up to a scalar AND vector field per:
 //      node
@@ -44,32 +45,36 @@ public:
 
     typedef typename Generator::SField SField;
     typedef typename Generator::VField VField;
+    typedef typename Generator::ElementGrid ElemGrid;
 
-    Result() { init(); }
-    Result(ResultDomain stype, const SField &sfield) {
-        init(); setScalarField(stype, sfield);
+    Result(const ElemGrid &grid) { init(grid); }
+    Result(const ElemGrid &grid, ResultDomain stype, const SField &sfield) {
+        init(grid); setScalarField(stype, sfield);
     }
 
-    Result(ResultDomain vtype, const VField &vfield) {
-        init(); setVectorField(vtype, vfield);
-    }
-
-    Result(ResultDomain stype, const SField &sfield,
+    Result(const ElemGrid &grid,
            ResultDomain vtype, const VField &vfield) {
-        init(); setScalarField(stype, sfield);
-                setVectorField(vtype, vfield);
+        init(grid); setVectorField(vtype, vfield);
+    }
+
+    Result(const ElemGrid &grid, ResultDomain stype, const SField &sfield,
+                                 ResultDomain vtype, const VField &vfield) {
+        init(grid); setScalarField(stype, sfield);
+                    setVectorField(vtype, vfield);
     }
 
     void setVectorField(ResultDomain type, const VField &vfield) {
         assert(type < NUM_DOMAINS);
         m_vfields[type] = vfield;
         m_hasVField[type] = true;
+        numEntities(type); // throw error if there is an entity count mismatch
     }
 
     void setScalarField(ResultDomain type, const SField &sfield) {
         assert(type < NUM_DOMAINS);
         m_sfields[type] = sfield;
         m_hasSField[type] = true;
+        numEntities(type); // throw error if there is an entity count mismatch
     }
 
     const VField &getVectorField(ResultDomain type) const {
@@ -79,6 +84,26 @@ public:
     const SField &getScalarField(ResultDomain type) const {
         return m_sfields[type];
     }
+
+    const std::vector<Real> &cellOverlaps() const {
+        return m_cellOverlap;
+    }
+
+    // Number of nodes/elements/boundary points our fields live on
+    // (for validation with the grid)
+    size_t numEntities(ResultDomain type) const {
+        if (m_hasSField[type] && m_hasVField[type]) {
+            if (m_sfields[type].domainSize() != m_vfields[type].domainSize())
+                throw std::runtime_error("Inconsistent number of entities");
+        }
+
+        return m_hasSField[type] ? m_sfields[type].domainSize() :
+                                   m_vfields[type].domainSize();
+    }
+
+    size_t numElems() const { return numEntities(PER_ELEM); }
+    size_t numNodes() const { return numEntities(PER_NODE); }
+    size_t numBdrys() const { return numEntities(PER_BDRY); }
 
     Real getMaxScalar(ResultDomain type) const { return m_sfields[type].max(); }
     Real getMinScalar(ResultDomain type) const { return m_sfields[type].min(); }
@@ -124,20 +149,21 @@ public:
     }
 
 private:
-    void init() {
+    void init(const ElemGrid &grid) {
         m_sfields.assign((size_t) NUM_DOMAINS, SField());
         m_vfields.assign((size_t) NUM_DOMAINS, VField());
         m_hasSField.assign((size_t) NUM_DOMAINS, false);
         m_hasVField.assign((size_t) NUM_DOMAINS, false);
+        grid.getCellOverlaps(m_cellOverlap);
     }
 
     std::vector<bool> m_hasSField, m_hasVField;
     std::vector<SField> m_sfields;
     std::vector<VField> m_vfields;
-    // Stores the type of each cell in a meshfree grid (to accelerate result
-    // viewing). This array's size must match the number of cells for it to be
-    // used.
-    std::vector<CellType> m_cellType;
+    // Stores the fraction of the cell overlapping the object (to accelerate
+    // rebuilding of element grids during results viewing). This array's size
+    // must match the number of cells for it to be used.
+    std::vector<Real> m_cellOverlap;
 };
 
 template<typename Generator>
