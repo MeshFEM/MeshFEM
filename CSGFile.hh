@@ -197,6 +197,12 @@ void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
     if (!os.is_open())
         throw std::runtime_error("Couldn't open csg output file.");
 
+    writeCSGFile(os, csgTree);
+}
+
+template<typename Vector>
+void writeCSGFile(std::ofstream &os, const CSGTree<Vector> &csgTree)
+{
     os << '{' << std::endl;
     
     if (csgTree.numRoots() > 0) {
@@ -204,7 +210,6 @@ void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
     }
 
     os << '}' << std::endl;
-
 }
 
 #endif // CSGFILE_HH

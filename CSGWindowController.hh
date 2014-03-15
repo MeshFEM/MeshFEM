@@ -50,6 +50,8 @@ public slots:
     void saveBoundaryPolygon();
     void loadCSG(QString path = QString());
     void saveCSG();
+    void loadSettings();
+    void saveSettings();
 
     void modelChanged(bool refitGrid = true);
     void settingsChanged();

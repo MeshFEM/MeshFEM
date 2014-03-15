@@ -195,6 +195,40 @@ void CSGWindowController::loadCSG(QString path)
     }
 }
 
+void CSGWindowController::loadSettings()
+{
+    QString path = QFileDialog::getOpenFileName(m_window, "Open Object (.cfg)",
+            QString(), "Text files (*.cfg)");
+    if (path.length() > 0) {
+        try {
+            std::ifstream settingsFile(path.toStdString());
+            m_settings.parseOptions(settingsFile);
+            emit reloadSettings();
+
+            QFileInfo fi(path);
+            string settingsName = fi.completeBaseName().toStdString();
+            if (m_settingsName != settingsName) {
+                m_settingsName = settingsName;
+                emit namesUpdated(m_modelName, m_settingsName);
+            }
+
+            validateNames();
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
+}
+
+void CSGWindowController::saveSettings()
+{
+}
+
 void CSGWindowController::modelChanged(bool refitGrid)
 {
     bool locked = m_fem.elementGrid().boundingBoxIsLocked();

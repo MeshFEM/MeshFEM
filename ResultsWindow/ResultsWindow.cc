@@ -48,12 +48,12 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
 
     QHBoxLayout *r_buttonLayout = new QHBoxLayout();
     QPushButton *r_deleteButton = new QPushButton("Delete");
+    QPushButton *r_saveButton = new QPushButton("Save...");
     QPushButton *r_mshButton = new QPushButton("Dump .MSH");
-    QPushButton *r_rawButton = new QPushButton("Dump raw");
     QPushButton *r_flipbookButton = new QPushButton("Flipbook");
     r_buttonLayout->addWidget(r_deleteButton);
+    r_buttonLayout->addWidget(r_saveButton);
     r_buttonLayout->addWidget(r_mshButton);
-    r_buttonLayout->addWidget(r_rawButton);
     r_buttonLayout->addWidget(r_flipbookButton);
     resultsTreeLayout->addLayout(r_buttonLayout);
 
@@ -73,13 +73,13 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
     resultsFilterLayout->addLayout(searchLayout);
 
     QPushButton *s_deleteButton = new QPushButton("Delete");
+    QPushButton *s_saveButton = new QPushButton("Save...");
     QPushButton *s_mshButton = new QPushButton("Dump .MSH");
-    QPushButton *s_rawButton = new QPushButton("Dump raw");
     QPushButton *s_flipbookButton = new QPushButton("Flipbook");
     QHBoxLayout *s_buttonLayout = new QHBoxLayout();
     s_buttonLayout->addWidget(s_deleteButton);
     s_buttonLayout->addWidget(s_mshButton);
-    s_buttonLayout->addWidget(s_rawButton);
+    s_buttonLayout->addWidget(s_saveButton);
     s_buttonLayout->addWidget(s_flipbookButton);
     resultsFilterLayout->addLayout(s_buttonLayout);
 
@@ -139,14 +139,14 @@ ResultsWindow::ResultsWindow(ResultsCollector_t &rc, QWidget *parent)
 
     QObject::connect(r_deleteButton, SIGNAL(clicked()),
                      controller(), SLOT(deleteSelection()));
-    QObject::connect(r_rawButton, SIGNAL(clicked()),
-                     controller(), SLOT(dumpRaw()));
+    QObject::connect(r_saveButton, SIGNAL(clicked()),
+                     controller(), SLOT(save()));
     QObject::connect(r_flipbookButton, SIGNAL(clicked()),
                      controller(), SLOT(generateFlipbook()));
     QObject::connect(s_deleteButton, SIGNAL(clicked()),
                      controller(), SLOT(deleteSelection()));
-    QObject::connect(s_rawButton, SIGNAL(clicked()),
-                     controller(), SLOT(dumpRaw()));
+    QObject::connect(s_saveButton, SIGNAL(clicked()),
+                     controller(), SLOT(save()));
     QObject::connect(s_flipbookButton, SIGNAL(clicked()),
                      controller(), SLOT(generateFlipbook()));
 

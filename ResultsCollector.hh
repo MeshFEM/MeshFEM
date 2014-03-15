@@ -32,8 +32,11 @@
 #include <stdexcept>
 #include <memory>
 #include <boost/algorithm/string.hpp>
+#include <fstream>
+#include <cstdint>
 #include "utils.hh"
 #include "AnalysisSettings.hh"
+#include "CSGFile.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Path operations
@@ -212,6 +215,53 @@ public:
             throw std::runtime_error(std::string("collection not found: " +
                         model + ":" + settings));
         return sit->second->getResult(name_it, nameComponents.end());
+    }
+
+    void writeResult(const std::string &resultPath,
+                     const std::string &outPath) const {
+        std::vector<std::string> nameComponents;
+        boost::split(nameComponents, resultPath, boost::is_any_of(":"));
+        assert(nameComponents.size() > 2);
+        std::string modelName    = nameComponents[0];
+        std::string settingsName = nameComponents[1];
+
+        std::shared_ptr<const Result> r = getResultWithPath(resultPath);
+        AnalysisSettings settings;
+        getSettings(settingsName, settings);
+        Model model;
+        BBox_t bbox;
+        getModel(modelName, model, bbox);
+
+        std::ofstream outFile(outPath, std::ios::binary);
+        if (!outFile.is_open())
+            throw std::runtime_error("Couldn't open result output path.");
+
+        int dim = Vector::RowsAtCompileTime;
+        if (dim == 2) {
+            outFile << "RESULT_2D";
+            outFile << resultPath << '\0';
+
+            int64_t Nx = settings.Int("Nx"), Ny = settings.Int("Ny");
+            outFile.write((char *) &Nx, sizeof(Nx));
+            outFile.write((char *) &Ny, sizeof(Ny));
+
+            const std::vector<Real> &cellOverlaps = r->cellOverlaps();
+            int64_t size = cellOverlaps.size();
+            outFile.write((char *) &size, sizeof(size));
+            for (size_t i = 0; i < cellOverlaps.size(); ++i) {
+                double overlap = cellOverlaps[i];
+                outFile.write((char *) &overlap, sizeof(double));
+            }
+
+            outFile << modelName << '\0';
+            double boxComponents[4] = { bbox.minCorner[0], bbox.minCorner[1],
+                                        bbox.maxCorner[0], bbox.maxCorner[1] };
+            outFile.write((char *) boxComponents, sizeof(boxComponents));
+            writeCSGFile(outFile, model); outFile << '\0';
+            outFile << settingsName << '\0';
+            outFile << "Settings content" << '\0';
+            r->write(outFile);
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////

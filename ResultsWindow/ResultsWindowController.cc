@@ -425,7 +425,7 @@ void ResultsWindowController::deleteSelection()
     resultsUpdated();
 }
 
-void ResultsWindowController::dumpRaw()
+void ResultsWindowController::save()
 {
     vector<string> paths = selectedResultPaths();
     if (paths.empty())
@@ -437,15 +437,13 @@ void ResultsWindowController::dumpRaw()
     try {
         for (const string &rpath : paths) {
             string fpath = dir.toStdString() + "/" + rpath;
-            shared_ptr<const ResultsCollector_t::Result> r =
-                m_window.m_resultsCollection.getResultWithPath(rpath);
-            r->dump(fpath);
+            m_window.m_resultsCollection.writeResult(rpath, fpath);
         }
     }
     catch (exception &e) {
-        string errorString("Dumping Results Failed: ");
+        string errorString("Saving Results Failed");
         errorString += e.what();
-        QMessageBox mbox(QMessageBox::Critical, "Dumping Results Failed",
+        QMessageBox mbox(QMessageBox::Critical, "Saving Results Failed",
                          errorString.c_str(), QMessageBox::Ok);
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();

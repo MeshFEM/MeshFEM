@@ -81,9 +81,13 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
     QAction *saveBoundaryAction = new QAction("Save &Boundary (.poly)", this);
     QAction *loadCSGAction = new QAction("&Open Object (.csg)", this);
     QAction *saveCSGAction = new QAction("&Save Object (.csg)", this);
+    QAction *loadSettingsAction =  new QAction("&Load Settings (.cfg)", this);
+    QAction *saveSettingsAction =  new QAction("Save Settin&gs (.cfg)", this);
     fileMenu->addAction(saveBoundaryAction);
     fileMenu->addAction(loadCSGAction);
     fileMenu->addAction(saveCSGAction);
+    fileMenu->addAction(loadSettingsAction);
+    fileMenu->addAction(saveSettingsAction);
 
     loadCSGAction->setShortcut(QKeySequence::Open);
     saveCSGAction->setShortcut(QKeySequence::Save);
@@ -94,6 +98,10 @@ CSGWindow::CSGWindow(MeshlessFEM_t &fem, AnalysisSettings &settings,
                      controller, SLOT(loadCSG()));
     QObject::connect(saveCSGAction, SIGNAL(triggered()),
                      controller, SLOT(saveCSG()));
+    QObject::connect(loadSettingsAction, SIGNAL(triggered()),
+                     controller, SLOT(loadSettings()));
+    QObject::connect(saveSettingsAction, SIGNAL(triggered()),
+                     controller, SLOT(saveSettings()));
 
     // View Menu
     QMenu *viewMenu = menuBar()->addMenu("View");

@@ -14,6 +14,7 @@ LIBS += -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
 LIBS += -L/opt/local/lib -lftgl
 # Bring in umfpack and dependencies (BLAS)
 LIBS += -lumfpack -lSuiteSparse -framework Accelerate
+LIBS += -lboost_program_options-mt
 LIBS += -L/Library/gurobi550/mac64/lib/ -lgurobi55
 LIBS += -framework OpenCL
 # Hack to circumvent bug when MOC tries to parse certain boost macros

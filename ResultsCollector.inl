@@ -148,6 +148,14 @@ public:
         }
     }
 
+    // Write binary of this result. Format:
+    // NumFields (NF)
+    // NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
+    // *  {    FieldData
+    void write(std::ostream &os) const {
+        os << "hi";
+    }
+
 private:
     void init(const ElemGrid &grid) {
         m_sfields.assign((size_t) NUM_DOMAINS, SField());
