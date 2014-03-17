@@ -136,7 +136,15 @@ void parseCSGFile(const char *path, CSGTree<Vector> &csgTree)
 {
     boost::property_tree::ptree pt;
     read_json(path, pt);
+    typename CSGTree<Vector>::CSGNode *node = parseNode<Vector>(pt);
+    csgTree.setRoot(node);
+}
 
+template<typename Vector>
+void parseCSGFile(std::istream &is, CSGTree<Vector> &csgTree)
+{
+    boost::property_tree::ptree pt;
+    read_json(is, pt);
     typename CSGTree<Vector>::CSGNode *node = parseNode<Vector>(pt);
     csgTree.setRoot(node);
 }

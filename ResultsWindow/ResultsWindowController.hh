@@ -49,6 +49,7 @@ public slots:
     void selectResult(const std::string &path);
     void deleteSelection();
     void save();
+    void load();
     void generateFlipbook();
     void groupingCheckToggled(bool);
     void runSearch();

@@ -33,6 +33,7 @@
 #include <memory>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+#include <sstream>
 #include <cstdint>
 #include "utils.hh"
 #include "AnalysisSettings.hh"
@@ -57,12 +58,14 @@ inline std::string getSettingsPathComponent(const std::string &path) {
 
 template<typename Generator>
 class ResultsCollector {
+public:
     typedef typename Generator::Model Model;
     typedef typename Generator::Real Real;
     typedef typename std::pair<Model, BBox_t> RModel;
-public:
+
     class ResultTree;
     class Result;
+    typedef std::shared_ptr<Result> RPtr;
 
     typedef enum { KEY_ORDER_MODEL_SETTINGS, KEY_ORDER_SETTINGS_MODEL } KeyOrder;
 
@@ -217,6 +220,12 @@ public:
         return sit->second->getResult(name_it, nameComponents.end());
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Write a result record to a file. The model and settings are also
+    //  embedded in this file so that it it is entirely stand-alone.
+    //  @param[in]  resultPath  result tree path of the result to write
+    //  @param[in]  outPath     file system path to write to
+    *///////////////////////////////////////////////////////////////////////////
     void writeResult(const std::string &resultPath,
                      const std::string &outPath) const {
         std::vector<std::string> nameComponents;
@@ -241,10 +250,6 @@ public:
             outFile << "RESULT_2D";
             outFile << resultPath << '\0';
 
-            int64_t Nx = settings.Int("Nx"), Ny = settings.Int("Ny");
-            outFile.write((char *) &Nx, sizeof(Nx));
-            outFile.write((char *) &Ny, sizeof(Ny));
-
             const std::vector<Real> &cellOverlaps = r->cellOverlaps();
             int64_t size = cellOverlaps.size();
             outFile.write((char *) &size, sizeof(size));
@@ -252,16 +257,94 @@ public:
                 double overlap = cellOverlaps[i];
                 outFile.write((char *) &overlap, sizeof(double));
             }
-
+            
             outFile << modelName << '\0';
             double boxComponents[4] = { bbox.minCorner[0], bbox.minCorner[1],
                                         bbox.maxCorner[0], bbox.maxCorner[1] };
             outFile.write((char *) boxComponents, sizeof(boxComponents));
             writeCSGFile(outFile, model); outFile << '\0';
             outFile << settingsName << '\0';
-            outFile << "Settings content" << '\0';
+            settings.writeOptions(outFile); outFile << '\0';
             r->write(outFile);
         }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Read a result record from a file along with its embedded model and
+    //  settings. Attempt to add these models/settings to the database with their
+    //  original names as read from the file, but modify the names if there are
+    //  conflicts. If settings/model names are modified, the result path is also
+    //  modified accordingly.
+    //  An existing result with the same resulting path is overwritten.
+    //  @param[in]  inPath     file system path to read from
+    *///////////////////////////////////////////////////////////////////////////
+    void readResult(const std::string &inPath) {
+        std::ifstream inFile(inPath, std::ios::binary);
+        if (!inFile.is_open())
+            throw std::runtime_error("Couldn't open result output path.");
+
+        int dim = Vector::RowsAtCompileTime;
+
+        if (dim == 2) {
+            char magic[10];
+            inFile.read(magic, 9);
+            magic[9] = 0;
+            if (strcmp(magic, "RESULT_2D") != 0) {
+                throw std::runtime_error(std::string("Invalid file magic '") +
+                        magic + "' (Expected 'RESULT_2D')");
+            }
+        }
+        else {
+            assert(false);
+        }
+
+        std::string rpath;
+        std::getline(inFile, rpath, '\0');
+
+        int64_t size;
+        inFile.read((char *) &size, sizeof(size));
+        std::vector<double> cellOverlaps(size);
+        inFile.read((char *) &cellOverlaps[0], size * sizeof(double));
+
+        std::string modelName, modelContent, settingsName, settingsContent;
+        std::getline(inFile, modelName, '\0');
+        double boxComponents[2 * dim];
+        inFile.read((char *) boxComponents, sizeof(boxComponents));
+        std::getline(inFile, modelContent, '\0');
+
+        std::getline(inFile, settingsName, '\0');
+        std::getline(inFile, settingsContent, '\0');
+
+        std::shared_ptr<Result> r(new Result(inFile));
+        r->setCellOverlaps(cellOverlaps);
+
+        assert(inFile); // Hopefully nothing went wrong while reading input...
+
+        Model model;
+        std::stringstream ss(modelContent);
+        parseCSGFile(ss, model);
+        BBox_t bbox(Vector(boxComponents[0], boxComponents[1]),
+                    Vector(boxComponents[2], boxComponents[3]));
+        
+        ss.str(settingsContent);
+        ss.clear();
+        AnalysisSettings settings(ss);
+
+        modelName = addModel(modelName, model, bbox);
+        settingsName = addSettings(settingsName, settings);
+
+        selectModel(modelName);
+        selectSettings(settingsName);
+
+        // Extract the result name from the full path
+        // (trim off model and settings names).
+        size_t sep1 = rpath.find_first_of(':', 0), sep2;
+        if (sep1 < rpath.size())
+            sep2 = rpath.find_first_of(':', sep1 + 1);
+        if ((sep1 >= rpath.size()) || (sep2 >= rpath.size() - 1))
+            throw std::runtime_error(std::string("Invalid result path embedded in results file: '")
+                    + rpath + "'");
+        setResult(rpath.substr(sep2 + 1), r);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -292,7 +375,7 @@ public:
     //  @param[in]  name    result's name in the collection
     //  @param[in]  result  object holding result data.
     *///////////////////////////////////////////////////////////////////////////
-    void setResult(const std::string &name, Result *result) {
+    void setResult(const std::string &name, std::shared_ptr<Result> result) {
         assert(m_models.find(m_selectedModel) != m_models.end());
         assert(m_settings.find(m_selectedSettings) != m_settings.end());
         // Note: pointers are default-initialized to NULL
@@ -433,6 +516,7 @@ public:
     }
 
 private:
+    typedef std::shared_ptr<const Result>     ConstRPtr;
     typedef std::shared_ptr<ResultTree>       _RTPtr;
     typedef std::shared_ptr<const ResultTree> _ConstRTPtr;
     typedef std::map<std::string, _RTPtr, NaturalLess> _InnerMapType;

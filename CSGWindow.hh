@@ -21,7 +21,6 @@
 #include "ViewSettings.hh"
 #include "ViewSettingsWidget.hh"
 #include "ResultsWindow/ResultsWindow.hh"
-#include "CSGWindow.hh"
 
 class CSGWindowController;
 struct AnalysisSettings;

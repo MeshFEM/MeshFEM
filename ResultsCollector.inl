@@ -12,7 +12,6 @@
 //  Company:  New York University
 //  Created:  07/15/2013 16:51:03
 ////////////////////////////////////////////////////////////////////////////////
-#include "utils.hh"
 #include <string>
 #include <vector>
 #include <list>
@@ -47,6 +46,7 @@ public:
     typedef typename Generator::VField VField;
     typedef typename Generator::ElementGrid ElemGrid;
 
+    Result(std::istream &is) {init(); read(is); }
     Result(const ElemGrid &grid) { init(grid); }
     Result(const ElemGrid &grid, ResultDomain stype, const SField &sfield) {
         init(grid); setScalarField(stype, sfield);
@@ -87,6 +87,13 @@ public:
 
     const std::vector<Real> &cellOverlaps() const {
         return m_cellOverlap;
+    }
+
+    template<typename Real2>
+    void setCellOverlaps(std::vector<Real2> &overlaps) {
+        m_cellOverlap.resize(overlaps.size());
+        for (size_t i = 0; i < overlaps.size(); ++i)
+            m_cellOverlap[i] = overlaps[i];
     }
 
     // Number of nodes/elements/boundary points our fields live on
@@ -149,19 +156,108 @@ public:
     }
 
     // Write binary of this result. Format:
+    // NumElements, NumNodes, NumBoundary
     // NumFields (NF)
-    // NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
-    // *  {    FieldData
+    // NF | Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
+    // *  |    FieldData
     void write(std::ostream &os) const {
-        os << "hi";
+        int64_t size;
+        size = numNodes(); os.write((char *) &size, sizeof(size));
+        size = numElems(); os.write((char *) &size, sizeof(size));
+        size = numBdrys(); os.write((char *) &size, sizeof(size));
+
+        int64_t numFields = 0;
+        for (int i = 0; i < NUM_DOMAINS; ++i) {
+            if (m_hasVField[i]) ++numFields;
+            if (m_hasSField[i]) ++numFields;
+        }
+        os.write((char *) &numFields, sizeof(numFields));
+
+        std::vector<double> data;
+        for (int i = 0; i < NUM_DOMAINS; ++i) {
+            // Recall:
+            // NODE_SCALAR = (1 << 0), ELEM_SCALAR = (1 << 1), BDRY_SCALAR = (1 << 2),
+            // NODE_VECTOR = (1 << 3), ELEM_VECTOR = (1 << 4), BDRY_VECTOR = (1 << 5)
+            if (m_hasSField[i]) {
+                char resultType = 1 << i;
+                os << resultType;
+                m_sfields[i].getFlattened(data);
+
+                size = data.size();
+                os.write((char *) &size, sizeof(size));
+                os.write((char *) &data[0], size * sizeof(double));
+            }
+            if (m_hasVField[i]) {
+                char resultType = 1 << (3 + i);
+                os << resultType;
+                m_vfields[i].getFlattened(data);
+
+                size = data.size();
+                os.write((char *) &size, sizeof(size));
+                os.write((char *) &data[0], size * sizeof(double));
+            }
+        }
+    }
+
+    void read(std::istream &is) {
+        int64_t numFields, numElems, numNodes, numBdrys;
+        is.read((char *) &numNodes, sizeof(numNodes));
+        is.read((char *) &numElems, sizeof(numElems));
+        is.read((char *) &numBdrys, sizeof(numBdrys));
+
+        is.read((char *) &numFields, sizeof(numFields));
+
+        for (size_t i = 0; i < numFields; ++i) {
+            char resultType;
+            is >> resultType;
+            // Recall:
+            // NODE_SCALAR = (1 << 0), ELEM_SCALAR = (1 << 1), BDRY_SCALAR = (1 << 2),
+            // NODE_VECTOR = (1 << 3), ELEM_VECTOR = (1 << 4), BDRY_VECTOR = (1 << 5)
+            int64_t size;
+            int dim;
+            ResultDomain domain;
+            if (resultType >= NODE_VECTOR) {
+                // Vector type
+                domain = (ResultDomain) (resultType - (char) NODE_VECTOR);
+                if      (domain == PER_NODE) size = numNodes;
+                else if (domain == PER_ELEM) size = numElems;
+                else if (domain == PER_BDRY) size = numBdrys;
+                else    assert(false);
+                dim = m_vfields[0].dim();
+            }
+            else {
+                // Scalar type
+                domain = (ResultDomain) (resultType - (char) NODE_SCALAR);
+                if      (domain == PER_NODE) size = numNodes;
+                else if (domain == PER_ELEM) size = numElems;
+                else if (domain == PER_BDRY) size = numBdrys;
+                else    assert(false);
+                dim = 1;
+            }
+            std::vector<double> data(dim * size);
+            int64_t dataSize;
+            is.read((char *) &dataSize, sizeof(dataSize));
+            assert(dataSize == data.size());
+
+            is.read((char *) &data[0], data.size() * sizeof(double));
+
+            if (dim > 1)
+                setVectorField(domain, data);
+            else
+                setScalarField(domain, data);
+        }
     }
 
 private:
-    void init(const ElemGrid &grid) {
+    void init() {
         m_sfields.assign((size_t) NUM_DOMAINS, SField());
         m_vfields.assign((size_t) NUM_DOMAINS, VField());
         m_hasSField.assign((size_t) NUM_DOMAINS, false);
         m_hasVField.assign((size_t) NUM_DOMAINS, false);
+    }
+
+    void init(const ElemGrid &grid) {
+        init();
         grid.getCellOverlaps(m_cellOverlap);
     }
 
@@ -181,7 +277,7 @@ public:
     ResultTree()
         : m_result(NULL) { }
 
-    void setResult(const std::string &name, Result *result) {
+    void setResult(const std::string &name, std::shared_ptr<Result> result) {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, name, boost::is_any_of(":"));
         for (std::string &str : nameComponents)
@@ -197,9 +293,9 @@ public:
         return getResult(nameComponents.begin(), nameComponents.end());
     }
 
-    // Set a result, releasing any existing one and assuming ownership.
-    void setResult(Result *r) {
-        m_result = std::shared_ptr<Result>(r);
+    // Set a result, releasing any existing one
+    void setResult(std::shared_ptr<Result> r) {
+        m_result = r;
     }
 
     // Get the result stored at this node.
@@ -280,7 +376,8 @@ public:
     // Insert a result object into the result tree with edges indicated by the
     // sequence of strings curr..end
     void setResult(std::vector<std::string>::const_iterator curr,
-                   std::vector<std::string>::const_iterator end, Result *result)
+                   std::vector<std::string>::const_iterator end,
+                   std::shared_ptr<Result> result)
     {
         if (curr == end) {
             setResult(result);

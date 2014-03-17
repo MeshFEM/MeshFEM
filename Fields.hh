@@ -45,6 +45,14 @@ public:
                                                domainSize);
     }
 
+    template<typename Real2>
+    VectorField(const std::vector<Real2> &values) {
+        size_t domainSize = values.size() / t_dim;
+        assert(t_dim * domainSize == values.size());
+        m_values = Eigen::Map<const Eigen::Matrix<Real2, t_dim, Eigen::Dynamic> >
+            (&values[0], t_dim, domainSize);
+    }
+
     VectorField(size_t domainSize = 0)
         : m_values(t_dim, domainSize) { }
 
@@ -89,6 +97,14 @@ public:
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
 
+    template<typename Real2>
+    void getFlattened(std::vector<Real2> &v) const {
+        size_t size = domainSize() * dim();
+        v.resize(size);
+        for (size_t i = 0; i < size; ++i)
+            v[i] = (Real2) m_values.data()[i];
+    }
+
     size_t dim() const { return t_dim; }
     size_t domainSize() const { return m_values.cols(); }
 
@@ -129,6 +145,9 @@ public:
         : VectorField<Real, 1>(values) { }
     ScalarField(size_t domainSize = 0)
         : VectorField<Real, 1>(domainSize) { }
+    template<typename Real2>
+    ScalarField(const std::vector<Real2> &values)
+        : VectorField<Real, 1>(values) { }
 
     // Also provide direct access to values in the scalar field case
     // (So this looks just like an array)

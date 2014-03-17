@@ -24,6 +24,8 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include "GlobalTypes.hh"
+#include "MeshlessFEM.hh"
 #include "ResultsCollector.hh"
 #include "AnalysisSettings.hh"
 

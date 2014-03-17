@@ -8,6 +8,10 @@
 //      more easy maintenance/saving/flexible queries at the cost of slightly
 //      more verbose access (must use type-specifying accessors) and less
 //      compile-time checks.
+//
+//      Reading settings is done with boost::program_options, and writing is
+//      done with boost::property_tree. When a new setting is added, getOptions,
+//      parseOptions, and writeOptions must all be updated.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -20,7 +24,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/lexical_cast.hpp>
-#include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <cassert>
@@ -42,7 +46,7 @@ public:
         TYPE_BOOL = 3
     } Type;
 
-    AnalysisSettings(std::ifstream &is) {
+    AnalysisSettings(std::istream &is) {
         parseOptions(is);
     }
     AnalysisSettings(std::string &path) {
@@ -129,59 +133,59 @@ public:
                                 privateOpt("private");
         // NOTE: DEFAULTS SPECIFIED HERE
         globalOpt.add_options()
-            ("solver", po::value<std::string>()->default_value("Gurobi"), "Which solver to use")
+            ("global.solver", po::value<std::string>()->default_value("Gurobi"), "Which solver to use")
             ;
 
         elementsOpt.add_options()
-            ("Nx", po::value<int>()->default_value(40), "Grid columns")
-            ("Ny", po::value<int>()->default_value(40), "Grid rows")
-            ("borderWidth", po::value<int>()->default_value(1), "Grid border width")
-            ("quadrature", po::value<int>()->default_value(UNIFORM_QUADRATURE), "Type of quadrature")
-            ("quadraturePoints", po::value<int>()->default_value(81), "Number of quadrature points")
-            ("cellOverlapThreshold", po::value<double>()->default_value(0.05), "Overlap threshold above which a cell is an element")
-            ("exactFullElements", po::value<bool>()->default_value(true), "Used closed formula for integrals over full elements")
-            ("antialiasedElements", po::value<bool>()->default_value(false), "Treat cut cells as full cells with lower density")
+            ("elements.Nx", po::value<int>()->default_value(40), "Grid columns")
+            ("elements.Ny", po::value<int>()->default_value(40), "Grid rows")
+            ("elements.borderWidth", po::value<int>()->default_value(1), "Grid border width")
+            ("elements.quadrature", po::value<int>()->default_value(UNIFORM_QUADRATURE), "Type of quadrature")
+            ("elements.quadraturePoints", po::value<int>()->default_value(81), "Number of quadrature points")
+            ("elements.cellOverlapThreshold", po::value<double>()->default_value(0.05), "Overlap threshold above which a cell is an element")
+            ("elements.exactFullElements", po::value<bool>()->default_value(true), "Used closed formula for integrals over full elements")
+            ("elements.antialiasedElements", po::value<bool>()->default_value(false), "Treat cut cells as full cells with lower density")
             ;
 
         // Materials
         materialOpt.add_options()
-            ("young_modulus", po::value<double>()->default_value(1.0), "Youngs modulus")
-            ("poisson_ratio", po::value<double>()->default_value(0.0), "Poisson ratio")
-            ("density", po::value<double>()->default_value(1.0), "Material density")
+            ("material.young_modulus", po::value<double>()->default_value(1.0), "Youngs modulus")
+            ("material.poisson_ratio", po::value<double>()->default_value(0.0), "Poisson ratio")
+            ("material.density", po::value<double>()->default_value(1.0), "Material density")
             ;
 
         // Simulation
         simulationOpt.add_options()
-            ("useMSBoundary", po::value<bool>()->default_value(false), "Get boundary points from marching squares")
-            ("boundarySpacing", po::value<double>()->default_value(.03), "Spacing between boundary points (if useMSBoundary is false)")
-            ("blurPointForces", po::value<bool>()->default_value(true), "Blur point forces into volume forces")
-            ("kernelRadius", po::value<double>()->default_value(1.0), "Blur radius")
+            ("simulation.useMSBoundary", po::value<bool>()->default_value(false), "Get boundary points from marching squares")
+            ("simulation.boundarySpacing", po::value<double>()->default_value(.03), "Spacing between boundary points (if useMSBoundary is false)")
+            ("simulation.blurPointForces", po::value<bool>()->default_value(true), "Blur point forces into volume forces")
+            ("simulation.kernelRadius", po::value<double>()->default_value(1.0), "Blur radius")
             ;
 
 
         // Modal analysis
         modalAnalysisOpt.add_options()
-            ("massMatrixType", po::value<int>()->default_value(MASS_QUARTER_CELL), "Type of mass matrix to use")
-            ("laplacianModes", po::value<bool>()->default_value(false), "Use eigenfunctions of the Laplacian as modes")
-            ("consistentSigns", po::value<bool>()->default_value(true), "Prevent randomness in mode signs by always making their max stress compressive")
-            ("numModes", po::value<int>()->default_value(10), "Number of modes to compute")
+            ("modalAnalysis.massMatrixType", po::value<int>()->default_value(MASS_QUARTER_CELL), "Type of mass matrix to use")
+            ("modalAnalysis.laplacianModes", po::value<bool>()->default_value(false), "Use eigenfunctions of the Laplacian as modes")
+            ("modalAnalysis.consistentSigns", po::value<bool>()->default_value(true), "Prevent randomness in mode signs by always making their max stress compressive")
+            ("modalAnalysis.numModes", po::value<int>()->default_value(10), "Number of modes to compute")
             ;
 
         // Weakness analysis
         weaknessAnalysisOpt.add_options()
-            ("weakRegionsPerMode", po::value<int>()->default_value(5), "Number of weak regions to extract permode")
-            ("weaknessCutoff", po::value<double>()->default_value(0.95), "Percentile above which regions are considered weak")
-            ("abstrace", po::value<bool>()->default_value(true), "Use modal stress signs to choose between optimizing +trace or -trace on a per-element basis")
-            ("plusMinusObjective", po::value<bool>()->default_value(true), "Optimize both the + and the - objective")
-            ("totalForceBound", po::value<double>()->default_value(0.1), "Total force allowed on the object")
-            ("pointwisePressureBound", po::value<double>()->default_value(0.1), "Maximum pointwise pressure allowed (prevent needle poke)")
+            ("weaknessAnalysis.weakRegionsPerMode", po::value<int>()->default_value(5), "Number of weak regions to extract permode")
+            ("weaknessAnalysis.weaknessCutoff", po::value<double>()->default_value(0.95), "Percentile above which regions are considered weak")
+            ("weaknessAnalysis.abstrace", po::value<bool>()->default_value(true), "Use modal stress signs to choose between optimizing +trace or -trace on a per-element basis")
+            ("weaknessAnalysis.plusMinusObjective", po::value<bool>()->default_value(true), "Optimize both the + and the - objective")
+            ("weaknessAnalysis.totalForceBound", po::value<double>()->default_value(0.1), "Total force allowed on the object")
+            ("weaknessAnalysis.pointwisePressureBound", po::value<double>()->default_value(0.1), "Maximum pointwise pressure allowed (prevent needle poke)")
             ;
 
         // Private
         privateOpt.add_options()
-            ("fixedTranslation", po::value<bool>()->default_value(false), "Use a fixed translation instead of a sweep for translation test")
-            ("xTranslation", po::value<double>()->default_value(0.0), "Fixed translation x")
-            ("yTranslation", po::value<double>()->default_value(0.0), "Fixed translation y")
+            ("private.fixedTranslation", po::value<bool>()->default_value(false), "Use a fixed translation instead of a sweep for translation test")
+            ("private.xTranslation", po::value<double>()->default_value(0.0), "Fixed translation x")
+            ("private.yTranslation", po::value<double>()->default_value(0.0), "Fixed translation y")
             ;
 
         opts.add(globalOpt).add(elementsOpt).add(materialOpt).
@@ -205,51 +209,55 @@ public:
         // Be careful with initialization literal types here... they determine
         // the setting's type, and need to match exactly to avoid overload
         // ambiguity.
-        m_values["solver"] = Variant(vm["solver"].as<std::string>());
+        m_values["solver"] =                 Variant(vm["global.solver"].as<std::string>());
 
         // Elements
-        m_values["Nx"] = Variant(vm["Nx"].as<int>());
-        m_values["Ny"] = Variant(vm["Ny"].as<int>());
-        m_values["borderWidth"] = Variant(vm["borderWidth"].as<int>());
-        m_values["quadrature"] = Variant(vm["quadrature"].as<int>());
-        m_values["quadraturePoints"] = Variant(vm["quadraturePoints"].as<int>());
-        m_values["cellOverlapThreshold"] = Variant(vm["cellOverlapThreshold"].as<double>());
-        m_values["exactFullElements"] = Variant(vm["exactFullElements"].as<bool>());
-        m_values["antialiasedElements"] = Variant(vm["antialiasedElements"].as<bool>());
+        m_values["Nx"] =                     Variant(vm["elements.Nx"].as<int>());
+        m_values["Ny"] =                     Variant(vm["elements.Ny"].as<int>());
+        m_values["borderWidth"] =            Variant(vm["elements.borderWidth"].as<int>());
+        m_values["quadrature"] =             Variant(vm["elements.quadrature"].as<int>());
+        m_values["quadraturePoints"] =       Variant(vm["elements.quadraturePoints"].as<int>());
+        m_values["cellOverlapThreshold"] =   Variant(vm["elements.cellOverlapThreshold"].as<double>());
+        m_values["exactFullElements"] =      Variant(vm["elements.exactFullElements"].as<bool>());
+        m_values["antialiasedElements"] =    Variant(vm["elements.antialiasedElements"].as<bool>());
 
         // Materials
-        m_values["young_modulus"] = Variant(vm["young_modulus"].as<double>());
-        m_values["poisson_ratio"] = Variant(vm["poisson_ratio"].as<double>());
-        m_values["density"] = Variant(vm["density"].as<double>());
+        m_values["young_modulus"] =          Variant(vm["material.young_modulus"].as<double>());
+        m_values["poisson_ratio"] =          Variant(vm["material.poisson_ratio"].as<double>());
+        m_values["density"] =                Variant(vm["material.density"].as<double>());
 
         // Simulation
-        m_values["useMSBoundary"] = Variant(vm["useMSBoundary"].as<bool>());
-        m_values["boundarySpacing"] = Variant(vm["boundarySpacing"].as<double>());
-        m_values["blurPointForces"] = Variant(vm["blurPointForces"].as<bool>());
-        m_values["kernelRadius"] = Variant(vm["kernelRadius"].as<double>());
+        m_values["useMSBoundary"] =          Variant(vm["simulation.useMSBoundary"].as<bool>());
+        m_values["boundarySpacing"] =        Variant(vm["simulation.boundarySpacing"].as<double>());
+        m_values["blurPointForces"] =        Variant(vm["simulation.blurPointForces"].as<bool>());
+        m_values["kernelRadius"] =           Variant(vm["simulation.kernelRadius"].as<double>());
 
 
         // Modal analysis
-        m_values["massMatrixType"] = Variant(vm["massMatrixType"].as<int>());
-        m_values["laplacianModes"] = Variant(vm["laplacianModes"].as<bool>());
-        m_values["consistentSigns"] = Variant(vm["consistentSigns"].as<bool>());
-        m_values["numModes"] = Variant(vm["numModes"].as<int>());
+        m_values["massMatrixType"] =         Variant(vm["modalAnalysis.massMatrixType"].as<int>());
+        m_values["laplacianModes"] =         Variant(vm["modalAnalysis.laplacianModes"].as<bool>());
+        m_values["consistentSigns"] =        Variant(vm["modalAnalysis.consistentSigns"].as<bool>());
+        m_values["numModes"] =               Variant(vm["modalAnalysis.numModes"].as<int>());
 
         // Weakness analysis
-        m_values["weakRegionsPerMode"] = Variant(vm["weakRegionsPerMode"].as<int>());
-        m_values["weaknessCutoff"] = Variant(vm["weaknessCutoff"].as<double>());
-        m_values["abstrace"] = Variant(vm["abstrace"].as<bool>());
-        m_values["plusMinusObjective"] = Variant(vm["plusMinusObjective"].as<bool>());
-        m_values["totalForceBound"] = Variant(vm["totalForceBound"].as<double>());
-        m_values["pointwisePressureBound"] = Variant(vm["pointwisePressureBound"].as<double>());
+        m_values["weakRegionsPerMode"] =     Variant(vm["weaknessAnalysis.weakRegionsPerMode"].as<int>());
+        m_values["weaknessCutoff"] =         Variant(vm["weaknessAnalysis.weaknessCutoff"].as<double>());
+        m_values["abstrace"] =               Variant(vm["weaknessAnalysis.abstrace"].as<bool>());
+        m_values["plusMinusObjective"] =     Variant(vm["weaknessAnalysis.plusMinusObjective"].as<bool>());
+        m_values["totalForceBound"] =        Variant(vm["weaknessAnalysis.totalForceBound"].as<double>());
+        m_values["pointwisePressureBound"] = Variant(vm["weaknessAnalysis.pointwisePressureBound"].as<double>());
 
         // Private
-        m_values["fixedTranslation"] = Variant(vm["fixedTranslation"].as<bool>());
-        m_values["xTranslation"] = Variant(vm["xTranslation"].as<double>());
-        m_values["yTranslation"] = Variant(vm["yTranslation"].as<double>());
+        m_values["fixedTranslation"] =       Variant(vm["private.fixedTranslation"].as<bool>());
+        m_values["xTranslation"] =           Variant(vm["private.xTranslation"].as<double>());
+        m_values["yTranslation"] =           Variant(vm["private.yTranslation"].as<double>());
     }
 
     void writeOptions(std::ostream &os) const {
+        // boost::program_options doesn't support writing .ini files, so we
+        // convert to a property_tree. Notice that property tree groups are
+        // written as groups in the .ini, so we don't need to add the group name
+        // to each setting (e.g. we write Nx instead of elements.Nx).
         using boost::property_tree::ptree;
         ptree root;
 

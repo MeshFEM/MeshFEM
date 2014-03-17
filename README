@@ -23,18 +23,16 @@ All integers are 64-bit, all floating point numbers are doubles
 ================================================================================
 RESULT_2D    (magic ASCII number)
 Result Name  (null-terminated string)
-Nx Ny [Nz]
-Gridcell_clasifications.size()      (needed because if there's a grid border,
-                                     this will differ from Nx * Ny).
-Gridcell_clasifications (sequence of doubles)
-NumElements NumNodes NumBoundary    (not strictly needed because we have
-                                     classifications, but simplifies parsing)
+Gridcell_overlaps.size()
+Gridcell_overlaps (sequence of doubles)
 Model Name     (null-terminated string)
 Model:
     BBox: vector, vector
     null-terminated json string
 Settings Name  (null-terminated string)
 Settings       (null-terminated string)
+NumElements NumNodes NumBoundary    (not strictly needed because we have
+                                     cell overlaps, but simplifies parsing)
 NumFields (NF)
 NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
 *  {    FieldData

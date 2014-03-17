@@ -33,8 +33,10 @@
 #include <algorithm>
 #include <Eigen/Sparse>
 
-template<typename Generator>
-class ResultsCollector;
+// Note: ResultsCollector is forward declared in "GlobalTypes.hh". We choose not
+// to bring in "ResultsCollector.hh" since typedefs in its defintion instantiate
+// MeshlessFEM, causing subtle dependency cycle problems. Better to treat it as
+// an opaque type...
 
 template<typename _Model>
 class MeshlessFEM {

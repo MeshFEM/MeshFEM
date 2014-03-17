@@ -436,7 +436,7 @@ void ResultsWindowController::save()
 
     try {
         for (const string &rpath : paths) {
-            string fpath = dir.toStdString() + "/" + rpath;
+            string fpath = dir.toStdString() + "/" + rpath + ".res";
             m_window.m_resultsCollection.writeResult(rpath, fpath);
         }
     }
@@ -447,6 +447,27 @@ void ResultsWindowController::save()
                          errorString.c_str(), QMessageBox::Ok);
         mbox.setDefaultButton(QMessageBox::Ok);
         mbox.exec();
+    }
+}
+
+void ResultsWindowController::load()
+{
+    QStringList paths = QFileDialog::getOpenFileNames(&m_window,
+            "Open Results (.res)", QString(), "Text files (*.res)");
+
+    foreach (const QString &path, paths) {
+        try {
+            m_window.m_resultsCollection.readResult(path.toStdString());
+            resultsUpdated();
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
     }
 }
 

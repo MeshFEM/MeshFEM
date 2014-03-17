@@ -213,7 +213,7 @@ class MatlabSolver : public Solver<Real> {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
+                const std::vector<size_t> &/* dirichletIndices */ = std::vector<size_t>())
         {
             m_Kn = K.n;
             m_np = A.n;
