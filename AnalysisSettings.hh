@@ -17,6 +17,9 @@
 #define ANALYSIS_SETTINGS_HH
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <boost/lexical_cast.hpp>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -244,6 +247,67 @@ public:
         m_values["fixedTranslation"] = Variant(vm["fixedTranslation"].as<bool>());
         m_values["xTranslation"] = Variant(vm["xTranslation"].as<double>());
         m_values["yTranslation"] = Variant(vm["yTranslation"].as<double>());
+    }
+
+    void writeOptions(std::ostream &os) const {
+        using boost::property_tree::ptree;
+        ptree root;
+
+        ptree globalOpt, elementsOpt, materialOpt, modalAnalysisOpt,
+              simulationOpt, weaknessAnalysisOpt, privateOpt;
+        
+        globalOpt.put("solver", boost::lexical_cast<std::string>(m_values.at("solver")));
+
+        // Elements
+        elementsOpt.put("Nx", boost::lexical_cast<std::string>(m_values.at("Nx")));
+        elementsOpt.put("Ny", boost::lexical_cast<std::string>(m_values.at("Ny")));
+        elementsOpt.put("borderWidth", boost::lexical_cast<std::string>(m_values.at("borderWidth")));
+        elementsOpt.put("quadrature", boost::lexical_cast<std::string>(m_values.at("quadrature")));
+        elementsOpt.put("quadraturePoints", boost::lexical_cast<std::string>(m_values.at("quadraturePoints")));
+        elementsOpt.put("cellOverlapThreshold", boost::lexical_cast<std::string>(m_values.at("cellOverlapThreshold")));
+        elementsOpt.put("exactFullElements", boost::lexical_cast<std::string>(m_values.at("exactFullElements")));
+        elementsOpt.put("antialiasedElements", boost::lexical_cast<std::string>(m_values.at("antialiasedElements")));
+
+        // Materials
+        materialOpt.put("young_modulus", boost::lexical_cast<std::string>(m_values.at("young_modulus")));
+        materialOpt.put("poisson_ratio", boost::lexical_cast<std::string>(m_values.at("poisson_ratio")));
+        materialOpt.put("density", boost::lexical_cast<std::string>(m_values.at("density")));
+
+        // Simulation
+        simulationOpt.put("useMSBoundary", boost::lexical_cast<std::string>(m_values.at("useMSBoundary")));
+        simulationOpt.put("boundarySpacing", boost::lexical_cast<std::string>(m_values.at("boundarySpacing")));
+        simulationOpt.put("blurPointForces", boost::lexical_cast<std::string>(m_values.at("blurPointForces")));
+        simulationOpt.put("kernelRadius", boost::lexical_cast<std::string>(m_values.at("kernelRadius")));
+
+
+        // Modal analysis
+        modalAnalysisOpt.put("massMatrixType", boost::lexical_cast<std::string>(m_values.at("massMatrixType")));
+        modalAnalysisOpt.put("laplacianModes", boost::lexical_cast<std::string>(m_values.at("laplacianModes")));
+        modalAnalysisOpt.put("consistentSigns", boost::lexical_cast<std::string>(m_values.at("consistentSigns")));
+        modalAnalysisOpt.put("numModes", boost::lexical_cast<std::string>(m_values.at("numModes")));
+
+        // Weakness analysis
+        weaknessAnalysisOpt.put("weakRegionsPerMode", boost::lexical_cast<std::string>(m_values.at("weakRegionsPerMode")));
+        weaknessAnalysisOpt.put("weaknessCutoff", boost::lexical_cast<std::string>(m_values.at("weaknessCutoff")));
+        weaknessAnalysisOpt.put("abstrace", boost::lexical_cast<std::string>(m_values.at("abstrace")));
+        weaknessAnalysisOpt.put("plusMinusObjective", boost::lexical_cast<std::string>(m_values.at("plusMinusObjective")));
+        weaknessAnalysisOpt.put("totalForceBound", boost::lexical_cast<std::string>(m_values.at("totalForceBound")));
+        weaknessAnalysisOpt.put("pointwisePressureBound", boost::lexical_cast<std::string>(m_values.at("pointwisePressureBound")));
+
+        // Private
+        privateOpt.put("fixedTranslation", boost::lexical_cast<std::string>(m_values.at("fixedTranslation")));
+        privateOpt.put("xTranslation", boost::lexical_cast<std::string>(m_values.at("xTranslation")));
+        privateOpt.put("yTranslation", boost::lexical_cast<std::string>(m_values.at("yTranslation")));
+
+        root.push_back(ptree::value_type("global", globalOpt));
+        root.push_back(ptree::value_type("elements", elementsOpt));
+        root.push_back(ptree::value_type("material", materialOpt));
+        root.push_back(ptree::value_type("modalAnalysis", modalAnalysisOpt));
+        root.push_back(ptree::value_type("simulation", simulationOpt));
+        root.push_back(ptree::value_type("weaknessAnalysis", weaknessAnalysisOpt));
+        root.push_back(ptree::value_type("private",  privateOpt));
+
+        write_ini(os, root);
     }
 
 private:

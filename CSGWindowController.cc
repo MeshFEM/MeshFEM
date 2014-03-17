@@ -197,7 +197,7 @@ void CSGWindowController::loadCSG(QString path)
 
 void CSGWindowController::loadSettings()
 {
-    QString path = QFileDialog::getOpenFileName(m_window, "Open Object (.cfg)",
+    QString path = QFileDialog::getOpenFileName(m_window, "Open Settings (.cfg)",
             QString(), "Text files (*.cfg)");
     if (path.length() > 0) {
         try {
@@ -227,6 +227,22 @@ void CSGWindowController::loadSettings()
 
 void CSGWindowController::saveSettings()
 {
+    QString path = QFileDialog::getSaveFileName(m_window, "Save Settings (.cfg)",
+            QString(), "Text files (*.cfg)");
+    if (path.length() > 0) {
+        try {
+            std::ofstream settingsFile(path.toStdString());
+            m_settings.writeOptions(settingsFile);
+        }
+        catch (std::exception &e)
+        {
+            QMessageBox mbox(QMessageBox::Critical,
+                    e.what(), e.what(),
+                    QMessageBox::Ok);
+            mbox.setDefaultButton(QMessageBox::Ok);
+            mbox.exec();
+        }
+    }
 }
 
 void CSGWindowController::modelChanged(bool refitGrid)
