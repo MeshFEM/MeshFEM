@@ -13,16 +13,21 @@
 #include <cstdlib>
 
 #include "AnalysisSettings.hh"
-#include "Solver.hh"
+#include "SolverLibrary.hh"
 #include "GlobalTypes.hh"
+#include "MeshlessFEM.hh"
+#include "ResultsCollector.hh"
+#include "CSGFile.hh"
+#include "MatlabInterface/MatlabInterface.h"
 
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 namespace po = boost::program_options;
 using namespace std;
 
 void usage(int exitVal, const po::options_description &visible_opts)
 {
-    cout << "Usage: CSGFEM_cli [options] input.csg output.msh" << endl;
+    cout << "Usage: CSGFEM_cli [options] input.csg output.res" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
@@ -41,16 +46,17 @@ int main(int argc, const char *argv[])
 
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
-        ("input-file", po::value<string>(), "input CSG file")
-        ("output-file", po::value<string>(), "output MSH file")
+        ("inputFile", po::value<string>(), "input CSG file")
+        ("outputFile", po::value<string>(), "output results file")
         ;
 
     po::positional_options_description p;
-    p.add("input-file", 1);
-    p.add("output-file", 1);
+    p.add("inputFile", 1);
+    p.add("outputFile", 1);
 
     po::options_description visible_opts;
-    visible_opts.add_options()("help", "Produce this help message");
+    visible_opts.add_options()("help", "Produce this help message")
+        ("settings", po::value<string>(), "settings file");
     visible_opts.add(analysis_opts);
 
     po::options_description cli_opts;
@@ -70,12 +76,44 @@ int main(int argc, const char *argv[])
     if (vm.count("help"))
         usage(0, visible_opts);
 
-    if ((vm.count("input-file") == 0) || (vm.count("output-file") == 0)) {
+    if ((vm.count("inputFile") == 0) || (vm.count("outputFile") == 0)) {
         cout << "Error: must specify input and output files" << endl;
         usage(1, visible_opts);
     }
+    
 
-    // MeshlessFEM_t fem(csgTree, settings, solver);
+    string settingsName("Default");
+    if (vm.count("settings") > 0) {
+        string settingsPath = vm["settings"].as<string>();
+        ifstream settingsFile(settingsPath);
+        if (!settingsFile.is_open())
+            cout << "Couldn't open settings '" << settingsPath << '\'' << endl;
+        else {
+            settings.parseOptions(settingsFile);
+            boost::filesystem::path spath(settingsPath);
+            settingsName = boost::filesystem::basename(spath);
+        }
+    }
+
+    MatlabInterface *mi = new MatlabInterface();
+
+    CSGTree_t csgTree;
+    string modelPath = vm["inputFile"].as<string>();
+    boost::filesystem::path mpath(modelPath);
+    string modelName = boost::filesystem::basename(mpath);
+
+    parseCSGFile(modelPath.c_str(), csgTree);
+    SolverLibrary<Scalar> solvers(mi);
+    MeshlessFEM_t fem(csgTree, settings, solvers);
+
+    ResultsCollector_t rc;
+    rc.addSettings(settingsName, settings);
+    rc.addModel(modelName, csgTree, csgTree.boundingBox());
+
+    fem.simulate(&rc);
+    rc.writeResult(rc.lastResultPath(), vm["outputFile"].as<string>());
+
+    delete mi;
 
     return 0;
 }

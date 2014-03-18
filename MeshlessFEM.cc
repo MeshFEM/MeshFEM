@@ -3,7 +3,6 @@
 #include <vector>
 #include <queue>
 #include "MeshlessFEM.hh"
-#include "QMatlabInterface.hh"
 #include "ResultsCollector.hh"
 
 using namespace std;
