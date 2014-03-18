@@ -133,7 +133,7 @@ public:
                                 privateOpt("private");
         // NOTE: DEFAULTS SPECIFIED HERE
         globalOpt.add_options()
-            ("global.solver", po::value<std::string>()->default_value("Gurobi"), "Which solver to use")
+            ("global.solver", po::value<std::string>()->default_value("Eigen"), "Which solver to use")
             ;
 
         elementsOpt.add_options()

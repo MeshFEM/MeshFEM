@@ -19,7 +19,9 @@
 #include "ResultsCollector.hh"
 #include "CSGFile.hh"
 #include "BoundaryConditions.hh"
-#include "MatlabInterface/MatlabInterface.h"
+#ifdef HAS_MATLAB
+#include "LazyMatlabInterfaces.hh"
+#endif
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -104,7 +106,12 @@ int main(int argc, const char *argv[])
         }
     }
 
-    MatlabInterface *mi = new MatlabInterface();
+#ifdef HAS_MATLAB
+    LazyQMatlab matlab;
+    SolverLibrary<Scalar> solvers(matlab);
+#else
+    SolverLibrary<Scalar> solvers;
+#endif
 
     CSGTree_t csgTree;
     string modelPath = vm["modelFile"].as<string>();
@@ -112,7 +119,6 @@ int main(int argc, const char *argv[])
     string modelName = boost::filesystem::basename(mpath);
 
     parseCSGFile(modelPath.c_str(), csgTree);
-    SolverLibrary<Scalar> solvers(mi);
     MeshlessFEM_t fem(csgTree, settings, solvers);
 
     string bcPath = vm["bcFile"].as<string>();
@@ -124,8 +130,6 @@ int main(int argc, const char *argv[])
 
     fem.simulate(&rc);
     rc.writeResult(rc.lastResultPath(), vm["outputFile"].as<string>());
-
-    delete mi;
 
     return 0;
 }

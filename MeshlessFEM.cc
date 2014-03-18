@@ -1085,10 +1085,9 @@ bool MeshlessFEM<Model>::simulate(RC *rc) {
     if (rc != NULL) {
         // Record the displacements/stresses in the results collector.
 
-        // MatlabEigenSolver variants provide access to the blurred volume
+        // EigenSolver variants provide access to the blurred volume
         // force. If that's what we're using, save this force for debugging.
-        MatlabEigenSolver<Real> *s =
-                dynamic_cast<MatlabEigenSolver<Real> *>(solver);
+        EigenSolver<Real> *s = dynamic_cast<EigenSolver<Real> *>(solver);
         if (s) {
             VField volForce;
             s->getVolumeForceForForces(forces, volForce);
@@ -1314,12 +1313,6 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
         RPtr r(new Result(elemGrid, Result::PER_ELEM, m_combinedWeakness));
         rc->setResult("Combined Weakness", r);
     }
-
-    // MatlabSolver<Real> *matsolver = dynamic_cast<MatlabSolver<Real> *>(solver);
-    // if (matsolver) {
-    //     matsolver->getMatlabInterface()->SetEngineRealMatrix("cw",
-    //             m_combinedWeakness.size(), 1, m_combinedWeakness.data());
-    // }
 
     std::vector<size_t> cwSortPerm;
     sortPermutation(m_combinedWeakness, cwSortPerm);

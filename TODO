@@ -1,15 +1,12 @@
 Implement:
+*** MSH writer
+*** 3D Meshfree FEM
+
 *** Implement field sampler (place point in FEMView, samples from nearest point)
 *** LP Parameters
     "center": (p, r); p > 2, r \in [0, 1]
     "dimensions": cell x, cell y
         (use to rescale--lp hole is scaled into this)
-
-*** Make eigen+arpack-only solvers and only spawn QMatlabInterface/corresponding
-    solvers when selected.
-*** Implement settings file save/load
-*** Implement stand-alone simulation command line tool
-*** Implement results file format
 
 *** Improve parameter sweeps to support expressions in the swept parameters
     instead of just ranges (i.e. Nx = 2 * Ny
@@ -22,7 +19,6 @@ Implement:
     parameter (topological sort).
     Evaluate the dependent parameters in sorted order.
 *** Boundary conditions rectangle selector
-*** MSH writer (multiple MSH needed for model changes).
 *** Non-bluring point force version.
 *** Multi-material simulation
 
@@ -30,7 +26,6 @@ Implement:
   - Prepend highest weakness to region name so they sort better...
   - Try refinement with non-MS boundary, but scaling force blur radius
     proportionally to grid
-  - Parameter sweeps (maybe)
 
     Work-arounds:
         Visualize signed distance function

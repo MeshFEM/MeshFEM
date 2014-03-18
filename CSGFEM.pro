@@ -18,14 +18,15 @@ LIBS += -lboost_program_options-mt
 LIBS += -L/Library/gurobi550/mac64/lib/ -lgurobi55
 LIBS += -framework OpenCL
 # Hack to circumvent bug when MOC tries to parse certain boost macros
-QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
-
+QMAKE_MOC = $$QMAKE_MOC -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION 
 QT += opengl
 CONFIG += release precompile_header
 PRECOMPILED_HEADER = precompile.hh
 # CONFIG += debug
 
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.7
+
+QMAKE_CXXFLAGS += -DHAS_QT -DHAS_MATLAB -DHAS_GUROBI
 
 # clang++ version
 QMAKE_CXXFLAGS += -DOS_OBJECT_USE_OBJC=0 -std=c++11 -stdlib=libc++ -Winvalid-pch

@@ -10,13 +10,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef SOLVER_LIBRARY_HH
 #define SOLVER_LIBRARY_HH
-
 #include "Solver.hh"
 
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <cassert>
+
+#ifdef HAS_MATLAB
+#include "LazyMatlabInterfaces.hh"
+#endif
 
 template<typename Real>
 class SolverLibrary {
@@ -25,11 +28,21 @@ public:
     SolverLibrary(const SolverLibrary &other) = delete;
     SolverLibrary &operator=(const SolverLibrary &other) = delete;
 
-    SolverLibrary(MatlabInterface *matlab)
+#ifdef HAS_MATLAB
+    SolverLibrary(LazyMatlabInterface &lmatlab)
         : m_selectedSolver(0)
     {
-        add("Gurobi", new MatlabGurobiSolver<Real>(matlab));
-        add("Matlab", new MatlabSolver<Real>(matlab));
+        add("Eigen", new EigenSolver<Real>());
+#ifdef HAS_GUROBI
+        add("Gurobi", new MatlabGurobiSolver<Real>(lmatlab));
+#endif // HAS_GUROBI
+        add("Matlab", new MatlabSolver<Real>(lmatlab));
+    }
+#endif // HAS_MATLAB
+    SolverLibrary()
+        : m_selectedSolver(0)
+    {
+        add("Eigen", new EigenSolver<Real>());
     }
 
     void selectSolver(const std::string &s) {

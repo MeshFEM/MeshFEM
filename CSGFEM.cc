@@ -11,10 +11,13 @@
 #include <QApplication>
 #include "CSGWindow.hh"
 #include "GlobalTypes.hh"
-#include "QMatlabInterface.hh"
-#include "Solver.hh"
+#include "SolverLibrary.hh"
 #include "AnalysisSettings.hh"
 #include "CSGWindowController.hh"
+
+#ifdef HAS_MATLAB
+#include "LazyMatlabInterfaces.hh"
+#endif
 
 #include <map>
 #include <string>
@@ -55,8 +58,12 @@ int main(int argc, char *argv[])
     AnalysisSettings settings;
 
     typedef CSGTree_t::Real Real;
-    QMatlabInterface *matlabInterface = new QMatlabInterface();
-    SolverLibrary<Real> solvers(matlabInterface);
+#ifdef HAS_MATLAB
+    LazyQMatlab matlab;
+    SolverLibrary<Real> solvers(matlab);
+#else
+    SolverLibrary<Real> solvers();
+#endif
 
     MeshlessFEM_t fem(csgTree, settings, solvers);
     ResultsCollector_t results;
@@ -64,8 +71,6 @@ int main(int argc, char *argv[])
     CSGWindow window(fem, settings, solvers, results);
     window.setWindowTitle("CSG Finite Element Structure Analysis");
     window.resize(1280, 768);
-
-    matlabInterface->show();
     window.show();
 
     if (argc > 1)
