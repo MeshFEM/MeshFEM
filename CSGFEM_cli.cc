@@ -115,6 +115,9 @@ int main(int argc, const char *argv[])
     SolverLibrary<Scalar> solvers(mi);
     MeshlessFEM_t fem(csgTree, settings, solvers);
 
+    string bcPath = vm["bcFile"].as<string>();
+    fem.boundaryConditions().readConditions(bcPath);
+
     ResultsCollector_t rc;
     rc.addSettings(settingsName, settings);
     rc.addModel(modelName, csgTree, csgTree.boundingBox());
