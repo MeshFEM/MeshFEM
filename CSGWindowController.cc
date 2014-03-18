@@ -328,29 +328,13 @@ void CSGWindowController::configureSimulation()
     m_femView->setGUIState(FEMView2D::STATE_PRESSURE_DRAW);
 }
 
-void CSGWindowController::savePressure()
+void CSGWindowController::saveBC()
 {
     QString fileName = QFileDialog::getSaveFileName(0,
-            "Save Boundary Pressures (.bp)", QString(), "Text files (*.bp)");
+            "Save Boundary Conditions (.bc)", QString(), "Text files (*.bc)");
     if (fileName.length() > 0) {
         try {
-            std::ofstream bpFile(fileName.toStdString().c_str());
-            if (!bpFile.is_open()) {
-                throw std::runtime_error(std::string("Couldn't open file: ") +
-                                         fileName.toStdString());
-            }
-
-            const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
-                    m_fem.boundaryPoints();
-            bpFile << bpts.size() << endl;
-            
-            for (size_t i = 0; i < bpts.size(); ++i) {
-                // Note: Python StructAys uses negative pressures, so our bp
-                // format takes this convention.
-                Scalar p = -m_fem.boundaryConditions().paintedPressure(i);
-                bpFile << bpts[i].p[0] << '\t' << bpts[i].p[1] << '\t'
-                       << p << endl;
-            }
+            m_fem.boundaryConditions().writeConditions(fileName.toStdString());
         }
         catch (std::exception &e)
         {
@@ -363,50 +347,13 @@ void CSGWindowController::savePressure()
     }
 }
 
-void CSGWindowController::loadPressure()
+void CSGWindowController::loadBC()
 {
-    QString fileName = QFileDialog::getOpenFileName(0, "Open boundary pressures (.bp)",
-            QString(), "Text files (*.bp)");
+    QString fileName = QFileDialog::getOpenFileName(0,
+            "Load Boundary Conditions (.bc)", QString(), "Text files (*.bc)");
     if (fileName.length() > 0) {
         try {
-            std::ifstream bpFile(fileName.toStdString().c_str());
-            if (!bpFile.is_open()) {
-                throw std::runtime_error(std::string("Couldn't open file: ") +
-                                         fileName.toStdString());
-            }
-            size_t boundarySize;
-            bpFile >> boundarySize;
-
-            if (boundarySize != m_fem.numBoundaryPoints())
-                throw std::runtime_error(std::string("Boundary count mismatch"));
-
-            const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
-                    m_fem.boundaryPoints();
-            std::vector<bool> mapped(boundarySize, false);
-
-            for (size_t i = 0; i < boundarySize; ++i) {
-                Vector p;
-                Scalar pressure;
-                bpFile >> p[0] >> p[1] >> pressure;
-                size_t closest = 0;
-                Scalar closestDist = std::numeric_limits<Scalar>::max();
-                for (size_t j = 0; j < bpts.size(); ++j) {
-                    Scalar dist = (bpts[j].p - p).norm();
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        closest = j;
-                    }
-                }
-                if (mapped[closest])
-
-                    throw std::runtime_error(std::string("Mapping not bijective"));
-                mapped[closest] = true;
-                // Note: Python StructAys uses negative pressures.
-                m_fem.boundaryConditions().paintPressure(closest, -pressure);
-            }
-            if (!bpFile)
-                throw std::runtime_error(std::string("Error reading file"));
-
+            m_fem.boundaryConditions().readConditions(fileName.toStdString());
             m_femView->setGUIState(FEMView2D::STATE_PRESSURE_DRAW);
         }
         catch (std::exception &e)
@@ -419,6 +366,98 @@ void CSGWindowController::loadPressure()
         }
     }
 }
+
+// void CSGWindowController::savePressure()
+// {
+//     QString fileName = QFileDialog::getSaveFileName(0,
+//             "Save Boundary Pressures (.bp)", QString(), "Text files (*.bp)");
+//     if (fileName.length() > 0) {
+//         try {
+//             std::ofstream bpFile(fileName.toStdString().c_str());
+//             if (!bpFile.is_open()) {
+//                 throw std::runtime_error(std::string("Couldn't open file: ") +
+//                                          fileName.toStdString());
+//             }
+// 
+//             const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
+//                     m_fem.boundaryPoints();
+//             bpFile << bpts.size() << endl;
+//             
+//             for (size_t i = 0; i < bpts.size(); ++i) {
+//                 // Note: Python StructAys uses negative pressures, so our bp
+//                 // format takes this convention.
+//                 Scalar p = -m_fem.boundaryConditions().paintedPressure(i);
+//                 bpFile << bpts[i].p[0] << '\t' << bpts[i].p[1] << '\t'
+//                        << p << endl;
+//             }
+//         }
+//         catch (std::exception &e)
+//         {
+//             QMessageBox mbox(QMessageBox::Critical,
+//                     e.what(), e.what(),
+//                     QMessageBox::Ok);
+//             mbox.setDefaultButton(QMessageBox::Ok);
+//             mbox.exec();
+//         }
+//     }
+// }
+// 
+// void CSGWindowController::loadPressure()
+// {
+//     QString fileName = QFileDialog::getOpenFileName(0, "Open boundary pressures (.bp)",
+//             QString(), "Text files (*.bp)");
+//     if (fileName.length() > 0) {
+//         try {
+//             std::ifstream bpFile(fileName.toStdString().c_str());
+//             if (!bpFile.is_open()) {
+//                 throw std::runtime_error(std::string("Couldn't open file: ") +
+//                                          fileName.toStdString());
+//             }
+//             size_t boundarySize;
+//             bpFile >> boundarySize;
+// 
+//             if (boundarySize != m_fem.numBoundaryPoints())
+//                 throw std::runtime_error(std::string("Boundary count mismatch"));
+// 
+//             const std::vector<MeshlessFEM_t::_BoundaryPoint> &bpts =
+//                     m_fem.boundaryPoints();
+//             std::vector<bool> mapped(boundarySize, false);
+// 
+//             for (size_t i = 0; i < boundarySize; ++i) {
+//                 Vector p;
+//                 Scalar pressure;
+//                 bpFile >> p[0] >> p[1] >> pressure;
+//                 size_t closest = 0;
+//                 Scalar closestDist = std::numeric_limits<Scalar>::max();
+//                 for (size_t j = 0; j < bpts.size(); ++j) {
+//                     Scalar dist = (bpts[j].p - p).norm();
+//                     if (dist < closestDist) {
+//                         closestDist = dist;
+//                         closest = j;
+//                     }
+//                 }
+//                 if (mapped[closest])
+// 
+//                     throw std::runtime_error(std::string("Mapping not bijective"));
+//                 mapped[closest] = true;
+//                 // Note: Python StructAys uses negative pressures.
+//                 m_fem.boundaryConditions().paintPressure(closest, -pressure);
+//             }
+//             if (!bpFile)
+//                 throw std::runtime_error(std::string("Error reading file"));
+// 
+//             m_femView->setGUIState(FEMView2D::STATE_PRESSURE_DRAW);
+//         }
+//         catch (std::exception &e)
+//         {
+//             QMessageBox mbox(QMessageBox::Critical,
+//                     e.what(), e.what(),
+//                     QMessageBox::Ok);
+//             mbox.setDefaultButton(QMessageBox::Ok);
+//             mbox.exec();
+//         }
+//     }
+// }
 
 void CSGWindowController::runSimulation()
 {

@@ -65,8 +65,8 @@ public slots:
 
     // Simulation actions
     void configureSimulation();
-    void savePressure();
-    void loadPressure();
+    void saveBC();
+    void loadBC();
     void runSimulation();
     void pressurePaintValueChanged(double);
 

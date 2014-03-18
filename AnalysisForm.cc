@@ -75,8 +75,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_kernelRadiusStepper->setMaximum(8.0);
     g_kernelRadiusStepper->setSingleStep(.01);
     g_configureSimulationButton = new QPushButton("Configure");
-    g_savePressureButton = new QPushButton("Save P");
-    g_loadPressureButton = new QPushButton("Load P");
+    g_saveBCButton = new QPushButton("Save BC");
+    g_loadBCButton = new QPushButton("Load BC");
     g_runSimulationButton = new QPushButton("Simulate");
     g_pressurePaintValueStepper = new QDoubleSpinBox();
     g_pressurePaintValueStepper->setSingleStep(.01);
@@ -181,8 +181,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     simForm->addRow(simButtonLayout);
 
     QHBoxLayout *pressureButtonLayout = new QHBoxLayout();
-    pressureButtonLayout->addWidget(g_savePressureButton);
-    pressureButtonLayout->addWidget(g_loadPressureButton);
+    pressureButtonLayout->addWidget(g_saveBCButton);
+    pressureButtonLayout->addWidget(g_loadBCButton);
     simForm->addRow(pressureButtonLayout);
 
     simForm->addRow("PressurePaint Value", g_pressurePaintValueStepper);
@@ -280,10 +280,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
 
     QObject::connect(g_configureSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(configureSimulation()));
-    QObject::connect(g_savePressureButton, SIGNAL(clicked()),
-                     controller, SLOT(savePressure()));
-    QObject::connect(g_loadPressureButton, SIGNAL(clicked()),
-                     controller, SLOT(loadPressure()));
+    QObject::connect(g_saveBCButton, SIGNAL(clicked()), controller, SLOT(saveBC()));
+    QObject::connect(g_loadBCButton, SIGNAL(clicked()), controller, SLOT(loadBC()));
     QObject::connect(g_runSimulationButton, SIGNAL(clicked()),
                      controller, SLOT(runSimulation()));
     QObject::connect(g_pressurePaintValueStepper, SIGNAL(valueChanged(double)),

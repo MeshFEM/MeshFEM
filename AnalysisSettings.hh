@@ -124,7 +124,7 @@ public:
         return keys;
     }
 
-    void getOptions(po::options_description &opts) const {
+    static void getOptions(po::options_description &opts) {
         po::options_description globalOpt("global"), elementsOpt("elements"),
                                 materialOpt("material"),
                                 modalAnalysisOpt("modalAnalysis"),

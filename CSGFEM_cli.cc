@@ -18,6 +18,7 @@
 #include "MeshlessFEM.hh"
 #include "ResultsCollector.hh"
 #include "CSGFile.hh"
+#include "BoundaryConditions.hh"
 #include "MatlabInterface/MatlabInterface.h"
 
 #include <boost/program_options.hpp>
@@ -27,31 +28,26 @@ using namespace std;
 
 void usage(int exitVal, const po::options_description &visible_opts)
 {
-    cout << "Usage: CSGFEM_cli [options] input.csg output.res" << endl;
+    cout << "Usage: CSGFEM_cli [options] model.csg bcond.bc output.res" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/*! Program entry point
-//  @param[in]  argc    Number of arguments
-//  @param[in]  argv    Argument strings
-//  @return     status  (0 on sucess)
-*///////////////////////////////////////////////////////////////////////////////
-int main(int argc, const char *argv[])
+po::variables_map parseCmdLine(int argc, const char *argv[])
 {
-    AnalysisSettings settings;
     po::options_description analysis_opts("Analysis Settings");
-    settings.getOptions(analysis_opts);
+    AnalysisSettings::getOptions(analysis_opts);
 
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
-        ("inputFile", po::value<string>(), "input CSG file")
+        ("modelFile", po::value<string>(), "input model (CSG) file")
+        ("bcFile", po::value<string>(), "boundary conditions file")
         ("outputFile", po::value<string>(), "output results file")
         ;
 
     po::positional_options_description p;
-    p.add("inputFile", 1);
+    p.add("modelFile", 1);
+    p.add("bcFile", 1);
     p.add("outputFile", 1);
 
     po::options_description visible_opts;
@@ -76,12 +72,25 @@ int main(int argc, const char *argv[])
     if (vm.count("help"))
         usage(0, visible_opts);
 
-    if ((vm.count("inputFile") == 0) || (vm.count("outputFile") == 0)) {
+    if ((vm.count("modelFile") == 0) || (vm.count("outputFile") == 0)) {
         cout << "Error: must specify input and output files" << endl;
         usage(1, visible_opts);
     }
-    
 
+    return vm;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Program entry point
+//  @param[in]  argc    Number of arguments
+//  @param[in]  argv    Argument strings
+//  @return     status  (0 on sucess)
+*///////////////////////////////////////////////////////////////////////////////
+int main(int argc, const char *argv[])
+{
+    po::variables_map vm = parseCmdLine(argc, argv);
+
+    AnalysisSettings settings;
     string settingsName("Default");
     if (vm.count("settings") > 0) {
         string settingsPath = vm["settings"].as<string>();
@@ -98,7 +107,7 @@ int main(int argc, const char *argv[])
     MatlabInterface *mi = new MatlabInterface();
 
     CSGTree_t csgTree;
-    string modelPath = vm["inputFile"].as<string>();
+    string modelPath = vm["modelFile"].as<string>();
     boost::filesystem::path mpath(modelPath);
     string modelName = boost::filesystem::basename(mpath);
 

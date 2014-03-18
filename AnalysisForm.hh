@@ -108,8 +108,8 @@ private:
     QDoubleSpinBox *g_boundaryPointStepper;
     QDoubleSpinBox *g_kernelRadiusStepper;
     QPushButton *g_configureSimulationButton;
-    QPushButton *g_savePressureButton;
-    QPushButton *g_loadPressureButton;
+    QPushButton *g_saveBCButton;
+    QPushButton *g_loadBCButton;
     QPushButton *g_runSimulationButton;
     QDoubleSpinBox *g_pressurePaintValueStepper;
 

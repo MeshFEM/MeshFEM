@@ -25,6 +25,10 @@ typedef BBox<Vector> BBox_t;
 typedef Polygon<Vector> Polygon_t;
 typedef BoundaryPoint<Vector> BoundaryPoint_t;
 
+inline int DIM() {
+    return Vector::RowsAtCompileTime;
+}
+
 template<typename Real>
 struct Triplet
 {
