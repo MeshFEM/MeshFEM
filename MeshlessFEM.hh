@@ -23,7 +23,6 @@
 #include "Geometry.hh"
 #include "SPHKernels.hh"
 #include "MarchingSquaresGrid.hh"
-#include "MSHWriter.hh"
 #include "utils.hh"
 #include "BoundaryConditions.hh"
 

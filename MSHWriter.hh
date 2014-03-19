@@ -14,12 +14,13 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <string>
 
 template<typename ElementGrid>
 class MSHWriter {
 public:
     typedef enum { PER_ELEMENT, PER_NODE } FieldType;
-    MSHWriter(const char *mshPath, const ElementGrid &grid)
+    MSHWriter(const std::string &mshPath, const ElementGrid &grid)
         : m_outStream(mshPath), m_grid(grid) {
         if (!m_outStream.is_open()) {
             std::cout << "Failed to open output file '"
@@ -30,9 +31,9 @@ public:
     }
 
     template<typename Field>
-    void addField(const char *name, const Field &f, FieldType type)
+    void addField(const std::string &name, const Field &f, FieldType type)
     {
-        const char *sectionHeader;
+        std::string sectionHeader;
         if (type == PER_ELEMENT) {
             assert(f.domainSize() == m_grid.numElements());
             sectionHeader = "ElementData";
@@ -41,19 +42,22 @@ public:
             assert(f.domainSize() == m_grid.numNodes());
             sectionHeader = "NodeData";
         }
+        int dim = f.dim();
+        // 2-vectors are padded to 3-vectors for GMSH compatibility.
+        if (dim == 2) dim = 3; 
         m_outStream << '$' << sectionHeader << std::endl
                     << '1' << std::endl // One string tag: field name
                     << '"' << name << '"' << std::endl
                     << '0' << std::endl // No real tags
                     << '3' << std::endl // 3 Integer tags
                     << '0' << std::endl // Time step 0 (ignored)
-                    << f.dim() << std::endl
+                    << dim << std::endl
                     << f.domainSize() << std::endl;
         for (size_t i = 0; i < f.domainSize(); ++i) {
             typename Field::ConstValueType val = f(i);
             m_outStream << i + 1;
-            for (size_t c = 0; c < f.dim(); ++c)
-                m_outStream << ' ' << val[c];
+            for (size_t c = 0; c < dim; ++c)
+                m_outStream << ' ' << ((c < f.dim()) ? val[c] : 0);
             m_outStream << std::endl;
         }
         m_outStream << "$End" << sectionHeader << std::endl;

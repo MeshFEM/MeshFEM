@@ -20,6 +20,7 @@
 #include <memory>
 #include <iostream>
 #include <stdexcept>
+#include "MSHWriter.hh"
 
 // A single result can consist of up to a scalar AND vector field per:
 //      node
@@ -245,6 +246,29 @@ public:
                 setVectorField(domain, data);
             else
                 setScalarField(domain, data);
+        }
+    }
+
+    // Add the fields in this result to an MSH file. The resulting names are
+    // field type descriptors, prefixed by the basename. E.g. if basename is
+    // "Simulation" the name will be like "Simulation (Per Element Scalar)"
+    typedef MSHWriter<typename Generator::ElementGrid> _MSHWriter;
+    void addToMSH(_MSHWriter &msh, const std::string &basename) const {
+        // NOTE: this works under the assumption that ResultDomain = 0 and 1
+        // correspond to per-node and per-element.
+        std::string descs[2] = {"Per Node", "Per Element"};
+        typename _MSHWriter::FieldType types[2] = { _MSHWriter::PER_NODE,
+                                                    _MSHWriter::PER_ELEMENT };
+        for (int i = 0; i < 2; ++i) {
+            if (m_hasSField[i]) {
+                std::string name = basename + " (" + descs[i] + " Scalar)";
+
+                msh.addField(name, m_sfields[i], types[i]);
+            }
+            if (m_hasVField[i]) {
+                std::string name = basename + " (" + descs[i] + " Vector)";
+                msh.addField(name, m_vfields[i], types[i]);
+            }
         }
     }
 

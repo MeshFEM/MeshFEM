@@ -22,6 +22,7 @@
 #ifdef HAS_MATLAB
 #include "LazyMatlabInterfaces.hh"
 #endif
+#include "MSHWriter.hh"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -30,7 +31,7 @@ using namespace std;
 
 void usage(int exitVal, const po::options_description &visible_opts)
 {
-    cout << "Usage: CSGFEM_cli [options] model.csg bcond.bc output.res" << endl;
+    cout << "Usage: CSGFEM_cli model.csg bcond.bc output.res [options]" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
@@ -54,7 +55,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("settings", po::value<string>(), "settings file");
+        ("settings", po::value<string>(), "settings file")
+        ("msh", po::value<string>(), ".msh output");
     visible_opts.add(analysis_opts);
 
     po::options_description cli_opts;
@@ -129,7 +131,16 @@ int main(int argc, const char *argv[])
     rc.addModel(modelName, csgTree, csgTree.boundingBox());
 
     fem.simulate(&rc);
-    rc.writeResult(rc.lastResultPath(), vm["outputFile"].as<string>());
+    string lastResultPath = rc.lastResultPath();
+    string outPath = vm["outputFile"].as<string>();
+    rc.writeResult(lastResultPath, outPath);
+
+    if (vm.count("msh")) {
+        string path = vm["msh"].as<string>();
+        MSHWriter<MeshlessFEM_t::ElementGrid> writer(path, fem.elementGrid());
+        ResultsCollector_t::ConstRPtr r = rc.getResultWithPath(lastResultPath);
+        r->addToMSH(writer, "Simulation");
+    }
 
     return 0;
 }

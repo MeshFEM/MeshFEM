@@ -65,7 +65,8 @@ public:
 
     class ResultTree;
     class Result;
-    typedef std::shared_ptr<Result> RPtr;
+    typedef std::shared_ptr<Result>       RPtr;
+    typedef std::shared_ptr<const Result> ConstRPtr;
 
     typedef enum { KEY_ORDER_MODEL_SETTINGS, KEY_ORDER_SETTINGS_MODEL } KeyOrder;
 
@@ -516,7 +517,6 @@ public:
     }
 
 private:
-    typedef std::shared_ptr<const Result>     ConstRPtr;
     typedef std::shared_ptr<ResultTree>       _RTPtr;
     typedef std::shared_ptr<const ResultTree> _ConstRTPtr;
     typedef std::map<std::string, _RTPtr, NaturalLess> _InnerMapType;
