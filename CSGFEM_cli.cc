@@ -56,7 +56,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
         ("settings", po::value<string>(), "settings file")
-        ("msh", po::value<string>(), ".msh output");
+        ("msh", po::value<string>(), ".msh output")
+        ("dumpMatrices", "Dump matrices for debugging");
     visible_opts.add(analysis_opts);
 
     po::options_description cli_opts;
@@ -108,11 +109,13 @@ int main(int argc, const char *argv[])
         }
     }
 
+    bool dumpMatrices = vm.count("dumpMatrices");
+
 #ifdef HAS_MATLAB
     LazyQMatlab matlab;
-    SolverLibrary<Scalar> solvers(matlab);
+    SolverLibrary<Scalar> solvers(matlab, dumpMatrices);
 #else
-    SolverLibrary<Scalar> solvers;
+    SolverLibrary<Scalar> solvers(dumpMatrices);
 #endif
 
     CSGTree_t csgTree;

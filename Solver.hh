@@ -120,6 +120,9 @@ public:
     typedef Eigen::SparseMatrix<Real, Eigen::RowMajor> SparseMatrixCSR;
     typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
 
+    EigenSolver(bool dumpMatrices)
+        : m_dumpMatrices(dumpMatrices) { }
+
     virtual bool configureAnalysis(const TMatrix &K, const TMatrix &F,
             const TMatrix &R, const TMatrix &N, const TMatrix &A,
             const TMatrix &B, const TMatrix &VD,
@@ -163,6 +166,9 @@ public:
             Cs.append(T_DC, TMatrix::APPEND_RIGHT, false, true);
             Cs.append(T_DC, TMatrix::APPEND_BELOW, true, false);
         }
+
+        if (m_dumpMatrices) Cs.dump("Cs.txt");
+        if (m_dumpMatrices) F.dump("F.txt");
 
         SparseMatrix S(T_S.m, T_S.n);
         S.setFromTriplets(T_S.nz.begin(), T_S.nz.end());
@@ -315,6 +321,8 @@ protected:
     // original matrix for iterative refinement.
     SparseMatrix m_Cs;
     Eigen::UmfPackLU<SparseMatrix> m_Cs_factors;
+
+    bool m_dumpMatrices;
 };
 
 
@@ -558,8 +566,8 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
         typedef Eigen::SparseMatrix<Real, Eigen::RowMajor> SparseMatrixCSR;
         typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
 
-        MatlabEigenSolver(LazyMatlabInterface &matlab)
-            : MatlabSolver<Real>(matlab) { }
+        MatlabEigenSolver(LazyMatlabInterface &matlab, bool dumpMatrices)
+            : MatlabSolver<Real>(matlab), EigenSolver<Real>(dumpMatrices) { }
 
         // Set all the matrices needed for weakness analysis and simulation
         // Does all factorization and precomputation of reused quantities.
@@ -621,6 +629,7 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
         using EigenSolver<Real>::m_linprog_beq;
         using EigenSolver<Real>::m_Cs;
         using EigenSolver<Real>::m_Cs_factors;
+        using EigenSolver<Real>::m_dumpMatrices;
 };
 
 #ifdef HAS_GUROBI
@@ -642,8 +651,8 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
         typedef Eigen::SparseMatrix<Real> SparseMatrix;
         typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
 
-        MatlabGurobiSolver(LazyMatlabInterface &matlab)
-            : MatlabEigenSolver<Real>(matlab), m_model(NULL) {
+        MatlabGurobiSolver(LazyMatlabInterface &matlab, bool dumpMatrices)
+            : MatlabEigenSolver<Real>(matlab, dumpMatrices), m_model(NULL) {
             // int error = GRBloadenv(&m_env, "gurobi.log");
             int error = GRBloadenv(&m_env, NULL);
             assert(error == 0);

@@ -29,20 +29,20 @@ public:
     SolverLibrary &operator=(const SolverLibrary &other) = delete;
 
 #ifdef HAS_MATLAB
-    SolverLibrary(LazyMatlabInterface &lmatlab)
+    SolverLibrary(LazyMatlabInterface &lmatlab, bool dumpMatrices)
         : m_selectedSolver(0)
     {
-        add("Eigen", new EigenSolver<Real>());
+        add("Eigen", new EigenSolver<Real>(dumpMatrices));
 #ifdef HAS_GUROBI
-        add("Gurobi", new MatlabGurobiSolver<Real>(lmatlab));
+        add("Gurobi", new MatlabGurobiSolver<Real>(lmatlab, dumpMatrices));
 #endif // HAS_GUROBI
         add("Matlab", new MatlabSolver<Real>(lmatlab));
     }
 #endif // HAS_MATLAB
-    SolverLibrary()
+    SolverLibrary(bool dumpMatrices)
         : m_selectedSolver(0)
     {
-        add("Eigen", new EigenSolver<Real>());
+        add("Eigen", new EigenSolver<Real>(dumpMatrices));
     }
 
     void selectSolver(const std::string &s) {
