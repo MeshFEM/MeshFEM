@@ -1,0 +1,25 @@
+INCLUDES=-I/home/jpanetta/usr/include -I/usr/include/suitesparse
+LIBS=-L/home/jpanetta/usr/lib -L/usr/lib64 -lboost_program_options -lboost_filesystem -lboost_system \
+	-lumfpack -static-libstdc++
+OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o
+
+CXX=g++48
+CC=gcc48
+CPPFLAGS=-std=c++11 -O2 $(INCLUDES)
+
+CSGFEM_cli: $(OBJS)
+	$(CXX) $(CPPFLAGS) $(LIBS) $(OBJS) -o CSGFEM_cli
+
+%.o: %.cpp Makefile
+	$(CXX) -c $(CPPFLAGS) $< -o $@
+
+%.o: %.c Makefile
+	$(CC) -c $(CPPFLAGS) $< -o $@
+
+depend:
+	makedepend $(INCLUDE_FLAGS) $(SOURCES)
+
+clean:
+	rm -f $(OBJS) *.bak CSGFEM_cli
+
+.PHONY: clean depend
