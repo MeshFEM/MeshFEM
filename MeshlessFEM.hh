@@ -83,6 +83,7 @@ public:
 
         m_selectedWeakRegion = -1L;
         
+        configureElements(settings);
         configureBoundaryPoints(settings);
         configureMatrices(settings);
         configureMaterial(settings);
