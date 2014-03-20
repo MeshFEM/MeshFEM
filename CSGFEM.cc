@@ -60,9 +60,9 @@ int main(int argc, char *argv[])
     typedef CSGTree_t::Real Real;
 #ifdef HAS_MATLAB
     LazyQMatlab matlab;
-    SolverLibrary<Real> solvers(matlab);
+    SolverLibrary<Real> solvers(matlab, false);
 #else
-    SolverLibrary<Real> solvers();
+    SolverLibrary<Real> solvers(false);
 #endif
 
     MeshlessFEM_t fem(csgTree, settings, solvers);

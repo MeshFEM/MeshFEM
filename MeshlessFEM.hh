@@ -64,6 +64,8 @@ public:
     typedef ResultsCollector<MeshlessFEM<_Model> > RC;
 
     class ElementData;
+
+    // Integrands
     class PerElementLaplacianDensity;
     class PerElementStiffnessDensity;
     class PerElementGradPhi;
