@@ -2,6 +2,7 @@ INCLUDES=-I/home/jpanetta/usr/include -I/usr/include/suitesparse
 LIBS=-L/home/jpanetta/usr/lib -L/usr/lib64 -lboost_program_options -lboost_filesystem -lboost_system \
 	-lumfpack -static-libstdc++
 OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o
+SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc
 
 CXX=g++48
 CC=gcc48
@@ -17,9 +18,14 @@ CSGFEM_cli: $(OBJS)
 	$(CC) -c $(CPPFLAGS) $< -o $@
 
 depend:
-	makedepend $(INCLUDE_FLAGS) $(SOURCES)
+	@touch Makefile.depend;
+	makedepend -Y -f Makefile.depend -- $(CPPFLAGS) -- $(SOURCES) &> /dev/null
+
 
 clean:
 	rm -f $(OBJS) *.bak CSGFEM_cli
 
 .PHONY: clean depend
+
+# Read in the dependency file, if it exists
+sinclude Makefile.depend

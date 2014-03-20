@@ -5,6 +5,7 @@ LIBS=-L/opt/local/lib -lboost_program_options-mt -lboost_filesystem-mt -lboost_s
 # -L/Library/gurobi550/mac64/lib/ -lgurobi55
 # -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
 OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o
+SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc
 
 CXX=clang++
 CC=clang
@@ -20,9 +21,14 @@ CSGFEM_cli: $(OBJS)
 	$(CC) -c $(CPPFLAGS) $< -o $@
 
 depend:
-	makedepend $(INCLUDE_FLAGS) $(SOURCES)
+	@touch Makefile.depend;
+	makedepend -Y -f Makefile.depend -- $(CPPFLAGS) -- $(SOURCES) &> /dev/null
 
 clean:
 	rm -f $(OBJS) *.bak CSGFEM_cli
 
+
 .PHONY: clean depend
+
+# Read in the dependency file, if it exists
+sinclude Makefile.depend

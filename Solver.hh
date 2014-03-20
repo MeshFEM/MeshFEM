@@ -169,6 +169,7 @@ public:
 
         if (m_dumpMatrices) Cs.dump("Cs.txt");
         if (m_dumpMatrices) F.dump("F.txt");
+        if (m_dumpMatrices) B.dump("B.txt");
 
         SparseMatrix S(T_S.m, T_S.n);
         S.setFromTriplets(T_S.nz.begin(), T_S.nz.end());
