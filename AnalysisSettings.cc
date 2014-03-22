@@ -53,6 +53,8 @@ bool AnalysisSettings::operator==(const AnalysisSettings &rhs) const {
             return false;
 
         if (!(it->first == rpair.first))
+            return false;
+
         if (!(*(it->second) == *(rpair.second)))
             return false;
     }
