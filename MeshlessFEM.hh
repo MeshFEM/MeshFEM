@@ -25,6 +25,7 @@
 #include "MarchingSquaresGrid.hh"
 #include "utils.hh"
 #include "BoundaryConditions.hh"
+#include "SparseMatrices.hh"
 
 #include <cassert>
 #include <vector>

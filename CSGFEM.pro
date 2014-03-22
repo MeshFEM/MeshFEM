@@ -57,7 +57,7 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            ResultsWindow/ResultsWindowController.hh \
            ResultsWindow/ResultTreeView.hh ResultsWindow/FlipbookDialog.hh \
            ParameterSweepDialog.hh ParameterSweep.hh \
-           BoundaryConditionDialog.hh BoundaryConditions.hh \
+           BoundaryConditionDialog.hh BoundaryConditions.hh SparseMatrices.hh \
            cl-helper.h
 
 

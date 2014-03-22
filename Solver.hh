@@ -16,6 +16,8 @@
 #include <cassert>
 #include <stdexcept>
 #include <string>
+#include <memory>
+#include "SparseMatrices.hh"
 #include "Fields.hh"
 #include "GlobalTypes.hh"
 
@@ -104,7 +106,6 @@ class Solver {
 };
 
 #include <Eigen/Sparse>
-#include <Eigen/UmfPackSupport>
 template<typename Real>
 class EigenSolver : public virtual Solver<Real>
 {
@@ -176,15 +177,9 @@ public:
         S.makeCompressed();
         m_S_tr = S.transpose();
 
-        m_Cs.resize(Cs.m, Cs.n);
-        m_Cs.setFromTriplets(Cs.nz.begin(), Cs.nz.end());
-        m_Cs.makeCompressed();
-        m_Cs_factors.compute(m_Cs);
-
-        if (m_Cs_factors.info() != Eigen::Success) {
-            throw std::runtime_error(
-                    std::string("UMFPack Factorization Failed"));
-        }
+        m_Cs.setFromTMatrix(Cs);
+        m_Cs_factors =
+            std::shared_ptr<UmfpackFactorizer>(new UmfpackFactorizer(m_Cs));
 
         size_t pSize = A.n;
 
@@ -262,9 +257,17 @@ public:
     }
 
     DVector applyCsInverse(const DVector &b) const {
-        DVector result = m_Cs_factors.solve(b);
-        if (m_Cs_factors.info() != Eigen::Success)
-            throw std::runtime_error("Solve error");
+        std::vector<double> b_vec(b.rows());
+        for (size_t i = 0; i < b_vec.size(); ++i)
+            b_vec[i] = b[i];
+
+        std::vector<double> x;
+        m_Cs_factors->solve(b_vec, x);
+
+        DVector result(x.size());
+        for (size_t i = 0; i < x.size(); ++i)
+            result[i] = x[i];
+
         return result;
     }
 
@@ -317,8 +320,8 @@ protected:
     DVector m_linprog_beq; // , m_linprog_b;
     // Note: must be kept around because UmfPackLU's solve accesses the
     // original matrix for iterative refinement.
-    SparseMatrix m_Cs;
-    Eigen::UmfPackLU<SparseMatrix> m_Cs_factors;
+    SuiteSparseMatrix m_Cs;
+    std::shared_ptr<UmfpackFactorizer> m_Cs_factors;
 
     bool m_dumpMatrices;
 };
