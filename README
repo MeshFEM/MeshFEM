@@ -36,3 +36,16 @@ NumElements NumNodes NumBoundary    (not strictly needed because we have
 NumFields (NF)
 NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
 *  {    FieldData
+
+================================================================================
+Running on the HPC cluster.
+================================================================================
+There are some oddities with the modules on the HPC cluster, but the following
+seems to work:
+Include in .bash_profile:
+    module load eigen/3.0.5
+    module load suitesparse/intel/3.6.1
+    module load gcc/4.7.3 
+    module load intel/11.1.046 
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/usr/lib
+$ make -f MakefileBowery

@@ -18,7 +18,14 @@
 #include <algorithm>
 #include <string>
 #include <stdexcept>
+
+extern "C" {
 #include <umfpack.h>
+}
+
+#ifndef SuiteSparse_long
+#define SuiteSparse_long UF_long
+#endif
 
 template<typename Real>
 struct Triplet
