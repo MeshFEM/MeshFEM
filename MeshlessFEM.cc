@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <string>
 #include <queue>
 #include "MeshlessFEM.hh"
 #include "ResultsCollector.hh"
@@ -1039,7 +1040,7 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
                 RPtr r(new Result(elementGrid(),
                                   Result::PER_ELEM, m_modalStressNorms[i],
                                   Result::PER_NODE, mode(i)));
-                rc->setResult(appendToString("Modes:Mode ", i), r);
+                rc->setResult(string("Modes:Mode ") + to_string(i), r);
             }
         }
     }
@@ -1237,7 +1238,7 @@ int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
             typedef typename RC::RPtr RPtr;
             RPtr r(new Result(grid, Result::PER_ELEM,
                               m_weakRegionStressNorms[i]));
-            rc->setResult(appendToString("Weak Regions:Region ", i), r);
+            rc->setResult(string("Weak Regions:Region ") + to_string(i), r);
         }
     }
 
@@ -1294,7 +1295,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
 
             if (rc != NULL) {
                 RPtr r(new Result(elemGrid, Result::PER_BDRY, pressures));
-                string regionName = appendToString("Weak Regions:Region ", i);
+                string regionName = string("Weak Regions:Region ") + to_string(i);
                 string pmName;
                 if (m_plusMinusObjective)
                     pmName = (pass == 0) ? " (+)" : " (-)";

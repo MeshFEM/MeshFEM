@@ -1,8 +1,8 @@
 INCLUDES=-I/home/jpanetta/usr/include -I/usr/include/suitesparse
 LIBS=-L/home/jpanetta/usr/lib -L/usr/lib64 -lboost_program_options -lboost_filesystem -lboost_system \
 	-lumfpack -static-libstdc++
-OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o
-SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc
+OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
+SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
 CXX=g++48
 CC=gcc48

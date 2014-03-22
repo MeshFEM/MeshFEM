@@ -1,5 +1,6 @@
 Implement:
-*** MSH writer
+*** Remove dependence on Eigen's UmfpackSupport
+        (Will allow larger matrices, and hopefully avoid linking error on Bowery)
 *** 3D Meshfree FEM
 
 *** Implement field sampler (place point in FEMView, samples from nearest point)

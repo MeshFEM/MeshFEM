@@ -261,18 +261,20 @@ public:
         throw std::runtime_error("Optimizer unimplemented!");
     }
 
+    DVector applyCsInverse(const DVector &b) const {
+        DVector result = m_Cs_factors.solve(b);
+        if (m_Cs_factors.info() != Eigen::Success)
+            throw std::runtime_error("Solve error");
+        return result;
+    }
+
     // Simulate the application of given pressures
     virtual bool simulate(const SField &p, VField &u) {
         DVector p_vec(p.domainSize());
         for (size_t i = 0; i < p.domainSize(); ++i)
             p_vec[i] = p[i];
 
-        DVector u_vec = m_S_tr * m_Cs_factors.solve(m_SFNA * p_vec);
-        if (m_Cs_factors.info() != Eigen::Success) {
-            std::cout << "Solve error" << std::endl;
-            return false;
-        }
-
+        DVector u_vec = m_S_tr * applyCsInverse(m_SFNA * p_vec);
         u = VField(u_vec);
 
         return true;
@@ -280,14 +282,9 @@ public:
 
     // Simulate the application of given forces
     virtual bool simulate(const VField &f, VField &u) {
-        DVector u_vec = m_S_tr * m_Cs_factors.solve(m_SF *
+        DVector u_vec = m_S_tr * applyCsInverse(m_SF *
             Eigen::Map<const DVector>(f.data().data(),
                                       f.dim() * f.domainSize()));
-
-        if (m_Cs_factors.info() != Eigen::Success) {
-            std::cout << "Solve error" << std::endl;
-            return false;
-        }
 
         u = VField(u_vec);
 
@@ -628,8 +625,6 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
         using EigenSolver<Real>::m_SF;
         using EigenSolver<Real>::m_linprog_Aeq;
         using EigenSolver<Real>::m_linprog_beq;
-        using EigenSolver<Real>::m_Cs;
-        using EigenSolver<Real>::m_Cs_factors;
         using EigenSolver<Real>::m_dumpMatrices;
 };
 
@@ -717,11 +712,8 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
         // Run the actual weakness analysis
         virtual bool optimizeObjective(const DVector &w, SField &p)
         {
-            Eigen::VectorXd f = m_SFNA_tr * m_Cs_factors.solve(m_VDBSt_tr * w);
-            if (m_Cs_factors.info() != Eigen::Success) {
-                std::cout << "Solve error" << std::endl;
-                return false;
-            }
+            Eigen::VectorXd f = m_SFNA_tr *
+                EigenSolver<Real>::applyCsInverse(m_VDBSt_tr * w);
 
             int error;
 
@@ -750,7 +742,6 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
 protected:
         using MatlabEigenSolver<Real>::m_SFNA_tr;
         using MatlabEigenSolver<Real>::m_VDBSt_tr;
-        using MatlabEigenSolver<Real>::m_Cs_factors;
         using MatlabEigenSolver<Real>::m_linprog_Aeq;
         using MatlabEigenSolver<Real>::m_linprog_beq;
 

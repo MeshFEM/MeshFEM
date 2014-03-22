@@ -42,7 +42,7 @@ public:
             assert(f.domainSize() == m_grid.numNodes());
             sectionHeader = "NodeData";
         }
-        int dim = f.dim();
+        size_t dim = f.dim();
         // 2-vectors are padded to 3-vectors for GMSH compatibility.
         if (dim == 2) dim = 3; 
         m_outStream << '$' << sectionHeader << std::endl

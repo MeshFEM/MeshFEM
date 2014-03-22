@@ -850,7 +850,7 @@ public:
 
     // Laminates are technically infinite, so it is impossible to generate a
     // finite number of boundary points... better use marching squares!
-    std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
+    std::vector<_BoundaryPoint> boundaryPoints(Real /* pointSpacing */) const {
         std::vector<_BoundaryPoint> bndPts;
         return bndPts;
     }
