@@ -43,21 +43,24 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
-        ("modelFile", po::value<string>(), "input model (CSG) file")
-        ("bcFile", po::value<string>(), "boundary conditions file")
+        ("modelFile",  po::value<string>(), "input model (CSG) file")
+        ("bcFile",     po::value<string>(), "boundary conditions file")
         ("outputFile", po::value<string>(), "output results file")
         ;
 
     po::positional_options_description p;
-    p.add("modelFile", 1);
-    p.add("bcFile", 1);
-    p.add("outputFile", 1);
+    p.add("modelFile",   1);
+    p.add("bcFile",      1);
+    p.add("outputFile",  1);
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("settings", po::value<string>(), "settings file")
-        ("msh", po::value<string>(), ".msh output")
-        ("dumpMatrices", "Dump matrices for debugging");
+        ("settings",      po::value<string>(), "settings file")
+        ("msh",           po::value<string>(), ".msh output")
+        ("dumpMatrices",                       "Dump matrices for debugging")
+        ("settingsName",  po::value<string>(), "settings name")
+        ("modelName",     po::value<string>(), "model name")
+        ;
     visible_opts.add(analysis_opts);
 
     po::options_description cli_opts;
@@ -109,6 +112,9 @@ int main(int argc, const char *argv[])
         }
     }
 
+    if (vm.count("settingsName"))
+        settingsName = vm["settingsName"].as<string>();
+
     bool dumpMatrices = vm.count("dumpMatrices");
 
 #ifdef HAS_MATLAB
@@ -122,6 +128,9 @@ int main(int argc, const char *argv[])
     string modelPath = vm["modelFile"].as<string>();
     boost::filesystem::path mpath(modelPath);
     string modelName = boost::filesystem::basename(mpath);
+    
+    if (vm.count("modelName"))
+        modelName = vm["modelName"].as<string>();
 
     parseCSGFile(modelPath.c_str(), csgTree);
     MeshlessFEM_t fem(csgTree, settings, solvers);

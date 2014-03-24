@@ -117,7 +117,7 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
 }
 
 template<typename Vector>
-void parseCSGFile(const char *path, CSGTree<Vector> &csgTree)
+void parseCSGFile(const std::string &path, CSGTree<Vector> &csgTree)
 {
     boost::property_tree::ptree pt;
     read_json(path, pt);
@@ -184,7 +184,7 @@ void writeNode(std::ofstream &os, int indentLevel,
 }
 
 template<typename Vector>
-void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree)
+void writeCSGFile(const std::string &path, const CSGTree<Vector> &csgTree)
 {
     std::ofstream os(path);
     if (!os.is_open())
@@ -208,7 +208,7 @@ void writeCSGFile(std::ofstream &os, const CSGTree<Vector> &csgTree)
 ////////////////////////////////////////////////////////////////////////////////
 // Template instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template void parseCSGFile<Vector>(const char *path, CSGTree<Vector> &csgTree);
+template void parseCSGFile<Vector>(const std::string &path, CSGTree<Vector> &csgTree);
 template void parseCSGFile<Vector>(std::istream &is, CSGTree<Vector> &csgTree);
-template void writeCSGFile<Vector>(const char *path, const CSGTree<Vector> &csgTree);
+template void writeCSGFile<Vector>(const std::string &path, const CSGTree<Vector> &csgTree);
 template void writeCSGFile<Vector>(std::ofstream &os, const CSGTree<Vector> &csgTree);

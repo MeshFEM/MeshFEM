@@ -17,18 +17,19 @@
 #define CSGFILE_HH
 
 #include <iosfwd>
+#include <string>
 
 template<typename Vector>
 class CSGTree;
 
 template<typename Vector>
-void parseCSGFile(const char *path, CSGTree<Vector> &csgTree);
+void parseCSGFile(const std::string &path, CSGTree<Vector> &csgTree);
 
 template<typename Vector>
 void parseCSGFile(std::istream &is, CSGTree<Vector> &csgTree);
 
 template<typename Vector>
-void writeCSGFile(const char *path, const CSGTree<Vector> &csgTree);
+void writeCSGFile(const std::string &path, const CSGTree<Vector> &csgTree);
 
 template<typename Vector>
 void writeCSGFile(std::ofstream &os, const CSGTree<Vector> &csgTree);

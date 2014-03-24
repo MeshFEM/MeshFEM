@@ -145,7 +145,7 @@ void CSGWindowController::saveCSG()
             "Text files (*.csg)");
     if (fileName.length() > 0) {
         try {
-            writeCSGFile(fileName.toLatin1(), *m_csgTree);
+            writeCSGFile(fileName.toStdString(), *m_csgTree);
         }
         catch (std::exception &e)
         {
@@ -168,7 +168,7 @@ void CSGWindowController::loadCSG(QString path)
         m_csgTreeModel->csgTreeAboutToUpdate();
 
         try {
-            parseCSGFile(path.toLatin1(), *m_csgTree);
+            parseCSGFile(path.toStdString(), *m_csgTree);
             QFileInfo fi(path);
             string modelName = fi.completeBaseName().toStdString();
             if (m_modelName != modelName) {
@@ -779,11 +779,12 @@ void CSGWindowController::runSimulationSweep() {
             }
             else {
                 // Save frame inputs
-                QString baseName = dir + "/" + QString::number(frame); 
-                writeCSGFile((baseName + ".csg").toLatin1(), *m_csgTree);
-                ofstream infoFile((baseName + ".txt").toLatin1());
+                string baseName = dir.toStdString() + "/" + to_string(frame); 
+                writeCSGFile(baseName + ".csg", *m_csgTree);
+                ofstream infoFile(baseName + ".txt");
                 infoFile << modelName << endl << settingsName << endl;
-                // settings.write((baseName + ".settings").toLatin1());
+                ofstream settingsFile(baseName + ".cfg");
+                settings.writeOptions(settingsFile);
             }
 
             ++frame;
