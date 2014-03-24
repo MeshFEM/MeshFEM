@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <cassert>
+#include <list>
 
 #include <sys/time.h>
 
@@ -121,6 +122,8 @@ public:
         if (name != currentName) {
             std::cerr << "ERROR: sections must be stopped in the reverse of "
                          "the order they were started." << std::endl;
+            std::cerr << "(Expected " << currentName << ", but got " << name
+                      << ")" << std::endl;
         }
 
         m_sections.at(name).stop();
@@ -157,8 +160,6 @@ public:
 
         os << "Full time\t" << m_sections.at("").elapsed() << std::endl;
     }
-
 };
-
 
 #endif // TIMER_HH

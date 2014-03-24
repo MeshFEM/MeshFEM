@@ -20,6 +20,7 @@
 #include "SparseMatrices.hh"
 #include "Fields.hh"
 #include "GlobalTypes.hh"
+#include "Timer.hh"
 
 // Numerically robust quadratic formula implementation (avoids cancellation)
 template<typename Real>
@@ -92,7 +93,8 @@ class Solver {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>()) = 0;
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                Timer *timer = NULL) = 0;
 
         // Run the actual weakness analysis
         virtual bool optimizeObjective(const DVector &w, SField &p) = 0;
@@ -128,8 +130,10 @@ public:
             const TMatrix &R, const TMatrix &N, const TMatrix &A,
             const TMatrix &B, const TMatrix &VD,
             Real F_tot, Real p_max,
-            const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
+            const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+            Timer *timer = NULL)
     {
+        if (timer) timer->startSection("configureAnalysis");
         // Build C_s and S matrices for simulation. C_s is the matrix for Ku = f
         // with extra rows/columns to implement the Lagrange-multipliers enforcing
         // either the no rigid motion or the Dirichlet constraints. S pads RHS
@@ -137,6 +141,7 @@ public:
         // constrained system, and S' filters out the Lagrange multipliers from a
         // solution:
         //    S' (C_s \ S f) = S' [u; lambda] = u
+        if (timer) timer->start("Build Cs");
         TMatrix T_S, Cs;
         if (dirichletIndices.size() == 0) {
             // Since we don't have Dirichlet constraints, we need to apply
@@ -168,18 +173,22 @@ public:
             Cs.append(T_DC, TMatrix::APPEND_BELOW, true, false);
         }
 
-        if (m_dumpMatrices) Cs.dump("Cs.txt");
-        if (m_dumpMatrices) F.dump("F.txt");
-        if (m_dumpMatrices) B.dump("B.txt");
-
         SparseMatrix S(T_S.m, T_S.n);
         S.setFromTriplets(T_S.nz.begin(), T_S.nz.end());
         S.makeCompressed();
         m_S_tr = S.transpose();
 
         m_Cs.setFromTMatrix(Cs);
+
+        if (timer) timer->stop("Build Cs");
+        if (timer) timer->start("Factorize Cs");
         m_Cs_factors =
             std::shared_ptr<UmfpackFactorizer>(new UmfpackFactorizer(m_Cs));
+        if (timer) timer->stop("Factorize Cs");
+
+        if (m_dumpMatrices) Cs.dump("Cs.txt");
+        if (m_dumpMatrices) F.dump("F.txt");
+        if (m_dumpMatrices) B.dump("B.txt");
 
         size_t pSize = A.n;
 
@@ -202,6 +211,7 @@ public:
         m_linprog_beq[3] = F_tot;
 
         m_linprog_Aeq.resize(4, pSize);
+        if (timer) timer->start("RFNA to Eigen");
         SparseMatrix R_mat(R.m, R.n), F_mat(F.m, F.n), N_mat(N.m, N.n),
                      A_mat(A.m, A.n);
         R_mat.setFromTriplets(R.nz.begin(), R.nz.end());
@@ -210,6 +220,8 @@ public:
         A_mat.setFromTriplets(A.nz.begin(), A.nz.end());
         
         SparseMatrix RFNA = (((R_mat * F_mat) * N_mat) * A_mat);
+        if (timer) timer->stop("RFNA to Eigen");
+
         TMatrix T_linprog_Aeq(4, pSize);
         T_linprog_Aeq.reserve(RFNA.nonZeros() + pSize);
         for (int k = 0; k < RFNA.outerSize(); ++k) {
@@ -226,17 +238,27 @@ public:
                                       T_linprog_Aeq.nz.end());
         m_linprog_Aeq.makeCompressed();
 
+        if (timer) timer->start("VDBS_tr to Eigen");
         SparseMatrix B_mat(B.m, B.n), VD_mat(VD.m, VD.n);
         B_mat.setFromTriplets(B.nz.begin(), B.nz.end());
         VD_mat.setFromTriplets(VD.nz.begin(), VD.nz.end());
         m_VDBSt_tr = (VD_mat * B_mat * m_S_tr).transpose();
+        if (timer) timer->stop("VDBS_tr to Eigen");
+
+
+        if (timer) timer->start("SFNA Multiply Eigen");
         m_SF = S * F_mat;
         m_SFNA = m_SF * N_mat * A_mat;
         m_SFNA_tr = m_SFNA.transpose();
+        if (timer) timer->stop("SFNA Multiply Eigen");
 
+        if (timer) timer->start("Matrix compress");
         m_VDBSt_tr.makeCompressed();
         m_SFNA.makeCompressed();
         m_SFNA_tr.makeCompressed();
+        if (timer) timer->stop("Matrix compress");
+
+        if (timer) timer->stopSection("configureAnalysis");
 
         return true;
     }
@@ -438,7 +460,8 @@ class MatlabSolver : public virtual Solver<Real> {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &/* dirichletIndices */ = std::vector<size_t>())
+                const std::vector<size_t> &/* dirichletIndices */ = std::vector<size_t>(),
+                Timer *timer = NULL)
         {
             m_Kn = K.n;
             m_np = A.n;
@@ -576,10 +599,11 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                Timer *timer = NULL)
         {
             return EigenSolver<Real>::configureAnalysis(K, F, R, N, A, B, VD,
-                    F_tot, p_max, dirichletIndices);
+                    F_tot, p_max, dirichletIndices, timer);
         }
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
@@ -664,10 +688,11 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>())
+                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                Timer *timer = NULL)
         {
             bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
-                    N, A, B, VD, F_tot, p_max, dirichletIndices);
+                    N, A, B, VD, F_tot, p_max, dirichletIndices, timer);
 
             m_pSize = A.n;
             

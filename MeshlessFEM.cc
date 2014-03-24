@@ -1050,15 +1050,22 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
 
 template<typename Model>
 bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
+    if (timer) timer->startSection("Simulation");
     TMatrix K, F, R, N, A;
+    if (timer) timer->start("Stiffness Matrix Assembly");
     m_assembleStiffnessMatrix(K);
+    if (timer) timer->stop("Stiffness Matrix Assembly");
+    if (timer) timer->start("Boundary Load Matrix Assembly");
     m_assembleLoadMatrix(F);
+    if (timer) timer->stop("Boundary Load Matrix Assembly");
     m_assembleRigidModeMatrix(R);
     m_assembleNMatrix(N);
     m_assembleAMatrix(A);
     // Note: the following aren't actually needed for simulation
     TMatrix B, VD;
+    if (timer) timer->start("Strain Matrix Assembly");
     m_assembleBMatrix(B);
+    if (timer) timer->stop("Strain Matrix Assembly");
     m_assembleVDMatrix(VD);
     Solver<Real> *solver = m_solvers.solver();
 
@@ -1073,13 +1080,18 @@ bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
     }
 
     solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
-                              m_pointwisePressureBound, dirichletIndices);
+                              m_pointwisePressureBound, dirichletIndices, timer);
+
     VField forces;
     m_boundaryConditions.getForces(m_boundaryPoints, forces);
+    if (timer) timer->start("solve");
     solver->simulate(forces, m_simulatedDisplacement);
+    if (timer) timer->stop("solve");
 
+    if (timer) timer->start("compute stress");
     m_simulatedStressTensors = elementStressTensors(m_simulatedDisplacement);
     m_simulatedStressNorms = computeStressTensorNorms(m_simulatedStressTensors);
+    if (timer) timer->stop("compute stress");
 
     typedef typename RC::Result Result;
     typedef typename RC::RPtr RPtr;
@@ -1126,6 +1138,8 @@ bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
     //     mshOut.addField("sim stress norms", m_simulatedStressNorms,
     //                     MSHWriter<ElementGrid>::PER_ELEMENT);
     // }
+
+    if (timer) timer->stopSection("Simulation");
 
     return true;
 }

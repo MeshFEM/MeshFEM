@@ -159,9 +159,7 @@ int main(int argc, const char *argv[])
     if (timer) timer->stop("Prepare Results Collector");
     if (timer) timer->stopSection("Setup");
 
-    if (timer) timer->startSection("Simulation");
     fem.simulate(&rc, timer);
-    if (timer) timer->stopSection("Simulation");
 
     if (timer) timer->startSection("Output");
     if (timer) timer->start(".res");
