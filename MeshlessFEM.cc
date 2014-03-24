@@ -1049,7 +1049,7 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::simulate(RC *rc) {
+bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
     TMatrix K, F, R, N, A;
     m_assembleStiffnessMatrix(K);
     m_assembleLoadMatrix(F);

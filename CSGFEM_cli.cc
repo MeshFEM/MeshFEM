@@ -23,6 +23,7 @@
 #include "LazyMatlabInterfaces.hh"
 #endif
 #include "MSHWriter.hh"
+#include "Timer.hh"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -60,6 +61,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("dumpMatrices",                       "Dump matrices for debugging")
         ("settingsName",  po::value<string>(), "settings name")
         ("modelName",     po::value<string>(), "model name")
+        ("time",                               "report timings")
         ;
     visible_opts.add(analysis_opts);
 
@@ -128,31 +130,57 @@ int main(int argc, const char *argv[])
     string modelPath = vm["modelFile"].as<string>();
     boost::filesystem::path mpath(modelPath);
     string modelName = boost::filesystem::basename(mpath);
+
+    Timer *timer = NULL;
+    if (vm.count("time"))
+        timer = new Timer();
     
     if (vm.count("modelName"))
         modelName = vm["modelName"].as<string>();
 
+    if (timer) timer->startSection("Setup");
+    if (timer) timer->start("parseCSGFile");
     parseCSGFile(modelPath.c_str(), csgTree);
-    MeshlessFEM_t fem(csgTree, settings, solvers);
+    if (timer) timer->stop("parseCSGFile");
 
+    if (timer) timer->start("FEM Grid");
+    MeshlessFEM_t fem(csgTree, settings, solvers);
+    if (timer) timer->stop("FEM Grid");
+
+    if (timer) timer->start("readConditions");
     string bcPath = vm["bcFile"].as<string>();
     fem.boundaryConditions().readConditions(bcPath);
+    if (timer) timer->stop("readConditions");
 
+    if (timer) timer->start("Prepare Results Collector");
     ResultsCollector_t rc;
     rc.addSettings(settingsName, settings);
     rc.addModel(modelName, csgTree, csgTree.boundingBox());
+    if (timer) timer->stop("Prepare Results Collector");
+    if (timer) timer->stopSection("Setup");
 
-    fem.simulate(&rc);
+    if (timer) timer->startSection("Simulation");
+    fem.simulate(&rc, timer);
+    if (timer) timer->stopSection("Simulation");
+
+    if (timer) timer->startSection("Output");
+    if (timer) timer->start(".res");
     string lastResultPath = rc.lastResultPath();
     string outPath = vm["outputFile"].as<string>();
     rc.writeResult(lastResultPath, outPath);
+    if (timer) timer->stop(".res");
 
     if (vm.count("msh")) {
+        if (timer) timer->start(".msh");
         string path = vm["msh"].as<string>();
         MSHWriter<MeshlessFEM_t::ElementGrid> writer(path, fem.elementGrid());
         ResultsCollector_t::ConstRPtr r = rc.getResultWithPath(lastResultPath);
         r->addToMSH(writer, "Simulation");
+        if (timer) timer->stop(".msh");
     }
+
+    if (timer) timer->stopSection("Output");
+    if (timer) timer->report(cout);
 
     return 0;
 }

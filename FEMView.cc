@@ -30,8 +30,6 @@
 #include "Flipbook.hh"
 #include "BoundaryConditionDialog.hh"
 
-// #include "timing.h"
-
 #define MAX_NODES 256
 #define MAX_PRIMITIVES 128
 typedef struct _CSGPrimitiveData {
@@ -371,7 +369,6 @@ void FEMView2D::m_clRenderCSGNode(CSGNode *node, cl_mem texBuf,
                                   const QColor &fg)
 {
     cl_int err;
-    // timestamp_type start, end;
     CALL_CL_GUARDED(clEnqueueAcquireGLObjects,
             (m_clQueue, 1, &texBuf, 0, NULL, NULL));
 

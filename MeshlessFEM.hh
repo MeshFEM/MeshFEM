@@ -26,6 +26,7 @@
 #include "utils.hh"
 #include "BoundaryConditions.hh"
 #include "SparseMatrices.hh"
+#include "Timer.hh"
 
 #include <cassert>
 #include <vector>
@@ -310,7 +311,7 @@ public:
     //                 radius will be r * cellSize
     void buildBoundaryFunctions(Real r = 1.0);
 
-    bool simulate(RC *rc = NULL);
+    bool simulate(RC *rc = NULL, Timer *timer = NULL);
 
     int weakRegionExtraction(RC *rc = NULL);
 
