@@ -201,8 +201,6 @@ public:
     getResultWithPath(const std::string &path) const {
         std::vector<std::string> nameComponents;
         boost::split(nameComponents, path, boost::is_any_of(":"));
-        for (std::string &str : nameComponents)
-            boost::trim(str);
         if (nameComponents.size() < 3) {
             throw std::runtime_error(std::string("Invalid path: ") + path);
         }
@@ -415,8 +413,6 @@ public:
         for (const std::string &path : paths) {
             std::vector<std::string> nameComponents;
             boost::split(nameComponents, path, boost::is_any_of(":"));
-            for (std::string &str : nameComponents)
-                boost::trim(str);
 
             std::runtime_error e_invalid(std::string("Removal path invalid!"));
             const std::string &mname = nameComponents[0];

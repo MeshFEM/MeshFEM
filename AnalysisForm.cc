@@ -38,8 +38,8 @@ AnalysisForm::AnalysisForm(AnalysisSettings &settings,
     g_borderWidthStepper = new QSpinBox();
     g_nxStepper->setMinimum(1);
     g_nyStepper->setMinimum(1);
-    g_nxStepper->setMaximum(999);
-    g_nyStepper->setMaximum(999);
+    g_nxStepper->setMaximum(9999);
+    g_nyStepper->setMaximum(9999);
     g_gaussQuadratureCheck = new QCheckBox();
     g_quadraturePointsStepper = new QuadraturePointsSpinBox();
     g_cellOverlapStepper = new QDoubleSpinBox();
