@@ -114,7 +114,7 @@ public:
                     << m_results->getResultWithPath(path(f))->getMinVectorMagnitude(Result::PER_NODE) << "'";
 
             AnalysisSettings settings;
-            m_results->getSettings(getSettingsPathComponent(path(f)), settings);
+            m_results->getSettings(settings, getSettingsPathComponent(path(f)));
 
             for (size_t s = 0; s < settingNames.size(); ++s) {
                 std::string name = escapedString(settingNames[s]);

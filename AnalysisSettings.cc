@@ -58,7 +58,17 @@ bool AnalysisSettings::operator==(const AnalysisSettings &rhs) const {
         if (!(*(it->second) == *(rpair.second)))
             return false;
     }
+
     return true;
+}
+
+AnalysisSettings &AnalysisSettings::operator=(const AnalysisSettings &rhs) {
+    m_values.clear();
+    for (const auto &rvalue : rhs.m_values) {
+        set(rvalue.first, *rvalue.second);
+    }
+
+    return *this;
 }
 
 AnalysisSettings::Type

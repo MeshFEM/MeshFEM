@@ -1,18 +1,24 @@
-INCLUDES=-I/opt/local/include -I/opt/local/include/eigen3 -I/Applications/MATLAB_R2013a.app/extern/include/ \
-	-I/Library/gurobi550/mac64/include/
+INCLUDES=-I/opt/local/include -I/opt/local/include/eigen3
 LIBS=-L/opt/local/lib -lboost_program_options-mt -lboost_filesystem-mt -lboost_system-mt \
 	-lumfpack -lSuiteSparse -framework Accelerate
+RENDER_LIBS=-lOSmesa -lpng
 # -L/Library/gurobi550/mac64/lib/ -lgurobi55
 # -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
-OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
+RENDER_OBJS=render_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o
+CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
 CXX=clang++
 CC=clang
 CPPFLAGS=-std=c++11 -stdlib=libc++ -O2 $(INCLUDES)
 
-CSGFEM_cli: $(OBJS)
-	clang++ $(CPPFLAGS) $(LIBS) $(OBJS) -o CSGFEM_cli
+all: CSGFEM_cli render_cli
+
+CSGFEM_cli: $(CSGFEM_OBJS)
+	clang++ $(CPPFLAGS) $(LIBS) $(CSGFEM_OBJS) -o $@
+
+render_cli: $(RENDER_OBJS)
+	clang++ $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $(RENDER_OBJS) -o $@
 
 %.o: %.cpp Makefile
 	$(CXX) -c $(CPPFLAGS) $< -o $@
@@ -25,7 +31,7 @@ depend:
 	makedepend -Y -f Makefile.depend -- $(CPPFLAGS) -- $(SOURCES) &> /dev/null
 
 clean:
-	rm -f $(OBJS) *.bak CSGFEM_cli
+	rm -f $(CSGFEM_OBJS) *.bak CSGFEM_cli
 
 
 .PHONY: clean depend

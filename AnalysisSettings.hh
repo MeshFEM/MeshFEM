@@ -89,6 +89,10 @@ public:
     // Memberwise comparator
     bool operator==(const AnalysisSettings &rhs) const;
 
+    // Memberwise assignment
+    AnalysisSettings &operator=(const AnalysisSettings &rhs);
+    
+
     Type type(const std::string &name) const;
 
     const Variant &get(const std::string &name) const;
