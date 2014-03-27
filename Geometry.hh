@@ -13,12 +13,16 @@
 
 #include <vector>
 #include <iostream>
+#include <ios>
 #include <string>
 #include <sstream>
 #include <cmath>
 
-template<typename Vector>
+#include <Eigen/Dense>
+
+template<typename _Vector>
 struct BBox {
+    typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
     BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
@@ -125,6 +129,71 @@ std::ostream &operator<<(std::ostream &os, const BBox<T> &b) {
     return os;
 }
 
+template<typename Real, int Dim>
+inline std::istream &operator>>(std::istream &is, Eigen::Matrix<Real, Dim, 1> &v) {
+    typedef Eigen::Matrix<Real, Dim, 1> Vector;
+    char c;
+    is >> std::skipws >> c;
+    if (c != '(') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
+
+    Vector vin;
+    for (int i = 0; i < Dim - 1; ++i) {
+        is >> vin[i];
+        is >> std::skipws >> c;
+        if (c != ',') {
+            is.setstate(std::ios::failbit);
+            return is;
+        }
+    }
+    is >> vin[Dim - 1];
+
+    is >> std::skipws >> c;
+    if (c != ')') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
+
+    if (is)
+        v = vin;
+
+    return is;
+}
+
+// Parse a box from an iostream in the form [min corner, max corner]
+template<typename T>
+std::istream &operator>>(std::istream &is, BBox<T> &b) {
+    char c;
+    is >> std::skipws >> c;
+    if (c != '[') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
+
+    typename BBox<T>::Vector minCorner, maxCorner;
+    is >> minCorner;
+    is >> std::skipws >> c;
+    if (c != ',') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
+    is >> maxCorner;
+    is >> std::skipws >> c;
+    if (c != ']') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
+
+    // If things worked out, take min and max corner
+    if (is) {
+        b.minCorner = minCorner;
+        b.maxCorner = maxCorner;
+    }
+
+    return is;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Fast 2D rotation class. This is useful because Eigen's Rotation2D was

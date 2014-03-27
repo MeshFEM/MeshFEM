@@ -20,6 +20,8 @@
 #include <string> // shoddy png++ needs this... (but so do we)
 #include <png++/png.hpp>
 #include <stdexcept>
+#include <iostream>
+#include <sstream>
 #include <boost/program_options.hpp>
 
 #include "GlobalTypes.hh"
@@ -52,7 +54,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("frame",  po::value<string>()->default_value("[-1, -1, 1, 1]"), "view frame ([minx, miny, maxx, maxy])")
+        ("frame",  po::value<string>()->default_value("[(-1, -1), (1, 1)]"), "view frame ([minx, miny, maxx, maxy])")
         ("width",  po::value<int>()->default_value(1024), "output image width")
         ("height", po::value<int>()->default_value(768),  "output image height")
         ("out",    po::value<string>(),                   "output png path")
@@ -118,7 +120,14 @@ int main(int argc, const char *argv[])
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     double aspectRatio = ((double) width) / height;
-    BBox_t frame(Vector(-3.0, -3.0), Vector(3.0, 3.0));
+
+    BBox_t frame(Vector(-1.0, 1.0), Vector(-1.0, 1.0));
+    string frameString = vm["frame"].as<string>();
+    stringstream frameArgStream(frameString);
+    frameArgStream >> frame;
+    if (!frameArgStream)
+        cerr << "ERROR: Failed to parse frame " << frameString << endl;
+
     frame.expand(Vector(aspectRatio - 1.0, 0.0));
     glViewport(0, 0, width, height);
     glOrtho(frame.minCorner[0], frame.maxCorner[0],
