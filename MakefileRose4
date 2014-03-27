@@ -1,15 +1,22 @@
-INCLUDES=-I/home/jpanetta/usr/include -I/usr/include/suitesparse
-LIBS=-L/home/jpanetta/usr/lib -L/usr/lib64 -lboost_program_options -lboost_filesystem -lboost_system \
+INCLUDES=-I$(HOME)/usr/include -I/usr/include/suitesparse -I/usr/include/freetype2
+LIBS=-L$(HOME)/usr/lib -L/usr/lib64 -lboost_program_options -lboost_filesystem -lboost_system \
 	-lumfpack -static-libstdc++
-OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
+RENDER_LIBS=-lOSMesa -lpng -lftgl
+RENDER_OBJS=render_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o utils.o draw.o
+CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
 CXX=g++48
 CC=gcc48
-CPPFLAGS=-std=c++11 -O2 $(INCLUDES)
+CPPFLAGS=-std=c++11 -O2 $(INCLUDES) -DUSE_MESA
 
-CSGFEM_cli: $(OBJS)
-	$(CXX) $(CPPFLAGS) $(LIBS) $(OBJS) -o CSGFEM_cli
+all: CSGFEM_cli render_cli
+
+CSGFEM_cli: $(CSGFEM_OBJS)
+	$(CXX) $(CPPFLAGS) $(LIBS) $(CSGFEM_OBJS) -o $@
+
+render_cli: $(RENDER_OBJS)
+	$(CXX) $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $(RENDER_OBJS) -o $@
 
 %.o: %.cpp Makefile
 	$(CXX) -c $(CPPFLAGS) $< -o $@
@@ -23,7 +30,7 @@ depend:
 
 
 clean:
-	rm -f $(OBJS) *.bak CSGFEM_cli
+	rm -f $(OBJS) *.bak CSGFEM_cli render_cli
 
 .PHONY: clean depend
 

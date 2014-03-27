@@ -19,6 +19,7 @@
 
 #include <string> // shoddy png++ needs this... (but so do we)
 #include <png++/png.hpp>
+#include <stdexcept>
 #include <boost/program_options.hpp>
 
 #include "GlobalTypes.hh"
@@ -179,13 +180,21 @@ int main(int argc, const char *argv[])
 
     if (vm.count("key")) {
         FTGLBitmapFont font("fonts/Arial.ttf");
+
+        if (font.Error())
+            throw std::runtime_error("Failed to load font!");
+        font.FaceSize(12);
+
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
+        glLoadIdentity();
         glOrtho(0, width, 0, height, -1, 1);
+        glMatrixMode(GL_MODELVIEW);
         float colorBarWidth = 300;
         // Horizontally center colorbar
         float colorbarX = .5 * (width - colorBarWidth);
         drawColorbar(colorbarX, 5, colorBarWidth, 35, colorMap, font);
+        glMatrixMode(GL_PROJECTION);
         glPopMatrix();
         glMatrixMode(GL_MODELVIEW);
     }

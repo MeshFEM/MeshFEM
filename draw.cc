@@ -1,4 +1,4 @@
-#include "Draw.hh"
+#include "draw.hh"
 #include "GlobalTypes.hh"
 
 #ifdef USE_MESA
