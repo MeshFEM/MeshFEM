@@ -63,9 +63,10 @@ bool AnalysisSettings::operator==(const AnalysisSettings &rhs) const {
 }
 
 AnalysisSettings &AnalysisSettings::operator=(const AnalysisSettings &rhs) {
-    m_values.clear();
-    for (const auto &rvalue : rhs.m_values) {
-        set(rvalue.first, *rvalue.second);
+    if (&rhs != this) {
+        m_values.clear();
+        for (const auto &rvalue : rhs.m_values)
+            set(rvalue.first, *rvalue.second);
     }
 
     return *this;

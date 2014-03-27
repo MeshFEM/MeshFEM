@@ -95,6 +95,29 @@ public:
         configureWeaknessAnalysis(settings);
     }
 
+    // Construct MeshlessFEM fast using (cellOverlaps, model, bbox, settings)
+    MeshlessFEM(const std::vector<Real> &cellOverlaps, Model &model,
+            const BBox<Vector> &bbox, const AnalysisSettings &settings,
+            SolverLibrary<Real> &solvers)
+        : m_model(model), m_stiffnessCached(false), m_massCached(false),
+          m_displacementStrainCached(false), m_solvers(solvers)
+    {
+        m_quadrature = new Quadrature2D(settings.Int("quadraturePoints"),
+                                        (QuadratureMethod) settings.Enum("quadrature"));
+        m_elementGrid = new ElementGrid(settings.Int("Nx"), settings.Int("Ny"),
+                settings.Real("cellOverlapThreshold"), *m_quadrature, model, bbox,
+                settings.Int("borderWidth"), cellOverlaps);
+
+        m_selectedWeakRegion = -1L;
+        
+        configureElements(settings);
+        configureBoundaryPoints(settings);
+        configureMatrices(settings);
+        configureMaterial(settings);
+        configureModalAnalysis(settings);
+        configureWeaknessAnalysis(settings);
+    }
+
     void loadSettings(const AnalysisSettings &settings) {
         configureElements(settings);
         configureBoundaryPoints(settings);

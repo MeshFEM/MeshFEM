@@ -257,12 +257,9 @@ void FEMView2D::resizeGL(int width, int height)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    // Center m_width, m_height box
-    int hmargin = (height - m_height) / 2;
-    int wmargin = (width  -  m_width) / 2;
-    glOrtho(-wmargin, width - wmargin, -hmargin, height - hmargin, -1, 1);
-    m_screenTop = height - hmargin;
-    m_screenLeft = -wmargin;
+    glOrtho(0, width, 0, height, -1, 1);
+    m_screenTop = height;
+    m_screenLeft = 0;
     glMatrixMode(GL_MODELVIEW);
 }
 

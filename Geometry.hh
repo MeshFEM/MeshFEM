@@ -108,6 +108,24 @@ struct BBox {
     }
 };
 
+template<typename T>
+std::ostream &operator<<(std::ostream &os, const BBox<T> &b) {
+    if (T::RowsAtCompileTime == 2)  {
+        os << "[(" << b.minCorner[0] << ", " << b.minCorner[1] << "), "
+           <<  '(' << b.maxCorner[0] << ", " << b.maxCorner[1] << ")]";
+    }
+    else if (T::RowsAtCompileTime == 3) {
+        os << "[(" << b.minCorner[0] << ", " << b.minCorner[1] << ", " << b.minCorner[2] << "), "
+           <<  '(' << b.maxCorner[0] << ", " << b.maxCorner[1] << ", " << b.maxCorner[2] << ")]";
+    }
+    else {
+        assert(false);
+    }
+
+    return os;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Fast 2D rotation class. This is useful because Eigen's Rotation2D was
 //  killing performance (isInside tests in particular)
@@ -144,13 +162,6 @@ public:
 private:
     Real m_angle, m_cos, m_sin;
 };
-
-template<typename T>
-std::ostream &operator<<(std::ostream &os, const BBox<T> &b) {
-    os << "[(" << b.minCorner[0] << ", " << b.minCorner[1] << ") -> ("
-       << b.maxCorner[0] << ", " << b.maxCorner[1] << ")]";
-    return os;
-}
 
 template<typename Vector>
 struct Polygon {
