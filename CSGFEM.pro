@@ -52,7 +52,7 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
            MSHWriter.hh colors.hh ViewSettingsWidget.hh ViewSettings.hh \
-           CSGFile.hh SPHKernels.hh utils.hh \
+           CSGFile.hh SPHKernels.hh utils.hh draw.hh \
            ResultsCollector.hh ResultsWindow/ResultsWindow.hh \
            ResultsWindow/ResultsWindowController.hh \
            ResultsWindow/ResultTreeView.hh ResultsWindow/FlipbookDialog.hh \
@@ -66,7 +66,7 @@ SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            MeshlessFEM.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
-           ViewSettingsWidget.cc Geometry.cc CSGFile.cc utils.cc \
+           ViewSettingsWidget.cc Geometry.cc CSGFile.cc utils.cc draw.cc \
            ResultsWindow/ResultsWindow.cc ResultsWindow/ResultsWindowController.cc \
            ResultsWindow/FlipbookDialog.cc ParameterSweepDialog.cc \
            BoundaryConditionDialog.cc BoundaryConditions.cc \

@@ -29,6 +29,7 @@
 #include "ShaderCompiler.hh"
 #include "Flipbook.hh"
 #include "BoundaryConditionDialog.hh"
+#include "draw.hh"
 
 #define MAX_NODES 256
 #define MAX_PRIMITIVES 128
@@ -261,21 +262,6 @@ void FEMView2D::resizeGL(int width, int height)
     m_screenTop = height;
     m_screenLeft = 0;
     glMatrixMode(GL_MODELVIEW);
-}
-
-void drawQuad(float minx, float miny, float maxx, float maxy) {
-    glBegin(GL_QUADS);
-
-    glTexCoord2f(0, 0);
-    glVertex2f(minx, miny);
-    glTexCoord2f(1, 0);
-    glVertex2f(maxx, miny);
-    glTexCoord2f(1, 1);
-    glVertex2f(maxx, maxy);
-    glTexCoord2f(0, 1);
-    glVertex2f(minx, maxy);
-
-    glEnd();
 }
 
 struct CSGTreeFlattener {
@@ -841,7 +827,7 @@ void FEMView2D::draw()
         // Horizontally center colorbar
         float colorbarX = .5 * (m_width - colorBarWidth);
 
-        m_drawColorbar(colorbarX, 5, colorBarWidth, 35);
+        drawColorbar(colorbarX, 5, colorBarWidth, 35, m_scalarColorMap, m_font);
     }
 
     // Screenshot this bad boy
@@ -1130,66 +1116,6 @@ bool FEMView2D::m_drawElements()
 
     return false;
 }
-
-void FEMView2D::m_drawColorbar(float x, float y, float width, float height)
-{
-    // Draw background box
-    glColor4f(1.0f, 1.0f, 1.0f, .5f);
-    glBegin(GL_QUADS);
-        glVertex2f(x, y);
-        glVertex2f(x + width, y);
-        glVertex2f(x + width, y + height);
-        glVertex2f(x, y + height);
-    glEnd();
-    
-    std::stringstream ss;
-    ss << m_scalarColorMap.getRangeMin();
-    std::string rangeMin = ss.str();
-    ss.str("");
-    ss.clear();
-    ss << m_scalarColorMap.getRangeMax();
-    std::string rangeMax = ss.str();
-
-    FTBBox bbox = m_font.BBox(rangeMin.c_str());
-    float lowTextWidth  = bbox.Upper().X() - bbox.Lower().X();
-    float textHeight = bbox.Upper().Y() - bbox.Lower().Y();
-
-    bbox = m_font.BBox(rangeMax.c_str());
-    float highTextWidth = bbox.Upper().X() - bbox.Lower().X();
-
-    // Vertically center text within height.
-    // Horizontal margins on text, with colorbar filling the rest
-    float textMargin = 5;
-    float barWidth = width - 4 * textMargin - lowTextWidth - highTextWidth;
-    float barVMargin = 5;
-    float barHeight = height - 2 * barVMargin;
-    float textY = y + .5 * (height - textHeight);
-
-    // Note: glRasterPos2i must be used to apply glColor3;
-    glColor3f(0.0f, 0.0f, 0.0f);
-    glRasterPos2i(x + textMargin, textY);
-    m_font.Render(rangeMin.c_str());
-    glRasterPos2i(x + 3 * textMargin + lowTextWidth + barWidth, textY);
-    m_font.Render(rangeMax.c_str());
-    
-    float barX = x + 2 * textMargin + lowTextWidth;
-    float barY = y + barVMargin;
-    int numSegments = 100;
-    float segmentWidth = barWidth / numSegments;
-    glBegin(GL_QUADS);
-        for (int i = 0; i < numSegments; ++i) {
-            float segmentStart = barX + segmentWidth * i;
-            float segmentEnd = barX + segmentWidth * (i + 1);
-            float normalizedValue = i / ((float) numSegments);
-            glColor3fv(m_scalarColorMap.normalizedValueColor(normalizedValue));
-            glVertex2f(segmentStart, barY + barHeight);
-            glVertex2f(segmentStart, barY);
-            glVertex2f(segmentEnd  , barY);
-            glVertex2f(segmentEnd  , barY + barHeight);
-        }
-    glEnd();
-}
-
 
 void FEMView2D::paintGL()
 {

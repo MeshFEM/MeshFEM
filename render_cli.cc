@@ -26,6 +26,8 @@
 #include "ResultsCollector.hh"
 #include "MeshlessFEM.hh"
 #include "SolverLibrary.hh"
+#include "colors.hh"
+#include "draw.hh"
 
 namespace po = boost::program_options;
 using namespace std;
@@ -53,6 +55,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("width",  po::value<int>()->default_value(1024), "output image width")
         ("height", po::value<int>()->default_value(768),  "output image height")
         ("out",    po::value<string>(),                   "output png path")
+        ("key",                                           "draw colormap key")
         ;
 
     po::options_description cli_opts;
@@ -111,22 +114,31 @@ int main(int argc, const char *argv[])
     unsigned char *osmesaBuffer = new unsigned char[4 * width * height];
     OSMesaMakeCurrent(ctx, osmesaBuffer, GL_UNSIGNED_BYTE, width, height);
 
-    glMatrixMode(GL_PROJECTION_MATRIX);
+    glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     double aspectRatio = ((double) width) / height;
-    BBox_t frame(Vector(-10.0, -10.0), Vector(10.0, 10.0));
+    BBox_t frame(Vector(-3.0, -3.0), Vector(3.0, 3.0));
     frame.expand(Vector(aspectRatio - 1.0, 0.0));
     glViewport(0, 0, width, height);
     glOrtho(frame.minCorner[0], frame.maxCorner[0],
             frame.minCorner[1], frame.maxCorner[1],
             -1, 1);
-    std::cout << "Set frame to " << frame << std::endl;
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
     glClearColor(1.0, 1.0, 1.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
+
+    MeshlessFEM_t::SField stress = r->getScalarField(
+            ResultsCollector_t::Result::PER_ELEM);
+    MeshlessFEM_t::VField defo = r->getVectorField(
+            ResultsCollector_t::Result::PER_NODE);
+
+    bool hasDefo = defo.domainSize() == grid.numNodes();
+
+    ColorMap<RGBColorf, Scalar> colorMap(COLORMAP_JET, stress.min(),
+                    stress.max());
 
     glBegin(GL_TRIANGLES);
     for (size_t e = 0; e < grid.numElements(); ++e) {
@@ -136,11 +148,11 @@ int main(int argc, const char *argv[])
                         grid.nodePosition(corners[1]),
                         grid.nodePosition(corners[2]),
                         grid.nodePosition(corners[3]) };
-        // std::cout << "drawing quad ("
-        //     << "[" << p[0][0] << ", " << p[0][1] << "], "
-        //     << "[" << p[1][0] << ", " << p[1][1] << "], "
-        //     << "[" << p[2][0] << ", " << p[2][1] << "], "
-        //     << "[" << p[3][0] << ", " << p[3][1] << "])" << std::endl;
+        if (hasDefo) {
+            for (size_t i = 0; i < 4; ++i) {
+                p[i] += defo(corners[i]);
+            }
+        }
 
         // An untwisted quad can be triangulated with a single edge: split the
         // quad with the smallest edge. This choice also minimizes out-of-quad
@@ -150,7 +162,11 @@ int main(int argc, const char *argv[])
         int v0 =  splitVertex,          v1 = (splitVertex + 1) % 4,
             v2 = (splitVertex + 2) % 4, v3 = (splitVertex + 3) % 4;
 
-        glColor3ub(255, 0, 0);
+        if (e < stress.size())
+            glColor4fv(colorMap(stress[e]));
+        else
+            glColor3ub(255, 0, 0);
+
         glVertex2f(p[v0][0], p[v0][1]);
         glVertex2f(p[v1][0], p[v1][1]);
         glVertex2f(p[v2][0], p[v2][1]);
@@ -161,13 +177,18 @@ int main(int argc, const char *argv[])
     }
     glEnd();
 
-    glBegin(GL_QUADS);
-    glColor3f(0, 1, 0);
-    glVertex2f(-.5, -.5);
-    glVertex2f( .5, -.5);
-    glVertex2f( .5,  .5);
-    glVertex2f(-.5,  .5);
-    glEnd();
+    if (vm.count("key")) {
+        FTGLBitmapFont font("fonts/Arial.ttf");
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glOrtho(0, width, 0, height, -1, 1);
+        float colorBarWidth = 300;
+        // Horizontally center colorbar
+        float colorbarX = .5 * (width - colorBarWidth);
+        drawColorbar(colorbarX, 5, colorBarWidth, 35, colorMap, font);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+    }
 
     glFinish();
 
@@ -192,6 +213,8 @@ int main(int argc, const char *argv[])
 
     }
     pngWriter.write(pngPath);
+
+    OSMesaDestroyContext(ctx);
 
     return 0;
 }
