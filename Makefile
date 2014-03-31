@@ -31,7 +31,7 @@ depend:
 	makedepend -Y -f Makefile.depend -- $(CPPFLAGS) -- $(SOURCES) &> /dev/null
 
 clean:
-	rm -f $(CSGFEM_OBJS) $(RENDER_OBJS)  *.bak CSGFEM_cli
+	rm -f $(CSGFEM_OBJS) $(RENDER_OBJS)  $(UMFPACK_OBJS) *.bak CSGFEM_cli
 
 
 .PHONY: clean depend

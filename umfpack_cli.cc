@@ -62,5 +62,7 @@ int main(int argc, char *argv[])
 
     timer.stopSection("Full UMFPACK solve");
 
+    timer.report(cout);
+
     return 0;
 }
