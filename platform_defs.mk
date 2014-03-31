@@ -12,7 +12,7 @@ endif
 # The VGL cluster is all the same
 VLG_HOSTS=banquo blakey cassio ceres django duncan horatio humair iago iris \
 		  juno macbeth othello rose1 rose2 rose3 rose4 texier
-ifneq (,$(findstring $(HOST), $VLG_HOSTS))
+ifneq (,$(findstring $(HOST), $(VLG_HOSTS)))
     HOST=vlg_cluster
 endif
 
