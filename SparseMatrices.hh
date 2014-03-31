@@ -15,9 +15,11 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <string>
 #include <stdexcept>
+#include <cassert>
 
 extern "C" {
 #include <umfpack.h>
@@ -193,6 +195,28 @@ struct TripletMatrix {
             }  
         }
     }
+
+    void read(std::ifstream &is) {
+        std::string line;
+        nz.clear();
+        size_t maxi = 0, maxj = 0;
+        while (std::getline(is, line)) {
+            size_t i, j;
+            double v;
+            std::stringstream ss(line);
+            ss >> i >> j >> v;
+            if (ss)
+                nz.push_back(Triplet(i, j, v));
+            else
+                std::cout << "WARNING: couldn't parse line '" << line << "'"
+                          << std::endl;
+            maxi = std::max(maxi, i);
+            maxj = std::max(maxj, j);
+        }
+
+        // Deduce matrix size from the triplets.
+        m = maxi + 1; n = maxj + 1;
+    }
 };
 
 struct SuiteSparseMatrix {
@@ -221,6 +245,7 @@ struct SuiteSparseMatrix {
         rows.reserve(mat.nnz()); cols.reserve(mat.nnz());
         vals.reserve(mat.nnz());
 
+        assert(mat.nz.size() > 0);
         rows.push_back(mat.nz[0].row());
         cols.push_back(mat.nz[0].col());
         vals.push_back(mat.nz[0].value());
@@ -251,9 +276,10 @@ struct SuiteSparseMatrix {
         Ap[0] = 0;
         size_t i = 0;
         for (size_t j = 0; j < n; ++j) {
-            assert(j <= cols[i]);
+            assert(i <= nz);
+            assert((i == nz) || (j <= cols[i]));
             // Advance past this column's nonzeros
-            while ((cols[i] == j) && (i < nz)) {
+            while ((i < nz) && (cols[i] == j)) {
                 ++i;
             }
             assert((i == nz) || (j < cols[i]));
@@ -261,7 +287,10 @@ struct SuiteSparseMatrix {
             Ap[j + 1] = i;
         }
 
-        assert(Ap[n] == nz);
+        if (Ap[n] != nz) {
+            std::cout << "Ap[n]: " << Ap[n] << ", nz: " << nz << std::endl;
+            assert(false);
+        }
     }
 };
 

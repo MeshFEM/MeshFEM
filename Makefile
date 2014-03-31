@@ -6,19 +6,23 @@ RENDER_LIBS=-lOSMesa -lpng -lftgl
 # -L/Applications/MATLAB_R2013a.app/bin/maci64/ -leng -lmx -lmat
 RENDER_OBJS=render_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o utils.o draw.o
 CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
+UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
 CXX=clang++
 CC=clang
 CPPFLAGS=-std=c++11 -stdlib=libc++ -O2 $(INCLUDES) -DUSE_MESA
 
-all: CSGFEM_cli render_cli
+all: CSGFEM_cli render_cli umfpack_cli
 
 CSGFEM_cli: $(CSGFEM_OBJS)
-	$(CXX) $(CPPFLAGS) $(LIBS) $(CSGFEM_OBJS) -o $@
+	$(CXX) $(CPPFLAGS) $(LIBS) $^ -o $@
 
 render_cli: $(RENDER_OBJS)
-	$(CXX) $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $(RENDER_OBJS) -o $@
+	$(CXX) $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $^ -o $@
+	
+umfpack_cli: $(UMFPACK_OBJS)
+	$(CXX) $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $^ -o $@
 
 %.o: %.cpp Makefile
 	$(CXX) -c $(CPPFLAGS) $< -o $@
