@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     timer.stop("Factorize");
 
     timer.start("Solve");
-    vector<double> b(1, A.m), x;
+    vector<double> b(A.m, 1.0), x;
     factors.solve(b, x);
     timer.stop("Solve");
 
