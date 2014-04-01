@@ -158,6 +158,7 @@ public:
             }
         }
 
+        m_sections.at("").report(os);
         os << "Full time\t" << m_sections.at("").elapsed() << std::endl;
     }
 };
