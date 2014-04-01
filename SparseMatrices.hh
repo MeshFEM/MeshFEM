@@ -21,14 +21,6 @@
 #include <stdexcept>
 #include <cassert>
 
-extern "C" {
-#include <umfpack.h>
-}
-
-#ifndef SuiteSparse_long
-#define SuiteSparse_long UF_long
-#endif
-
 template<typename Real>
 struct Triplet
 {
@@ -219,6 +211,14 @@ struct TripletMatrix {
     }
 };
 
+extern "C" {
+#include <umfpack.h>
+}
+
+#ifndef SuiteSparse_long
+#define SuiteSparse_long UF_long
+#endif
+
 struct SuiteSparseMatrix {
     std::vector<SuiteSparse_long>  Ap, Ai;
     std::vector<double>            Ax;
@@ -353,5 +353,86 @@ private:
     SuiteSparseMatrix &m_mat;
 };
 
+extern "C" {
+#include <cholmod.h>
+}
+
+class CholmodFactorizer {
+public:
+    CholmodFactorizer(SuiteSparseMatrix &mat)
+        : m_mat(mat), m_A(NULL), m_L(NULL), m_b(NULL) {
+        cholmod_start(&m_c);
+        m_c.itype = CHOLMOD_LONG;
+        m_c.error_handler = error_handler;
+
+        m_A = cholmod_allocate_sparse(mat.m, mat.n, mat.nz,
+                true,           // Row indices in each column are sorted
+                true,           // packed
+                1,              // Symmetry type (0: full matrix stored,
+                                //                1: upper triangle stored
+                                //                2: lower triangle stored)
+                CHOLMOD_REAL,   // Keep it real
+                &m_c);
+
+        // Create an extra copy of the matrix data--in the future we should
+        // probably pass a TMatrix directly to CholmodFactorizer to avoid the
+        // copy in SuiteSparseMatrix mat.
+        for (size_t i = 0; i <= mat.n; ++i)
+            ((SuiteSparse_long *) m_A->p)[i] = mat.Ap[i];
+        for (size_t i = 0; i < mat.nz; ++i) {
+            ((SuiteSparse_long *) m_A->x)[i] = mat.Ax[i];
+            ((double *) m_A->x)[i] = mat.Ax[i];
+            ((SuiteSparse_long *) m_A->i)[i] = mat.Ai[i];
+        }
+
+        m_L = cholmod_analyze(m_A, &m_c);
+        int success = cholmod_factorize(m_A, m_L, &m_c);
+    }
+
+    void solve(const std::vector<double> &b, std::vector<double> &x) {
+        size_t m = m_A->nrow, n = m_A->ncol;
+        assert(b.size() == m);
+        m_b = cholmod_allocate_dense(n, 1,
+                n,            // Leading dimension
+                CHOLMOD_REAL, // Keep it real
+                &m_c);
+
+        for (size_t i = 0; i < m; ++i)
+            ((double *) m_b->x)[i] = b[i];
+
+        cholmod_dense *chol_x = cholmod_solve(CHOLMOD_A, m_L, m_b, &m_c);
+
+        x.resize(n);
+        for (size_t i = 0; i < n; ++i)
+            x[i] = ((double *) chol_x->x)[i];
+
+        cholmod_free_dense(&chol_x, &m_c);
+    }
+
+    ~CholmodFactorizer() {
+        if (m_A) cholmod_free_sparse(&m_A, &m_c);
+        if (m_L) cholmod_free_factor(&m_L, &m_c);
+        if (m_b)  cholmod_free_dense(&m_b, &m_c);
+        cholmod_finish(&m_c);
+    }
+
+    static void error_handler(int status, const char *file, int line,
+            const char *message) {
+        if (status < 0)
+            throw std::runtime_error("Cholmod error in " + std::string(file) + ", line " +
+                    std::to_string(line) + ": " + message + "( status " +
+                    std::to_string(status) + ")");
+        if (status > 0)
+            std::cout << "Cholmod warning in " << file << ", line " << line
+                      << ": " << message << "( status "
+                      << std::to_string(status) << ")" << std::endl;
+    }
+private:
+    cholmod_common m_c;
+    cholmod_sparse *m_A;
+    cholmod_factor *m_L;
+    cholmod_dense  *m_b;
+    SuiteSparseMatrix &m_mat;
+};
 
 #endif /* end of include guard: SPARSEMATRICES_HH */

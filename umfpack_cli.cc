@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////
-// umfpack_cli.cc
+// suitesparse_cli.cc
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //		Command-line interface to read in a matrix in triplet format and run
-//		UMFPACK factorization for benchmarking (to compare against openFTL's
-//		SuperLU solver).
+//		UMFPACK/Cholmod factorization for benchmarking (to compare against
+//		openFTL's SuperLU solver).
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 using namespace std;
@@ -27,11 +28,25 @@ using namespace std;
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        cout << "Usage: umfpack_cli A.txt" << endl;
+    if (argc < 2 || argc > 3) {
+        cout << "Usage: suitesparse_cli A.txt [UMFPACK|CHOLMOD]" << endl;
         return -1;
     }
-    std::string APath(argv[1]);
+    string APath(argv[1]);
+
+    bool useCholmod = false;
+    string solver("UMFPACK");
+    if (argc == 3) {
+        solver = argv[2];
+        transform(solver.begin(), solver.end(), solver.begin(), ::toupper);
+        if (solver == "CHOLMOD")
+            useCholmod = true;
+        else if (solver != "UMFPACK") {
+            cout << "Warning: solver must be UMFPACK or CHOLMOD. Using UMFPACK."
+                 << endl;
+            solver = "UMFPACK";
+        }
+    }
 
     TripletMatrix<Triplet<double> > A;
     ifstream inFile(APath);
@@ -46,21 +61,33 @@ int main(int argc, char *argv[])
 
     Timer timer;
 
-    timer.startSection("Full UMFPACK solve");
+    timer.startSection("Full " + solver + " solve");
     timer.start("to SuiteSparseMatrix");
     SuiteSparseMatrix ssA(A);
     timer.stop("to SuiteSparseMatrix");
 
-    timer.start("Factorize");
-    UmfpackFactorizer factors(ssA);
-    timer.stop("Factorize");
+    if (useCholmod) {
+        timer.start("Factorize");
+        CholmodFactorizer factors(ssA);
+        timer.stop("Factorize");
 
-    timer.start("Solve");
-    vector<double> b(A.m, 1.0), x;
-    factors.solve(b, x);
-    timer.stop("Solve");
+        timer.start("Solve");
+        vector<double> b(A.m, 1.0), x;
+        factors.solve(b, x);
+        timer.stop("Solve");
+    }
+    else {
+        timer.start("Factorize");
+        UmfpackFactorizer factors(ssA);
+        timer.stop("Factorize");
 
-    timer.stopSection("Full UMFPACK solve");
+        timer.start("Solve");
+        vector<double> b(A.m, 1.0), x;
+        factors.solve(b, x);
+        timer.stop("Solve");
+    }
+
+    timer.stopSection("Full " + solver + " solve");
 
     timer.report(cout);
 
