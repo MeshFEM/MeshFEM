@@ -14,6 +14,7 @@
 #include "Timer.hh"
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -66,13 +67,14 @@ int main(int argc, char *argv[])
     SuiteSparseMatrix ssA(A);
     timer.stop("to SuiteSparseMatrix");
 
+    vector<double> b(A.m, 1.0), x;
+
     if (useCholmod) {
         timer.start("Factorize");
         CholmodFactorizer factors(ssA);
         timer.stop("Factorize");
 
         timer.start("Solve");
-        vector<double> b(A.m, 1.0), x;
         factors.solve(b, x);
         timer.stop("Solve");
     }
@@ -82,12 +84,17 @@ int main(int argc, char *argv[])
         timer.stop("Factorize");
 
         timer.start("Solve");
-        vector<double> b(A.m, 1.0), x;
         factors.solve(b, x);
         timer.stop("Solve");
     }
 
     timer.stopSection("Full " + solver + " solve");
+
+    ofstream outFile("x.txt");
+    outFile << setprecision(16);
+    for (size_t i = 0; i < x.size(); ++i)
+        outFile << x[i] << endl;
+    outFile.close();
 
     timer.report(cout);
 

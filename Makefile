@@ -15,7 +15,7 @@ CSGFEM_cli: $(CSGFEM_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 render_cli: $(RENDER_OBJS)
-	$(CXX) $(CPPFLAGS) $(LIBS) $(RENDER_LIBS) $^ -o $@
+	$(CXX) $(CPPFLAGS) $^ $(LIBS) $(RENDER_LIBS) -o $@
 	
 umfpack_cli: $(UMFPACK_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@

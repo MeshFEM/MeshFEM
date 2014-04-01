@@ -361,11 +361,10 @@ class CholmodFactorizer {
 public:
     CholmodFactorizer(SuiteSparseMatrix &mat)
         : m_mat(mat), m_A(NULL), m_L(NULL), m_b(NULL) {
-        cholmod_start(&m_c);
-        m_c.itype = CHOLMOD_LONG;
+        cholmod_l_start(&m_c);
         m_c.error_handler = error_handler;
 
-        m_A = cholmod_allocate_sparse(mat.m, mat.n, mat.nz,
+        m_A = cholmod_l_allocate_sparse(mat.m, mat.n, mat.nz,
                 true,           // Row indices in each column are sorted
                 true,           // packed
                 1,              // Symmetry type (0: full matrix stored,
@@ -385,14 +384,16 @@ public:
             ((SuiteSparse_long *) m_A->i)[i] = mat.Ai[i];
         }
 
-        m_L = cholmod_analyze(m_A, &m_c);
-        int success = cholmod_factorize(m_A, m_L, &m_c);
+        m_L = cholmod_l_analyze(m_A, &m_c);
+        int success = cholmod_l_factorize(m_A, m_L, &m_c);
+        if (!success)
+            throw std::runtime_error("Factorize failed.");
     }
 
     void solve(const std::vector<double> &b, std::vector<double> &x) {
         size_t m = m_A->nrow, n = m_A->ncol;
         assert(b.size() == m);
-        m_b = cholmod_allocate_dense(n, 1,
+        m_b = cholmod_l_allocate_dense(n, 1,
                 n,            // Leading dimension
                 CHOLMOD_REAL, // Keep it real
                 &m_c);
@@ -400,24 +401,25 @@ public:
         for (size_t i = 0; i < m; ++i)
             ((double *) m_b->x)[i] = b[i];
 
-        cholmod_dense *chol_x = cholmod_solve(CHOLMOD_A, m_L, m_b, &m_c);
+        cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, m_b, &m_c);
 
         x.resize(n);
         for (size_t i = 0; i < n; ++i)
             x[i] = ((double *) chol_x->x)[i];
 
-        cholmod_free_dense(&chol_x, &m_c);
+        cholmod_l_free_dense(&chol_x, &m_c);
     }
 
     ~CholmodFactorizer() {
-        if (m_A) cholmod_free_sparse(&m_A, &m_c);
-        if (m_L) cholmod_free_factor(&m_L, &m_c);
-        if (m_b)  cholmod_free_dense(&m_b, &m_c);
-        cholmod_finish(&m_c);
+        if (m_A) cholmod_l_free_sparse(&m_A, &m_c);
+        if (m_L) cholmod_l_free_factor(&m_L, &m_c);
+        if (m_b) cholmod_l_free_dense (&m_b, &m_c);
+        cholmod_l_finish(&m_c);
     }
 
     static void error_handler(int status, const char *file, int line,
             const char *message) {
+        std::cout << "Caught error." << std::endl;
         if (status < 0)
             throw std::runtime_error("Cholmod error in " + std::string(file) + ", line " +
                     std::to_string(line) + ": " + message + "( status " +
