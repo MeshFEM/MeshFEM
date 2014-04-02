@@ -69,6 +69,8 @@ int main(int argc, char *argv[])
 
     vector<double> b(A.m, 1.0), x;
 
+    double mem;
+
     if (useCholmod) {
         timer.start("Factorize");
         CholmodFactorizer factors(ssA);
@@ -77,6 +79,8 @@ int main(int argc, char *argv[])
         timer.start("Solve");
         factors.solve(b, x);
         timer.stop("Solve");
+
+        mem = factors.peakMemoryMB();
     }
     else {
         timer.start("Factorize");
@@ -86,6 +90,8 @@ int main(int argc, char *argv[])
         timer.start("Solve");
         factors.solve(b, x);
         timer.stop("Solve");
+
+        mem = factors.peakMemoryMB();
     }
 
     timer.stopSection("Full " + solver + " solve");
@@ -97,6 +103,8 @@ int main(int argc, char *argv[])
     outFile.close();
 
     timer.report(cout);
+
+    std::cout << "Factorizer Memory (MB):\t" << mem << std::endl;
 
     return 0;
 }

@@ -297,7 +297,9 @@ struct SuiteSparseMatrix {
 class UmfpackFactorizer {
 public:
     UmfpackFactorizer(SuiteSparseMatrix &mat)
-        : m_mat(mat), symbolic(NULL), numeric(NULL) {
+        : m_mat(mat), symbolic(NULL), numeric(NULL),
+          m_factorizationMemoryBytes(0)
+    {
         umfpack_dl_defaults(Control);
         int status = umfpack_dl_symbolic(mat.m, mat.n, Ap(), Ai(), Ax(),
                                          &symbolic, Control, Info);
@@ -320,6 +322,9 @@ public:
             throw std::runtime_error("Umfpack numeric factorization failed: "
                     + std::to_string(status));
         }
+
+        m_factorizationMemoryBytes = Info[UMFPACK_PEAK_MEMORY] *
+                                     Info[UMFPACK_SIZE_OF_UNIT];
     }
 
     void solve(const std::vector<double> &b, std::vector<double> &x) {
@@ -331,6 +336,10 @@ public:
             throw std::runtime_error("Umfpack solve failed: "
                     + std::to_string(status));
         }
+    }
+
+    double peakMemoryMB() const {
+        return m_factorizationMemoryBytes / (1 << 20);
     }
 
     ~UmfpackFactorizer() {
@@ -350,6 +359,7 @@ private:
     void *symbolic;
     void *numeric;
     double Control[UMFPACK_CONTROL], Info[UMFPACK_INFO];
+    double m_factorizationMemoryBytes;
     SuiteSparseMatrix &m_mat;
 };
 
@@ -408,6 +418,10 @@ public:
             x[i] = ((double *) chol_x->x)[i];
 
         cholmod_l_free_dense(&chol_x, &m_c);
+    }
+
+    double peakMemoryMB() const {
+        return ((double) m_c.memory_usage) / (1 << 20);
     }
 
     ~CholmodFactorizer() {
