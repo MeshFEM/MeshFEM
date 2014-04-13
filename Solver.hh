@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <memory>
+#include <utility>
 #include "SparseMatrices.hh"
 #include "Fields.hh"
 #include "GlobalTypes.hh"
@@ -48,14 +49,15 @@ template<typename Real>
 class Solver {
     public:
         Solver() { }
-        typedef TripletMatrix<Triplet<Real> >  TMatrix;
-        typedef std::vector<size_t>  IVec;
-        typedef std::vector<Real>    VVec;
-        typedef ScalarField<Real>    SField;
-        typedef VectorField<Real, 2> VField;
-        typedef SymmetricMatrixField<Real, 2> SM2Field;
-        typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
+        typedef TripletMatrix<Triplet<Real> >                       TMatrix;
+        typedef std::vector<size_t>                                 IVec;
+        typedef std::vector<Real>                                   VVec;
+        typedef ScalarField<Real>                                   SField;
+        typedef VectorField<Real, 2>                                VField;
+        typedef SymmetricMatrixField<Real, 2>                       SM2Field;
+        typedef Eigen::Matrix<Real, Eigen::Dynamic, 1>              DVector;
         typedef Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> DMatrix;
+        typedef std::vector<std::pair<size_t, Real> >               DirichletPairs;
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 const TMatrix &K, const TMatrix &M,
@@ -93,7 +95,7 @@ class Solver {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                const DirichletPairs &dirichletPairs = DirichletPairs(),
                 Timer *timer = NULL) = 0;
 
         // Run the actual weakness analysis
@@ -112,16 +114,18 @@ template<typename Real>
 class EigenSolver : public virtual Solver<Real>
 {
 public:
-    typedef std::vector<size_t>  IVec;
-    typedef std::vector<Real>    VVec;
-    typedef ScalarField<Real>    SField;
-    typedef VectorField<Real, 2> VField;
-    typedef SymmetricMatrixField<Real, 2> SM2Field;
-    typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
-    typedef Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> DMatrix;
+    using typename Solver<Real>::IVec;
+    using typename Solver<Real>::VVec;
+    using typename Solver<Real>::SField;
+    using typename Solver<Real>::VField;
+    using typename Solver<Real>::SM2Field;
+    using typename Solver<Real>::DVector;
+    using typename Solver<Real>::DMatrix;
+    using typename Solver<Real>::TMatrix;
+    using typename Solver<Real>::DirichletPairs;
+
     typedef Eigen::SparseMatrix<Real> SparseMatrix;
     typedef Eigen::SparseMatrix<Real, Eigen::RowMajor> SparseMatrixCSR;
-    typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
 
     EigenSolver(bool dumpMatrices)
         : m_dumpMatrices(dumpMatrices) { }
@@ -130,7 +134,7 @@ public:
             const TMatrix &R, const TMatrix &N, const TMatrix &A,
             const TMatrix &B, const TMatrix &VD,
             Real F_tot, Real p_max,
-            const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+            const DirichletPairs &dirichletPairs = DirichletPairs(),
             Timer *timer = NULL)
     {
         if (timer) timer->startSection("configureAnalysis");
@@ -138,12 +142,14 @@ public:
         // with extra rows/columns to implement the Lagrange-multipliers enforcing
         // either the no rigid motion or the Dirichlet constraints. S pads RHS
         // vector f with a zero row for each constraint to get the RHS for the
-        // constrained system, and S' filters out the Lagrange multipliers from a
-        // solution:
+        // constrained system (assuming Dirichlet constraint value is 0), and S'
+        // filters out the Lagrange multipliers from a solution:
         //    S' (C_s \ S f) = S' [u; lambda] = u
+        // If Dirichlet constraint value is nonzero, it must be manually added
+        // to the RHS.
         if (timer) timer->start("Build Cs");
         TMatrix T_S, Cs;
-        if (dirichletIndices.size() == 0) {
+        if (dirichletPairs.size() == 0) {
             // Since we don't have Dirichlet constraints, we need to apply
             // the no rigid motion constraints.
             // S = [I_Kn; zeros(3, Kn)]
@@ -161,13 +167,16 @@ public:
             // Where ND is the number of Dirichlet constraints and DC is the matrix
             // picking out the constrained components (each row has a single nonzero
             // entry of 1 in the constrained component's location).
-            size_t ND = dirichletIndices.size();
+            size_t ND = dirichletPairs.size();
+            m_dirichletValues.resize(ND);
             T_S.setIdentity(K.n);
             T_S.m += ND;
             TMatrix T_DC(ND, K.n);
             T_DC.reserve(ND);
-            for (size_t i = 0; i < ND; ++i)
-                T_DC.addNZ(i, dirichletIndices[i], 1.0);
+            for (size_t i = 0; i < ND; ++i) {
+                T_DC.addNZ(i, dirichletPairs[i].first, 1.0);
+                m_dirichletValues[i] = dirichletPairs[i].second;
+            }
             Cs = K;
             Cs.append(T_DC, TMatrix::APPEND_RIGHT, false, true);
             Cs.append(T_DC, TMatrix::APPEND_BELOW, true, false);
@@ -293,13 +302,23 @@ public:
         return result;
     }
 
+    void applyDirichletValues(DVector &rhs) const {
+        assert(rhs.rows() == m_SF.rows()); // RHS vector better be the right size...
+        size_t dirichletOffset = rhs.rows() - m_dirichletValues.size();
+        for (size_t i = 0; i < m_dirichletValues.size(); ++i)
+            rhs[dirichletOffset + i] = m_dirichletValues[i];
+    }
+
     // Simulate the application of given pressures
     virtual bool simulate(const SField &p, VField &u) {
         DVector p_vec(p.domainSize());
         for (size_t i = 0; i < p.domainSize(); ++i)
             p_vec[i] = p[i];
 
-        DVector u_vec = m_S_tr * applyCsInverse(m_SFNA * p_vec);
+        DVector rhs = m_SFNA * p_vec;
+        applyDirichletValues(rhs);
+
+        DVector u_vec = m_S_tr * applyCsInverse(rhs);
         u = VField(u_vec);
 
         return true;
@@ -307,9 +326,10 @@ public:
 
     // Simulate the application of given forces
     virtual bool simulate(const VField &f, VField &u) {
-        DVector u_vec = m_S_tr * applyCsInverse(m_SF *
-            Eigen::Map<const DVector>(f.data().data(),
-                                      f.dim() * f.domainSize()));
+        DVector rhs = m_SF * Eigen::Map<const DVector>(f.data().data(),
+                                      f.dim() * f.domainSize());
+        applyDirichletValues(rhs);
+        DVector u_vec = m_S_tr * applyCsInverse(rhs);
 
         u = VField(u_vec);
 
@@ -345,6 +365,8 @@ protected:
     SuiteSparseMatrix m_Cs;
     std::shared_ptr<UmfpackFactorizer> m_Cs_factors;
 
+    std::vector<Real> m_dirichletValues;
+
     bool m_dumpMatrices;
 };
 
@@ -365,6 +387,7 @@ class MatlabSolver : public virtual Solver<Real> {
         using typename Solver<Real>::SM2Field;
         using typename Solver<Real>::DVector;
         using typename Solver<Real>::DMatrix;
+        using typename Solver<Real>::DirichletPairs;
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
                 const TMatrix &K, const TMatrix &M,
@@ -460,7 +483,7 @@ class MatlabSolver : public virtual Solver<Real> {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &/* dirichletIndices */ = std::vector<size_t>(),
+                const DirichletPairs &/*dirichletPairs*/ = DirichletPairs(),
                 Timer *timer = NULL)
         {
             m_Kn = K.n;
@@ -586,9 +609,8 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
         using typename MatlabSolver<Real>::SM2Field;
         using typename MatlabSolver<Real>::DVector;
         using typename MatlabSolver<Real>::DMatrix;
-        typedef Eigen::SparseMatrix<Real> SparseMatrix;
-        typedef Eigen::SparseMatrix<Real, Eigen::RowMajor> SparseMatrixCSR;
-        typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
+        using typename EigenSolver<Real>::TMatrix;
+        using typename EigenSolver<Real>::DirichletPairs;
 
         MatlabEigenSolver(LazyMatlabInterface &matlab, bool dumpMatrices)
             : MatlabSolver<Real>(matlab), EigenSolver<Real>(dumpMatrices) { }
@@ -599,11 +621,11 @@ class MatlabEigenSolver : public MatlabSolver<Real>, public EigenSolver<Real> {
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                const DirichletPairs &dirichletPairs = DirichletPairs(),
                 Timer *timer = NULL)
         {
             return EigenSolver<Real>::configureAnalysis(K, F, R, N, A, B, VD,
-                    F_tot, p_max, dirichletIndices, timer);
+                    F_tot, p_max, dirichletPairs, timer);
         }
 
         virtual bool GeneralizedEigenvalueProblem(size_t numModes,
@@ -671,8 +693,8 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
         using typename MatlabSolver<Real>::SM2Field;
         using typename MatlabSolver<Real>::DVector;
         using typename MatlabSolver<Real>::DMatrix;
-        typedef Eigen::SparseMatrix<Real> SparseMatrix;
-        typedef TripletMatrix<Triplet<Real> > TMatrix; // "using" doesn't work
+        using typename MatlabSolver<Real>::TMatrix;
+        using typename MatlabSolver<Real>::DirichletPairs;
 
         MatlabGurobiSolver(LazyMatlabInterface &matlab, bool dumpMatrices)
             : MatlabEigenSolver<Real>(matlab, dumpMatrices), m_model(NULL) {
@@ -688,11 +710,11 @@ class MatlabGurobiSolver : public MatlabEigenSolver<Real>
                 const TMatrix &R, const TMatrix &N, const TMatrix &A,
                 const TMatrix &B, const TMatrix &VD,
                 Real F_tot, Real p_max,
-                const std::vector<size_t> &dirichletIndices = std::vector<size_t>(),
+                const DirichletPairs &dirichletPairs = DirichletPairs(),
                 Timer *timer = NULL)
         {
             bool success = MatlabEigenSolver<Real>::configureAnalysis(K, F, R,
-                    N, A, B, VD, F_tot, p_max, dirichletIndices, timer);
+                    N, A, B, VD, F_tot, p_max, dirichletPairs, timer);
 
             m_pSize = A.n;
             

@@ -112,9 +112,11 @@ readConditions(istream &is) {
         ptree tcond = val.second;
         string type = tcond.get_child("type").get_value<string>();
         Condition c;
-        if      (type == "pressure")  c.type = CONDITION_PRESSURE;
-        else if (type == "traction")  c.type = CONDITION_TRACTION;
-        else if (type == "dirichlet") c.type = CONDITION_DIRICHLET;
+        if      (type == "pressure")   c.type = CONDITION_PRESSURE;
+        else if (type == "traction")   c.type = CONDITION_TRACTION;
+        else if (type == "dirichlet")  c.type = CONDITION_DIRICHLET;
+        else if (type == "dirichletx") c.type = CONDITION_DIRICHLET_X;
+        else if (type == "dirichlety") c.type = CONDITION_DIRICHLET_Y;
         else    throw runtime_error(string("Invalid type '") + type + "'");
         c.value = parseVectorLenient<Vector>(tcond.get_child("value"));
         c.region.minCorner = parseVectorLenient<Vector>(tcond.get_child("box.minCorner"));

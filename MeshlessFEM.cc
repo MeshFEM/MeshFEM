@@ -1069,18 +1069,23 @@ bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
     m_assembleVDMatrix(VD);
     Solver<Real> *solver = m_solvers.solver();
 
-    std::vector<size_t> dirichletIndices;
+    std::vector<std::pair<size_t, Real> > dirichletValues;
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     for (size_t i = 0; i < elemGrid.numNodes(); ++i) {
-        if (m_boundaryConditions.hasDirichlet(elemGrid.nodePosition(i))) {
+        // Dirichlet constraint information: (componentIsConstrained, value)
+        std::vector<std::pair<bool, Real> > dc;
+        if (m_boundaryConditions.getDirichlet(elemGrid.nodePosition(i), dc)) {
             // Add a constraint for each component of the fixed node's disp.
-            for (size_t j = 0; j < dim(); ++j)
-                dirichletIndices.push_back(dim() * i + j);
+            for (size_t j = 0; j < dim(); ++j) {
+                if (!dc[j].first) continue;
+                dirichletValues.push_back(std::make_pair(dim() * i + j,
+                                        dc[j].second));
+            }
         }
     }
 
     solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
-                              m_pointwisePressureBound, dirichletIndices, timer);
+                              m_pointwisePressureBound, dirichletValues, timer);
 
     VField forces;
     m_boundaryConditions.getForces(m_boundaryPoints, forces);

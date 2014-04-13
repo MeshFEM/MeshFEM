@@ -44,7 +44,9 @@
 #include "Fields.hh"
 
 typedef enum { CONDITION_NONE, CONDITION_PRESSURE,
-               CONDITION_TRACTION, CONDITION_DIRICHLET } Type;
+               CONDITION_TRACTION, CONDITION_DIRICHLET,
+               CONDITION_DIRICHLET_X, CONDITION_DIRICHLET_Y,
+               CONDITION_DIRICHLET_Z } Type;
 
 template<typename _Vector>
 class BoundaryConditions {
@@ -59,6 +61,11 @@ public:
         Type type;
         Vector value;
 
+        bool isDirichlet() const {
+            return (type == CONDITION_DIRICHLET) || (type == CONDITION_DIRICHLET_X) || 
+                   (type == CONDITION_DIRICHLET_Y) || (type == CONDITION_DIRICHLET_Z);
+        }
+
         Condition() : type(CONDITION_NONE) { }
         Condition(const BBox<Vector> &region, const Vector &t)
             : region(region), type(CONDITION_TRACTION), value(t) { }
@@ -66,8 +73,9 @@ public:
             : region(region), type(CONDITION_PRESSURE), value(p, 0) { }
 
         void setPressure(Real p) { type = CONDITION_PRESSURE; value[0] = p; }
-        void setTraction(Vector t) { type = CONDITION_TRACTION; value = t; }
+        void setTraction(const Vector &t) { type = CONDITION_TRACTION; value = t; }
         void setDirichlet() { type = CONDITION_DIRICHLET; }
+        void setDirichlet(const Vector &d) { type = CONDITION_DIRICHLET; value = d; }
 
         Real   getPressure() const { return value[0]; }
         Vector getTraction() const { return value; }
@@ -88,16 +96,32 @@ public:
                         Vector(0, -0.003)));
     }
 
-    // Does the boundary point have a dirichlet constraint acting on it?
-    bool hasDirichlet(const Vector &p) const {
+    // Get the dirichlet constraint(s) acting on a point. If conflicting
+    // constraints are specified, an arbitrary one is chosen.
+    // @param[in]   p   point to query
+    // @param[out]  dc  Dirichlet constraints at this point. Array with
+    //                  (isConstrained, value) pair for each dimension
+    // @return      true if there is any constraint
+    bool getDirichlet(const Vector &p,
+                      std::vector<std::pair<bool, Real> > &dc) const {
+        dc.resize(3);
+        dc[0].first = dc[1].first = dc[2].first = false;
+
+        bool hasConstraint = false;
         for (size_t j = 0; j < m_conditions.size(); ++j) {
             const Condition &c = m_conditions[j];
-            if (c.type == CONDITION_DIRICHLET) {
-                if (c.region.containsPoint(p))
-                    return true;
+            if (c.isDirichlet()) {
+                if (c.region.containsPoint(p)) {
+                    hasConstraint |= true;
+                    dc[0].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_X);
+                    dc[1].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_Y);
+                    dc[2].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_Z);
+                    for (size_t dim = 0; dim < c.value.rows(); ++dim)
+                        dc[dim].second = c.value[dim];
+                }
             }
         }
-        return false;
+        return hasConstraint;
     }
 
     // Get the traction (not force!) acting on each boundary point
