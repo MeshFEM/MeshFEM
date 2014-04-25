@@ -116,7 +116,7 @@ public:
                     dc[0].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_X);
                     dc[1].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_Y);
                     dc[2].first |= (c.type == CONDITION_DIRICHLET) || (c.type == CONDITION_DIRICHLET_Z);
-                    for (size_t dim = 0; dim < c.value.rows(); ++dim)
+                    for (size_t dim = 0; dim < (size_t) c.value.rows(); ++dim)
                         dc[dim].second = c.value[dim];
                 }
             }

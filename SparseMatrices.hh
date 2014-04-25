@@ -276,8 +276,8 @@ struct SuiteSparseMatrix {
         Ap[0] = 0;
         size_t i = 0;
         for (size_t j = 0; j < (size_t) n; ++j) {
-            assert(i <= nz);
-            assert((i == nz) || (j <= cols[i]));
+            assert(i <= (size_t) nz);
+            assert((i == (size_t) nz) || (j <= cols[i]));
             // Advance past this column's nonzeros
             while ((i < (size_t) nz) && (cols[i] == j)) {
                 ++i;
@@ -360,11 +360,7 @@ private:
     void *symbolic;
     void *numeric;
     double Control[UMFPACK_CONTROL], Info[UMFPACK_INFO];
-<<<<<<< local
-=======
     double m_factorizationMemoryBytes;
-    SuiteSparseMatrix &m_mat;
->>>>>>> other
 };
 
 extern "C" {
@@ -374,7 +370,7 @@ extern "C" {
 class CholmodFactorizer {
 public:
     CholmodFactorizer(SuiteSparseMatrix &mat)
-        : m_mat(mat), m_A(NULL), m_L(NULL), m_b(NULL) {
+        : m_A(NULL), m_L(NULL), m_b(NULL) {
         cholmod_l_start(&m_c);
         m_c.error_handler = error_handler;
 
@@ -390,9 +386,9 @@ public:
         // Create an extra copy of the matrix data--in the future we should
         // probably pass a TMatrix directly to CholmodFactorizer to avoid the
         // copy in SuiteSparseMatrix mat.
-        for (size_t i = 0; i <= mat.n; ++i)
+        for (size_t i = 0; i <= (size_t) mat.n; ++i)
             ((SuiteSparse_long *) m_A->p)[i] = mat.Ap[i];
-        for (size_t i = 0; i < mat.nz; ++i) {
+        for (size_t i = 0; i < (size_t) mat.nz; ++i) {
             ((SuiteSparse_long *) m_A->x)[i] = mat.Ax[i];
             ((double *) m_A->x)[i] = mat.Ax[i];
             ((SuiteSparse_long *) m_A->i)[i] = mat.Ai[i];
@@ -452,7 +448,6 @@ private:
     cholmod_sparse *m_A;
     cholmod_factor *m_L;
     cholmod_dense  *m_b;
-    SuiteSparseMatrix &m_mat;
 };
 
 #endif /* end of include guard: SPARSEMATRICES_HH */
