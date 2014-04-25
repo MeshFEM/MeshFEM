@@ -283,7 +283,6 @@ private:
     void m_drawWorldArrow(const Vector &p, const Vector &n,
                           Scalar length = 1.0, bool rescale = false);
     void m_drawWorldVertex(const Vector &v);
-    void m_drawColorbar(float x, float y, float width, float height);
 
     ////////////////////////////////////////////////////////////////////////////
     // Instance variables

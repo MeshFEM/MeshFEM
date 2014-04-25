@@ -67,6 +67,8 @@ public:
         parseOptions();
     }
 
+    AnalysisSettings(const AnalysisSettings &b) { *this = b; }
+
     ////////////////////////////////////////////////////////////////////////////
     // Accessors
     // Throw exceptions if settings name isn't found, or if wrong typed accessor
@@ -88,6 +90,9 @@ public:
 
     // Memberwise comparator
     bool operator==(const AnalysisSettings &rhs) const;
+
+    // Memberwise assignment
+    AnalysisSettings &operator=(const AnalysisSettings &rhs);
 
     Type type(const std::string &name) const;
 

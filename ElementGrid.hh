@@ -56,6 +56,20 @@ public:
         update();
     }
 
+    // Construct ElementGrid2D quickly using (model, bbox, cellOverlaps) to
+    // accelerate
+    ElementGrid2D(size_t Nx, size_t Ny, double cellOverlapThreshold,
+                  const Quadrature2D &q, const Model &model, const BBox_t &bbox,
+                  size_t borderWidth,
+                  std::vector<Scalar> cellOverlaps = std::vector<Scalar>())
+        : Grid2D(Nx, Ny, bbox, borderWidth),
+          m_cellOverlapThreshold(cellOverlapThreshold), m_boundingBoxLocked(false),
+          m_updatesEnabled(true), m_updatePending(false),
+          m_quadrature(q), m_model(model)
+    {
+        update(cellOverlaps);
+    }
+
     bool boundingBoxIsLocked() const { return m_boundingBoxLocked; }
     void setBoundingBoxLocked(bool locked) { m_boundingBoxLocked = locked; }
 

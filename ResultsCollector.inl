@@ -473,7 +473,7 @@ inline std::string generateEntryName(const std::string &nameSuggestion,
         // Only create a new entry if the existing one differs.
         if (!(it->second == entry)) {
             std::vector<std::string> keys;
-            for (auto existing: collection)
+            for (const auto &existing: collection)
                 keys.push_back(existing.first);
             name = uniqueName(nameSuggestion, keys);
         }

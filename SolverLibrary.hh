@@ -29,7 +29,7 @@ public:
     SolverLibrary &operator=(const SolverLibrary &other) = delete;
 
 #ifdef HAS_MATLAB
-    SolverLibrary(LazyMatlabInterface &lmatlab, bool dumpMatrices)
+    SolverLibrary(LazyMatlabInterface &lmatlab, bool dumpMatrices = false)
         : m_selectedSolver(0)
     {
         add("Eigen", new EigenSolver<Real>(dumpMatrices));
@@ -39,7 +39,7 @@ public:
         add("Matlab", new MatlabSolver<Real>(lmatlab));
     }
 #endif // HAS_MATLAB
-    SolverLibrary(bool dumpMatrices)
+    SolverLibrary(bool dumpMatrices = false)
         : m_selectedSolver(0)
     {
         add("Eigen", new EigenSolver<Real>(dumpMatrices));

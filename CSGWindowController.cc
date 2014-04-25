@@ -974,8 +974,8 @@ void CSGWindowController::resultDeslected()
 
 void CSGWindowController::modelSelected(const string &name) {
     BBox_t bbox = m_fem.elementGrid().getBoundingBox();
-    if (m_results.modelDiffers(name, m_fem.model(), bbox)) {
-        m_results.getModel(name, m_fem.model(), bbox);
+    if (m_results.modelDiffers(m_fem.model(), bbox, name)) {
+        m_results.getModel(m_fem.model(), bbox, name);
         m_fem.elementGrid().setBoundingBox(bbox);
         modelChanged(false);
     }
@@ -991,10 +991,10 @@ void CSGWindowController::modelSelected(const string &name) {
 }
 
 void CSGWindowController::settingsSelected(const string &name) {
-    if (m_results.settingsDiffer(name, m_settings)) {
+    if (m_results.settingsDiffer(m_settings, name)) {
         bool locked = m_fem.elementGrid().boundingBoxIsLocked();
         m_fem.elementGrid().setBoundingBoxLocked(true);
-        m_results.getSettings(name, m_settings);
+        m_results.getSettings(m_settings, name);
         emit reloadSettings();
         m_fem.elementGrid().setBoundingBoxLocked(locked);
     }

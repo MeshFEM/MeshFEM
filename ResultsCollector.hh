@@ -107,15 +107,6 @@ public:
         m_selectedSettings = name;
     }
 
-    bool modelDiffers(const std::string &name, const Model &model,
-                      const BBox_t &gridBBox) const {
-        auto model_it = m_models.find(name);
-        if (model_it == m_models.end())
-            throw std::runtime_error(std::string("model not found: ") + name);
-        return !((model == model_it->second.first) &&
-                 (gridBBox == model_it->second.second));
-    }
-
     std::vector<std::string> getModelNames() const {
         std::vector<std::string> names;
         names.reserve(m_models.size());
@@ -124,13 +115,24 @@ public:
         return names;
     }
 
-    void getModel(const std::string &name, Model &model,
-                  BBox_t &gridBBox) const {
-        auto model_it = m_models.find(name);
+    void getModel(Model &model, BBox_t &gridBBox,
+                  const std::string &name = std::string()) const {
+        std::string query = name.size() ? name : m_selectedModel;
+        auto model_it = m_models.find(query);
         if (model_it == m_models.end())
-            throw std::runtime_error(std::string("model not found: ") + name);
+            throw std::runtime_error(std::string("model not found: ") + query);
         model = model_it->second.first;
         gridBBox = model_it->second.second;
+    }
+
+    bool modelDiffers(const Model &model, const BBox_t &gridBBox,
+                      const std::string &name = std::string()) const {
+        std::string query = name.size() ? name : m_selectedModel;
+        auto model_it = m_models.find(query);
+        if (model_it == m_models.end())
+            throw std::runtime_error(std::string("model not found: ") + query);
+        return !((model == model_it->second.first) &&
+                 (gridBBox == model_it->second.second));
     }
 
     std::vector<std::string> getSettingsNames() const {
@@ -141,12 +143,23 @@ public:
         return names;
     }
 
-    void getSettings(const std::string &name, AnalysisSettings &settings) const
-    {
-        auto settings_it = m_settings.find(name);
+    void getSettings(AnalysisSettings &settings,
+                     const std::string &name = std::string()) const {
+        std::string query = name.size() ? name : m_selectedSettings;
+        auto settings_it = m_settings.find(query);
         if (settings_it == m_settings.end())
-            throw std::runtime_error(std::string("settings not found: ") + name);
+            throw std::runtime_error(std::string("settings not found: ") + query);
         settings = settings_it->second;
+    }
+
+    bool settingsDiffer(const AnalysisSettings &settings,
+                        const std::string &name = std::string()) const {
+        std::string query = name.size() ? name : m_selectedSettings;
+        auto settings_it = m_settings.find(query);
+        if (settings_it == m_settings.end())
+            throw std::runtime_error(std::string("settings not found: ") + query);
+        bool differ = !(settings == settings_it->second);
+        return differ;
     }
 
     typedef std::pair<size_t, std::string> ModelParameterID;
@@ -168,31 +181,6 @@ public:
         if (model_it == m_models.end())
             throw std::runtime_error(std::string("model not found: ") + name);
         return model_it->second.first.getParameters();
-    }
-
-    bool settingsDiffer(const std::string &name,
-                        const AnalysisSettings &settings) const {
-        auto settings_it = m_settings.find(name);
-        if (settings_it == m_settings.end())
-            throw std::runtime_error(std::string("settings not found: ") + name);
-        return !(settings == settings_it->second);
-    }
-
-    // Gets a copy of the currently selected model
-    void getModel(Model &model, BBox_t &gridBBox) const {
-        getModel(m_selectedModel, model, gridBBox);
-    }
-
-    // Checks if a model differs from the currently selected model.
-    bool modelIsDifferent(const Model &m, const BBox_t &b) const {
-        if (m_selectedModel.size() == 0)
-            return true;
-        else {
-            auto mit = m_models.find(m_selectedModel);
-            if (mit == m_models.end())
-                return true;
-            return (mit->second.first == m) && (mit->second.second == b);
-        }
     }
 
     // Path always has the format model_name:settings_name:name
@@ -235,10 +223,10 @@ public:
 
         std::shared_ptr<const Result> r = getResultWithPath(resultPath);
         AnalysisSettings settings;
-        getSettings(settingsName, settings);
+        getSettings(settings, settingsName);
         Model model;
         BBox_t bbox;
-        getModel(modelName, model, bbox);
+        getModel(model, bbox, modelName);
 
         std::ofstream outFile(outPath, std::ios::binary);
         if (!outFile.is_open())
