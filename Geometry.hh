@@ -1,0 +1,271 @@
+////////////////////////////////////////////////////////////////////////////////
+// Geometry.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Basic geometry types.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  01/30/2013 16:38:45
+////////////////////////////////////////////////////////////////////////////////
+#ifndef GEOMETRY_HH
+#define GEOMETRY_HH
+
+#include <vector>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <cmath>
+
+template<typename Vector>
+struct BBox {
+    typedef typename Vector::Scalar Real;
+
+    BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
+    BBox(const Vector &minCorner, const Vector &maxCorner)
+        : minCorner(minCorner), maxCorner(maxCorner) { }
+
+    Vector minCorner, maxCorner;
+
+    void unionBox(const BBox &b) {
+        minCorner = minCorner.cwiseMin(b.minCorner);
+        maxCorner = maxCorner.cwiseMax(b.maxCorner);
+    }
+
+    void intersectBox(const BBox &b) {
+        minCorner = minCorner.cwiseMax(b.minCorner);
+        maxCorner = maxCorner.cwiseMin(b.maxCorner);
+    }
+
+    Vector interpolatePoint(const Vector &v) const {
+        return minCorner +
+              (v.array() * (maxCorner - minCorner).array()).matrix();
+    }
+
+    // Get the interpolation coordinates of a point.
+    // These are inside [0, 1]^dim if the point is in the box.
+    Vector interpolationCoordinates(const Vector &v) const {
+        return ((v - minCorner).array() / dimensions().array()).matrix();
+    }
+
+    bool containsPoint(const Vector &p) const {
+        return (p.array() >= minCorner.array()).all() &&
+               (p.array() <= maxCorner.array()).all();
+    }
+
+    Vector dimensions() const {
+        return maxCorner - minCorner;
+    }
+
+    // Expands the bounding box around its center so that dimension i is
+    // increased by factors[i].
+    void expand(const Vector &factors) {
+        Vector delta = .5 * (factors.array() * dimensions().array());
+        minCorner -= delta;
+        maxCorner += delta;
+    }
+    
+    void translate(const Vector &t) {
+        minCorner += t;
+        maxCorner += t;
+    }
+
+    Real volume() const {
+        Vector widths = maxCorner - minCorner;
+        Real result = 1.0;
+        for (int i = 0; i < widths.rows(); ++i)
+            result *= widths[i];
+        return result;
+    }
+
+    bool operator==(const BBox &b) const {
+        return ((minCorner == b.minCorner) && (maxCorner == b.maxCorner));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Determine whether there is any overlap with a circle.
+    //  Adapted from:
+    //  http://stackoverflow.com/questions/401847/ ...
+    //         circle-rectangle-collision-detection-intersection/402010#402010
+    //  @param[in]  c   circle center
+    //  @param[in]  r   circle radius
+    //  @return     true if this box overlaps the circle.
+    *///////////////////////////////////////////////////////////////////////////
+    bool intersectsCircle(const Vector &c, Real r) const {
+        // Transform so box center is at the origin and the circle is in the
+        // first quadrant.
+        Vector boxCenter = .5 * (minCorner + maxCorner);
+        Vector c_prime = (c - boxCenter).cwiseAbs();
+
+        Vector boxHalfDims = .5 * dimensions();
+        if ((c_prime.array() > (boxHalfDims.array() + r)).any())
+            return false;
+
+        if ((c_prime.array() <= boxHalfDims.array()).any())
+            return true;
+
+        return (c_prime - boxHalfDims).squaredNorm() <= r * r;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Fast 2D rotation class. This is useful because Eigen's Rotation2D was
+//  killing performance (isInside tests in particular)
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real, typename Vector>
+class FastRotation2D {
+public:
+    FastRotation2D(Real radians) { setAngle(radians); }
+
+    void setAngle(Real radians) {
+        m_angle = radians;
+        m_cos = cos(radians);
+        m_sin = sin(radians);
+    }
+
+    void setDegrees(Real degrees) {
+        setAngle((M_PI * degrees) / 180.0);
+    }
+
+    // Apply the rotation
+    Vector operator()(const Vector &v) const {
+        return Vector(m_cos * v[0] - m_sin * v[1], m_cos * v[1] + m_sin * v[0]);
+    }
+
+    // Apply the inverse rotation
+    Vector inverse(const Vector &v) const {
+        return Vector(m_cos * v[0] + m_sin * v[1], m_cos * v[1] - m_sin * v[0]);
+    }
+
+    // Accessors
+    Real deg() const { return (180.0 * m_angle) / M_PI; }
+    Real rad() const { return m_angle; }
+
+private:
+    Real m_angle, m_cos, m_sin;
+};
+
+template<typename T>
+std::ostream &operator<<(std::ostream &os, const BBox<T> &b) {
+    os << "[(" << b.minCorner[0] << ", " << b.minCorner[1] << ") -> ("
+       << b.maxCorner[0] << ", " << b.maxCorner[1] << ")]";
+    return os;
+}
+
+template<typename Vector>
+struct Polygon {
+    typedef typename Vector::Scalar Real;
+
+    Polygon() { }
+
+    void addPoint(const Vector &p) {
+        points.push_back(p);
+    }
+
+    const Vector &operator[](size_t i) const
+    {
+        return points[i];
+    }
+
+    size_t size() const { return points.size(); }
+
+    std::vector<Vector> points;
+};
+
+// Outputs the polygon in .poly format.
+template<typename Vector>
+std::ostream &operator<<(std::ostream &os, const Polygon<Vector> &p)
+{
+    // # Vertices   dimension   # of attributes     # of boundary markers
+    os << p.points.size() << " 2 0 0" << std::endl;
+    // Vertex number, x, y
+    for (size_t i = 0; i < p.points.size(); ++i) {
+        os << i << " " << p.points[i][0] << " " << p.points[i][1] << std::endl;
+    }
+    // # of segments    # of boundary markers
+    os << p.points.size() << " 0" << std::endl;
+    // Segment number, endpoint, endpoint
+    for (size_t i = 0; i < p.points.size(); ++i) {
+        os << i << " " << i << " " << (i + 1) % p.points.size() << std::endl;
+    }
+    // # of holes
+    os << 0 << std::endl;
+
+    return os;
+}
+
+// Output a polygon soup in the .poly format.
+// Note: this is missing the holes information.
+template<typename Vector>
+std::ostream &operator<<(std::ostream &os,
+                         const std::vector<Polygon<Vector> > &ps)
+{
+    size_t numPolys = ps.size(), numPoints = 0;
+    for (size_t i = 0; i < numPolys; ++i)
+        numPoints += ps[i].size();
+
+    // # Vertices   dimension   # of attributes     # of boundary markers
+    os << numPoints << " 2 0 0" << std::endl;
+
+    // Vertex number, x, y
+    size_t idx = 0;
+    for (size_t p = 0; p < numPolys; ++p) {
+        const Polygon<Vector> &poly = ps[p];
+        for (size_t i = 0; i < poly.size(); ++i) {
+            os << idx++ << " " << poly[i][0] << " " << poly[i][1] << std::endl;
+        }
+    }
+
+    // # of segments    # of boundary markers
+    os << numPoints << " 0" << std::endl;
+    // Segment number, endpoint, endpoint
+    size_t polyStart = 0;
+    for (size_t p = 0; p < numPolys; ++p) {
+        size_t polySize = ps[p].size();
+        for (size_t i = 0; i < polySize; ++i) {
+            size_t start = polyStart + i;
+            size_t end = polyStart + ((i + 1) % polySize);
+            os << start << " " << start << " " << end << std::endl;
+        }
+        polyStart += polySize;
+    }
+
+    // # of holes (note: wrong!)
+    os << 0 << std::endl;
+
+    return os;
+}
+
+template<typename Vector>
+struct BoundaryPoint {
+    typedef typename Vector::Scalar Real;
+
+    BoundaryPoint(Vector pt, Vector normal, Real area = 0)
+        : p(pt), n(normal), a(area) { }
+
+    std::string info() const {
+        std::stringstream ss;
+        ss << "[" << p[0] << ", " << p[1] << "], <"
+           << n[0] << ", " << n[1] << ">, " << a;
+        return ss.str();
+    }
+
+    Vector p, n;
+    // Area of point.
+    Real a;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Returns parameter values 't' generating N evenly (arc-length) spaced points
+//  around the ellipse:
+//      t |--> (a * cos(t), b * sin(t))
+//  @param[in]  s   spacing of points to distibute
+//  @param[in]  a   ellipse major axis
+//  @param[in]  b   ellipse minor axis
+//  @param[out] pointAreas      length of the arc segment centered on each point
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real>
+void ellipseParameterPoints(Real s, Real a, Real b,
+                            std::vector<Real> &paramPoints, Real &pointAreas);
+
+#endif // GEOMETRY_HH
