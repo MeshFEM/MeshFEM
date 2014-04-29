@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "GlobalTypes.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 
 

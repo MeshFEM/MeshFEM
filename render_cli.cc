@@ -27,7 +27,7 @@
 #include "GlobalTypes.hh"
 #include "AnalysisSettings.hh"
 #include "ResultsCollector.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "SolverLibrary.hh"
 #include "colors.hh"
 #include "draw.hh"

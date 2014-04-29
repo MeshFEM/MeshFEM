@@ -27,6 +27,7 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
     if (!m_boundingBoxLocked)
         setBoundingBox(m_model.boundingBox());
     
+    // Compute cell overlaps using inside-outside tests if they weren't provided
     if (cellOverlaps.size() != numCells()) {
         cellOverlaps.resize(numCells());
 
@@ -46,6 +47,8 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
         }
     }
 
+    // Compute the cell->element map (element index if cell is an element, -1
+    // otherwise)
     m_elementForCell.assign(numCells(), -1);
     m_elementOverlap.clear();
     size_t numElements = 0;
@@ -66,7 +69,91 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
     m_cellForElement.resize(numElements);
     AdjacencyVec cellVerts;
     const size_t numVerts = numVertices();
-    std::vector<bool> isNode(numVerts);
+    std::vector<bool> isNode(numVerts, false);
+    for (size_t cell = 0; cell < m_elementForCell.size(); ++cell) {
+        int e = m_elementForCell[cell];
+        if (e >= 0) {
+            assert((size_t) e < numElements);
+            m_cellForElement[e] = cell;
+            cellVertices(cell, cellVerts);
+            // All corners of an element cell are nodes.
+            for (size_t i = 0; i < (size_t) cellVerts.rows(); ++i) {
+                assert((size_t) cellVerts[i] < numVerts);
+                isNode[cellVerts[i]] = true;
+            }
+        }
+    }
+
+    // Compute m_vertexForNode, m_nodeForVertex
+    m_nodeForVertex.assign(numVerts, -1);
+    size_t numNodes = 0;
+    for (size_t v = 0; v < numVerts; ++v) {
+        if (isNode[v])
+            m_nodeForVertex[v] = numNodes++;
+    }
+    m_vertexForNode.resize(numNodes);
+    for (size_t v = 0; v < numVerts; ++v) {
+        int n = m_nodeForVertex[v];
+        if (n >= 0) {
+            assert((size_t) n < numNodes);
+            m_vertexForNode[n] = v;
+        }
+    }
+}
+
+// Should be called whenever the quadrature or model changes
+template<typename Model>
+void ElementGrid3D<Model>::update(std::vector<Scalar> cellOverlaps)
+{
+    setBoundingBox(m_model.boundingBox());
+    
+    // Compute cell overlaps using inside-outside tests if they weren't provided
+    if (cellOverlaps.size() != numCells()) {
+        cellOverlaps.resize(numCells());
+
+        std::vector<Vector3D> qPoints;
+        for (size_t s = 0; s < slices(); ++s) {
+            for (size_t r = 0; r < rows(); ++r) {
+                for (size_t c = 0; c < cols(); ++c) {
+                    BBox_t b = cellBoundingBox(s, r, c);
+                    m_quadrature.quadraturePoints(b, qPoints);
+                    size_t insideCount = 0;
+                    for (size_t pi = 0; pi < qPoints.size(); ++pi) {
+                        if (m_model.isInside(qPoints[pi]))
+                            ++insideCount;
+                    }
+                    size_t cell = get1DCellIndex(s, r, c);
+                    cellOverlaps[cell] = ((Scalar) insideCount) / qPoints.size();
+                }
+            }
+        }
+    }
+
+    // Compute the cell->element map (element index if cell is an element, -1
+    // otherwise)
+    m_elementForCell.assign(numCells(), -1);
+    m_elementOverlap.clear();
+    size_t numElements = 0;
+    for (size_t s = 0; s < slices(); ++s) {
+        for (size_t r = 0; r < rows(); ++r) {
+            for (size_t c = 0; c < cols(); ++c) {
+                // A cell is an element if all quadrature points fall inside the
+                // object or if the fraction exceeds the cell overlap threshold.
+                size_t cell = get1DCellIndex(s, r, c);
+                Scalar overlap  = cellOverlaps[cell];
+                if ((overlap == 1.0) || (overlap > m_cellOverlapThreshold)) {
+                    m_elementForCell[cell] = numElements++;
+                    m_elementOverlap.push_back(overlap);
+                }
+            }
+        }
+    }
+
+    // Invert m_elementForCell to get m_cellForElement, mark nodes
+    m_cellForElement.resize(numElements);
+    AdjacencyVec cellVerts;
+    const size_t numVerts = numVertices();
+    std::vector<bool> isNode(numVerts, false);
     for (size_t cell = 0; cell < m_elementForCell.size(); ++cell) {
         int e = m_elementForCell[cell];
         if (e >= 0) {

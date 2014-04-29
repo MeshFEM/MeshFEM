@@ -16,7 +16,7 @@
 #include "CSGTree.hh"
 #include "GlobalTypes.hh"
 #include "FEMView.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "AnalysisSettings.hh"
 
 #include <QObject>

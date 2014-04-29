@@ -14,7 +14,7 @@
 #include <QObject>
 #include <QMainWindow>
 #include "GlobalTypes.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 
 #include "AnalysisSettings.hh"

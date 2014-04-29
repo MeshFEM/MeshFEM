@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <queue>
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 
 using namespace std;
@@ -18,7 +18,7 @@ using namespace std;
 // 0         1
 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementStiffnessDensity
+class MeshlessFEM2D<Model>::PerElementStiffnessDensity
 {
 public:
     typedef Eigen::Matrix<Real, 8, 8> value_type;
@@ -216,7 +216,7 @@ private:
 };
 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementLaplacianDensity
+class MeshlessFEM2D<Model>::PerElementLaplacianDensity
 {
 public:
     typedef Eigen::Matrix<Real, 4, 4> value_type;
@@ -274,7 +274,7 @@ private:
 
 // Averaged (not integrated) grad phi over the element.
 template<typename Model>
-class MeshlessFEM<Model>::PerElementGradPhi
+class MeshlessFEM2D<Model>::PerElementGradPhi
 {
 public:
     // D: (d00, d01, d10, d11, d22)
@@ -354,7 +354,7 @@ private:
 };
 
 template<typename Model>
-class MeshlessFEM<Model>::PerElementMassMatrixDensity
+class MeshlessFEM2D<Model>::PerElementMassMatrixDensity
 {
 public:
     typedef Eigen::Matrix<Real, 4, 4> value_type;
@@ -424,7 +424,7 @@ private:
 };
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleStiffnessMatrix(TMatrix &K)
+void MeshlessFEM2D<Model>::m_assembleStiffnessMatrix(TMatrix &K)
 {
     // Simple (i, j v) stiffness matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -475,7 +475,7 @@ void MeshlessFEM<Model>::m_assembleStiffnessMatrix(TMatrix &K)
 }
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleLaplacianMatrix(TMatrix &L)
+void MeshlessFEM2D<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 {
     // Simple (i, j v) laplacian matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -508,7 +508,7 @@ void MeshlessFEM<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 // Compute the quantities needed to evaluate (average) strain/stress/energy from
 // displacement.
 template<typename Model>
-void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
+void MeshlessFEM2D<Model>::m_computePerElementDisplacementStrainMap()
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     const Quadrature2D &q = quadrature();
@@ -553,8 +553,8 @@ void MeshlessFEM<Model>::m_computePerElementDisplacementStrainMap()
 }
 
 template<typename Model>
-typename MeshlessFEM<Model>::SMField
-MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
+typename MeshlessFEM2D<Model>::SMField
+MeshlessFEM2D<Model>::elementStressTensors(const VField &displacement)
 {
     if (!m_displacementStrainCached)
         m_computePerElementDisplacementStrainMap();
@@ -583,8 +583,8 @@ MeshlessFEM<Model>::elementStressTensors(const VField &displacement)
 //  @return     per-element scalar field of stress tensor norms
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-typename MeshlessFEM<Model>::SField
-MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField,
+typename MeshlessFEM2D<Model>::SField
+MeshlessFEM2D<Model>::computeStressTensorNorms(const SMField &stressField,
                                              bool signedNorm)
 {
     size_t numMats = stressField.domainSize();
@@ -615,7 +615,7 @@ MeshlessFEM<Model>::computeStressTensorNorms(const SMField &stressField,
 //                              modal analysis (defaults to false)
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleMassMatrix(TMatrix &M, bool forLaplacian)
+void MeshlessFEM2D<Model>::m_assembleMassMatrix(TMatrix &M, bool forLaplacian)
 {
     // Simple (i, j v) mass matrix generation
     const ElementGrid2D<Model> &elemGrid = elementGrid();
@@ -654,7 +654,7 @@ void MeshlessFEM<Model>::m_assembleMassMatrix(TMatrix &M, bool forLaplacian)
 }
 
 template<typename Model>
-class MeshlessFEM<Model>::BoundaryFunctionLoad
+class MeshlessFEM2D<Model>::BoundaryFunctionLoad
 {
 public:
     typedef Eigen::Matrix<Real, 4, 1> value_type;
@@ -698,7 +698,7 @@ private:
 // @param[in] r    scale factor determining blur kernel radius. The actual
 //                 radius will be r * cellSize
 template<typename Model>
-void MeshlessFEM<Model>::buildBoundaryFunctions(Real r)
+void MeshlessFEM2D<Model>::buildBoundaryFunctions(Real r)
 {
     m_boundaryFunctions.clear();
     m_boundaryFunctions.reserve(m_boundaryPoints.size());
@@ -725,7 +725,7 @@ void MeshlessFEM<Model>::buildBoundaryFunctions(Real r)
 //  @param[out]  F          Load matrix in triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
+void MeshlessFEM2D<Model>::m_assembleLoadMatrix(TMatrix &F)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     F.clear();
@@ -793,7 +793,7 @@ void MeshlessFEM<Model>::m_assembleLoadMatrix(TMatrix &F)
 //  @param[out]  R      Rigid mode matrix in sparse triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleRigidModeMatrix(TMatrix &R)
+void MeshlessFEM2D<Model>::m_assembleRigidModeMatrix(TMatrix &R)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     R.m = 3;
@@ -825,7 +825,7 @@ void MeshlessFEM<Model>::m_assembleRigidModeMatrix(TMatrix &R)
 //  @param[out]  A      boundary pressure->force matrix in sparse triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleAMatrix(TMatrix &A)
+void MeshlessFEM2D<Model>::m_assembleAMatrix(TMatrix &A)
 {
     A.m = m_boundaryPoints.size();
     A.n = m_boundaryPoints.size();
@@ -846,7 +846,7 @@ void MeshlessFEM<Model>::m_assembleAMatrix(TMatrix &A)
 //                      triplet format.
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleNMatrix(TMatrix &N)
+void MeshlessFEM2D<Model>::m_assembleNMatrix(TMatrix &N)
 {
     N.m = 2 * m_boundaryPoints.size();
     N.n = m_boundaryPoints.size();
@@ -871,7 +871,7 @@ void MeshlessFEM<Model>::m_assembleNMatrix(TMatrix &N)
 //  @param[out]  B      displacement->strain matrix in sparse triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleBMatrix(TMatrix &B)
+void MeshlessFEM2D<Model>::m_assembleBMatrix(TMatrix &B)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     B.m = 3 * elemGrid.numElements();
@@ -904,7 +904,7 @@ void MeshlessFEM<Model>::m_assembleBMatrix(TMatrix &B)
 //  @param[out]  VD     strain->stress sparse matrix in triplet format
 *///////////////////////////////////////////////////////////////////////////////
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleVDMatrix(TMatrix &VD)
+void MeshlessFEM2D<Model>::m_assembleVDMatrix(TMatrix &VD)
 {
     const ElementGrid2D<Model> &elemGrid = elementGrid();
     VD.m = 3 * elemGrid.numElements();
@@ -929,7 +929,7 @@ void MeshlessFEM<Model>::m_assembleVDMatrix(TMatrix &VD)
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
+bool MeshlessFEM2D<Model>::modalAnalysis(RC *rc)
 {
     bool success;
     Solver<Real> *solver = m_solvers.solver();
@@ -1049,7 +1049,7 @@ bool MeshlessFEM<Model>::modalAnalysis(RC *rc)
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
+bool MeshlessFEM2D<Model>::simulate(RC *rc, Timer *timer) {
     if (timer) timer->startSection("Simulation");
     TMatrix K, F, R, N, A;
     if (timer) timer->start("Stiffness Matrix Assembly");
@@ -1153,7 +1153,7 @@ bool MeshlessFEM<Model>::simulate(RC *rc, Timer *timer) {
 //   0: success
 //   1: success, and modes were updated
 template<typename Model>
-int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
+int MeshlessFEM2D<Model>::weakRegionExtraction(RC *rc)
 {
     bool recomputedModes = false;
     if (m_modes.size() == 0) {
@@ -1265,7 +1265,7 @@ int MeshlessFEM<Model>::weakRegionExtraction(RC *rc)
 }
 
 template<typename Model>
-bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
+bool MeshlessFEM2D<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
 {
     typedef typename RC::Result Result;
     typedef typename RC::RPtr RPtr;
@@ -1404,7 +1404,7 @@ bool MeshlessFEM<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
 }
 
 template<typename Model>
-void MeshlessFEM<Model>::m_assembleWVector(DVector &w, size_t regionIdx) const {
+void MeshlessFEM2D<Model>::m_assembleWVector(DVector &w, size_t regionIdx) const {
     size_t numElems = elementGrid().numElements();
     w.resize(3 * numElems, Eigen::NoChange);
     if (regionIdx < m_weakRegions.size()) {
@@ -1432,7 +1432,7 @@ void MeshlessFEM<Model>::m_assembleWVector(DVector &w, size_t regionIdx) const {
 }
 
 template<typename Model>
-void MeshlessFEM<Model>::m_invalidateCache() {
+void MeshlessFEM2D<Model>::m_invalidateCache() {
     m_stiffnessCached = false;
     m_massCached = false;
     m_modes.clear();
@@ -1487,4 +1487,4 @@ void MeshlessFEM<Model>::m_invalidateCache() {
 // Template instantiations
 ////////////////////////////////////////////////////////////////////////////////
 #include "GlobalTypes.hh"
-template class MeshlessFEM<CSGTree_t>;
+template class MeshlessFEM2D<CSGTree_t>;

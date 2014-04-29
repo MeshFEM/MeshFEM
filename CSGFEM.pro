@@ -47,7 +47,7 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
            Geometry.hh \
            AnalysisSettings.hh \
            AnalysisForm.hh QuadraturePointsSpinBox.hh \
-           Quadrature.hh MeshlessFEM.hh Grid.hh ElementGrid.hh \
+           Quadrature.hh MeshlessFEM2D.hh Grid.hh ElementGrid.hh \
            MatlabInterface/MatlabInterface.h QMatlabInterface.hh \
            QCommandLine.hh Solver.hh Fields.hh ModelForm.hh \
            MarchingSquaresGrid.hh ShaderCompiler.hh \
@@ -63,7 +63,7 @@ HEADERS += precompile.hh CSGTree.hh CSGTree.inl CSGTreeModel.hh \
 
 SOURCES += CSGFEM.cc CSGTreeModel.cc FEMView.cc CSGWindow.cc \
            CSGWindowController.cc AnalysisSettings.cc AnalysisForm.cc Quadrature.cc \
-           MeshlessFEM.cc \
+           MeshlessFEM2D.cc \
            MatlabInterface/MatlabInterface.cpp QMatlabInterface.cc \
            ModelForm.cc MarchingSquaresGrid.cc ShaderCompiler.cc \
            ViewSettingsWidget.cc Geometry.cc CSGFile.cc utils.cc draw.cc \

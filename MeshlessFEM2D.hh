@@ -1,11 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////
-// MeshlessFEM.hh
+// MeshlessFEM2D.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Implements mesh-free finite element discretization of linear elasticity.
-//      "Mesh-free" means the surface/volume representation only needs to
-//      support point inclusion tests. However, an explicit piecewise linear
-//      boundary representation is needed for boundary force integration.
+//      Implements a 2D mesh-free finite element discretization of linear
+//      elasticity. "Mesh-free" means the surface/volume representation only
+//      needs to support point inclusion tests.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -36,11 +35,11 @@
 
 // Note: ResultsCollector is forward declared in "GlobalTypes.hh". We choose not
 // to bring in "ResultsCollector.hh" since typedefs in its defintion instantiate
-// MeshlessFEM, causing subtle dependency cycle problems. Better to treat it as
+// MeshlessFEM2D, causing subtle dependency cycle problems. Better to treat it as
 // an opaque type...
 
 template<typename _Model>
-class MeshlessFEM {
+class MeshlessFEM2D {
 public:
     typedef _Model Model;
     typedef typename Model::Vector         Vector;
@@ -63,7 +62,7 @@ public:
     typedef TripletMatrix<Triplet<Real> > TMatrix;
     typedef Eigen::SparseMatrix<Real> SparseMatrix;
 
-    typedef ResultsCollector<MeshlessFEM<_Model> > RC;
+    typedef ResultsCollector<MeshlessFEM2D<_Model> > RC;
 
     class ElementData;
 
@@ -74,7 +73,7 @@ public:
     class PerElementMassMatrixDensity;
     class BoundaryFunctionLoad;
 
-    MeshlessFEM(Model &model, const AnalysisSettings &settings,
+    MeshlessFEM2D(Model &model, const AnalysisSettings &settings,
                 SolverLibrary<Real> &solvers)
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
           m_displacementStrainCached(false), m_solvers(solvers)
@@ -95,8 +94,8 @@ public:
         configureWeaknessAnalysis(settings);
     }
 
-    // Construct MeshlessFEM fast using (cellOverlaps, model, bbox, settings)
-    MeshlessFEM(const std::vector<Real> &cellOverlaps, Model &model,
+    // Construct MeshlessFEM2D fast using (cellOverlaps, model, bbox, settings)
+    MeshlessFEM2D(const std::vector<Real> &cellOverlaps, Model &model,
             const BBox<Vector> &bbox, const AnalysisSettings &settings,
             SolverLibrary<Real> &solvers)
         : m_model(model), m_stiffnessCached(false), m_massCached(false),
@@ -449,7 +448,7 @@ private:
 };
 
 template<typename Model>
-class MeshlessFEM<Model>::ElementData
+class MeshlessFEM2D<Model>::ElementData
 {
 public:
     ElementData() { }
@@ -464,7 +463,7 @@ public:
         return m_gradPhis(c, d);
     }
 
-    typedef typename MeshlessFEM<Model>::FlattenedTensor FlattenedTensor;
+    typedef typename MeshlessFEM2D<Model>::FlattenedTensor FlattenedTensor;
 
     // Compute non-engineering strain tensor for linear elasticity:
     // e_xx = d u_x / dx = u_0_x d phi_0 / dx + u_1_x d phi_1 / dx + ...

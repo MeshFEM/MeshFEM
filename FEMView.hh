@@ -29,7 +29,7 @@ extern "C" {
 }
 
 #include "GlobalTypes.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 #include "ViewSettings.hh"
 #include "colors.hh"

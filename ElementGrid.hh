@@ -38,8 +38,6 @@
 #include <Eigen/Dense>
 #include <vector>
 
-typedef enum { CELL_TYPE_FULL, CELL_TYPE_CUT, CELL_TYPE_EMPTY } CellType;
-
 template<typename Model>
 class ElementGrid2D : public Grid2D {
 public:
@@ -59,7 +57,7 @@ public:
     // Construct ElementGrid2D quickly using (model, bbox, cellOverlaps) to
     // accelerate
     ElementGrid2D(size_t Nx, size_t Ny, double cellOverlapThreshold,
-                  const Quadrature2D &q, const Model &model, const BBox_t &bbox,
+                  const Quadrature2D &q, const Model &model, const _BBox &bbox,
                   size_t borderWidth,
                   std::vector<Scalar> cellOverlaps = std::vector<Scalar>())
         : Grid2D(Nx, Ny, bbox, borderWidth),
@@ -107,13 +105,8 @@ public:
         return m_cellOverlapThreshold;
     }
 
-    size_t numElements() const  {
-        return m_cellForElement.size();
-    }
-
-    size_t numNodes() const {
-        return m_vertexForNode.size();
-    }
+    size_t numElements() const { return m_cellForElement.size(); }
+    size_t numNodes()    const { return m_vertexForNode.size(); }
 
     _BBox elementBoundingBox(size_t i) const
     {
@@ -242,9 +235,6 @@ private:
     // How much a cell must overlap the object to be considered an element.
     Scalar m_cellOverlapThreshold;
 
-    // Records whether 
-    std::vector<CellType> m_cellType;
-
     // Maps between node/vertex indices and element/cell indices
     IndexVector m_nodeForVertex, m_vertexForNode,
                 m_elementForCell, m_cellForElement;
@@ -255,11 +245,140 @@ private:
 
     const Quadrature2D &m_quadrature;
     const Model &m_model;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Private Member Functions
-    ////////////////////////////////////////////////////////////////////////////
 };
+
+template<typename Model>
+class ElementGrid3D : public Grid3D {
+public:
+    using Grid3D::_BBox;
+    using Grid3D::AdjacencyVec;
+
+    ElementGrid3D(size_t Nx, size_t Ny, size_t Nz, double cellOverlapThreshold,
+                  const Quadrature3D &q, const Model &model, size_t borderWidth)
+        : Grid3D(Nx, Ny, Nz, model.boundingBox(), borderWidth),
+          m_cellOverlapThreshold(cellOverlapThreshold),
+          m_quadrature(q), m_model(model)
+    {
+        update();
+    }
+
+    // Construct ElementGrid3D quickly using (model, bbox, cellOverlaps) to
+    // accelerate
+    ElementGrid3D(size_t Nx, size_t Ny, size_t Nz, double cellOverlapThreshold,
+                  const Quadrature3D &q, const Model &model, const _BBox &bbox,
+                  size_t borderWidth,
+                  std::vector<Scalar> cellOverlaps = std::vector<Scalar>())
+        : Grid3D(Nx, Ny, Nz, bbox, borderWidth),
+          m_cellOverlapThreshold(cellOverlapThreshold),
+          m_quadrature(q), m_model(model)
+    {
+        update(cellOverlaps);
+    }
+
+    // Should be called whenever the grid size, quadrature, or model changes. If
+    // cellOverlaps is passed and is of size numCells(), it is used to determine
+    // cell classification without running inside/outside queries (much faster!)
+    void update(std::vector<Scalar> cellOverlaps = std::vector<Scalar>());
+
+    void setBorderWidth(size_t borderWidth) {
+        Grid3D::setBorderWidth(borderWidth);
+        update();
+    }
+
+    void setGridSize(size_t Nx, size_t Ny, size_t Nz) {
+        Grid3D::setGridSize(Nx, Ny, Nz);
+        update();
+    }
+
+    void setCellOverlapThreshold(double eps) {
+        m_cellOverlapThreshold = eps;
+        update();
+    }
+
+    double getCellOverlapThreshold() const { return m_cellOverlapThreshold; }
+
+    size_t numElements() const { return m_cellForElement.size(); }
+    size_t numNodes()    const { return m_vertexForNode.size(); }
+
+    _BBox elementBoundingBox(size_t i) const
+    {
+        assert(i < m_cellForElement.size());
+        return cellBoundingBox(m_cellForElement[i]);
+    }
+
+    Scalar elementOverlap(size_t i) const
+    {
+        assert(i < m_elementOverlap.size());
+        return m_elementOverlap[i];
+    }
+
+    void getCellOverlaps(std::vector<Scalar> &cellOverlaps) const {
+        cellOverlaps.assign(numCells(), 0.0);
+        for (size_t i = 0; i < numElements(); ++i)
+            cellOverlaps[m_cellForElement[i]] = elementOverlap(i);
+    }
+
+    Vector3D nodePosition(size_t i) const
+    {
+        assert(i < m_vertexForNode.size());
+        return vertexPosition(m_vertexForNode[i]);
+    }
+
+    void elementCorners(size_t ei, AdjacencyVec &corners) const {
+        assert(ei < m_elementForCell.size());
+        cellVertices(m_cellForElement[ei], corners);
+        for (size_t i = 0; i < (size_t) corners.rows(); ++i) {
+            corners[i] = m_nodeForVertex[corners[i]];
+            assert((corners[i] >= 0) && ((size_t) corners[i] < numNodes()));
+        }
+    }
+
+    AdjacencyVec elementCorners(size_t ei) const {
+        AdjacencyVec result;
+        elementCorners(ei, result);
+        return result;
+    }
+
+    void elementsAroundPoint(const Vector3D &pt, Scalar radius,
+                          std::vector<size_t> &elements) const {
+        elements.clear();
+
+        std::vector<size_t> cells;
+        cellsAroundPoint(pt, radius, cells);
+
+        for (size_t i = 0; i < cells.size(); ++i) {
+            assert(cells[i] < m_elementForCell.size());
+            int elem = m_elementForCell[cells[i]];
+            if (elem >= 0)
+                elements.push_back(elem);
+        }
+    }
+
+    bool elementIsFull(size_t i) const {
+        assert(i < m_elementOverlap.size());
+        return m_elementOverlap[i] == 1.0;
+    }
+
+    ~ElementGrid3D() { };
+
+private:
+    ////////////////////////////////////////////////////////////////////////////
+    // Member Variables
+    ////////////////////////////////////////////////////////////////////////////
+    typedef std::vector<int> IndexVector;
+
+    // How much a cell must overlap the object to be considered an element.
+    Scalar m_cellOverlapThreshold;
+
+    // Maps between node/vertex indices and element/cell indices
+    IndexVector m_nodeForVertex, m_vertexForNode,
+                m_elementForCell, m_cellForElement;
+    std::vector<Scalar> m_elementOverlap;
+
+    const Quadrature3D &m_quadrature;
+    const Model &m_model;
+};
+
 
 #include "ElementGrid.inl"
 

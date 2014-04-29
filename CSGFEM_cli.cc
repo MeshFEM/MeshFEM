@@ -15,7 +15,7 @@
 #include "AnalysisSettings.hh"
 #include "SolverLibrary.hh"
 #include "GlobalTypes.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 #include "CSGFile.hh"
 #include "BoundaryConditions.hh"

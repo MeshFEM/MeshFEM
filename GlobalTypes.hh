@@ -38,13 +38,19 @@ typedef BoundaryPoint<Vector> BoundaryPoint_t;
 typedef std::list<CSGNode *> NodeList;
 
 template<typename Model>
-class MeshlessFEM;
+class MeshlessFEM2D;
+template<typename Model>
+class MeshlessFEM3D;
 template<typename Model>
 class ElementGrid2D;
+template<typename Model>
+class ElementGrid3D;
 template<typename Generator>
 class ResultsCollector;
 
-typedef MeshlessFEM<CSGTree_t>   MeshlessFEM_t;
+#if DIM==2
+typedef MeshlessFEM2D<CSGTree_t>   MeshlessFEM_t;
+#endif
 typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
 typedef ResultsCollector<MeshlessFEM_t> ResultsCollector_t;
 

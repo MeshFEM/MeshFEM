@@ -203,6 +203,7 @@ protected:
 };
 
 class Grid3D {
+public:
     typedef BBox<Vector3D> _BBox;
     typedef Eigen::Matrix<int, 8, 1> AdjacencyVec;
 

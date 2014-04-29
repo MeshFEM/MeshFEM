@@ -25,7 +25,7 @@
 #include <string>
 #include <cassert>
 #include "GlobalTypes.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 #include "AnalysisSettings.hh"
 

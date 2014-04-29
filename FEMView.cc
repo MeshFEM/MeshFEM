@@ -25,7 +25,7 @@
 #include <limits>
 #include <boost/format.hpp>
 
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ShaderCompiler.hh"
 #include "Flipbook.hh"
 #include "BoundaryConditionDialog.hh"

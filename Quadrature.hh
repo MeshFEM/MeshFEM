@@ -3,6 +3,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Provides quadrature sample locations and weights.
+//      Only supports double precision currently because of partial template
+//      specialization woes (only classes in c++ can be partially specialized,
+//      tno their memebers :().
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -20,64 +23,52 @@
 
 #include <Eigen/Dense>
 
-class Quadrature2D {
-    typedef Vector2D::Scalar Real;
+template<int _Dim>
+class Quadrature {
+    typedef Scalar                       Real;
+    typedef Eigen::Matrix<Real, _Dim, 1> _Vector;
 public:
-    Quadrature2D(int numPoints = 16,
-                 QuadratureMethod method = UNIFORM_QUADRATURE)
-        : m_method(method) {
-        setNumPoints(numPoints);
-    }
+    Quadrature(int numPoints = -1, QuadratureMethod method =
+            UNIFORM_QUADRATURE);
 
-    void setNumPoints(int numPoints) {
-        // TODO: Implement gauss node snapping
-        numPoints = std::max(numPoints, 1);
-        int sqrtNumPoints = sqrtf(numPoints);
-        numPoints = sqrtNumPoints * sqrtNumPoints;
-        m_generateReferenceQuadratureNodes(numPoints);
-    }
+    void setNumPoints(int numPoints);
+    size_t numPoints() const { return m_referenceQuadraturePoints.size(); }
 
-    size_t numPoints() const {
-        return m_referenceQuadraturePoints.size();
-    }
-
-    void setQuadratureMethod(QuadratureMethod method) {
-        m_method = method;
-    }
-
-    QuadratureMethod getQuadratureMethod() const {
-        return m_method;
-    }
+    void setQuadratureMethod(QuadratureMethod method) { m_method = method; }
+    QuadratureMethod getQuadratureMethod() const { return m_method; }
 
     void setUsingGaussQuadrature(bool b) {
-        m_method = b ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE;
+        setQuadratureMethod(b ? GAUSS_QUADRATURE : UNIFORM_QUADRATURE);
     }
 
-    void quadraturePoints(const BBox<Vector2D> &b,
-                          std::vector<Vector2D> &qp) const;
-    std::vector<Vector2D> quadraturePoints(const BBox<Vector2D> &b) const;
+    void quadraturePoints(const BBox<_Vector> &b,
+                          std::vector<_Vector> &qp) const;
+    std::vector<_Vector> quadraturePoints(const BBox<_Vector> &b) const;
 
     // For each quadrature point, calls f.accumulate() passing in the sample
     // point along with the corresponding reference point (in the canonical
     // element) and weight (scaled by the ref->element jacobian determinant)
     template<typename Func>
-    void integrate(Func &f, const BBox<Vector2D> &b) const {
+    void integrate(Func &f, const BBox<_Vector> &b) const {
         int n = numPoints();
         Real volume = b.volume();
         for (int i = 0; i < n; ++i) {
-            const Vector2D &p = m_referenceQuadraturePoints[i];
+            const _Vector &p = m_referenceQuadraturePoints[i];
             Real weight = m_referenceQuadratureWeights[i];
-            Vector2D sample = b.interpolatePoint(p);
+            _Vector sample = b.interpolatePoint(p);
             f.accumulate(sample, p, weight * volume);
         }
     }
 
 private:
     QuadratureMethod m_method;
-    std::vector<Vector2D> m_referenceQuadraturePoints;
-    std::vector<Real>     m_referenceQuadratureWeights;
+    std::vector<_Vector> m_referenceQuadraturePoints;
+    std::vector<Real>    m_referenceQuadratureWeights;
 
     void m_generateReferenceQuadratureNodes(int numPoints);
 };
+
+typedef Quadrature<2> Quadrature2D;
+typedef Quadrature<3> Quadrature3D;
 
 #endif // QUADRATURE_HH

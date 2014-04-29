@@ -29,7 +29,7 @@
 
 #include "utils.hh"
 #include "ResultsWindowController.hh"
-#include "MeshlessFEM.hh"
+#include "MeshlessFEM2D.hh"
 #include "ResultsCollector.hh"
 #include "ResultsWindow.hh"
 #include "ResultTreeView.hh"
