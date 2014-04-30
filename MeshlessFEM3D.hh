@@ -25,6 +25,7 @@ public:
     typedef _Model                         Model;
     typedef typename Model::Vector         Vector;
     typedef typename Model::Real           Real;
+    typedef typename BBox<Vector>          BBox;
 
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
     typedef Eigen::Matrix<Real, 21, 1> DType;
@@ -38,23 +39,19 @@ public:
     typedef typename ElementGrid::AdjacencyVec CornerVec;
 
 private:
-    Quadrature3D *m_quadrature;
+    Quadrature3D m_quadrature;
     Model &m_model;
-    ElementGrid *m_elementGrid;
-
-    std::vector<_BoundaryPoint>   m_boundaryPoints;
-    std::vector<BoundaryFunction> m_boundaryFunctions;
-    BoundaryConditions<Vector>    m_boundaryConditions;
+    ElementGrid m_elementGrid;
 
     bool m_exactFullElements;
     DType m_d;
     SolverLibrary<Real> &m_solvers;
 
-    typedef std::vector<size_t> IndexVec;
-    typedef std::vector<Real>   ValueVec;
-
     class PerElementOrthotropicStiffnessDensity;
     class PerElementGradPhi;
+
+    // Sparse Matrices
+    typedef TripletMatrix<Triplet<Real> > TMatrix;
 
     void m_assembleStiffnessMatrix(TMatrix &K);
     void m_assembleRigidModeMatrix(TMatrix &R);

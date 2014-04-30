@@ -60,7 +60,6 @@ public:
 
     // Sparse Matrices
     typedef TripletMatrix<Triplet<Real> > TMatrix;
-    typedef Eigen::SparseMatrix<Real> SparseMatrix;
 
     typedef ResultsCollector<MeshlessFEM2D<_Model> > RC;
 
@@ -245,9 +244,7 @@ public:
 
     size_t dim() const { return Vector::RowsAtCompileTime; }
 
-    Model &model() {
-        return m_model;
-    }
+    Model &model() { return m_model; }
 
     const std::vector<_BoundaryPoint> &boundaryPoints() const {
         return m_boundaryPoints;

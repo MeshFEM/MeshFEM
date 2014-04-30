@@ -433,7 +433,7 @@ void MeshlessFEM2D<Model>::m_assembleStiffnessMatrix(TMatrix &K)
 
     K.clear();
     size_t nnz = 64 * m_elementGrid.numElements();
-    K.nz.reserve(nnz);
+    K.reserve(nnz);
 
     for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
         BBox_t b = m_elementGrid.elementBoundingBox(e);

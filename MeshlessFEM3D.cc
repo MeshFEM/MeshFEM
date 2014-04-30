@@ -731,26 +731,132 @@ private:
     value_type KOrtho, KOrthoInt;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Compute and assemble each 24x24 per-element stiffness matrix into the full
+//  3N x 3N stiffness matrix.
+//  @param[out] K   Stiffness matrix in sparse triplet format.
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
+    K.m = K.n = 3 * m_elementGrid.numNodes();
+    PerElementOrthotropicStiffnessDensity stiff(m_d, m_model);
+    CornerVec cornerIndices;
+
+    K.clear();
+    K.reserve(24 * 24 * m_elementGrid.numElements());
+
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+         BBox b = m_elementGrid.elementBoundingBox(e);
+         m_elementGrid.elementCorners(e, cornerIndices);
+         stiff.setDimensions(b.dimensions());
+
+         if (m_exactFullElements && m_elementGrid.elementIsFull(e)) {
+             for (size_t i = 0; i < 8; ++i) {
+                 size_t vi = cornerIndices[i];
+                 for (size_t j = 0; j < 8; ++j) {
+                     size_t vj = cornerIndices[j];
+                     // xx, xy, xz, yx, yy, yz, zx, zy, zz
+                     K.addNZ(3 * vi    , 3 * vj    , stiff.fullCellIntegral(3 * i    , 3 * j    ));
+                     K.addNZ(3 * vi    , 3 * vj + 1, stiff.fullCellIntegral(3 * i    , 3 * j + 1));
+                     K.addNZ(3 * vi    , 3 * vj + 2, stiff.fullCellIntegral(3 * i    , 3 * j + 2));
+                     K.addNZ(3 * vi + 1, 3 * vj    , stiff.fullCellIntegral(3 * i + 1, 3 * j    ));
+                     K.addNZ(3 * vi + 1, 3 * vj + 1, stiff.fullCellIntegral(3 * i + 1, 3 * j + 1));
+                     K.addNZ(3 * vi + 1, 3 * vj + 2, stiff.fullCellIntegral(3 * i + 1, 3 * j + 2));
+                     K.addNZ(3 * vi + 2, 3 * vj    , stiff.fullCellIntegral(3 * i + 2, 3 * j    ));
+                     K.addNZ(3 * vi + 2, 3 * vj + 1, stiff.fullCellIntegral(3 * i + 2, 3 * j + 1));
+                     K.addNZ(3 * vi + 2, 3 * vj + 2, stiff.fullCellIntegral(3 * i + 2, 3 * j + 2));
+                 }
+             }
+         }
+         else {
+             stiff.clear();
+             m_quadrature.integrate(stiff, b);
+             for (size_t i = 0; i < 8; ++i) {
+                 size_t vi = cornerIndices[i];
+                 for (size_t j = 0; j < 8; ++j) {
+                     size_t vj = cornerIndices[j];
+                     // xx, xy, xz, yx, yy, yz, zx, zy, zz
+                     K.addNZ(3 * vi    , 3 * vj    , stiff(3 * i    , 3 * j    ));
+                     K.addNZ(3 * vi    , 3 * vj + 1, stiff(3 * i    , 3 * j + 1));
+                     K.addNZ(3 * vi    , 3 * vj + 2, stiff(3 * i    , 3 * j + 2));
+                     K.addNZ(3 * vi + 1, 3 * vj    , stiff(3 * i + 1, 3 * j    ));
+                     K.addNZ(3 * vi + 1, 3 * vj + 1, stiff(3 * i + 1, 3 * j + 1));
+                     K.addNZ(3 * vi + 1, 3 * vj + 2, stiff(3 * i + 1, 3 * j + 2));
+                     K.addNZ(3 * vi + 2, 3 * vj    , stiff(3 * i + 2, 3 * j    ));
+                     K.addNZ(3 * vi + 2, 3 * vj + 1, stiff(3 * i + 2, 3 * j + 1));
+                     K.addNZ(3 * vi + 2, 3 * vj + 2, stiff(3 * i + 2, 3 * j + 2));
+                 }
+             }
+         }
+    }
 }
 
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix whose rows span the space of translations.
 //  This matrix can also compute the total force of a load.
 //  @param[out] T   Translation mode matrix in sparse triplet format.
-*///////////////////////////////////////////////////////////////////////////
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_assembleTranslationMatrix(TMatrix &T) {
+    size_t nNodes = m_elementGrid.numNodes();
 
+    T.m = 3;
+    T.n = 3 * nNodes;
+
+    T.clear();
+    T.reserve(3 * nNodes);
+    
+    for (size_t k = 0; k < nNodes; ++k) {
+        T.addNz(0, 3 * k    , 1.0);
+        T.addNz(1, 3 * k + 1, 1.0);
+        T.addNz(2, 3 * k + 2, 1.0);
+    }
 }
 
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_computePerElementDisplacementStrainMap() {
+
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a sparse matrix mapping a flattened per-node displacement vector to a 
+//  flattened per-element (non-engineering) strain tensor. The strain tensor for
+//  element e is computed by rows 6 * e + [0..5].
+//  @param[out]  B      displacement->strain matrix in sparse triplet format
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_assembleBMatrix(TMatrix &B) {
+    if (!m_displacementStrainCached)
+        m_computePerElementDisplacementStrainMap();
+
+    B.m = 6 * m_elementGrid.numElements();
+    B.n = 3 * m_elementGrid.numNodes();
+
+    B.clear();
+    // 3 normal strain rows have  8 nonzeros
+    // 3  shear strain rows have 16 nonzeros
+    B.reserve(72 * m_elementGrid.numElements());
+
+    CornerVec cornerIndices;
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+        const ElementData &data = m_elementData[e];
+        m_elementGrid.elementCorners(e, cornerIndices);
+        for (size_t c = 0; c < 8; ++c) {
+            size_t vtx = cornerIndices[c];
+            // Rows of B are given by Voigt flattening:
+            // First normal stresses: e_xx, e_yy, e_zz...
+            B.addNZ(6 * e    , 3 * vtx    , data.gradPhi(c, 0));
+            B.addNZ(6 * e + 1, 3 * vtx + 1, data.gradPhi(c, 1));
+            B.addNZ(6 * e + 2, 3 * vtx + 2, data.gradPhi(c, 2));
+            // then shear stresses: e_yz, e_xz, e_xy
+            B.addNZ(6 * e + 3, 3 * vtx + 1, 0.5 * data.gradPhi(c, 2));
+            B.addNZ(6 * e + 3, 3 * vtx + 2, 0.5 * data.gradPhi(c, 1));
+            B.addNZ(6 * e + 4, 3 * vtx    , 0.5 * data.gradPhi(c, 2));
+            B.addNZ(6 * e + 4, 3 * vtx + 2, 0.5 * data.gradPhi(c, 0));
+            B.addNZ(6 * e + 5, 3 * vtx    , 0.5 * data.gradPhi(c, 1));
+            B.addNZ(6 * e + 5, 3 * vtx + 1, 0.5 * data.gradPhi(c, 0));
+        }
+    }
 }
 
 template<typename _Model>

@@ -98,12 +98,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, const char *argv[])
 {
-    po::variables_map vm = parseCmdLine(argc, argv);
+    po::variables_map args = parseCmdLine(argc, argv);
 
     AnalysisSettings settings;
     string settingsName("Default");
-    if (vm.count("settings") > 0) {
-        string settingsPath = vm["settings"].as<string>();
+    if (args.count("settings") > 0) {
+        string settingsPath = args["settings"].as<string>();
         ifstream settingsFile(settingsPath);
         if (!settingsFile.is_open())
             cout << "Couldn't open settings '" << settingsPath << '\'' << endl;
@@ -114,10 +114,10 @@ int main(int argc, const char *argv[])
         }
     }
 
-    if (vm.count("settingsName"))
-        settingsName = vm["settingsName"].as<string>();
+    if (args.count("settingsName"))
+        settingsName = args["settingsName"].as<string>();
 
-    bool dumpMatrices = vm.count("dumpMatrices");
+    bool dumpMatrices = args.count("dumpMatrices");
 
 #ifdef HAS_MATLAB
     LazyQMatlab matlab;
@@ -127,16 +127,16 @@ int main(int argc, const char *argv[])
 #endif
 
     CSGTree_t csgTree;
-    string modelPath = vm["modelFile"].as<string>();
+    string modelPath = args["modelFile"].as<string>();
     boost::filesystem::path mpath(modelPath);
     string modelName = boost::filesystem::basename(mpath);
 
     Timer *timer = NULL;
-    if (vm.count("time"))
+    if (args.count("time"))
         timer = new Timer();
     
-    if (vm.count("modelName"))
-        modelName = vm["modelName"].as<string>();
+    if (args.count("modelName"))
+        modelName = args["modelName"].as<string>();
 
     if (timer) timer->startSection("Setup");
     if (timer) timer->start("parseCSGFile");
@@ -148,7 +148,7 @@ int main(int argc, const char *argv[])
     if (timer) timer->stop("FEM Grid");
 
     if (timer) timer->start("readConditions");
-    string bcPath = vm["bcFile"].as<string>();
+    string bcPath = args["bcFile"].as<string>();
     fem.boundaryConditions().readConditions(bcPath);
     if (timer) timer->stop("readConditions");
 
@@ -164,13 +164,13 @@ int main(int argc, const char *argv[])
     if (timer) timer->startSection("Output");
     if (timer) timer->start(".res");
     string lastResultPath = rc.lastResultPath();
-    string outPath = vm["outputFile"].as<string>();
+    string outPath = args["outputFile"].as<string>();
     rc.writeResult(lastResultPath, outPath);
     if (timer) timer->stop(".res");
 
-    if (vm.count("msh")) {
+    if (args.count("msh")) {
         if (timer) timer->start(".msh");
-        string path = vm["msh"].as<string>();
+        string path = args["msh"].as<string>();
         MSHWriter<MeshlessFEM_t::ElementGrid> writer(path, fem.elementGrid());
         ResultsCollector_t::ConstRPtr r = rc.getResultWithPath(lastResultPath);
         r->addToMSH(writer, "Simulation");
