@@ -211,14 +211,14 @@ std::ostream &operator<<(std::ostream &os, const ScalarField<Real> &sf)
 
 
 // Symmetric matrix NxN fields need only store the upper triangle of the NxN
-// matrix. This triangle is flattened into a 1D vector as follows:
-//    [ 0  N  N+2 ...    ]
-//    [    1  N+3 ...    ]
-//    [        2         ]
-//    [         ..       ]
-//    [           ..     ]
-//    [              N-1 ]
-// This flattening is compatible with the typical stress/strain flattening that
+// matrix. This triangle is flattened into a 1D vector following Voigt notation.
+//  [ 0 2 ]   [ 0 5 4 ]  ...  [ 0  N*(N+1)/2 -1  ]
+//  [   1 ]   [   1 3 ]       [    1             ]
+//            [     2 ]       [        2     ... ]
+//                            [         ..   N+1 ]
+//                            [           .. N   ]
+//                            [              N-1 ]
+// This is the typical stress/strain flattening that
 // collects the diagonal xx, yy, ... entries at the beginning
 // The total number of entries is sum_{i=1}^N i = (N * (N + 1)) / 2
 // (because there are i entries in the ith column).
@@ -243,7 +243,14 @@ public:
                 std::swap(i, j);
             }
             // Note: j > 0 because j == 0 contradicts j > i     (i >= 0)
-            idx1D = t_N + ((j - 1) * j) / 2 + i;
+            // Generalization of Voigt notation (matches for 2, 3 dim Rank 2
+            // tensors). Derivation: upper triangle's indices are found by
+            // subtracting from the maximum number of elements (N * (N + 1)) /2:
+            // - 1 2 3
+            // - - 3 4
+            // - - - 5
+            // - - - -
+            idx1D = (t_N * (t_N + 1)) / 2 - (i + ((j - 1) * j) / 2 + 1);
         }
 
         return idx1D;
