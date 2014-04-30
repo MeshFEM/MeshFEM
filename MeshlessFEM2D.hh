@@ -75,15 +75,15 @@ public:
 
     MeshlessFEM2D(Model &model, const AnalysisSettings &settings,
                 SolverLibrary<Real> &solvers)
-        : m_model(model), m_stiffnessCached(false), m_massCached(false),
+        : m_quadrature(settings.Int("quadraturePoints"),
+                       (QuadratureMethod) settings.Enum("quadrature")),
+          m_model(model),
+          m_elementGrid(settings.Int("Nx"), settings.Int("Ny"),
+                settings.Real("cellOverlapThreshold"), m_quadrature, model,
+                settings.Int("borderWidth")),
+          m_stiffnessCached(false), m_massCached(false),
           m_displacementStrainCached(false), m_solvers(solvers)
     {
-        m_quadrature = new Quadrature2D(settings.Int("quadraturePoints"),
-                                        (QuadratureMethod) settings.Enum("quadrature"));
-        m_elementGrid = new ElementGrid(settings.Int("Nx"), settings.Int("Ny"),
-                settings.Real("cellOverlapThreshold"), *m_quadrature, model,
-                settings.Int("borderWidth"));
-
         m_selectedWeakRegion = -1L;
         
         configureElements(settings);
@@ -98,15 +98,15 @@ public:
     MeshlessFEM2D(const std::vector<Real> &cellOverlaps, Model &model,
             const BBox<Vector> &bbox, const AnalysisSettings &settings,
             SolverLibrary<Real> &solvers)
-        : m_model(model), m_stiffnessCached(false), m_massCached(false),
+        : m_quadrature(settings.Int("quadraturePoints"),
+                       (QuadratureMethod) settings.Enum("quadrature")),
+          m_model(model),
+          m_elementGrid(settings.Int("Nx"), settings.Int("Ny"),
+                settings.Real("cellOverlapThreshold"), m_quadrature, model, bbox,
+                settings.Int("borderWidth"), cellOverlaps),
+          m_stiffnessCached(false), m_massCached(false),
           m_displacementStrainCached(false), m_solvers(solvers)
     {
-        m_quadrature = new Quadrature2D(settings.Int("quadraturePoints"),
-                                        (QuadratureMethod) settings.Enum("quadrature"));
-        m_elementGrid = new ElementGrid(settings.Int("Nx"), settings.Int("Ny"),
-                settings.Real("cellOverlapThreshold"), *m_quadrature, model, bbox,
-                settings.Int("borderWidth"), cellOverlaps);
-
         m_selectedWeakRegion = -1L;
         
         configureElements(settings);
@@ -151,7 +151,7 @@ public:
             changesPending = true;
         }
 
-        ElementGrid &grid = elementGrid();
+        ElementGrid &grid = m_elementGrid;
         if (grid.getCellOverlapThreshold() != settings.Real("cellOverlapThreshold")) {
             grid.setCellOverlapThreshold(settings.Real("cellOverlapThreshold"));
             changed = true;
@@ -236,19 +236,12 @@ public:
     // refitGrid determines whether the element grid should be fit inside the
     // new model bounding box.
     void modelChanged() {
-        elementGrid().update();
+        m_elementGrid.update();
         m_invalidateCache();
     }
 
-    ElementGrid &elementGrid() {
-        assert(m_elementGrid != NULL);
-        return *m_elementGrid;
-    }
-
-    const ElementGrid &elementGrid() const {
-        assert(m_elementGrid != NULL);
-        return *m_elementGrid;
-    }
+    ElementGrid       &elementGrid()       { return m_elementGrid; }
+    const ElementGrid &elementGrid() const { return m_elementGrid; }
 
     size_t dim() const { return Vector::RowsAtCompileTime; }
 
@@ -260,10 +253,8 @@ public:
         return m_boundaryPoints;
     }
 
-    Quadrature2D &quadrature() {
-        assert(m_quadrature != NULL);
-        return *m_quadrature;
-    }
+          Quadrature2D &quadrature()       { return m_quadrature; }
+    const Quadrature2D &quadrature() const { return m_quadrature; }
 
     size_t numModes() const {
         return m_modes.size();
@@ -349,9 +340,9 @@ public:
                                      bool signedNorm = false);
 
 private:
-    Quadrature2D *m_quadrature;
+    Quadrature2D m_quadrature;
     Model &m_model;
-    ElementGrid *m_elementGrid;
+    ElementGrid m_elementGrid;
 
     std::vector<_BoundaryPoint>   m_boundaryPoints;
     std::vector<BoundaryFunction> m_boundaryFunctions;
@@ -420,21 +411,20 @@ private:
 
         Real energy = 0;
         CornerVec cornerIndices;
-        ElementGrid &grid = elementGrid();
         if (region.size() > 0) {
             // Only integrate over supplied region
             for (size_t i = 0; i < region.size(); ++i) {
                 size_t ei = region[i];
-                grid.elementCorners(ei, cornerIndices);
+                m_elementGrid.elementCorners(ei, cornerIndices);
                 const ElementData &e = m_elementData[ei];
                 energy += e.displacementToEnergy(disp, cornerIndices, m_d);
             }
         }
         else {
             // Integrate over entire object
-            size_t numElements = grid.numElements();
+            size_t numElements = m_elementGrid.numElements();
             for (size_t ei = 0; ei < numElements; ++ei) {
-                grid.elementCorners(ei, cornerIndices);
+                m_elementGrid.elementCorners(ei, cornerIndices);
                 const ElementData &e = m_elementData[ei];
                 energy += e.displacementToEnergy(disp, cornerIndices, m_d);
             }

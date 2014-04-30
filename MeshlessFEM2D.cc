@@ -427,23 +427,21 @@ template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleStiffnessMatrix(TMatrix &K)
 {
     // Simple (i, j v) stiffness matrix generation
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    const Quadrature2D &q = quadrature();
-    K.m = K.n = 2 * elemGrid.numNodes();
+    K.m = K.n = 2 * m_elementGrid.numNodes();
     PerElementStiffnessDensity stiff(m_d, model());
     CornerVec cornerIndices;
 
     K.clear();
-    size_t nnz = 64 * elemGrid.numElements();
+    size_t nnz = 64 * m_elementGrid.numElements();
     K.nz.reserve(nnz);
 
-    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
-        BBox_t b = elemGrid.elementBoundingBox(e);
-        elemGrid.elementCorners(e, cornerIndices);
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+        BBox_t b = m_elementGrid.elementBoundingBox(e);
+        m_elementGrid.elementCorners(e, cornerIndices);
         stiff.setDimensions(b.dimensions());
-        if ((m_exactFullElements && elemGrid.elementIsFull(e))
+        if ((m_exactFullElements && m_elementGrid.elementIsFull(e))
                 || m_antialiasedElements) {
-            Real rho = elemGrid.elementOverlap(e);
+            Real rho = m_elementGrid.elementOverlap(e);
             for (size_t i = 0; i < 4; ++i) {
                 size_t vi = cornerIndices[i];
                 for (size_t j = 0; j < 4; ++j) {
@@ -458,7 +456,7 @@ void MeshlessFEM2D<Model>::m_assembleStiffnessMatrix(TMatrix &K)
         }
         else {
             stiff.clear();
-            q.integrate(stiff, b);
+            m_quadrature.integrate(stiff, b);
             for (size_t i = 0; i < 4; ++i) {
                 size_t vi = cornerIndices[i];
                 for (size_t j = 0; j < 4; ++j) {
@@ -478,22 +476,20 @@ template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 {
     // Simple (i, j v) laplacian matrix generation
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    const Quadrature2D &q = quadrature();
-    L.m = L.n = elemGrid.numNodes();
+    L.m = L.n = m_elementGrid.numNodes();
     PerElementLaplacianDensity lap(model());
     CornerVec cornerIndices;
 
     L.clear();
-    size_t nnz = 16 * elemGrid.numElements();
+    size_t nnz = 16 * m_elementGrid.numElements();
     L.nz.reserve(nnz);
 
-    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
         lap.clear();
-        BBox_t b = elemGrid.elementBoundingBox(e);
+        BBox_t b = m_elementGrid.elementBoundingBox(e);
         lap.setDimensions(b.dimensions());
-        q.integrate(lap, b);
-        elemGrid.elementCorners(e, cornerIndices);
+        m_quadrature.integrate(lap, b);
+        m_elementGrid.elementCorners(e, cornerIndices);
         for (size_t i = 0; i < 4; ++i) {
             size_t vi = cornerIndices[i];
             for (size_t j = 0; j < 4; ++j) {
@@ -510,39 +506,37 @@ void MeshlessFEM2D<Model>::m_assembleLaplacianMatrix(TMatrix &L)
 template<typename Model>
 void MeshlessFEM2D<Model>::m_computePerElementDisplacementStrainMap()
 {
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    const Quadrature2D &q = quadrature();
     PerElementGradPhi gradPhi(model());
 
-    size_t numElements = elemGrid.numElements();
+    size_t numElements = m_elementGrid.numElements();
     if (m_elementData.size() != numElements) {
         m_elementData.resize(numElements);
     }
 
     if (m_antialiasedElements) {
         for (size_t e = 0; e < numElements; ++e) {
-            BBox_t b = elemGrid.elementBoundingBox(e);
+            BBox_t b = m_elementGrid.elementBoundingBox(e);
             gradPhi.setDimensions(b.dimensions());
-            Real rho = elemGrid.elementOverlap(e);
+            Real rho = m_elementGrid.elementOverlap(e);
             m_elementData[e].setGradPhis(rho * gradPhi.fullCellIntegral());
             m_elementData[e].setVolume(b.volume());
         }
     }
     else {
         for (size_t e = 0; e < numElements; ++e) {
-            BBox_t b = elemGrid.elementBoundingBox(e);
+            BBox_t b = m_elementGrid.elementBoundingBox(e);
             gradPhi.setDimensions(b.dimensions());
             m_elementData[e].setVolume(b.volume());
-            if (m_exactFullElements && (elemGrid.elementIsFull(e))) {
+            if (m_exactFullElements && (m_elementGrid.elementIsFull(e))) {
                 m_elementData[e].setGradPhis(gradPhi.fullCellIntegral());
             }
             else {
                 gradPhi.clear();
-                q.integrate(gradPhi, b);
+                m_quadrature.integrate(gradPhi, b);
                 // TODO: remove rho, or document so we know gradPhi is no
                 // longer an average over the cell, but rather an average over
                 // the non-void cell portion.
-                Real rho = elemGrid.elementOverlap(e);
+                Real rho = m_elementGrid.elementOverlap(e);
                 gradPhi.finalize(rho);
                 m_elementData[e].setGradPhis(gradPhi);
             }
@@ -563,10 +557,9 @@ MeshlessFEM2D<Model>::elementStressTensors(const VField &displacement)
 
     SMField stressTensorField(numElements);
 
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
     for (size_t e = 0; e < numElements; ++e) {
         CornerVec cornerIndices;
-        elemGrid.elementCorners(e, cornerIndices);
+        m_elementGrid.elementCorners(e, cornerIndices);
         typename SMField::SymmetricMatrix tensor = stressTensorField(e);
         m_elementData[e].displacementToStress(displacement, cornerIndices, m_d,
                                               tensor);
@@ -618,22 +611,20 @@ template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleMassMatrix(TMatrix &M, bool forLaplacian)
 {
     // Simple (i, j v) mass matrix generation
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    const Quadrature2D &q = quadrature();
 
-    M.m = M.n = (forLaplacian ? 1 : 2) * elemGrid.numNodes();
+    M.m = M.n = (forLaplacian ? 1 : 2) * m_elementGrid.numNodes();
 
     PerElementMassMatrixDensity lmass(model(), m_density, m_massMatrixType);
     CornerVec cornerIndices;
 
     M.clear();
-    size_t nnz = 16 * (forLaplacian ? 1 : 2) * (elemGrid.numElements());
+    size_t nnz = 16 * (forLaplacian ? 1 : 2) * (m_elementGrid.numElements());
     M.nz.reserve(nnz);
 
-    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
         lmass.clear();
-        q.integrate(lmass, elemGrid.elementBoundingBox(e));
-        elemGrid.elementCorners(e, cornerIndices);
+        m_quadrature.integrate(lmass, m_elementGrid.elementBoundingBox(e));
+        m_elementGrid.elementCorners(e, cornerIndices);
         for (size_t i = 0; i < 4; ++i) {
             size_t vi = cornerIndices[i];
             for (size_t j = 0; j < 4; ++j) {
@@ -702,7 +693,7 @@ void MeshlessFEM2D<Model>::buildBoundaryFunctions(Real r)
 {
     m_boundaryFunctions.clear();
     m_boundaryFunctions.reserve(m_boundaryPoints.size());
-    Vector cellSize = m_elementGrid->cellSize();
+    Vector cellSize = m_elementGrid.cellSize();
     Real h = std::max(cellSize[0], cellSize[1]);
     h *= r;
 
@@ -727,14 +718,12 @@ void MeshlessFEM2D<Model>::buildBoundaryFunctions(Real r)
 template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleLoadMatrix(TMatrix &F)
 {
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
     F.clear();
-    F.m = elemGrid.numNodes();
+    F.m = m_elementGrid.numNodes();
     F.n = numBoundaryPoints();
 
     std::vector<size_t> support_elems;
     CornerVec cornerIndices;
-    const Quadrature2D &q = quadrature();
 
     // Create (i, j, v) triplets for each function's contribution to load in a
     // single dimension.
@@ -746,16 +735,16 @@ void MeshlessFEM2D<Model>::m_assembleLoadMatrix(TMatrix &F)
         const BoundaryFunction &psi = boundaryFunction(f);
         BoundaryFunctionLoad load(psi, model());
 
-        elemGrid.elementsAroundPoint(psi.center(), psi.supportRadius(),
-                                     support_elems);
+        m_elementGrid.elementsAroundPoint(psi.center(), psi.supportRadius(),
+                                          support_elems);
         Real colSum = 0;
         // Mark the start of the values in this column so we can go back and
         // normalize them.
         size_t colValuesOffset = v.size();
         for (size_t e : support_elems) {
             load.clear();
-            q.integrate(load, elemGrid.elementBoundingBox(e));
-            elemGrid.elementCorners(e, cornerIndices);
+            m_quadrature.integrate(load, m_elementGrid.elementBoundingBox(e));
+            m_elementGrid.elementCorners(e, cornerIndices);
             for (size_t c = 0; c < 4; ++c) {
                 Real ld = load(c);
                 if (std::abs(ld) > 1e-8) {
@@ -795,10 +784,9 @@ void MeshlessFEM2D<Model>::m_assembleLoadMatrix(TMatrix &F)
 template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleRigidModeMatrix(TMatrix &R)
 {
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
     R.m = 3;
-    R.n = 2 * elemGrid.numNodes();
-    size_t nNodes = elemGrid.numNodes();
+    R.n = 2 * m_elementGrid.numNodes();
+    size_t nNodes = m_elementGrid.numNodes();
     
     R.clear();
     size_t predictedNNZ = 4 * nNodes;
@@ -812,7 +800,7 @@ void MeshlessFEM2D<Model>::m_assembleRigidModeMatrix(TMatrix &R)
 
     // Infinitesimal rotations
     for (size_t k = 0; k < nNodes; ++k) {
-        Vector p = elemGrid.nodePosition(k);
+        Vector p = m_elementGrid.nodePosition(k);
         // offset: [-y, x]
         R.addNZ(2, 2 * k, -p[1]);
         R.addNZ(2, 2 * k + 1, p[0]);
@@ -873,20 +861,19 @@ void MeshlessFEM2D<Model>::m_assembleNMatrix(TMatrix &N)
 template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleBMatrix(TMatrix &B)
 {
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    B.m = 3 * elemGrid.numElements();
-    B.n = 2 * elemGrid.numNodes();
+    B.m = 3 * m_elementGrid.numElements();
+    B.n = 2 * m_elementGrid.numNodes();
 
     if (!m_displacementStrainCached)
         m_computePerElementDisplacementStrainMap();
 
-    size_t nnz = 16 * elemGrid.numElements();
+    size_t nnz = 16 * m_elementGrid.numElements();
     B.clear();
     B.reserve(nnz);
 
-    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
         CornerVec cornerIndices;
-        elemGrid.elementCorners(e, cornerIndices);
+        m_elementGrid.elementCorners(e, cornerIndices);
         for (size_t c = 0; c < 4; ++c) {
             size_t vtx = cornerIndices[c];
             // e_xx, e_yy, e_xy (1), e_xy (2)
@@ -906,11 +893,10 @@ void MeshlessFEM2D<Model>::m_assembleBMatrix(TMatrix &B)
 template<typename Model>
 void MeshlessFEM2D<Model>::m_assembleVDMatrix(TMatrix &VD)
 {
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    VD.m = 3 * elemGrid.numElements();
-    VD.n = 3 * elemGrid.numElements();
+    VD.m = 3 * m_elementGrid.numElements();
+    VD.n = 3 * m_elementGrid.numElements();
 
-    size_t nnz = 5 * elemGrid.numElements();
+    size_t nnz = 5 * m_elementGrid.numElements();
     VD.clear();
     VD.reserve(nnz);
 
@@ -918,7 +904,7 @@ void MeshlessFEM2D<Model>::m_assembleVDMatrix(TMatrix &VD)
     // D = d00 d01   0 =  d0 d1   0 
     //     d10 d11   0    d1 d2   0
     //     0   0   d22    0   0   d3
-    for (size_t e = 0; e < elemGrid.numElements(); ++e) {
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
         Real vol = m_elementData[e].volume();
         VD.addNZ(3 * e + 0, 3 * e + 0, vol * m_d[0]);
         VD.addNZ(3 * e + 0, 3 * e + 1, vol * m_d[1]);
@@ -1070,11 +1056,10 @@ bool MeshlessFEM2D<Model>::simulate(RC *rc, Timer *timer) {
     Solver<Real> *solver = m_solvers.solver();
 
     std::vector<std::pair<size_t, Real> > dirichletValues;
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    for (size_t i = 0; i < elemGrid.numNodes(); ++i) {
+    for (size_t i = 0; i < m_elementGrid.numNodes(); ++i) {
         // Dirichlet constraint information: (componentIsConstrained, value)
         std::vector<std::pair<bool, Real> > dc;
-        if (m_boundaryConditions.getDirichlet(elemGrid.nodePosition(i), dc)) {
+        if (m_boundaryConditions.getDirichlet(m_elementGrid.nodePosition(i), dc)) {
             // Add a constraint for each component of the fixed node's disp.
             for (size_t j = 0; j < dim(); ++j) {
                 if (!dc[j].first) continue;
@@ -1109,13 +1094,13 @@ bool MeshlessFEM2D<Model>::simulate(RC *rc, Timer *timer) {
         if (s) {
             VField volForce;
             s->getVolumeForceForForces(forces, volForce);
-            RPtr f_r(new Result(elemGrid,
+            RPtr f_r(new Result(m_elementGrid,
                                 Result::PER_ELEM, m_simulatedStressNorms,
                                 Result::PER_NODE, volForce));
             rc->setResult("Blurred Boundary Forces", f_r);
         }
 
-        RPtr r(new Result(elemGrid,
+        RPtr r(new Result(m_elementGrid,
                           Result::PER_ELEM, m_simulatedStressNorms,
                           Result::PER_NODE, m_simulatedDisplacement));
         rc->setResult("Simulation", r);
@@ -1165,12 +1150,11 @@ int MeshlessFEM2D<Model>::weakRegionExtraction(RC *rc)
     m_weakRegions.clear();
     m_weakRegionStressNorms.clear();
 
-    const ElementGrid &grid = elementGrid();
     for (size_t m = numRigidModes(); m < m_modes.size(); ++m) {
         // compute the stress cutoff value
         const SField &stressNorms = m_modalStressNorms[m];
         const VField &modalDisp   = m_modes[m];
-        assert(stressNorms.size() == grid.numElements());
+        assert(stressNorms.size() == m_elementGrid.numElements());
 
         std::vector<size_t> sortedElements;
         sortPermutation(AbsWrapper<SField>(stressNorms), sortedElements);
@@ -1201,7 +1185,7 @@ int MeshlessFEM2D<Model>::weakRegionExtraction(RC *rc)
             while (!bfsQueue.empty()) {
                 size_t u = bfsQueue.front();
                 bfsQueue.pop();
-                grid.elementsAdjacentElement(u, adj);
+                m_elementGrid.elementsAdjacentElement(u, adj);
                 for (size_t j = 0; j < adj.size(); ++j) {
                     size_t v = adj[j];
                     assert(v < wrIndex.size());
@@ -1255,7 +1239,7 @@ int MeshlessFEM2D<Model>::weakRegionExtraction(RC *rc)
         for (size_t i = 0; i < m_weakRegionStressNorms.size(); ++i) {
             typedef typename RC::Result Result;
             typedef typename RC::RPtr RPtr;
-            RPtr r(new Result(grid, Result::PER_ELEM,
+            RPtr r(new Result(m_elementGrid, Result::PER_ELEM,
                               m_weakRegionStressNorms[i]));
             rc->setResult(string("Weak Regions:Region ") + to_string(i), r);
         }
@@ -1287,9 +1271,8 @@ bool MeshlessFEM2D<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     solver->configureAnalysis(K, F, R, N, A, B, VD, m_totalForceBound,
                                 m_pointwisePressureBound);
 
-    const ElementGrid2D<Model> &elemGrid = elementGrid();
-    size_t numNodes = elemGrid.numNodes();
-    size_t numElems = elemGrid.numElements();
+    size_t numNodes = m_elementGrid.numNodes();
+    size_t numElems = m_elementGrid.numElements();
 
     m_combinedWeakness.resizeDomain(numElems);
     m_combinedWeakness.clear();
@@ -1313,14 +1296,14 @@ bool MeshlessFEM2D<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
             SField  optStress = computeStressTensorNorms(stressTensors);
 
             if (rc != NULL) {
-                RPtr r(new Result(elemGrid, Result::PER_BDRY, pressures));
+                RPtr r(new Result(m_elementGrid, Result::PER_BDRY, pressures));
                 string regionName = string("Weak Regions:Region ") + to_string(i);
                 string pmName;
                 if (m_plusMinusObjective)
                     pmName = (pass == 0) ? " (+)" : " (-)";
                 rc->setResult(regionName + ":Opt Pressure" + pmName, r);
 
-                r = RPtr(new Result(elemGrid, Result::PER_ELEM, optStress,
+                r = RPtr(new Result(m_elementGrid, Result::PER_ELEM, optStress,
                                     Result::PER_NODE, optU));
                 rc->setResult(regionName + ":Opt Displacement" + pmName, r);
             }
@@ -1330,7 +1313,7 @@ bool MeshlessFEM2D<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     }
 
     if (rc != NULL) {
-        RPtr r(new Result(elemGrid, Result::PER_ELEM, m_combinedWeakness));
+        RPtr r(new Result(m_elementGrid, Result::PER_ELEM, m_combinedWeakness));
         rc->setResult("Combined Weakness", r);
     }
 
@@ -1354,7 +1337,7 @@ bool MeshlessFEM2D<Model>::weaknessAnalysis(Real &weaknessCriterion, RC *rc)
     // // so partial elements have an unfair advantage in the rankings)
     // Real weaknessCriterion = m_combinedWeakness[cwSortPerm.back()];
     // for (int i = cwSortPerm.size() - 1; i >= 0; --i) {
-    //     if (elemGrid.elementIsFull(cwSortPerm[i])) {
+    //     if (m_elementGrid.elementIsFull(cwSortPerm[i])) {
     //         weaknessCriterion = m_combinedWeakness[cwSortPerm[i]];
     //         break;
     //     }
