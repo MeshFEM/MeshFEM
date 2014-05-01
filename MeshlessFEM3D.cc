@@ -10,8 +10,10 @@
 //  Company:  New York University
 //  Created:  04/30/2014 00:07:12
 ////////////////////////////////////////////////////////////////////////////////
+#define DIM 3
 #include "MeshlessFEM3D.hh"
 #include <cassert>
+#include <iostream>
 
 // Integrand for the per-element stiffness matrix integral for an orthotropic
 // material. As an optimization for symmetry, only the upper triangle terms are
@@ -900,9 +902,9 @@ void MeshlessFEM3D<_Model>::m_assembleTranslationMatrix(TMatrix &T) {
     T.reserve(3 * nNodes);
     
     for (size_t k = 0; k < nNodes; ++k) {
-        T.addNz(0, 3 * k    , 1.0);
-        T.addNz(1, 3 * k + 1, 1.0);
-        T.addNz(2, 3 * k + 2, 1.0);
+        T.addNZ(0, 3 * k    , 1.0);
+        T.addNZ(1, 3 * k + 1, 1.0);
+        T.addNZ(2, 3 * k + 2, 1.0);
     }
 }
 
@@ -924,14 +926,14 @@ void MeshlessFEM3D<_Model>::m_assembleRigidModeMatrix(TMatrix &R) {
     for (size_t k = 0; k < nNodes; ++k) {
         Vector x = m_elementGrid.nodePosition(k);
         // x axis infinitesimal rotation (0, -z, y)
-        R.addNz(3, 3 * k + 1, -x[2]);
-        R.addNz(3, 3 * k + 2,  x[1]);
+        R.addNZ(3, 3 * k + 1, -x[2]);
+        R.addNZ(3, 3 * k + 2,  x[1]);
         // y axis infinitesimal rotation (z, 0, -x)
-        R.addNz(4, 3 * k    ,  x[2]);
-        R.addNz(4, 3 * k + 2, -x[0]);
+        R.addNZ(4, 3 * k    ,  x[2]);
+        R.addNZ(4, 3 * k + 2, -x[0]);
         // z axis infinitesimal rotation (-y, x, 0)
-        R.addNz(5, 3 * k    , -x[1]);
-        R.addNz(5, 3 * k + 1,  x[0]);
+        R.addNZ(5, 3 * k    , -x[1]);
+        R.addNZ(5, 3 * k + 1,  x[0]);
     }
 }
 
@@ -1013,7 +1015,7 @@ void MeshlessFEM3D<_Model>::m_assembleVDMatrix(TMatrix &VD) {
     VD.n = 6 * m_elementGrid.numElements();
 
     VD.clear();
-    VD.reserve();
+    // VD.reserve();
 
     Real d00 = m_d[0], d01 = m_d[1], d02 = m_d[ 2], d03 = m_d[ 3], d04 = m_d[ 4], d05 = m_d[ 5],
                        d11 = m_d[6], d12 = m_d[ 7], d13 = m_d[ 8], d14 = m_d[ 9], d15 = m_d[10],
@@ -1026,3 +1028,27 @@ void MeshlessFEM3D<_Model>::m_assembleVDMatrix(TMatrix &VD) {
     //     VD.addNZ(6 * e + 0, 6 * e + 0
     // }
 }
+
+template<typename _Model>
+void MeshlessFEM3D<_Model>::periodicHomogenize() {
+    std::cout << "Running homogenization on "
+              << m_elementGrid.slices() << " x "
+              << m_elementGrid.rows() << " x "
+              << m_elementGrid.cols() << " grid with "
+              << m_elementGrid.numElements()  << " elements and "
+              << m_elementGrid.numNodes()  << " nodes." << std::endl;
+    TMatrix K, T;
+
+    m_assembleStiffnessMatrix(K);
+    m_assembleTranslationMatrix(T);
+
+    // K.dump("K.txt");
+    // T.dump("T.txt");
+    m_computePerElementDisplacementStrainMap();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Template instantiations
+////////////////////////////////////////////////////////////////////////////////
+#include "GlobalTypes.hh"
+template class MeshlessFEM3D<LevelSet_t>;

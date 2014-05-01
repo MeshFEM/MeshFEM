@@ -101,11 +101,18 @@ void AnalysisSettings::getOptions(po::options_description &opts) {
         ;
 
     elementsOpt.add_options()
-        ("elements.Nx",                    po::value<int>()->default_value(40),                  "Grid columns")
-        ("elements.Ny",                    po::value<int>()->default_value(40),                  "Grid rows")
-        ("elements.borderWidth",           po::value<int>()->default_value(1),                   "Grid border width")
+        ("elements.Nx",                    po::value<int>()->default_value(20),                  "Grid columns")
+        ("elements.Ny",                    po::value<int>()->default_value(20),                  "Grid rows")
+#if DIM==3
+        ("elements.Nz",                    po::value<int>()->default_value(20),                  "Grid Slices")
+#endif
+        ("elements.borderWidth",           po::value<int>()->default_value(0),                   "Grid border width")
         ("elements.quadrature",            po::value<int>()->default_value(UNIFORM_QUADRATURE),  "Type of quadrature")
+#if DIM==3
+        ("elements.quadraturePoints",      po::value<int>()->default_value(512),                 "Number of quadrature points")
+#else
         ("elements.quadraturePoints",      po::value<int>()->default_value(81),                  "Number of quadrature points")
+#endif
         ("elements.cellOverlapThreshold",  po::value<double>()->default_value(0.05),             "Overlap threshold above which a cell is an element")
         ("elements.exactFullElements",     po::value<bool>()->default_value(true),               "Used closed formula for integrals over full elements")
         ("elements.antialiasedElements",   po::value<bool>()->default_value(false),              "Treat cut cells as full cells with lower density")
@@ -178,6 +185,9 @@ void AnalysisSettings::parseOptions(std::istream &is) {
     // Elements
     set("Nx",                     vm["elements.Nx"].as<int>());
     set("Ny",                     vm["elements.Ny"].as<int>());
+#if DIM==3
+    set("Nz",                     vm["elements.Nz"].as<int>());
+#endif
     set("borderWidth",            vm["elements.borderWidth"].as<int>());
     set("quadrature",             vm["elements.quadrature"].as<int>());
     set("quadraturePoints",       vm["elements.quadraturePoints"].as<int>());
@@ -233,6 +243,9 @@ void AnalysisSettings::writeOptions(std::ostream &os) const {
     // Elements
     elementsOpt.put("Nx",                             boost::lexical_cast<std::string>(get("Nx")));
     elementsOpt.put("Ny",                             boost::lexical_cast<std::string>(get("Ny")));
+#if DIM==3
+    elementsOpt.put("Nz",                             boost::lexical_cast<std::string>(get("Nz")));
+#endif
     elementsOpt.put("borderWidth",                    boost::lexical_cast<std::string>(get("borderWidth")));
     elementsOpt.put("quadrature",                     boost::lexical_cast<std::string>(get("quadrature")));
     elementsOpt.put("quadraturePoints",               boost::lexical_cast<std::string>(get("quadraturePoints")));

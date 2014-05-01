@@ -2,6 +2,7 @@
 #define GLOBAL_TYPES_HH
 
 #include "CSGTree.hh"
+#include "LevelSet.hh"
 #include "Geometry.hh"
 #include <vector>
 #include <list>
@@ -35,6 +36,8 @@ typedef BBox<Vector> BBox_t;
 typedef Polygon<Vector> Polygon_t;
 typedef BoundaryPoint<Vector> BoundaryPoint_t;
 
+typedef LevelSet<Vector> LevelSet_t;
+
 typedef std::list<CSGNode *> NodeList;
 
 template<typename Model>
@@ -50,11 +53,9 @@ class ResultsCollector;
 
 #if DIM==2
 typedef MeshlessFEM2D<CSGTree_t>   MeshlessFEM_t;
-#else
-typedef MeshlessFEM3D<CSGTree_t>   MeshlessFEM_t;
-#endif
-typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
 typedef ResultsCollector<MeshlessFEM_t> ResultsCollector_t;
+typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
+#endif
 
 typedef enum {GAUSS_QUADRATURE = 0, UNIFORM_QUADRATURE = 1} QuadratureMethod;
 typedef enum {MASS_FULL = 0, MASS_LUMPED = 1, MASS_QUARTER_CELL = 2}

@@ -2,13 +2,13 @@ include platform_defs.mk
 
 RENDER_OBJS=render_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o utils.o draw.o
 CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
-PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings.o utils.o
+PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings3D.o utils.o
 UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM2D.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
 CPPFLAGS+=-std=c++11 -O2 $(INCLUDES) -DUSE_MESA
 
-all: CSGFEM_cli render_cli umfpack_cli
+all: CSGFEM_cli PeriodicHomogenization_cli render_cli umfpack_cli
 
 # NOTE: on Bowery, linker flags must go after OBJS for some weird reason.
 # Otherwise, umfpack reference doesn't work...
@@ -23,6 +23,9 @@ render_cli: $(RENDER_OBJS)
 	
 umfpack_cli: $(UMFPACK_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
+
+AnalysisSettings3D.o: AnalysisSettings.cc
+	$(CXX) -DDIM=3 -c $(CPPFLAGS) $< -o $@
 
 %.o: %.cpp Makefile
 	$(CXX) -c $(CPPFLAGS) $< -o $@

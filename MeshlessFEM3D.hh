@@ -57,6 +57,9 @@ public:
         loadSettings(settings);
     }
 
+    const ElementGrid &elementGrid() const { return m_elementGrid; }
+
+
     void loadSettings(const AnalysisSettings &settings) {
         configureElements(settings);
         configureMaterial(settings);
@@ -126,7 +129,7 @@ public:
         //                  d15  d16  d17                d15
         //                       d18  d19                     d18
         //                            d20                          d20
-        m_d = DType::Zeros();
+        m_d = DType::Zero();
         m_d[ 0] = lambda + 2 * mu; m_d[ 1] =          lambda; m_d[ 2] = lambda;
                                    m_d[ 6] = lambda + 2 * mu; m_d[ 7] = lambda;
                                                               m_d[11] = lambda + 2 * mu;
@@ -137,6 +140,7 @@ public:
         m_invalidateCache();
     }
 
+    void periodicHomogenize();
 
 private:
     Quadrature3D m_quadrature;
@@ -204,7 +208,7 @@ public:
 
     void setGradPhis(const GradPhis &gp) { m_gradPhis = gp; }
     // c: corner, d: coordinate
-    Real gradPhi(size_t c, size_t d) { return m_gradPhis(c, d); }
+    Real gradPhi(size_t c, size_t d) const { return m_gradPhis(c, d); }
 
     // Compute non-engineering flattened strain tensor for linear elasticity:
     // e_xx = d u_x / dx = u_0_x d phi_0 / dx + ...

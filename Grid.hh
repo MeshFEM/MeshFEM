@@ -212,6 +212,10 @@ public:
         : m_Nx(Nx), m_Ny(Ny), m_Nz(Nz), m_borderWidth(borderWidth), m_bbox(bbox)
     { }
 
+    size_t interiorSlices() const { return m_Nz; }
+    size_t interiorRows()   const { return m_Ny; }
+    size_t interiorCols()   const { return m_Nx; }
+
     size_t slices() const { return m_Nz + 2 * m_borderWidth; }
     size_t rows()   const { return m_Ny + 2 * m_borderWidth; }
     size_t cols()   const { return m_Nx + 2 * m_borderWidth; }
@@ -219,6 +223,9 @@ public:
     size_t vertexSlices() const { return slices() + 1; }
     size_t vertexCols()   const { return cols() + 1; }
     size_t vertexRows()   const { return rows() + 1; }
+
+    void   setBoundingBox(_BBox bbox) { m_bbox = bbox; }
+    _BBox getBoundingBox() const      { return m_bbox; }
 
     void setGridSize(size_t Nx, size_t Ny, size_t Nz) {
         m_Nx = Nx;

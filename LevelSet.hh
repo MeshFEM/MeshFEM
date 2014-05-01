@@ -24,10 +24,11 @@ public:
         : m_domain(domain) { }
 
     virtual bool isInside(const Vector &p) const = 0;
-    Real value(const Vector &p) const = 0;
+    virtual Real    value(const Vector &p) const = 0;
 
     void setDomain(const BBox &b) { m_domain = b; }
-    BBox    domain() const        { return m_domain; }
+    const BBox      &domain() const { return m_domain; }
+    const BBox &boundingBox() const { return domain(); }
 
     ~LevelSet() { }
 private:
@@ -38,18 +39,40 @@ template<typename _Vector>
 class Sphere : public LevelSet<_Vector>
 {
 public:
-    using typename LevelSet<_Vector>::BBox;
-    using typename LevelSet<_Vector>::Vector;
-    using typename LevelSet<_Vector>::Real;
+    typedef LevelSet<_Vector> super;
+    using typename super::BBox;
+    using typename super::Vector;
+    using typename super::Real;
 
     Sphere(const BBox &domain, const Vector &center, Real radius)
-        : LevelSet(domain), m_center(center), m_radius(radius) { }
+        : super(domain), m_center(center), m_radius(radius) { }
     bool isInside(const Vector &p) const {
         return (p - m_center).norm() <= m_radius;
+    }
+    Real value(const Vector &p) const {
+        return (p - m_center).norm() - m_radius;
     }
 private:
     Vector m_center;
     Real m_radius;
+};
+
+template<typename _Vector>
+class SchwarzP : public LevelSet<_Vector>
+{
+public:
+    typedef LevelSet<_Vector> super;
+    using typename super::BBox;
+    using typename super::Vector;
+    using typename super::Real;
+
+    SchwarzP(const BBox &domain) : super(domain)  { }
+    bool isInside(const Vector &p) const {
+        return cos(p[0]) + cos(p[1]) + cos(p[2]) < 0;
+    }
+    Real value(const Vector &p) const {
+        return cos(p[0]) + cos(p[1]) + cos(p[2]);
+    }
 };
 
 #endif // LEVEL_SET_HH

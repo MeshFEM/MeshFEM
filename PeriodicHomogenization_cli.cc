@@ -13,6 +13,8 @@
 #include "AnalysisSettings.hh"
 #include "SolverLibrary.hh"
 #include "MeshlessFEM3D.hh"
+#include "LevelSet.hh"
+#include "MSHWriter.hh"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -105,7 +107,23 @@ int main(int argc, const char *argv[])
 
     SolverLibrary<Scalar> solvers(dumpMatrices);
 
-    // MeshlessFEM_t fem(csgTree, settings, solvers);
+    SchwarzP<Vector> model(BBox_t(M_PI * Vector(-1.0, -1.0, -1.0),
+                                  M_PI * Vector( 1.0,  1.0,  1.0)));
+    // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
+    //                              Vector( 1.0,  1.0,  1.0)),
+    //                       Vector(0.0, 0.0, 0.0), 3);
+
+    typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
+    MeshlessFEM3D_t fem(model, settings, solvers);
+    typedef MSHWriter<MeshlessFEM3D_t::ElementGrid> MSHWriter_t;
+    MSHWriter_t debugMSH("debug.msh", fem.elementGrid());
+
+    MeshlessFEM3D_t::SField overlaps(fem.elementGrid().numElements());
+    for (size_t e = 0; e < fem.elementGrid().numElements(); ++e)
+        overlaps[e] = fem.elementGrid().elementOverlap(e);
+    debugMSH.addField("cellOverlaps", overlaps, MSHWriter_t::PER_ELEMENT);
+
+    fem.periodicHomogenize();
     
     return 0;
 }

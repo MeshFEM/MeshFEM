@@ -434,11 +434,8 @@ public:
     void setVolume(Real vol) { m_volume = vol; }
     Real volume() const      { return m_volume; }
 
-    // c: corner
-    // d: coordinate
-    Real gradPhi(size_t c, size_t d) {
-        return m_gradPhis(c, d);
-    }
+    // c: corner, d: coordinate
+    Real gradPhi(size_t c, size_t d) const { return m_gradPhis(c, d); }
 
     typedef typename MeshlessFEM2D<Model>::FlattenedTensor FlattenedTensor;
 

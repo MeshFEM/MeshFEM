@@ -85,10 +85,14 @@ private:
     void m_writeGrid() {
         m_outStream << "$Nodes" << std::endl
                     << m_grid.numNodes() << std::endl;
+
+        size_t dim = m_grid.nodePosition(0).rows();
+
         for (size_t i = 0; i < m_grid.numNodes(); ++i) {
             // Node number/index (1 ... m_grid.numNodes()), x y z
             m_outStream << i + 1 << ' ' << m_grid.nodePosition(i)[0] << ' '
-                        << m_grid.nodePosition(i)[1] << " 0.0" << std::endl;
+                        << m_grid.nodePosition(i)[1] << ' '
+                        << ((dim == 3) ? m_grid.nodePosition(i)[2] : 0.0) << std::endl;
         }
         m_outStream << "$EndNodes" << std::endl
                     << "$Elements" << std::endl
@@ -96,9 +100,18 @@ private:
         for (size_t i = 0; i < m_grid.numElements(); ++i) {
             typename ElementGrid::AdjacencyVec adj;
             m_grid.elementCorners(i, adj);
-            // Element number, quad element type (3), 0 tags, n0 n1 n2 n3
-            m_outStream << i + 1 << " 3 0 " << adj[0] + 1 << ' ' << adj[1] + 1
-                        << ' ' << adj[2] + 1 << ' ' << adj[3] + 1 << std::endl;
+            if (dim == 2) {
+                // Element number, quad element type (3), 0 tags, n0 n1 n2 n3
+                m_outStream << i + 1 << " 3 0 " << adj[0] + 1 << ' ' << adj[1] + 1
+                            << ' ' << adj[2] + 1 << ' ' << adj[3] + 1 << std::endl;
+            }
+            if (dim == 3) {
+                // Element number, (hexahedron) element type (5), 0 tags, n0..n7
+                m_outStream << i + 1 << " 5 0";
+                for (size_t c = 0; c < adj.size(); ++c)
+                    m_outStream << " " << adj[c] + 1;
+                m_outStream << std::endl;
+            }
         }
         m_outStream << "$EndElements" << std::endl;
     }
