@@ -14,6 +14,8 @@
 
 #include <vector>
 #include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -176,6 +178,7 @@ struct TripletMatrix {
 
     void dump(const char *path) const {
         std::ofstream outFile(path);
+        outFile << std::setprecision(16);
         if (!outFile.is_open()) {
             std::cout << "Failed to open output file '"
                       << path << '\'' << std::endl;

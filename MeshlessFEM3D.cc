@@ -79,7 +79,7 @@ public:
         Real dyp7 =       ((1 - x) * z)/m_dimensions[1];
         Real dzp0 = ((x - 1) * (1 - y))/m_dimensions[2];
         Real dzp1 =       (x * (y - 1))/m_dimensions[2];
-        Real dzp2 =             (x * y)/m_dimensions[2];
+        Real dzp2 =            -(x * y)/m_dimensions[2];
         Real dzp3 =       ((x - 1) * y)/m_dimensions[2];
         Real dzp4 = ((1 - x) * (1 - y))/m_dimensions[2];
         Real dzp5 =       (x * (1 - y))/m_dimensions[2];
@@ -1036,14 +1036,15 @@ void MeshlessFEM3D<_Model>::periodicHomogenize() {
               << m_elementGrid.rows() << " x "
               << m_elementGrid.cols() << " grid with "
               << m_elementGrid.numElements()  << " elements and "
-              << m_elementGrid.numNodes()  << " nodes." << std::endl;
+              << m_elementGrid.numNodes()  << " nodes (qp = "
+              << m_quadrature.numPoints() << ")" << std::endl;
     TMatrix K, T;
 
     m_assembleStiffnessMatrix(K);
     m_assembleTranslationMatrix(T);
 
-    // K.dump("K.txt");
-    // T.dump("T.txt");
+    K.dump("K.txt");
+    T.dump("T.txt");
     m_computePerElementDisplacementStrainMap();
 }
 
