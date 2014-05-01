@@ -50,6 +50,8 @@ class ResultsCollector;
 
 #if DIM==2
 typedef MeshlessFEM2D<CSGTree_t>   MeshlessFEM_t;
+#else
+typedef MeshlessFEM3D<CSGTree_t>   MeshlessFEM_t;
 #endif
 typedef ElementGrid2D<CSGTree_t> ElementGrid2D_t;
 typedef ResultsCollector<MeshlessFEM_t> ResultsCollector_t;

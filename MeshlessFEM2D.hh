@@ -31,7 +31,6 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
-#include <Eigen/Sparse>
 
 // Note: ResultsCollector is forward declared in "GlobalTypes.hh". We choose not
 // to bring in "ResultsCollector.hh" since typedefs in its defintion instantiate
@@ -84,13 +83,7 @@ public:
           m_displacementStrainCached(false), m_solvers(solvers)
     {
         m_selectedWeakRegion = -1L;
-        
-        configureElements(settings);
-        configureBoundaryPoints(settings);
-        configureMatrices(settings);
-        configureMaterial(settings);
-        configureModalAnalysis(settings);
-        configureWeaknessAnalysis(settings);
+        loadSettings(settings);
     }
 
     // Construct MeshlessFEM2D fast using (cellOverlaps, model, bbox, settings)
@@ -107,13 +100,7 @@ public:
           m_displacementStrainCached(false), m_solvers(solvers)
     {
         m_selectedWeakRegion = -1L;
-        
-        configureElements(settings);
-        configureBoundaryPoints(settings);
-        configureMatrices(settings);
-        configureMaterial(settings);
-        configureModalAnalysis(settings);
-        configureWeaknessAnalysis(settings);
+        loadSettings(settings);
     }
 
     void loadSettings(const AnalysisSettings &settings) {
@@ -128,6 +115,8 @@ public:
 
     // Return true if the grid changes as a result of the settings change
     bool configureElements(const AnalysisSettings &settings) {
+        // Keep track of whether changing the settings will update the grid and
+        // whether such an update has been applied or if it is still pending.
         bool changed = false, changesPending = false;
 
         if ((m_exactFullElements != settings.Bool("exactFullElements")) ||
@@ -144,8 +133,9 @@ public:
             changesPending = true;
         }
 
-        if (quadrature().getQuadratureMethod() != settings.Enum("quadrature")) {
-            quadrature().setUsingGaussQuadrature(settings.Enum("quadrature"));
+        QuadratureMethod method = (QuadratureMethod) settings.Enum("quadrature");
+        if (quadrature().getQuadratureMethod() != method) {
+            quadrature().setQuadratureMethod(method);
             changed = true;
             changesPending = true;
         }

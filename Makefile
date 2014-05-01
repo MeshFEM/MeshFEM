@@ -2,6 +2,7 @@ include platform_defs.mk
 
 RENDER_OBJS=render_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o utils.o draw.o
 CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
+PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings.o utils.o
 UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM2D.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 
@@ -12,6 +13,9 @@ all: CSGFEM_cli render_cli umfpack_cli
 # NOTE: on Bowery, linker flags must go after OBJS for some weird reason.
 # Otherwise, umfpack reference doesn't work...
 CSGFEM_cli: $(CSGFEM_OBJS)
+	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
+
+PeriodicHomogenization_cli: $(PERHOMO_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 render_cli: $(RENDER_OBJS)

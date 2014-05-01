@@ -277,13 +277,10 @@ template<typename Model>
 class MeshlessFEM2D<Model>::PerElementGradPhi
 {
 public:
-    // D: (d00, d01, d10, d11, d22)
     PerElementGradPhi(const Model &model)
         : m_model(model) { clear(); setDimensions(Vector::Zero()); }
 
-    void clear() {
-        result = GradPhis::Zero();
-    }
+    void clear() { result = GradPhis::Zero(); }
 
     void setDimensions(const Vector &dims) {
         m_dimensions = dims;
