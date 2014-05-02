@@ -101,10 +101,10 @@ void AnalysisSettings::getOptions(po::options_description &opts) {
         ;
 
     elementsOpt.add_options()
-        ("elements.Nx",                    po::value<int>()->default_value(20),                  "Grid columns")
-        ("elements.Ny",                    po::value<int>()->default_value(20),                  "Grid rows")
+        ("elements.Nx",                    po::value<int>()->default_value(15),                  "Grid columns")
+        ("elements.Ny",                    po::value<int>()->default_value(15),                  "Grid rows")
 #if DIM==3
-        ("elements.Nz",                    po::value<int>()->default_value(20),                  "Grid Slices")
+        ("elements.Nz",                    po::value<int>()->default_value(15),                  "Grid Slices")
 #endif
         ("elements.borderWidth",           po::value<int>()->default_value(0),                   "Grid border width")
         ("elements.quadrature",            po::value<int>()->default_value(UNIFORM_QUADRATURE),  "Type of quadrature")

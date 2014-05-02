@@ -51,6 +51,7 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
     // otherwise)
     m_elementForCell.assign(numCells(), -1);
     m_elementOverlap.clear();
+    m_hasExternalElements = false;
     size_t numElements = 0;
     for (size_t r = 0; r < rows(); ++r) {
         for (size_t c = 0; c < cols(); ++c) {
@@ -61,6 +62,12 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
             if ((overlap == 1.0) || (overlap > m_cellOverlapThreshold)) {
                 m_elementForCell[cell] = numElements++;
                 m_elementOverlap.push_back(overlap);
+                // Check if the element is outside the grid's interior
+                // (i.e. one of the border cells, if m_borderWidth > 0)
+                if ((r < m_borderWidth) || (r >= m_Ny + m_borderWidth) ||
+                    (c < m_borderWidth) || (c >= m_Nx + m_borderWidth)) {
+                    m_hasExternalElements = true;
+                }
             }
         }
     }
@@ -131,6 +138,7 @@ void ElementGrid3D<Model>::update(std::vector<Scalar> cellOverlaps)
 
     // Compute the cell->element map (element index if cell is an element, -1
     // otherwise)
+    m_hasExternalElements = false;
     m_elementForCell.assign(numCells(), -1);
     m_elementOverlap.clear();
     size_t numElements = 0;
@@ -144,6 +152,14 @@ void ElementGrid3D<Model>::update(std::vector<Scalar> cellOverlaps)
                 if ((overlap == 1.0) || (overlap > m_cellOverlapThreshold)) {
                     m_elementForCell[cell] = numElements++;
                     m_elementOverlap.push_back(overlap);
+
+                    // Check if the element is outside the grid's interior
+                    // (i.e. inside the border)
+                    if ((s < m_borderWidth) || (s >= m_Nz + m_borderWidth) ||
+                        (r < m_borderWidth) || (r >= m_Ny + m_borderWidth) ||
+                        (c < m_borderWidth) || (c >= m_Nx + m_borderWidth)) {
+                        m_hasExternalElements = true;
+                    }
                 }
             }
         }

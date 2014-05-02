@@ -37,6 +37,7 @@
 #include "Grid.hh"
 #include <Eigen/Dense>
 #include <vector>
+#include <utility>
 
 template<typename Model>
 class ElementGrid2D : public Grid2D {
@@ -240,6 +241,11 @@ private:
                 m_elementForCell, m_cellForElement;
     std::vector<Scalar> m_elementOverlap;
 
+    // Whether geometry extends out into the grid border (this shouldn't happen in
+    // general--it only happens if the grid bbox doesn't contain the
+    // object bbox, and if m_borderWidth is nonzero.
+    bool m_hasExternalElements;
+
     bool m_boundingBoxLocked;
     bool m_updatesEnabled, m_updatePending;
 
@@ -359,6 +365,70 @@ public:
         return m_elementOverlap[i] == 1.0;
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Collect pairs of identified nodes on the periodic (grid) boundary.
+    //  Notice that these pairs can represent cyclic identifications (for nodes
+    //  on the grid edges/corners), so we must break cycles before creating
+    //  periodic constraints based on them to avoid linearly dependent
+    //  contraints.
+    //  Asssumes geometry is periodic (so every node on the grid boundary has a
+    //  pair).
+    //  @param[out] pairs   pairs of identified nodes.
+    *///////////////////////////////////////////////////////////////////////////
+    void periodicBoundaryPairs(std::vector<std::pair<size_t, size_t> > &pairs) const {
+        pairs.clear();
+
+        // We want the periodic boundary to be the interior grid boundary (which
+        // differs from the grid boundary if m_borderWidth != 0), so there
+        // better not be any elements outside it.
+        assert(!m_hasExternalElements);
+
+        // +/- z face pairs
+        for (size_t r = 0; r < interiorRows(); ++r) {
+            for (size_t c = 0; c < interiorCols(); ++c) {
+                int vi = get1DVertexIndex(m_borderWidth,
+                        r + m_borderWidth, c + m_borderWidth),
+                    ui = get1DVertexIndex(m_borderWidth + interiorSlices() - 1,
+                        r + m_borderWidth, c + m_borderWidth);
+                int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
+                if (ni >= 0) {
+                    assert(mi >= 0);
+                    pairs.push_back(std::make_pair((size_t) ni, (size_t) mi));
+                }
+            }
+        }
+
+        // +/- y face pairs
+        for (size_t s = 0; s < interiorSlices(); ++s) {
+            for (size_t c = 0; c < interiorCols(); ++c) {
+                int vi = get1DVertexIndex(s + m_borderWidth, m_borderWidth,
+                        c + m_borderWidth),
+                    ui = get1DVertexIndex(s + m_borderWidth,
+                        m_borderWidth + interiorRows() - 1, c + m_borderWidth);
+                int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
+                if (ni >= 0) {
+                    assert(mi >= 0);
+                    pairs.push_back(std::make_pair((size_t) ni, (size_t) mi));
+                }
+            }
+        }
+
+        // +/- x face pairs
+        for (size_t s = 0; s < interiorSlices(); ++s) {
+            for (size_t r = 0; r < interiorRows(); ++r) {
+                int vi = get1DVertexIndex(s + m_borderWidth, r + m_borderWidth,
+                        m_borderWidth),
+                    ui = get1DVertexIndex(s + m_borderWidth, r + m_borderWidth,
+                        m_borderWidth + interiorCols() - 1);
+                int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
+                if (ni >= 0) {
+                    assert(mi >= 0);
+                    pairs.push_back(std::make_pair((size_t) ni, (size_t) mi));
+                }
+            }
+        }
+    }
+
     ~ElementGrid3D() { };
 
 private:
@@ -373,7 +443,13 @@ private:
     // Maps between node/vertex indices and element/cell indices
     IndexVector m_nodeForVertex, m_vertexForNode,
                 m_elementForCell, m_cellForElement;
+
     std::vector<Scalar> m_elementOverlap;
+
+    // Whether geometry extends out into the grid border (this shouldn't happen in
+    // general--it only happens if the grid bbox doesn't contain the
+    // object bbox, and if m_borderWidth is nonzero.
+    bool m_hasExternalElements;
 
     const Quadrature3D &m_quadrature;
     const Model &m_model;

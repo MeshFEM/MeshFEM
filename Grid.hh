@@ -195,9 +195,8 @@ public:
 
     ~Grid2D() { }
 
-private:
-    size_t m_Nx, m_Ny;
 protected:
+    size_t m_Nx, m_Ny;
     size_t m_borderWidth;
     _BBox m_bbox;
 };
@@ -382,9 +381,8 @@ public:
     size_t numCells()    const { return slices() * rows() * cols(); }
 
 private:
-    private:
-        size_t m_Nx, m_Ny, m_Nz;
     protected:
+        size_t m_Nx, m_Ny, m_Nz;
         size_t m_borderWidth;
         _BBox m_bbox;
 };

@@ -121,4 +121,14 @@ std::string escapedString(const std::string &str);
 template<typename Real>
 std::vector<Real> expandRange(const std::string &range);
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Compute a spanning forest for an undirected graph specifed as a list of
+//  edges. The graph's vertices are implicitly given by the vertices appearing
+//  in this edge list.
+//  @param[in]  in_edges    input graph's edges
+//  @param[out] out_edges   output forest edges
+*///////////////////////////////////////////////////////////////////////////////
+void spanningForest(const std::vector<std::pair<size_t, size_t> > &in_edges,
+                          std::vector<std::pair<size_t, size_t> > &out_edges);
+
 #endif // UTILS_HH

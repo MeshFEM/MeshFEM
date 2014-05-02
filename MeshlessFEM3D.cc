@@ -14,6 +14,7 @@
 #include "MeshlessFEM3D.hh"
 #include <cassert>
 #include <iostream>
+#include "utils.hh"
 
 // Integrand for the per-element stiffness matrix integral for an orthotropic
 // material. As an optimization for symmetry, only the upper triangle terms are
@@ -1029,8 +1030,67 @@ void MeshlessFEM3D<_Model>::m_assembleVDMatrix(TMatrix &VD) {
     // }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Create a sparse matrix for the equations enforcing periodic displacement
+//  boundary conditions on the computational grid.
+//  @param[out] P   periodic constraint matrix in sparse triplet format 
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
-void MeshlessFEM3D<_Model>::periodicHomogenize() {
+void MeshlessFEM3D<_Model>::m_assemblePeriodicConstraints(TMatrix &P) const {
+    std::vector<std::pair<size_t, size_t> > pairs, indep;
+    m_elementGrid.periodicBoundaryPairs(pairs);
+    // Pairs found from the grid have redundancies (cyclic identifications). We
+    // must break these to get linearly independent constraints.
+    spanningForest(pairs, indep);
+
+    P.clear();
+    P.m = indep.size() * 3;
+    P.n = m_elementGrid.numNodes() * 3;
+    P.reserve(indep.size() * 6);
+
+    for (size_t i = 0; i < indep.size(); ++i) {
+        P.addNZ(3 * i    , 3 * indep[i].first     ,  1.0);
+        P.addNZ(3 * i    , 3 * indep[i].second    , -1.0);
+        P.addNZ(3 * i + 1, 3 * indep[i].first  + 1,  1.0);
+        P.addNZ(3 * i + 1, 3 * indep[i].second + 1, -1.0);
+        P.addNZ(3 * i + 2, 3 * indep[i].first  + 2,  1.0);
+        P.addNZ(3 * i + 2, 3 * indep[i].second + 2, -1.0);
+    }
+}
+
+template<typename Vector_>
+struct VectorSlicer {
+    typedef typename Vector_::value_type     Scalar;
+
+    VectorSlicer(Vector_ &v) : vec(v) { }
+    size_t rows() const { return indices.size(); }
+    void  clear()       { indices.clear(); }
+    void appendIndex(size_t i) {
+        assert(i < vec.size());
+        indices.push_back(i);
+    }
+
+    Scalar &operator[](size_t i) {
+        assert(i < indices.size());
+        size_t ii = indices[i];
+        assert(ii < vec.size());
+        return vec[ii];
+    }
+
+    Scalar operator[](size_t i) const {
+        assert(i < indices.size());
+        size_t ii = indices[i];
+        assert(ii < vec.size());
+        return vec[ii];
+    }
+    
+    std::vector<size_t> indices;
+    Vector_ &vec;
+};
+
+template<typename _Model>
+void MeshlessFEM3D<_Model>::
+periodicHomogenize(Timer *timer, MSHWriter *mshWriter) {
     std::cout << "Running homogenization on "
               << m_elementGrid.slices() << " x "
               << m_elementGrid.rows() << " x "
@@ -1038,14 +1098,91 @@ void MeshlessFEM3D<_Model>::periodicHomogenize() {
               << m_elementGrid.numElements()  << " elements and "
               << m_elementGrid.numNodes()  << " nodes (qp = "
               << m_quadrature.numPoints() << ")" << std::endl;
-    TMatrix K, T;
+    TMatrix K, T, P;
 
+    if (timer) timer->start("Assemble Stiffness");
     m_assembleStiffnessMatrix(K);
+    if (timer) timer->stop("Assemble Stiffness");
+    if (timer) timer->start("Assemble T, P");
     m_assembleTranslationMatrix(T);
+    m_assemblePeriodicConstraints(P);
+    if (timer) timer->stop("Assemble T, P");
 
-    K.dump("K.txt");
-    T.dump("T.txt");
+    if (timer) timer->start("Assemble C");
+    // Build constrained system with lagrange multipliers
+    // [ K T' P' ] [u        ]   [ f ]
+    // [ T       ] [lambda_t ] = [ 0 ]
+    // [ P       ] [lambda_p ]   [ 0 ]
+    //  --- C ---   -- u_l --    -rhs-
+    TMatrix &C = K; // update in place
+    // Append boolean arguments:        pad   transpose
+    C.append(T, TMatrix::APPEND_BELOW, false, false);
+    C.append(P, TMatrix::APPEND_BELOW, false, false);
+    C.append(T, TMatrix::APPEND_RIGHT,  true,  true);
+    C.append(P, TMatrix::APPEND_RIGHT,  true,  true);
+    if (timer) timer->stop("Assemble C");
+    
+    if (timer) timer->start("To SuiteSparse");
+    SuiteSparseMatrix ssC(C);
+    if (timer) timer->stop("To SuiteSparse");
+    if (timer) timer->start("Factorize");
+    UmfpackFactorizer Cfactors(ssC);
+    if (timer) timer->stop("Factorize");
+
+    // Solve cell problems for fluctuation displacments "w_ij"
+    std::vector<std::vector<double> > w_ij(6);
     m_computePerElementDisplacementStrainMap();
+    assert(m_elementData.size() == m_elementGrid.numElements());
+
+    if (timer) timer->startSection("Cell Problems");
+    FlattenedRank2Tensor e_ij, s_ij;
+    for (size_t i = 0; i < 6; ++i) {
+        // Use constant engineering test strain so that B' * V * D computes
+        // nodal load.
+        e_ij = FlattenedRank2Tensor::Zero();
+        e_ij[i] = (i < 3) ? 1 : 2;
+        strainToStress(e_ij, m_d, s_ij);
+        std::vector<double> rhs(C.n, 0.0);
+
+        // Apply B'V to each the constant stress tensor, accumulating into rhs
+        VectorSlicer<std::vector<double> > loadSlicer(rhs);
+        for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+            CornerVec cornerIndices;
+            m_elementGrid.elementCorners(e, cornerIndices);
+
+            // Index into load vector based on the corner indices
+            loadSlicer.clear();
+            for (size_t c = 0; c < cornerIndices.RowsAtCompileTime; ++c) {
+                loadSlicer.appendIndex(3 * cornerIndices[c]    );
+                loadSlicer.appendIndex(3 * cornerIndices[c] + 1);
+                loadSlicer.appendIndex(3 * cornerIndices[c] + 2);
+            }
+
+            m_elementData[e].applyBt_V(s_ij, loadSlicer); 
+        }
+        for (size_t i = 0; i < rhs.size(); ++i) {
+            rhs[i] = -rhs[i];
+            if (i >= 3 * m_elementGrid.numNodes())
+                assert(rhs[i] == 0.0);
+        }
+
+        if (timer) timer->start("Solve");
+        Cfactors.solve(rhs, w_ij[i]);
+        if (timer) timer->stop("Solve");
+
+        // Trim off the lagrange multipliers.
+        w_ij[i].resize(3 * m_elementGrid.numNodes());
+    }
+    if (timer) timer->stopSection("Cell Problems");
+
+    if (mshWriter) {
+        for (size_t i = 0; i < 6; ++i) {
+            std::string name("w_ij ");
+            name += std::to_string(i);
+            VField displ(w_ij[i]);
+            mshWriter->addField(name, displ, MSHWriter::PER_NODE);
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

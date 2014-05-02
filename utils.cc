@@ -2,6 +2,9 @@
 #include <vector>
 #include <sstream>
 #include <regex>
+#include <map>
+#include <list>
+#include <queue>
 #include <boost/format.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -109,6 +112,47 @@ std::vector<Real> expandRange(const std::string &range)
     }
 
     return sequence; 
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Compute a spanning forest for an undirected graph specifed as a list of
+//  edges. The graph's vertices are implicitly given by the vertices appearing
+//  in this edge list.
+//  @param[in]  in_edges    input graph's edges
+//  @param[out] out_edges   output forest edges
+*///////////////////////////////////////////////////////////////////////////////
+void spanningForest(const std::vector<std::pair<size_t, size_t> > &in_edges,
+                          std::vector<std::pair<size_t, size_t> > &out_edges)
+{
+    // Build traversable graph representation
+    map<size_t, list<size_t> > adj;
+    for (const pair<size_t, size_t> &i: in_edges) {
+        adj[i.first ].push_back(i.second);
+        adj[i.second].push_back(i.first);
+    }
+
+    // Build a spanning forest in out_edges using a BFS
+    out_edges.clear();
+    map<size_t, bool> visited;
+    for (const auto &e: adj) {
+        if (!visited[e.first]) {
+            queue<size_t> bfsQueue;
+            bfsQueue.push(e.first);
+            visited[e.first] = true;
+            while (!bfsQueue.empty()) {
+                size_t u = bfsQueue.front();
+                bfsQueue.pop();
+                const list<size_t> &adj_u = adj[u];
+                for (size_t v : adj_u) {
+                    if (!visited[v]) {
+                        visited[v] = true;
+                        out_edges.push_back(make_pair(u, v));
+                        bfsQueue.push(v);
+                    }
+                }
+            }
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -23,6 +23,8 @@
 #include "AnalysisSettings.hh"
 #include "SolverLibrary.hh"
 #include "SparseMatrices.hh"
+#include "Timer.hh"
+#include "MSHWriter.hh"
 
 template<typename _Model>
 class MeshlessFEM3D {
@@ -37,7 +39,8 @@ public:
     typedef ScalarField<Real>          SField;
     typedef VectorField<Real, 3>       VField;
     typedef SymmetricMatrixField<Real, 3> SMField;
-    typedef ElementGrid3D<Model>      ElementGrid;
+    typedef ElementGrid3D<Model>       ElementGrid;
+    typedef MSHWriter<ElementGrid>     MSHWriter;
     
     typedef Eigen::Matrix<Real, 8, 3> GradPhis; // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 6, 1> FlattenedRank2Tensor;
@@ -140,7 +143,7 @@ public:
         m_invalidateCache();
     }
 
-    void periodicHomogenize();
+    void periodicHomogenize(Timer *timer = NULL, MSHWriter *mshWriter = NULL);
 
 private:
     Quadrature3D m_quadrature;
@@ -171,6 +174,8 @@ private:
     void m_computePerElementDisplacementStrainMap();
     void m_assembleBMatrix(TMatrix &B);
     void m_assembleVDMatrix(TMatrix &VD);
+
+    void m_assemblePeriodicConstraints(TMatrix &P) const;
 
     void m_invalidateCache() {
         m_displacementStrainCached = false;
@@ -220,8 +225,7 @@ public:
     // This is the average strain tensor over the element (occupied portion).
     template<typename Tensor>
     void displacementToStrain(const VField &displacements,
-                              const CornerVec &corners, Tensor &strain) const
-    {
+                              const CornerVec &corners, Tensor &strain) const {
         strain[0] = strain[1] = strain[2] = strain[3] = strain[4] = strain[5] = 0;
 
         // Compute each basis function's contribution to the strain
@@ -248,8 +252,7 @@ public:
     template<typename Tensor>
     void displacementToStress(const VField &displacements,
                               const CornerVec &corners, const DType &d,
-                              Tensor &stress) const
-    {
+                              Tensor &stress) const {
         FlattenedRank2Tensor strain;
         displacementToStrain(displacements, corners, strain);
         strainToStress(strain, d, stress);
@@ -259,14 +262,32 @@ public:
     // Note: for a more accurate energy computation we should instead store the
     // average element stiffness matrix (avg(B^T D B) != avg(B)^T D avg(B)).
     Real displacementToEnergy(const VField &displacements,
-                              const CornerVec &corners, const DType &d) const
-    {
+                              const CornerVec &corners, const DType &d) const {
         FlattenedRank2Tensor strain, stress;
         displacementToStrain(displacements, corners, strain);
         strainToStress(strain, d, stress);
 
         return (strain[0] * stress[0] + strain[1] * stress[1] + strain[2] * stress[2] +
            2 * (strain[3] * stress[3] + strain[4] * stress[4] + strain[5] * stress[5])) * volume();
+    }
+
+    // Apply B' V to a stress to get contribution to element corners' load.
+    // (Takes in flattened tensor as a 6-vector and outputs a 24-vector of x/y/z
+    //  load per node)
+    //  This should probably be "engineering stress" for the quantity to be
+    //  load...
+    template<typename Vec>
+    void applyBt_V(const FlattenedRank2Tensor &stress, Vec &l) const {
+        assert(l.rows() == 24);
+        FlattenedRank2Tensor vs(volume() * stress);
+        for (size_t c = 0; c < 8; ++c) {
+            //        0     1     2     3     4     5
+            // vs: [s_xx, s_yy, s_zz, s_yz, s_xz, s_xy]
+            //                  d/dx                        d/dy                       d/dz
+            l[3 * c    ] += m_gradPhis(c, 0) * vs[0] + m_gradPhis(c, 1) * vs[5] + m_gradPhis(c, 2) * vs[4]; // x: xx, xy, xz
+            l[3 * c + 1] += m_gradPhis(c, 0) * vs[5] + m_gradPhis(c, 1) * vs[1] + m_gradPhis(c, 2) * vs[3]; // y: xy, yy, yz
+            l[3 * c + 2] += m_gradPhis(c, 0) * vs[4] + m_gradPhis(c, 1) * vs[3] + m_gradPhis(c, 2) * vs[2]; // z: xz, yz, zz
+        }
     }
     
 private:

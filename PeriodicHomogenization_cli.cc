@@ -103,6 +103,10 @@ int main(int argc, const char *argv[])
     if (args.count("settingsName"))
         settingsName = args["settingsName"].as<string>();
 
+    Timer *timer = NULL;
+    if (args.count("time"))
+        timer = new Timer();
+
     bool dumpMatrices = args.count("dumpMatrices");
 
     SolverLibrary<Scalar> solvers(dumpMatrices);
@@ -114,7 +118,11 @@ int main(int argc, const char *argv[])
     //                       Vector(0.0, 0.0, 0.0), 3);
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
+    if (timer) timer->start("Setup");
     MeshlessFEM3D_t fem(model, settings, solvers);
+    if (timer) timer->stop("Setup");
+
+    if (timer) timer->start("Debug MSH");
     typedef MSHWriter<MeshlessFEM3D_t::ElementGrid> MSHWriter_t;
     MSHWriter_t debugMSH("debug.msh", fem.elementGrid());
 
@@ -122,8 +130,13 @@ int main(int argc, const char *argv[])
     for (size_t e = 0; e < fem.elementGrid().numElements(); ++e)
         overlaps[e] = fem.elementGrid().elementOverlap(e);
     debugMSH.addField("cellOverlaps", overlaps, MSHWriter_t::PER_ELEMENT);
+    if (timer) timer->stop("Debug MSH");
 
-    fem.periodicHomogenize();
+    if (timer) timer->startSection("Periodic Homogenization");
+    fem.periodicHomogenize(timer, &debugMSH);
+    if (timer) timer->stopSection("Periodic Homogenization");
+
+    if (timer) timer->report(cout);
     
     return 0;
 }
