@@ -384,11 +384,12 @@ public:
         assert(!m_hasExternalElements);
 
         // +/- z face pairs
-        for (size_t r = 0; r < interiorRows(); ++r) {
-            for (size_t c = 0; c < interiorCols(); ++c) {
+        for (size_t r = 0; r < interiorVertexRows(); ++r) {
+            for (size_t c = 0; c < interiorVertexCols(); ++c) {
                 int vi = get1DVertexIndex(m_borderWidth,
                         r + m_borderWidth, c + m_borderWidth),
-                    ui = get1DVertexIndex(m_borderWidth + interiorSlices() - 1,
+                    ui = get1DVertexIndex(
+                        m_borderWidth + interiorVertexSlices() - 1,
                         r + m_borderWidth, c + m_borderWidth);
                 int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
                 if (ni >= 0) {
@@ -399,12 +400,13 @@ public:
         }
 
         // +/- y face pairs
-        for (size_t s = 0; s < interiorSlices(); ++s) {
-            for (size_t c = 0; c < interiorCols(); ++c) {
+        for (size_t s = 0; s < interiorVertexSlices(); ++s) {
+            for (size_t c = 0; c < interiorVertexCols(); ++c) {
                 int vi = get1DVertexIndex(s + m_borderWidth, m_borderWidth,
                         c + m_borderWidth),
                     ui = get1DVertexIndex(s + m_borderWidth,
-                        m_borderWidth + interiorRows() - 1, c + m_borderWidth);
+                        m_borderWidth + interiorVertexRows() - 1,
+                        c + m_borderWidth);
                 int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
                 if (ni >= 0) {
                     assert(mi >= 0);
@@ -414,12 +416,12 @@ public:
         }
 
         // +/- x face pairs
-        for (size_t s = 0; s < interiorSlices(); ++s) {
-            for (size_t r = 0; r < interiorRows(); ++r) {
+        for (size_t s = 0; s < interiorVertexSlices(); ++s) {
+            for (size_t r = 0; r < interiorVertexRows(); ++r) {
                 int vi = get1DVertexIndex(s + m_borderWidth, r + m_borderWidth,
                         m_borderWidth),
                     ui = get1DVertexIndex(s + m_borderWidth, r + m_borderWidth,
-                        m_borderWidth + interiorCols() - 1);
+                        m_borderWidth + interiorVertexCols() - 1);
                 int ni = m_nodeForVertex[vi], mi = m_nodeForVertex[ui];
                 if (ni >= 0) {
                     assert(mi >= 0);

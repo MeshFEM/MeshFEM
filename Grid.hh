@@ -219,9 +219,13 @@ public:
     size_t rows()   const { return m_Ny + 2 * m_borderWidth; }
     size_t cols()   const { return m_Nx + 2 * m_borderWidth; }
 
+    size_t interiorVertexSlices() const { return interiorSlices() + 1; }
+    size_t interiorVertexCols()   const { return interiorCols()   + 1; }
+    size_t interiorVertexRows()   const { return interiorRows()   + 1; }
+
     size_t vertexSlices() const { return slices() + 1; }
-    size_t vertexCols()   const { return cols() + 1; }
-    size_t vertexRows()   const { return rows() + 1; }
+    size_t vertexCols()   const { return cols()   + 1; }
+    size_t vertexRows()   const { return rows()   + 1; }
 
     void   setBoundingBox(_BBox bbox) { m_bbox = bbox; }
     _BBox getBoundingBox() const      { return m_bbox; }

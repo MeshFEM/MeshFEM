@@ -54,13 +54,12 @@ public:
         // Unpack elasticity tensor
         // .5 scaling for off-diagonals  is to account for engineering stress :
         // engineering strain double-counting the off-diagonals.
-        Real d00 = m_d[0], d01 = 0.5 * m_d[1], d02 = 0.5 * m_d[ 2], // d03 = 0.5 * m_d[ 3], d04 = .5 * m_d[ 4], d05 = .5 * m_d[ 5],
-                           d11 =       m_d[6], d12 = 0.5 * m_d[ 7], // d13 = 0.5 * m_d[ 8], d14 = .5 * m_d[ 9], d15 = .5 * m_d[10],
-                                               d22 =       m_d[11], // d23 = 0.5 * m_d[12], d24 = .5 * m_d[13], d25 = .5 * m_d[14],
-                                                                    d33 =       m_d[15], // d34 = .5 * m_d[16], d35 = .5 * m_d[17],
-                                                                                         d44 =      m_d[18], // d45 = .5 * m_d[19],
-                                                                                                             d55 =      m_d[20];
-
+        Real d00 = m_d[0], d01 =       m_d[1], d02 =       m_d[ 2], // d03 = 0.5 * m_d[ 3], d04 = 0.5 * m_d[ 4], d05 = 0.5 * m_d[ 5],
+                           d11 =       m_d[6], d12 =       m_d[ 7], // d13 = 0.5 * m_d[ 8], d14 = 0.5 * m_d[ 9], d15 = 0.5 * m_d[10],
+                                               d22 =       m_d[11], // d23 = 0.5 * m_d[12], d24 = 0.5 * m_d[13], d25 = 0.5 * m_d[14],
+                                                                    d33 = 0.5 * m_d[15], // d34 = 0.5 * m_d[16], d35 = 0.5 * m_d[17],
+                                                                                         d44 = 0.5 * m_d[18], // d45 = 0.5 * m_d[19],
+                                                                                                             d55 = 0.5 * m_d[20];
         // Entries in B
         Real dxp0 = ((y - 1) * (1 - z))/m_dimensions[0];
         Real dxp1 = ((1 - y) * (1 - z))/m_dimensions[0];
@@ -395,12 +394,12 @@ public:
             // Unpack elasticity tensor
             // .5 scaling for off-diagonals  is to account for engineering stress :
             // engineering strain double-counting the off-diagonals.
-            Real d00 = m_d[0], d01 = 0.5 * m_d[1], d02 = 0.5 * m_d[ 2], // d03 = 0.5 * m_d[ 3], d04 = .5 * m_d[ 4], d05 = .5 * m_d[ 5],
-                               d11 =       m_d[6], d12 = 0.5 * m_d[ 7], // d13 = 0.5 * m_d[ 8], d14 = .5 * m_d[ 9], d15 = .5 * m_d[10],
-                                                   d22 =       m_d[11], // d23 = 0.5 * m_d[12], d24 = .5 * m_d[13], d25 = .5 * m_d[14],
-                                                                        d33 =       m_d[15], // d34 = .5 * m_d[16], d35 = .5 * m_d[17],
-                                                                                             d44 =      m_d[18], // d45 = .5 * m_d[19],
-                                                                                                                 d55 =      m_d[20];
+            Real d00 = m_d[0], d01 =       m_d[1], d02 =       m_d[ 2], // d03 = 0.5 * m_d[ 3], d04 = 0.5 * m_d[ 4], d05 = 0.5 * m_d[ 5],
+                               d11 =       m_d[6], d12 =       m_d[ 7], // d13 = 0.5 * m_d[ 8], d14 = 0.5 * m_d[ 9], d15 = 0.5 * m_d[10],
+                                                   d22 =       m_d[11], // d23 = 0.5 * m_d[12], d24 = 0.5 * m_d[13], d25 = 0.5 * m_d[14],
+                                                                        d33 = 0.5 * m_d[15], // d34 = 0.5 * m_d[16], d35 = 0.5 * m_d[17],
+                                                                                             d44 = 0.5 * m_d[18], // d45 = 0.5 * m_d[19],
+                                                                                                                 d55 = 0.5 * m_d[20];
 
             Real w = m_dimensions[0];
             Real h = m_dimensions[1];
@@ -761,21 +760,18 @@ public:
             return;
 
         Real x = ref_sample[0], y = ref_sample[1], z = ref_sample[2];
-        Real invW = 1.0 / m_dimensions[0];
-        Real invH = 1.0 / m_dimensions[1];
-        Real invD = 1.0 / m_dimensions[2];
         Real xWeight = weight / m_dimensions[0];
         Real yWeight = weight / m_dimensions[1];
         Real zWeight = weight / m_dimensions[2];
 
-        result(0, 0) += xWeight * (y - 1) * (1 - z); result(0, 1) += yWeight * (x - 1) * (1 - z); result(0, 2) += zWeight * (x - 1) * (1 - y);
-        result(1, 0) += xWeight * (1 - y) * (1 - z); result(1, 1) += yWeight * x * (z - 1);       result(1, 2) += zWeight * x * (y - 1);
-        result(2, 0) += xWeight * y * (1 - z);       result(2, 1) += yWeight * x * (1 - z);       result(2, 2) += zWeight * (-x * y);
-        result(3, 0) += xWeight * y * (z - 1);       result(3, 1) += yWeight * (1 - x) * (1 - z); result(3, 2) += zWeight * (x - 1) * y;
-        result(4, 0) += xWeight * (y - 1) * z;       result(4, 1) += yWeight * (x - 1) * z;       result(4, 2) += zWeight * (1 - x) * (1 - y);
-        result(5, 0) += xWeight * (1 - y) * z;       result(5, 1) += yWeight * (-x * z);          result(5, 2) += zWeight * x * (1 - y);
-        result(6, 0) += xWeight * y * z;             result(6, 1) += yWeight * x * z;             result(6, 2) += zWeight * x * y;
-        result(7, 0) += xWeight * y * z;             result(7, 1) += yWeight * (1 - x) * z;       result(7, 2) += zWeight * (1 - x) * y;
+        result(0, 0) +=  xWeight * (y - 1) * (1 - z); result(0, 1) +=  yWeight * (x - 1) * (1 - z); result(0, 2) +=  zWeight * (x - 1) * (1 - y);
+        result(1, 0) +=  xWeight * (1 - y) * (1 - z); result(1, 1) +=  yWeight * x * (z - 1);       result(1, 2) +=  zWeight * x * (y - 1);
+        result(2, 0) +=  xWeight * y * (1 - z);       result(2, 1) +=  yWeight * x * (1 - z);       result(2, 2) += -zWeight * x * y;
+        result(3, 0) +=  xWeight * y * (z - 1);       result(3, 1) +=  yWeight * (1 - x) * (1 - z); result(3, 2) +=  zWeight * (x - 1) * y;
+        result(4, 0) +=  xWeight * (y - 1) * z;       result(4, 1) +=  yWeight * (x - 1) * z;       result(4, 2) +=  zWeight * (1 - x) * (1 - y);
+        result(5, 0) +=  xWeight * (1 - y) * z;       result(5, 1) += -yWeight * x * z;             result(5, 2) +=  zWeight * x * (1 - y);
+        result(6, 0) +=  xWeight * y * z;             result(6, 1) +=  yWeight * x * z;             result(6, 2) +=  zWeight * x * y;
+        result(7, 0) += -xWeight * y * z;             result(7, 1) +=  yWeight * (1 - x) * z;       result(7, 2) +=  zWeight * (1 - x) * y;
     }
 
     // Analytic average of grad phis over the full cell
@@ -808,7 +804,7 @@ public:
     void finalize(Real elementOverlap = 1.0) {
         // We accumulated the integral, not the average--divide by the
         // integration domain.
-        result /= elementOverlap * m_dimensions[0] * m_dimensions[1];
+        result /= elementOverlap * m_dimensions[0] * m_dimensions[1] * m_dimensions[2];
     }
 
     Real operator()(size_t i, size_t j) const {
@@ -953,15 +949,19 @@ void MeshlessFEM3D<_Model>::m_computePerElementDisplacementStrainMap() {
     for (size_t e = 0; e < numElements; ++e) {
         BBox_t b = m_elementGrid.elementBoundingBox(e);
         gradPhi.setDimensions(b.dimensions());
-        m_elementData[e].setVolume(b.volume());
         if (m_exactFullElements && (m_elementGrid.elementIsFull(e))) {
             m_elementData[e].setGradPhis(gradPhi.fullCellAverage());
+            m_elementData[e].setVolume(b.volume());
         }
         else {
             gradPhi.clear();
             m_quadrature.integrate(gradPhi, b);
-            gradPhi.finalize(m_elementGrid.elementOverlap(e));
+            // TODO: Figure out and document what we're calling volume.
+            // Do this for 2D as well...
+            Real overlap = m_elementGrid.elementOverlap(e);
+            gradPhi.finalize(overlap);
             m_elementData[e].setGradPhis(gradPhi);
+            m_elementData[e].setVolume(b.volume() * overlap);
         }
     }
 
@@ -1164,6 +1164,14 @@ periodicHomogenize(Timer *timer, MSHWriter *mshWriter) {
             rhs[i] = -rhs[i];
             if (i >= 3 * m_elementGrid.numNodes())
                 assert(rhs[i] == 0.0);
+        }
+        if (mshWriter) {
+            std::string name("rhs ");
+            name += std::to_string(i);
+            rhs.resize(3 * m_elementGrid.numNodes());
+            VField rhs_field(rhs);
+            rhs.resize(C.n);
+            mshWriter->addField(name, rhs_field, MSHWriter::PER_NODE);
         }
 
         if (timer) timer->start("Solve");

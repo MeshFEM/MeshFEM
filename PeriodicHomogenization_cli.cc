@@ -113,9 +113,9 @@ int main(int argc, const char *argv[])
 
     SchwarzP<Vector> model(BBox_t(M_PI * Vector(-1.0, -1.0, -1.0),
                                   M_PI * Vector( 1.0,  1.0,  1.0)));
-    // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
-    //                              Vector( 1.0,  1.0,  1.0)),
-    //                       Vector(0.0, 0.0, 0.0), 3);
+    Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
+                                 Vector( 1.0,  1.0,  1.0)),
+                          Vector(0.0, 0.0, 0.0), 2.0);
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");
