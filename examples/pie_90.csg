@@ -1,0 +1,7 @@
+{
+    "name": "Pie 90",
+    "type": "pieslice",
+    "center": [0, 0],
+    "dimensions": [25, 4.71238898038469],
+    "rotation": 90
+}

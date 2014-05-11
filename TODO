@@ -1,0 +1,56 @@
+Implement:
+*** 3D Meshfree FEM
+*************
+************* Estimate linear system size/complexity by using the full-cell
+************* stiffness integral to build a stiffness matrix for a solid NxNxN
+************* block. Apply Dirichlet constraints and run CHOLMOD.
+*************
+
+*** Implement field sampler (place point in FEMView, samples from nearest point)
+*** LP Parameters
+    "center": (p, r); p > 2, r \in [0, 1]
+    "dimensions": cell x, cell y
+        (use to rescale--lp hole is scaled into this)
+
+*** Improve parameter sweeps to support expressions in the swept parameters
+    instead of just ranges (i.e. Nx = 2 * Ny
+    Parse all expressions (ranges or otherwise)
+        Try to parse as an expresion of the form = ...
+        If failed, try to parse as a range
+    Build up a graph of dependencies, making sure each is a unique selected
+    parameter.
+    Make sure the dependency graph doesn't have cycles and terminates in a swept
+    parameter (topological sort).
+    Evaluate the dependent parameters in sorted order.
+*** Boundary conditions rectangle selector
+*** Non-bluring point force version.
+*** Multi-material simulation
+
+  - Make pressure viewing configure the simulation
+  - Prepend highest weakness to region name so they sort better...
+  - Try refinement with non-MS boundary, but scaling force blur radius
+    proportionally to grid
+
+    Work-arounds:
+        Visualize signed distance function
+        Visualize "blurred" object
+        ==> now weakness *should* be a continuous function of the parameters
+            + ideally we can make it differentiable
+
+        Try averaging over a fixed area (see if this converges)
+
+- Compare compliance, von mises stress, and max stress fields (what should we be
+  using as a criterion?
+
+Observations:
+    Every element in a (stiffness) weak region should have roughly the same max
+    stress sign if stress is smooth. We could also force it to if needed.
+    Therefore, "abstrace" maybe isn't needed to avoid cancellation.
+
+    There is a "preferred" sign from the perspective of stress optimization
+    (flipping pressures isn't allowed). Modal analysis has no such preference,
+    so we should try both +/- weightings for the entire weak region.
+
+==> Thoughts:
+    Split up weak regions into sign-coherent regions.
+    Test both + and - objectives.
