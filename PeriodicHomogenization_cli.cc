@@ -136,8 +136,8 @@ int main(int argc, const char *argv[])
     MeshlessFEM3D_t::ETensor Eh = fem.periodicHomogenize(timer, &debugMSH);
     if (timer) timer->stopSection("Periodic Homogenization");
 
-    for (size_t i = 0; i < Eh.Drows(); ++i) {
-        for (size_t j = 0; j < Eh.Dcols(); ++j)
+    for (size_t i = 0; i < Eh.D().rows(); ++i) {
+        for (size_t j = 0; j < Eh.D().cols(); ++j)
             cout << ((j > 0) ? "\t" : "") << Eh.D(i, j);
         cout << endl;
     }
