@@ -1094,6 +1094,8 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     m_assemblePeriodicConstraints(P);
     if (timer) timer->stop("Assemble T, P");
 
+    K.dump("K.txt");
+
     if (timer) timer->start("Assemble C");
     // Build constrained system with lagrange multipliers
     // [ K T' P' ] [u        ]   [ f ]

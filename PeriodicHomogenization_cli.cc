@@ -15,6 +15,7 @@
 #include "MeshlessFEM3D.hh"
 #include "LevelSet.hh"
 #include "MSHWriter.hh"
+#include "WireNetwork.hh"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -111,11 +112,16 @@ int main(int argc, const char *argv[])
 
     SolverLibrary<Scalar> solvers(dumpMatrices);
 
-    SchwarzP<Vector> model(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
-                                  M_PI * Vector(2.0, 2.0, 2.0)));
-    Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
-                                 Vector( 1.0,  1.0,  1.0)),
-                          Vector(0.0, 0.0, 0.0), 2.0);
+    // SchwarzP<Vector> model(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
+    //                               M_PI * Vector(2.0, 2.0, 2.0)));
+    // SchwarzP<Vector> model(BBox_t(M_PI * Vector(-1.0, -1.0, -1.0),
+    //                               M_PI * Vector( 1.0,  1.0,  1.0)));
+    // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
+    //                              Vector( 1.0,  1.0,  1.0)),
+    //                       Vector(0.0, 0.0, 0.0), 2.0);
+    WireNetwork<Vector> model(BBox_t(Vector(-2.0, -2.0, -2.0), Vector(2.0, 2.0, 2.0)), 
+                "examples/wires/star.wire", 0.1);
+
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");

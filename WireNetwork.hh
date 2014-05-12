@@ -16,6 +16,7 @@
 #include <fstream>
 #include <vector>
 #include <iostream>
+#include <limits>
 
 #include "LevelSet.hh"
 
@@ -23,7 +24,7 @@ template<typename _Vector>
 class WireNetwork : public LevelSet<_Vector> {
 public:
     typedef LevelSet<_Vector> super;
-    using typename super::BBox;
+    using typename super::_BBox;
     using typename super::Vector;
     using typename super::Real;
 
@@ -33,7 +34,7 @@ public:
     typedef std::vector<Edge> Edges;
 
 public:
-    WireNetwork(const BBox &domain, const std::string& wire_file, Real thickness)
+    WireNetwork(const _BBox &domain, const std::string& wire_file, Real thickness)
         : super(domain), m_thickness(thickness) {
             parse_wire_file(wire_file);
             compute_wire_bbox();
@@ -47,10 +48,13 @@ public:
 
     Real value(const Vector &p) const {
         Vector q = project_into_cell(p);
-        std::vector<Real> dist_to_edges = compute_distance_to_edges(q);
-        typename std::vector<Real>::iterator itr = std::min_element(
-                dist_to_edges.begin(), dist_to_edges.end());
-        return *itr;
+        Real minDist = std::numeric_limits<Real>::max();
+        for (Edges::const_iterator itr = m_edges.begin(); itr != m_edges.end();
+                itr++) {
+            Real dist = compute_distance_to_edge(p, itr->first, itr->second);
+            minDist = std::min(dist, minDist);
+        }
+        return minDist;
     }
 
 private:
