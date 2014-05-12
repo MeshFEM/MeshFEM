@@ -119,8 +119,12 @@ int main(int argc, const char *argv[])
     // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
     //                              Vector( 1.0,  1.0,  1.0)),
     //                       Vector(0.0, 0.0, 0.0), 2.0);
-    WireNetwork<Vector> model(BBox_t(Vector(-2.0, -2.0, -2.0), Vector(2.0, 2.0, 2.0)), 
-                "examples/wires/star.wire", 0.1);
+    //WireNetwork<Vector> model(BBox_t(Vector(-2.0, -2.0, -2.0), Vector(2.0, 2.0, 2.0)), 
+    //            "examples/wires/star.wire", 0.1);
+    WireNetwork<Vector> model(
+            BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
+            "examples/wires/brick5.wire",
+            0.5);
 
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;

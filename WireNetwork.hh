@@ -37,7 +37,8 @@ public:
     WireNetwork(const _BBox &domain, const std::string& wire_file, Real thickness)
         : super(domain), m_thickness(thickness) {
             parse_wire_file(wire_file);
-            compute_wire_bbox();
+            fit_wire_to_bbox();
+            //compute_wire_bbox();
             std::cout << "#v: " << m_vertices.size() << std::endl;
             std::cout << "#e: " << m_edges.size() << std::endl;
     }
@@ -47,7 +48,6 @@ public:
     }
 
     Real value(const Vector &p) const {
-        Vector q = project_into_cell(p);
         Real minDist = std::numeric_limits<Real>::max();
         for (Edges::const_iterator itr = m_edges.begin(); itr != m_edges.end();
                 itr++) {
@@ -76,6 +76,24 @@ private:
                 default:
                     fin.ignore(LINE_WIDTH, '\n');
             }
+        }
+    }
+
+    void fit_wire_to_bbox() {
+        const size_t num_vertices = m_vertices.size();
+        compute_wire_bbox();
+        const _BBox &domain = this->domain();
+        Vector bbox_center = (domain.minCorner + domain.maxCorner) * 0.5;
+        Vector bbox_size = domain.maxCorner - domain.minCorner;
+
+        Vector wire_center = (m_wire_bbox_max + m_wire_bbox_min) * 0.5;
+        Vector offset = bbox_center - wire_center;
+
+        Vector scale = bbox_size.array() / m_wire_bbox_size.array();
+
+        for (size_t i=0; i<num_vertices; i++) {
+            m_vertices[i] = (m_vertices[i] - wire_center).array() * scale.array();
+            m_vertices[i] += bbox_center;
         }
     }
 
@@ -154,7 +172,7 @@ private:
         } else if (proj_fraction > 1.0) {
             return (p - p2).norm();
         } else {
-            return (p - e * proj_fraction).norm();
+            return (v - e * proj_fraction).norm();
         }
     }
 
