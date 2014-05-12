@@ -38,7 +38,6 @@ public:
         : super(domain), m_thickness(thickness) {
             parse_wire_file(wire_file);
             fit_wire_to_bbox();
-            //compute_wire_bbox();
             std::cout << "#v: " << m_vertices.size() << std::endl;
             std::cout << "#e: " << m_edges.size() << std::endl;
     }
@@ -134,31 +133,6 @@ private:
         fin >> head;
         fin >> v1 >> v2;
         m_edges.push_back(Edge(v1-1, v2-1));
-    }
-
-    Vector project_into_cell(const Vector& p) const {
-        Real int_part;
-        Vector proj = p - m_wire_bbox_min;
-        proj[0] = modf(proj[0] / m_wire_bbox_size[0], &int_part);
-        if (proj[0] < 0.0) proj[0]+=1;
-        proj[1] = modf(proj[1] / m_wire_bbox_size[1], &int_part);
-        if (proj[1] < 0.0) proj[1]+=1;
-#if DIM!=2
-        proj[2] = modf(proj[2] / m_wire_bbox_size[2], &int_part);
-        if (proj[2] < 0.0) proj[2]+=1;
-#endif
-        proj = Vector(proj.array() * m_wire_bbox_size.array()) + m_wire_bbox_min;
-        return proj;
-    }
-
-    std::vector<Real> compute_distance_to_edges(const Vector& p) const {
-        std::vector<Real> result;
-        for (Edges::const_iterator itr = m_edges.begin(); itr != m_edges.end();
-                itr++) {
-            Real dist = compute_distance_to_edge(p, itr->first, itr->second);
-            result.push_back(dist);
-        }
-        return result;
     }
 
     Real compute_distance_to_edge(const Vector& p, size_t v1, size_t v2) const {
