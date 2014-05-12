@@ -2,8 +2,8 @@
 // MeshlessFEM3D.cc
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//		Implements a 3D mesh-free finite element discretization of linear
-//		elasticity." Mesh-free" means the surface/volume representation only
+//      Implements a 3D mesh-free finite element discretization of linear
+//      elasticity." Mesh-free" means the surface/volume representation only
 //      needs to support point inclusion tests.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com

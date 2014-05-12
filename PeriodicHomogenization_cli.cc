@@ -122,6 +122,9 @@ int main(int argc, const char *argv[])
     MeshlessFEM3D_t fem(model, settings, solvers);
     if (timer) timer->stop("Setup");
 
+    // cout << fem.getElasticityTensor();
+    // cout << endl;
+
     if (timer) timer->start("Debug MSH");
     typedef MSHWriter<MeshlessFEM3D_t::ElementGrid> MSHWriter_t;
     MSHWriter_t debugMSH("debug.msh", fem.elementGrid());
@@ -136,11 +139,7 @@ int main(int argc, const char *argv[])
     MeshlessFEM3D_t::ETensor Eh = fem.periodicHomogenize(timer, &debugMSH);
     if (timer) timer->stopSection("Periodic Homogenization");
 
-    for (size_t i = 0; i < Eh.D().rows(); ++i) {
-        for (size_t j = 0; j < Eh.D().cols(); ++j)
-            cout << ((j > 0) ? "\t" : "") << Eh.D(i, j);
-        cout << endl;
-    }
+    cout << Eh;
 
     if (timer) timer->report(cout);
     

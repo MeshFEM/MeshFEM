@@ -2,15 +2,14 @@
 // ElasticityTensor.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//		Implements a rank 4 tensor with the symmetries of an elasticity tensor:
-//		E_ijkl = E_jikl = E_ijlk = E_klij
-//		This allows the tensor to be stored as a symmetric 6x6 matrix.
-//		See doc/meshless_fem/TensorFlattening.pdf
-//		for details of this transformation.
-//
+//      Implements a rank 4 tensor with the symmetries of an elasticity tensor:
+//          E_ijkl = E_jikl = E_ijlk = E_klij
+//      This allows the tensor to be stored as a symmetric 6x6 matrix.
+//      See doc/meshless_fem/TensorFlattening.pdf
+//      for details of this transformation.
+//      
 //      Currently the major symmetry isn't exploited to simplify homogenization
 //      double contraction operations, but it may be as a future optimization.
-//
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -19,6 +18,7 @@
 #ifndef ELASTICITYTENSOR_HH
 #define ELASTICITYTENSOR_HH
 
+#include <iostream>
 #include <Eigen/Dense>
 
 // Length of a flattened rank 2 tensor in "dim" dimensions.
@@ -50,7 +50,7 @@ public:
         if (_Dim == 3) {
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;          m_d(0, 2) = lambda;
             m_d(1, 0) = lambda;          m_d(1, 1) = lambda + 2 * mu; m_d(1, 2) = lambda;
-            m_d(2, 0) = lambda;          m_d(1, 1) = lambda;          m_d(1, 2) = lambda + 2 * mu;
+            m_d(2, 0) = lambda;          m_d(2, 1) = lambda;          m_d(2, 2) = lambda + 2 * mu;
             m_d(3, 3) = m_d(4, 4) = m_d(5, 5) = mu;
         }
         else {
@@ -113,5 +113,17 @@ public:
 private:
     DType m_d;
 };
+
+template<typename Real, int Dim>
+std::ostream &operator<<(std::ostream &os, const ElasticityTensor<Real, Dim> &E)
+{
+    for (size_t i = 0; i < E.D().rows(); ++i) {
+        for (size_t j = 0; j < E.D().cols(); ++j)
+            os << ((j > 0) ? "\t" : "") << E.D(i, j);
+        os << std::endl;
+    }
+
+    return os;
+}
 
 #endif /* end of include guard: ELASTICITYTENSOR_HH */

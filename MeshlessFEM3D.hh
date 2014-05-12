@@ -127,6 +127,9 @@ public:
 
         m_invalidateCache();
     }
+    const ETensor &getElasticityTensor() const {
+        return m_E;
+    }
 
     ETensor periodicHomogenize(Timer *timer = NULL, MSHWriter *mshWriter = NULL);
 
