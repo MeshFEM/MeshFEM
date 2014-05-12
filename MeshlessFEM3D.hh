@@ -33,7 +33,7 @@ public:
     typedef _Model                         Model;
     typedef typename Model::Vector         Vector;
     typedef typename Model::Real           Real;
-    typedef          BBox<Vector>          BBox;
+    typedef          BBox<Vector>          _BBox;
 
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> DVector;
     typedef ElasticityTensor<Real, 3>  ETensor;
@@ -41,7 +41,7 @@ public:
     typedef VectorField<Real, 3>       VField;
     typedef SymmetricMatrixField<Real, 3> SMField;
     typedef ElementGrid3D<Model>       ElementGrid;
-    typedef MSHWriter<ElementGrid>     MSHWriter;
+    typedef MSHWriter<ElementGrid>     _MSHWriter;
     
     typedef Eigen::Matrix<Real, 8, 3> GradPhis; // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 6, 1> FlattenedRank2Tensor;
@@ -131,7 +131,7 @@ public:
         return m_E;
     }
 
-    ETensor periodicHomogenize(Timer *timer = NULL, MSHWriter *mshWriter = NULL);
+    ETensor periodicHomogenize(Timer *timer = NULL, _MSHWriter *mshWriter = NULL);
 
 private:
     Quadrature3D m_quadrature;

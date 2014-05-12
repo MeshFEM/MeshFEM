@@ -34,7 +34,7 @@ void ElementGrid2D<Model>::update(std::vector<Scalar> cellOverlaps)
         std::vector<Vector2D> qPoints;
         for (size_t r = 0; r < rows(); ++r) {
             for (size_t c = 0; c < cols(); ++c) {
-                BBox_t b = cellBoundingBox(r, c);
+                BBox<Vector2D> b = cellBoundingBox(r, c);
                 m_quadrature.quadraturePoints(b, qPoints);
                 size_t insideCount = 0;
                 for (size_t pi = 0; pi < qPoints.size(); ++pi) {

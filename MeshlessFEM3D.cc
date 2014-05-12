@@ -836,7 +836,7 @@ void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
     K.reserve(24 * 24 * m_elementGrid.numElements());
 
     for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
-         BBox b = m_elementGrid.elementBoundingBox(e);
+         _BBox b = m_elementGrid.elementBoundingBox(e);
          m_elementGrid.elementCorners(e, cornerIndices);
          stiff.setDimensions(b.dimensions());
 
@@ -945,7 +945,7 @@ void MeshlessFEM3D<_Model>::m_computePerElementDisplacementStrainMap() {
         m_elementData.resize(numElements);
 
     for (size_t e = 0; e < numElements; ++e) {
-        BBox_t b = m_elementGrid.elementBoundingBox(e);
+        _BBox b = m_elementGrid.elementBoundingBox(e);
         gradPhi.setDimensions(b.dimensions());
         if (m_exactFullElements && (m_elementGrid.elementIsFull(e))) {
             m_elementData[e].setGradPhis(gradPhi.fullCellAverage());
@@ -1076,7 +1076,7 @@ struct VectorSlicer {
 
 template<typename _Model>
 typename MeshlessFEM3D<_Model>::ETensor MeshlessFEM3D<_Model>::
-periodicHomogenize(Timer *timer, MSHWriter *mshWriter) {
+periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     std::cout << "Running homogenization on "
               << m_elementGrid.slices() << " x "
               << m_elementGrid.rows() << " x "
@@ -1158,7 +1158,7 @@ periodicHomogenize(Timer *timer, MSHWriter *mshWriter) {
             rhs.resize(3 * m_elementGrid.numNodes());
             VField rhs_field(rhs);
             rhs.resize(C.n);
-            mshWriter->addField(name, rhs_field, MSHWriter::PER_NODE);
+            mshWriter->addField(name, rhs_field, _MSHWriter::PER_NODE);
         }
 
         if (timer) timer->start("Solve");
@@ -1176,7 +1176,7 @@ periodicHomogenize(Timer *timer, MSHWriter *mshWriter) {
         for (size_t i = 0; i < 6; ++i) {
             std::string name("w_ij ");
             name += std::to_string(i);
-            mshWriter->addField(name, w_ij[i], MSHWriter::PER_NODE);
+            mshWriter->addField(name, w_ij[i], _MSHWriter::PER_NODE);
         }
     }
 

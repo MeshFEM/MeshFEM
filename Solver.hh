@@ -121,7 +121,9 @@ public:
     using typename Solver<Real>::SM2Field;
     using typename Solver<Real>::DVector;
     using typename Solver<Real>::DMatrix;
-    using typename Solver<Real>::TMatrix;
+    // g++ doesn't understand TMatrix::APPEND_RIGHT if TMatrix is brought in
+    // from Solver<Real>
+    typedef TripletMatrix<Triplet<Real> > TMatrix;
     using typename Solver<Real>::DirichletPairs;
 
     typedef Eigen::SparseMatrix<Real> SparseMatrix;
