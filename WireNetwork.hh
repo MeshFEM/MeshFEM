@@ -42,10 +42,6 @@ public:
             std::cout << "#e: " << m_edges.size() << std::endl;
     }
 
-    bool isInside(const Vector &p) const {
-        return value(p) <= m_thickness;
-    }
-
     Real value(const Vector &p) const {
         Real minDist = std::numeric_limits<Real>::max();
         for (Edges::const_iterator itr = m_edges.begin(); itr != m_edges.end();
@@ -53,7 +49,7 @@ public:
             Real dist = compute_distance_to_edge(p, itr->first, itr->second);
             minDist = std::min(dist, minDist);
         }
-        return minDist;
+        return minDist - m_thickness;
     }
 
 private:

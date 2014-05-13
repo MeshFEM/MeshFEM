@@ -23,7 +23,10 @@ public:
     LevelSet(const _BBox &domain)
         : m_domain(domain) { }
 
-    virtual bool isInside(const Vector &p) const = 0;
+    bool isInside(const Vector &p) const {
+        return value(p) < 0;
+    }
+
     virtual Real    value(const Vector &p) const = 0;
 
     void setDomain(const _BBox &b) { m_domain = b; }
@@ -46,9 +49,6 @@ public:
 
     Sphere(const _BBox &domain, const Vector &center, Real radius)
         : super(domain), m_center(center), m_radius(radius) { }
-    bool isInside(const Vector &p) const {
-        return (p - m_center).norm() <= m_radius;
-    }
     Real value(const Vector &p) const {
         return (p - m_center).norm() - m_radius;
     }
@@ -67,9 +67,7 @@ public:
     using typename super::Real;
 
     SchwarzP(const _BBox &domain) : super(domain)  { }
-    bool isInside(const Vector &p) const {
-        return cos(p[0]) + cos(p[1]) + cos(p[2]) < 0;
-    }
+
     Real value(const Vector &p) const {
         return cos(p[0]) + cos(p[1]) + cos(p[2]);
     }

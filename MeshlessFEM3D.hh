@@ -252,17 +252,16 @@ public:
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    /*! Apply B' V to a (shear-doubled) stress to get contribution to element
+    /*! Apply B' V S to a stress to get contribution to element
     //  corners' load.
-    //  @param[in]   shearDoubledStress  flattened "engineering stress" tensor
-    //  @param[out   l                   24-vector of x/y/z load per corner node
-    //                                   to which this element's contribution is
-    //                                   added.
+    //  @param[in]   stress flattened (non-engineering) stress tensor
+    //  @param[out   l      24-vector of x/y/z load per corner node to which
+    //                      this element's contribution is added.
     *///////////////////////////////////////////////////////////////////////////
     template<typename Vec>
-    void applyBt_V(const FlattenedRank2Tensor &shearDoubledStress, Vec &l) const {
+    void applyBt_VS(const FlattenedRank2Tensor &stress, Vec &l) const {
         assert(l.rows() == 24);
-        FlattenedRank2Tensor vs(volume() * shearDoubledStress);
+        FlattenedRank2Tensor vs(volume() * stress);
         for (size_t c = 0; c < 8; ++c) {
             //        0     1     2     3     4     5
             // vs: [s_xx, s_yy, s_zz, s_yz, s_xz, s_xy]

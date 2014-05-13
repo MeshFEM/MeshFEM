@@ -119,12 +119,12 @@ int main(int argc, const char *argv[])
     // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
     //                              Vector( 1.0,  1.0,  1.0)),
     //                       Vector(0.0, 0.0, 0.0), 2.0);
-    //WireNetwork<Vector> model(BBox_t(Vector(-2.0, -2.0, -2.0), Vector(2.0, 2.0, 2.0)), 
-    //            "examples/wires/star.wire", 0.1);
-    WireNetwork<Vector> model(
-            BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
-            "examples/wires/brick5.wire",
-            0.5);
+    WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
+                "examples/wires/star.wire", 1.0);
+    // WireNetwork<Vector> model(
+    //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
+    //         "examples/wires/brick5.wire",
+    //         0.5);
 
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
@@ -143,6 +143,12 @@ int main(int argc, const char *argv[])
     for (size_t e = 0; e < fem.elementGrid().numElements(); ++e)
         overlaps[e] = fem.elementGrid().elementOverlap(e);
     debugMSH.addField("cellOverlaps", overlaps, MSHWriter_t::PER_ELEMENT);
+
+    MeshlessFEM3D_t::SField signedDistances(fem.elementGrid().numNodes());
+    for (size_t n = 0; n < fem.elementGrid().numNodes(); ++n)
+        signedDistances[n] = model.value(fem.elementGrid().nodePosition(n));
+    debugMSH.addField("signedDistances", signedDistances, MSHWriter_t::PER_NODE);
+
     if (timer) timer->stop("Debug MSH");
 
     if (timer) timer->startSection("Periodic Homogenization");

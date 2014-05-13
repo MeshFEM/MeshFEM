@@ -1128,11 +1128,11 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
         e_ij = FlattenedRank2Tensor::Zero();
         e_ij[i] = 1;
         s_ij = m_E.doubleContract(e_ij);
+
         // B' * V * S' * stress computes nodal load
-        applyShearDoubler(s_ij);
         std::vector<double> rhs(C.n, 0.0);
 
-        // Apply each element's B'V to the constant stress tensor, accumulating
+        // Apply each element's B'VS to the constant stress tensor, accumulating
         // into rhs
         VectorSlicer<std::vector<double> > loadSlicer(rhs);
         for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
@@ -1147,7 +1147,7 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
                 loadSlicer.appendIndex(3 * cornerIndices[c] + 2);
             }
 
-            m_elementData[e].applyBt_V(s_ij, loadSlicer); 
+            m_elementData[e].applyBt_VS(s_ij, loadSlicer); 
         }
         for (size_t i = 0; i < rhs.size(); ++i) {
             rhs[i] = -rhs[i];
@@ -1188,18 +1188,18 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     Real Yvol = m_elementGrid.getBoundingBox().volume();
     Real rho = objectVolume / Yvol;
 
-    // Homogenized elasticity tensor (flattened)
-    ETensor Eh;
-    Eigen::Matrix<Real, 6, 6> ETensor;
-
     // Compute homogenized elasticity tensor:
-    // E^H_ijkl = 1/|Y| int_w E_ijkl [e(w_ij)]_kl + E_ijkl dV
-    //          = rho * E_ijkl + 1/|Y| int_w E_ijkl [e(w_ij)]_kl dV
+    // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dV
+    //          = rho * E_ijkl + 1/|Y| int_w [E : strain(w_ij)]_kl dV
     // Where |Y| = Yvol = periodic cell (grid bounding box) volume
     //        w  = periodic base geometry
-    //      e(.) = strain operator
+    ETensor Eh;
+    Eh.D() = rho * m_E.D();
+
+    std::cout << "Density-scaled Tensor:" << std::endl;
+    std::cout << Eh << std::endl;
+
     for (size_t i = 0; i < 6; ++i) {
-        Eh.D().row(i) = rho * m_E.D().row(i);
         // Add in fluctuation stress corrector
         FlattenedRank2Tensor intStress(FlattenedRank2Tensor::Zero());
         CornerVec cornerIndices;
@@ -1210,7 +1210,11 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
                                                   stress);
             intStress += m_elementData[e].volume() * stress;
         }
-        Eh.D().row(i) += (1.0 / Yvol) * intStress;
+        intStress /= Yvol;
+        std::cout << "Fluctuation contribution " << i << ": ["
+                  << intStress[0] << ", " << intStress[1] << ", " << intStress[2] << ", "
+                  << intStress[3] << ", " << intStress[4] << ", " << intStress[5] << "]" << std::endl;
+        Eh.D().row(i) += intStress;
     }
 
     return Eh;
