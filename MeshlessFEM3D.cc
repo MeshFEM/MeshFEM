@@ -14,6 +14,8 @@
 #include "MeshlessFEM3D.hh"
 #include <cassert>
 #include <iostream>
+#include <queue>
+#include <map>
 #include "utils.hh"
 
 // Integrand for the per-element stiffness matrix integral for an orthotropic
@@ -824,11 +826,31 @@ private:
 ////////////////////////////////////////////////////////////////////////////////
 /*! Compute and assemble each 24x24 per-element stiffness matrix into the full
 //  3N x 3N stiffness matrix.
-//  @param[out] K   Stiffness matrix in sparse triplet format.
+//  @param[out] K          Stiffness matrix in sparse triplet format.
+//  @param[in]  dofForNode Degree of freedom assocated with each grid node
+//                         (e.g. applying periodic boundary conditions).
+//                         These should fill the range [0 .. numDOFs - 1]
+//  @param[in]  numDOFs    number of DOFs (default = 0)
 *///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
-void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
-    K.m = K.n = 3 * m_elementGrid.numNodes();
+void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K,
+        std::vector<int> dofForNode, size_t numDOFs) const {
+    if (numDOFs > 0) {
+        // Validate DOF map
+        assert(dofForNode.size() == m_elementGrid.numNodes());
+        for (size_t i = 0; i < dofForNode.size(); ++i) {
+            assert(dofForNode[i] >= 0);
+            assert((size_t) dofForNode[i] < numDOFs);
+        }
+    }
+    else {
+        // Create identity DOF map
+        numDOFs = m_elementGrid.numNodes();
+        for (size_t i = 0; i < m_elementGrid.numNodes(); ++i)
+            dofForNode[i] = i;
+    }
+
+    K.m = K.n = 3 * numDOFs;
     PerElementOrthotropicStiffnessDensity stiff(m_E, m_model);
     CornerVec cornerIndices;
 
@@ -842,9 +864,9 @@ void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
 
          if (m_exactFullElements && m_elementGrid.elementIsFull(e)) {
              for (size_t i = 0; i < 8; ++i) {
-                 size_t vi = cornerIndices[i];
+                 size_t vi = dofForNode[cornerIndices[i]];
                  for (size_t j = 0; j < 8; ++j) {
-                     size_t vj = cornerIndices[j];
+                     size_t vj = dofForNode[cornerIndices[j]];
                      // xx, xy, xz, yx, yy, yz, zx, zy, zz
                      K.addNZ(3 * vi    , 3 * vj    , stiff.fullCellIntegral(3 * i    , 3 * j    ));
                      K.addNZ(3 * vi    , 3 * vj + 1, stiff.fullCellIntegral(3 * i    , 3 * j + 1));
@@ -862,9 +884,9 @@ void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
              stiff.clear();
              m_quadrature.integrate(stiff, b);
              for (size_t i = 0; i < 8; ++i) {
-                 size_t vi = cornerIndices[i];
+                 size_t vi = dofForNode[cornerIndices[i]];
                  for (size_t j = 0; j < 8; ++j) {
-                     size_t vj = cornerIndices[j];
+                     size_t vj = dofForNode[cornerIndices[j]];
                      // xx, xy, xz, yx, yy, yz, zx, zy, zz
                      K.addNZ(3 * vi    , 3 * vj    , stiff(3 * i    , 3 * j    ));
                      K.addNZ(3 * vi    , 3 * vj + 1, stiff(3 * i    , 3 * j + 1));
@@ -884,19 +906,24 @@ void MeshlessFEM3D<_Model>::m_assembleStiffnessMatrix(TMatrix &K) {
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a sparse matrix whose rows span the space of translations.
 //  This matrix can also compute the total force of a load.
-//  @param[out] T   Translation mode matrix in sparse triplet format.
+//  @param[out] T       Translation mode matrix in sparse triplet format.
+//  @param[in]  numDOFs Number of DOFs after node elimination using constraints;
+//                      only these DOFs need translation constraints.
+//                      By default, this is m_elementGrid.numNodes();
+//
 *///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
-void MeshlessFEM3D<_Model>::m_assembleTranslationMatrix(TMatrix &T) {
-    size_t nNodes = m_elementGrid.numNodes();
+void MeshlessFEM3D<_Model>::m_assembleTranslationMatrix(TMatrix &T,
+        size_t numDOFs) {
+    numDOFs = (numDOFs > 0) ? numDOFs : m_elementGrid.numNodes();
 
     T.m = 3;
-    T.n = 3 * nNodes;
+    T.n = 3 * numDOFs;
 
     T.clear();
-    T.reserve(3 * nNodes);
+    T.reserve(3 * numDOFs);
     
-    for (size_t k = 0; k < nNodes; ++k) {
+    for (size_t k = 0; k < numDOFs; ++k) {
         T.addNZ(0, 3 * k    , 1.0);
         T.addNZ(1, 3 * k + 1, 1.0);
         T.addNZ(2, 3 * k + 2, 1.0);
@@ -1044,6 +1071,83 @@ void MeshlessFEM3D<_Model>::m_assemblePeriodicConstraints(TMatrix &P) const {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Determine a "DOF index" for each node to implement periodic boundary
+//  conditions. For internal nodes, these are all unique. On the periodic
+//  boundary, these will be shared by identified nodes.
+//  These indices are all assuming one variable per node. For elasticity, there
+//  will actually be three DOFs per node i, with indices
+//  [3 * dofForNode[i] + 0, 3 * dofForNode[i] + 1, 3 * dofForNode[i] + 2]
+//  @param[out] dofForNode  The degree of freedom assigned to each grid node
+//                          after accounting for periodic constraints.
+//  @return     number of DOFs (again, assuming one DOF per node).
+*///////////////////////////////////////////////////////////////////////////////
+template<typename _Model>
+size_t MeshlessFEM3D<_Model>::
+m_computePeriodicDOFs(std::vector<int> &dofForNode) const {
+    std::vector<std::pair<size_t, size_t> > pairs;
+    m_elementGrid.periodicBoundaryPairs(pairs);
+    // Assign each vertex the same DOF in a connected component of the equality
+    // constraints to implement periodic boundary conditions.
+    size_t numDOFs = 0;
+    dofForNode.assign(m_elementGrid.numNodes(), -1);
+
+    // Build traversable graph representation
+    std::map<size_t, std::list<size_t> > adj;
+    for (const std::pair<size_t, size_t> &i: pairs) {
+        adj[i.first ].push_back(i.second);
+        adj[i.second].push_back(i.first);
+    }
+
+    for (size_t i = 0; i < m_elementGrid.numNodes(); ++i) {
+        if (dofForNode[i] >= 0) continue;
+        dofForNode[i] = numDOFs++;
+        std::queue<size_t> bfsQueue;
+        bfsQueue.push(i);
+        while (!bfsQueue.empty()) {
+            size_t u = bfsQueue.front(); bfsQueue.pop();
+            if (adj.find(u) == adj.end()) continue;
+            const std::list<size_t> adj_u = adj[u];
+            for (size_t v: adj_u) {
+                if (dofForNode[v] < 0) {
+                    dofForNode[v] = dofForNode[u];
+                    bfsQueue.push(v);
+                }
+            }
+        }
+    }
+
+    return numDOFs;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Extract a per-node 3-vector field from DOF values. Assume the field values
+//  are in the first 3 * numDOFs entries--the rest can be arbitrary (could be
+//  constraint right hand sides, lagrange multipliers, etc).
+//  Used to trim off lagrange multiplier parts of systems/solutions and to
+//  reverse the variable reduction done, e.g., to enforce periodic boundary
+//  conditions.
+//  @param[in]  values      flattened per-dof 3-vector field values
+//  @param[in]  dofForNode  DOF index corresponding to each grid node
+//  @return     Per-node VField holding values
+*///////////////////////////////////////////////////////////////////////////////
+template<typename _Model>
+typename MeshlessFEM3D<_Model>::VField MeshlessFEM3D<_Model>::
+m_extractNodeVField(const std::vector<Real> &values,
+                    const std::vector<int> &dofForNode) const {
+    VField result(m_elementGrid.numNodes());
+    assert(dofForNode.size() == result.domainSize());
+    for (size_t i = 0; i < result.domainSize(); ++i) {
+        size_t dof = dofForNode[i];
+        assert(3 * dof + 2 < values.size());
+        result(i)[0] = values[3 * dof];
+        result(i)[1] = values[3 * dof + 1];
+        result(i)[2] = values[3 * dof + 2];
+    }
+
+    return result;
+}
+
 template<typename Vector_>
 struct VectorSlicer {
     typedef typename Vector_::value_type     Scalar;
@@ -1086,28 +1190,26 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
               << m_quadrature.numPoints() << ")" << std::endl;
     TMatrix K, T, P;
 
+    std::vector<int> dofForNode;
+    size_t numDOFs = m_computePeriodicDOFs(dofForNode);
+
     if (timer) timer->start("Assemble Stiffness");
-    m_assembleStiffnessMatrix(K);
+    m_assembleStiffnessMatrix(K, dofForNode, numDOFs);
     if (timer) timer->stop("Assemble Stiffness");
-    if (timer) timer->start("Assemble T, P");
-    m_assembleTranslationMatrix(T);
-    m_assemblePeriodicConstraints(P);
-    if (timer) timer->stop("Assemble T, P");
+
+    m_assembleTranslationMatrix(T, numDOFs);
 
     K.dump("K.txt");
 
     if (timer) timer->start("Assemble C");
     // Build constrained system with lagrange multipliers
-    // [ K T' P' ] [u        ]   [ f ]
-    // [ T       ] [lambda_t ] = [ 0 ]
-    // [ P       ] [lambda_p ]   [ 0 ]
+    // [ K T'] [u        ]   [ f ]
+    // [ T   ] [lambda_t ] = [ 0 ]
     //  --- C ---   -- u_l --    -rhs-
     TMatrix &C = K; // update in place
     // Append boolean arguments:        pad   transpose
     C.append(T, TMatrix::APPEND_BELOW, false, false);
-    C.append(P, TMatrix::APPEND_BELOW, false, false);
     C.append(T, TMatrix::APPEND_RIGHT,  true,  true);
-    C.append(P, TMatrix::APPEND_RIGHT,  true,  true);
     if (timer) timer->stop("Assemble C");
     
     if (timer) timer->start("To SuiteSparse");
@@ -1143,9 +1245,10 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
             // Index into load vector based on the corner indices
             loadSlicer.clear();
             for (size_t c = 0; c < cornerIndices.RowsAtCompileTime; ++c) {
-                loadSlicer.appendIndex(3 * cornerIndices[c]    );
-                loadSlicer.appendIndex(3 * cornerIndices[c] + 1);
-                loadSlicer.appendIndex(3 * cornerIndices[c] + 2);
+                int cDOF = dofForNode[cornerIndices[c]];
+                loadSlicer.appendIndex(3 * cDOF    );
+                loadSlicer.appendIndex(3 * cDOF + 1);
+                loadSlicer.appendIndex(3 * cDOF + 2);
             }
 
             m_elementData[e].applyBt_VS(s_ij, loadSlicer); 
@@ -1158,10 +1261,8 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
         if (mshWriter) {
             std::string name("rhs ");
             name += std::to_string(i);
-            rhs.resize(3 * m_elementGrid.numNodes());
-            VField rhs_field(rhs);
-            rhs.resize(C.n);
-            mshWriter->addField(name, rhs_field, _MSHWriter::PER_NODE);
+            mshWriter->addField(name, m_extractNodeVField(rhs, dofForNode),
+                                _MSHWriter::PER_NODE);
         }
 
         if (timer) timer->start("Solve");
@@ -1169,9 +1270,7 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
         Cfactors.solve(rhs, soln);
         if (timer) timer->stop("Solve");
 
-        // Trim off the lagrange multipliers.
-        soln.resize(3 * m_elementGrid.numNodes());
-        w_ij[i] = VField(soln);
+        w_ij[i] = m_extractNodeVField(soln, dofForNode);
     }
     if (timer) timer->stopSection("Cell Problems");
 

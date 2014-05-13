@@ -155,15 +155,21 @@ private:
     // Sparse Matrices
     typedef TripletMatrix<Triplet<Real> > TMatrix;
 
-    void m_assembleStiffnessMatrix(TMatrix &K);
+    void m_assembleStiffnessMatrix(TMatrix &K,
+            std::vector<int> dofForNode = std::vector<int>(),
+            size_t numDOFs = 0) const;
     void m_assembleRigidModeMatrix(TMatrix &R);
-    void m_assembleTranslationMatrix(TMatrix &T);
+    void m_assembleTranslationMatrix(TMatrix &T, size_t numDOFs = 0);
 
     void m_computePerElementDisplacementStrainMap();
     void m_assembleBMatrix(TMatrix &B);
     void m_assembleVDMatrix(TMatrix &VD);
 
     void m_assemblePeriodicConstraints(TMatrix &P) const;
+    size_t m_computePeriodicDOFs(std::vector<int> &dofForNode) const;
+
+    VField m_extractNodeVField(const std::vector<Real> &values,
+                               const std::vector<int> &dofForNode) const;
 
     void m_invalidateCache() {
         m_displacementStrainCached = false;
