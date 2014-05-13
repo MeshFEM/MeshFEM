@@ -117,12 +117,7 @@ private:
 template<typename Real, int Dim>
 std::ostream &operator<<(std::ostream &os, const ElasticityTensor<Real, Dim> &E)
 {
-    for (size_t i = 0; i < E.D().rows(); ++i) {
-        for (size_t j = 0; j < E.D().cols(); ++j)
-            os << ((j > 0) ? "\t" : "") << E.D(i, j);
-        os << std::endl;
-    }
-
+    os << E.D();
     return os;
 }
 

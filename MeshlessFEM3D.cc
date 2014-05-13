@@ -1197,9 +1197,6 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     ETensor Eh;
     Eh.D() = rho * m_E.D();
 
-    std::cout << "Density-scaled Tensor:" << std::endl;
-    std::cout << Eh << std::endl;
-
     for (size_t i = 0; i < 6; ++i) {
         // Add in fluctuation stress corrector
         FlattenedRank2Tensor intStress(FlattenedRank2Tensor::Zero());
@@ -1212,9 +1209,6 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
             intStress += m_elementData[e].volume() * stress;
         }
         intStress /= Yvol;
-        std::cout << "Fluctuation contribution " << i << ": ["
-                  << intStress[0] << ", " << intStress[1] << ", " << intStress[2] << ", "
-                  << intStress[3] << ", " << intStress[4] << ", " << intStress[5] << "]" << std::endl;
         Eh.D().row(i) += intStress;
     }
 

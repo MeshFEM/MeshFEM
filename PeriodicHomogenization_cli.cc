@@ -19,6 +19,7 @@
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <iomanip>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -155,8 +156,19 @@ int main(int argc, const char *argv[])
     MeshlessFEM3D_t::ETensor Eh = fem.periodicHomogenize(timer, &debugMSH);
     if (timer) timer->stopSection("Periodic Homogenization");
 
-    cout << Eh;
+    cout << setprecision(16);
+    cout << "Homogenized elasticity tensor:" << endl;
+    cout << Eh << endl << endl;;
 
+    MeshlessFEM3D_t::ETensor::DType Dinv = Eh.D().inverse();
+
+    cout << "Homogenized compliance tensor:" << endl;
+    cout << Dinv << endl << endl;
+    Eigen::Matrix<Scalar, 6, 1> moduli(1.0 / Dinv.diagonal().array());
+    std::cout << "Approximate Young moduli:\t" << moduli[0] << "\t" << moduli[1] << "\t"
+              << moduli[2] << endl;
+    std::cout << "Approximate shear moduli:\t" << moduli[3] << "\t" << moduli[4] << "\t"
+              << moduli[5] << endl;
     if (timer) timer->report(cout);
     
     return 0;
