@@ -112,15 +112,15 @@ int main(int argc, const char *argv[])
 
     SolverLibrary<Scalar> solvers(dumpMatrices);
 
-    // SchwarzP<Vector> model(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
-    //                               M_PI * Vector(2.0, 2.0, 2.0)));
+    SchwarzP<Vector> model(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
+                                  M_PI * Vector(2.0, 2.0, 2.0)));
     // SchwarzP<Vector> model(BBox_t(M_PI * Vector(-1.0, -1.0, -1.0),
     //                               M_PI * Vector( 1.0,  1.0,  1.0)));
     // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
     //                              Vector( 1.0,  1.0,  1.0)),
     //                       Vector(0.0, 0.0, 0.0), 2.0);
-    WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
-                "examples/wires/star.wire", 1.0);
+    // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
+    //             "examples/wires/star.wire", 1.0);
     // WireNetwork<Vector> model(
     //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
     //         "examples/wires/brick5.wire",

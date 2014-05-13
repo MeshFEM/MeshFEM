@@ -5,6 +5,7 @@ CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquares
 PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings3D.o utils.o
 UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM2D.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
+SOURCES=PeriodicHomogenization_cli.cc MeshlessFEM3D.cc
 TARGETS=CSGFEM_cli PeriodicHomogenization_cli render_cli umfpack_cli
 
 CPPFLAGS+=-std=c++11 -O2 $(INCLUDES) -DUSE_MESA
@@ -36,7 +37,7 @@ AnalysisSettings3D.o: AnalysisSettings.cc
 
 depend:
 	@touch Makefile.depend;
-	makedepend -Y -f Makefile.depend -- $(CPPFLAGS) -- $(SOURCES) &> /dev/null
+	makedepend -Y -f Makefile.depend --  -- $(SOURCES) &> /dev/null
 
 clean:
 	rm -f $(CSGFEM_OBJS) $(RENDER_OBJS)  $(UMFPACK_OBJS) $(PERHOMO_OBJS) *.bak $(TARGETS)

@@ -1126,7 +1126,8 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     FlattenedRank2Tensor e_ij, s_ij;
     for (size_t i = 0; i < 6; ++i) {
         e_ij = FlattenedRank2Tensor::Zero();
-        e_ij[i] = 1;
+        // e_ij = .5 * (e_i e_j^T + e_j e_i^T)
+        e_ij[i] = (i > 2) ? 0.5 : 1.0;
         s_ij = m_E.doubleContract(e_ij);
 
         // B' * V * S' * stress computes nodal load
