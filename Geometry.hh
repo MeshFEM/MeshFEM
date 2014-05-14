@@ -263,7 +263,7 @@ public:
     }
 
     void setDegrees(Real alpha, Real beta, Real gamma) {
-        setRadians(rad(alpha), rad(beta), rad(gamma));
+        setRadians(to_rad(alpha), to_rad(beta), to_rad(gamma));
     }
 
     void setDegrees(const Vector &angles) {
@@ -277,11 +277,11 @@ public:
     Vector getRadians() const { return Vector(m_alpha, m_beta, m_gamma); }
 
     void getDegrees(Real &alpha, Real &beta, Real &gamma) const {
-        alpha = deg(m_alpha), beta = deg(m_beta), gamma = deg(m_gamma);
+        alpha = to_deg(m_alpha), beta = to_deg(m_beta), gamma = to_deg(m_gamma);
     }
 
     Vector getDegrees() const {
-        return Vector(deg(m_alpha), deg(m_beta), deg(m_gamma));
+        return Vector(to_deg(m_alpha), to_deg(m_beta), to_deg(m_gamma));
     }
 
     // Apply the rotation
@@ -320,8 +320,8 @@ public:
 
 private:
     // Converters
-    constexpr Real deg(Real a) const { return (180.0 * a) / M_PI; }
-    constexpr Real rad(Real a) const { return a; }
+    constexpr Real to_deg(Real a) const { return (180.0 / M_PI) * a; }
+    constexpr Real to_rad(Real a) const { return (M_PI / 180.0) * a; }
 
     Real m_alpha, m_cosAlpha, m_sinAlpha;
     Real m_beta,  m_cosBeta,  m_sinBeta;
