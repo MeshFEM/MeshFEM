@@ -1,6 +1,10 @@
 #ifndef GLOBAL_TYPES_HH
 #define GLOBAL_TYPES_HH
 
+#ifndef DIM
+#define DIM 2
+#endif
+
 #include "CSGTree.hh"
 #include "LevelSet.hh"
 #include "Geometry.hh"
@@ -9,10 +13,6 @@
 #include <cassert>
 #include <iostream>
 #include <fstream> 
-
-#ifndef DIM
-#define DIM 2
-#endif
 
 #include <Eigen/Dense>
 typedef Eigen::Vector2d                                       Vector2D;
@@ -29,9 +29,11 @@ typedef CSGTree<Vector> CSGTree_t;
 typedef CSGTree_t::CSGNode CSGNode;
 typedef CSGTree_t::CSGGlueNode CSGGlueNode;
 typedef CSGTree_t::CSGRectangleNode CSGRectangleNode;
+#if DIM == 2
 typedef CSGTree_t::CSGEllipseNode CSGEllipseNode;
 typedef CSGTree_t::CSGPieSliceNode CSGPieSliceNode;
 typedef CSGTree_t::CSGLaminateNode CSGLaminateNode;
+#endif
 typedef BBox<Vector> BBox_t;
 typedef Polygon<Vector> Polygon_t;
 typedef BoundaryPoint<Vector> BoundaryPoint_t;

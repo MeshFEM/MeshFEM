@@ -33,9 +33,11 @@ public:
     class CSGBoolNode;
     class CSGPrimitive;
     class CSGRectangleNode;
+#if DIM == 2
     class CSGEllipseNode;
     class CSGPieSliceNode;
     class CSGLaminateNode;
+#endif
     typedef BBox<_Vector> BBox_t;
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;

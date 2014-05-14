@@ -2,7 +2,7 @@ include platform_defs.mk
 
 RENDER_OBJS=render_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o CSGFile.o utils.o draw.o
 CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquaresGrid.o AnalysisSettings.o BoundaryConditions.o utils.o CSGFile.o
-PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings3D.o utils.o
+PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings3D.o utils.o CSGFile3D.o
 UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM2D.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
 SOURCES=PeriodicHomogenization_cli.cc MeshlessFEM3D.cc
@@ -26,7 +26,7 @@ render_cli: $(RENDER_OBJS)
 umfpack_cli: $(UMFPACK_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
-AnalysisSettings3D.o: AnalysisSettings.cc
+%3D.o: %.cc
 	$(CXX) -DDIM=3 -c $(CPPFLAGS) $< -o $@
 
 %.o: %.cpp Makefile

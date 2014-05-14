@@ -1,6 +1,6 @@
+#include "GlobalTypes.hh"
 #include "CSGFile.hh"
 #include "CSGTree.hh"
-#include "GlobalTypes.hh"
 
 #include <iostream>
 #include <fstream>
@@ -42,9 +42,11 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
     typedef typename _CSGTree::CSGNode          CSGNode;
     typedef typename _CSGTree::CSGBoolNode      CSGBoolNode;
     typedef typename _CSGTree::CSGRectangleNode CSGRectangleNode;
+#if Dim == 2
     typedef typename _CSGTree::CSGEllipseNode   CSGEllipseNode;
     typedef typename _CSGTree::CSGPieSliceNode  CSGPieSliceNode;
     typedef typename _CSGTree::CSGLaminateNode  CSGLaminateNode;
+#endif
 
     std::string name = pt.get<std::string>("name");
     std::string type = pt.get<std::string>("type");
@@ -93,18 +95,25 @@ typename CSGTree<Vector>::CSGNode *parseNode(ptree &pt)
         parseVector(pt.get_child("center"), center);
         parseVector(pt.get_child("dimensions"), dimensions);
 
+#if DIM == 2
         double rot;
         try { rot = pt.get<double>("rotation"); }
         catch (...) { throw std::runtime_error("Error parsing rotation."); }
+#else
+        Vector rot;
+        parseVector(pt.get_child("rotation"), rot);
+#endif
         
         if (node_type == N_RECT)
             node = new CSGRectangleNode(center, dimensions, rot);
+#if DIM == 2
         else if (node_type == N_ELLIPSE)
             node = new CSGEllipseNode(center, dimensions, rot);
         else if (node_type == N_PIESLICE)
             node = new CSGPieSliceNode(center, dimensions, rot);
         else if (node_type == N_LAMINATE)
             node = new CSGLaminateNode(center, dimensions, rot);
+#endif
         else
             assert(false);
     }

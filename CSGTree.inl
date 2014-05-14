@@ -111,10 +111,15 @@ class CSGTree<Vector>::CSGPrimitive : public CSGTree<Vector>::CSGNode
 {
 public:
     typedef typename Vector::Scalar Real;
+#if DIM == 2
+    typedef Real        AngleType;
+#else
+    typedef Vector      AngleType;
+#endif
 
-    CSGPrimitive(Vector center, Vector dimensions, Real rot = 0.0)
-        : m_c(center), m_dim(dimensions), m_rot_inv(0) {
-        m_rot_inv.setDegrees(-rot);
+    CSGPrimitive(const Vector &center, const Vector &dimensions, const AngleType &rot)
+        : m_c(center), m_dim(dimensions) {
+        m_rot.setDegrees(rot);
     }
 
     virtual ~CSGPrimitive() { }
@@ -125,13 +130,13 @@ public:
     void setCenter(const Vector &c) { m_c = c; }
     void setDimensions(const Vector &dim) { m_dim = dim; }
 
-    Real getRotation() const { return -m_rot_inv.deg(); }
-    Real getRotationRad() const { return -m_rot_inv.rad(); }
-    void setRotation(Real r) { m_rot_inv.setDegrees(-r); }
-    void setRotationRad(Real r) { m_rot_inv.setAngle(-r); }
+    AngleType getRotation() const    { return m_rot.getDegrees(); }
+    AngleType getRotationRad() const { return m_rot.getRadians(); }
+    void setRotation(const AngleType &angles) { m_rot.setDegrees(angles); }
+    void setRotationRad(const AngleType &angles) { m_rot.setRadians(angles); }
 
     Vector toLocalCoords(const Vector &p) const {
-        return m_rot_inv(p - m_c);
+        return m_rot.inverse(p - m_c);
     }
 
     BBox_t boundingBox() const {
@@ -145,7 +150,7 @@ public:
             }
 
             // Apply rotation and offset
-            corners[i] = m_rot_inv.inverse(corners[i]) + m_c;
+            corners[i] = m_rot(corners[i]) + m_c;
         }
 
         BBox_t b(corners[0], corners[0]);
@@ -161,13 +166,23 @@ public:
 
     virtual bool operator==(const CSGNode &b) const {
         const CSGPrimitive *bCast = dynamic_cast<const CSGPrimitive *>(&b);
-        return bCast && (m_c == bCast->m_c) && (m_dim == bCast->m_dim) &&
-               (std::abs(this->getRotation() - bCast->getRotation() < 1e-6));
+        if (!bCast) return false;
+#if DIM == 2
+        return (m_c == bCast->m_c) && (m_dim == bCast->m_dim) &&
+               (std::abs(this->getRotation() - bCast->getRotation() < 1e-8));
+#else
+        return (m_c == bCast->m_c) && (m_dim == bCast->m_dim) &&
+               ((getRotation() - bCast->getRotation()).norm() < 1e-8);
+#endif
     }
 
 protected:
     Vector m_c, m_dim;
-    FastRotation2D<Real, Vector> m_rot_inv;
+#if DIM == 2
+    FastRotation2D<Real, Vector> m_rot;
+#else
+    FastRotation3D<Real, Vector> m_rot;
+#endif
 };
 
 template<typename Vector>
@@ -373,9 +388,14 @@ class CSGTree<Vector>::CSGRectangleNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
     typedef BoundaryPoint<Vector> _BoundaryPoint;
-    using CSGTree<Vector>::CSGPrimitive::m_rot_inv;
+    using CSGTree<Vector>::CSGPrimitive::m_rot;
+    using typename CSGTree<Vector>::CSGPrimitive::AngleType;
 public:
-    CSGRectangleNode(const Vector &center, const Vector &dimensions, Real rot = 0)
+#if DIM == 2
+    CSGRectangleNode(const Vector &center, const Vector &dimensions, AngleType rot = 0)
+#else
+    CSGRectangleNode(const Vector &center, const Vector &dimensions, AngleType rot = Vector::Zero())
+#endif
         : CSGPrimitive(center, dimensions, rot)
     { }
 
@@ -390,6 +410,9 @@ public:
     bool isInside(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
         return (fabs(l[0]) <= .5 * this->m_dim[0]) && 
+#if DIM == 3
+               (fabs(l[2]) <= .5 * this->m_dim[2]) &&
+#endif
                (fabs(l[1]) <= .5 * this->m_dim[1]);
     }
 
@@ -403,6 +426,7 @@ public:
 
     // Corners are always chosen as boundary points.
     std::vector<_BoundaryPoint> boundaryPoints(Real pointSpacing) const {
+        assert(DIM == 2);
         std::vector<_BoundaryPoint> bndPts;
         Real width = this->m_dim[0];
         Real height = this->m_dim[1];
@@ -489,8 +513,8 @@ public:
         // Transorm all boundary points
         for (size_t i = 0; i < bndPts.size(); ++i) {
             _BoundaryPoint &bp = bndPts[i];
-            bp.p = m_rot_inv.inverse(bp.p) + this->m_c; 
-            bp.n = m_rot_inv.inverse(bp.n);
+            bp.p = m_rot(bp.p) + this->m_c; 
+            bp.n = m_rot(bp.n);
         }
 
         // Verify the point areas sum to the perimeter
@@ -513,14 +537,15 @@ public:
 };
 
 
+#if DIM==2
 template<typename Vector>
 class CSGTree<Vector>::CSGEllipseNode : public CSGTree<Vector>::CSGPrimitive
 {
     typedef typename Vector::Scalar Real;
     typedef BoundaryPoint<Vector> _BoundaryPoint;
-    using CSGTree<Vector>::CSGPrimitive::m_rot_inv;
+    using CSGTree<Vector>::CSGPrimitive::m_rot;
 public:
-    CSGEllipseNode(Vector center, const Vector &dimensions, Real rot = 0)
+    CSGEllipseNode(const Vector &center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
     {
         Real w = dimensions[0], h = dimensions[1];
@@ -541,7 +566,7 @@ public:
 
     Vector getFocus() const {
         Vector f(m_vertical ? 0 : m_f, m_vertical ? m_f : 0);
-        return m_rot_inv.inverse(f);
+        return m_rot(f);
     }
 
     Real getMajorRadius() const {
@@ -600,8 +625,8 @@ public:
                 n = Vector(-n[1], n[0]);
             }
 
-            p = m_rot_inv.inverse(p) + this->m_c;
-            n = m_rot_inv.inverse(n);
+            p = m_rot(p) + this->m_c;
+            n = m_rot(n);
 
             bndPts.push_back(_BoundaryPoint(p, n, pointAreas));
         }
@@ -630,7 +655,7 @@ class CSGTree<Vector>::CSGPieSliceNode : public CSGTree<Vector>::CSGPrimitive
 {
     using CSGTree<Vector>::CSGPrimitive::m_c;
 public:
-    CSGPieSliceNode(Vector center, const Vector &dimensions, Real rot = 0)
+    CSGPieSliceNode(const Vector &center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
     { }
 
@@ -820,7 +845,7 @@ class CSGTree<Vector>::CSGLaminateNode : public CSGTree<Vector>::CSGPrimitive
 {
     using CSGTree<Vector>::CSGPrimitive::m_c;
 public:
-    CSGLaminateNode(Vector center, const Vector &dimensions, Real rot = 0)
+    CSGLaminateNode(const Vector &center, const Vector &dimensions, Real rot = 0)
         : CSGPrimitive(center, dimensions, rot)
     { }
 
@@ -870,6 +895,8 @@ public:
 
     ~CSGLaminateNode() { }
 };
+
+#endif // DIM == 2
 
 template<typename Functor, typename CSGNode>
 void dfsWorker(Functor &f, CSGNode *node)

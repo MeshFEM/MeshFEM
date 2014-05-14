@@ -202,17 +202,20 @@ std::istream &operator>>(std::istream &is, BBox<T> &b) {
 template<typename Real, typename Vector>
 class FastRotation2D {
 public:
-    FastRotation2D(Real radians) { setAngle(radians); }
+    FastRotation2D(Real radians = 0.0) { setRadians(radians); }
 
-    void setAngle(Real radians) {
+    void setRadians(Real radians) {
         m_angle = radians;
         m_cos = cos(radians);
         m_sin = sin(radians);
     }
 
     void setDegrees(Real degrees) {
-        setAngle((M_PI * degrees) / 180.0);
+        setRadians((M_PI * degrees) / 180.0);
     }
+
+    Real getDegrees() const { return deg(); }
+    Real getRadians() const { return rad(); }
 
     // Apply the rotation
     Vector operator()(const Vector &v) const {
@@ -230,6 +233,99 @@ public:
 
 private:
     Real m_angle, m_cos, m_sin;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Fast 3D rotation class. Works with (something like) Euler angles:
+//  (alpha, beta, gamma). We define our rotation to be:
+//      1) rotate around x axis by alpha
+//      2) rotate around y axis by beta
+//      3) rotate around z axis by gamma
+*///////////////////////////////////////////////////////////////////////////////
+template<typename Real, typename Vector>
+class FastRotation3D {
+public:
+    FastRotation3D(Real alpha, Real beta, Real gamma) {
+        setRadians(alpha, beta, gamma);
+    }
+    FastRotation3D(const Vector &angles = Vector::Zero()) {
+        setRadians(angles);
+    }
+
+    void setRadians(Real alpha, Real beta, Real gamma) {
+        m_alpha = alpha; m_cosAlpha = cos(alpha), m_sinAlpha = sin(alpha);
+        m_beta  = beta ; m_cosBeta  = cos(beta ), m_sinBeta  = sin(beta );
+        m_gamma = gamma; m_cosGamma = cos(gamma), m_sinGamma = sin(gamma);
+    }
+
+    void setRadians(const Vector &angles) {
+        setRadians(angles[0], angles[1], angles[2]);
+    }
+
+    void setDegrees(Real alpha, Real beta, Real gamma) {
+        setRadians(rad(alpha), rad(beta), rad(gamma));
+    }
+
+    void setDegrees(const Vector &angles) {
+        setDegrees(angles[0], angles[1], angles[2]);
+    }
+
+    void getRadians(Real &alpha, Real &beta, Real &gamma) const {
+        alpha = m_alpha, beta = m_alpha, gamma = m_gamma;
+    }
+
+    Vector getRadians() const { return Vector(m_alpha, m_beta, m_gamma); }
+
+    void getDegrees(Real &alpha, Real &beta, Real &gamma) const {
+        alpha = deg(m_alpha), beta = deg(m_beta), gamma = deg(m_gamma);
+    }
+
+    Vector getDegrees() const {
+        return Vector(deg(m_alpha), deg(m_beta), deg(m_gamma));
+    }
+
+    // Apply the rotation
+    Vector operator()(Vector v) const {
+        // Rotate around x axis (yz plane)
+        Real tmp = v[1];
+        v[1] = m_cosAlpha * tmp - m_sinAlpha * v[2];
+        v[2] = m_sinAlpha * tmp + m_cosAlpha * v[2];
+        // Rotate around y axis (zx plane)
+        tmp = v[2];
+        v[2] = m_cosBeta  * tmp - m_sinBeta  * v[0];
+        v[0] = m_sinBeta  * tmp + m_cosBeta  * v[0];
+        // Rotate around z axis (xy plane)
+        tmp = v[0];
+        v[0] = m_cosGamma * tmp - m_sinGamma * v[1];
+        v[1] = m_sinGamma * tmp + m_cosGamma * v[1];
+        return v;
+    }
+
+    // Apply the inverse rotation
+    Vector inverse(Vector v) const {
+        // Inverse rotation around z axis (xy plane)
+        Real tmp = v[0];
+        v[0] =  m_cosGamma * tmp + m_sinGamma * v[1];
+        v[1] = -m_sinGamma * tmp + m_cosGamma * v[1];
+        // Inverse rotation around y axis (zx plane)
+        tmp = v[2];
+        v[2] =  m_cosBeta  * tmp + m_sinBeta  * v[0];
+        v[0] = -m_sinBeta  * tmp + m_cosBeta  * v[0];
+        // Inverse rotation around x axis (yz plane)
+        tmp = v[1];
+        v[1] =  m_cosAlpha * tmp + m_sinAlpha * v[2];
+        v[2] = -m_sinAlpha * tmp + m_cosAlpha * v[2];
+        return v;
+    }
+
+private:
+    // Converters
+    constexpr Real deg(Real a) const { return (180.0 * a) / M_PI; }
+    constexpr Real rad(Real a) const { return a; }
+
+    Real m_alpha, m_cosAlpha, m_sinAlpha;
+    Real m_beta,  m_cosBeta,  m_sinBeta;
+    Real m_gamma, m_cosGamma, m_sinGamma;
 };
 
 template<typename Vector>

@@ -1199,7 +1199,7 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
 
     m_assembleTranslationMatrix(T, numDOFs);
 
-    K.dump("K.txt");
+    // K.dump("K.txt");
 
     if (timer) timer->start("Assemble C");
     // Build constrained system with lagrange multipliers
@@ -1319,3 +1319,4 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
 ////////////////////////////////////////////////////////////////////////////////
 #include "GlobalTypes.hh"
 template class MeshlessFEM3D<LevelSet_t>;
+template class MeshlessFEM3D<CSGTree_t>;
