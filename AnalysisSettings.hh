@@ -34,8 +34,10 @@
 // Forward declare options_description for compile speed.
 namespace boost { namespace program_options {
     class options_description;
+    class variables_map;
 } }
 
+namespace po = boost::program_options;
 
 struct AnalysisSettings {
     typedef boost::variant<std::string, int, double, bool> Variant;
@@ -106,8 +108,8 @@ public:
     static void getOptions(boost::program_options::options_description &opts);
 
     void parseOptions(const std::string &s = std::string());
-
     void parseOptions(std::istream &is);
+    void readOptions(const po::variables_map &vm);
 
     void writeOptions(std::ostream &os) const;
 

@@ -324,7 +324,7 @@ public:
     }
 
     _BBox cellBoundingBox(size_t slice, size_t row, size_t col) const {
-        assert((slice < rows()) && (row < rows()) && (col < cols()));
+        assert((slice < slices()) && (row < rows()) && (col < cols()));
         return _BBox(vertexPosition(slice, row, col),
                       vertexPosition(slice + 1, row + 1, col + 1));
     }

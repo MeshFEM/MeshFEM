@@ -10,8 +10,6 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/lexical_cast.hpp>
 
-namespace po = boost::program_options;
-
 ////////////////////////////////////////////////////////////////////////////
 // Accessors
 // Throw exceptions if settings name isn't found, or if wrong typed accessor
@@ -173,10 +171,13 @@ void AnalysisSettings::parseOptions(std::istream &is) {
     po::options_description opts;
     getOptions(opts);
 
-
     po::variables_map vm;
     po::store(po::parse_config_file(is, opts), vm);
 
+    readOptions(vm);
+}
+
+void AnalysisSettings::readOptions(const po::variables_map &vm) {
     // Be careful with initialization literal types here... they determine
     // the setting's type, and need to match exactly to avoid overload
     // ambiguity.
