@@ -4,9 +4,14 @@
 # determine the hostname
 HOST=$(shell hostname -s)
 
-# Assume hostnames like "login-0-2" are the Bowery cluster
+# Assume hostnames like "login-0-2" are the Mercer cluster
 ifneq (,$(findstring login,$(HOST)))
-    HOST=bowery
+    HOST=mercer
+endif
+
+# Assume hostnames like "compute-0-2" are the Mercer cluster
+ifneq (,$(findstring compute,$(HOST)))
+    HOST=mercer
 endif
 
 # The VGL cluster is all the same

@@ -1217,6 +1217,8 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     if (timer) timer->stop("To SuiteSparse");
     if (timer) timer->start("Factorize");
     UmfpackFactorizer Cfactors(ssC);
+    std::cout << "Factorization peak memory:\t" << Cfactors.peakMemoryMB()
+              << "MB" << std::endl;
     if (timer) timer->stop("Factorize");
 
     // Solve cell problems for fluctuation displacments "w_ij"
