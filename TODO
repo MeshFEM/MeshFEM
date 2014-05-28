@@ -1,10 +1,4 @@
 Implement:
-*** 3D Meshfree FEM
-*************
-************* Estimate linear system size/complexity by using the full-cell
-************* stiffness integral to build a stiffness matrix for a solid NxNxN
-************* block. Apply Dirichlet constraints and run CHOLMOD.
-*************
 
 *** Implement field sampler (place point in FEMView, samples from nearest point)
 *** LP Parameters

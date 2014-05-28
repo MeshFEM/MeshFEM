@@ -149,8 +149,8 @@ private:
     bool m_displacementStrainCached;
 
     // Integrands
-    class PerElementOrthotropicStiffnessDensity;
-    class PerElementGradPhi;
+    class PerElementOrthotropicStiffnessIntegrand;
+    class PerElementGradPhiIntegrand;
 
     // Sparse Matrices
     typedef TripletMatrix<Triplet<Real> > TMatrix;
