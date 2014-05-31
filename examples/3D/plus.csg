@@ -14,14 +14,14 @@
             "name": "y Box",
             "type": "rectangle",
             "center": [0, 0, 0],
-            "dimensions": [0.0625, 1.0, 0.0625],
+            "dimensions": [0.25, 1.0, 0.25],
             "rotation": [0, 0, 0]
         },
         "right": {
             "name": "z Box",
             "type": "rectangle",
             "center": [0, 0, 0],
-            "dimensions": [0.0625, 0.0625, 1.0],
+            "dimensions": [0.25, 0.25, 1.0],
             "rotation": [0, 0, 0]
         }
     }

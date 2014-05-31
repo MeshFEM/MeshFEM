@@ -4,12 +4,15 @@
 /*! @file
 //      Implements a rank 4 tensor with the symmetries of an elasticity tensor:
 //          E_ijkl = E_jikl = E_ijlk = E_klij
-//      This allows the tensor to be stored as a symmetric 6x6 matrix.
+//      This allows the tensor to be stored as a symmetric 6x6 matrix "D"
 //      See doc/meshless_fem/TensorFlattening.pdf
 //      for details of this transformation.
 //      
-//      Currently the major symmetry isn't exploited to simplify homogenization
-//      double contraction operations, but it may be as a future optimization.
+//      Major symmetry is enforced by only storing the upper triangle of D
+//      internally. This means matrix element accesses must be done through
+//      method D(i, j), and matrix operations need to be performed with
+//      Eigen's "selfadjointView<Eigen::Upper>" view. For safety, because of
+//      this complexity, m_d is kept entirely private, with no direct accessor.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -36,26 +39,28 @@ public:
     ElasticityTensor() : m_d(DType::Zero()) { }
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
     ElasticityTensor(Real E, Real nu) { setIsotropic(E, nu); }
+    // Copy constructor
+    ElasticityTensor(const ElasticityTensor &b) { m_d = b.m_d; }
 
     // Configure the elasticity tensor with a Young's modulus and Poisson ratio
     void setIsotropic(Real E, Real nu) {
         // Lame formula:
         // stress = lamda * trace(strain) + mu (strain + strain^T)
         // (We write it this way so that the implied elasticity tensor has the
-        //  correct symmetries.
+        //  correct symmetries.)
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
 
         m_d =  DType::Zero();
         if (_Dim == 3) {
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;          m_d(0, 2) = lambda;
-            m_d(1, 0) = lambda;          m_d(1, 1) = lambda + 2 * mu; m_d(1, 2) = lambda;
-            m_d(2, 0) = lambda;          m_d(2, 1) = lambda;          m_d(2, 2) = lambda + 2 * mu;
+                                         m_d(1, 1) = lambda + 2 * mu; m_d(1, 2) = lambda;
+                                                                      m_d(2, 2) = lambda + 2 * mu;
             m_d(3, 3) = m_d(4, 4) = m_d(5, 5) = mu;
         }
         else {
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;
-            m_d(1, 0) = lambda;          m_d(1, 1) = lambda + 2 * mu;
+                                         m_d(1, 1) = lambda + 2 * mu;
             m_d(2, 2) = mu;
         }
     }
@@ -76,25 +81,42 @@ public:
 
     Real D(size_t i, size_t j) const {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));
-        return m_d(i, j);
+        return (i <= j) ? m_d(i, j) : m_d(j, i);
     }
 
     Real &D(size_t i, size_t j) {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));
-        return m_d(i, j);
+        return (i <= j) ? m_d(i, j) : m_d(j, i);
     }
 
-    ElasticityTensor &operator*=(Real s) { m_d *= s; }
+    // Get the flattened tensor's diagonal
+    Eigen::Matrix<Real, flatLen(_Dim), 1> diag() const {
+        return m_d.diagonal();
+    }
+
+    ElasticityTensor &operator*=(Real s) { m_d *= s; return *this; }
     ElasticityTensor  operator*(Real s) const {
         ElasticityTensor E(*this);
         E *= s;
         return E;
     }
 
-    // Access rows of the flattened  elasticity tensor.
-    // (Useful for implementing the periodic homogenization equations).
-    const DType &D() const { return m_d; }
-          DType &D()       { return m_d; }
+    ElasticityTensor &operator-=(const ElasticityTensor &b) {
+        m_d -= b.m_d;
+        return *this;
+    }
+    ElasticityTensor operator-(const ElasticityTensor &b) const {
+        ElasticityTensor E(*this);
+        E -= b;
+        return E;
+    }
+
+    ElasticityTensor inverse() const {
+        ElasticityTensor result;
+        result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        result.m_d = result.m_d.inverse();
+        return result;
+    }
 
     // Doubles the off-diagonal entries of a flattened symmetric rank 2 tensor.
     FlattenedRank2Tensor shearDoubler(FlattenedRank2Tensor t) const {
@@ -107,18 +129,33 @@ public:
     // need to implement contraction E_ijkl e_kl
     // (see doc/meshless_fem/TensorFlattening.pdf)
     FlattenedRank2Tensor doubleContract(const FlattenedRank2Tensor &in) const {
-        return m_d * shearDoubler(in);
+        return m_d.template selfadjointView<Eigen::Upper>() * shearDoubler(in);
+    }
+
+    Real quadrupleContract(const ElasticityTensor &b) const {
+        Real result = 0;
+        for (size_t i = 0; i < _Dim; ++i)
+            for (size_t j = 0; j < _Dim; ++j)
+                for (size_t k = 0; k < _Dim; ++k)
+                    for (size_t l = 0; l < _Dim; ++l)
+                        result += (*this)(i, j, k, l) * b(i, j, k, l);
+        return result;
     }
 
 private:
     DType m_d;
+
+    friend std::ostream &operator<<(std::ostream &os, const ElasticityTensor &E) {
+        DType d = E.m_d.template selfadjointView<Eigen::Upper>();
+        os << d;
+        return os;
+    }
 };
 
-template<typename Real, int Dim>
-std::ostream &operator<<(std::ostream &os, const ElasticityTensor<Real, Dim> &E)
-{
-    os << E.D();
-    return os;
+template<typename Real, int _Dim>
+ElasticityTensor<Real, _Dim> operator*(Real a,
+        const ElasticityTensor<Real, _Dim> &E) {
+    return E * a;
 }
 
 #endif /* end of include guard: ELASTICITYTENSOR_HH */

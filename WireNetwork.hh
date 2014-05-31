@@ -42,7 +42,7 @@ public:
             std::cout << "#e: " << m_edges.size() << std::endl;
     }
 
-    Real value(const Vector &p) const {
+    Real signedDistance(const Vector &p) const {
         Real minDist = std::numeric_limits<Real>::max();
         for (Edges::const_iterator itr = m_edges.begin(); itr != m_edges.end();
                 itr++) {

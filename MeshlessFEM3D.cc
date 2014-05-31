@@ -27,18 +27,27 @@ class MeshlessFEM3D<_Model>::PerElementOrthotropicStiffnessIntegrand
 {
 public:
     typedef Eigen::Matrix<Real, 24, 24> value_type;
+    typedef Eigen::Matrix<Real, 24,  1> displacement_type;
 
     // D: (d00, d01, d10, d11, d22)
     PerElementOrthotropicStiffnessIntegrand(const ETensor &E, const Model &model)
-        : m_model(model), m_E(E) { configure(Vector::Zero()); }
+        : m_model(model), m_E(E), m_fullCellCached(false) {
+        configure(Vector::Zero());
+    }
 
-    void clear() { result = value_type::Zero(); }
+    void clear() { m_fullCellCached = false; result = value_type::Zero(); }
 
     // Set the integration cell dimensions and compute the full cell integral if
     // useFullCell = true (so that integral is available immediately via the ()
     // operator). Otherwise the integral is cleared.
     void configure(const Vector &dims, bool useFullCell = false) {
-        m_dimensions = dims;
+        if ((dims - m_dimensions).norm() > 1e-9) {
+            m_dimensions = dims;
+            m_fullCellCached = false;
+        }
+
+        if (useFullCell && m_fullCellCached) return;
+
         if (useFullCell) computeFullCellIntegral();
         else             clear();
     }
@@ -49,6 +58,8 @@ public:
     // @param[in]  weight     "dV" for the sample--includes jacobian determinant
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
+        m_fullCellCached = false;
+
         if (!m_model.isInside(sample))
             return;
         Real x = ref_sample[0], y = ref_sample[1], z = ref_sample[2];
@@ -394,6 +405,7 @@ public:
 
     // Analytic result for a full cell
     void computeFullCellIntegral() {
+        std::cout << "Evaluating full cell integral" << std::endl;
         // Unpack elasticity tensor
         Real d00 = m_E.D(0, 0), d01 = m_E.D(0, 1), d02 = m_E.D(0, 2),
                                 d11 = m_E.D(1, 1), d12 = m_E.D(1, 2),
@@ -714,6 +726,8 @@ public:
         result(22, 22) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
         result(22, 23) = invVol * ((d12 + d33)*wSqdh)/12.;
         result(23, 23) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        
+        m_fullCellCached = true;
     }
 
     Real operator()(size_t i, size_t j) const {
@@ -721,11 +735,22 @@ public:
         return (i <= j) ? result(i, j) : result(j, i);
     }
 
+    Real bilinearForm(const displacement_type &a,
+                      const displacement_type &b) const {
+        return a.dot(result.template selfadjointView<Eigen::Upper>() * b);
+    }
+
+    Real quadraticForm(const displacement_type &a) const {
+        return a.dot(result.template selfadjointView<Eigen::Upper>() * a);
+    }
+
+
 private:
     const Model &m_model;
     const ETensor &m_E;
     Vector m_dimensions;
 
+    bool m_fullCellCached;
     value_type result;
 };
 
@@ -737,15 +762,21 @@ template<typename _Model>
 class MeshlessFEM3D<_Model>::PerElementGradPhiIntegrand {
 public:
     PerElementGradPhiIntegrand(const Model &model)
-        : m_model(model) { configure(Vector::Zero()); }
+        : m_model(model), m_fullCellCached(false) { configure(Vector::Zero()); }
 
-    void clear() { result = GradPhis::Zero(); }
+    void clear() { m_fullCellCached = false; result = GradPhis::Zero(); }
 
     // Set the integration cell dimensions and compute the full cell integral if
     // useFullCell = true (so that integral is available immediately via the ()
     // operator). Otherwise the integral is cleared.
     void configure(const Vector &dims, bool useFullCell = false) {
-        m_dimensions = dims;
+        if ((dims - m_dimensions).norm() > 1e-9) {
+            m_dimensions = dims;
+            m_fullCellCached = false;
+        }
+
+        if (useFullCell && m_fullCellCached) return;
+
         if (useFullCell) computeFullCellAverage();
         else             clear();
     }
@@ -754,6 +785,8 @@ public:
     // (Must call finalze() passing in the integration volume to make 
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
+        m_fullCellCached = false;
+
         // Multiply integrand by indicator function
         if (!m_model.isInside(sample))
             return;
@@ -775,6 +808,7 @@ public:
 
     // Analytic average of grad phis over the full cell
     void computeFullCellAverage() {
+        std::cout << "Evaluating full cell integral" << std::endl;
         Real qInvW = 0.25 / m_dimensions[0];
         Real qInvH = 0.25 / m_dimensions[1];
         Real qInvD = 0.25 / m_dimensions[2];
@@ -787,6 +821,8 @@ public:
         result(5, 0) =  qInvW; result(5, 1) = -qInvH; result(5, 2) =  qInvD;
         result(6, 0) =  qInvW; result(6, 1) =  qInvH; result(6, 2) =  qInvD;
         result(7, 0) = -qInvW; result(7, 1) =  qInvH; result(7, 2) =  qInvD;
+
+        m_fullCellCached = true;
     }
 
     // Convert the integraded quantitites into averaged quantities by dividing
@@ -810,9 +846,9 @@ public:
 
 private:
     const Model &m_model;
+    bool m_fullCellCached;
     GradPhis result;
     Vector m_dimensions;
-    Real m_volume;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -936,9 +972,14 @@ void MeshlessFEM3D<_Model>::m_assembleRigidModeMatrix(TMatrix &R) {
 *///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_computePerElementDisplacementStrainMap() {
+    size_t numElements = m_elementGrid.numElements();
+    if (m_displacementStrainCached) {
+        assert(m_elementData.size() == numElements);
+        return;
+    }
+
     PerElementGradPhiIntegrand gradPhi(m_model);
 
-    size_t numElements = m_elementGrid.numElements();
     if (m_elementData.size() != numElements)
         m_elementData.resize(numElements);
 
@@ -970,8 +1011,7 @@ void MeshlessFEM3D<_Model>::m_computePerElementDisplacementStrainMap() {
 *///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 void MeshlessFEM3D<_Model>::m_assembleBMatrix(TMatrix &B) {
-    if (!m_displacementStrainCached)
-        m_computePerElementDisplacementStrainMap();
+    m_computePerElementDisplacementStrainMap();
 
     B.m = 6 * m_elementGrid.numElements();
     B.n = 3 * m_elementGrid.numNodes();
@@ -1094,8 +1134,8 @@ m_computePeriodicDOFs(std::vector<int> &dofForNode) const {
 //  are in the first 3 * numDOFs entries--the rest can be arbitrary (could be
 //  constraint right hand sides, lagrange multipliers, etc).
 //  Used to trim off lagrange multiplier parts of systems/solutions and to
-//  reverse the variable reduction done, e.g., to enforce periodic boundary
-//  conditions.
+//  reverse the variable reduction that was done, e.g., to enforce periodic
+//  boundary conditions.
 //  @param[in]  values      flattened per-dof 3-vector field values
 //  @param[in]  dofForNode  DOF index corresponding to each grid node
 //  @return     Per-node VField holding values
@@ -1115,6 +1155,18 @@ m_extractNodeVField(const std::vector<Real> &values,
     }
 
     return result;
+}
+
+template<typename _Model>
+void MeshlessFEM3D<_Model>::
+m_extractCornerVField(const VField &field, const CornerVec &corners,
+                      CornerVField &result) const {
+    for (size_t c = 0; c < 8; ++c) {
+        size_t node = corners[c];
+        result[3 * c + 0] = field(node)[0];
+        result[3 * c + 1] = field(node)[1];
+        result[3 * c + 2] = field(node)[2];
+    }
 }
 
 template<typename Vector_>
@@ -1147,18 +1199,19 @@ struct VectorSlicer {
     Vector_ &vec;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Solve the periodic cell problems needed for periodic homogenization and
+//  the homogenized elasticity tensor's shape derivative
+//  @param[out]     w_ij        6 fluctuation displacements
+//  @param[inout]   timer       Optional timer (NULL if none)
+//  @param[inout]   mshWriter   Optional MSH output (NULL if none)
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
-typename MeshlessFEM3D<_Model>::ETensor MeshlessFEM3D<_Model>::
-periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
-    std::cout << "Running homogenization on "
-              << m_elementGrid.slices() << " x "
-              << m_elementGrid.rows() << " x "
-              << m_elementGrid.cols() << " grid with "
-              << m_elementGrid.numElements()  << " elements and "
-              << m_elementGrid.numNodes()  << " nodes (qp = "
-              << m_quadrature.numPoints() << ")" << std::endl;
+void MeshlessFEM3D<_Model>::
+solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
+                  _MSHWriter *mshWriter)
+{
     TMatrix K, T;
-
     std::vector<int> dofForNode;
     size_t numDOFs = m_computePeriodicDOFs(dofForNode);
 
@@ -1167,8 +1220,6 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     if (timer) timer->stop("Assemble Stiffness");
 
     m_assembleTranslationMatrix(T, numDOFs);
-
-    // K.dump("K.txt");
 
     if (timer) timer->start("Assemble C");
     // Build constrained system with lagrange multipliers
@@ -1191,7 +1242,7 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     if (timer) timer->stop("Factorize");
 
     // Solve cell problems for fluctuation displacments "w_ij"
-    std::vector<VField> w_ij(6);
+    w_ij.resize(6);
     m_computePerElementDisplacementStrainMap();
     assert(m_elementData.size() == m_elementGrid.numElements());
 
@@ -1252,8 +1303,22 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
             mshWriter->addField(name, w_ij[i], _MSHWriter::PER_NODE);
         }
     }
+}
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Compute the homogenized elasticity tensor.
+//  @param[in]      w_ij        6 fluctuation displacements
+//  @param[inout]   timer       Optional timer (NULL if none)
+//  @param[inout]   mshWriter   Optional MSH output (NULL if none)
+//  @return     Homogenized elasticity tensor.
+*///////////////////////////////////////////////////////////////////////////////
+template<typename _Model>
+typename MeshlessFEM3D<_Model>::ETensor MeshlessFEM3D<_Model>::
+homogenizedElasticityTensor(const std::vector<VField> &w_ij, Timer *timer,
+                           _MSHWriter *mshWriter) {
+    if (timer) timer->start("Compute Homogenized Tensor");
     Real objectVolume = 0.0;
+    m_computePerElementDisplacementStrainMap();
     for (size_t e = 0; e < m_elementGrid.numElements(); ++e)
         objectVolume += m_elementData[e].volume();
     Real Yvol = m_elementGrid.getBoundingBox().volume();
@@ -1264,8 +1329,7 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
     //          = rho * E_ijkl + 1/|Y| int_w [E : strain(w_ij)]_kl dV
     // Where |Y| = Yvol = periodic cell (grid bounding box) volume
     //        w  = periodic base geometry
-    ETensor Eh;
-    Eh.D() = rho * m_E.D();
+    ETensor Eh(rho * m_E);
 
     for (size_t i = 0; i < 6; ++i) {
         // Add in fluctuation stress corrector
@@ -1279,10 +1343,156 @@ periodicHomogenize(Timer *timer, _MSHWriter *mshWriter) {
             intStress += m_elementData[e].volume() * stress;
         }
         intStress /= Yvol;
-        Eh.D().row(i) += intStress;
+        for (size_t j = i; j < 6; ++j)
+            Eh.D(i, j) += intStress[j];
     }
 
+    // The following "energy-like" version is equivalent to the more efficient
+    // "stress-like" version above:
+    // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
+    // // Where the integrand can be written as:
+    // //  <E e(w_ij), e(w_kl)> + [stress(w_ij)]_kl + [stress(w_kl)]_ij +
+    // //      rho * E_ijkl
+    // ETensor EhE(rho * m_E);
+    // CornerVec cornerIndices;
+    // PerElementOrthotropicStiffnessIntegrand Ke(m_E, m_model);
+    // typedef ElasticityTensor<Real, 3>  ETensor;
+    // for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+    //     _BBox b = m_elementGrid.elementBoundingBox(e);
+    //     m_elementGrid.elementCorners(e, cornerIndices);
+    //     bool exact = m_exactFullElements && m_elementGrid.elementIsFull(e);
+    //     Ke.configure(b.dimensions(), exact);
+    //     if (!exact) m_quadrature.integrate(Ke, b);
+    //     Real vol = m_elementData[e].volume();
+
+    //     for (size_t ij = 0; ij < 6; ++ij) {
+    //         for (size_t kl = ij; kl < 6; ++kl) {
+    //             CornerVField we_ij, we_kl;
+    //             m_extractCornerVField(w_ij[ij], cornerIndices, we_ij);
+    //             m_extractCornerVField(w_ij[kl], cornerIndices, we_kl);
+    //             Real elemContrib = Ke.bilinearForm(we_ij, we_kl);
+
+    //             FlattenedRank2Tensor stress;
+    //             m_elementData[e].displacementToStress(w_ij[ij], cornerIndices,
+    //                     m_E, stress);
+    //             elemContrib += stress[kl] * vol;
+    //             m_elementData[e].displacementToStress(w_ij[kl], cornerIndices,
+    //                     m_E, stress);
+    //             elemContrib += stress[ij] * vol;
+
+    //             EhE.D(ij, kl) += elemContrib / Yvol;
+    //         }
+    //     }
+    // }
+    if (timer) timer->stop("Compute Homogenized Tensor");
+
     return Eh;
+}
+
+template<typename _Model>
+typename MeshlessFEM3D<_Model>::SField MeshlessFEM3D<_Model>::
+homogenizedElasticityTensorShapeDerivative(ETensor target,
+        const std::vector<VField> &w_ij, Timer *timer, _MSHWriter *mshWriter) {
+    ETensor diff = target - homogenizedElasticityTensor(w_ij, timer, mshWriter);
+    // shape derivative evaluated on normal velocity v_n:
+    // diff_ijkl int_dt -<E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
+    // So the steepest descent is to evolve with
+    //      v_n = diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
+    // For now we just visulize the average value of
+    //      diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)> =
+    //      diff_ijkl DS_ijkl where
+    //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
+    //                 = <E e(w_ij), e(w_kl)> + [stress(w_ij)]_kl +
+    //                   [stress(w_kl)]_ij + E_ijkl
+    // within each boundary cell.
+    // (Here, int DS_ijkl v_n dA is the shape derivative of Eh_ijkl)
+    // Eventually we will want to exclude the periodic boundary cells
+    
+    CornerVec cornerIndices;
+    PerElementOrthotropicStiffnessIntegrand Ke(m_E, m_model);
+    typedef ElasticityTensor<Real, 3>  ETensor;
+
+    SField descentVelocity(m_elementGrid.numElements());
+    for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
+        // Compute average of DS 
+        ETensor DS_avg(m_E);
+        _BBox b = m_elementGrid.elementBoundingBox(e);
+        m_elementGrid.elementCorners(e, cornerIndices);
+        bool exact = m_exactFullElements && m_elementGrid.elementIsFull(e);
+        Ke.configure(b.dimensions(), exact);
+        if (!exact) m_quadrature.integrate(Ke, b);
+        Real vol = m_elementData[e].volume();
+
+        for (size_t ij = 0; ij < 6; ++ij) {
+            for (size_t kl = ij; kl < 6; ++kl) {
+                CornerVField we_ij, we_kl;
+                m_extractCornerVField(w_ij[ij], cornerIndices, we_ij);
+                m_extractCornerVField(w_ij[kl], cornerIndices, we_kl);
+                DS_avg.D(ij, kl) += Ke.bilinearForm(we_ij, we_kl) / vol;
+
+                // Add in averaged fluctuation stresses
+                FlattenedRank2Tensor stress;
+                m_elementData[e].displacementToStress(w_ij[ij], cornerIndices,
+                        m_E, stress);
+                DS_avg.D(ij, kl) += stress[kl];
+                m_elementData[e].displacementToStress(w_ij[kl], cornerIndices,
+                        m_E, stress);
+                DS_avg.D(ij, kl) += stress[ij];
+            }
+        }
+
+        descentVelocity[e] = diff.quadrupleContract(DS_avg);
+    }
+
+    if (mshWriter) mshWriter->addField("Descent Normal Velocity",
+            descentVelocity, _MSHWriter::PER_ELEMENT);
+    return descentVelocity;
+}
+
+template<typename _Model>
+void MeshlessFEM3D<_Model>::
+testQuadraticForm(const CornerVField &a, const CornerVField &b) {
+    size_t e = 0;
+    CornerVec cornerIndices;
+
+    m_elementGrid.elementBoundingBox(e);
+    m_elementGrid.elementCorners(e, cornerIndices);
+
+    VField ua(m_elementGrid.numNodes()), ub(m_elementGrid.numNodes());
+    ua.clear(), ub.clear();
+    std::cout << ua.domainSize() << std::endl;
+
+    for (size_t i = 0; i < 8; ++i) {
+        ua(cornerIndices[i])[0] = a[3 * i + 0];
+        ua(cornerIndices[i])[1] = a[3 * i + 1];
+        ua(cornerIndices[i])[2] = a[3 * i + 2];
+        ub(cornerIndices[i])[0] = b[3 * i + 0];
+        ub(cornerIndices[i])[1] = b[3 * i + 1];
+        ub(cornerIndices[i])[2] = b[3 * i + 2];
+    }
+
+    m_computePerElementDisplacementStrainMap();
+
+    PerElementOrthotropicStiffnessIntegrand Ke(m_E, m_model);
+    bool exact = m_exactFullElements && m_elementGrid.elementIsFull(e);
+    _BBox box = m_elementGrid.elementBoundingBox(e);
+    Ke.configure(box.dimensions(), exact);
+    if (!exact) m_quadrature.integrate(Ke, box);
+    Real vol = m_elementData[e].volume();
+
+    Real quartic = Ke.bilinearForm(a, b);
+
+    FlattenedRank2Tensor stress, strain;
+    m_elementData[e].displacementToStress(ua, cornerIndices, m_E, stress);
+    m_elementData[e].displacementToStrain(ub, cornerIndices, strain);
+    std::cout << strain << std::endl;
+    std::cout << stress << std::endl;
+    std::cout << vol << std::endl;
+    applyShearDoubler(strain);
+    Real quadratic = strain.dot(stress) * vol;
+
+    std::cout << quartic << "\t" << quadratic << std::endl;
+    return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

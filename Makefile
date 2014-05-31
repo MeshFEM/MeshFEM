@@ -5,7 +5,7 @@ CSGFEM_OBJS=CSGFEM_cli.o MeshlessFEM2D.o Geometry.o Quadrature.o MarchingSquares
 PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshlessFEM3D.o Geometry.o Quadrature.o AnalysisSettings3D.o utils.o CSGFile3D.o
 UMFPACK_OBJS=umfpack_cli.o
 SOURCES=CSGFEM_cli.cc MeshlessFEM2D.cc Geometry.cc Quadrature.cc MarchingSquaresGrid.cc AnalysisSettings.cc BoundaryConditions.cc utils.cc CSGFile.cc
-SOURCES=PeriodicHomogenization_cli.cc MeshlessFEM3D.cc
+SOURCES+=PeriodicHomogenization_cli.cc MeshlessFEM3D.cc
 TARGETS=CSGFEM_cli PeriodicHomogenization_cli render_cli umfpack_cli
 
 CPPFLAGS+=-std=c++11 -O2 $(INCLUDES) -DUSE_MESA

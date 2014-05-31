@@ -22,6 +22,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <iomanip>
+#include <vector>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -95,7 +96,7 @@ int main(int argc, const char *argv[])
         if (!settingsFile.is_open())
             cout << "Couldn't open settings '" << settingsPath << '\'' << endl;
         else {
-            // Merge in settings file's options
+            // Merge settings file's contents into args.
             // Already specified options read from command line remain unchanged
             // (so they override the settings file)
             po::options_description opts;
@@ -123,22 +124,18 @@ int main(int argc, const char *argv[])
     //                       Vector(0.0, 0.0, 0.0), 2.0);
     // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
     //             "examples/wires/star.wire", 1.0);
-    // WireNetwork<Vector> model(
-    //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
-    //         "examples/wires/brick5.wire",
-    //         0.5);
-    // string modelPath = args["modelFile"].as<string>();
-    CSGTree_t model;
-    parseCSGFile(args["modelFile"].as<string>(), model);
+    WireNetwork<Vector> model(
+            BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
+            "examples/wires/brick5.wire",
+            0.5);
+    // CSGTree_t model;
+    // parseCSGFile(args["modelFile"].as<string>(), model);
 
-    // typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
-    typedef MeshlessFEM3D<CSGTree_t> MeshlessFEM3D_t;
+    typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
+    // typedef MeshlessFEM3D<CSGTree_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");
     MeshlessFEM3D_t fem(model, settings, solvers);
     if (timer) timer->stop("Setup");
-
-    // cout << fem.getElasticityTensor();
-    // cout << endl;
 
     typedef MSHWriter<MeshlessFEM3D_t::ElementGrid> MSHWriter_t;
     MSHWriter_t *msh = NULL;
@@ -156,19 +153,52 @@ int main(int argc, const char *argv[])
         msh->addField("signedDistances", signedDistances, MSHWriter_t::PER_NODE);
     }
 
+    cout << setprecision(16);
     if (timer) timer->startSection("Periodic Homogenization");
-    MeshlessFEM3D_t::ETensor Eh = fem.periodicHomogenize(timer, msh);
+    vector<MeshlessFEM3D_t::VField> w_ij;
+    std::cout << "Running homogenization on "
+              << settings.Int("Nz") << " x "
+              << settings.Int("Ny") << " x "
+              << settings.Int("Nx") << " grid with "
+              << fem.elementGrid().numElements()  << " elements and "
+              << fem.elementGrid().numNodes()  << " nodes (qp = "
+              << settings.Int("quadraturePoints") << ")" << std::endl;
+    fem.solveCellProblems(w_ij, timer, msh);
+    MeshlessFEM3D_t::ETensor Eh =
+                fem.homogenizedElasticityTensor(w_ij, timer, msh);
+    MeshlessFEM3D_t::ETensor ETargetinv(Eh.inverse());
+    // // Try to double x Young's modulus
+    // ETargetinv.D(0, 0) /= 2.0;
+    // ETargetinv.D(0, 1) /= 2.0;
+    // ETargetinv.D(0, 2) /= 2.0;
+
+    // Try to set all Poisson ratios to -0.5
+    ETargetinv.D(0, 1) = 0.5 * ETargetinv.D(1, 1);
+    ETargetinv.D(0, 2) = 0.5 * ETargetinv.D(2, 2);
+    ETargetinv.D(1, 2) = 0.5 * ETargetinv.D(2, 2);
+
+    // // Try to double all Young's moduli
+    // ETargetinv.D(0, 0) /= 2.0;
+    // ETargetinv.D(1, 1) /= 2.0;
+    // ETargetinv.D(2, 2) /= 2.0;
+    // ETargetinv.D(0, 1) /= 2.0;
+    // ETargetinv.D(0, 2) /= 2.0;
+    // ETargetinv.D(1, 2) /= 2.0;
+
+    fem.homogenizedElasticityTensorShapeDerivative(ETargetinv.inverse(), w_ij, timer, msh);
+    
     if (timer) timer->stopSection("Periodic Homogenization");
 
-    cout << setprecision(16);
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;;
 
-    MeshlessFEM3D_t::ETensor::DType Dinv = Eh.D().inverse();
+    cout << "Tensor Diff:" << endl << Eh - ETargetinv.inverse() << endl << endl;;
+
+    MeshlessFEM3D_t::ETensor Einv = Eh.inverse();
 
     cout << "Homogenized compliance tensor:" << endl;
-    cout << Dinv << endl << endl;
-    Eigen::Matrix<Scalar, 6, 1> moduli(1.0 / Dinv.diagonal().array());
+    cout << Einv << endl << endl;
+    Eigen::Matrix<Scalar, 6, 1> moduli(1.0 / Einv.diag().array());
     std::cout << "Approximate Young moduli:\t" << moduli[0] << "\t" << moduli[1] << "\t"
               << moduli[2] << endl;
     std::cout << "Approximate shear moduli:\t" << moduli[3] << "\t" << moduli[4] << "\t"

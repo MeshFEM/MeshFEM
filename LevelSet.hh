@@ -24,10 +24,10 @@ public:
         : m_domain(domain) { }
 
     bool isInside(const Vector &p) const {
-        return value(p) < 0;
+        return signedDistance(p) < 0;
     }
 
-    virtual Real    value(const Vector &p) const = 0;
+    virtual Real signedDistance(const Vector &p) const = 0;
 
     void setDomain(const _BBox &b) { m_domain = b; }
     const _BBox      &domain() const { return m_domain; }
@@ -49,7 +49,7 @@ public:
 
     Sphere(const _BBox &domain, const Vector &center, Real radius)
         : super(domain), m_center(center), m_radius(radius) { }
-    Real value(const Vector &p) const {
+    Real signedDistance(const Vector &p) const {
         return (p - m_center).norm() - m_radius;
     }
 private:
@@ -68,7 +68,7 @@ public:
 
     SchwarzP(const _BBox &domain) : super(domain)  { }
 
-    Real value(const Vector &p) const {
+    Real signedDistance(const Vector &p) const {
         return cos(p[0]) + cos(p[1]) + cos(p[2]);
     }
 };

@@ -45,7 +45,10 @@ public:
     
     typedef Eigen::Matrix<Real, 8, 3> GradPhis; // i, j entry: d phi_i / d x_j
     typedef Eigen::Matrix<Real, 6, 1> FlattenedRank2Tensor;
+    // An element's corners' indices
     typedef typename ElementGrid::AdjacencyVec CornerVec;
+    // An element's per-corner vector field flattened into a single vector.
+    typedef Eigen::Matrix<Real, 24, 1> CornerVField;
 
     MeshlessFEM3D(Model &model, const AnalysisSettings &settings,
                   SolverLibrary<Real> &solvers)
@@ -55,10 +58,10 @@ public:
           m_elementGrid(settings.Int("Nx"), settings.Int("Ny"), settings.Int("Nz"),
                 settings.Real("cellOverlapThreshold"), m_quadrature, model,
                 settings.Int("borderWidth")),
-          m_solvers(solvers),
-          m_displacementStrainCached(false)
+          m_solvers(solvers)
     {
         loadSettings(settings);
+        m_invalidateCache();
     }
 
     const ElementGrid &elementGrid() const { return m_elementGrid; }
@@ -131,7 +134,15 @@ public:
         return m_E;
     }
 
-    ETensor periodicHomogenize(Timer *timer = NULL, _MSHWriter *mshWriter = NULL);
+
+    void solveCellProblems(std::vector<VField> &w_ij,
+                Timer *timer = NULL, _MSHWriter *mshWriter = NULL);
+    ETensor homogenizedElasticityTensor(const std::vector<VField> &w_ij,
+                Timer *timer = NULL, _MSHWriter *mshWriter = NULL);
+    SField homogenizedElasticityTensorShapeDerivative(ETensor target,
+        const std::vector<VField> &w_ij, Timer *timer, _MSHWriter *mshWriter);
+
+    void testQuadraticForm(const CornerVField &a, const CornerVField &b);
 
 private:
     Quadrature3D m_quadrature;
@@ -170,6 +181,8 @@ private:
 
     VField m_extractNodeVField(const std::vector<Real> &values,
                                const std::vector<int> &dofForNode) const;
+    void m_extractCornerVField(const VField &field, const CornerVec &corners,
+                               CornerVField &result) const;
 
     void m_invalidateCache() {
         m_displacementStrainCached = false;
