@@ -51,6 +51,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("msh",           po::value<string>(), ".msh output")
         ("dumpMatrices",                       "Dump matrices for debugging")
         ("time",                               "report timings")
+        ("parameterStep", po::value<double>()->default_value(0.1),
+                "(fractional) ammount by which to attempt to change elastic coefficients")
         ;
     visible_opts.add(analysis_opts);
 
@@ -171,11 +173,18 @@ int main(int argc, const char *argv[])
     // ETargetinv.D(0, 0) /= 2.0;
     // ETargetinv.D(0, 1) /= 2.0;
     // ETargetinv.D(0, 2) /= 2.0;
+    
+    // Try to reduce all Poisson ratios
+    Scalar parameterStep = args["parameterStep"].as<double>();
+    cout << "Parameter step: " << parameterStep << endl;
+    Scalar currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(1, 1);
+    Scalar targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
+    cout << "currentPoisson, targetPoisson:\t" << currentPoisson << "\t"
+         << targetPoisson << endl;
 
-    // Try to set all Poisson ratios to -0.5
-    ETargetinv.D(0, 1) = 0.5 * ETargetinv.D(1, 1);
-    ETargetinv.D(0, 2) = 0.5 * ETargetinv.D(2, 2);
-    ETargetinv.D(1, 2) = 0.5 * ETargetinv.D(2, 2);
+    ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
+    ETargetinv.D(0, 2) = -targetPoisson * ETargetinv.D(2, 2);
+    ETargetinv.D(1, 2) = -targetPoisson * ETargetinv.D(2, 2);
 
     // // Try to double all Young's moduli
     // ETargetinv.D(0, 0) /= 2.0;
@@ -199,10 +208,18 @@ int main(int argc, const char *argv[])
     cout << "Homogenized compliance tensor:" << endl;
     cout << Einv << endl << endl;
     Eigen::Matrix<Scalar, 6, 1> moduli(1.0 / Einv.diag().array());
-    std::cout << "Approximate Young moduli:\t" << moduli[0] << "\t" << moduli[1] << "\t"
-              << moduli[2] << endl;
-    std::cout << "Approximate shear moduli:\t" << moduli[3] << "\t" << moduli[4] << "\t"
-              << moduli[5] << endl;
+    cout << "Approximate Young moduli:\t" << moduli[0] << "\t" << moduli[1] << "\t"
+         << moduli[2] << endl;
+    cout << "Approximate shear moduli:\t" << moduli[3] << "\t" << moduli[4] << "\t"
+         << moduli[5] << endl;
+
+    cout << "v_yx, v_zx, v_zy:\t" << -Einv.D(0, 1) / Einv.D(1, 1) << "\t"
+                                  << -Einv.D(0, 2) / Einv.D(2, 2) << "\t"
+                                  << -Einv.D(1, 2) / Einv.D(2, 2) << endl;
+    cout << "v_xy, v_xz, v_yz:\t" << -Einv.D(1, 0) / Einv.D(0, 0) << "\t"
+                                  << -Einv.D(2, 0) / Einv.D(0, 0) << "\t"
+                                  << -Einv.D(2, 1) / Einv.D(1, 1) << endl;
+
     if (timer) timer->report(cout);
     
     return 0;
