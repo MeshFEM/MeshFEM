@@ -856,7 +856,6 @@ public:
 
     CSGNodeType nodeType() const { return CSG_NODE_LAMINATE; }
 
-    // 
     bool isInside(const Vector &p) const {
         Vector l = this->toLocalCoords(p);
         Real epsilon = getEpsilon();

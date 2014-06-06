@@ -25,4 +25,3 @@ constexpr size_t flattenIndices(size_t dim, size_t i, size_t j) {
 }
 
 #endif /* end of include guard: FLATTENING_HH */
-

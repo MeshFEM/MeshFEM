@@ -15,7 +15,9 @@
 #include <fstream>
 #include <cassert>
 #include <string>
+
 #include "Flattening.hh"
+#include "Fields.hh"
 
 template<typename ElementGrid>
 class MSHWriter {

@@ -77,7 +77,7 @@ private:
     void fit_wire_to_bbox() {
         const size_t num_vertices = m_vertices.size();
         compute_wire_bbox();
-        const _BBox &domain = this->domain();
+        const _BBox &domain = this->m_domain;
         Vector bbox_center = (domain.minCorner + domain.maxCorner) * 0.5;
         Vector bbox_size = domain.maxCorner - domain.minCorner;
 

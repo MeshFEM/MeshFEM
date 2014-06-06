@@ -47,12 +47,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("settings",      po::value<string>(), "settings file")
-        ("msh",           po::value<string>(), ".msh output")
-        ("dumpMatrices",                       "Dump matrices for debugging")
-        ("time",                               "report timings")
-        ("parameterStep", po::value<double>()->default_value(0.1),
-                "(fractional) ammount by which to attempt to change elastic coefficients")
+        ("type",           po::value<string>()->default_value("csg"), "model type (csg, wire, schwarzP)")
+        ("settings",       po::value<string>(),                       "settings file")
+        ("msh",            po::value<string>(),                       ".msh output")
+        ("dumpMatrices",                                              "Dump matrices for debugging")
+        ("time",                                                      "report timings")
+        ("parameterStep",  po::value<double>()->default_value(0.1),   "(fractional) ammount by which to attempt to change elastic coefficients")
         ;
     visible_opts.add(analysis_opts);
 
@@ -70,9 +70,18 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         usage(1, visible_opts);
     }
 
-    if ((vm.count("modelFile") == 0)) {
-        cout << "Error: must specify input file" << endl;
-        usage(1, visible_opts);
+    string modelType = vm["type"].as<string>();
+    if (modelType == "csg" || modelType == "wire") {
+        if ((vm.count("modelFile") == 0)) {
+            cout << "Error: must specify input file" << endl;
+            usage(1, visible_opts);
+        }
+    }
+    else {
+        if (modelType != "schwarzP") {
+            cout << "Error: unknown model type " << modelType << endl;
+            usage(1, visible_opts);
+        }
     }
 
     if (vm.count("help"))
@@ -117,26 +126,36 @@ int main(int argc, const char *argv[])
 
     SolverLibrary<Scalar> solvers(dumpMatrices);
 
-    // SchwarzP<Vector> schwarzP(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
-    //                                  M_PI * Vector(2.0, 2.0, 2.0)));
-    // SchwarzP<Vector> model(BBox_t(M_PI * Vector(-1.0, -1.0, -1.0),
-    //                               M_PI * Vector( 1.0,  1.0,  1.0)));
-    // Sphere<Vector> sphere(BBox_t(Vector(-1.0, -1.0, -1.0),
-    //                              Vector( 1.0,  1.0,  1.0)),
-    //                       Vector(0.0, 0.0, 0.0), 2.0);
-    // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
-    //             "examples/wires/star.wire", 1.0);
-    // WireNetwork<Vector> model(
-    //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
-    //         "examples/wires/brick5.wire",
-    //         0.5);
-    CSGTree_t model;
-    parseCSGFile(args["modelFile"].as<string>(), model);
+    LevelSet<Vector> *model = NULL;
+    string modelType = args["type"].as<string>();
+    if (modelType == "csg") {
+        model = new CSGTree<Vector>();
+        parseCSGFile(args["modelFile"].as<string>(),
+                     *dynamic_cast<CSGTree<Vector> *>(model));
+    }
+    else if (modelType == "wire") {
+        model = new WireNetwork<Vector>(BBox_t(Vector(0.0, 0.0, 0.0),
+                    Vector(10.0, 10.0, 10.0)),
+                    args["modelFile"].as<string>(), 1.0);
 
-    // typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
-    typedef MeshlessFEM3D<CSGTree_t> MeshlessFEM3D_t;
+        // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
+        //             "examples/wires/star.wire", 1.0);
+        // WireNetwork<Vector> model(
+        //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
+        //         "examples/wires/brick5.wire",
+        //         0.5);
+    }
+    else if (modelType == "schwarzP") {
+        model = new SchwarzP<Vector>(BBox_t(M_PI * Vector(0.0, 0.0, 0.0),
+                                            M_PI * Vector(2.0, 2.0, 2.0)));
+    }
+    
+    assert(model != NULL);
+
+
+    typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");
-    MeshlessFEM3D_t fem(model, settings, solvers);
+    MeshlessFEM3D_t fem(*model, settings, solvers);
     if (timer) timer->stop("Setup");
 
     typedef MSHWriter<MeshlessFEM3D_t::ElementGrid> MSHWriter_t;
@@ -151,7 +170,7 @@ int main(int argc, const char *argv[])
 
         MeshlessFEM3D_t::SField signedDistances(fem.elementGrid().numNodes());
         for (size_t n = 0; n < fem.elementGrid().numNodes(); ++n)
-            signedDistances[n] = model.signedDistance(fem.elementGrid().nodePosition(n));
+            signedDistances[n] = model->signedDistance(fem.elementGrid().nodePosition(n));
         msh->addField("signedDistances", signedDistances, MSHWriter_t::PER_NODE);
     }
 

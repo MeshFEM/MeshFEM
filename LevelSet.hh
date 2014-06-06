@@ -20,21 +20,22 @@ public:
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
+    LevelSet() { } // Only should be used by subclass
     LevelSet(const _BBox &domain)
         : m_domain(domain) { }
 
-    bool isInside(const Vector &p) const {
+    virtual bool isInside(const Vector &p) const {
         return signedDistance(p) < 0;
     }
 
     virtual Real signedDistance(const Vector &p) const = 0;
 
-    void setDomain(const _BBox &b) { m_domain = b; }
-    const _BBox      &domain() const { return m_domain; }
-    const _BBox &boundingBox() const { return domain(); }
+    virtual void setDomain(const _BBox &b) { m_domain = b; }
+    virtual _BBox      domain() const { return m_domain; }
+    virtual _BBox boundingBox() const { return domain(); }
 
-    ~LevelSet() { }
-private:
+    virtual ~LevelSet() { }
+protected:
     _BBox m_domain;
 };
 

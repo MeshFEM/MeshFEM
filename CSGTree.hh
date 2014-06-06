@@ -17,6 +17,7 @@
 #include <limits>
 #include <string>
 #include "Geometry.hh"
+#include "LevelSet.hh"
 
 typedef enum { INTERSECT = 0, UNION = 1, SUBTRACT = 2 } CSGOperation;
 typedef enum { CSG_NODE_INTERSECT = 0, CSG_NODE_UNION = 1,
@@ -25,7 +26,7 @@ typedef enum { CSG_NODE_INTERSECT = 0, CSG_NODE_UNION = 1,
                CSG_NODE_LAMINATE = 6 } CSGNodeType;
 
 template<typename _Vector>
-class CSGTree {
+class CSGTree : public LevelSet<_Vector> {
 
 public:
     class CSGNode;
@@ -48,7 +49,7 @@ public:
         *this = b;
     }
 
-    bool isInside(const Vector &p) const {
+    virtual bool isInside(const Vector &p) const {
         // Implied union of all roots
         for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
             if ((*it)->isInside(p))
@@ -57,7 +58,7 @@ public:
         return false;
     }
 
-    Real signedDistance(const Vector &p) const {
+    virtual Real signedDistance(const Vector &p) const {
         // Implied union of all roots
         Real distance = std::numeric_limits<Real>::max();
         for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
@@ -82,7 +83,10 @@ public:
         return idx;
     }
 
-    BBox<Vector> boundingBox() const {
+    // Domain is determined by geometry and can't be configured.
+    virtual void setDomain(const BBox_t &b) { assert(false); }
+    virtual BBox_t domain() const { return boundingBox(); }
+    virtual BBox_t boundingBox() const {
         BBox<Vector> b;
         for (RootIt it = m_roots.begin(); it != m_roots.end(); ++it) {
             if (it == m_roots.begin())
@@ -242,7 +246,7 @@ public:
         return !(*this == b);
     }
 
-    ~CSGTree() {
+    virtual ~CSGTree() {
         clearRoots();
     }
 

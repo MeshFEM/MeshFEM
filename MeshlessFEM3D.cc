@@ -1505,4 +1505,3 @@ testQuadraticForm(const CornerVField &a, const CornerVField &b) {
 ////////////////////////////////////////////////////////////////////////////////
 #include "GlobalTypes.hh"
 template class MeshlessFEM3D<LevelSet_t>;
-template class MeshlessFEM3D<CSGTree_t>;
