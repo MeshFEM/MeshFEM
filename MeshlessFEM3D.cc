@@ -35,7 +35,7 @@ public:
         configure(Vector::Zero());
     }
 
-    void clear() { m_fullCellCached = false; result = value_type::Zero(); }
+    void clear() { result = value_type::Zero(); }
 
     // Set the integration cell dimensions and compute the full cell integral if
     // useFullCell = true (so that integral is available immediately via the ()
@@ -46,10 +46,13 @@ public:
             m_fullCellCached = false;
         }
 
-        if (useFullCell && m_fullCellCached) return;
-
-        if (useFullCell) computeFullCellIntegral();
-        else             clear();
+        m_useFullCell = useFullCell;
+        if (useFullCell) {
+            if (!m_fullCellCached) computeFullCellIntegral();
+        }
+        else {
+            clear();
+        }
     }
 
     // Called once per quadrature sample to perform the integration.
@@ -58,8 +61,7 @@ public:
     // @param[in]  weight     "dV" for the sample--includes jacobian determinant
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
-        m_fullCellCached = false;
-
+        // Multiply integrand by indicator function
         if (!m_model.isInside(sample))
             return;
         Real x = ref_sample[0], y = ref_sample[1], z = ref_sample[2];
@@ -405,7 +407,6 @@ public:
 
     // Analytic result for a full cell
     void computeFullCellIntegral() {
-        std::cout << "Evaluating full cell integral" << std::endl;
         // Unpack elasticity tensor
         Real d00 = m_E.D(0, 0), d01 = m_E.D(0, 1), d02 = m_E.D(0, 2),
                                 d11 = m_E.D(1, 1), d12 = m_E.D(1, 2),
@@ -426,322 +427,325 @@ public:
         Real wSqdh  = w * w * d * h;
         Real hSqdw  = h * h * d * w;
 
-        result( 0,  0) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result( 0,  1) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result( 0,  2) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 0,  3) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
-        result( 0,  4) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result( 0,  5) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result( 0,  6) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
-        result( 0,  7) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result( 0,  8) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result( 0,  9) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
-        result( 0, 10) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result( 0, 11) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 0, 12) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
-        result( 0, 13) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 0, 14) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result( 0, 15) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
-        result( 0, 16) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 0, 17) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result( 0, 18) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
-        result( 0, 19) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 0, 20) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result( 0, 21) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
-        result( 0, 22) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 0, 23) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 1,  1) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result( 1,  2) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result( 1,  3) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result( 1,  4) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
-        result( 1,  5) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result( 1,  6) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result( 1,  7) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
-        result( 1,  8) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result( 1,  9) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result( 1, 10) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
-        result( 1, 11) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result( 1, 12) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 1, 13) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
-        result( 1, 14) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result( 1, 15) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 1, 16) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
-        result( 1, 17) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result( 1, 18) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 1, 19) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
-        result( 1, 20) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 1, 21) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 1, 22) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
-        result( 1, 23) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result( 2,  2) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result( 2,  3) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result( 2,  4) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result( 2,  5) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
-        result( 2,  6) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 2,  7) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result( 2,  8) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
-        result( 2,  9) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 2, 10) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result( 2, 11) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
-        result( 2, 12) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result( 2, 13) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result( 2, 14) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
-        result( 2, 15) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result( 2, 16) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result( 2, 17) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
-        result( 2, 18) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result( 2, 19) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 2, 20) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
-        result( 2, 21) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result( 2, 22) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result( 2, 23) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
-        result( 3,  3) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result( 3,  4) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result( 3,  5) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result( 3,  6) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
-        result( 3,  7) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result( 3,  8) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result( 3,  9) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
-        result( 3, 10) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result( 3, 11) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 3, 12) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
-        result( 3, 13) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 3, 14) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 3, 15) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
-        result( 3, 16) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 3, 17) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result( 3, 18) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
-        result( 3, 19) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 3, 20) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result( 3, 21) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
-        result( 3, 22) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 3, 23) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 4,  4) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result( 4,  5) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result( 4,  6) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result( 4,  7) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
-        result( 4,  8) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result( 4,  9) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result( 4, 10) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
-        result( 4, 11) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result( 4, 12) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 4, 13) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
-        result( 4, 14) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result( 4, 15) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 4, 16) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
-        result( 4, 17) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result( 4, 18) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 4, 19) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
-        result( 4, 20) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result( 4, 21) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 4, 22) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
-        result( 4, 23) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 5,  5) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result( 5,  6) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result( 5,  7) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result( 5,  8) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
-        result( 5,  9) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result( 5, 10) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result( 5, 11) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
-        result( 5, 12) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 5, 13) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result( 5, 14) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
-        result( 5, 15) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result( 5, 16) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result( 5, 17) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
-        result( 5, 18) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 5, 19) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result( 5, 20) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
-        result( 5, 21) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 5, 22) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 5, 23) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
-        result( 6,  6) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result( 6,  7) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result( 6,  8) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result( 6,  9) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
-        result( 6, 10) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result( 6, 11) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result( 6, 12) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
-        result( 6, 13) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 6, 14) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 6, 15) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
-        result( 6, 16) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 6, 17) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result( 6, 18) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
-        result( 6, 19) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 6, 20) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result( 6, 21) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
-        result( 6, 22) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 6, 23) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 7,  7) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result( 7,  8) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result( 7,  9) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result( 7, 10) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
-        result( 7, 11) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 7, 12) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 7, 13) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
-        result( 7, 14) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result( 7, 15) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 7, 16) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
-        result( 7, 17) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result( 7, 18) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 7, 19) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
-        result( 7, 20) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result( 7, 21) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 7, 22) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
-        result( 7, 23) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result( 8,  8) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result( 8,  9) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result( 8, 10) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result( 8, 11) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
-        result( 8, 12) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result( 8, 13) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result( 8, 14) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
-        result( 8, 15) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 8, 16) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result( 8, 17) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
-        result( 8, 18) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result( 8, 19) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result( 8, 20) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
-        result( 8, 21) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 8, 22) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result( 8, 23) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
-        result( 9,  9) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result( 9, 10) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result( 9, 11) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result( 9, 12) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
-        result( 9, 13) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result( 9, 14) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result( 9, 15) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
-        result( 9, 16) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result( 9, 17) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result( 9, 18) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
-        result( 9, 19) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result( 9, 20) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result( 9, 21) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
-        result( 9, 22) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result( 9, 23) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result(10, 10) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result(10, 11) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result(10, 12) = invVol * ((-d01 + d55)*dSqhw)/24.;
-        result(10, 13) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
-        result(10, 14) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result(10, 15) = invVol * ((d01 + d55)*dSqhw)/24.;
-        result(10, 16) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
-        result(10, 17) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result(10, 18) = invVol * ((d01 - d55)*dSqhw)/24.;
-        result(10, 19) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
-        result(10, 20) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result(10, 21) = invVol * -((d01 + d55)*dSqhw)/24.;
-        result(10, 22) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
-        result(10, 23) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result(11, 11) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result(11, 12) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result(11, 13) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result(11, 14) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
-        result(11, 15) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result(11, 16) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result(11, 17) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
-        result(11, 18) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result(11, 19) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result(11, 20) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
-        result(11, 21) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result(11, 22) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result(11, 23) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
-        result(12, 12) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result(12, 13) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result(12, 14) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result(12, 15) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
-        result(12, 16) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result(12, 17) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result(12, 18) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
-        result(12, 19) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result(12, 20) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result(12, 21) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
-        result(12, 22) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result(12, 23) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result(13, 13) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result(13, 14) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result(13, 15) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result(13, 16) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
-        result(13, 17) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result(13, 18) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result(13, 19) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
-        result(13, 20) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result(13, 21) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result(13, 22) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
-        result(13, 23) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result(14, 14) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result(14, 15) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result(14, 16) = invVol * -((d12 + d33)*wSqdh)/24.;
-        result(14, 17) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
-        result(14, 18) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result(14, 19) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result(14, 20) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
-        result(14, 21) = invVol * -((d02 + d44)*hSqdw)/24.;
-        result(14, 22) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result(14, 23) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
-        result(15, 15) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result(15, 16) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result(15, 17) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result(15, 18) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
-        result(15, 19) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result(15, 20) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result(15, 21) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
-        result(15, 22) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result(15, 23) = invVol * ((d02 - d44)*hSqdw)/24.;
-        result(16, 16) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result(16, 17) = invVol * -((d12 + d33)*wSqdh)/12.;
-        result(16, 18) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result(16, 19) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
-        result(16, 20) = invVol * ((-d12 + d33)*wSqdh)/12.;
-        result(16, 21) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result(16, 22) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
-        result(16, 23) = invVol * ((-d12 + d33)*wSqdh)/24.;
-        result(17, 17) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result(17, 18) = invVol * ((d02 + d44)*hSqdw)/24.;
-        result(17, 19) = invVol * ((d12 - d33)*wSqdh)/12.;
-        result(17, 20) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
-        result(17, 21) = invVol * ((-d02 + d44)*hSqdw)/24.;
-        result(17, 22) = invVol * ((d12 - d33)*wSqdh)/24.;
-        result(17, 23) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
-        result(18, 18) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result(18, 19) = invVol * ((d01 + d55)*dSqhw)/12.;
-        result(18, 20) = invVol * ((d02 + d44)*hSqdw)/12.;
-        result(18, 21) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
-        result(18, 22) = invVol * ((d01 - d55)*dSqhw)/12.;
-        result(18, 23) = invVol * ((d02 - d44)*hSqdw)/12.;
-        result(19, 19) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result(19, 20) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result(19, 21) = invVol * ((-d01 + d55)*dSqhw)/12.;
-        result(19, 22) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
-        result(19, 23) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result(20, 20) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
-        result(20, 21) = invVol * ((-d02 + d44)*hSqdw)/12.;
-        result(20, 22) = invVol * ((d12 + d33)*wSqdh)/24.;
-        result(20, 23) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
-        result(21, 21) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
-        result(21, 22) = invVol * -((d01 + d55)*dSqhw)/12.;
-        result(21, 23) = invVol * -((d02 + d44)*hSqdw)/12.;
-        result(22, 22) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
-        result(22, 23) = invVol * ((d12 + d33)*wSqdh)/12.;
-        result(23, 23) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult( 0,  0) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult( 0,  1) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 0,  2) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 0,  3) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult( 0,  4) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult( 0,  5) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult( 0,  6) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
+        fullCellResult( 0,  7) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 0,  8) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult( 0,  9) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult( 0, 10) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult( 0, 11) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 0, 12) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
+        fullCellResult( 0, 13) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 0, 14) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult( 0, 15) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
+        fullCellResult( 0, 16) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 0, 17) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 0, 18) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
+        fullCellResult( 0, 19) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 0, 20) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 0, 21) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
+        fullCellResult( 0, 22) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 0, 23) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 1,  1) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult( 1,  2) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 1,  3) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult( 1,  4) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult( 1,  5) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 1,  6) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 1,  7) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
+        fullCellResult( 1,  8) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult( 1,  9) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult( 1, 10) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult( 1, 11) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult( 1, 12) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 1, 13) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
+        fullCellResult( 1, 14) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult( 1, 15) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 1, 16) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
+        fullCellResult( 1, 17) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult( 1, 18) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 1, 19) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
+        fullCellResult( 1, 20) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 1, 21) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 1, 22) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
+        fullCellResult( 1, 23) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 2,  2) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult( 2,  3) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult( 2,  4) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 2,  5) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult( 2,  6) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 2,  7) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult( 2,  8) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
+        fullCellResult( 2,  9) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 2, 10) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult( 2, 11) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult( 2, 12) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult( 2, 13) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult( 2, 14) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
+        fullCellResult( 2, 15) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 2, 16) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult( 2, 17) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
+        fullCellResult( 2, 18) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 2, 19) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 2, 20) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
+        fullCellResult( 2, 21) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult( 2, 22) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 2, 23) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
+        fullCellResult( 3,  3) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult( 3,  4) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 3,  5) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 3,  6) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult( 3,  7) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult( 3,  8) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 3,  9) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
+        fullCellResult( 3, 10) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 3, 11) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 3, 12) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
+        fullCellResult( 3, 13) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 3, 14) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 3, 15) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
+        fullCellResult( 3, 16) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 3, 17) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult( 3, 18) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
+        fullCellResult( 3, 19) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 3, 20) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult( 3, 21) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
+        fullCellResult( 3, 22) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 3, 23) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 4,  4) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult( 4,  5) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 4,  6) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult( 4,  7) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult( 4,  8) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult( 4,  9) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 4, 10) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
+        fullCellResult( 4, 11) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult( 4, 12) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 4, 13) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
+        fullCellResult( 4, 14) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult( 4, 15) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 4, 16) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
+        fullCellResult( 4, 17) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult( 4, 18) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 4, 19) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
+        fullCellResult( 4, 20) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 4, 21) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 4, 22) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
+        fullCellResult( 4, 23) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 5,  5) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult( 5,  6) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 5,  7) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult( 5,  8) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult( 5,  9) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult( 5, 10) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult( 5, 11) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
+        fullCellResult( 5, 12) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 5, 13) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult( 5, 14) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
+        fullCellResult( 5, 15) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult( 5, 16) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult( 5, 17) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
+        fullCellResult( 5, 18) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 5, 19) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 5, 20) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
+        fullCellResult( 5, 21) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 5, 22) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 5, 23) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
+        fullCellResult( 6,  6) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult( 6,  7) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 6,  8) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 6,  9) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult( 6, 10) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult( 6, 11) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult( 6, 12) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
+        fullCellResult( 6, 13) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 6, 14) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 6, 15) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
+        fullCellResult( 6, 16) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 6, 17) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult( 6, 18) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
+        fullCellResult( 6, 19) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 6, 20) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult( 6, 21) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
+        fullCellResult( 6, 22) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 6, 23) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 7,  7) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult( 7,  8) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 7,  9) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult( 7, 10) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult( 7, 11) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 7, 12) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 7, 13) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
+        fullCellResult( 7, 14) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 7, 15) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 7, 16) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
+        fullCellResult( 7, 17) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 7, 18) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 7, 19) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
+        fullCellResult( 7, 20) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult( 7, 21) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 7, 22) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
+        fullCellResult( 7, 23) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult( 8,  8) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult( 8,  9) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult( 8, 10) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 8, 11) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult( 8, 12) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 8, 13) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult( 8, 14) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
+        fullCellResult( 8, 15) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 8, 16) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult( 8, 17) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
+        fullCellResult( 8, 18) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult( 8, 19) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult( 8, 20) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
+        fullCellResult( 8, 21) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 8, 22) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult( 8, 23) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
+        fullCellResult( 9,  9) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult( 9, 10) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult( 9, 11) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 9, 12) = invVol * (d00*dSqhSq - 2*(d55*dSqwSq + d44*hSqwSq))/36.;
+        fullCellResult( 9, 13) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult( 9, 14) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult( 9, 15) = invVol * (-(d00*dSqhSq) - d55*dSqwSq - d44*hSqwSq)/36.;
+        fullCellResult( 9, 16) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 9, 17) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult( 9, 18) = invVol * (-2*d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/36.;
+        fullCellResult( 9, 19) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult( 9, 20) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult( 9, 21) = invVol * (d00*dSqhSq + d55*dSqwSq - 2*d44*hSqwSq)/18.;
+        fullCellResult( 9, 22) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult( 9, 23) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult(10, 10) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult(10, 11) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult(10, 12) = invVol * ((-d01 + d55)*dSqhw)/24.;
+        fullCellResult(10, 13) = invVol * (d55*dSqhSq - 2*(d11*dSqwSq + d33*hSqwSq))/36.;
+        fullCellResult(10, 14) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult(10, 15) = invVol * ((d01 + d55)*dSqhw)/24.;
+        fullCellResult(10, 16) = invVol * (-(d55*dSqhSq) - d11*dSqwSq - d33*hSqwSq)/36.;
+        fullCellResult(10, 17) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult(10, 18) = invVol * ((d01 - d55)*dSqhw)/24.;
+        fullCellResult(10, 19) = invVol * (-2*d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/36.;
+        fullCellResult(10, 20) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult(10, 21) = invVol * -((d01 + d55)*dSqhw)/24.;
+        fullCellResult(10, 22) = invVol * (d55*dSqhSq + d11*dSqwSq - 2*d33*hSqwSq)/18.;
+        fullCellResult(10, 23) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult(11, 11) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult(11, 12) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult(11, 13) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult(11, 14) = invVol * (d44*dSqhSq - 2*(d33*dSqwSq + d22*hSqwSq))/36.;
+        fullCellResult(11, 15) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult(11, 16) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult(11, 17) = invVol * (-(d44*dSqhSq) - d33*dSqwSq - d22*hSqwSq)/36.;
+        fullCellResult(11, 18) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult(11, 19) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult(11, 20) = invVol * (-2*d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/36.;
+        fullCellResult(11, 21) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult(11, 22) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult(11, 23) = invVol * (d44*dSqhSq + d33*dSqwSq - 2*d22*hSqwSq)/18.;
+        fullCellResult(12, 12) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult(12, 13) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult(12, 14) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult(12, 15) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult(12, 16) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult(12, 17) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult(12, 18) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
+        fullCellResult(12, 19) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult(12, 20) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult(12, 21) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult(12, 22) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult(12, 23) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult(13, 13) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult(13, 14) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult(13, 15) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult(13, 16) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult(13, 17) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult(13, 18) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult(13, 19) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
+        fullCellResult(13, 20) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult(13, 21) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult(13, 22) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult(13, 23) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult(14, 14) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult(14, 15) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult(14, 16) = invVol * -((d12 + d33)*wSqdh)/24.;
+        fullCellResult(14, 17) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult(14, 18) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult(14, 19) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult(14, 20) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
+        fullCellResult(14, 21) = invVol * -((d02 + d44)*hSqdw)/24.;
+        fullCellResult(14, 22) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult(14, 23) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult(15, 15) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult(15, 16) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult(15, 17) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult(15, 18) = invVol * (d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult(15, 19) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult(15, 20) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult(15, 21) = invVol * (-2*d00*dSqhSq - 2*d55*dSqwSq + d44*hSqwSq)/36.;
+        fullCellResult(15, 22) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult(15, 23) = invVol * ((d02 - d44)*hSqdw)/24.;
+        fullCellResult(16, 16) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult(16, 17) = invVol * -((d12 + d33)*wSqdh)/12.;
+        fullCellResult(16, 18) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult(16, 19) = invVol * (d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult(16, 20) = invVol * ((-d12 + d33)*wSqdh)/12.;
+        fullCellResult(16, 21) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult(16, 22) = invVol * (-2*d55*dSqhSq - 2*d11*dSqwSq + d33*hSqwSq)/36.;
+        fullCellResult(16, 23) = invVol * ((-d12 + d33)*wSqdh)/24.;
+        fullCellResult(17, 17) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult(17, 18) = invVol * ((d02 + d44)*hSqdw)/24.;
+        fullCellResult(17, 19) = invVol * ((d12 - d33)*wSqdh)/12.;
+        fullCellResult(17, 20) = invVol * (d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult(17, 21) = invVol * ((-d02 + d44)*hSqdw)/24.;
+        fullCellResult(17, 22) = invVol * ((d12 - d33)*wSqdh)/24.;
+        fullCellResult(17, 23) = invVol * (-2*d44*dSqhSq - 2*d33*dSqwSq + d22*hSqwSq)/36.;
+        fullCellResult(18, 18) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult(18, 19) = invVol * ((d01 + d55)*dSqhw)/12.;
+        fullCellResult(18, 20) = invVol * ((d02 + d44)*hSqdw)/12.;
+        fullCellResult(18, 21) = invVol * (-2*d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/18.;
+        fullCellResult(18, 22) = invVol * ((d01 - d55)*dSqhw)/12.;
+        fullCellResult(18, 23) = invVol * ((d02 - d44)*hSqdw)/12.;
+        fullCellResult(19, 19) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult(19, 20) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult(19, 21) = invVol * ((-d01 + d55)*dSqhw)/12.;
+        fullCellResult(19, 22) = invVol * (-2*d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/18.;
+        fullCellResult(19, 23) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult(20, 20) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+        fullCellResult(20, 21) = invVol * ((-d02 + d44)*hSqdw)/12.;
+        fullCellResult(20, 22) = invVol * ((d12 + d33)*wSqdh)/24.;
+        fullCellResult(20, 23) = invVol * (-2*d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/18.;
+        fullCellResult(21, 21) = invVol * (d00*dSqhSq + d55*dSqwSq + d44*hSqwSq)/9.;
+        fullCellResult(21, 22) = invVol * -((d01 + d55)*dSqhw)/12.;
+        fullCellResult(21, 23) = invVol * -((d02 + d44)*hSqdw)/12.;
+        fullCellResult(22, 22) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
+        fullCellResult(22, 23) = invVol * ((d12 + d33)*wSqdh)/12.;
+        fullCellResult(23, 23) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
         
         m_fullCellCached = true;
     }
 
     Real operator()(size_t i, size_t j) const {
         assert((i < 24) && (j < 24));
-        return (i <= j) ? result(i, j) : result(j, i);
+        const value_type &value = m_useFullCell ? fullCellResult : result;
+        return (i <= j) ? value(i, j) : value(j, i);
     }
 
     Real bilinearForm(const displacement_type &a,
                       const displacement_type &b) const {
-        return a.dot(result.template selfadjointView<Eigen::Upper>() * b);
+        const value_type &value = m_useFullCell ? fullCellResult : result;
+        return a.dot(value.template selfadjointView<Eigen::Upper>() * b);
     }
 
     Real quadraticForm(const displacement_type &a) const {
-        return a.dot(result.template selfadjointView<Eigen::Upper>() * a);
+        const value_type &value = m_useFullCell ? fullCellResult : result;
+        return a.dot(value.template selfadjointView<Eigen::Upper>() * a);
     }
 
 
@@ -750,8 +754,8 @@ private:
     const ETensor &m_E;
     Vector m_dimensions;
 
-    bool m_fullCellCached;
-    value_type result;
+    bool m_fullCellCached, m_useFullCell;
+    value_type result, fullCellResult;
 };
 
 // Integrand computing the averaged (not integrated), grad phi over the element
@@ -764,7 +768,7 @@ public:
     PerElementGradPhiIntegrand(const Model &model)
         : m_model(model), m_fullCellCached(false) { configure(Vector::Zero()); }
 
-    void clear() { m_fullCellCached = false; result = GradPhis::Zero(); }
+    void clear() { result = GradPhis::Zero(); }
 
     // Set the integration cell dimensions and compute the full cell integral if
     // useFullCell = true (so that integral is available immediately via the ()
@@ -775,18 +779,19 @@ public:
             m_fullCellCached = false;
         }
 
-        if (useFullCell && m_fullCellCached) return;
-
-        if (useFullCell) computeFullCellAverage();
-        else             clear();
+        m_useFullCell = useFullCell;
+        if (useFullCell) {
+            if (!m_fullCellCached) computeFullCellAverage();
+        }
+        else {
+            clear();
+        }
     }
 
     // Numerical integration of grad phis over the cell
     // (Must call finalze() passing in the integration volume to make 
     void accumulate(const Vector &sample, const Vector &ref_sample, Real weight)
     {
-        m_fullCellCached = false;
-
         // Multiply integrand by indicator function
         if (!m_model.isInside(sample))
             return;
@@ -808,19 +813,18 @@ public:
 
     // Analytic average of grad phis over the full cell
     void computeFullCellAverage() {
-        std::cout << "Evaluating full cell integral" << std::endl;
         Real qInvW = 0.25 / m_dimensions[0];
         Real qInvH = 0.25 / m_dimensions[1];
         Real qInvD = 0.25 / m_dimensions[2];
 
-        result(0, 0) = -qInvW; result(0, 1) = -qInvH; result(0, 2) = -qInvD;
-        result(1, 0) =  qInvW; result(1, 1) = -qInvH; result(1, 2) = -qInvD;
-        result(2, 0) =  qInvW; result(2, 1) =  qInvH; result(2, 2) = -qInvD;
-        result(3, 0) = -qInvW; result(3, 1) =  qInvH; result(3, 2) = -qInvD;
-        result(4, 0) = -qInvW; result(4, 1) = -qInvH; result(4, 2) =  qInvD;
-        result(5, 0) =  qInvW; result(5, 1) = -qInvH; result(5, 2) =  qInvD;
-        result(6, 0) =  qInvW; result(6, 1) =  qInvH; result(6, 2) =  qInvD;
-        result(7, 0) = -qInvW; result(7, 1) =  qInvH; result(7, 2) =  qInvD;
+        fullCellResult(0, 0) = -qInvW; fullCellResult(0, 1) = -qInvH; fullCellResult(0, 2) = -qInvD;
+        fullCellResult(1, 0) =  qInvW; fullCellResult(1, 1) = -qInvH; fullCellResult(1, 2) = -qInvD;
+        fullCellResult(2, 0) =  qInvW; fullCellResult(2, 1) =  qInvH; fullCellResult(2, 2) = -qInvD;
+        fullCellResult(3, 0) = -qInvW; fullCellResult(3, 1) =  qInvH; fullCellResult(3, 2) = -qInvD;
+        fullCellResult(4, 0) = -qInvW; fullCellResult(4, 1) = -qInvH; fullCellResult(4, 2) =  qInvD;
+        fullCellResult(5, 0) =  qInvW; fullCellResult(5, 1) = -qInvH; fullCellResult(5, 2) =  qInvD;
+        fullCellResult(6, 0) =  qInvW; fullCellResult(6, 1) =  qInvH; fullCellResult(6, 2) =  qInvD;
+        fullCellResult(7, 0) = -qInvW; fullCellResult(7, 1) =  qInvH; fullCellResult(7, 2) =  qInvD;
 
         m_fullCellCached = true;
     }
@@ -838,16 +842,18 @@ public:
 
     Real operator()(size_t i, size_t j) const {
         assert((i < 8) && (j < 8));
-        return result(i, j);
+        return m_useFullCell ? fullCellResult(i, j) : result(i, j);
     }
 
     // Allow type cast to GradPhi
-    operator const GradPhis &() const { return result; }
+    operator const GradPhis &() const {
+        return m_useFullCell ? fullCellResult : result;
+    }
 
 private:
     const Model &m_model;
-    bool m_fullCellCached;
-    GradPhis result;
+    bool m_fullCellCached, m_useFullCell;
+    GradPhis result, fullCellResult;
     Vector m_dimensions;
 };
 
