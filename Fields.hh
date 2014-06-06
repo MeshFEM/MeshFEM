@@ -2,14 +2,19 @@
 // Fields.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Classes to wrap vector/tensor fields that whose values have been
-//  flattened into 1D arrays as follows:
-//      v(f) -> [v_1(f), v_2(f), ..., v_dim(f)]^T
-//  where dim is the number of scalars specifying each vector/tensor value.
-//  This allows the full field to be written as a (v_dim \times |D|) array
-//  where |D| is the size of the discrete domain.
+//  Classes implementing vector/scalar/tensor fields. Each class also specifies
+//  how the quantities are flattened into a single 1D array. Field samples are
+//  stored as columns of a dim x |D| 2D array that is then flattened in column
+//  major format. Here |D| is the size of the discrete domain.
 //
-//  Thus, for a vector field v represented by a 2D array V, v(i) = V.col(i).
+//  This means, for symmetric tensor fields, there are two flattenings: first
+//  each sample is flattened into a 6-vector (in 3D) using Voigt notation, then
+//  each 6-vector is stored as a column in a 6 x |D| array, which is flattened
+//  into a 6 |D| vector.
+//
+//  For vector fields, the resulting flattened vector looks like:
+//      [v_0x, v_0y, v_0z, v_1x, ..., v_|D|z]
+//  This vector can be obtained with the getFlattened() method.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -27,6 +32,10 @@
 #include <stdexcept>
 #include <cmath>
 #include <limits>
+
+#include "Flattening.hh"
+
+typedef enum { FIELD_SCALAR, FIELD_VECTOR, FIELD_MATRIX} FieldType;
 
 template<typename Real, size_t t_dim>
 class VectorField {
@@ -107,6 +116,10 @@ public:
 
     size_t dim() const { return t_dim; }
     size_t domainSize() const { return m_values.cols(); }
+    FieldType fieldType() const { return FIELD_VECTOR; }
+
+    // stub for interchangeability with SymmetricMatrixField
+    size_t N() const { assert(false); }
 
     void resizeDomain(size_t dSize) {
         m_values.resize(Eigen::NoChange, dSize);
@@ -148,6 +161,8 @@ public:
     template<typename Real2>
     ScalarField(const std::vector<Real2> &values)
         : VectorField<Real, 1>(values) { }
+
+    FieldType fieldType() const { return FIELD_SCALAR; }
 
     // Also provide direct access to values in the scalar field case
     // (So this looks just like an array)
@@ -231,42 +246,19 @@ public:
     typedef typename ArrayType::ColXpr      ValueStorageType;
     typedef typename ArrayType::ConstColXpr ConstValueStorageType;
 
-    static size_t compute1DIndex(size_t i, size_t j) {
-        assert((i < t_N) && (j < t_N));
-        size_t idx1D = -1;
-        if (i == j) {
-            idx1D = i;
-        }
-        else {
-            if (j < i) {
-                // First, map all array accesses to the upper triangle
-                std::swap(i, j);
-            }
-            // Note: j > 0 because j == 0 contradicts j > i     (i >= 0)
-            // Generalization of Voigt notation (matches for 2, 3 dim Rank 2
-            // tensors). Derivation: upper triangle's indices are found by
-            // subtracting from the maximum number of elements (N * (N + 1)) /2:
-            // - 1 2 3
-            // - - 3 4
-            // - - - 5
-            // - - - -
-            idx1D = (t_N * (t_N + 1)) / 2 - (i + ((j - 1) * j) / 2 + 1);
-        }
-
-        return idx1D;
-    }
-
     class SymmetricMatrix {
         public:
             SymmetricMatrix(const ValueStorageType &values)
                 : m_data(values) { }
             size_t N() const { return t_N; }
             Real &operator()(size_t i, size_t j) {
-                return m_data[compute1DIndex(i, j)];
+                assert((i < t_N) && (j < t_N));
+                return m_data[flattenIndices(t_N, i, j)];
             }
 
             Real operator()(size_t i, size_t j) const {
-                return m_data[compute1DIndex(i, j)];
+                assert((i < t_N) && (j < t_N));
+                return m_data[flattenIndices(t_N, i, j)];
             }
 
             // Flattened addressing
@@ -289,7 +281,8 @@ public:
                 : m_data(values) { }
             size_t N() const { return t_N; }
             Real operator()(size_t i, size_t j) const {
-                return m_data[compute1DIndex(i, j)];
+                assert((i < t_N) && (j < t_N));
+                return m_data[flattenIndices(t_N, i, j)];
             }
 
             // Flattened addressing
@@ -301,8 +294,10 @@ public:
             const ConstValueStorageType m_data;
     };
 
-    SymmetricMatrixField(size_t domainSize, const FlattenedType &values)
-    {
+    typedef SymmetricMatrix      ValueType;
+    typedef ConstSymmetricMatrix ConstValueType;
+
+    SymmetricMatrixField(size_t domainSize, const FlattenedType &values) {
         assert(dim() * domainSize == values.rows());
         m_values = Eigen::Map<const ArrayType>(values.data(), dim(),
                                                domainSize);
@@ -314,12 +309,19 @@ public:
     size_t dim() const { return ((t_N * (t_N + 1)) / 2); }
     size_t N()   const { return t_N; }
     size_t domainSize() const { return m_values.cols(); }
+    FieldType fieldType() const { return FIELD_MATRIX; }
 
-    ConstSymmetricMatrix operator()(size_t i) const {
+    void clear() { m_values = ArrayType::Zero(dim(), domainSize()); }
+    void resizeDomain(size_t dSize) {
+        m_values.resize(Eigen::NoChange, dSize);
+        clear();
+    }
+
+    ConstValueType operator()(size_t i) const {
         return ConstSymmetricMatrix(m_values.col(i));
     }
 
-    SymmetricMatrix operator()(size_t i) {
+    ValueType operator()(size_t i) {
         return SymmetricMatrix(m_values.col(i));
     }
 

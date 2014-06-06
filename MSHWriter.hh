@@ -15,6 +15,7 @@
 #include <fstream>
 #include <cassert>
 #include <string>
+#include "Flattening.hh"
 
 template<typename ElementGrid>
 class MSHWriter {
@@ -43,21 +44,48 @@ public:
             sectionHeader = "NodeData";
         }
         size_t dim = f.dim();
-        // 2-vectors are padded to 3-vectors for GMSH compatibility.
-        if (dim == 2) dim = 3; 
+        switch (f.fieldType()) {
+            case FIELD_SCALAR:
+                assert(dim == 1);
+                break;
+            case FIELD_VECTOR:
+                // 2-vectors are padded to 3-vectors for GMSH compatibility.
+                if (dim == 2) dim = 3;
+                assert(dim == 3);
+                break;
+            case FIELD_MATRIX:
+                assert((f.N() == 2) || (f.N() == 3));
+                // for GMSH compatibility, 2x2 matrices are padded to 3x3,
+                // which are output as a 9-vector in scanline
+                dim = 9;
+                break;
+            default:
+                assert(false);
+        }
+
         m_outStream << '$' << sectionHeader << std::endl
                     << '1' << std::endl // One string tag: field name
                     << '"' << name << '"' << std::endl
                     << '0' << std::endl // No real tags
-                    << '3' << std::endl // 3 Integer tags
+                    << '3' << std::endl // 3 Integer tags:
                     << '0' << std::endl // Time step 0 (ignored)
-                    << dim << std::endl
-                    << f.domainSize() << std::endl;
+                    << dim << std::endl // dimension
+                    << f.domainSize() << std::endl; // number of nodal values
         for (size_t i = 0; i < f.domainSize(); ++i) {
             typename Field::ConstValueType val = f(i);
             m_outStream << i + 1;
-            for (size_t c = 0; c < dim; ++c)
-                m_outStream << ' ' << ((c < f.dim()) ? val[c] : 0);
+            if (f.fieldType() == FIELD_MATRIX) {
+                for (size_t k = 0; k < 3; ++k) {
+                    for (size_t l = 0; l < 3; ++l) {
+                        m_outStream << ' ' << (((k < f.N()) && (l < f.N())) ?
+                            val[flattenIndices(f.N(), k, l)] : 0);
+                    }
+                }
+            }
+            else {
+                for (size_t c = 0; c < dim; ++c)
+                    m_outStream << ' ' << ((c < f.dim()) ? val[c] : 0);
+            }
             m_outStream << std::endl;
         }
         m_outStream << "$End" << sectionHeader << std::endl;

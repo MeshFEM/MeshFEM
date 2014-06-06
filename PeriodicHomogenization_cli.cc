@@ -126,15 +126,15 @@ int main(int argc, const char *argv[])
     //                       Vector(0.0, 0.0, 0.0), 2.0);
     // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
     //             "examples/wires/star.wire", 1.0);
-    WireNetwork<Vector> model(
-            BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
-            "examples/wires/brick5.wire",
-            0.5);
-    // CSGTree_t model;
-    // parseCSGFile(args["modelFile"].as<string>(), model);
+    // WireNetwork<Vector> model(
+    //         BBox_t(Vector(0.0, 0.0, 0.0), Vector(10.0, 10.0, 10.0)),
+    //         "examples/wires/brick5.wire",
+    //         0.5);
+    CSGTree_t model;
+    parseCSGFile(args["modelFile"].as<string>(), model);
 
-    typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
-    // typedef MeshlessFEM3D<CSGTree_t> MeshlessFEM3D_t;
+    // typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
+    typedef MeshlessFEM3D<CSGTree_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");
     MeshlessFEM3D_t fem(model, settings, solvers);
     if (timer) timer->stop("Setup");

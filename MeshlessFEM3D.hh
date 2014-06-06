@@ -130,10 +130,32 @@ public:
 
         m_invalidateCache();
     }
+
     const ETensor &getElasticityTensor() const {
         return m_E;
     }
 
+    SMField getStrainField(const VField &disp) {
+        if (!m_displacementStrainCached)
+            m_computePerElementDisplacementStrainMap();
+        SMField s(m_elementData.size());
+        s.resizeDomain(m_elementData.size());
+        for (size_t e = 0; e < m_elementData.size(); ++e) {
+            CornerVec cornerIndices = m_elementGrid.elementCorners(e);
+            typename SMField::SymmetricMatrix strain = s(e);
+            m_elementData[e].displacementToStrain(disp, cornerIndices, strain);
+        }
+
+        return s;
+    }
+
+    void getStrain(size_t e, const VField &disp, FlattenedRank2Tensor &strain) {
+        if (!m_displacementStrainCached)
+            m_computePerElementDisplacementStrainMap();
+        assert(e < m_elementData.size());
+        CornerVec cornerIndices = m_elementGrid.elementCorners(e);
+        m_elementData[e].displacementToStrain(disp, cornerIndices, strain);
+    }
 
     void solveCellProblems(std::vector<VField> &w_ij,
                 Timer *timer = NULL, _MSHWriter *mshWriter = NULL);

@@ -1301,7 +1301,12 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
             std::string name("w_ij ");
             name += std::to_string(i);
             mshWriter->addField(name, w_ij[i], _MSHWriter::PER_NODE);
+
+            SMField strain = getStrainField(w_ij[0]);
+            mshWriter->addField(std::string("fluctuation strain ") +
+                        std::to_string(i), strain, _MSHWriter::PER_ELEMENT);
         }
+        
     }
 }
 

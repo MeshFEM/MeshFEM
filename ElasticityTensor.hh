@@ -23,10 +23,7 @@
 
 #include <iostream>
 #include <Eigen/Dense>
-
-// Length of a flattened rank 2 tensor in "dim" dimensions.
-// This is also the row and column size of the flattened rank 4 tensor.
-constexpr int flatLen(int dim) { return (dim == 3) ? 6 : 3; }
+#include "Flattening.hh"
 
 template<typename Real, int _Dim>
 class ElasticityTensor {
@@ -65,17 +62,10 @@ public:
         }
     }
 
-    // Implements flattening of symmetric 2D indices into 1D indices
-    constexpr size_t flattenIndices(size_t i, size_t j) const {
-        return (i == j) ? i :
-               ((i < j) ? (_Dim * (_Dim + 1) - j * (j - 1)) / 2 - (i + 1)
-                        : (_Dim * (_Dim + 1) - i * (i - 1)) / 2 - (j + 1));
-    }
-
     Real operator()(size_t i, size_t j, size_t k, size_t l) const {
         assert((i < _Dim) && (j < _Dim) && (k < _Dim) && (l < _Dim));
-        size_t ij = flattenIndices(i, j);
-        size_t kl = flattenIndices(k, l);
+        size_t ij = flattenIndices(_Dim, i, j);
+        size_t kl = flattenIndices(_Dim, k, l);
         return D(ij, kl);
     }
 
