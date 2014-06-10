@@ -17,6 +17,7 @@
 #include <vector>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 #include "LevelSet.hh"
 
@@ -56,7 +57,10 @@ private:
     void parse_wire_file(const std::string& wire_file) {
         const size_t LINE_WIDTH = 256;
 
-        std::ifstream fin(wire_file.c_str());
+        std::ifstream fin(wire_file);
+        if (!fin)
+            throw std::runtime_error(std::string("Couldn't open ") + wire_file);
+
         while (!fin.eof()) {
             char head = fin.peek();
             switch (head) {
