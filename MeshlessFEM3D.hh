@@ -142,7 +142,7 @@ public:
         s.resizeDomain(m_elementData.size());
         for (size_t e = 0; e < m_elementData.size(); ++e) {
             CornerVec cornerIndices = m_elementGrid.elementCorners(e);
-            typename SMField::SymmetricMatrix strain = s(e);
+            typename SMField::ValueType strain = s(e);
             m_elementData[e].displacementToStrain(disp, cornerIndices, strain);
         }
 

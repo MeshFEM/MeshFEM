@@ -1,0 +1,119 @@
+////////////////////////////////////////////////////////////////////////////////
+// SymmetricMatrix.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//  Classes to wrap a flattened symmetric rank 2 tensor (a 6-vector in 3D),
+//  allowing it to be treated as a plain symmetric matrix.
+//
+//  The *SymmetricMatrixRef types provide a wrapper for reference types (e.g.
+//  Eigen's ColXpr). This is useful for the SymmetricMatrixField class that
+//  stores all symmetric matrix values as flattened columns in a
+//  flatSize x domainSize() array; it allows values to be accessed in-place.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  06/18/2014 17:59:39
+////////////////////////////////////////////////////////////////////////////////
+
+#include "Flattening.hh"
+
+template<typename _Real, size_t t_N, typename _ConstSymmetricMatrix>
+class ConstSymmetricMatrixBase {
+public:
+    static constexpr size_t N()        { return t_N; }
+    static constexpr size_t flatSize() { return (N() * (N() + 1)) / 2; }
+
+    _Real operator()(size_t i, size_t j) const {
+        assert((i < N()) && (j < N()));
+        return (*this)[flattenIndices(N(), i, j)];
+    }
+
+    Eigen::Matrix<_Real, N(), 1> eigenvalues() const {
+        Eigen::Matrix<_Real, N(), N()> mat;
+        for (size_t j = 0; j < N(); ++j)
+            for (size_t i = 0; i <= j; ++i)
+                mat(i, j) = (*this)(i, j);
+        return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
+    }
+
+    _Real maxEigenvalue() const { return eigenvalues().maxCoeff(); }
+    _Real minEigenvalue() const { return eigenvalues().minCoeff(); }
+
+    // Flattened addressing
+    _Real operator[](size_t i) const {
+        return (*static_cast<const _ConstSymmetricMatrix *>(this))[i];
+    }
+};
+
+template<typename _Real, size_t t_N, typename _SymmetricMatrix>
+class SymmetricMatrixBase : public ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> {
+    typedef ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> super;
+public:
+    _Real &operator()(size_t i, size_t j) {
+        assert((i < t_N) && (j < t_N));
+        return (*this)[flattenIndices(t_N, i, j)];
+    }
+
+    template<typename FType>
+    void assign(const FType &f) {
+        assert(f.rows() == super::flatSize());
+        for (size_t i = 0; i < f.rows(); ++i)
+            (*this)[i] = f[i];
+    }
+
+    // Flattened addressing
+    _Real  &operator[](size_t i) { return (*static_cast<_SymmetricMatrix *>(this))[i]; }
+};
+
+template<size_t t_N, typename StorageRef, typename ConstStorageRef>
+class SymmetricMatrixRef
+    : public SymmetricMatrixBase<typename StorageRef::Scalar, t_N,
+                              SymmetricMatrixRef<t_N, StorageRef, ConstStorageRef> >
+{
+    typedef typename StorageRef::Scalar _Real;
+    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrixRef<t_N, StorageRef, ConstStorageRef> > super;
+public:
+    SymmetricMatrixRef(const StorageRef &values) : m_data(values) { }
+    _Real &operator[](size_t i) { return m_data[i]; }
+    _Real  operator[](size_t i) const { return m_data[i]; }
+    StorageRef      flattened()       { return m_data; }
+    ConstStorageRef flattened() const { return m_data; }
+    template<typename FType>
+    SymmetricMatrixRef &operator=(const FType &f) { super::assign(f); return *this; }
+private:
+    StorageRef m_data;
+};
+
+template<size_t t_N, typename ConstStorageRef>
+class ConstSymmetricMatrixRef
+    : public SymmetricMatrixBase<typename ConstStorageRef::Scalar, t_N,
+                                 ConstSymmetricMatrixRef<t_N, ConstStorageRef> >
+{
+    typedef typename ConstStorageRef::Scalar _Real;
+public:
+    ConstSymmetricMatrixRef(const ConstStorageRef &values) : m_data(values) { }
+    _Real operator[](size_t i) const { return m_data[i]; }
+    ConstStorageRef flattened() { return m_data; }
+private:
+    ConstStorageRef m_data;
+};
+
+template<size_t t_N, typename Storage>
+class SymmetricMatrix
+    : public SymmetricMatrixBase<typename Storage::Scalar, t_N,
+                                 SymmetricMatrix<t_N, Storage> >
+{
+    typedef typename Storage::Scalar _Real;
+    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrix<t_N, Storage> > super;
+public:
+    SymmetricMatrix() { }
+    SymmetricMatrix(const Storage &values) : m_data(values) { }
+    _Real &operator[](size_t i)       { return m_data[i]; }
+    _Real  operator[](size_t i) const { return m_data[i]; }
+    Storage &flattened()             { return m_data; }
+    const Storage &flattened() const { return m_data; }
+    template<typename FType>
+    SymmetricMatrix &operator=(const FType &f) { super::assign(f); return *this; }
+private:
+    Storage m_data;
+};

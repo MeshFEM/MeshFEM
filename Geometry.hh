@@ -36,6 +36,11 @@ struct BBox {
         maxCorner = maxCorner.cwiseMax(b.maxCorner);
     }
 
+    void unionPoint(const _Vector &p) {
+        minCorner = minCorner.cwiseMin(p);
+        maxCorner = maxCorner.cwiseMax(p);
+    }
+
     void intersectBox(const BBox &b) {
         minCorner = minCorner.cwiseMax(b.minCorner);
         maxCorner = maxCorner.cwiseMin(b.maxCorner);

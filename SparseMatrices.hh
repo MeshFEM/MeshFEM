@@ -57,12 +57,18 @@ struct TripletMatrix {
     size_t m, n;
     std::vector<Triplet> nz;
 
+    void init(size_t mm = 0, size_t nn = 0) {
+        m = mm, n = nn;
+        clear();
+    }
+
     void clear() { nz.clear(); }
     void reserve(size_t n) { nz.reserve(n); }
     size_t nnz() const { return nz.size(); }
     void addNZ(size_t i, size_t j, Real v) {
         assert((i < m) && (j < n));
-        nz.push_back(Triplet(i, j, v));
+        if (std::abs(v) > 0) // Possibly give this a tolerance...
+            nz.push_back(Triplet(i, j, v));
     }
 
     void sort() {

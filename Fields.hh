@@ -34,6 +34,7 @@
 #include <limits>
 
 #include "Flattening.hh"
+#include "SymmetricMatrix.hh"
 
 typedef enum { FIELD_SCALAR, FIELD_VECTOR, FIELD_MATRIX} FieldType;
 
@@ -243,59 +244,11 @@ public:
     enum { FIELD_DIM = (t_N * (t_N + 1)) / 2 };
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
     typedef Eigen::Matrix<Real, FIELD_DIM, Eigen::Dynamic> ArrayType;
-    typedef typename ArrayType::ColXpr      ValueStorageType;
-    typedef typename ArrayType::ConstColXpr ConstValueStorageType;
 
-    class SymmetricMatrix {
-        public:
-            SymmetricMatrix(const ValueStorageType &values)
-                : m_data(values) { }
-            size_t N() const { return t_N; }
-            Real &operator()(size_t i, size_t j) {
-                assert((i < t_N) && (j < t_N));
-                return m_data[flattenIndices(t_N, i, j)];
-            }
-
-            Real operator()(size_t i, size_t j) const {
-                assert((i < t_N) && (j < t_N));
-                return m_data[flattenIndices(t_N, i, j)];
-            }
-
-            // Flattened addressing
-            Real &operator[](size_t i) {
-                return m_data[i];
-            }
-
-            // Flattened addressing
-            Real operator[](size_t i) const {
-                return m_data[i];
-            }
-
-        private:
-            ValueStorageType m_data;
-    };
-
-    class ConstSymmetricMatrix {
-        public:
-            ConstSymmetricMatrix(const ConstValueStorageType &values)
-                : m_data(values) { }
-            size_t N() const { return t_N; }
-            Real operator()(size_t i, size_t j) const {
-                assert((i < t_N) && (j < t_N));
-                return m_data[flattenIndices(t_N, i, j)];
-            }
-
-            // Flattened addressing
-            Real operator[](size_t i) const {
-                return m_data[i];
-            }
-
-        private:
-            const ConstValueStorageType m_data;
-    };
-
-    typedef SymmetricMatrix      ValueType;
-    typedef ConstSymmetricMatrix ConstValueType;
+    typedef SymmetricMatrixRef<t_N, typename ArrayType::ColXpr,
+            typename ArrayType::ConstColXpr> ValueType;
+    typedef ConstSymmetricMatrixRef<t_N,
+            typename ArrayType::ConstColXpr> ConstValueType;
 
     SymmetricMatrixField(size_t domainSize, const FlattenedType &values) {
         assert(dim() * domainSize == values.rows());
@@ -318,11 +271,11 @@ public:
     }
 
     ConstValueType operator()(size_t i) const {
-        return ConstSymmetricMatrix(m_values.col(i));
+        return ConstValueType(m_values.col(i));
     }
 
     ValueType operator()(size_t i) {
-        return SymmetricMatrix(m_values.col(i));
+        return ValueType(m_values.col(i));
     }
 
     SymmetricMatrixField &operator*=(Real scalar) {

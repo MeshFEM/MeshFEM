@@ -122,6 +122,14 @@ public:
         return m_d.template selfadjointView<Eigen::Upper>() * shearDoubler(in);
     }
 
+    // Apply matrix D itself to a vector or a matrix. For this to have physical
+    // meaning, "in" should represent a (collection of) flattened engineering
+    // strains.
+    template<typename FlattenedType>
+    FlattenedType applyD(const FlattenedType &in) const {
+        return m_d.template selfadjointView<Eigen::Upper>() * in;
+    }
+
     Real quadrupleContract(const ElasticityTensor &b) const {
         Real result = 0;
         for (size_t i = 0; i < _Dim; ++i)

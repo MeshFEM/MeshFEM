@@ -136,7 +136,7 @@ int main(int argc, const char *argv[])
     else if (modelType == "wire") {
         model = new WireNetwork<Vector>(BBox_t(Vector(0.0, 0.0, 0.0),
                     Vector(10.0, 10.0, 10.0)),
-                    args["modelFile"].as<string>(), 1.0);
+                    args["modelFile"].as<string>(), 0.5);
 
         // WireNetwork<Vector> model(BBox_t(Vector(-5.0, -5.0, -5.0), Vector(5.0, 5.0, 5.0)), 
         //             "examples/wires/star.wire", 1.0);
@@ -151,7 +151,6 @@ int main(int argc, const char *argv[])
     }
     
     assert(model != NULL);
-
 
     typedef MeshlessFEM3D<LevelSet_t> MeshlessFEM3D_t;
     if (timer) timer->start("Setup");
