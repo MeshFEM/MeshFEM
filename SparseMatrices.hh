@@ -336,7 +336,8 @@ public:
                                      Info[UMFPACK_SIZE_OF_UNIT];
     }
 
-    void solve(const std::vector<double> &b, std::vector<double> &x) {
+    template<typename _Vec1, typename _Vec2>
+    void solve(const _Vec1 &b, _Vec2 &x) {
         assert(b.size() == (size_t) m_mat.m);
         x.resize(m_mat.n);
         int status = umfpack_dl_solve(UMFPACK_A, Ap(), Ai(), Ax(), &x[0], &b[0],
@@ -409,7 +410,8 @@ public:
             throw std::runtime_error("Factorize failed.");
     }
 
-    void solve(const std::vector<double> &b, std::vector<double> &x) {
+    template<typename _Vec1, typename _Vec2>
+    void solve(const _Vec1 &b, _Vec2 &x) {
         size_t m = m_A->nrow, n = m_A->ncol;
         assert(b.size() == m);
         m_b = cholmod_l_allocate_dense(n, 1,

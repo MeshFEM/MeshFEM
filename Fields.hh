@@ -81,14 +81,10 @@ public:
         return m_values.col(i);
     }
 
-    void clear() {
-        m_values = ArrayType::Zero(dim(), domainSize());
-    }
+    void clear() { m_values = ArrayType::Zero(dim(), domainSize()); }
 
     // Normalize data so that the maximum column magnitude is 1.
-    void maxColumnNormalize() {
-        m_values /= maxMag();
-    }
+    void maxColumnNormalize() { m_values /= maxMag(); }
 
     Real maxMag() const {
         Real maxNorm = 0;
@@ -107,24 +103,27 @@ public:
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
 
-    template<typename Real2>
-    void getFlattened(std::vector<Real2> &v) const {
-        size_t size = domainSize() * dim();
-        v.resize(size);
-        for (size_t i = 0; i < size; ++i)
-            v[i] = (Real2) m_values.data()[i];
-    }
-
     size_t dim() const { return t_dim; }
+    size_t N()   const { return dim(); }
     size_t domainSize() const { return m_values.cols(); }
     FieldType fieldType() const { return FIELD_VECTOR; }
-
-    // stub for interchangeability with SymmetricMatrixField
-    size_t N() const { assert(false); }
 
     void resizeDomain(size_t dSize) {
         m_values.resize(Eigen::NoChange, dSize);
         clear();
+    }
+
+    // Flattened access
+    size_t size() const { return dim() * domainSize(); }
+    void resize(size_t i) { assert(i % dim() == 0); resizeDomain(i / 3); }
+    Real &operator[](size_t i)       { assert(i < size()); return m_values.data()[i]; }
+    Real  operator[](size_t i) const { assert(i < size()); return m_values.data()[i]; }
+
+    template<typename Real2>
+    void getFlattened(std::vector<Real2> &v) const {
+        v.resize(size());
+        for (size_t i = 0; i < size(); ++i)
+            v[i] = operator[](i);
     }
 
     void dump(const std::string &path) const {
@@ -165,12 +164,6 @@ public:
 
     FieldType fieldType() const { return FIELD_SCALAR; }
 
-    // Also provide direct access to values in the scalar field case
-    // (So this looks just like an array)
-    Real  operator[](size_t i) const { return m_values[i]; }
-    Real &operator[](size_t i)       { return m_values[i]; }
-    size_t size() const { return this->domainSize(); }
-
     Real min() const { return m_values.minCoeff(); }
     Real max() const { return m_values.maxCoeff(); }
     // Return the magnitude of the entry with maximum magnitude
@@ -198,18 +191,6 @@ public:
         m_values = m_values.cwiseMax(b.m_values);
     }
 
-    void dump(const std::string &path) const {
-        std::ofstream of(path);
-        if (!of.is_open())
-            throw std::runtime_error(std::string("Couldn't open '") +
-                        path + "' for writing.");
-        of << std::scientific << std::setprecision(16);
-        size_t N = size();
-        for (size_t i = 0; i < N; ++i) {
-            of << (*this)[i] << std::endl;
-        }
-    }
-
 private:
     using VectorField<Real, 1>::m_values;
 };
@@ -217,6 +198,7 @@ private:
 template<typename Real>
 std::ostream &operator<<(std::ostream &os, const ScalarField<Real> &sf)
 {
+    os << std::scientific << std::setprecision(16);
     size_t N = sf.size();
     for (size_t i = 0; i < N; ++i) {
         os << sf[i] << std::endl;
@@ -241,9 +223,9 @@ std::ostream &operator<<(std::ostream &os, const ScalarField<Real> &sf)
 template<typename Real, size_t t_N>
 class SymmetricMatrixField {
 public:
-    enum { FIELD_DIM = (t_N * (t_N + 1)) / 2 };
+    static constexpr size_t FieldDim() { return t_N * (t_N + 1) / 2; }
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
-    typedef Eigen::Matrix<Real, FIELD_DIM, Eigen::Dynamic> ArrayType;
+    typedef Eigen::Matrix<Real, FieldDim(), Eigen::Dynamic> ArrayType;
 
     typedef SymmetricMatrixRef<t_N, typename ArrayType::ColXpr,
             typename ArrayType::ConstColXpr> ValueType;

@@ -14,6 +14,8 @@
 //  Company:  New York University
 //  Created:  06/18/2014 17:59:39
 ////////////////////////////////////////////////////////////////////////////////
+#ifndef SYMMETRICMATRIX_HH
+#define SYMMETRICMATRIX_HH
 
 #include "Flattening.hh"
 
@@ -25,14 +27,14 @@ public:
 
     _Real operator()(size_t i, size_t j) const {
         assert((i < N()) && (j < N()));
-        return (*this)[flattenIndices(N(), i, j)];
+        return operator[](flattenIndices(N(), i, j));
     }
 
     Eigen::Matrix<_Real, N(), 1> eigenvalues() const {
         Eigen::Matrix<_Real, N(), N()> mat;
         for (size_t j = 0; j < N(); ++j)
             for (size_t i = 0; i <= j; ++i)
-                mat(i, j) = (*this)(i, j);
+                mat(i, j) = operator()(i, j);
         return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
     }
 
@@ -51,14 +53,25 @@ class SymmetricMatrixBase : public ConstSymmetricMatrixBase<_Real, t_N, _Symmetr
 public:
     _Real &operator()(size_t i, size_t j) {
         assert((i < t_N) && (j < t_N));
-        return (*this)[flattenIndices(t_N, i, j)];
+        return operator[](flattenIndices(t_N, i, j));
     }
 
     template<typename FType>
     void assign(const FType &f) {
         assert(f.rows() == super::flatSize());
-        for (size_t i = 0; i < f.rows(); ++i)
-            (*this)[i] = f[i];
+        for (size_t i = 0; i < super::flatSize(); ++i)
+            operator[](i) = f[i];
+    }
+
+    SymmetricMatrixBase &operator*=(_Real s) {
+        for (size_t i = 0; i < super::flatSize(); ++i)
+            operator[](i) *= s;
+        return *this;
+    }
+
+    void clear() {
+        for (size_t i = 0; i < super::flatSize(); ++i)
+            operator[](i) = 0.0;
     }
 
     // Flattened addressing
@@ -117,3 +130,5 @@ public:
 private:
     Storage m_data;
 };
+
+#endif /* end of include guard: SYMMETRICMATRIX_HH */
