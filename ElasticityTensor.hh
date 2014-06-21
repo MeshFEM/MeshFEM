@@ -24,6 +24,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include "Flattening.hh"
+#include "SymmetricMatrix.hh"
 
 template<typename Real, int _Dim>
 class ElasticityTensor {
@@ -31,6 +32,12 @@ public:
     typedef Eigen::Matrix<Real, flatLen(_Dim), flatLen(_Dim)> DType;
     typedef typename DType::RowXpr                            RowXpr;
     typedef typename DType::ConstRowXpr                       ConstRowXpr;
+    // Wraps a row of the flattened elasticity tensor with a symmetric matrix
+    // interface--useful for periodic homogenization formulas where rows of the
+    // flattened homogenized elasticity tensor are modulated by flattened
+    // fluctuation stresses.
+    typedef SymmetricMatrixRef<_Dim, RowXpr, ConstRowXpr>     SMRowWrapper;
+    typedef ConstSymmetricMatrixRef<_Dim, ConstRowXpr>        ConstSMRowWrapper;
     typedef Eigen::Matrix<Real, flatLen(_Dim), 1> FlattenedRank2Tensor;
 
     ElasticityTensor() : m_d(DType::Zero()) { }
@@ -69,6 +76,7 @@ public:
         return D(ij, kl);
     }
 
+
     Real D(size_t i, size_t j) const {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));
         return (i <= j) ? m_d(i, j) : m_d(j, i);
@@ -79,27 +87,25 @@ public:
         return (i <= j) ? m_d(i, j) : m_d(j, i);
     }
 
+    ConstRowXpr DRow(size_t i) const { assert(i < (size_t) m_d.rows()); return m_d.row(i); }
+    RowXpr      DRow(size_t i)       { assert(i < (size_t) m_d.rows()); return m_d.row(i); }
+    ConstSMRowWrapper DRowAsSymMatrix(size_t i) const { return ConstSMRowWrapper(DRow(i)); }
+         SMRowWrapper DRowAsSymMatrix(size_t i)       { return      SMRowWrapper(DRow(i)); }
+
     // Get the flattened tensor's diagonal
     Eigen::Matrix<Real, flatLen(_Dim), 1> diag() const {
         return m_d.diagonal();
     }
 
     ElasticityTensor &operator*=(Real s) { m_d *= s; return *this; }
-    ElasticityTensor  operator*(Real s) const {
-        ElasticityTensor E(*this);
-        E *= s;
-        return E;
-    }
+    ElasticityTensor &operator/=(Real s) { m_d /= s; return *this; }
+    ElasticityTensor  operator*(Real s) const { ElasticityTensor E(*this); E *= s; return E; }
+    ElasticityTensor  operator/(Real s) const { ElasticityTensor E(*this); E /= s; return E; }
 
-    ElasticityTensor &operator-=(const ElasticityTensor &b) {
-        m_d -= b.m_d;
-        return *this;
-    }
-    ElasticityTensor operator-(const ElasticityTensor &b) const {
-        ElasticityTensor E(*this);
-        E -= b;
-        return E;
-    }
+    ElasticityTensor &operator+=(const ElasticityTensor &b) { m_d += b.m_d; return *this; }
+    ElasticityTensor &operator-=(const ElasticityTensor &b) { m_d -= b.m_d; return *this; }
+    ElasticityTensor  operator+ (const ElasticityTensor &b) const { ElasticityTensor E(*this); E += b; return E; }
+    ElasticityTensor  operator- (const ElasticityTensor &b) const { ElasticityTensor E(*this); E -= b; return E; }
 
     ElasticityTensor inverse() const {
         ElasticityTensor result;

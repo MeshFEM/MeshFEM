@@ -49,7 +49,7 @@ public:
 
 template<typename _Real, size_t t_N, typename _SymmetricMatrix>
 class SymmetricMatrixBase : public ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> {
-    typedef ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> super;
+    typedef ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> Base;
 public:
     _Real &operator()(size_t i, size_t j) {
         assert((i < t_N) && (j < t_N));
@@ -58,19 +58,19 @@ public:
 
     template<typename FType>
     void assign(const FType &f) {
-        assert(f.rows() == super::flatSize());
-        for (size_t i = 0; i < super::flatSize(); ++i)
+        assert(f.rows() == Base::flatSize());
+        for (size_t i = 0; i < Base::flatSize(); ++i)
             operator[](i) = f[i];
     }
 
     SymmetricMatrixBase &operator*=(_Real s) {
-        for (size_t i = 0; i < super::flatSize(); ++i)
+        for (size_t i = 0; i < Base::flatSize(); ++i)
             operator[](i) *= s;
         return *this;
     }
 
     void clear() {
-        for (size_t i = 0; i < super::flatSize(); ++i)
+        for (size_t i = 0; i < Base::flatSize(); ++i)
             operator[](i) = 0.0;
     }
 
@@ -84,7 +84,7 @@ class SymmetricMatrixRef
                               SymmetricMatrixRef<t_N, StorageRef, ConstStorageRef> >
 {
     typedef typename StorageRef::Scalar _Real;
-    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrixRef<t_N, StorageRef, ConstStorageRef> > super;
+    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrixRef<t_N, StorageRef, ConstStorageRef> > Base;
 public:
     SymmetricMatrixRef(const StorageRef &values) : m_data(values) { }
     _Real &operator[](size_t i) { return m_data[i]; }
@@ -92,7 +92,7 @@ public:
     StorageRef      flattened()       { return m_data; }
     ConstStorageRef flattened() const { return m_data; }
     template<typename FType>
-    SymmetricMatrixRef &operator=(const FType &f) { super::assign(f); return *this; }
+    SymmetricMatrixRef &operator=(const FType &f) { Base::assign(f); return *this; }
 private:
     StorageRef m_data;
 };
@@ -117,16 +117,35 @@ class SymmetricMatrix
                                  SymmetricMatrix<t_N, Storage> >
 {
     typedef typename Storage::Scalar _Real;
-    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrix<t_N, Storage> > super;
+    typedef SymmetricMatrixBase<_Real, t_N, SymmetricMatrix<t_N, Storage> > Base;
 public:
     SymmetricMatrix() { }
+
+    SymmetricMatrix(size_t i) : m_data(Storage::Zero()) {
+        if (i >= Base::flatSize())
+            throw std::runtime_error("Illegal basis element number.");
+        m_data[i] = (i < t_N) ? 1.0 : 0.5;
+    }
+
     SymmetricMatrix(const Storage &values) : m_data(values) { }
+
+    // Construct a unit canonical basis symmetric matrix:
+    // e_ij = .5 * (e_i e_j^T + e_j e_i^T)
+    static SymmetricMatrix CanonicalBasis(size_t i) {
+        if (i >= Base::flatSize())
+            throw std::runtime_error("Illegal basis element number.");
+        SymmetricMatrix e_ij(Storage::Zero());
+        e_ij[i] = (i < t_N) ? 1.0 : 0.5;
+        return e_ij;
+    }
+
     _Real &operator[](size_t i)       { return m_data[i]; }
     _Real  operator[](size_t i) const { return m_data[i]; }
     Storage &flattened()             { return m_data; }
     const Storage &flattened() const { return m_data; }
     template<typename FType>
-    SymmetricMatrix &operator=(const FType &f) { super::assign(f); return *this; }
+    SymmetricMatrix &operator=(const FType &f) { Base::assign(f); return *this; }
+    SymmetricMatrix  operator-() const { SymmetricMatrix copy(*this); copy *= -1.0; return copy; }
 private:
     Storage m_data;
 };
