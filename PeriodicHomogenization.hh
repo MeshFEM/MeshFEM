@@ -48,46 +48,70 @@ namespace PeriodicHomogenization3D {
 
         // // The following "energy-like" version is equivalent to the more efficient
         // // "stress-like" version above:
-        // // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
-        // // // Where the integrand can be written as:
-        // // //  <E e(w_ij), e(w_kl)> + [stress(w_ij)]_kl + [stress(w_kl)]_ij +
-        // // //      rho * E_ijkl
-        // // ETensor EhE(rho * m_E);
-        // // CornerVec cornerIndices;
-        // // PerElementOrthotropicStiffnessIntegrand Ke(m_E, m_model);
-        // // typedef ElasticityTensor<Real, 3>  ETensor;
-        // // for (size_t e = 0; e < m_elementGrid.numElements(); ++e) {
-        // //     _BBox b = m_elementGrid.elementBoundingBox(e);
-        // //     m_elementGrid.elementCorners(e, cornerIndices);
-        // //     bool exact = m_exactFullElements && m_elementGrid.elementIsFull(e);
-        // //     Ke.configure(b.dimensions(), exact);
-        // //     if (!exact) m_quadrature.integrate(Ke, b);
-        // //     Real vol = m_elementData[e].volume();
-
-        // //     for (size_t ij = 0; ij < 6; ++ij) {
-        // //         for (size_t kl = ij; kl < 6; ++kl) {
-        // //             CornerVField we_ij, we_kl;
-        // //             m_extractCornerVField(w_ij[ij], cornerIndices, we_ij);
-        // //             m_extractCornerVField(w_ij[kl], cornerIndices, we_kl);
-        // //             Real elemContrib = Ke.bilinearForm(we_ij, we_kl);
-
-        // //             FlattenedRank2Tensor stress;
-        // //             m_elementData[e].displacementToStress(w_ij[ij], cornerIndices,
-        // //                     m_E, stress);
-        // //             elemContrib += stress[kl] * vol;
-        // //             m_elementData[e].displacementToStress(w_ij[kl], cornerIndices,
-        // //                     m_E, stress);
-        // //             elemContrib += stress[ij] * vol;
-
-        // //             EhE.D(ij, kl) += elemContrib / Yvol;
-        // //         }
-        // //     }
-        // // }
-        // if (timer) timer->stop("Compute Homogenized Tensor");
+        // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
+        // ETensor EhE;
+        // SMatrix we_ij, we_kl;
+        // for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
+        //     auto e = mesh.element(ei);
+        //     for (size_t ij = 0; ij < 6; ++ij) {
+        //         sim.elementStrain(ei, w_ij[ij], we_ij);
+        //         we_ij += SMatrix::CanonicalBasis(ij);
+        //         for (size_t kl = ij; kl < 6; ++kl) {
+        //             sim.elementStrain(ei, w_ij[kl], we_kl);
+        //             we_kl += SMatrix::CanonicalBasis(kl);
+        //             EhE.D(ij, kl) += e->volume() * (e->elasticityTensor().
+        //                     doubleContract(we_ij).doubleContract(we_kl));
+        //         }
+        //     }
+        // }
+        // EhE /= mesh.boundingBox().volume();
 
         return Eh;
     }
 
+    template<class _Simulator>
+    SField homogenizedElasticityTensorShapeDerivative(const ETensor &target,
+            const std::vector<VField> &w_ij, const _Simulator &sim) {
+        const auto &mesh = sim.mesh();
+        ETensor diff = target - homogenizedElasticityTensor(w_ij, sim);
+        // Shape derivative evaluated on normal velocity v_n:
+        // diff_ijkl int_dt -<E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
+        // So the steepest descent is to evolve with
+        //      v_n = diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
+        //         := diff_ijkl DS_ijkl where
+        //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
+        // DS is constant on each element
+        SField descentVelocity(mesh.numBoundaryFaces());
+        ETensor DS;
+        SMatrix we_ij, we_kl;
+        for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
+            auto e = mesh.element(ei);
+            if (!e.isBoundary()) continue;
+            for (size_t ij = 0; ij < 6; ++ij) {
+                sim.elementStrain(ei, w_ij[ij], we_ij);
+                we_ij += SMatrix::CanonicalBasis(ij);
+                for (size_t kl = ij; kl < 6; ++kl) {
+                    sim.elementStrain(ei, w_ij[kl], we_kl);
+                    we_kl += SMatrix::CanonicalBasis(kl);
+                    DS.D(ij, kl) = e->elasticityTensor().doubleContract(we_ij)
+                                                        .doubleContract(we_kl);
+                }
+            }
+            Real vn = diff.quadrupleContract(DS);
+
+            // distribute vn to all of this element's boundary faces
+            for (size_t f = 0; f < 4; ++f) {
+                auto hf = mesh.element(ei).halfFace(f);
+                if (hf.isBoundary()) {
+                    auto bf = hf.boundaryFace();
+                    assert(bf);
+                    descentVelocity[bf.index()] = vn;
+                }
+            }
+        }
+
+        return descentVelocity;
+    }
 }
 
 #endif /* end of include guard: PERIODICHOMOGENIZATION_HH */

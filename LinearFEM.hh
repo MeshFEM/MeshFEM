@@ -69,6 +69,9 @@ namespace LinearFEM3D {
         Vector3D m_normal;
     };
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Tet Mesh
+    ////////////////////////////////////////////////////////////////////////////
     template <class VData  = VertexData,   class HFData = TMEmptyData,
               class TData  = TetData,      class BVData = TMEmptyData,
               class BHEData = TMEmptyData, class BFData = BoundaryFaceData>
@@ -113,12 +116,6 @@ namespace LinearFEM3D {
                 vol += Base::tet(i)->volume();
             return vol;
         }
-
-        // For 3D problems, tets are elements and vertices are nodes.
-        size_t numElements() const { return Base::numTets(); }
-        size_t numNodes() const { return Base::numVertices(); }
-        typename Base::ConstVertexHandle node(size_t i) const { return Base::vertex(i); }
-        typename Base::ConstTetHandle element(size_t i) const { return Base::tet(i); }
     };
 }
 

@@ -40,7 +40,7 @@ namespace LinearElasticity3D {
         FlattenedType applyD(const FlattenedType  &in) const { return m_E.applyD(in); }
 
         template<class _SymMat>
-        _SymMat applyE(const _SymMat &in) const { return _SymMat(m_E.doubleContract(in.flattened())); }
+        _SymMat applyE(const _SymMat &in) const { return _SymMat(m_E.doubleContract(in)); }
 
         template<class _SymMat>
         void engStrain(const Vector3D &u0, const Vector3D &u1,
@@ -113,9 +113,9 @@ namespace LinearElasticity3D {
 
     struct BoundaryFaceData : LinearFEM3D::BoundaryFaceData {
         BoundaryFaceData() : neumannTraction(Vector3D::Zero()) { }
-        // Get the load this triangle's Neumann condition places on its nodes.
-        // Note: the integral of a picewise constant function, f, times the
-        // nodes' shape functions is f * A / 3
+        // Get the load this triangle's Neumann condition places on its corner
+        // nodes. Note: the integral of a picewise constant function, f, times
+        // the nodes' shape functions is f * A / 3
         Vector3D nodalLoad() const {
             return neumannTraction * (LinearFEM3D::BoundaryFaceData::area() / 3);
         }
@@ -138,7 +138,7 @@ namespace LinearElasticity3D {
 
         const Mesh &mesh() const { return m_mesh; }
 
-        // Solve for equilibrium under nodal load f
+        // Solve for equilibrium under DoF load f
         VField solve(const VField &f) const {
             if (!m_system.cached()) m_assembleConstrainedSystem();
 
@@ -202,6 +202,7 @@ namespace LinearElasticity3D {
             return f;
         }
 
+        // Compute the load on the DoFs from the Neumann boundary conditions.
         VField neumannLoad() const {
             VField load(numDoFs());
             load.clear();

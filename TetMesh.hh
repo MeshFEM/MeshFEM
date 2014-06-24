@@ -94,6 +94,10 @@ public:
     size_t numHalfFaces() const { return O.size(); }
     size_t numTets()      const { return V.size() / 4; }
 
+    // For volume meshes, tets are elements and vertices are nodes.
+    size_t numElements() const { return numTets(); }
+    size_t numNodes() const { return numVertices(); }
+
     size_t numBoundaryVertices()  const { return bV.size(); }
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
@@ -121,6 +125,11 @@ public:
     ConstBoundaryHalfEdgeHandle boundaryHalfEdge(size_t i) const { return ConstBoundaryHalfEdgeHandle(i, *this); }
              BoundaryFaceHandle     boundaryFace(size_t i)       { return          BoundaryFaceHandle(i, *this); }
         ConstBoundaryFaceHandle     boundaryFace(size_t i) const { return     ConstBoundaryFaceHandle(i, *this); }
+
+         VertexHandle node(size_t i)       { return vertex(i); }
+    ConstVertexHandle node(size_t i) const { return vertex(i); }
+         TetHandle element(size_t i)       { return tet(i); }
+    ConstTetHandle element(size_t i) const { return tet(i); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Container iterator access
@@ -153,6 +162,52 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Boundary halfedge wrapper
     ////////////////////////////////////////////////////////////////////////////
+    class ConstBoundaryMesh {
+    public:
+        ConstBoundaryMesh(const TetMesh &mesh) : m_mesh(mesh) { }
+
+        typedef ConstBoundaryVertexHandle   ConstVertexHandle;
+        typedef ConstBoundaryHalfEdgeHandle ConstHalfEdgeHandle;
+        typedef ConstBoundaryFaceHandle     ConstFaceHandle;
+
+        size_t  numVertices() const { return m_mesh.numBoundaryVertices(); }
+        size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
+        size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
+
+        // For volume meshes, faces are elements and vertices are nodes.
+        size_t numElements() const { return numFaces(); }
+        size_t numNodes()    const { return numVertices(); }
+
+          ConstVertexHandle   vertex(size_t i) const { return m_mesh.boundaryVertex(i); }
+        ConstHalfEdgeHandle halfEdge(size_t i) const { return m_mesh.boundaryHalfEdge(i); }
+            ConstFaceHandle     face(size_t i) const { return m_mesh.boundaryFace(i); }
+
+        ConstVertexHandle  node(size_t i) const { return vertex(i); }
+        ConstFaceHandle element(size_t i) const { return face(i); }
+
+        // Get the halfedge pointing from s to e.
+        ConstHalfEdgeHandle halfEdge(size_t s, size_t e) const { return halfEdge(halfedgeIndex(s, e)); }
+
+        /*! Get the index of the halfedge pointing from s to e */
+        int halfedgeIndex(size_t s, size_t e) const {
+            assert((s < numVertices()) && (e < numVertices()));
+            
+            ConstVertexHandle v = vertex(e);
+            ConstHalfEdgeHandle h = v.halfEdge();
+            ConstHalfEdgeHandle hit = h;
+            do {
+                if (hit.tail().index() == s) {
+                    return hit.index();
+                }
+            } while ((hit = hit.cw()) != h);
+
+            return -1;
+        }
+
+    private:
+        const TetMesh &m_mesh;
+    };
+
     class BoundaryMesh {
     public:
         typedef      BoundaryVertexHandle      VertexHandle;
@@ -167,12 +222,21 @@ public:
         size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
         size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
 
+        // For volume meshes, faces are elements and vertices are nodes.
+        size_t numElements() const { return numFaces(); }
+        size_t numNodes()    const { return numVertices(); }
+
                VertexHandle   vertex(size_t i)       { return m_mesh.boundaryVertex(i); }
           ConstVertexHandle   vertex(size_t i) const { return m_mesh.boundaryVertex(i); }
              HalfEdgeHandle halfEdge(size_t i)       { return m_mesh.boundaryHalfEdge(i); }
         ConstHalfEdgeHandle halfEdge(size_t i) const { return m_mesh.boundaryHalfEdge(i); }
                  FaceHandle     face(size_t i)       { return m_mesh.boundaryFace(i); }
             ConstFaceHandle     face(size_t i) const { return m_mesh.boundaryFace(i); }
+
+             VertexHandle  node(size_t i)       { return vertex(i); }
+        ConstVertexHandle  node(size_t i) const { return vertex(i); }
+             FaceHandle element(size_t i)       { return face(i); }
+        ConstFaceHandle element(size_t i) const { return face(i); }
 
         // Get the halfedge pointing from s to e.
              HalfEdgeHandle halfEdge(size_t s, size_t e)       { return halfEdge(halfedgeIndex(s, e)); }
@@ -198,7 +262,8 @@ public:
         TetMesh &m_mesh;
     };
 
-    BoundaryMesh boundary() { return BoundaryMesh(*this); }
+    BoundaryMesh boundary()            { return BoundaryMesh(*this); }
+    ConstBoundaryMesh boundary() const { return ConstBoundaryMesh(*this); }
 
 private:
     std::vector<VertexData>           m_vertexData;

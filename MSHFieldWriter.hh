@@ -24,8 +24,10 @@ class MSHFieldWriter {
 public:
     typedef enum { PER_ELEMENT, PER_NODE } FieldType;
 
+    // boundary: construct a boundary writer instead of a volume mesh writer.
     template<typename Mesh>
-    MSHFieldWriter(const std::string &mshPath, const Mesh &mesh)
+    MSHFieldWriter(const std::string &mshPath, const Mesh &mesh,
+                   bool boundary = false)
         : m_outStream(mshPath), m_numNodes(mesh.numNodes()),
           m_numElements(mesh.numElements())
     {
@@ -38,15 +40,32 @@ public:
             typedef MESH_IO::IOElement OutElement;
             std::vector<OutVertex> outNodes;
             std::vector<OutElement> outElements;
-            for (size_t i = 0; i < m_numNodes; ++i)
-                outNodes.emplace_back(OutVertex(mesh.vertex(i)->p));
-            OutElement outElement;
-            for (size_t i = 0; i < m_numElements; ++i) {
-                outElement.clear();
-                auto elem = mesh.element(i);
-                for (size_t c = 0; c < elem.numVertices(); ++c)
-                    outElement.push_back(elem.vertex(c).index());
-                outElements.push_back(outElement);
+            if (boundary) {
+                auto bdry = mesh.boundary();
+                m_numNodes = bdry.numNodes();
+                m_numElements = bdry.numElements();
+                for (size_t i = 0; i < m_numNodes; ++i)
+                    outNodes.emplace_back(OutVertex(bdry.vertex(i).volumeVertex()->p));
+                OutElement outElement;
+                for (size_t i = 0; i < m_numElements; ++i) {
+                    outElement.clear();
+                    auto elem = bdry.element(i);
+                    for (size_t c = 0; c < elem.numVertices(); ++c)
+                        outElement.push_back(elem.vertex(c).index());
+                    outElements.push_back(outElement);
+                }
+            }
+            else {
+                for (size_t i = 0; i < m_numNodes; ++i)
+                    outNodes.emplace_back(OutVertex(mesh.vertex(i)->p));
+                OutElement outElement;
+                for (size_t i = 0; i < m_numElements; ++i) {
+                    outElement.clear();
+                    auto elem = mesh.element(i);
+                    for (size_t c = 0; c < elem.numVertices(); ++c)
+                        outElement.push_back(elem.vertex(c).index());
+                    outElements.push_back(outElement);
+                }
             }
 
             MESH_IO::save(m_outStream, outNodes, outElements, MESH_IO::FMT_MSH);
