@@ -136,6 +136,23 @@ public:
         return m_d.template selfadjointView<Eigen::Upper>() * in;
     }
 
+    template<typename Real2, size_t N, class SM>
+    SymmetricMatrix<N, FlattenedRank2Tensor>
+    doubleContract(const SymmetricMatrixBase<Real2, N, SM> &b) const {
+        SymmetricMatrix<N, FlattenedRank2Tensor> result;
+        for (size_t i = 0; i < _Dim; ++i) {
+            for (size_t j = 0; j < _Dim; ++j) {
+                result(i, j) = 0;
+                for (size_t k = 0; k < _Dim; ++k) {
+                    for (size_t l = 0; l < _Dim; ++l) {
+                        result(i, j) += (*this)(i, j, k, l) * b(k, l);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     Real quadrupleContract(const ElasticityTensor &b) const {
         Real result = 0;
         for (size_t i = 0; i < _Dim; ++i)

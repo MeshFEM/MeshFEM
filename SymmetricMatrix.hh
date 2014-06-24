@@ -41,6 +41,16 @@ public:
     _Real maxEigenvalue() const { return eigenvalues().maxCoeff(); }
     _Real minEigenvalue() const { return eigenvalues().minCoeff(); }
 
+    _Real doubleContract(const ConstSymmetricMatrixBase &b) const {
+        _Real result(0);
+        for (size_t i = 0; i < t_N; ++i) {
+            for (size_t j = 0; j < t_N; ++j) {
+                result += operator()(i, j) * b(i, j);
+            }
+        }
+        return result;
+    }
+
     // Flattened addressing
     _Real operator[](size_t i) const {
         return (*static_cast<const _ConstSymmetricMatrix *>(this))[i];
@@ -51,6 +61,7 @@ template<typename _Real, size_t t_N, typename _SymmetricMatrix>
 class SymmetricMatrixBase : public ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> {
     typedef ConstSymmetricMatrixBase<_Real, t_N, _SymmetricMatrix> Base;
 public:
+    using Base::operator();
     _Real &operator()(size_t i, size_t j) {
         assert((i < t_N) && (j < t_N));
         return operator[](flattenIndices(t_N, i, j));
@@ -69,12 +80,19 @@ public:
         return *this;
     }
 
+    SymmetricMatrixBase &operator+=(const SymmetricMatrixBase &b) {
+        for (size_t i = 0; i < Base::flatSize(); ++i)
+            operator[](i) += b[i];
+        return *this;
+    }
+
     void clear() {
         for (size_t i = 0; i < Base::flatSize(); ++i)
             operator[](i) = 0.0;
     }
 
     // Flattened addressing
+    using Base::operator[];
     _Real  &operator[](size_t i) { return (*static_cast<_SymmetricMatrix *>(this))[i]; }
 };
 

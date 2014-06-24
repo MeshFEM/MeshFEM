@@ -1414,7 +1414,7 @@ homogenizedElasticityTensorShapeDerivative(ETensor target,
     // So the steepest descent is to evolve with
     //      v_n = diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
     // For now we just visulize the average value of
-    //      diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)> =
+    //      diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)> :=
     //      diff_ijkl DS_ijkl where
     //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
     //                 = <E e(w_ij), e(w_kl)> + [stress(w_ij)]_kl +
