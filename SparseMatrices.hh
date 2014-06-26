@@ -461,4 +461,64 @@ private:
     cholmod_dense  *m_b;
 };
 
+// TODO: get documented version from Laptop...
+template<typename _Real, class _Factorizer = UmfpackFactorizer>
+class ConstrainedSystem {
+public:
+    ConstrainedSystem() : m_cached(false), m_C(NULL), m_CFactors(NULL) { }
+
+    typedef TripletMatrix<Triplet<_Real> > TMatrix;
+    // Side effect: sorts C
+    void setSystem(TMatrix &C, const std::vector<_Real> &constraintRHS) {
+        m_constraintRHS = constraintRHS;
+        clear();
+        m_C = new SuiteSparseMatrix(C);
+    }
+
+    bool cached() const { return m_cached; }
+
+    // Solve K u = f under the constraints (e.g. dirichlet, no rigid motion)
+    template<class _Vec>
+    void solve(const _Vec &f, std::vector<_Real> &u) {
+        if (m_C == NULL) throw std::runtime_error("No system to solve");
+
+        // Size with lagrange multiplier rows
+        size_t numDoFs = f.size();
+        size_t fullSize = numDoFs + m_constraintRHS.size();
+        if (fullSize != m_C->m) throw std::runtime_error("Bad RHS");
+        // Pad with constraint RHS (zero for no rigid motion
+        // constraints, m_dirichletRHS for dirichlet constraints)
+        std::vector<_Real> b(fullSize, 0.0);
+        for (size_t i = 0; i < numDoFs; ++i)
+            b[i] = f[i];
+        for (size_t i = 0; i < m_constraintRHS.size(); ++i)
+            b[numDoFs + i] = m_constraintRHS[i];
+
+        if (!m_cached) {
+            assert(m_CFactors == NULL);
+            m_CFactors = new _Factorizer(*m_C);
+            m_cached = true;
+        }
+
+        u.resize(fullSize);
+        m_CFactors->solve(b, u);
+        u.resize(numDoFs);
+    }
+
+    void clear() {
+        m_cached = false;
+        delete m_C;
+        delete m_CFactors;
+        m_C = NULL;
+        m_CFactors = NULL;
+    }
+
+    ~ConstrainedSystem() { clear(); }
+private:
+    bool m_cached;
+    std::vector<_Real> m_constraintRHS;
+    SuiteSparseMatrix *m_C;
+    _Factorizer *m_CFactors;
+};
+
 #endif /* end of include guard: SPARSEMATRICES_HH */
