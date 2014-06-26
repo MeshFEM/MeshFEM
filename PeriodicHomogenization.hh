@@ -40,7 +40,7 @@ namespace PeriodicHomogenization3D {
             ETensor Econtrib;
             for (size_t i = 0; i < 6; ++i)
                 sim.elementStress(ei, w_ij[i], Econtrib.DRowAsSymMatrix(i));
-            Econtrib += mesh.element(ei)->elasticityTensor();
+            Econtrib += mesh.element(ei)->E();
             Econtrib *= mesh.element(ei)->volume();
             Eh += Econtrib;
         }
@@ -59,7 +59,7 @@ namespace PeriodicHomogenization3D {
         //         for (size_t kl = ij; kl < 6; ++kl) {
         //             sim.elementStrain(ei, w_ij[kl], we_kl);
         //             we_kl += SMatrix::CanonicalBasis(kl);
-        //             EhE.D(ij, kl) += e->volume() * (e->elasticityTensor().
+        //             EhE.D(ij, kl) += e->volume() * (e->E().
         //                     doubleContract(we_ij).doubleContract(we_kl));
         //         }
         //     }
@@ -93,8 +93,8 @@ namespace PeriodicHomogenization3D {
                 for (size_t kl = ij; kl < 6; ++kl) {
                     sim.elementStrain(ei, w_ij[kl], we_kl);
                     we_kl += SMatrix::CanonicalBasis(kl);
-                    DS.D(ij, kl) = e->elasticityTensor().doubleContract(we_ij)
-                                                        .doubleContract(we_kl);
+                    DS.D(ij, kl) = e->E().doubleContract(we_ij)
+                                         .doubleContract(we_kl);
                 }
             }
             Real vn = diff.quadrupleContract(DS);

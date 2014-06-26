@@ -15,11 +15,11 @@ mesh_convert: $(CONVERT_OBJS)
 TestPeriodicHomogenization: $(PERHOMO_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
-%.o: %.cpp Makefile
-	$(CXX) -c $(CPPFLAGS) $< -o $@
+%.o: %.cc Makefile
+	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 %.o: %.c Makefile
-	$(CC) -c $(CPPFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@
 
 depend:
 	@touch Makefile.depend;

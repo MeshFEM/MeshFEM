@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //  A "half-face" tet data structure with explicit representations for vertices,
-//  tets, and faces (but not edges). The per-entity connectivity data is of
+//  faces, and tets (but not edges). The per-entity connectivity data is of
 //  constant size and mesh traversal can be done in constant time. This is a
 //  modification of the Compact Half-Face (CHF) data structure:
 //
@@ -74,19 +74,14 @@
 #include <vector>
 #include <cassert>
 #include "Geometry.hh"
-
-// Special data type that causes no per-entity storage for each entity it is
-// assigned to.
-// This exact type must be used because empty structs actually have nonzero
-// size. By comparing against this type, we explicitly avoid allocating
-// instances of it.
-class TMEmptyData { };
+#include "Handle.hh"
 
 template<class VertexData, class HalfFaceData, class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData,
          class BoundaryFaceData>
 class TetMesh {
 public:
+    // Constructor from tetrahedron soup.
     template<typename Tets>
     TetMesh(const Tets &tets, size_t nVertices);
         
@@ -94,21 +89,24 @@ public:
     size_t numHalfFaces() const { return O.size(); }
     size_t numTets()      const { return V.size() / 4; }
 
-    // For volume meshes, tets are elements and vertices are nodes.
-    size_t numElements() const { return numTets(); }
-    size_t numNodes() const { return numVertices(); }
-
     size_t numBoundaryVertices()  const { return bV.size(); }
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
 
     // Entity handles (declared out-of-line in TetMesh.inl).
-    class VertexHandle;           class ConstVertexHandle;
-    class HalfFaceHandle;         class ConstHalfFaceHandle;
-    class TetHandle;              class ConstTetHandle;
-    class BoundaryVertexHandle;   class ConstBoundaryVertexHandle;
-    class BoundaryHalfEdgeHandle; class ConstBoundaryHalfEdgeHandle;
-    class BoundaryFaceHandle;     class ConstBoundaryFaceHandle;
+    template<template<class, class, class, class> class _HType> class   VHandle;
+    template<template<class, class, class, class> class _HType> class  HFHandle;
+    template<template<class, class, class, class> class _HType> class   THandle;
+    template<template<class, class, class, class> class _HType> class  BVHandle;
+    template<template<class, class, class, class> class _HType> class BHEHandle;
+    template<template<class, class, class, class> class _HType> class  BFHandle;
+
+    typedef   VHandle<Handle>           VertexHandle; typedef   VHandle<ConstHandle> ConstVertexHandle;
+    typedef  HFHandle<Handle>         HalfFaceHandle; typedef  HFHandle<ConstHandle> ConstHalfFaceHandle;
+    typedef   THandle<Handle>              TetHandle; typedef   THandle<ConstHandle> ConstTetHandle;
+    typedef  BVHandle<Handle>   BoundaryVertexHandle; typedef  BVHandle<ConstHandle> ConstBoundaryVertexHandle;
+    typedef BHEHandle<Handle> BoundaryHalfEdgeHandle; typedef BHEHandle<ConstHandle> ConstBoundaryHalfEdgeHandle;
+    typedef  BFHandle<Handle>     BoundaryFaceHandle; typedef  BFHandle<ConstHandle> ConstBoundaryFaceHandle;
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
@@ -126,12 +124,7 @@ public:
              BoundaryFaceHandle     boundaryFace(size_t i)       { return          BoundaryFaceHandle(i, *this); }
         ConstBoundaryFaceHandle     boundaryFace(size_t i) const { return     ConstBoundaryFaceHandle(i, *this); }
 
-         VertexHandle node(size_t i)       { return vertex(i); }
-    ConstVertexHandle node(size_t i) const { return vertex(i); }
-         TetHandle element(size_t i)       { return tet(i); }
-    ConstTetHandle element(size_t i) const { return tet(i); }
-
-    ////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
     // Container iterator access
     ////////////////////////////////////////////////////////////////////////////
                    VertexHandle             vertex_begin()       { return                VertexHandle(0,                      *this); }
@@ -265,6 +258,11 @@ public:
     BoundaryMesh boundary()            { return BoundaryMesh(*this); }
     ConstBoundaryMesh boundary() const { return ConstBoundaryMesh(*this); }
 
+    template<class Mesh, class Subtype, class ConstSubtype, class Data>
+    friend class Handle;
+    template<class Mesh, class Subtype, class ConstSubtype, class Data>
+    friend class ConstHandle;
+
 private:
     std::vector<VertexData>           m_vertexData;
     std::vector<HalfFaceData>         m_halfFaceData;
@@ -324,9 +322,9 @@ private:
         return Vb[v];
     }
 
-    // Arbitrary halfFace incident on V (though guaranteed to be a boundary face
+    // Arbitrary halfFace incident on v (though guaranteed to be a boundary face
     // if v is on the boundary).
-    int m_halfFaceofVertex(int v) const {
+    int m_halfFaceOfVertex(int v) const {
         assert(size_t(v) < VH.size());
         return VH[v];
     }
@@ -496,86 +494,6 @@ private:
         assert(size_t(bf) < numBoundaryFaces() && e >= 0 && e < 3);
         return 3 * bf + e;
     }
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Handle base classes: an index-based bidirectional iterator with some
-    // added features. Subclasses will implement entity-dependent traversal.
-    ////////////////////////////////////////////////////////////////////////////
-    // Forward declare ConstHandle since Handle must referece it.
-    template<class Subtype, class ConstSubtype, class Data>
-    class ConstHandle;
-
-    template<class Subtype, class ConstSubtype, class Data>
-    class Handle {
-    public:
-        typedef Data value_type;
-
-        typedef ConstHandle<Subtype, ConstSubtype, Data> _ConstHandle;
-
-        Handle(int idx, TetMesh &mesh) : m_idx(idx), m_mesh(mesh) { }
-        operator bool() const { return static_cast<const Subtype *>(this)->valid(); }
-        bool sameMesh(const Handle &h)         const { return &m_mesh == &(h.m_mesh); }
-        bool sameMesh(const _ConstHandle &h)   const { return &m_mesh == &(h.m_mesh); }
-        bool operator==(const Handle &h)       const { return sameMesh(h) && m_idx == h.m_idx; }
-        bool operator==(const _ConstHandle &h) const { return sameMesh(h) && m_idx == h.m_idx; }
-        bool operator!=(const Handle &h)       const { return !(*this == h); }
-        bool operator!=(const _ConstHandle &h) const { return !(*this == h); }
-
-        // Allow assignment between handles on the same mesh
-        Handle &operator=(const Handle &h)       { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-        Handle &operator=(const _ConstHandle &h) { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-        Handle &operator++() { ++m_idx; return *this; }
-        Handle &operator--() { ++m_idx; return *this; }
-        Handle &operator++(int) { Handle old(*this); ++(*this); return old; }
-        Handle &operator--(int) { Handle old(*this); --(*this); return old; }
-
-        value_type &operator*()  const { return *(static_cast<const Subtype *>(this)->dataPtr()); }
-        value_type *operator->() const { return   static_cast<const Subtype *>(this)->dataPtr(); }
-
-        int index() const { return m_idx; }
-        operator ConstSubtype() const { return ConstSubtype(m_idx, m_mesh); }
-
-        friend class ConstHandle<Subtype, ConstSubtype, Data>;
-    protected:
-        int m_idx;
-        TetMesh &m_mesh;
-    };
-
-    template<class Subtype, class ConstSubtype, class Data>
-    class ConstHandle {
-    public:
-        typedef Data value_type;
-
-        typedef Handle<Subtype, ConstSubtype, Data> _Handle;
-
-        ConstHandle(int idx, const TetMesh &mesh) : m_idx(idx), m_mesh(mesh) { }
-        operator bool() const { return static_cast<const ConstSubtype *>(this)->valid(); }
-        bool sameMesh(const _Handle &h)       const { return &m_mesh == &(h.m_mesh); }
-        bool sameMesh(const ConstHandle &h)   const { return &m_mesh == &(h.m_mesh); }
-        bool operator==(const _Handle &h)     const { return sameMesh(h) && m_idx == h.m_idx; }
-        bool operator==(const ConstHandle &h) const { return sameMesh(h) && m_idx == h.m_idx; }
-        bool operator!=(const _Handle &h)     const { return !(*this == h); }
-        bool operator!=(const ConstHandle &h) const { return !(*this == h); }
-
-        // Allow assignment between handles on the same mesh
-        ConstHandle &operator=(const _Handle &h)     { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-        ConstHandle &operator=(const ConstHandle &h) { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-        ConstHandle &operator++() { ++m_idx; return *this; }
-        ConstHandle &operator--() { ++m_idx; return *this; }
-        ConstHandle &operator++(int) { ConstHandle old(*this); ++(*this); return old; }
-        ConstHandle &operator--(int) { ConstHandle old(*this); --(*this); return old; }
-
-        const value_type &operator*()  const { return *(static_cast<const ConstSubtype *>(this)->dataPtr()); }
-        const value_type *operator->() const { return   static_cast<const ConstSubtype *>(this)->dataPtr(); }
-
-        int index() const { return m_idx; }
-
-        friend class Handle<Subtype, ConstSubtype, Data>;
-    protected:
-        int m_idx;
-        const TetMesh &m_mesh;
-    };
-
 };
 
 #include "TetMesh.inl"

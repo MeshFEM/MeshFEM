@@ -11,4 +11,4 @@ LIBS=-L$(BOOST_LIB) -lboost_program_options-mt \
 
 CXX=clang++
 CC=clang
-CPPFLAGS=-std=libc++
+CPPFLAGS=

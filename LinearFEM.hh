@@ -80,7 +80,31 @@ namespace LinearFEM3D {
     public:
         typedef TetMesh<VData,  HFData,  TData,
                         BVData, BHEData, BFData> Base;
+
         typedef Point3D Point;
+        static constexpr size_t _N = 3;
+
+        // FEM-named types and accessors:
+        // For volume meshes, elements are tets and nodes are volume vertices
+        // On the boundary, elements are faces and nodes are boundary vertices
+        typedef VData  NodeData;
+        typedef TData  ElementData;
+        typedef BVData BoundaryNodeData;
+        typedef BFData BoundaryElementData;
+
+        size_t numElements()         const { return Base::numTets(); }
+        size_t numNodes()            const { return Base::numVertices(); }
+        size_t numBoundaryElements() const { return Base::numBoundaryFaces(); }
+        size_t numBoundaryNodes()    const { return Base::numBoundaryVertices(); }
+
+        typename Base::     VertexHandle                  node(size_t i)       { return Base::vertex(i); }
+        typename Base::ConstVertexHandle                  node(size_t i) const { return Base::vertex(i); }
+        typename Base::     TetHandle                  element(size_t i)       { return Base::tet(i); }
+        typename Base::ConstTetHandle                  element(size_t i) const { return Base::tet(i); }
+        typename Base::     BoundaryVertexHandle  boundaryNode(size_t i)       { return Base::boundaryVertex(i); }
+        typename Base::ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return Base::boundaryVertex(i); }
+        typename Base::     BoundaryFaceHandle boundaryElement(size_t i)       { return Base::boundaryFace(i); }
+        typename Base::ConstBoundaryFaceHandle boundaryElement(size_t i) const { return Base::boundaryFace(i); }
 
         template<typename Tets, typename Vertices>
         Mesh(const Tets &tets, const Vertices &vertices)
