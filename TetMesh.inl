@@ -88,7 +88,7 @@ public:
      VHandle<_HType> volumeVertex() const { return VHandle<_HType>(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
     // Get some incident boundary face. This works because the incident half-face
     // for a vertex on the boundary is guaranteed to be on the boundary.
-     BFHandle<_HType>        face() const { assert(valid()); BFHandle<_HType> bf = vertex().halfFace().boundaryFace(); assert(bf); return bf; }
+     BFHandle<_HType>        face() const { assert(valid()); BFHandle<_HType> bf = volumeVertex().halfFace().boundaryFace(); assert(bf); return bf; }
     BHEHandle<_HType>    halfEdge() const { return BHEHandle<_HType>(m_mesh.m_bdryHEOfBdryVertex(m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
@@ -160,7 +160,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
-// Build index tables
+// Build index tables from tetrahedron soup
 ////////////////////////////////////////////////////////////////////////////////
 #include <map>
 template<class VertexData,         class HalfFaceData,         class TetData,
@@ -201,6 +201,8 @@ TetMesh(const Tets &tets, size_t nVertices) {
                 O[hfO] = hf;
                 O[hf] = hfO;
             }
+            // Note: the following can't actually detect non-manifold geometry
+            // because of the halfEdgeForEdge.erase(it) call...
             else throw nonManifold;
             halfFaceForFace.erase(it);
         }
@@ -210,20 +212,18 @@ TetMesh(const Tets &tets, size_t nVertices) {
     }
 
     // Boundary Extraction
-    // Boundary faces are those with no opposites--create explicit entries for
-    // these in the bO array
+    // Boundary faces are those with no opposites--the ones left in
+    // halfFaceForFace. Create explicit entries for these in the bO array
     // Each vertex of a boundary face is a boundary vertex--create explicit
     // entries for these in the bV array and fill out Vb mapping vertex indices
     // to associated boundary vertex index.
-    // Also start filling out half-face incidence VH since VH[v] is required to
-    // be a boundary face if v is a boundary vertex
-    bO.reserve(halfFaceForFace.size());
-    bO.clear();
+    // Also start filling out half-face incidence table VH since VH[v] is
+    // required to be a boundary face if v is a boundary vertex
+    bO.reserve(halfFaceForFace.size()), bO.clear();
     Vb.assign(nVertices, -1);
     bV.clear();
     VH.assign(nVertices, -1);
-    for (FaceMap::iterator it = halfFaceForFace.begin();
-            it != halfFaceForFace.end(); ++it) {
+    for (auto it = halfFaceForFace.begin(); it != halfFaceForFace.end(); ++it) {
         int bhf = it->second;
         assert(O[bhf] == -1);
         bO.push_back(bhf);
@@ -240,7 +240,6 @@ TetMesh(const Tets &tets, size_t nVertices) {
             }
         }
     }
-    assert(bO.size() == halfFaceForFace.size());
     size_t nBoundaryFaces    = bO.size();
     size_t nBoundaryVertices = bV.size();
     halfFaceForFace.clear();

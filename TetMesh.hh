@@ -167,7 +167,7 @@ public:
         size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
         size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
 
-        // For volume meshes, faces are elements and vertices are nodes.
+        // For boundary meshes, faces are elements and vertices are nodes.
         size_t numElements() const { return numFaces(); }
         size_t numNodes()    const { return numVertices(); }
 

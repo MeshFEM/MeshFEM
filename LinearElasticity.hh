@@ -24,6 +24,7 @@
 #include <SymmetricMatrix.hh>
 #include <Fields.hh>
 #include "TetMesh.hh"
+#include "TriMesh.hh"
 #include "BoundaryConditions.hh"
 #include "LinearFEM.hh"
 
@@ -210,8 +211,8 @@ namespace {
 
         void removeDirichletConditions() {
             int removeCount = 0;
-            for (size_t i = 0; i < m_mesh.numBoundaryVertices(); ++i) {
-                auto bv = m_mesh.boundaryVertex(i);
+            for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+                auto bv = m_mesh.boundaryNode(i);
                 if (bv->hasDirichlet) {
                     bv->hasDirichlet = false;
                     ++removeCount;
@@ -222,8 +223,8 @@ namespace {
         }
 
         void removeNeumanConditions() {
-            for (size_t i = 0; i < m_mesh.numBoundaryFaces(); ++i)
-                m_mesh.boundaryFace(i)->neumannTraction = _Point::Zero();
+            for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
+                m_mesh.boundaryElement(i)->neumannTraction = _Point::Zero();
         }
 
         void applyNoRigidMotionConstraint() {
@@ -424,6 +425,59 @@ namespace LinearElasticity3D {
     typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
     typedef SymmetricMatrix<3, FlattenedSymmetricMatrix> SMatrix;
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Elasticity ElementData knows how to compute per-elem strain, stress, load
+    // t_ETensorGetter: policy for getting the elasticity tensor. The default
+    //                  policy is to actually store a full tensor on each tet.
+    ////////////////////////////////////////////////////////////////////////////
+    struct ETensorStoreGetter {
+        ETensorStoreGetter() : m_E(1, 0) { }
+        const ETensor &operator()() const { return m_E; }
+    private:
+        ETensor m_E;
+    };
+    template<class t_ETensorGetter = ETensorStoreGetter>
+    struct ElementData;
+
+    struct BoundaryNodeData {
+        BoundaryNodeData() : hasDirichlet(false) { }
+        bool hasDirichlet;
+        Vector3D dirichletDisplacement;
+    };
+
+    struct BoundaryElementData : LinearFEM3D::BoundaryElementData {
+        BoundaryElementData() : neumannTraction(Vector3D::Zero()) { }
+        // Get the load this triangle's Neumann condition places on its corner
+        // nodes. Note: the integral of a picewise constant function, f, times
+        // the nodes' shape functions is f * A / 3
+        Vector3D nodalNeumannLoad() const {
+            return neumannTraction * (LinearFEM3D::BoundaryElementData::area() / 3);
+        }
+
+        Vector3D neumannTraction;
+    };
+
+    template<class VData  = LinearFEM3D::NodeData,
+             class TData  = ElementData<>,
+             class BVData = BoundaryNodeData,
+             class BFData = BoundaryElementData>
+    using Mesh = LinearFEM3D::Mesh<VData, TMEmptyData, TData, BVData, TMEmptyData, BFData>;
+
+    template<class VData  = LinearFEM3D::NodeData,
+             class TData  = ElementData<>,
+             class BVData = BoundaryNodeData,
+             class BFData = BoundaryElementData>
+    using Simulator = SimulatorND<Mesh<VData, TData, BVData, BFData> >;
+}
+
+namespace LinearElasticity2D {
+    typedef ElasticityTensor<Real, 2>     ETensor;
+    typedef ScalarField<Real>             SField;
+    typedef VectorField<Real, 2>          VField;
+    typedef SymmetricMatrixField<Real, 2> SMField;
+    typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
+    typedef SymmetricMatrix<2, FlattenedSymmetricMatrix> SMatrix;
+
     ///////////////////////////////////////////////////////////////////////////
     // Elasticity TetData knows how to compute per-element strain, stress, load
     // t_ETensorGetter: policy for getting the elasticity tensor. The default
@@ -436,90 +490,38 @@ namespace LinearElasticity3D {
         ETensor m_E;
     };
     template<class t_ETensorGetter = ETensorStoreGetter>
-    struct TetData;
+    struct ElementData;
 
-    struct BoundaryVertexData {
-        BoundaryVertexData() : hasDirichlet(false) { }
+    struct BoundaryNodeData {
+        BoundaryNodeData() : hasDirichlet(false) { }
         bool hasDirichlet;
-        Vector3D dirichletDisplacement;
+        Vector2D dirichletDisplacement;
     };
 
-    struct BoundaryFaceData : LinearFEM3D::BoundaryFaceData {
-        BoundaryFaceData() : neumannTraction(Vector3D::Zero()) { }
-        // Get the load this triangle's Neumann condition places on its corner
+    struct BoundaryElementData : LinearFEM2D::BoundaryElementData<Point2D> {
+        typedef LinearFEM2D::BoundaryElementData<Point2D> Base;
+        BoundaryElementData() : neumannTraction(Vector2D::Zero()) { }
+        // Get the load this edge's Neumann condition places on its corner
         // nodes. Note: the integral of a picewise constant function, f, times
-        // the nodes' shape functions is f * A / 3
-        Vector3D nodalNeumannLoad() const {
-            return neumannTraction * (LinearFEM3D::BoundaryFaceData::area() / 3);
+        // the nodes' shape functions is f * A / 2
+        Vector2D nodalNeumannLoad() const {
+            return neumannTraction * (Base::area() / 2);
         }
 
-        Vector3D neumannTraction;
+        Vector2D neumannTraction;
     };
 
-    template<class VData  = LinearFEM3D::VertexData,
-             class TData  = TetData<>,
-             class BVData = BoundaryVertexData,
-             class BFData = BoundaryFaceData>
-    using Mesh = LinearFEM3D::Mesh<VData, TMEmptyData, TData, BVData, TMEmptyData, BFData>;
+    template<class VData  = LinearFEM2D::NodeData<Point2D>,
+             class TData  = ElementData<Point2D>,
+             class BVData = BoundaryNodeData,
+             class BEData = BoundaryElementData>
+    using Mesh = LinearFEM2D::Mesh<VData, TMEmptyData, TData, BVData, BEData>;
 
-    template<class VData  = LinearFEM3D::VertexData,
-             class TData  = TetData<>,
-             class BVData = BoundaryVertexData,
-             class BFData = BoundaryFaceData>
-    using Simulator = SimulatorND<Mesh<VData, TData, BVData, BFData> >;
-}
-
-namespace LinearElasticity2D {
-    // typedef ElasticityTensor<Real, 2>     ETensor;
-    // typedef ScalarField<Real>             SField;
-    // typedef VectorField<Real, 2>          VField;
-    // typedef SymmetricMatrixField<Real, 2> SMField;
-    // typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
-    // typedef SymmetricMatrix<2, FlattenedSymmetricMatrix> SMatrix;
-
-    // ///////////////////////////////////////////////////////////////////////////
-    // // Elasticity TetData knows how to compute per-element strain, stress, load
-    // // t_ETensorGetter: policy for getting the elasticity tensor. The default
-    // //                  policy is to actually store a full tensor on each tet.
-    // ///////////////////////////////////////////////////////////////////////////
-    // struct ETensorStoreGetter {
-    //     ETensorStoreGetter() : m_E(1, 0) { }
-    //     const ETensor &operator()() const { return m_E; }
-    // private:
-    //     ETensor m_E;
-    // };
-    // template<class t_ETensorGetter = ETensorStoreGetter>
-    // struct TriData;
-
-    // struct BoundaryVertexData {
-    //     BoundaryVertexData() : hasDirichlet(false) { }
-    //     bool hasDirichlet;
-    //     Vector2D dirichletDisplacement;
-    // };
-
-    // struct BoundaryEdgeData : LinearFEM2D::BoundaryEdgeData {
-    //     BoundaryEdgeData() : neumannTraction(Vector2D::Zero()) { }
-    //     // Get the load this edge's Neumann condition places on its corner
-    //     // nodes. Note: the integral of a picewise constant function, f, times
-    //     // the nodes' shape functions is f * A / 2
-    //     Vector2D nodalNeumannLoad() const {
-    //         return neumannTraction * (LinearFEM2D::BoundaryEdgeData::area() / 2);
-    //     }
-
-    //     Vector2D neumannTraction;
-    // };
-
-    // template<class VData  = LinearFEM2D::VertexData,
-    //          class TData  = TriData<>,
-    //          class BVData = BoundaryVertexData,
-    //          class BFData = BoundaryEdgeData>
-    // using Mesh = LinearFEM2D::Mesh<VData, TMEmptyData, TData, BVData, BEData>;
-
-    // template<class VData  = LinearFEM2D::VertexData,
-    //          class TData  = TriData<>,
-    //          class BVData = BoundaryVertexData,
-    //          class BEData = BoundaryEdge>
-    // using Simulator = SimulatorND<Mesh<VData, TData, BVData, BEData> >;
+    template<class VData  = LinearFEM2D::NodeData<Point2D>,
+             class TData  = ElementData<Point2D>,
+             class BVData = BoundaryNodeData,
+             class BEData = BoundaryElementData>
+    using Simulator = SimulatorND<Mesh<VData, TData, BVData, BEData> >;
 }
 
 #include "LinearElasticity.inl"

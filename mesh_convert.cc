@@ -1,5 +1,6 @@
 #include "Geometry.hh"
 #include "TetMesh.hh"
+#include "TriMesh.hh"
 #include "MeshIO.hh"
 #include "tools/subdivide.hh"
 
@@ -131,15 +132,24 @@ int main(int argc, const char *argv[])
         }
     }
     else if (type == MESH_IO::MESH_TRI) {
-        if (args.count("subdivide")) {
-            // We need to update the triangle halfedge to have an interface
-            // compatible with the tet boundary halfedge.
-            throw runtime_error("Tri halfedge doesn't yet support subdivision.");
+        typedef TriMesh<VertexData, HalfEdgeData, TMEmptyData, VertexData,
+                        TMEmptyData> Mesh;
+        Mesh mesh(inElements, inVertices.size());
+        // Store position on both volume and boundary vertices for ease of use.
+        for (size_t vi = 0; vi < mesh.numVertices(); ++vi) {
+            auto v = mesh.vertex(vi);
+            v->p = inVertices[vi];
+            if (v.isBoundary()) v.boundaryVertex()->p = inVertices[vi];
         }
 
-        // Output is the unmodified triangle mesh
-        outVertices = inVertices;
-        outElements = inElements;
+        if (args.count("subdivide")) {
+            subdivide(mesh, outVertices, outElements);
+        }
+        else {
+            // Output is the unmodified triangle mesh
+            outVertices = inVertices;
+            outElements = inElements;
+        }
     }
     else {
         throw runtime_error("Unrecognized mesh type.");

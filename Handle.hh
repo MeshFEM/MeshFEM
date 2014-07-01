@@ -33,16 +33,16 @@ public:
 
     Handle(int idx, Mesh &mesh) : m_idx(idx), m_mesh(mesh) { }
     operator bool() const { return static_cast<const Subtype *>(this)->valid(); }
-    bool sameMesh(const Handle &h)         const { return &m_mesh == &(h.m_mesh); }
-    bool sameMesh(const _ConstHandle &h)   const { return &m_mesh == &(h.m_mesh); }
-    bool operator==(const Handle &h)       const { return sameMesh(h) && m_idx == h.m_idx; }
-    bool operator==(const _ConstHandle &h) const { return sameMesh(h) && m_idx == h.m_idx; }
+    bool sameMesh(const Handle &h)         const { return &m_mesh == &(h.mesh()); }
+    bool sameMesh(const _ConstHandle &h)   const { return &m_mesh == &(h.mesh()); }
+    bool operator==(const Handle &h)       const { return sameMesh(h) && index() == h.index(); }
+    bool operator==(const _ConstHandle &h) const { return sameMesh(h) && index() == h.index(); }
     bool operator!=(const Handle &h)       const { return !(*this == h); }
     bool operator!=(const _ConstHandle &h) const { return !(*this == h); }
 
     // Allow assignment between handles on the same mesh
-    Handle &operator=(const Handle &h)       { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-    Handle &operator=(const _ConstHandle &h) { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
+    Handle &operator=(const Handle &h)       { assert(sameMesh(h)); m_idx = h.index(); return *this; }
+    Handle &operator=(const _ConstHandle &h) { assert(sameMesh(h)); m_idx = h.index(); return *this; }
     Handle &operator++() { ++m_idx; return *this; }
     Handle &operator--() { ++m_idx; return *this; }
     Handle &operator++(int) { Handle old(*this); ++(*this); return old; }
@@ -51,10 +51,11 @@ public:
     value_type &operator*()  const { return *m_guardedGetPtr(); }
     value_type *operator->() const { return  m_guardedGetPtr(); }
 
+          Mesh &mesh()       { return m_mesh; }
+    const Mesh &mesh() const { return m_mesh; }
+
     int index() const { return m_idx; }
     operator ConstSubtype() const { return ConstSubtype(m_idx, m_mesh); }
-
-    friend class ConstHandle<Mesh, Subtype, ConstSubtype, Data>;
 protected:
     Data *m_guardedGetPtr() const {
         const Subtype *self = static_cast<const Subtype *>(this);
@@ -77,27 +78,27 @@ public:
 
     ConstHandle(int idx, const Mesh &mesh) : m_idx(idx), m_mesh(mesh) { }
     operator bool() const { return static_cast<const ConstSubtype *>(this)->valid(); }
-    bool sameMesh(const _Handle &h)       const { return &m_mesh == &(h.m_mesh); }
-    bool sameMesh(const ConstHandle &h)   const { return &m_mesh == &(h.m_mesh); }
-    bool operator==(const _Handle &h)     const { return sameMesh(h) && m_idx == h.m_idx; }
-    bool operator==(const ConstHandle &h) const { return sameMesh(h) && m_idx == h.m_idx; }
+    bool sameMesh(const _Handle &h)       const { return &m_mesh == &(h.mesh()); }
+    bool sameMesh(const ConstHandle &h)   const { return &m_mesh == &(h.mesh()); }
+    bool operator==(const _Handle &h)     const { return sameMesh(h) && index() == h.index(); }
+    bool operator==(const ConstHandle &h) const { return sameMesh(h) && index() == h.index(); }
     bool operator!=(const _Handle &h)     const { return !(*this == h); }
     bool operator!=(const ConstHandle &h) const { return !(*this == h); }
 
     // Allow assignment between handles on the same mesh
-    ConstHandle &operator=(const _Handle &h)     { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-    ConstHandle &operator=(const ConstHandle &h) { assert(sameMesh(h)); m_idx = h.m_idx; return *this; }
-    ConstHandle &operator++() { ++m_idx; return *this; }
-    ConstHandle &operator--() { ++m_idx; return *this; }
-    ConstHandle &operator++(int) { ConstHandle old(*this); ++(*this); return old; }
-    ConstHandle &operator--(int) { ConstHandle old(*this); --(*this); return old; }
+    ConstHandle &operator=(const _Handle &h)     { assert(sameMesh(h)); m_idx = h.index(); return *this; }
+    ConstHandle &operator=(const ConstHandle &h) { assert(sameMesh(h)); m_idx = h.index(); return *this; }
+    ConstHandle &operator++() { assert(bool(*this)); ++m_idx; return *this; }
+    ConstHandle &operator--() { assert(bool(*this)); ++m_idx; return *this; }
+    ConstHandle &operator++(int) { assert(bool(*this)); ConstHandle old(*this); ++(*this); return old; }
+    ConstHandle &operator--(int) { assert(bool(*this)); ConstHandle old(*this); --(*this); return old; }
 
     const value_type &operator*()  const { return *m_guardedGetPtr(); }
     const value_type *operator->() const { return  m_guardedGetPtr(); }
 
-    int index() const { return m_idx; }
+    const Mesh &mesh() const { return m_mesh; }
 
-    friend class Handle<Mesh, Subtype, ConstSubtype, Data>;
+    int index() const { return m_idx; }
 protected:
     const Data *m_guardedGetPtr() const {
         const ConstSubtype *self = static_cast<const ConstSubtype *>(this);
