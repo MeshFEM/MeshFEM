@@ -6,12 +6,14 @@
 #include <vector>
 #include <string>
 
-namespace PeriodicHomogenization3D {
-    using namespace LinearElasticity3D;
-
+namespace PeriodicHomogenization {
     template<class _Simulator>
-    void solveCellProblems(std::vector<VField> &w_ij, _Simulator &sim,
-            MSHFieldWriter *mshWriter = NULL) {
+    void solveCellProblems(std::vector<typename _Simulator::VField> &w_ij,
+                           _Simulator &sim, MSHFieldWriter *mshWriter = NULL)
+    {
+        typedef typename _Simulator::VField  VField;
+        typedef typename _Simulator::SMatrix SMatrix;
+
         sim.applyPeriodicConditions();
         sim.applyNoRigidMotionConstraint();
 
@@ -27,17 +29,19 @@ namespace PeriodicHomogenization3D {
     }
 
     template<class _Simulator>
-    ETensor homogenizedElasticityTensor(const std::vector<VField> &w_ij,
-                                        const _Simulator &sim) {
+    typename _Simulator::ETensor homogenizedElasticityTensor(
+            const std::vector<typename _Simulator::VField> &w_ij,
+            const _Simulator &sim)
+    {
         const auto &mesh = sim.mesh();
 
         // Compute homogenized elasticity tensor (stress-like version):
         // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dV
         // Where |Y| = Yvol = periodic cell (grid bounding box) volume
         //        w  = periodic base cell geometry
-        ETensor Eh;
+        typename _Simulator::ETensor Eh;
         for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
-            ETensor Econtrib;
+            typename _Simulator::ETensor Econtrib;
             for (size_t i = 0; i < 6; ++i)
                 sim.elementStress(ei, w_ij[i], Econtrib.DRowAsSymMatrix(i));
             Econtrib += mesh.element(ei)->E();
@@ -49,7 +53,7 @@ namespace PeriodicHomogenization3D {
         // // The following "energy-like" version is equivalent to the more efficient
         // // "stress-like" version above:
         // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
-        // ETensor EhE;
+        // typename _Simulator::ETensor EhE;
         // SMatrix we_ij, we_kl;
         // for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
         //     auto e = mesh.element(ei);
@@ -70,8 +74,15 @@ namespace PeriodicHomogenization3D {
     }
 
     template<class _Simulator>
-    SField homogenizedElasticityTensorShapeDerivative(const ETensor &target,
-            const std::vector<VField> &w_ij, const _Simulator &sim) {
+    typename _Simulator::SField homogenizedElasticityTensorShapeDerivative(
+            const typename _Simulator::ETensor &target,
+            const std::vector<typename _Simulator::VField> &w_ij,
+            const _Simulator &sim)
+    {
+        typedef typename _Simulator::ETensor ETensor;
+        typedef typename _Simulator::SField  SField;
+        typedef typename _Simulator::SMatrix SMatrix;
+
         const auto &mesh = sim.mesh();
         ETensor diff = target - homogenizedElasticityTensor(w_ij, sim);
         // Shape derivative evaluated on normal velocity v_n:

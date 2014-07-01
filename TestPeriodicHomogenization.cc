@@ -9,7 +9,8 @@
 #include <memory>
 
 using namespace std;
-using namespace PeriodicHomogenization3D;
+using namespace LinearElasticity3D;
+using namespace PeriodicHomogenization;
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point

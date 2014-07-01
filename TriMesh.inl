@@ -260,8 +260,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
     for (auto it = halfEdgeForEdge.begin(); it != halfEdgeForEdge.end(); ++it) {
         int vhe = it->second;
         assert(O[vhe] == -1);
-        int be = numBoundaryEdges();
-        O[vhe] = m_bdryEIdxConvUnguarded(be);
+        O[vhe] = m_bdryEIdxConvUnguarded(numBoundaryEdges());
         assert(O[vhe] < 0);
 
         // Boundary edge tip is volume half edge's tail and vice versa.
@@ -272,17 +271,18 @@ TriMesh(const Tris &tris, size_t nVertices) {
         if (Vb[ tipVV] == -1) { Vb[ tipVV] = bV.size(); bV.push_back( tipVV); }
         if (Vb[tailVV] == -1) { Vb[tailVV] = bV.size(); bV.push_back(tailVV); }
 
-        VH[tipVV] = vhe;
+        // Note: vhe's tip (the vertex it's incident on) is actually tailVV
+        VH[tailVV] = vhe;
 
         bTipTail.push_back(Vb[ tipVV]);
         bTipTail.push_back(Vb[tailVV]);
     }
     assert(bV.size() == nBoundaryVertices);
 
-    // Finish filling out VH with incoming hafl-edges
+    // Finish filling out VH with incoming half-edges
     for (size_t he = 0; he < nHalfEdges; ++he) {
-       int vtip  = m_vertexOfHE<HEVertex::TIP >(he); 
-       if (VH[ vtip] == -1) VH[ vtip] = he;
+       int vtip = m_vertexOfHE<HEVertex::TIP>(he); 
+       if (VH[vtip] == -1) VH[vtip] = he;
     }
 
     // Validate VH

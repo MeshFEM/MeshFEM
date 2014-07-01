@@ -5,14 +5,14 @@
 //  A half-edge triangle data structure with explicit representations for
 //  vertices, half edges, and triangles. The per-connectivity data is of
 //  constant size and mesh traversal can be done in constant time. This is an
-//  implementation of the corner table half-edge implementation:
+//  implementation of the corner table half-edge data structure:
 //
 //  [1] Rossignac, Jarek, Alla Safonova, and Andrzej Szymczak. "Edgebreaker on a
 //      Corner Table: A simple technique for representing and compressing
 //      triangulated surfaces." Hierarchical and geometrical methods in
 //      scientific visualization. Springer Berlin Heidelberg, 2003. 41-50.
 //
-//  This datastructure explots the duality between vertices of a triangle and
+//  This data structure exploits the duality between vertices of a triangle and
 //  their opposite half-edge within the triangle:
 //
 //        0
@@ -300,7 +300,6 @@ private:
 
         return -1;
     }
-
 };
 
 #include "TriMesh.inl"

@@ -5,7 +5,8 @@ PERHOMO_OBJS=TestPeriodicHomogenization.o
 SOURCES=TestPeriodicHomogenization.cc mesh_convert.cc
 TARGETS=mesh_convert TestPeriodicHomogenization
 
-CPPFLAGS+=-std=c++11 -O0 -fno-inline -g $(INCLUDES)
+# CPPFLAGS+=-std=c++11 -O0 -fno-inline -g $(INCLUDES)
+CPPFLAGS+=-std=c++11 -O2 $(INCLUDES)
 
 all: $(TARGETS)
 
