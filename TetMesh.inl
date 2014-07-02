@@ -66,8 +66,8 @@ public:
     
     // Note: true neighbor count can be less than 4; must check if neighbor(i)
     // is valid.
-    int numNeighbors() const { return 4; }
-    int numVertices()  const { return 4; }
+    constexpr size_t numNeighbors() const { return 4; }
+    constexpr size_t numVertices()  const { return 4; }
 
      VHandle<_HType>   vertex(size_t i) const { return  VHandle<_HType>(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
      THandle<_HType> neighbor(size_t i) const { return  THandle<_HType>(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
