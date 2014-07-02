@@ -117,7 +117,7 @@ namespace PeriodicHomogenization {
             Real vn = diff.quadrupleContract(DS);
 
             // distribute vn to all of this element's boundary faces/edges
-            for (size_t f = 0; f < 4; ++f) {
+            for (size_t f = 0; f < mesh.element(ei).numNeighbors(); ++f) {
                 auto h = mesh.element(ei).interface(f);
                 if (h.isBoundary()) {
                     auto bh = h.boundaryEntity();

@@ -115,8 +115,8 @@ public:
 
     // Note: true neighbor count can be less than 3; must check if neighbor(i)
     // is valid.
-    int numNeighbors() const { return 3; }
-    int numVertices()  const { return 3; }
+    constexpr size_t numNeighbors() const { return 3; }
+    constexpr size_t numVertices()  const { return 3; }
 
      VHandle<_HType>   vertex(size_t i) const { return  VHandle<_HType>(m_mesh.m_vertexOfTri(i, m_idx), m_mesh); }
      THandle<_HType> neighbor(size_t i) const { return  THandle<_HType>(m_mesh.m_triAdjTri(i, m_idx), m_mesh); }
