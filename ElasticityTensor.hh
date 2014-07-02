@@ -63,10 +63,39 @@ public:
             m_d(3, 3) = m_d(4, 4) = m_d(5, 5) = mu;
         }
         else {
+            // For 2D (plane strain) lambda is actually different...
+            // This can be found by inverting 2D orthotropic tensor with equal
+            // Young's moduli
+            Real lambda = (nu * E) / (1.0 - nu * nu);
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;
                                          m_d(1, 1) = lambda + 2 * mu;
             m_d(2, 2) = mu;
         }
+    }
+
+    void setOrthotropic3D(Real   Ex, Real   Ey, Real   Ez,
+                          Real nuYX, Real nuZX, Real nuZY,
+                          Real muYZ, Real muZX, Real muXY) {
+        if (_Dim != 3)
+            throw std::runtime_error("setOrthotropic3D call on non-3D tensor");
+        m_d << 1.0 / Ex, -nuYX / Ey, -nuZX / Ez,        0.0,        0.0,        0.0,
+                    0.0,   1.0 / Ey, -nuZY / Ez,        0.0,        0.0,        0.0,
+                    0.0,        0.0,   1.0 / Ez,        0.0,        0.0,        0.0,
+                    0.0,        0.0,        0.0, 1.0 / muYZ,        0.0,        0.0,
+                    0.0,        0.0,        0.0,        0.0, 1.0 / muZX,        0.0,
+                    0.0,        0.0,        0.0,        0.0,        0.0, 1.0 / muXY;
+        m_d = m_d.template selfadjointView<Eigen::Upper>();
+        m_d = m_d.inverse().eval();
+    }
+
+    void setOrthotropic2D(Real Ex, Real Ey, Real nuYX, Real muXY) {
+        if (_Dim != 2)
+            throw std::runtime_error("setOrthotropic2D call on non-2D tensor");
+        m_d << 1.0 / Ex, -nuYX / Ey,        0.0,
+                    0.0,   1.0 / Ey,        0.0,
+                    0.0,        0.0, 1.0 / muXY;
+        m_d = m_d.template selfadjointView<Eigen::Upper>();
+        m_d = m_d.inverse().eval();
     }
 
     Real operator()(size_t i, size_t j, size_t k, size_t l) const {
@@ -75,7 +104,6 @@ public:
         size_t kl = flattenIndices(_Dim, k, l);
         return D(ij, kl);
     }
-
 
     Real D(size_t i, size_t j) const {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));

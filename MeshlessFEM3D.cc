@@ -727,6 +727,10 @@ public:
         fullCellResult(22, 22) = invVol * (d55*dSqhSq + d11*dSqwSq + d33*hSqwSq)/9.;
         fullCellResult(22, 23) = invVol * ((d12 + d33)*wSqdh)/12.;
         fullCellResult(23, 23) = invVol * (d44*dSqhSq + d33*dSqwSq + d22*hSqwSq)/9.;
+
+        // std::cout << std::setprecision(8);
+        // std::cout << fullCellResult << std::endl;
+        // std::cout << std::setprecision(16);
         
         m_fullCellCached = true;
     }
@@ -1217,6 +1221,10 @@ void MeshlessFEM3D<_Model>::
 solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
                   _MSHWriter *mshWriter)
 {
+    // m_E.setOrthotropic3D(2.0, 1.0, 0.5, 0.3, 0.3, 0.3, 0.5, 0.5, 0.5);
+    // m_E.setOrthotropic3D(1.5, 1.0, 0.75, 0.3, 0.3, 0.3, 0.67, 0.5, 0.33);
+    // m_E.setOrthotropic3D(1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5);
+    // std::cout << m_E << std::endl;
     TMatrix K, T;
     std::vector<int> dofForNode;
     size_t numDOFs = m_computePeriodicDOFs(dofForNode);
