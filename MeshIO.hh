@@ -21,8 +21,9 @@
 #include <stdexcept>
 #include <iomanip>
 #include "Geometry.hh"
+#include "Types.hh"
 
-namespace MESH_IO {
+namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_MSH = 1, FMT_POLY = 2, FMT_NODE_ELE = 3,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
@@ -31,119 +32,91 @@ namespace MESH_IO {
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex
     //  Minimal vertex class for unattributed mesh I/O 
-    //  @tparam Point   3D Point Type
     *///////////////////////////////////////////////////////////////////////////
-    template<typename Point>
-    struct IOVertex {
-        private:
-            typedef typename Point::Scalar Real;
-        public:
-            typedef Real  real_type;
-            typedef Point point_type;
+    class IOVertex {
+        typedef typename Point3D::Scalar _Real;
+    public:
 
-            Point point;
+        Point3D point;
 
-            IOVertex()                       : point(0, 0, 0) { }
-            IOVertex(Real x, Real y, Real z) : point(x, y, z) { }
-            IOVertex(const Real *p)          : point(p) { }
-            IOVertex(const Point &p) : point(p) { }
+        IOVertex()                       : point(0, 0, 0) { }
+        IOVertex(Real x, Real y, Real z) : point(x, y, z) { }
+        IOVertex(const Real *p)          : point(p) { }
+        IOVertex(const Point3D &p)       : point(p) { }
+        // Padding constructor
+        IOVertex(const Point2D &p)       : point(p[0], p[1], 0) { }
 
-            void set(Real x, Real y, Real z) {
-                point[0] = x; point[1] = y; point[2] = z;
-            }
+        void set(_Real x, _Real y, _Real z) {
+            point[0] = x; point[1] = y; point[2] = z;
+        }
 
-            Real  operator[](size_t i) const { assert(i < 3); return point[i]; }
-            Real &operator[](size_t i)       { assert(i < 3); return point[i]; }
+        _Real  operator[](size_t i) const { assert(i < 3); return point[i]; }
+        _Real &operator[](size_t i)       { assert(i < 3); return point[i]; }
 
-            operator const Point &() const { return point; }
-            operator       Point &()       { return point; }
+        operator const Point3D &() const { return point; }
+        operator       Point3D &()       { return point; }
     };
-
-    ////////////////////////////////////////////////////////////////////
-    /*! Reads a data line from an OFF file (skipping whitespace and comment
-    //  lines)
-    //  @param[in]  is   input stream to read from
-    //  @param[out] line string output to hold data line
-    //  @return     reference to input stream for operator chaining
-    *///////////////////////////////////////////////////////////////////
-    std::istream &getDataLine(std::istream &is, std::string &line) {
-        do  {
-            std::getline(is >> std::ws, line);
-        } while (is && (line[0] == '#'));
-        return is;
-    }
-
-    ////////////////////////////////////////////////////////////////////////////
-    /*! IOVertex ASCII input  (for implementing OFF I/O)
-    //  @tparam     Point   3D Point Type
-    //  @param[in]  is      input stream
-    //  @param[out] p       vertex to read
-    //  @return     input stream for stream operator chaining
-    *///////////////////////////////////////////////////////////////////////////
-    template<typename Point>
-    std::istream & operator>>(std::istream &is, IOVertex<Point> &v) {
-        std::string line; getDataLine(is, line);
-        std::istringstream iss(line);
-        IOVertex<Point> temp;
-        iss >> temp[0] >> temp[1] >> temp[2];
-        if (iss.fail())
-            is.setstate(std::ios_base::failbit);
-        else
-            v = temp;
-        return is; 
-    }
-
-    ////////////////////////////////////////////////////////////////////////////
-    /*! IOVertex ASCII output  (for implementing OFF I/O)
-    //  @tparam     Point   3D Point Type
-    //  @param[in]  os      output stream
-    //  @param[in]  p       vertex to output
-    //  @return     output stream for stream operator chaining
-    *///////////////////////////////////////////////////////////////////////////
-    template<typename Point>
-    std::ostream & operator<<(std::ostream &os, const IOVertex<Point> &v) {
-        os << v[0] << " " << v[1] << " " << v[2] << " " << std::endl;
-        return os;
-    }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
     //  Minimal polygon/polyhedron class for unattributed mesh i/o 
     *///////////////////////////////////////////////////////////////////////////
     class IOElement {
-        private:
-            std::vector<size_t> m_idxs;
+        std::vector<size_t> m_idxs;
+    public:
+        IOElement(size_t n = 0) : m_idxs(n) { }
+        int operator[](size_t i) const {
+            assert(i < m_idxs.size());
+            return m_idxs[i];
+        }
 
-        public:
-            IOElement(size_t n = 0) : m_idxs(n) { }
-            int operator[](size_t i) const {
-                assert(i < m_idxs.size());
-                return m_idxs[i];
-            }
+        size_t &operator[](size_t i)  {
+            assert(i < m_idxs.size());
+            return m_idxs[i];
+        }
 
-            size_t &operator[](size_t i)  {
-                assert(i < m_idxs.size());
-                return m_idxs[i];
-            }
+        size_t size() const { return m_idxs.size(); }
+        void resize(size_t n) { m_idxs.resize(n); }
+        void clear() { m_idxs.clear(); }
 
-            size_t size() const { return m_idxs.size(); }
-            void resize(size_t n) { m_idxs.resize(n); }
-            void clear() { m_idxs.clear(); }
+        template<typename PType>
+        IOElement &operator=(const PType &rhs) {
+            m_idxs.resize(rhs.size());
+            for (size_t i = 0; i < rhs.size(); ++i)
+                m_idxs[i] = rhs[i];
+            return *this;
+        }
 
-            template<typename PType>
-            IOElement &operator=(const PType &rhs) {
-                m_idxs.resize(rhs.size());
-                for (size_t i = 0; i < rhs.size(); ++i)
-                    m_idxs[i] = rhs[i];
-                return *this;
-            }
+        void push_back(int idx) { m_idxs.push_back(idx); }
+        operator std::vector<size_t>&()             { return m_idxs; }
+        operator const std::vector<size_t>&() const { return m_idxs; }
 
-            void push_back(int idx) { m_idxs.push_back(idx); }
-            operator std::vector<size_t>&()             { return m_idxs; }
-            operator const std::vector<size_t>&() const { return m_idxs; }
-
-            friend std::istream & operator>>(std::istream &, IOElement &);
+        friend std::istream & operator>>(std::istream &, IOElement &);
     };
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Reads data line from an OFF file (skipping whitespace and comment lines)
+    //  @param[in]  is   input stream to read from
+    //  @param[out] line string output to hold data line
+    //  @return     reference to input stream for operator chaining
+    *///////////////////////////////////////////////////////////////////////////
+    std::istream &getDataLine(std::istream &is, std::string &line);
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! IOVertex ASCII input  (for implementing OFF I/O)
+    //  @param[in]  is      input stream
+    //  @param[out] p       vertex to read
+    //  @return     input stream for stream operator chaining
+    *///////////////////////////////////////////////////////////////////////////
+    std::istream & operator>>(std::istream &is, IOVertex &v);
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! IOVertex ASCII output  (for implementing OFF I/O)
+    //  @param[in]  os      output stream
+    //  @param[in]  p       vertex to output
+    //  @return     output stream for stream operator chaining
+    *///////////////////////////////////////////////////////////////////////////
+    std::ostream & operator<<(std::ostream &os, const IOVertex &v);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! IOElement ASCII input  (for implementing OFF I/O)
@@ -152,20 +125,7 @@ namespace MESH_IO {
     //  @param[out] e   element to read
     //  @return     input stream for stream operator chaining
     *///////////////////////////////////////////////////////////////////////////
-    inline std::istream & operator>>(std::istream &is, IOElement &e) {
-        std::string line; getDataLine(is, line);
-        std::istringstream iss(line);
-        IOElement temp;
-        size_t idx, size;
-        iss >> size;
-        while (iss >> idx)
-            temp.m_idxs.push_back(idx);
-        if (temp.size() == size)
-            e = temp;
-        else
-            is.setstate(std::ios_base::failbit);
-        return is; 
-    }
+    std::istream & operator>>(std::istream &is, IOElement &e);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! IOElement ASCII output  (for implementing OFF I/O)
@@ -174,23 +134,15 @@ namespace MESH_IO {
     //  @param[in]  e   element to output
     //  @return     output stream for stream operator chaining
     *///////////////////////////////////////////////////////////////////////////
-    inline std::ostream & operator<<(std::ostream &os, const IOElement &e) {
-        os << e.size();
-        for (unsigned int i = 0; i < e.size(); ++i)
-            os << ' ' << e[i];
-        os << std::endl;
-        return os;
-    }
+    std::ostream & operator<<(std::ostream &os, const IOElement &e);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Abstract base functor for supporting various mesh format i/o
-    //  @tparam     Point   3D Point Type
     *///////////////////////////////////////////////////////////////////////////
-    template<typename Point>
     class MeshIO {
         public:
-            typedef IOVertex<Point> Vertex;
-            typedef IOElement       Element;
+            typedef IOVertex  Vertex;
+            typedef IOElement Element;
 
             virtual void save(std::ostream &os,
                               const std::vector<Vertex> &vertices,
@@ -199,11 +151,10 @@ namespace MESH_IO {
                                   std::vector<Element> &elements, MeshType t) = 0;
     };
 
-    template<typename Point>
-    class MeshIO_OFF : public MeshIO<Point> {
+    class MeshIO_OFF : public MeshIO {
         public:
-            typedef IOVertex<Point> Vertex;
-            typedef IOElement       Element;
+            typedef IOVertex  Vertex;
+            typedef IOElement Element;
 
             void save(std::ostream &os, const std::vector<Vertex> &vertices,
                       const std::vector<Element> &elements, MeshType /* t */) {
@@ -244,11 +195,10 @@ namespace MESH_IO {
             }
     };
 
-    template<typename Point>
-    class MeshIO_POLY : public MeshIO<Point> {
+    class MeshIO_POLY : public MeshIO {
         public:
-            typedef IOVertex<Point> Vertex;
-            typedef IOElement       Element;
+            typedef IOVertex  Vertex;
+            typedef IOElement Element;
 
             void save(std::ostream &os, const std::vector<Vertex> &vertices,
                       const std::vector<Element> &elements, MeshType /* t */) {
@@ -275,11 +225,10 @@ namespace MESH_IO {
             }
     };
 
-    template<typename Point>
     class MeshIO_NodeEle  {
         public:
-            typedef IOVertex<Point> Vertex;
-            typedef IOElement       Element;
+            typedef IOVertex  Vertex;
+            typedef IOElement Element;
 
             MeshType load(const std::string &nodePath, const std::string &elePath,
                           std::vector<Vertex> &vertices, std::vector<Element>
@@ -333,11 +282,10 @@ namespace MESH_IO {
             }
     };
 
-    template<typename Point>
-    class MeshIO_MSH : public MeshIO<Point> {
+    class MeshIO_MSH : public MeshIO {
     public:
-        typedef IOVertex<Point> Vertex;
-        typedef IOElement       Element;
+        typedef IOVertex  Vertex;
+        typedef IOElement Element;
 
         void getElementInfo(MeshType meshType, int &elementType,
                             int &numCorners) {
@@ -530,7 +478,7 @@ namespace MESH_IO {
             return type;
         }
 
-        bool setBinaryOut(bool binary) { m_binaryOut = binary; }
+        void setBinaryOut(bool binary) { m_binaryOut = binary; }
 private:
         bool m_binaryOut = false;
     };
@@ -540,46 +488,14 @@ private:
     //  @param[in]  path    mesh path
     //  @return     file format, or INVALID if the extension wasn't recognized
     *///////////////////////////////////////////////////////////////////////////
-    Format guessFormat(const std::string &path) {
-        // Extract file extension from the path (including the last .)
-        std::string ext = path.substr(path.find_last_of('.'));
-        // Make comparisons insensitive;
-        for (unsigned int i = 0; i < ext.length(); ++i)
-            ext[i] = tolower(ext[i]);
-        if (ext == ".off")
-            return FMT_OFF;
-        if (ext == ".msh")
-            return FMT_MSH;
-        if (ext == ".poly")
-            return FMT_POLY;
-        if ((ext == ".node") || (ext == ".ele"))
-            return FMT_NODE_ELE;
-
-        return FMT_INVALID;
-    }
+    Format guessFormat(const std::string &path);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Gets a parser/writer that will work with a particular file format
     //  @param[in]  format  file format
     //  @return     format parser object
     *///////////////////////////////////////////////////////////////////////////
-    template<typename Point>
-    MeshIO<Point> *getMeshIO(Format &format) {
-        static MeshIO_OFF <Point> s_offIO;
-        static MeshIO_MSH <Point> s_mshIO;
-        static MeshIO_POLY<Point> s_polyIO;
-
-        // Indexed using Format enum (order must match enum)
-        std::vector<MeshIO<Point> *> IOs;
-        IOs.push_back(&s_offIO);
-        IOs.push_back(&s_mshIO);
-        IOs.push_back(&s_polyIO);
-
-        if (format < IOs.size() && format >= 0)
-            return IOs[format];
-        
-        throw std::runtime_error("Illegal Format" + std::to_string(format));
-    }
+    MeshIO *getMeshIO(Format &format);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes an element soup to an output stream
@@ -589,27 +505,9 @@ private:
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    template<typename VType, typename EType>
-    void save(std::ostream &os, const std::vector<VType> &vertices,
-              const std::vector<EType> &elements, Format format,
-              MeshType type = MESH_GUESS) {
-        typedef typename VType::point_type Point;
-        MeshIO<Point> *io = getMeshIO<Point>(format);
-
-        std::vector<IOVertex<Point> > ioVertices;
-        std::vector<IOElement>        ioElements;
-
-        ioVertices.resize(vertices.size());
-        for (size_t i = 0; i < vertices.size(); ++i)
-            ioVertices[i] = IOVertex<Point>(vertices[i].point);
-
-        ioElements.resize(elements.size());
-        for (size_t i = 0; i < elements.size(); ++i)
-            ioElements[i] = elements[i];
-
-        io->save(os, ioVertices, ioElements, type);
-        if (!os) throw std::runtime_error("Error in save: bad i/o");
-    }
+    void save(std::ostream &os, const std::vector<IOVertex> &vertices,
+              const std::vector<IOElement> &elements, Format format,
+              MeshType type = MESH_GUESS);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes an element soup to a mesh path
@@ -619,18 +517,9 @@ private:
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    template<typename VType, typename EType>
-    void save(const std::string &path, const std::vector<VType> &vertices,
-              const std::vector<EType> &elements, Format format = FMT_GUESS,
-              MeshType type = MESH_GUESS) {
-        if (format == FMT_GUESS)
-            format = guessFormat(path);
-
-        std::ofstream os(path);
-        if (!os.is_open()) throw std::runtime_error("Couldn't open out file");
-
-        save(os, vertices, elements, format, type);
-    }
+    void save(const std::string &path, const std::vector<IOVertex> &vertices,
+              const std::vector<IOElement> &elements, Format format = FMT_GUESS,
+              MeshType type = MESH_GUESS);
 
 
     ////////////////////////////////////////////////////////////////////////////
@@ -641,31 +530,9 @@ private:
     //  @param[in]  format    file format
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    template<typename VType, typename PType>
-    MeshType load(std::istream &is, std::vector<VType> &vertices,
-              std::vector<PType> &elements, Format format,
-              MeshType type = MESH_GUESS)
-    {
-        typedef typename VType::point_type Point;
-        MeshIO<Point> *io = getMeshIO<Point>(format);
-
-        std::vector<IOVertex<Point> > ioVertices;
-        std::vector<IOElement>        ioElements;
-
-        type = io->load(is, ioVertices, ioElements, type);
-        if (!is) throw std::runtime_error("Error in load: bad i/o");
-
-        vertices.resize(ioVertices.size());
-        for (unsigned int i = 0; i < vertices.size(); ++i)
-            for (int j = 0; j < 3; ++j)
-                vertices[i].point[j] = ioVertices[i][j];
-
-        elements.resize(ioElements.size());
-        for (unsigned int i = 0; i < elements.size(); ++i)
-            elements[i] = ioElements[i];
-
-        return type;
-    }
+    MeshType load(std::istream &is, std::vector<IOVertex> &vertices,
+              std::vector<IOElement> &elements, Format format,
+              MeshType type = MESH_GUESS);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Reads an element soup from a mesh path
@@ -676,27 +543,9 @@ private:
     //  @param[in]  type      mesh element type (default: guess from first)
     //  @return     actual loaded MeshType
     *///////////////////////////////////////////////////////////////////////////
-    template<typename VType, typename PType>
-    MeshType load(const std::string &path, std::vector<VType> &vertices,
-                  std::vector<PType> &elements, Format format = FMT_GUESS,
-                  MeshType type = MESH_GUESS) {
-        if (format == FMT_GUESS)
-            format = guessFormat(path);
-
-        // TetGen format is special because it uses multiple files :(
-        if (format == FMT_NODE_ELE) {
-            typedef typename VType::point_type Point;
-            MeshIO_NodeEle<Point> reader;
-            std::string basePath = path.substr(0, path.find_last_of('.'));
-            return reader.load(basePath + ".node", basePath + ".ele", vertices,
-                               elements);
-        }
-        else {
-            std::ifstream is(path);
-            if (!is.is_open()) throw std::runtime_error("Couldn't open input file");
-            return load(is, vertices, elements, format, type);
-        }
-    }
+    MeshType load(const std::string &path, std::vector<IOVertex> &vertices,
+                  std::vector<IOElement> &elements, Format format = FMT_GUESS,
+                  MeshType type = MESH_GUESS);
 }
 
 #endif // MESH_IO_HH

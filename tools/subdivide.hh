@@ -45,7 +45,11 @@ void subdivide(_HalfEdge &mesh, std::vector<Vertex> &subVertices,
             he->newVertexIndex = subVertices.size();
 
             // Place the new vertex at the edge midpoint
-            subVertices.push_back(Vertex(.5 * (he.tip()->p + he.tail()->p)));
+            // Verbosity is not just for efficiency--
+            auto midpt = he.tip()->p;
+            midpt += he.tail()->p;
+            midpt *= 0.5;
+            subVertices.push_back(Vertex(midpt));
         }
     }
 

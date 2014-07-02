@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
 {
     vector<Tetrahedron> tets;
 
-    vector<MESH_IO::IOVertex<Point3D> > inVertices;
-    vector<MESH_IO::IOElement> inTets;
+    vector<MeshIO::IOVertex > inVertices;
+    vector<MeshIO::IOElement> inTets;
 
     std::string mshPath("Meshes/cylinder_cross.msh");
     if (argc >= 2) mshPath = std::string(argv[1]);
@@ -47,12 +47,12 @@ int main(int argc, char *argv[])
         if (v.isBoundary()) v.boundaryVertex()->p = inVertices[vi];
     }
 
-    vector<MESH_IO::IOVertex<Point3D> > outVertices;
-    vector<MESH_IO::IOElement> outTriangles;
+    vector<MeshIO::IOVertex<Point3D> > outVertices;
+    vector<MeshIO::IOElement> outTriangles;
     for (size_t bvi = 0; bvi < mesh.numBoundaryVertices(); ++bvi)
         outVertices.push_back(mesh.boundaryVertex(bvi)->p);
 
-    MESH_IO::IOElement btri(3);
+    MeshIO::IOElement btri(3);
     for (size_t bfi = 0; bfi < mesh.numBoundaryFaces(); ++bfi) {
         Mesh::BoundaryFaceHandle bf = mesh.boundaryFace(bfi);
         btri[0] = bf.vertex(0).index();
@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
     
     save("out_surface.poly", outVertices, outTriangles);
 
-    vector<MESH_IO::IOVertex<Point3D> > subVertices;
-    vector<MESH_IO::IOElement> subTriangles;
+    vector<MeshIO::IOVertex > subVertices;
+    vector<MeshIO::IOElement> subTriangles;
     auto surfaceMesh = mesh.boundary();
     subdivide(surfaceMesh, subVertices, subTriangles);
     save("out_subdiv.msh", subVertices, subTriangles);
@@ -153,7 +153,6 @@ int main(int argc, char *argv[])
     }
 
     cout << surfaceComponents << " surface cw vertex component(s)" << endl;
-
 
     return 0;
 }

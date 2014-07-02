@@ -15,6 +15,10 @@ public:
     BVHandle<_HType> boundaryVertex() const { return BVHandle<_HType>(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
     HFHandle<_HType>       halfFace() const { return HFHandle<_HType>(m_mesh.m_halfFaceOfVertex(m_idx), m_mesh); }
 
+    // Identity operation for unified writing of surface and volume meshes
+    // (since point data is typically stored only on the volume vertex)
+    VHandle<_HType> volumeVertex() const { return VHandle<_HType>(m_idx, m_mesh); }
+
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_vertexData[m_idx]; }
 };
@@ -33,7 +37,11 @@ public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
     bool isBoundary()                 const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
     BFHandle<_HType>   boundaryFace() const { return BFHandle<_HType>(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
+    // Dimension-independent terminology:
+    BFHandle<_HType> boundaryEntity() const { return boundaryFace(); }
+
      VHandle<_HType> vertex(size_t i) const { return VHandle<_HType>(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
+
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_halfFaceData[m_idx]; }
@@ -64,6 +72,11 @@ public:
      VHandle<_HType>   vertex(size_t i) const { return  VHandle<_HType>(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
      THandle<_HType> neighbor(size_t i) const { return  THandle<_HType>(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
     HFHandle<_HType> halfFace(size_t i) const { return HFHandle<_HType>(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
+
+    // Dimension-independent terminology:
+    //  interface of a tet is a half-face
+    //  interface of a tri is a half-edge
+    HFHandle<_HType> interface(size_t i) const { return halfFace(i); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_tetData[m_idx]; }

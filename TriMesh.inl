@@ -14,6 +14,10 @@ public:
     BVHandle<_HType> boundaryVertex() const { return BVHandle<_HType>(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
     HEHandle<_HType>       halfEdge() const { return HEHandle<_HType>(   m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
 
+    // Identity operation for unified writing of surface and volume meshes
+    // (since point data is typically stored only on the volume vertex)
+    VHandle<_HType> volumeVertex() const { return VHandle<_HType>(m_idx, m_mesh); }
+
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_vertexData[m_idx]; }
 };
 
@@ -50,6 +54,8 @@ public:
     //    m_idx--should only happen during circulation around boundary vertices)
     //    get a handle on that boundary edge.
     BEHandle<_HType> boundaryEdge() const { return BEHandle<_HType>(m_mesh.m_bdryEdgeIdx(m_idx), m_mesh); }
+    // Dimension-independent terminology:
+    BEHandle<_HType> boundaryEntity() const { return boundaryEdge(); }
 
      THandle<_HType>          tri() const { return  THandle<_HType>(m_mesh.m_triOfHE(m_idx), m_mesh); }
     HEHandle<_HType>         next() const {
@@ -115,6 +121,11 @@ public:
      VHandle<_HType>   vertex(size_t i) const { return  VHandle<_HType>(m_mesh.m_vertexOfTri(i, m_idx), m_mesh); }
      THandle<_HType> neighbor(size_t i) const { return  THandle<_HType>(m_mesh.m_triAdjTri(i, m_idx), m_mesh); }
     HEHandle<_HType> halfEdge(size_t i) const { return HEHandle<_HType>(m_mesh.m_halfEdgeOfTri(i, m_idx), m_mesh); }
+
+    // Dimension-independent terminology:
+    //  interface of a tet is a half-face
+    //  interface of a tri is a half-edge
+    HEHandle<_HType> interface(size_t i) const { return halfEdge(i); }
 
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_triData[m_idx]; }
 };

@@ -11,10 +11,12 @@
 #ifndef LINEARFEM_HH
 #define LINEARFEM_HH
 #include "Types.hh"
+#include <stdexcept>
 
 // FEM on a 3-Manifold embedded in 3D
 namespace LinearFEM3D {
     struct NodeData {
+        typedef Point3D Point;
         NodeData(const Point3D &_p = Point3D::Zero()) : p(_p) { }
         Point3D p;
     };
@@ -149,7 +151,7 @@ namespace LinearFEM2D {
     template<class EmbeddingSpace = Point2D>
     struct NodeData {
         typedef EmbeddingSpace Point;
-        static constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;
+        static constexpr size_t _N = EmbeddingSpace::RowsAtCompileTime;
 
         NodeData(const EmbeddingSpace &_p = EmbeddingSpace::Zero()) : p(_p) { }
         Point p;
@@ -158,6 +160,8 @@ namespace LinearFEM2D {
     // For generality, shape function derivatives are computed for 3D
     // embeddings--provide padding/truncation functions that implement mappings
     // to and from 3D
+    // Warning: template parameter deduction doesn't work well with Eigen's
+    // expressions since, e.g., Point2D - Point2D is really a CwiseBinaryOp...
     template<class EmbeddingSpace> 
     Point3D padTo3D(const EmbeddingSpace &p);
     template<> Point3D padTo3D<Point3D>(const Point3D &p) { return p; }
@@ -166,12 +170,16 @@ namespace LinearFEM2D {
     template<class EmbeddingSpace> 
     EmbeddingSpace truncateFrom3D(const Point3D &p);
     template<> Point3D truncateFrom3D<Point3D>(const Point3D &p) { return p; }
-    template<> Point2D truncateFrom3D<Point2D>(const Point3D &p) { return Point2D(p[0], p[1]); }
+    template<> Point2D truncateFrom3D<Point2D>(const Point3D &p) {
+        if (std::abs(p[2]) > 1e-6)
+            throw std::runtime_error("Nonzero z component in embedded Point2D");
+        return Point2D(p[0], p[1]);
+    }
     
     template<class EmbeddingSpace = Point2D>
     struct ElementData {
-        static constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;
-        typedef Eigen::Matrix<Real, 3, N> GradPhis;
+        static constexpr size_t _N = EmbeddingSpace::RowsAtCompileTime;
+        typedef Eigen::Matrix<Real, 3, _N> GradPhis;
         ElementData() : m_volume(0) { }
         void computeData(const EmbeddingSpace &p0, const EmbeddingSpace &p1,
                          const EmbeddingSpace &p2) {
@@ -186,8 +194,9 @@ namespace LinearFEM2D {
             //    /     \         /
             //  0*---2---* 1     v z
             // Inward-pointing edge perpendiculars
-            Vector3D e0 = pad3D(p2 - p1), e1 = pad3D(p0 - p2),
-                     e2 = pad3D(p1 - p0);
+            Vector3D e0 = padTo3D<EmbeddingSpace>(p2 - p1),
+                     e1 = padTo3D<EmbeddingSpace>(p0 - p2),
+                     e2 = padTo3D<EmbeddingSpace>(p1 - p0);
             Vector3D n = e1.cross(e2);
             Real doubleA = n.norm();
             n /= doubleA;
@@ -209,18 +218,18 @@ namespace LinearFEM2D {
 
     template<class EmbeddingSpace = Point2D>
     struct BoundaryElementData {
-        static constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;
+        static constexpr size_t _N = EmbeddingSpace::RowsAtCompileTime;
         // Compute outward-pointing normal for edge p0->p1 (i.e. edge e2)
         // ***in the plane of the triangle p0, p1, p2***
         // (We need point p2 for the 3D case since otherwise normals aren't
         //  well-defined.)
         void computeData(const EmbeddingSpace &p0, const EmbeddingSpace &p1,
                          const EmbeddingSpace &p2) {
-            Vector3D e2 = p1 - p0;
+            Vector3D e2 = padTo3D<EmbeddingSpace>(p1 - p0);
             m_area = e2.norm();
 
-            Vector3D triNDoubleA = (p0 - p2).cross(e2); // e1 x e2
-            m_normal = e2.cross(triNDoubleA);
+            Vector3D triNDoubleA = padTo3D<EmbeddingSpace>(p0 - p2).cross(e2); // e1 x e2
+            m_normal = truncateFrom3D<EmbeddingSpace>(e2.cross(triNDoubleA));
             m_normal /= m_normal.norm();
         }
 
@@ -242,7 +251,7 @@ namespace LinearFEM2D {
         typedef TriMesh<VData, HEData,  TData, BVData, BEData> Base;
 
         typedef typename VData::Point Point;
-        static constexpr size_t _N = 3;
+        static constexpr size_t _N = VData::_N;
 
         // FEM-named types and accessors:
         typedef VData  NodeData;
@@ -265,11 +274,11 @@ namespace LinearFEM2D {
         typename Base::ConstBoundaryEdgeHandle boundaryElement(size_t i) const { return Base::boundaryEdge(i); }
 
         template<typename Tris, typename Vertices>
-        Mesh(const Tris &tets, const Vertices &vertices)
-            : Base(tets, vertices.size()) {
+        Mesh(const Tris &tris, const Vertices &vertices)
+            : Base(tris, vertices.size()) {
             // Fill out mesh data.
             for (size_t i = 0; i < Base::numVertices(); ++i) {
-                Base::vertex(i)->p = vertices[i];
+                Base::vertex(i)->p = truncateFrom3D<Point>(vertices[i]);
             }
             for (size_t i = 0; i < Base::numTris(); ++i) {
                 auto tri = Base::tri(i);
@@ -278,10 +287,9 @@ namespace LinearFEM2D {
             }
             for (size_t i = 0; i < Base::numBoundaryEdges(); ++i) {
                 auto be = Base::boundaryEdge(i);
-                auto tipV = be.volumeHalfEdge().next().tip();
-                assert(tipV.index() == be.tail().volumeVertex().index());
+                auto oppV = be.volumeHalfEdge().next().tip();
                 be->computeData(be.tail().volumeVertex()->p,
-                                be. tip().volumeVertex()->p, tipV->p);
+                                be. tip().volumeVertex()->p, oppV->p);
             }
         }
 

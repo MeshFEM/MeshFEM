@@ -81,14 +81,14 @@ int main(int argc, const char *argv[])
 {
     po::variables_map args = parseCmdLine(argc, argv);
 
-    vector<MESH_IO::IOVertex<Point3D> > inVertices, outVertices;
-    vector<MESH_IO::IOElement>          inElements, outElements;
+    vector<MeshIO::IOVertex > inVertices, outVertices;
+    vector<MeshIO::IOElement> inElements, outElements;
 
     auto type = load(args["inFile"].as<string>(), inVertices, inElements);
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 
-    if (type == MESH_IO::MESH_TET) {
+    if (type == MeshIO::MESH_TET) {
         typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, VertexData,
                         HalfEdgeData, TMEmptyData> Mesh;
         Mesh mesh(inElements, inVertices.size());
@@ -111,7 +111,7 @@ int main(int argc, const char *argv[])
                 for (size_t bvi = 0; bvi < mesh.numBoundaryVertices(); ++bvi)
                     outVertices.push_back(mesh.boundaryVertex(bvi)->p);
 
-                MESH_IO::IOElement btri(3);
+                MeshIO::IOElement btri(3);
                 for (size_t bfi = 0; bfi < mesh.numBoundaryFaces(); ++bfi) {
                     Mesh::BoundaryFaceHandle bf = mesh.boundaryFace(bfi);
                     btri[0] = bf.vertex(0).index();
@@ -131,7 +131,7 @@ int main(int argc, const char *argv[])
             outElements = inElements;
         }
     }
-    else if (type == MESH_IO::MESH_TRI) {
+    else if (type == MeshIO::MESH_TRI) {
         typedef TriMesh<VertexData, HalfEdgeData, TMEmptyData, VertexData,
                         TMEmptyData> Mesh;
         Mesh mesh(inElements, inVertices.size());

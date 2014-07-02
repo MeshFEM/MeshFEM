@@ -20,18 +20,18 @@ using namespace PeriodicHomogenization;
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[])
 {
-    vector<MESH_IO::IOVertex<Point3D> > inVertices;
-    vector<MESH_IO::IOElement> inTets;
-    std::string mshPath("Meshes/cylinder_cross.msh");
+    vector<MeshIO::IOVertex>  inVertices;
+    vector<MeshIO::IOElement> inTets;
+    string mshPath("Meshes/cylinder_cross.msh");
     if (argc >= 2) mshPath = std::string(argv[1]);
 
-    load(mshPath, inVertices, inTets, MESH_IO::FMT_GUESS,
-         MESH_IO::MESH_TET);
+    load(mshPath, inVertices, inTets, MeshIO::FMT_GUESS,
+         MeshIO::MESH_TET);
 
     Simulator<> sim(inTets, inVertices);
     MSHFieldWriter writer("htest.msh", sim.mesh());
 
-    std::vector<LinearElasticity3D::VField> w_ij;
+    std::vector<VField> w_ij;
     solveCellProblems(w_ij, sim, &writer);
 
     for (size_t i = 0; i < w_ij.size(); ++i) {
@@ -43,23 +43,23 @@ int main(int argc, char *argv[])
 
     ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
     ETensor ETargetinv(Eh.inverse());
-    // // Try to double x Young's modulus
-    // ETargetinv.D(0, 0) /= 2.0;
-    // ETargetinv.D(0, 1) /= 2.0;
-    // ETargetinv.D(0, 2) /= 2.0;
+    // Try to double x Young's modulus
+    ETargetinv.D(0, 0) /= 2.0;
+    ETargetinv.D(0, 1) /= 2.0;
+    ETargetinv.D(0, 2) /= 2.0;
     
-    // Try to reduce all Poisson ratios
-    // Scalar parameterStep = args["parameterStep"].as<double>();
-    Real parameterStep = 0.1;
-    cout << "Parameter step: " << parameterStep << endl;
-    Real currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(1, 1);
-    Real targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
-    cout << "currentPoisson, targetPoisson:\t" << currentPoisson << "\t"
-         << targetPoisson << endl;
+    // // Try to reduce all Poisson ratios
+    // // Scalar parameterStep = args["parameterStep"].as<double>();
+    // Real parameterStep = 0.1;
+    // cout << "Parameter step: " << parameterStep << endl;
+    // Real currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(1, 1);
+    // Real targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
+    // cout << "currentPoisson, targetPoisson:\t" << currentPoisson << "\t"
+    //      << targetPoisson << endl;
 
-    ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
-    ETargetinv.D(0, 2) = -targetPoisson * ETargetinv.D(2, 2);
-    ETargetinv.D(1, 2) = -targetPoisson * ETargetinv.D(2, 2);
+    // ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
+    // ETargetinv.D(0, 2) = -targetPoisson * ETargetinv.D(2, 2);
+    // ETargetinv.D(1, 2) = -targetPoisson * ETargetinv.D(2, 2);
 
     // // Try to double all Young's moduli
     // ETargetinv.D(0, 0) /= 2.0;
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     VField descent(bdry.numElements());
     for (size_t i = 0; i < bdry.numElements(); ++i)
         descent(i) = v_n[i] * bdry.element(i)->normal();
-    MSHFieldWriter surfaceWriter("htestSurf.msh", sim.mesh(), true);
+    MSHFieldWriter surfaceWriter("htestSurf.msh", bdry);
     surfaceWriter.addField(string("normal descent velocity"), v_n,
                            MSHFieldWriter::PER_ELEMENT);
     surfaceWriter.addField(string("descent direction"), descent,

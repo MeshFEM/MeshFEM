@@ -380,7 +380,7 @@ namespace {
                         std::cout << "Warning: Dirichlet condition on periodic "
                             << "boundary applies to all identified vertices."
                             << std::endl;
-                        Vector3D diff = bv->dirichletDisplacement -
+                        auto diff = bv->dirichletDisplacement -
                             constraintDisplacements[constraintIndex[dof]];
                         if (diff.norm() > 1e-10) {
                             throw std::runtime_error("Mismatched Dirichlet "
@@ -512,13 +512,13 @@ namespace LinearElasticity2D {
     };
 
     template<class VData  = LinearFEM2D::NodeData<Point2D>,
-             class TData  = ElementData<Point2D>,
+             class TData  = ElementData<>,
              class BVData = BoundaryNodeData,
              class BEData = BoundaryElementData>
     using Mesh = LinearFEM2D::Mesh<VData, TMEmptyData, TData, BVData, BEData>;
 
     template<class VData  = LinearFEM2D::NodeData<Point2D>,
-             class TData  = ElementData<Point2D>,
+             class TData  = ElementData<>,
              class BVData = BoundaryNodeData,
              class BEData = BoundaryElementData>
     using Simulator = SimulatorND<Mesh<VData, TData, BVData, BEData> >;
