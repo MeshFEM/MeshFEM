@@ -461,7 +461,21 @@ private:
     cholmod_dense  *m_b;
 };
 
-// TODO: get documented version from Laptop...
+////////////////////////////////////////////////////////////////////////////////
+/*! Wraps a constrained system that will be solved for several different
+//  righthand sides. The constraint RHS is specified at system setup time, so
+//  only the unconstrained RHS is specified for each solve. For example, for
+//  elasticity with constraints M, we have the following terminology:
+//
+//  [ K M'] [u     ]   [ f     ]
+//  [ M   ] [lambda] = [ M_rhs ]
+//  -- C -- - u_l -    -- rhs --
+//
+//  All of C, and M_rhs are passed to setSystem() to specify the constrained
+//  systme. Then, at solve time, only f is passed into and u is retrieved from
+//  solve(). Subsequent calls to solve() made until a call to setSystem() run
+//  without refactorization.
+*///////////////////////////////////////////////////////////////////////////////
 template<typename _Real, class _Factorizer = UmfpackFactorizer>
 class ConstrainedSystem {
 public:
@@ -469,7 +483,8 @@ public:
 
     typedef TripletMatrix<Triplet<_Real> > TMatrix;
     // Side effect: sorts C
-    void setSystem(TMatrix &C, const std::vector<_Real> &constraintRHS) {
+    void setSystem(TripletMatrix<Triplet<_Real> > &C,
+                   const std::vector<_Real> &constraintRHS) {
         m_constraintRHS = constraintRHS;
         clear();
         m_C = new SuiteSparseMatrix(C);
@@ -477,22 +492,21 @@ public:
 
     bool cached() const { return m_cached; }
 
-    // Solve K u = f under the constraints (e.g. dirichlet, no rigid motion)
+    // Solve K u = f under the constraints
     template<class _Vec>
     void solve(const _Vec &f, std::vector<_Real> &u) {
         if (m_C == NULL) throw std::runtime_error("No system to solve");
 
         // Size with lagrange multiplier rows
-        size_t numDoFs = f.size();
-        size_t fullSize = numDoFs + m_constraintRHS.size();
+        size_t numVars = f.size();
+        size_t fullSize = numVars + m_constraintRHS.size();
         if (fullSize != m_C->m) throw std::runtime_error("Bad RHS");
-        // Pad with constraint RHS (zero for no rigid motion
-        // constraints, m_dirichletRHS for dirichlet constraints)
+        // Pad with constraint RHS
         std::vector<_Real> b(fullSize, 0.0);
-        for (size_t i = 0; i < numDoFs; ++i)
+        for (size_t i = 0; i < numVars; ++i)
             b[i] = f[i];
         for (size_t i = 0; i < m_constraintRHS.size(); ++i)
-            b[numDoFs + i] = m_constraintRHS[i];
+            b[numVars + i] = m_constraintRHS[i];
 
         if (!m_cached) {
             assert(m_CFactors == NULL);
@@ -502,7 +516,7 @@ public:
 
         u.resize(fullSize);
         m_CFactors->solve(b, u);
-        u.resize(numDoFs);
+        u.resize(numVars);
     }
 
     void clear() {
