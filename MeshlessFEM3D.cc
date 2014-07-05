@@ -1246,9 +1246,9 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
     C.append(T, TMatrix::APPEND_RIGHT,  true,  true);
     if (timer) timer->stop("Assemble C");
 
-    // std::cout << "Dumping matrix of size " << C.m << ", " << C.n << std::endl;
-    // C.dump("C.txt");
-    // exit(-1);
+    std::cout << "Dumping matrix of size " << C.m << ", " << C.n << std::endl;
+    C.dump("C.txt");
+    exit(-1);
     
     if (timer) timer->start("To SuiteSparse");
     SuiteSparseMatrix ssC(C);
