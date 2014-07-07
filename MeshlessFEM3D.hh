@@ -199,7 +199,7 @@ private:
     void m_assembleVDMatrix(TMatrix &VD);
 
     void m_assemblePeriodicConstraints(TMatrix &P) const;
-    size_t m_computePeriodicDOFs(std::vector<int> &dofForNode) const;
+    size_t m_computePeriodicDOFs(std::vector<int> &dofForNode, bool compress=true) const;
 
     VField m_extractNodeVField(const std::vector<Real> &values,
                                const std::vector<int> &dofForNode) const;

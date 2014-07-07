@@ -127,10 +127,14 @@ public:
             cellOverlaps[m_cellForElement[i]] = elementOverlap(i);
     }
 
-    Vector2D nodePosition(size_t i) const
-    {
+    // Get grid vertex index of a node.
+    int vertexForNode(size_t i) const {
         assert(i < m_vertexForNode.size());
-        return vertexPosition(m_vertexForNode[i]);
+        return m_vertexForNode[i];
+    }
+
+    Vector2D nodePosition(size_t i) const {
+        return vertexPosition(vertexForNode(i));
     }
 
     void elementCorners(size_t ei, AdjacencyVec &corners) const {
@@ -306,14 +310,12 @@ public:
     size_t numElements() const { return m_cellForElement.size(); }
     size_t numNodes()    const { return m_vertexForNode.size(); }
 
-    _BBox elementBoundingBox(size_t i) const
-    {
+    _BBox elementBoundingBox(size_t i) const {
         assert(i < m_cellForElement.size());
         return cellBoundingBox(m_cellForElement[i]);
     }
 
-    Scalar elementOverlap(size_t i) const
-    {
+    Scalar elementOverlap(size_t i) const {
         assert(i < m_elementOverlap.size());
         return m_elementOverlap[i];
     }
@@ -324,10 +326,14 @@ public:
             cellOverlaps[m_cellForElement[i]] = elementOverlap(i);
     }
 
-    Vector3D nodePosition(size_t i) const
-    {
+    // Get grid vertex index of a node.
+    int vertexForNode(size_t i) const {
         assert(i < m_vertexForNode.size());
-        return vertexPosition(m_vertexForNode[i]);
+        return m_vertexForNode[i];
+    }
+
+    Vector3D nodePosition(size_t i) const {
+        return vertexPosition(vertexForNode(i));
     }
 
     void elementCorners(size_t ei, AdjacencyVec &corners) const {

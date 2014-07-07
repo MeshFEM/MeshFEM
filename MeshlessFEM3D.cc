@@ -1097,46 +1097,78 @@ void MeshlessFEM3D<_Model>::m_assemblePeriodicConstraints(TMatrix &P) const {
 //  These indices are all assuming one variable per node. For elasticity, there
 //  will actually be three DOFs per node i, with indices
 //  [3 * dofForNode[i] + 0, 3 * dofForNode[i] + 1, 3 * dofForNode[i] + 2]
+//
+//  The "compress" parameter determines whether or not non-node grid vertices
+//  get DoFs. This should always be true (the default value) when using UMFPACK,
+//  but Eduardo's may benefit from preserving the non-node DoFs to preserve
+//  matrix structure. If compress = false, extra nonzeros need to be added to
+//  the diagonals on non-node rows of the stiffness matrix; otherwise the matrix
+//  will be singular.
+//
 //  @param[out] dofForNode  The degree of freedom assigned to each grid node
 //                          after accounting for periodic constraints.
 //  @return     number of DOFs (again, assuming one DOF per node).
 *///////////////////////////////////////////////////////////////////////////////
 template<typename _Model>
 size_t MeshlessFEM3D<_Model>::
-m_computePeriodicDOFs(std::vector<int> &dofForNode) const {
-    std::vector<std::pair<size_t, size_t> > pairs;
-    m_elementGrid.periodicBoundaryPairs(pairs);
-    // Assign each vertex the same DOF in a connected component of the equality
-    // constraints to implement periodic boundary conditions.
-    size_t numDOFs = 0;
-    dofForNode.assign(m_elementGrid.numNodes(), -1);
-
-    // Build traversable graph representation
-    std::map<size_t, std::list<size_t> > adj;
-    for (const std::pair<size_t, size_t> &i: pairs) {
-        adj[i.first ].push_back(i.second);
-        adj[i.second].push_back(i.first);
-    }
-
+m_computePeriodicDOFs(std::vector<int> &dofForNode, bool compress) const {
+    size_t numDoFs;
+    dofForNode.resize(m_elementGrid.numNodes());
+    // Get DoF indices
+    int maxDoF = -1;
     for (size_t i = 0; i < m_elementGrid.numNodes(); ++i) {
-        if (dofForNode[i] >= 0) continue;
-        dofForNode[i] = numDOFs++;
-        std::queue<size_t> bfsQueue;
-        bfsQueue.push(i);
-        while (!bfsQueue.empty()) {
-            size_t u = bfsQueue.front(); bfsQueue.pop();
-            if (adj.find(u) == adj.end()) continue;
-            const std::list<size_t> adj_u = adj[u];
-            for (size_t v: adj_u) {
-                if (dofForNode[v] < 0) {
-                    dofForNode[v] = dofForNode[u];
-                    bfsQueue.push(v);
-                }
-            }
+        dofForNode[i] = m_elementGrid.periodicVertexIndex(
+                m_elementGrid.vertexForNode(i));
+        maxDoF = std::max(maxDoF, dofForNode[i]);
+    }
+    if (compress) {
+        std::vector<int> compressedDoF(maxDoF + 1, -1);
+        numDoFs = 0;
+        for (size_t i = 0; i < m_elementGrid.numNodes(); ++i) {
+            size_t di = dofForNode[i];
+            if (compressedDoF[di] < 0) compressedDoF[di] = numDoFs++;
+            dofForNode[i] = compressedDoF[di];
         }
     }
+    else {
+        numDoFs = m_elementGrid.numPeriodicVertices();
+    }
 
-    return numDOFs;
+    // // BFS-based implementation:
+    // std::vector<std::pair<size_t, size_t> > pairs;
+    // m_elementGrid.periodicBoundaryPairs(pairs);
+    // // Assign each vertex the same DOF in a connected component of the equality
+    // // constraints to implement periodic boundary conditions.
+    // numDoFs = 0;
+    // dofForNode.assign(m_elementGrid.numNodes(), -1);
+
+    // // Build traversable graph representation
+    // std::map<size_t, std::list<size_t> > adj;
+    // for (const std::pair<size_t, size_t> &i: pairs) {
+    //     adj[i.first ].push_back(i.second);
+    //     adj[i.second].push_back(i.first);
+    // }
+
+    // for (size_t i = 0; i < m_elementGrid.numNodes(); ++i) {
+    //     if (dofForNode[i] >= 0) continue;
+    //     dofForNode[i] = numDoFs++;
+    //     std::queue<size_t> bfsQueue;
+    //     bfsQueue.push(i);
+    //     while (!bfsQueue.empty()) {
+    //         size_t u = bfsQueue.front(); bfsQueue.pop();
+    //         if (adj.find(u) == adj.end()) continue;
+    //         const std::list<size_t> adj_u = adj[u];
+    //         for (size_t v: adj_u) {
+    //             if (dofForNode[v] < 0) {
+    //                 dofForNode[v] = dofForNode[u];
+    //                 bfsQueue.push(v);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+
+    return numDoFs;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1227,7 +1259,7 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
     // std::cout << m_E << std::endl;
     TMatrix K, T;
     std::vector<int> dofForNode;
-    size_t numDOFs = m_computePeriodicDOFs(dofForNode);
+    size_t numDOFs = m_computePeriodicDOFs(dofForNode, true);
 
     if (timer) timer->start("Assemble Stiffness");
     m_assembleStiffnessMatrix(K, dofForNode, numDOFs);
@@ -1246,9 +1278,20 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
     C.append(T, TMatrix::APPEND_RIGHT,  true,  true);
     if (timer) timer->stop("Assemble C");
 
-    std::cout << "Dumping matrix of size " << C.m << ", " << C.n << std::endl;
-    C.dump("C.txt");
-    exit(-1);
+    // // Add in "identity rows" for the ghost variables
+    // std::vector<bool> dofPresent(numDOFs, false);
+    // for (size_t i = 0; i < dofForNode.size(); ++i) {
+    //     dofPresent[dofForNode[i]] = true;
+    // }
+    // for (size_t i = 0; i < dofPresent.size(); ++i) {
+    //     if (dofPresent[i]) continue;
+    //     C.addNZ(3 * i + 0, 3 * i + 0, 1.0);
+    //     C.addNZ(3 * i + 1, 3 * i + 1, 1.0);
+    //     C.addNZ(3 * i + 2, 3 * i + 2, 1.0);
+    // }
+    // std::cout << "Dumping matrix of size " << C.m << ", " << C.n << std::endl;
+    // C.dump("C.txt");
+    // exit(-1);
     
     if (timer) timer->start("To SuiteSparse");
     SuiteSparseMatrix ssC(C);
@@ -1295,8 +1338,7 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
         }
         for (size_t i = 0; i < rhs.size(); ++i) {
             rhs[i] = -rhs[i];
-            if (i >= 3 * m_elementGrid.numNodes())
-                assert(rhs[i] == 0.0);
+            assert((i < 3 * numDOFs) || (rhs[i] == 0.0));
         }
         if (mshWriter) {
             std::string name("rhs ");

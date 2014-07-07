@@ -40,6 +40,7 @@
 #include <algorithm>
 #include "GlobalTypes.hh"
 #include "Geometry.hh"
+#include <stdexcept>
 #ifndef GRID_HH
 #define GRID_HH
 
@@ -287,7 +288,7 @@ public:
     size_t get1DVertexIndex(size_t slice, size_t row, size_t col) const {
         assert((slice < vertexSlices()) && (row < vertexRows()) &&
                (col < vertexCols()));
-        return slice * vertexRows() * vertexCols() + row * vertexCols() + col;
+        return (slice * vertexRows() + row) * vertexCols() + col;
     }
 
     Vector3D vertexPosition(size_t i) const {
@@ -383,6 +384,24 @@ public:
 
     size_t numVertices() const { return vertexSlices() * vertexRows() * vertexCols(); }
     size_t numCells()    const { return slices() * rows() * cols(); }
+
+    size_t periodicVertexIndex(size_t i) const {
+        if (m_borderWidth != 0) throw std::runtime_error("periodicVertexIndex doesn't support nonzero grid border widths.");
+        size_t slice, row, col;
+        get3DVertexIndex(i, slice, row, col);
+
+        // Vertices are identified with their lowest index copy
+        if (slice == vertexSlices() - 1) slice = 0;
+        if (row   == vertexRows()   - 1) row   = 0;
+        if (col   == vertexCols()   - 1) col   = 0;
+
+        return (slice * (vertexRows()  - 1) + row) * (vertexCols() - 1) + col;
+    }
+
+    size_t numPeriodicVertices() const {
+        if (m_borderWidth != 0) throw std::runtime_error("periodicVertexIndex doesn't support nonzero grid border widths.");
+        return (vertexSlices() - 1) * (vertexRows() - 1) * (vertexCols() - 1);
+    }
 
 private:
     protected:
