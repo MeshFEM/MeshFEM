@@ -190,6 +190,12 @@ public:
         return h_it.boundaryEdge();
     }
 
+    // Dimension-independent access
+    constexpr int  numVertices() const { return 2; }
+    constexpr int numNeighbors() const { return 2; }
+    BVHandle<_HType>    vertex(size_t i) const { return (i == 0) ? tail() : tip(); }
+    BEHandle<_HType>  neighbor(size_t i) const { return (i == 0) ? prev() : next(); }
+
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryEdgeData[m_idx]; }
 
 private:

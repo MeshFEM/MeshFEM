@@ -65,6 +65,12 @@ namespace LinearFEM3D {
             m_area /= 2;
         }
 
+        // Per-element mass matrix for the boundary mesh shape funtions.
+        Real massMatrixContribution(int i, int j) const {
+            assert(i < 3 && j < 3);
+            return (i == j) ? area() / 6 : area() / 4;
+        }
+
         const Vector3D &normal() const { return m_normal; }
         Real area() const { return m_area; }
     protected:
@@ -160,22 +166,6 @@ namespace LinearFEM2D {
     // For generality, shape function derivatives are computed for 3D
     // embeddings--provide padding/truncation functions that implement mappings
     // to and from 3D
-    // Warning: template parameter deduction doesn't work well with Eigen's
-    // expressions since, e.g., Point2D - Point2D is really a CwiseBinaryOp...
-    template<class EmbeddingSpace> 
-    Point3D padTo3D(const EmbeddingSpace &p);
-    template<> Point3D padTo3D<Point3D>(const Point3D &p) { return p; }
-    template<> Point3D padTo3D<Point2D>(const Point2D &p) { return Point3D(p[0], p[1], 0); }
-
-    template<class EmbeddingSpace> 
-    EmbeddingSpace truncateFrom3D(const Point3D &p);
-    template<> Point3D truncateFrom3D<Point3D>(const Point3D &p) { return p; }
-    template<> Point2D truncateFrom3D<Point2D>(const Point3D &p) {
-        if (std::abs(p[2]) > 1e-6)
-            throw std::runtime_error("Nonzero z component in embedded Point2D");
-        return Point2D(p[0], p[1]);
-    }
-    
     template<class EmbeddingSpace = Point2D>
     struct ElementData {
         static constexpr size_t _N = EmbeddingSpace::RowsAtCompileTime;
@@ -231,6 +221,12 @@ namespace LinearFEM2D {
             Vector3D triNDoubleA = padTo3D<EmbeddingSpace>(p0 - p2).cross(e2); // e1 x e2
             m_normal = truncateFrom3D<EmbeddingSpace>(e2.cross(triNDoubleA));
             m_normal /= m_normal.norm();
+        }
+
+        // Per-element mass matrix for the boundary mesh shape funtions.
+        Real massMatrixContribution(int i, int j) const {
+            assert(i < 2 && j < 2);
+            return (i == j) ? area() / 3 : area() / 6;
         }
 
         const Vector3D &normal() const { return m_normal; }

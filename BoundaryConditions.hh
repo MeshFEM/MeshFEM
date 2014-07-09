@@ -17,6 +17,7 @@
 #include <list>
 #include <utility>
 #include <queue>
+#include <iostream>
 #include "CollisionGrid.hh"
 #include "Geometry.hh"
 
@@ -27,6 +28,12 @@ struct BoundaryCondition {
     bool containsPoint(const _Vec &p) const { return region.containsPoint(p); }
     virtual ~BoundaryCondition() { }
 };
+
+
+template<class _Vec>
+using CondPtr      = std::shared_ptr<BoundaryCondition<_Vec> >;
+template<class _Vec>
+using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_Vec> >;
 
 enum class NeumannType { Pressure, Traction };
 template<typename _Vec>
@@ -54,6 +61,34 @@ struct DirichletCondition : public BoundaryCondition<_Vec> {
     virtual ~DirichletCondition() { }
 };
 
+template<typename _Vec>
+struct TargetCondition : public BoundaryCondition<_Vec> {
+    TargetCondition(const BBox<_Vec> &region, const _Vec &d)
+        : BoundaryCondition<_Vec>(region), displacement(d) { }
+
+    _Vec displacement;
+    virtual ~TargetCondition() { }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Boundary Condition I/O
+////////////////////////////////////////////////////////////////////////////////
+template<class _Vec>
+void writeBoundaryConditions(const std::string &cpath,
+                             const std::vector<ConstCondPtr<_Vec> > &conds);
+template<class _Vec>
+void writeBoundaryConditions(std::ostream &os,
+                             const std::vector<ConstCondPtr<_Vec> > &conds);
+template<typename _Vec>
+std::vector<CondPtr<_Vec> > readBoundaryConditions(const std::string &cpath);
+template<typename _Vec>
+std::vector<CondPtr<_Vec> > readBoundaryConditions(std::istream &is);
+
+////////////////////////////////////////////////////////////////////////////////
+// Periodic boundary condition implementation
+// (Nothing to read from input files--just specified either in code or command
+//  line switch.)
+////////////////////////////////////////////////////////////////////////////////
 template<typename _Vec>
 class PeriodicCondition {
 public:

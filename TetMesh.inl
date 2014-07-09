@@ -159,8 +159,8 @@ BFHandle : public _HType<TetMesh, BFHandle<Handle>, BFHandle<ConstHandle>, Bound
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryFaces(); }
 
-    int numNeighbors() const { return 3; }
-    int numVertices()  const { return 3; }
+    constexpr int numNeighbors() const { return 3; }
+    constexpr int numVertices()  const { return 3; }
 
     HFHandle<_HType>    volumeHalfFace() const { return HFHandle<_HType>(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
     BVHandle<_HType>    vertex(size_t i) const { BVHandle<_HType> bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }

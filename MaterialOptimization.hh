@@ -1,3 +1,13 @@
+////////////////////////////////////////////////////////////////////////////////
+// MaterialOptimization.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//		
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  07/09/2014 01:34:28
+////////////////////////////////////////////////////////////////////////////////
 #ifndef MATERIALOPTIMIZATION_HH
 #define MATERIALOPTIMIZATION_HH
 
@@ -5,6 +15,7 @@
 #include <cassert>
 #include <iostream>
 #include <vector>
+#include <memory>
 
 namespace MaterialOptimization {
 
@@ -14,7 +25,7 @@ struct IsotropicMaterial {
     static constexpr size_t numVars = 2;
     typedef ElasticityTensor<Real, _N> ETensor;
 
-    IsotropicMaterial() { vars[0] = 1; vars[1] = 0; }
+    IsotropicMaterial() { vars[0] = 1.0; vars[1] = 0; }
 
     void getTensorDerivative(size_t p, ETensor &d) const {
         assert(p == 0 || p == 1);
@@ -148,23 +159,93 @@ class SimulatorND : public LinearElasticity::SimulatorND<_Mesh>
     typedef LinearElasticity::SimulatorND<_Mesh> Base;
     using Base::m_mesh;
 public:
+    static constexpr size_t N = _Material::N;
+    typedef MaterialField<_Material> MField;
+    typedef typename Base::VField VField;
+
     template<typename Elems, typename Vertices>
     SimulatorND(const Elems &elems, const Vertices &vertices,
-         const MaterialField<_Material> &mfield)
+                std::shared_ptr<const MField> mfield)
         : Base(elems, vertices) {
-        for (size_t i = 0; i < elems.size(); ++i)
-            m_mesh.element(i)->configure(mfield.getterForElement(i));
+        attachMaterialField(mfield);
     }
 
-    void solveAdjoint() const {
+    // Configures each mesh element to its material from mfield.
+    // Simulator must obtain (share) ownership of the material field since it
+    // may be accessed at any point in Simulator's lifetime.
+    void attachMaterialField(std::shared_ptr<const MField> mfield) {
+        m_matField = mfield;
+        for (size_t i = 0; i < m_mesh.numElements(); ++i)
+            m_mesh.element(i)->configure(mfield->getterForElement(i));
     }
+
+    VField solveAdjoint(const VField &u) const {
+        // Compute load on the DoFs caused by the adjoint problem's Neuman
+        // traction:
+        //  u - u_target
+        // This traction is defined per-vertex and linearly interpolated over
+        // each boundary element, so we can't use the inherited constant
+        // per-boundary-element traction load computation. Instead, the load is
+        // computed by applying the mass matrix.
+        VField dofLoad(m_mesh.numVertices());
+        for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
+            auto be = m_mesh.boundaryElement(bei);
+            // 2D boundary elements have 2 nodes, 3D have 3 nodes.
+            for (size_t j = 0; j < N; ++j) {
+                auto dist_j = u(be.vertex(j).volumeVertex().index()) -
+                                be.vertex(j)->targetDisplacement();
+                for (size_t i = 0; i < N; ++i) {
+                    dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
+                                      be->massMatrixContribution(i, j) * dist_j;
+                }
+            }
+        }
+
+        // Adjoint problem looks just like the elastostatic problem, but with
+        // the load as computed above.
+        return solve(dofLoad);
+    }
+private:
+    std::shared_ptr<const MField> m_matField;
 };
 
 template<class _Simulator>
 class Optimizer {
 public:
-    
+    typedef typename _Simulator::VField  VField;
+    typedef typename _Simulator::SMatrix SMatrix;
+    typedef typename _Simulator::ETensor ETensor;
+
+    template<typename Elems, typename Vertices>
+    Optimizer(Elems inElems, Vertices inVertices,
+              std::shared_ptr<typename _Simulator::MField> matField)
+        : m_sim(inElems, inVertices, matField), m_matField(matField)
+    {
+    }
+
+    std::vector<Real> objectiveGradient(const VField &u) const {
+        auto lambda = m_sim.solveAdjoint(u);
+        std::vector<Real> g(m_matField.numVars(), 0);
+        std::vector<int> elems;
+        for (size_t var = 0; var < m_matField.numVars(); ++var) {
+            m_matField.getInfluenceRegion(var, elems);
+            ETensor dE;
+            m_matField.getDerivative(var, dE);
+            for (size_t ei = 0; ei < elems.size(); ++ei) {
+                auto e = m_sim.mesh().element(elems[ei]);
+                SMatrix e_lambda, e_u;
+                m_sim.elementStrain(ei,      u,      e_u);
+                m_sim.elementStrain(ei, lambda, e_lambda);
+                g[var] += e->volume() * (dE.doubleContract(e_u).doubleContract(e_lambda));
+            }
+        }
+
+        return g;
+    }
+
 private:
+    _Simulator m_sim;
+    std::shared_ptr<typename _Simulator::MField> m_matField;
 };
 
 }
