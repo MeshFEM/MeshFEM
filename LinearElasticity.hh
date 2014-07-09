@@ -4,9 +4,9 @@
 /*! @file
 //      Implements an assembler and solver for the linear elastostatic equation.
 //
-//      The anonymous namespace contains the simulation code that is common to
-//      both 2D and 3D, while LinearElasticity[23]D namespaces contain
-//      typedefs and types that are [23]D-specific.
+//      The LinearElasticity namespace contains the simulation code common to
+//      both 2D and 3D, while LinearElasticity[23]D namespaces contain typedefs
+//      and types that are [23]D-specific.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -28,7 +28,7 @@
 #include "BoundaryConditions.hh"
 #include "LinearFEM.hh"
 
-namespace {
+namespace LinearElasticity {
     // Simulator for both 2 and 3 dimensions.
     // Pulls dimension information from the _Mesh template parameter
     template<class _Mesh>
@@ -46,7 +46,7 @@ namespace {
 
         template<class Elements, class Vertices>
         SimulatorND(const Elements &elems, const Vertices &vertices)
-            : m_mesh(elems, vertices), m_useNoRigidMotionConstraint(false) { }
+            : m_useNoRigidMotionConstraint(false), m_mesh(elems, vertices) { }
 
         const _Mesh &mesh() const { return m_mesh; }
 
@@ -405,7 +405,6 @@ namespace {
 
         // Note: a "DoF" here is actually vector-valued--there are actualy
         //_N * m_numDoFs variables in the elastostatic equation.
-        _Mesh m_mesh;
         bool m_useNoRigidMotionConstraint;
         size_t m_numDoFs;
         std::vector<int> m_dofForNode;
@@ -414,6 +413,8 @@ namespace {
         // It should be mutable because building and solving the system doesn't
         // affect user-visible state.
         mutable ConstrainedSystem<Real> m_system;
+    protected:
+        _Mesh m_mesh;
     };
 }
 
@@ -467,7 +468,7 @@ namespace LinearElasticity3D {
              class TData  = ElementData<>,
              class BVData = BoundaryNodeData,
              class BFData = BoundaryElementData>
-    using Simulator = SimulatorND<Mesh<VData, TData, BVData, BFData> >;
+    using Simulator = LinearElasticity::SimulatorND<Mesh<VData, TData, BVData, BFData> >;
 }
 
 namespace LinearElasticity2D {
@@ -521,7 +522,7 @@ namespace LinearElasticity2D {
              class TData  = ElementData<>,
              class BVData = BoundaryNodeData,
              class BEData = BoundaryElementData>
-    using Simulator = SimulatorND<Mesh<VData, TData, BVData, BEData> >;
+    using Simulator = LinearElasticity::SimulatorND<Mesh<VData, TData, BVData, BEData> >;
 }
 
 #include "LinearElasticity.inl"

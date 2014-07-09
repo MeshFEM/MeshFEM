@@ -9,13 +9,14 @@ namespace LinearElasticity3D {
 
         ElementData() { }
 
-        const ETensor &E() const { return m_E(); }
+        void configure(t_ETensorGetter EGetter) { m_E = EGetter; }
+        ETensor E() const { return m_E(); }
 
         template<class FlattenedType>
-        FlattenedType applyD(const FlattenedType  &in) const { return E().applyD(in); }
+        FlattenedType applyD(const FlattenedType  &in) const { return m_E().applyD(in); }
 
         template<class _SymMat>
-        _SymMat applyE(const _SymMat &in) const { return _SymMat(E().doubleContract(in)); }
+        _SymMat applyE(const _SymMat &in) const { return _SymMat(m_E().doubleContract(in)); }
 
         template<class _ElemHandle, class _SymMat>
         void engStrain(_ElemHandle elem, const VField &u, _SymMat &&out) const {
@@ -97,13 +98,15 @@ namespace LinearElasticity2D {
 
         ElementData() { }
 
-        const ETensor &E() const { return m_E(); }
+        void configure(t_ETensorGetter EGetter) { m_E = EGetter; }
+
+        ETensor E() const { return m_E(); }
 
         template<class FlattenedType>
-        FlattenedType applyD(const FlattenedType  &in) const { return E().applyD(in); }
+        FlattenedType applyD(const FlattenedType  &in) const { return m_E().applyD(in); }
 
         template<class _SymMat>
-        _SymMat applyE(const _SymMat &in) const { return _SymMat(E().doubleContract(in)); }
+        _SymMat applyE(const _SymMat &in) const { return _SymMat(m_E().doubleContract(in)); }
 
         template<class _ElemHandle, class _SymMat>
         void engStrain(_ElemHandle elem, const VField &u, _SymMat &&out) const {

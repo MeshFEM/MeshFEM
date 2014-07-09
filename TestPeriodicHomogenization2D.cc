@@ -2,6 +2,7 @@
 #include "BoundaryConditions.hh"
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
+#include "MaterialOptimization.hh"
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -27,8 +28,9 @@ int main(int argc, char *argv[])
 
     load(mshPath, inVertices, inTris, MeshIO::FMT_GUESS,
          MeshIO::MESH_TRI);
-
-    Simulator<> sim(inTris, inVertices);
+    MaterialOptimization2D::IsotropicField matField(inTris.size());
+    MaterialOptimization2D::Simulator<MaterialOptimization2D::IsotropicMaterial2D>
+        sim(inTris, inVertices, matField);
     MSHFieldWriter writer("htest.msh", sim.mesh());
 
     std::vector<LinearElasticity2D::VField> w_ij;
@@ -79,7 +81,7 @@ int main(int argc, char *argv[])
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;;
 
-    cout << "Tensor Diff:" << endl << Eh - ETargetinv.inverse() << endl << endl;;
+    // cout << "Tensor Diff:" << endl << Eh - ETargetinv.inverse() << endl << endl;;
     ETensor Einv = Eh.inverse();
 
     // cout << "Homogenized compliance tensor:" << endl;
@@ -90,8 +92,6 @@ int main(int argc, char *argv[])
 
     cout << "v_yx, v_xy:\t" << -Einv.D(0, 1) / Einv.D(1, 1) << "\t"
                             << -Einv.D(1, 0) / Einv.D(0, 0) << endl;
-
-    cout << Eh << endl;
 
     return 0;
 }

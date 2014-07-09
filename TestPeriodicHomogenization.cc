@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;;
 
-    cout << "Tensor Diff:" << endl << Eh - ETargetinv.inverse() << endl << endl;;
+    cout << "Tensor Diff:" << endl << Eh - ETargetinv.inverse() << endl << endl;
     ETensor Einv = Eh.inverse();
 
     // cout << "Homogenized compliance tensor:" << endl;
@@ -102,8 +102,6 @@ int main(int argc, char *argv[])
     cout << "v_xy, v_xz, v_yz:\t" << -Einv.D(1, 0) / Einv.D(0, 0) << "\t"
                                   << -Einv.D(2, 0) / Einv.D(0, 0) << "\t"
                                   << -Einv.D(2, 1) / Einv.D(1, 1) << endl;
-
-    cout << Eh << endl;
 
     return 0;
 }
