@@ -98,6 +98,10 @@ public:
         m_d = m_d.inverse().eval();
     }
 
+    void clear() {
+        m_d =  DType::Zero();
+    }
+
     Real operator()(size_t i, size_t j, size_t k, size_t l) const {
         assert((i < _Dim) && (j < _Dim) && (k < _Dim) && (l < _Dim));
         size_t ij = flattenIndices(_Dim, i, j);
