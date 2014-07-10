@@ -183,7 +183,7 @@ namespace LinearElasticity {
                         _Point center(_Point::Zero());
                         for (size_t c = 0; c < be.numVertices(); ++c)
                             center += be.vertex(c).volumeVertex()->p;
-                        center /= 3;
+                        center /= be.numVertices();
                         if (ncond->containsPoint(center)) {
                             if (ncond->type == NeumannType::Pressure)
                                  be->neumannTraction = -ncond->pressure * be->normal();
