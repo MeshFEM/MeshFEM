@@ -19,6 +19,7 @@
 
 namespace MaterialOptimization {
 
+// Var 0: Young's modulus, var 1: Poisson ratio
 template<size_t _N>
 struct IsotropicMaterial {
     static constexpr size_t N = _N;
@@ -29,7 +30,30 @@ struct IsotropicMaterial {
 
     void getTensorDerivative(size_t p, ETensor &d) const {
         assert(p == 0 || p == 1);
-        assert(false); // TODO: IMPLEMENT
+        d.clear();
+        Real E = vars[0], nu = vars[1];
+        Real dL, dmu;
+        if (_N == 2) {
+            // 2D Lambda = (nu * E) / (1.0 - nu * nu);
+            //    mu = E / (2.0 + 2.0 * nu);
+            dL = (p == 0) ? nu / (1 - nu * nu)
+                          : E * (1 + nu * nu) / ((1 - nu * nu) * (1 - nu * nu));
+        }
+        if (_N == 3) {
+            // 3D Lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
+            Real denSqrt = 1 - nu - 2 * nu * nu;
+            dL = (p == 0) ? nu / ((1.0 + nu) * (1.0 - 2 * nu))
+                          : E * (1 + 2 * nu * nu) / (denSqrt * denSqrt);
+        }
+
+        // 2D and 3D mu: E / (2 (1 + nu))
+        dmu = (p == 0) ? 1 / (2 * (1 + nu))
+                       : -E / (2 * (1 + nu) * (1 + nu));
+        for (size_t i = 0; i < flatLen(_N); ++i) {
+            for (size_t j = i; j < _N; ++j)
+                d.D(i, j) = dL;
+            d.D(i, i) += (i < _N) ? 2 * dmu : dmu;
+        }
     }
 
     void getTensor(ETensor &tensor) const {
@@ -85,6 +109,14 @@ public:
         size_t matIdx, param;
         m_variableRole(var, matIdx, param);
         region = m_elementsForMatIdx[matIdx];
+    }
+
+    // Gets dE/dvar
+    // Note: assumes variable only affects a single elasticity tensor.
+    void getTensorDerivative(size_t var, ETensor &dE) const {
+        size_t matIdx, param;
+        m_variableRole(var, matIdx, param);
+        m_materials[matIdx].getTensorDerivative(param, dE);
     }
 
     size_t   domainSize() const { return m_matIdxForElement.size(); }
@@ -162,6 +194,7 @@ public:
     static constexpr size_t N = _Material::N;
     typedef MaterialField<_Material> MField;
     typedef typename Base::VField VField;
+    typedef typename Base::_Point _Point;
 
     template<typename Elems, typename Vertices>
     SimulatorND(const Elems &elems, const Vertices &vertices,
@@ -179,6 +212,33 @@ public:
             m_mesh.element(i)->configure(mfield->getterForElement(i));
     }
 
+    void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
+        std::vector<CondPtr<_Point> > filteredConditions;
+        // Handle all the target conditions; pass everything else to base.
+        for (auto c : conds) {
+            if (auto tc = std::dynamic_pointer_cast<const TargetCondition<_Point> >(c)) {
+                for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+                    auto bv = m_mesh.boundaryNode(i);
+                    if (tc->containsPoint(bv.volumeVertex()->p)) {
+                        bv->hasTarget = true;
+                        bv->targetDisplacement = tc->displacement;
+                    }
+                }
+            }
+            else {
+                filteredConditions.push_back(c);
+            }
+        }
+
+        Base::applyBoundaryConditions(filteredConditions);
+    }
+
+    void removeTargets() {
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+            m_mesh.boundaryNode(i)->hasTarget = false;
+        }
+    }
+
     VField solveAdjoint(const VField &u) const {
         // Compute load on the DoFs caused by the adjoint problem's Neuman
         // traction:
@@ -188,22 +248,25 @@ public:
         // per-boundary-element traction load computation. Instead, the load is
         // computed by applying the mass matrix.
         VField dofLoad(m_mesh.numVertices());
+        dofLoad.clear();
         for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
             auto be = m_mesh.boundaryElement(bei);
             // 2D boundary elements have 2 nodes, 3D have 3 nodes.
             for (size_t j = 0; j < N; ++j) {
-                auto dist_j = u(be.vertex(j).volumeVertex().index()) -
-                                be.vertex(j)->targetDisplacement();
-                for (size_t i = 0; i < N; ++i) {
-                    dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
-                                      be->massMatrixContribution(i, j) * dist_j;
+                if (be.vertex(j)->hasTarget) {
+                    auto dist_j = u(be.vertex(j).volumeVertex().index()) -
+                                    be.vertex(j)->targetDisplacement;
+                    for (size_t i = 0; i < N; ++i) {
+                        dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
+                                          be->massMatrixContribution(i, j) * dist_j;
+                    }
                 }
             }
         }
 
         // Adjoint problem looks just like the elastostatic problem, but with
         // the load as computed above.
-        return solve(dofLoad);
+        return Base::solve(dofLoad);
     }
 private:
     std::shared_ptr<const MField> m_matField;
@@ -213,24 +276,68 @@ template<class _Simulator>
 class Optimizer {
 public:
     typedef typename _Simulator::VField  VField;
+    typedef typename _Simulator::SField  SField;
     typedef typename _Simulator::SMatrix SMatrix;
     typedef typename _Simulator::ETensor ETensor;
+    typedef typename _Simulator::_Point  _Point;
+    static constexpr size_t N = _Simulator::N;
+    typedef typename _Simulator::MField   MField;
 
     template<typename Elems, typename Vertices>
     Optimizer(Elems inElems, Vertices inVertices,
-              std::shared_ptr<typename _Simulator::MField> matField)
+              std::shared_ptr<MField> matField,
+              const std::vector<CondPtr<_Point> > &boundaryConditions,
+              bool noRigidMotion)
         : m_sim(inElems, inVertices, matField), m_matField(matField)
     {
+        m_sim.applyBoundaryConditions(boundaryConditions);
+        if (noRigidMotion)
+            m_sim.applyNoRigidMotionConstraint();
+    }
+
+    VField currentDisplacement() const {
+        return m_sim.solve();
+    }
+
+    // 1/2 int_bdry ||u - t||^2 dA = 1/2 int_bdry ||d||^2 dA
+    // where d = u - t is the distance-to-target vector field (linearly
+    // interpolated over each boundary element). The per-element
+    // contribution to this integral is:
+    //  ||d_i phi_i|| = area * phi_i phi_j <d_i, d_j>.
+    // area * phi_i * phi_j terms are just entries of the element mass matrix.
+    Real objective(const VField &u) const {
+        Real obj = 0;
+        for (size_t bei = 0; bei < m_sim.mesh().numBoundaryElements(); ++bei) {
+            auto be = m_sim.mesh().boundaryElement(bei);
+            // Integral over the boundary elements of distance to target is the
+            // (uniform) average distance to target * element area
+            // (since distance is linearly interpolated).
+            _Point totalDist(_Point::Zero());
+            _Point d[N];
+            for (size_t i = 0; i < N; ++i) {
+                auto bv = be.vertex(i);
+                d[i] = bv->hasTarget ? u(bv.volumeVertex().index()) -
+                                         bv->targetDisplacement
+                                     : _Point::Zero();
+            }
+            for (size_t i = 0; i < N; ++i) {
+                for (size_t j = 0; j < N; ++j) {
+                    obj += d[i].dot(d[j]) * be->massMatrixContribution(i, j);
+                }
+            }
+        }
+
+        return obj / 2;
     }
 
     std::vector<Real> objectiveGradient(const VField &u) const {
         auto lambda = m_sim.solveAdjoint(u);
-        std::vector<Real> g(m_matField.numVars(), 0);
-        std::vector<int> elems;
-        for (size_t var = 0; var < m_matField.numVars(); ++var) {
-            m_matField.getInfluenceRegion(var, elems);
+        std::vector<Real> g(m_matField->numVars(), 0);
+        std::vector<size_t> elems;
+        for (size_t var = 0; var < m_matField->numVars(); ++var) {
+            m_matField->getInfluenceRegion(var, elems);
             ETensor dE;
-            m_matField.getDerivative(var, dE);
+            m_matField->getTensorDerivative(var, dE);
             for (size_t ei = 0; ei < elems.size(); ++ei) {
                 auto e = m_sim.mesh().element(elems[ei]);
                 SMatrix e_lambda, e_u;
@@ -243,6 +350,9 @@ public:
         return g;
     }
 
+    const typename _Simulator::Mesh &mesh() const { return m_sim.mesh(); }
+    const _Simulator &simulator() const { return m_sim; }
+
 private:
     _Simulator m_sim;
     std::shared_ptr<typename _Simulator::MField> m_matField;
@@ -252,8 +362,8 @@ private:
 
 namespace MaterialOptimization2D {
 
-typedef MaterialOptimization::IsotropicMaterial<2> IsotropicMaterial2D;
-typedef MaterialOptimization::MaterialField<IsotropicMaterial2D> IsotropicField;
+typedef MaterialOptimization::IsotropicMaterial<2> IsotropicMaterial;
+typedef MaterialOptimization::MaterialField<IsotropicMaterial> IsotropicField;
 
 struct BoundaryNodeData : LinearElasticity2D::BoundaryNodeData {
     bool hasTarget;
@@ -268,6 +378,9 @@ using Mesh = LinearElasticity2D::Mesh<LinearFEM2D::NodeData<Point2D>,
 
 template<class _Material>
 using Simulator = MaterialOptimization::SimulatorND<_Material, Mesh<_Material> >;
+
+template<class _Material>
+using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
 
 }
 

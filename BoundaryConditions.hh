@@ -73,16 +73,10 @@ struct TargetCondition : public BoundaryCondition<_Vec> {
 ////////////////////////////////////////////////////////////////////////////////
 // Boundary Condition I/O
 ////////////////////////////////////////////////////////////////////////////////
-template<class _Vec>
-void writeBoundaryConditions(const std::string &cpath,
-                             const std::vector<ConstCondPtr<_Vec> > &conds);
-template<class _Vec>
-void writeBoundaryConditions(std::ostream &os,
-                             const std::vector<ConstCondPtr<_Vec> > &conds);
-template<typename _Vec>
-std::vector<CondPtr<_Vec> > readBoundaryConditions(const std::string &cpath);
-template<typename _Vec>
-std::vector<CondPtr<_Vec> > readBoundaryConditions(std::istream &is);
+template<class _Vec> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_Vec> > &conds);
+template<class _Vec> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_Vec> > &conds);
+template<typename _Vec> std::vector<CondPtr<_Vec> > readBoundaryConditions(const std::string &cpath, bool &noRigidMotion);
+template<typename _Vec> std::vector<CondPtr<_Vec> > readBoundaryConditions(std::istream &is,         bool &noRigidMotion);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation

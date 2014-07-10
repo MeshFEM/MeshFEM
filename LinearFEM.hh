@@ -229,7 +229,7 @@ namespace LinearFEM2D {
             return (i == j) ? area() / 3 : area() / 6;
         }
 
-        const Vector3D &normal() const { return m_normal; }
+        const EmbeddingSpace &normal() const { return m_normal; }
         Real area() const { return m_area; }
     protected:
         Real m_area;

@@ -34,7 +34,9 @@ namespace LinearElasticity {
     template<class _Mesh>
     class SimulatorND {
     public:
+        typedef _Mesh                 Mesh;
         typedef typename _Mesh::Point _Point;
+
         static constexpr size_t _N = _Mesh::_N;
 
         typedef ScalarField<Real>              SField;
@@ -170,16 +172,15 @@ namespace LinearElasticity {
             m_dofForNode.clear();
         }
 
-        template<class CondSmartPtrCollection>
-        void applyBoundaryConditions(const CondSmartPtrCollection &conds) {
+        void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
             if (conds.size() > 0) m_system.clear();
             for (auto cond : conds) {
                 std::runtime_error illegalCondition("Illegal BC type");
-                auto ncond = dynamic_cast<NeumannCondition<_Point> *>(cond.get());
+                auto ncond = dynamic_cast<const NeumannCondition<_Point> *>(cond.get());
                 if (ncond) {
                     for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
                         auto be = m_mesh.boundaryElement(i);
-                        _Point center(_Point::Zero);
+                        _Point center(_Point::Zero());
                         for (size_t c = 0; c < be.numVertices(); ++c)
                             center += be.vertex(c).volumeVertex()->p;
                         center /= 3;
@@ -191,15 +192,13 @@ namespace LinearElasticity {
                     }
                     continue;
                 }
-                auto dcond = dynamic_cast<DirichletCondition<_Point> *>(cond.get());
+                auto dcond = dynamic_cast<const DirichletCondition<_Point> *>(cond.get());
                 if (dcond) {
-                    int count = 0;
                     for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                         auto bv = m_mesh.boundaryNode(i);
                         if (dcond->containsPoint(bv.volumeVertex()->p)) {
                             bv->hasDirichlet = true;
                             bv->dirichletDisplacement = dcond->displacement;
-                            ++count;
                         }
                     }
                     continue;

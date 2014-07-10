@@ -2,7 +2,6 @@
 #include "BoundaryConditions.hh"
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
-#include "MaterialOptimization.hh"
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -28,10 +27,7 @@ int main(int argc, char *argv[])
 
     load(mshPath, inVertices, inTris, MeshIO::FMT_GUESS,
          MeshIO::MESH_TRI);
-    typedef MaterialOptimization2D::IsotropicField MField;
-    std::shared_ptr<MField> matField(new MField(inTris.size()));
-    MaterialOptimization2D::Simulator<MaterialOptimization2D::IsotropicMaterial2D>
-        sim(inTris, inVertices, matField);
+    Simulator<> sim(inTris, inVertices);
     MSHFieldWriter writer("htest.msh", sim.mesh());
 
     std::vector<LinearElasticity2D::VField> w_ij;
