@@ -27,7 +27,7 @@ namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_MSH = 1, FMT_POLY = 2, FMT_NODE_ELE = 3,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
-    typedef enum { MESH_TRI, MESH_TET, MESH_GUESS } MeshType;
+    typedef enum { MESH_TRI, MESH_TET, MESH_QUAD, MESH_GUESS, MESH_INVALID } MeshType;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex
@@ -190,8 +190,15 @@ namespace MeshIO {
                 for (size_t i = 0; is && (i < eSize); ++i)
                     is >> elements[i];
 
+                size_t polyVertices = elements[0].size();
+                for (size_t i = 0; i < eSize; ++i) {
+                    if (elements[i].size() != polyVertices)
+                        throw std::runtime_error("All elements must have same number of vertices.");
+                }
+
                 // Only surface meshes are supported by OFF
-                return MESH_TRI;
+                return (polyVertices == 3) ? MESH_TRI
+                     : ( (polyVertices == 4) ? MESH_QUAD : MESH_INVALID );
             }
     };
 

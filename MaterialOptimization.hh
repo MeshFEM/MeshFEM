@@ -320,9 +320,6 @@ public:
         Real obj = 0;
         for (size_t bei = 0; bei < m_sim.mesh().numBoundaryElements(); ++bei) {
             auto be = m_sim.mesh().boundaryElement(bei);
-            // Integral over the boundary elements of distance to target is the
-            // (uniform) average distance to target * element area
-            // (since distance is linearly interpolated).
             _Point totalDist(_Point::Zero());
             _Point d[N];
             for (size_t i = 0; i < N; ++i) {

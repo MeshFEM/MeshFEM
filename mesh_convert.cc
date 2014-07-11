@@ -3,6 +3,7 @@
 #include "TriMesh.hh"
 #include "MeshIO.hh"
 #include "tools/subdivide.hh"
+#include "tools/quad_tri_subdiv.hh"
 
 #include <iostream>
 #include <vector>
@@ -149,6 +150,15 @@ int main(int argc, const char *argv[])
             // Output is the unmodified triangle mesh
             outVertices = inVertices;
             outElements = inElements;
+        }
+    }
+    else if (type == MeshIO::MESH_QUAD) {
+        if (args.count("boundary")) {
+            throw runtime_error("Quad boundary extraction unsupported");
+        }
+
+        if (args.count("subdivide")) {
+            quad_tri_subdiv(inVertices, inElements, outVertices, outElements);
         }
     }
     else {
