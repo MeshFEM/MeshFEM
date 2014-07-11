@@ -2,12 +2,12 @@
 // quad_tri_subdiv.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//		Subdivide a quad mesh into triangles in a symmetric way:
-//		+---+
-//		|\ /|
-//		| X |
-//		|/ \|
-//		+---+
+//  Subdivide a quad mesh into triangles in a symmetric way:
+//      +---+
+//      |\ /|
+//      | X |
+//      |/ \|
+//      +---+
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

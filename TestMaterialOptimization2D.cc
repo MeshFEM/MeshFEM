@@ -1,6 +1,8 @@
 #include "BoundaryConditions.hh"
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
+#include "Materials.hh"
+#include "MaterialField.hh"
 #include "MaterialOptimization.hh"
 #include <vector>
 #include <queue>
@@ -47,17 +49,17 @@ int main(int argc, char *argv[])
     // writer.addField("e_lambda", matOpt.simulator().strain(lambda), MSHFieldWriter::PER_ELEMENT);
 
     size_t numElements = matOpt.mesh().numElements();
-    // SField gradE(numElements), gradNu(numElements);
+    SField gradE(numElements), gradNu(numElements);
 
-    // std::vector<Real> g = matOpt.objectiveGradient(u);
-    // assert(g.size() == 2 * numElements);
-    // for (size_t i = 0; i < numElements; ++i) {
-    //     gradE[i]  = g[2 * i + 0];
-    //     gradNu[i] = g[2 * i + 1];
-    // }
+    std::vector<Real> g = matOpt.objectiveGradient(u);
+    assert(g.size() == 2 * numElements);
+    for (size_t i = 0; i < numElements; ++i) {
+        gradE[i]  = g[2 * i + 0];
+        gradNu[i] = g[2 * i + 1];
+    }
 
-    // writer.addField("gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
+    writer.addField("gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
+    writer.addField("gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
 
     std::cout << "Attempting optimization" << std::endl;
     matOpt.run();

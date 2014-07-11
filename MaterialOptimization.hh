@@ -2,7 +2,12 @@
 // MaterialOptimization.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//		
+//	    Simulator and optimizer to minimize difference of boundary displacement
+//	    from a given per-boundary-vertex boundary displacement field, t:
+//          1/2 int_bdry ||u - t||^2 dA
+//      t is a linearly interpolated per-boundary vertex displacement field.
+//      If desired, t can be specified on a subset of the vertices, in which
+//      case we effectively set t = u on the unprescribed boundary vertices.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -14,10 +19,12 @@
 // Make NEWMAT support the 0-based indexing operator[]
 #define SETUP_C_SUBSCRIPTS
 
-#include "LinearElasticity.hh"
 #include <OPT++/NLF.h>
 #include <OPT++/OptCG.h>
 #include <OPT++/OptLBFGS.h>
+#include "LinearElasticity.hh"
+#include "Materials.hh"
+#include "MaterialField.hh"
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -25,172 +32,8 @@
 
 namespace MaterialOptimization {
 
-// Var 0: Young's modulus, var 1: Poisson ratio
-template<size_t _N>
-struct IsotropicMaterial {
-    static constexpr size_t N = _N;
-    static constexpr size_t numVars = 2;
-    typedef ElasticityTensor<Real, _N> ETensor;
-
-    IsotropicMaterial() { vars[0] = 1.0; vars[1] = 0; }
-
-    void getETensorDerivative(size_t p, ETensor &d) const {
-        assert(p == 0 || p == 1);
-        d.clear();
-        Real E = vars[0], nu = vars[1];
-        Real dL, dmu;
-        if (_N == 2) {
-            // 2D Lambda = (nu * E) / (1.0 - nu * nu);
-            //    mu = E / (2.0 + 2.0 * nu);
-            dL = (p == 0) ? nu / (1 - nu * nu)
-                          : E * (1 + nu * nu) / ((1 - nu * nu) * (1 - nu * nu));
-        }
-        if (_N == 3) {
-            // 3D Lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
-            Real denSqrt = 1 - nu - 2 * nu * nu;
-            dL = (p == 0) ? nu / ((1.0 + nu) * (1.0 - 2 * nu))
-                          : E * (1 + 2 * nu * nu) / (denSqrt * denSqrt);
-        }
-
-        // 2D and 3D mu: E / (2 (1 + nu))
-        dmu = (p == 0) ? 1 / (2 * (1 + nu))
-                       : -E / (2 * (1 + nu) * (1 + nu));
-        for (size_t i = 0; i < flatLen(_N); ++i) {
-            for (size_t j = i; j < _N; ++j)
-                d.D(i, j) = dL;
-            d.D(i, i) += (i < _N) ? 2 * dmu : dmu;
-        }
-    }
-
-    void getTensor(ETensor &tensor) const {
-        tensor.setIsotropic(vars[0], vars[1]);
-    }
-
-    Real vars[numVars];
-};
-
-// Per-element material field
-template<class _Material>
-class MaterialField {
-public:
-    typedef typename _Material::ETensor ETensor;
-
-    MaterialField(size_t numElements,
-            const std::vector<size_t> &matIdxForElement = std::vector<size_t>())
-    {
-        size_t numMat;
-        if (matIdxForElement.size() == numElements) {
-            m_matIdxForElement = matIdxForElement;
-            size_t m = *(std::max_element(matIdxForElement.begin(),
-                                          matIdxForElement.end()));
-            numMat = m + 1;
-            if (numMat > numElements) std::cout << "WARNING: more materials than elements." << std::endl;
-            m_elementsForMatIdx.assign(numMat, std::vector<size_t>());
-            for (size_t i = 0; i < numElements; ++i) {
-                m_elementsForMatIdx[matIdxForElement[i]].push_back(i);
-            }
-            for (size_t i = 0; i < numMat; ++i) {
-                if (m_elementsForMatIdx[i].size() == 0) {
-                    std::cout << "WARNING: Material " << i
-                              << " unreferenced." << std::endl;
-                }
-            }
-        }
-        else {
-            // By default, create one material per element
-            numMat = numElements;
-            assert(matIdxForElement.size() == 0);
-            m_matIdxForElement.resize(numElements);
-            m_elementsForMatIdx.assign(numMat, std::vector<size_t>(1));
-            for (size_t i = 0; i < numElements; ++i) {
-                m_matIdxForElement[i] = i;
-                m_elementsForMatIdx[i][0] = i;
-            }
-        }
-
-        m_materials.resize(numMat);
-    }
-
-    void getInfluenceRegion(size_t var, std::vector<size_t> &region) const {
-        size_t matIdx, param;
-        m_variableRole(var, matIdx, param);
-        region = m_elementsForMatIdx[matIdx];
-    }
-
-    // Gets dE/dvar
-    // Note: assumes variable only affects a single elasticity tensor.
-    void getETensorDerivative(size_t var, ETensor &dE) const {
-        size_t matIdx, param;
-        m_variableRole(var, matIdx, param);
-        m_materials[matIdx].getETensorDerivative(param, dE);
-    }
-
-    size_t   domainSize() const { return m_matIdxForElement.size(); }
-    size_t numMaterials() const { return m_materials.size(); }
-    size_t      numVars() const { return _Material::numVars * numMaterials(); }
-
-    template<typename ValueVector>
-    void setVars(const ValueVector &vals) {
-        for (size_t i = 0; i < numVars(); ++i) {
-            size_t matIdx, param;
-            m_variableRole(i, matIdx, param);
-            m_materials[matIdx].vars[param] = vals[i];
-        }
-    }
-
-    template<typename ValueVector>
-    void getVars(ValueVector &vals) const {
-        for (size_t i = 0; i < numVars(); ++i) {
-            size_t matIdx, param;
-            m_variableRole(i, matIdx, param);
-            vals[i] = m_materials[matIdx].vars[param];
-        }
-    }
-
-    ETensor getElasticityTensor(size_t mi) const {
-        assert(mi < m_materials.size());
-        ETensor result;
-        m_materials[mi].getTensor(result);
-        return result;
-    }
-
-    // For use in tet/tri Data
-    struct MaterialGetter {
-        MaterialGetter() : m_field(NULL), m_mat(0) { }
-        MaterialGetter(const MaterialField *fld, size_t mat) : m_field(fld), m_mat(mat) { }
-        ETensor operator()() const { return m_field->getElasticityTensor(m_mat); }
-    private:
-        const MaterialField *m_field;
-        size_t m_mat;
-    };
-
-    MaterialGetter getterForElement(size_t ei) const {
-        assert(ei < domainSize());
-        return MaterialGetter(this, m_matIdxForElement[ei]);
-    }
-
-private:
-    std::vector<_Material>            m_materials;
-    std::vector<size_t>               m_matIdxForElement;
-    std::vector<std::vector<size_t> > m_elementsForMatIdx;
-
-    ////////////////////////////////////////////////////////////////////////////
-    /*! Get the role of a variable in the material optimization. This role
-    //  comprises the material the variable affects and the parameter it
-    //  controls within that material. Currently we only support simple
-    //  variables that directly control a single parameter of a single material.
-    //  @param[in]  var    variable to query
-    //  @param[out] matIdx Index of the material controlled by var
-    //  @param[out] param  Parameter of material matIdx controlled by var
-    *///////////////////////////////////////////////////////////////////////////
-    void m_variableRole(size_t var, size_t &matIdx, size_t &param) const {
-        assert(var < numVars());
-        matIdx = var / _Material::numVars;
-        param  = var % _Material::numVars;
-        assert(matIdx < numMaterials());
-    }
-};
-
+// Simulator supporting material field attachment and solution of the material
+// optimization adjoint problem.
 template<class _Material, class _Mesh>
 class SimulatorND : public LinearElasticity::SimulatorND<_Mesh>
 {
@@ -218,9 +61,10 @@ public:
             m_mesh.element(i)->configure(mfield->getterForElement(i));
     }
 
+    // Apply the target displacement "boundary conditions", letting Base handle
+    // the rest.
     void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
         std::vector<CondPtr<_Point> > filteredConditions;
-        // Handle all the target conditions; pass everything else to base.
         for (auto c : conds) {
             if (auto tc = std::dynamic_pointer_cast<const TargetCondition<_Point> >(c)) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
@@ -239,6 +83,7 @@ public:
         Base::applyBoundaryConditions(filteredConditions);
     }
 
+    // Remove all target displacements
     void removeTargets() {
         for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
             m_mesh.boundaryNode(i)->hasTarget = false;
@@ -275,7 +120,9 @@ public:
         return Base::solve(dofLoad);
     }
 
-    void materialChanged() {
+    void materialFieldUpdated() {
+        // In the future, we can avoid symbolic refactorization by simply
+        // changing the nonzero values and re-calling numeric factorization.
         Base::m_system.clear();
     }
 
@@ -376,7 +223,7 @@ public:
         opt.optimize();
         std::cout << "Terminated after " << opt.getIter() << std::endl;
         _problem->m_matField->setVars(opt.getXPrev());
-        _problem->m_sim.materialChanged();
+        _problem->m_sim.materialFieldUpdated();
         opt.cleanup();
     }
 
@@ -403,7 +250,7 @@ private:
         assert(_problem);
         assert((size_t) ndim == _problem->m_matField->numVars());
         _problem->m_matField->setVars(x);
-        _problem->m_sim.materialChanged();
+        _problem->m_sim.materialFieldUpdated();
         auto u = _problem->currentDisplacement();
         Real normSq = 0;
         result = 0;
@@ -430,8 +277,8 @@ Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
 
 namespace MaterialOptimization2D {
 
-typedef MaterialOptimization::IsotropicMaterial<2> IsotropicMaterial;
-typedef MaterialOptimization::MaterialField<IsotropicMaterial> IsotropicField;
+typedef Materials::Isotropic<2> IsotropicMaterial;
+typedef MaterialField<IsotropicMaterial> IsotropicField;
 
 struct BoundaryNodeData : LinearElasticity2D::BoundaryNodeData {
     bool hasTarget;
@@ -440,9 +287,8 @@ struct BoundaryNodeData : LinearElasticity2D::BoundaryNodeData {
 
 template<class _Material>
 using Mesh = LinearElasticity2D::Mesh<LinearFEM2D::NodeData<Point2D>,
-            LinearElasticity2D::ElementData<typename
-                MaterialOptimization::MaterialField<_Material>::MaterialGetter>,
-            BoundaryNodeData>;
+                                      LinearElasticity2D::ElementData<typename MaterialField<_Material>::MaterialGetter>,
+                                      BoundaryNodeData>;
 
 template<class _Material>
 using Simulator = MaterialOptimization::SimulatorND<_Material, Mesh<_Material> >;
