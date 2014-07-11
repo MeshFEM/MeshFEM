@@ -18,10 +18,10 @@
 
 // Make NEWMAT support the 0-based indexing operator[]
 #define SETUP_C_SUBSCRIPTS
-
 #include <OPT++/NLF.h>
 #include <OPT++/OptCG.h>
 #include <OPT++/OptLBFGS.h>
+
 #include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "MaterialField.hh"
@@ -161,8 +161,8 @@ public:
     // where d = u - t is the distance-to-target vector field (linearly
     // interpolated over each boundary element). The per-element
     // contribution to this integral is:
-    //  ||d_i phi_i|| = area * phi_i phi_j <d_i, d_j>.
-    // area * phi_i * phi_j terms are just entries of the element mass matrix.
+    //      area * ||d_i phi_i||^2 = area * phi_i phi_j <d_i, d_j>.
+    // area * phi_i phi_j terms are entries of the boundary element mass matrix.
     Real objective(const VField &u) const {
         Real obj = 0;
         for (size_t bei = 0; bei < m_sim.mesh().numBoundaryElements(); ++bei) {

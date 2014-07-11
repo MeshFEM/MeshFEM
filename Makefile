@@ -8,8 +8,9 @@ OBJS=$(CONVERT_OBJS) $(PERHOMO_OBJS) $(PERHOMO2D_OBJS)
 SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc
 TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D TestMaterialOptimization2D
 
-CPPFLAGS+=-Wall -pedantic -std=c++11 -O0 -fno-inline -g $(INCLUDES) -DHAVE_NAMESPACES -DHAVE_STD
-# CPPFLAGS+=-std=c++11 -O2 $(INCLUDES)
+// CPPFLAGS+=-Wall -pedantic -std=c++11 -O0 -fno-inline -g $(INCLUDES)
+CPPFLAGS+=-Wall -std=c++11 -O2 $(INCLUDES)
+CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD
 
 all: $(TARGETS)
 
