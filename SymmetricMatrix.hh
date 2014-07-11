@@ -18,6 +18,7 @@
 #define SYMMETRICMATRIX_HH
 
 #include "Flattening.hh"
+#include <iostream>
 
 template<typename _Real, size_t t_N, typename _ConstSymmetricMatrix>
 class ConstSymmetricMatrixBase {
@@ -54,6 +55,16 @@ public:
     // Flattened addressing
     _Real operator[](size_t i) const {
         return (*static_cast<const _ConstSymmetricMatrix *>(this))[i];
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const ConstSymmetricMatrixBase &m) {
+        for (size_t i = 0; i < t_N; ++i) {
+            os << m(i, 0);
+            for (size_t j = 1; j < t_N; ++j)
+                os << " " << m(i, j);
+            os << std::endl;
+        }
+        return os;
     }
 };
 
