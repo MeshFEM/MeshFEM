@@ -38,22 +38,43 @@ int main(int argc, char *argv[])
 
     typedef typename Opt::SField  SField;
     auto u = matOpt.currentDisplacement();
+    auto lambda = matOpt.simulator().solveAdjoint(u);
 
     MSHFieldWriter writer("mtest.msh", matOpt.mesh());
     writer.addField("u", u, MSHFieldWriter::PER_NODE);
+    // writer.addField("lambda", lambda, MSHFieldWriter::PER_NODE);
+    // writer.addField("e_u", matOpt.simulator().strain(u), MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("e_lambda", matOpt.simulator().strain(lambda), MSHFieldWriter::PER_ELEMENT);
 
     size_t numElements = matOpt.mesh().numElements();
-    SField gradE(numElements), gradNu(numElements);
+    // SField gradE(numElements), gradNu(numElements);
 
-    std::vector<Real> g = matOpt.objectiveGradient(u);
-    assert(g.size() == 2 * numElements);
+    // std::vector<Real> g = matOpt.objectiveGradient(u);
+    // assert(g.size() == 2 * numElements);
+    // for (size_t i = 0; i < numElements; ++i) {
+    //     gradE[i]  = g[2 * i + 0];
+    //     gradNu[i] = g[2 * i + 1];
+    // }
+
+    // writer.addField("gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
+
+    std::cout << "Attempting optimization" << std::endl;
+    matOpt.run();
+
+    SField E(numElements), nu(numElements);
+    std::vector<Real> vars(matField->numVars());
+    matField->getVars(vars);
+    assert(vars.size() == 2 * numElements);
     for (size_t i = 0; i < numElements; ++i) {
-        gradE[i]  = g[2 * i + 0];
-        gradNu[i] = g[2 * i + 1];
+         E[i] = vars[2 * i + 0];
+        nu[i] = vars[2 * i + 1];
     }
+    writer.addField("E" , E , MSHFieldWriter::PER_ELEMENT);
+    writer.addField("nu", nu, MSHFieldWriter::PER_ELEMENT);
 
-    writer.addField("gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
-    writer.addField("gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
+    auto u_opt = matOpt.currentDisplacement();
+    writer.addField("u_opt", u_opt, MSHFieldWriter::PER_NODE);
 
     return 0;
 }

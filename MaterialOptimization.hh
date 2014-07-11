@@ -11,7 +11,13 @@
 #ifndef MATERIALOPTIMIZATION_HH
 #define MATERIALOPTIMIZATION_HH
 
+// Make NEWMAT support the 0-based indexing operator[]
+#define SETUP_C_SUBSCRIPTS
+
 #include "LinearElasticity.hh"
+#include <OPT++/NLF.h>
+#include <OPT++/OptCG.h>
+#include <OPT++/OptLBFGS.h>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -28,7 +34,7 @@ struct IsotropicMaterial {
 
     IsotropicMaterial() { vars[0] = 1.0; vars[1] = 0; }
 
-    void getTensorDerivative(size_t p, ETensor &d) const {
+    void getETensorDerivative(size_t p, ETensor &d) const {
         assert(p == 0 || p == 1);
         d.clear();
         Real E = vars[0], nu = vars[1];
@@ -113,10 +119,10 @@ public:
 
     // Gets dE/dvar
     // Note: assumes variable only affects a single elasticity tensor.
-    void getTensorDerivative(size_t var, ETensor &dE) const {
+    void getETensorDerivative(size_t var, ETensor &dE) const {
         size_t matIdx, param;
         m_variableRole(var, matIdx, param);
-        m_materials[matIdx].getTensorDerivative(param, dE);
+        m_materials[matIdx].getETensorDerivative(param, dE);
     }
 
     size_t   domainSize() const { return m_matIdxForElement.size(); }
@@ -242,7 +248,7 @@ public:
     VField solveAdjoint(const VField &u) const {
         // Compute load on the DoFs caused by the adjoint problem's Neuman
         // traction:
-        //  u - u_target
+        //  u_target - u
         // This traction is defined per-vertex and linearly interpolated over
         // each boundary element, so we can't use the inherited constant
         // per-boundary-element traction load computation. Instead, the load is
@@ -254,8 +260,8 @@ public:
             // 2D boundary elements have 2 nodes, 3D have 3 nodes.
             for (size_t j = 0; j < N; ++j) {
                 if (be.vertex(j)->hasTarget) {
-                    auto dist_j = u(be.vertex(j).volumeVertex().index()) -
-                                    be.vertex(j)->targetDisplacement;
+                    auto dist_j = be.vertex(j)->targetDisplacement -
+                                u(be.vertex(j).volumeVertex().index());
                     for (size_t i = 0; i < N; ++i) {
                         dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
                                           be->massMatrixContribution(i, j) * dist_j;
@@ -268,6 +274,11 @@ public:
         // the load as computed above.
         return Base::solve(dofLoad);
     }
+
+    void materialChanged() {
+        Base::m_system.clear();
+    }
+
 private:
     std::shared_ptr<const MField> m_matField;
 };
@@ -316,8 +327,8 @@ public:
             _Point d[N];
             for (size_t i = 0; i < N; ++i) {
                 auto bv = be.vertex(i);
-                d[i] = bv->hasTarget ? u(bv.volumeVertex().index()) -
-                                         bv->targetDisplacement
+                d[i] = bv->hasTarget ? (u(bv.volumeVertex().index()) -
+                                         bv->targetDisplacement).eval()
                                      : _Point::Zero();
             }
             for (size_t i = 0; i < N; ++i) {
@@ -337,10 +348,11 @@ public:
         for (size_t var = 0; var < m_matField->numVars(); ++var) {
             m_matField->getInfluenceRegion(var, elems);
             ETensor dE;
-            m_matField->getTensorDerivative(var, dE);
-            for (size_t ei = 0; ei < elems.size(); ++ei) {
-                auto e = m_sim.mesh().element(elems[ei]);
-                SMatrix e_lambda, e_u;
+            m_matField->getETensorDerivative(var, dE);
+            for (size_t i = 0; i < elems.size(); ++i) {
+                size_t ei = elems[i];
+                auto e = m_sim.mesh().element(ei);
+                SMatrix e_u, e_lambda;
                 m_sim.elementStrain(ei,      u,      e_u);
                 m_sim.elementStrain(ei, lambda, e_lambda);
                 g[var] += e->volume() * (dE.doubleContract(e_u).doubleContract(e_lambda));
@@ -350,13 +362,72 @@ public:
         return g;
     }
 
+    void run() {
+        _chooseProblem(this);
+        OPTPP::NLF1 nlp(m_matField->numVars(), _optAlgoEval, _optAlgoInit);
+
+        OPTPP::TOLS tol;         
+        tol.setDefaultTol();
+        tol.setFTol(1.e-9);    // Set convergence tolerance to 1.e-9 
+        tol.setMaxIter(200);   // Set maximum number of outer iterations to 200
+
+        // OPTPP::OptCG opt(&nlp);
+        OPTPP::OptLBFGS opt(&nlp, tol);
+        // opt.setOutputFile(cout);
+
+        opt.setGradTol(1.e-6);
+        opt.optimize();
+        std::cout << "Terminated after " << opt.getIter() << std::endl;
+        _problem->m_matField->setVars(opt.getXPrev());
+        _problem->m_sim.materialChanged();
+        opt.cleanup();
+    }
+
     const typename _Simulator::Mesh &mesh() const { return m_sim.mesh(); }
     const _Simulator &simulator() const { return m_sim; }
 
 private:
     _Simulator m_sim;
     std::shared_ptr<typename _Simulator::MField> m_matField;
+
+    // Callback interface for OptPP
+    static Optimizer *_problem;
+
+    static void _chooseProblem(Optimizer *prob) { _problem = prob; }
+    static void _optAlgoInit(int ndim, NEWMAT::ColumnVector &x) {
+        std::cout << "init called " << std::endl;
+        assert(_problem);
+        assert((size_t) ndim == _problem->m_matField->numVars());
+        _problem->m_matField->getVars(x);
+    }
+
+    static void _optAlgoEval(int mode, int ndim, const NEWMAT::ColumnVector &x,
+                             double &fx, NEWMAT::ColumnVector &gx, int &result) {
+        assert(_problem);
+        assert((size_t) ndim == _problem->m_matField->numVars());
+        _problem->m_matField->setVars(x);
+        _problem->m_sim.materialChanged();
+        auto u = _problem->currentDisplacement();
+        Real normSq = 0;
+        result = 0;
+        if (mode & OPTPP::NLPFunction) {
+            fx = _problem->objective(u);
+            result |= OPTPP::NLPFunction;
+        }
+        if (mode & OPTPP::NLPGradient) {
+            auto g = _problem->objectiveGradient(u);
+            for (size_t i = 0; i < (size_t) ndim; ++i) {
+                normSq += g[i] * g[i];
+                gx[i] = g[i];
+            }
+            result |= OPTPP::NLPGradient;
+        }
+        std::cout << fx << "\t" << sqrt(normSq) << std::endl;
+    }
 };
+
+template<class _Simulator>
+Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
 
 }
 

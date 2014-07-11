@@ -408,11 +408,12 @@ namespace LinearElasticity {
         size_t m_numDoFs;
         std::vector<int> m_dofForNode;
 
+    protected:
         // m_system implements caching of system matrices for multiple solves.
         // It should be mutable because building and solving the system doesn't
         // affect user-visible state.
         mutable ConstrainedSystem<Real> m_system;
-    protected:
+
         _Mesh m_mesh;
     };
 }
