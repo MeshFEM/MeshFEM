@@ -26,6 +26,7 @@
 #include "Materials.hh"
 #include "MaterialField.hh"
 #include <cassert>
+#include <stdexcept>
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -65,6 +66,7 @@ public:
     // the rest.
     void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
         std::vector<CondPtr<_Point> > filteredConditions;
+        std::string nonbdryMsg("Condition applied to non-boundary vertex ");
         for (auto c : conds) {
             if (auto tc = std::dynamic_pointer_cast<const TargetCondition<_Point> >(c)) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
@@ -75,9 +77,17 @@ public:
                     }
                 }
             }
-            else {
-                filteredConditions.push_back(c);
+            else if (auto tvc = std::dynamic_pointer_cast<const TargetVerticesCondition<_Point> >(c)) {
+                for (size_t i = 0; i < tvc->indices.size(); ++i) {
+                    size_t vi = tvc->indices[i];
+                    auto v = m_mesh.vertex(vi);
+                    auto bv = v.boundaryVertex();
+                    if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
+                    bv->hasTarget = true;
+                    bv->targetDisplacement = tvc->displacements[i];
+                }
             }
+            else filteredConditions.push_back(c);
         }
 
         Base::applyBoundaryConditions(filteredConditions);

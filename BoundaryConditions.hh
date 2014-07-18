@@ -13,6 +13,7 @@
 #define BOUNDARYCONDITIONS_HH
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <map>
 #include <list>
 #include <utility>
@@ -23,6 +24,7 @@
 
 template<typename _Vec>
 struct BoundaryCondition {
+    BoundaryCondition() { }
     BoundaryCondition(const BBox<_Vec> &r) : region(r) { }
     BBox<_Vec> region;
     bool containsPoint(const _Vec &p) const { return region.containsPoint(p); }
@@ -68,6 +70,82 @@ struct TargetCondition : public BoundaryCondition<_Vec> {
 
     _Vec displacement;
     virtual ~TargetCondition() { }
+};
+
+template<typename _Vec>
+struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
+    NeumannElementsCondition(NeumannType t,
+                             const std::vector<UnorderedTriplet> &element_corners,
+                             const std::vector<_Vec> &values) {
+        assert(element_corners.size() == values.size());
+        for (size_t i = 0; i < element_corners.size(); ++i) {
+            if      (t == NeumannType::Traction) m_vals[element_corners[i]] = Value(values[i]);
+            else if (t == NeumannType::Pressure) m_vals[element_corners[i]] = Value(values[i][0]);
+        }
+    }
+
+    struct Value {
+        Value(Real p = 0.0) : type(NeumannType::Pressure) { m_val[0] = p; }
+        Value(const _Vec &t) : type(NeumannType::Traction), m_val(t) { }
+        NeumannType type;
+        
+        Real pressure() const {
+            if (type != NeumannType::Pressure)
+                throw std::runtime_error("Neumann condition isn't pressure.");
+            return m_val[0];
+        }
+
+        const _Vec &traction() const {
+            if (type != NeumannType::Traction)
+                throw std::runtime_error("Neumann condition isn't traction.");
+            return m_val;
+        }
+
+    private:
+        _Vec m_val;
+    };
+
+    void setValue(Real pressure, size_t v0, size_t v1, size_t v2 = 0) {
+        UnorderedTriplet elem(v0, v1, v2);
+        m_vals[elem] = Value(pressure);
+    }
+
+    void setValue(const _Vec &traction, size_t v0, size_t v1, size_t v2 = 0) {
+        UnorderedTriplet elem(v0, v1, v2);
+        m_vals[elem] = Value(traction);
+    }
+
+    const Value &getValue(size_t v0, size_t v1, size_t v2 = 0) const {
+        UnorderedTriplet elem(v0, v1, v2);
+        return m_vals.at(elem);
+    }
+
+    /*! Number of elements this condition affects. */
+    size_t numElements() const { return m_vals.size(); }
+
+    virtual ~NeumannElementsCondition() { }
+private:
+    std::map<UnorderedTriplet, Value> m_vals;
+};
+
+template<typename _Vec>
+struct DirichletVerticesCondition : public BoundaryCondition<_Vec> {
+    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps)
+        : indices(vidxs), displacements(vdisps) { }
+
+    std::vector<size_t> indices;
+    std::vector<_Vec> displacements;
+    virtual ~DirichletVerticesCondition() { }
+};
+
+template<typename _Vec>
+struct TargetVerticesCondition : public BoundaryCondition<_Vec> {
+    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps)
+        : indices(vidxs), displacements(vdisps) { }
+
+    std::vector<size_t> indices;
+    std::vector<_Vec> displacements;
+    virtual ~TargetVerticesCondition() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////

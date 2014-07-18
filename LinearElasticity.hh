@@ -176,35 +176,66 @@ namespace LinearElasticity {
             if (conds.size() > 0) m_system.clear();
             for (auto cond : conds) {
                 std::runtime_error illegalCondition("Illegal BC type");
-                auto ncond = dynamic_cast<const NeumannCondition<_Point> *>(cond.get());
-                if (ncond) {
+                std::string nonbdryMsg("Condition applied to non-boundary vertex ");
+                if (auto nc = std::dynamic_pointer_cast<const NeumannCondition<_Point> >(cond)) {
                     for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
                         auto be = m_mesh.boundaryElement(i);
                         _Point center(_Point::Zero());
                         for (size_t c = 0; c < be.numVertices(); ++c)
                             center += be.vertex(c).volumeVertex()->p;
                         center /= be.numVertices();
-                        if (ncond->containsPoint(center)) {
-                            if (ncond->type == NeumannType::Pressure)
-                                 be->neumannTraction = -ncond->pressure * be->normal();
-                            else be->neumannTraction =  ncond->traction;
+                        if (nc->containsPoint(center)) {
+                            if (nc->type == NeumannType::Pressure)
+                                 be->neumannTraction = -nc->pressure * be->normal();
+                            else be->neumannTraction =  nc->traction;
                         }
                     }
-                    continue;
                 }
-                auto dcond = dynamic_cast<const DirichletCondition<_Point> *>(cond.get());
-                if (dcond) {
+                else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_Point> >(cond)) {
                     for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                         auto bv = m_mesh.boundaryNode(i);
-                        if (dcond->containsPoint(bv.volumeVertex()->p)) {
+                        if (dc->containsPoint(bv.volumeVertex()->p)) {
                             bv->hasDirichlet = true;
-                            bv->dirichletDisplacement = dcond->displacement;
+                            bv->dirichletDisplacement = dc->displacement;
                         }
                     }
                     continue;
                 }
-
-                throw illegalCondition;
+                else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<_Point> >(cond)) {
+                    typename NeumannElementsCondition<_Point>::Value val;
+                    size_t numSet = 0;
+                    for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
+                        auto be = m_mesh.boundaryElement(bei);
+                        if (_N == 2) {
+                            val = nec->getValue(
+                                    be.vertex(0).volumeVertex().index(),
+                                    be.vertex(1).volumeVertex().index());
+                        }
+                        else if (_N == 3) {
+                            val = nec->getValue(
+                                    be.vertex(0).volumeVertex().index(),
+                                    be.vertex(1).volumeVertex().index(),
+                                    be.vertex(2).volumeVertex().index());
+                        }
+                        if (val.type == NeumannType::Pressure)
+                             be->neumannTraction = -val.pressure() * be->normal();
+                        else be->neumannTraction =  val.traction();
+                        ++numSet;
+                    }
+                    if (numSet != nec->numElements())
+                        throw std::runtime_error("Some vertex boundary conditions weren't matched.");
+                }
+                else if (auto dvc = std::dynamic_pointer_cast<const DirichletVerticesCondition<_Point> >(cond)) {
+                    for (size_t i = 0; i < dvc->indices.size(); ++i) {
+                        size_t vi = dvc->indices[i];
+                        auto v = m_mesh.vertex(vi);
+                        auto bv = v.boundaryVertex();
+                        if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
+                        bv->hasDirichlet = true;
+                        bv->dirichletDisplacement = dvc->displacements[i];
+                    }
+                }
+                else throw illegalCondition;
             }
         }
 
