@@ -23,6 +23,7 @@
 #ifndef FIELDS_HH
 #define FIELDS_HH
 #include <Eigen/Dense>
+#include <vector>
 #include <string>
 #include <cassert>
 #include <algorithm>
