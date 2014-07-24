@@ -103,6 +103,9 @@ public:
         }
     }
 
+    const _Material &material(size_t mi) const { return m_materials.at(mi); }
+          _Material &material(size_t mi)       { return m_materials.at(mi); }
+
     ETensor getElasticityTensor(size_t mi) const {
         assert(mi < m_materials.size());
         ETensor result;

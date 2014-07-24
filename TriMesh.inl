@@ -11,8 +11,8 @@ VHandle : public _HType<TriMesh, VHandle<Handle>, VHandle<ConstHandle>, VertexDa
 public:
     bool valid() const { return size_t(m_idx) < m_mesh.numVertices(); }
     bool isBoundary() const { return m_mesh.m_bdryVertexIdx(m_idx) >= 0; }
-    BVHandle<_HType> boundaryVertex() const { return BVHandle<_HType>(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
-    HEHandle<_HType>       halfEdge() const { return HEHandle<_HType>(   m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
+    BVHandle<_HType> boundaryVertex() const { return BVHandle<_HType>(   m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
+    HEHandle<_HType>       halfEdge() const { return HEHandle<_HType>(m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
 
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)
@@ -144,7 +144,11 @@ public:
     bool valid() const { return size_t(m_idx) < m_mesh.numBoundaryVertices(); }
 
      VHandle<_HType> volumeVertex() const { return  VHandle<_HType>(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
-    BEHandle<_HType>         edge() const { return BEHandle<_HType>(m_mesh.m_bdryEIncidentBdryVertex(m_idx), m_mesh); }
+    // Going and incoming boundary edges. Note: getting the incoming edge is
+    // slightly more expensive since it can't be retrieved directly from the
+    // lookup tables--circulation is required.
+    BEHandle<_HType> outEdge() const { return BEHandle<_HType>(m_mesh.m_bdryELeavingBdryVertex(m_idx), m_mesh); }
+    BEHandle<_HType>    edge() const { return outEdge().prev(); }
 
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryVertexData[m_idx]; }
 };
@@ -233,7 +237,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // Half-edge Adjacency
     typedef std::map<UnorderedPair, int> EdgeMap;
     EdgeMap halfEdgeForEdge;
-    std::runtime_error nonManifold("Non-manifold input detected.");
+    // std::runtime_error nonManifold("Non-manifold input detected.");
     O.assign(3 * tris.size(), -1);
     size_t nHalfEdges = O.size();
     for (size_t he = 0; he < 3 * tris.size(); ++he) {
@@ -249,7 +253,8 @@ TriMesh(const Tris &tris, size_t nVertices) {
             }
             // Note: the following can't actually detect non-manifold geometry
             // because of the halfEdgeForEdge.erase(it) call...
-            else throw nonManifold;
+            // else throw nonManifold;
+            else assert(false);
             halfEdgeForEdge.erase(it);
         }
         else {
@@ -284,13 +289,14 @@ TriMesh(const Tris &tris, size_t nVertices) {
         int  tipVV = m_vertexOfHE<HEVertex::TAIL>(vhe);
         int tailVV = m_vertexOfHE<HEVertex::TIP >(vhe);
 
-        // Create tip and tail vertices if they don't already exist
+        // Create tip and tail boundary vertices if they don't already exist
         if (Vb[ tipVV] == -1) { Vb[ tipVV] = bV.size(); bV.push_back( tipVV); }
         if (Vb[tailVV] == -1) { Vb[tailVV] = bV.size(); bV.push_back(tailVV); }
 
         // Note: vhe's tip (the vertex it's incident on) is actually tailVV
         VH[tailVV] = vhe;
 
+        // Appending tip and til to bTipTail actually creates the boundary edge.
         bTipTail.push_back(Vb[ tipVV]);
         bTipTail.push_back(Vb[tailVV]);
     }

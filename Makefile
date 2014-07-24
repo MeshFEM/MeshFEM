@@ -3,9 +3,9 @@ include platform_defs.mk
 CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o
 PERHOMO_OBJS=TestPeriodicHomogenization.o MeshIO.o Types.o
 PERHOMO2D_OBJS=TestPeriodicHomogenization2D.o MeshIO.o Types.o
-MATOPT2D_OBJS=TestMaterialOptimization2D.o MeshIO.o Types.o BoundaryConditions.o
+MATOPT2D_OBJS=TestMaterialOptimization2D.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o
 OBJS=$(CONVERT_OBJS) $(PERHOMO_OBJS) $(PERHOMO2D_OBJS)
-SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc
+SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc
 TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D TestMaterialOptimization2D
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)

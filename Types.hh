@@ -3,12 +3,15 @@
 
 #include <Eigen/Dense>
 typedef double Real;
-typedef Eigen::Matrix<Real, 3, 1> Point3D;
-typedef Eigen::Matrix<Real, 3, 1> Vector3D;
-typedef Eigen::Matrix<Real, 2, 1> Point2D;
-typedef Eigen::Matrix<Real, 2, 1> Vector2D;
 
-// Utilities to convert between 2-vectors stored as padded 3D vectors or 2D
+template<int N>
+using PointND = Eigen::Matrix<Real, N, 1>;
+
+typedef PointND<3> Point3D;
+typedef PointND<3> Vector3D;
+typedef PointND<2> Point2D;
+typedef PointND<2> Vector2D;
+
 // vectors. Valid instantiations are provided in Types.cc; invalid generate
 // linker errors.
 //

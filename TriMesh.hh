@@ -128,12 +128,15 @@ private:
     ////////////////////////////////////
     // Vertex Operations
     ////////////////////////////////////
-    /*! Find the boundary mesh vertex associated with the volume mesh index v.
-     *  @return index of boundary vertex or -1 if v is an internal vertex. */
+    // Find the boundary mesh vertex associated with the volume mesh index v.
+    // Operation:
+    //     incoming volume halfedge -> outgoing boundary edge outgoing -> tail
+    // Works because the incident halfedge is guaranteed to be on the boundary.
+    // @return index of boundary vertex or -1 if v is an internal vertex.
     int m_bdryVertexIdx(int v) const {
         int be = m_bdryEdgeIdx(m_halfEdgeOfVertex(v));
         if (be == -1) return -1;
-        return m_bdryEdgeTip(be);
+        return m_bdryEdgeTail(be);
     }
 
     // Arbitrary half-edge incident on v (but guaranteed to be the boundary face
@@ -246,10 +249,12 @@ private:
         return bV[bv];
     }
 
-    // Get the (incoming) boundary edge incident on a boundary vertex.
-    // Works because the half-edge incident on a boundary vertex is guaranteed
-    // to be a boundary half-edge.
-    int m_bdryEIncidentBdryVertex(int bv) const {
+    // Get the (OUTOING) boundary edge incident on a boundary vertex.
+    // Works because the (volume) half-edge incident on a boundary vertex is
+    // guaranteed lie on the boundary.
+    // Unfortunately, getting the incoming boundary edge can't be done with a
+    // single lookup--for that we use the prev() call.
+    int m_bdryELeavingBdryVertex(int bv) const {
         int he = m_halfEdgeOfVertex(m_vertexForBdryVertex(bv));
         return m_bdryEdgeIdx(he);
     }

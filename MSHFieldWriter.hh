@@ -2,7 +2,8 @@
 // MSHFieldWriter.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Scalar/vector/matrix fields in the MSH format for viewing with Gmsh
+//      Write scalar/vector/matrix fields in the MSH format for viewing with
+//      Gmsh
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

@@ -83,8 +83,11 @@ public:
                     auto v = m_mesh.vertex(vi);
                     auto bv = v.boundaryVertex();
                     if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
-                    bv->hasTarget = true;
                     bv->targetDisplacement = tvc->displacements[i];
+                    bv->hasTarget = true;
+                    std::cout << "applied target " << bv->targetDisplacement[0]
+                              << ", " << bv->targetDisplacement[1] << " to vertex "
+                              << vi << " (" << bv.volumeVertex().index() << ")" << std::endl;
                 }
             }
             else filteredConditions.push_back(c);
@@ -230,6 +233,7 @@ public:
         // opt.setOutputFile(cout);
 
         opt.setGradTol(1.e-6);
+        opt.setDebug();
         opt.optimize();
         std::cout << "Terminated after " << opt.getIter() << std::endl;
         _problem->m_matField->setVars(opt.getXPrev());
