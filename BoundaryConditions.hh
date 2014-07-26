@@ -18,6 +18,7 @@
 #include <list>
 #include <utility>
 #include <queue>
+#include <memory>
 #include <iostream>
 #include "CollisionGrid.hh"
 #include "Geometry.hh"

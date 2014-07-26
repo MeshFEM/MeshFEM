@@ -445,14 +445,14 @@ private:
         return -1;
     }
 
-    //    e
+    /*    e
     //   / \
     //  +--->  
     // Tip (>) of half-edge e is vertex e's previous vertex in the half face,
     // and tail (+) is the next.
     // Connectivity must be accessed through the volume half face.
     // Equivalent operation for {tip, tail} is:
-    // volumeFace().vertex((c + {2, 1}) % 3).boundaryVertex()
+    // volumeFace().vertex((c + {2, 1}) % 3).boundaryVertex() */
     enum class HEVertex : int { TIP = 2, TAIL = 1 };
     template<HEVertex vtx>
     int m_bdryVertexOfBdryHE(int bhe) const {
