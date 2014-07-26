@@ -9,8 +9,8 @@ SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMateri
 TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D TestMaterialOptimization2D
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)
-CPPFLAGS+=-O0 -fno-inline -g
-# CPPFLAGS+=-O2
+# CPPFLAGS+=-O0 -fno-inline -g
+CPPFLAGS+=-O2
 CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 
 all: $(TARGETS)

@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     // cout << Einv << endl << endl;
     Eigen::Matrix<Real, 3, 1> moduli(1.0 / Einv.diag().array());
     cout << "Approximate Young moduli:\t"  << moduli[0] << "\t" << moduli[1] << endl;
-    cout << "Approximate shear modulus:\t" << moduli[2] << "\t" << endl;
+    cout << "Approximate shear modulus:\t" << moduli[2] << endl;
 
     cout << "v_yx, v_xy:\t" << -Einv.D(0, 1) / Einv.D(1, 1) << "\t"
                             << -Einv.D(1, 0) / Einv.D(0, 0) << endl;

@@ -5,6 +5,7 @@
 #include "tools/subdivide.hh"
 #include "tools/quad_tri_subdiv.hh"
 
+#include <limits>
 #include <iostream>
 #include <vector>
 #include <queue>
@@ -24,7 +25,7 @@ struct HalfEdgeData {
 };
 
 void usage(int exitVal, const po::options_description &visible_opts) {
-    cout << "Usage: mesh_convert inFile outFile [options]" << endl;
+    cout << "Usage: mesh_convert inFile (-i | [-bs] outFile)" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
@@ -43,6 +44,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
+        ("info,i",      "Get mesh information")
         ("boundary,b",  "Extract boundary surface")
         ("subdivide,s", "Subdivide geometry (surface mesh only)")
         ;
@@ -64,8 +66,9 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     if (vm.count("help"))
         usage(0, visible_opts);
 
-    if ((vm.count("inFile") == 0) || (vm.count("outFile") == 0)) {
-        cout << "Error: must specify input and output files" << endl;
+    if ((vm.count("inFile") == 0) || (vm.count("info") == vm.count("outFile"))) {
+        cout << "Error: specify input file and either request info "
+                "or specify output file" << endl;
         usage(1, visible_opts);
     }
 
@@ -101,6 +104,21 @@ int main(int argc, const char *argv[])
             if (v.isBoundary()) v.boundaryVertex()->p = inVertices[vi];
         }
 
+        if (args.count("info")) {
+            cout << "Tets:\t" << mesh.numTets() << endl
+                 << "Vertices:\t" << mesh.numVertices() << endl
+                 << "Boundary Tris:\t" << mesh.numBoundaryFaces() << endl
+                 << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
+
+            Real minSqNorm = numeric_limits<Real>::max();
+            for (size_t hfi = 0; hfi < mesh.numHalfFaces(); ++hfi) {
+                auto hf = mesh.halfFace(hfi);
+                for (size_t i = 0; i < 3; ++i) {
+                    minSqNorm = min(minSqNorm, (hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).squaredNorm());
+                }
+            }
+            cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
+        }
         if (args.count("boundary")) {
             if (args.count("subdivide")) {
                 // Output is the subdivided surface mesh
@@ -143,6 +161,19 @@ int main(int argc, const char *argv[])
             if (v.isBoundary()) v.boundaryVertex()->p = inVertices[vi];
         }
 
+        if (args.count("info")) {
+            cout << "Tris:\t" << mesh.numTris() << endl
+                 << "Vertices:\t" << mesh.numVertices() << endl
+                 << "Boundary Edges:\t" << mesh.numBoundaryEdges() << endl
+                 << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
+
+            Real minSqNorm = numeric_limits<Real>::max();
+            for (size_t hei = 0; hei < mesh.numHalfEdges(); ++hei) {
+                auto he = mesh.halfEdge(hei);
+                minSqNorm = min(minSqNorm, (he.tip()->p - he.tail()->p).squaredNorm());
+            }
+            cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
+        }
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);
         }
@@ -165,7 +196,9 @@ int main(int argc, const char *argv[])
         throw runtime_error("Unrecognized mesh type.");
     }
 
-    save(args["outFile"].as<string>(), outVertices, outElements); 
+    if (args.count("outFile")) {
+        save(args["outFile"].as<string>(), outVertices, outElements); 
+    }
 
     return 0;
 }
