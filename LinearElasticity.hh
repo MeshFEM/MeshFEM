@@ -27,6 +27,7 @@
 #include "TriMesh.hh"
 #include "BoundaryConditions.hh"
 #include "LinearFEM.hh"
+#include "MSHFieldWriter.hh"
 
 namespace LinearElasticity {
     // Simulator for both 2 and 3 dimensions.
@@ -48,7 +49,7 @@ namespace LinearElasticity {
 
         template<class Elements, class Vertices>
         SimulatorND(const Elements &elems, const Vertices &vertices)
-            : m_useNoRigidMotionConstraint(false), m_mesh(elems, vertices) { }
+            : m_useRigidMotionConstraint(false), m_mesh(elems, vertices) { }
 
         const _Mesh &mesh() const { return m_mesh; }
 
@@ -260,27 +261,64 @@ namespace LinearElasticity {
         }
 
         void applyNoRigidMotionConstraint() {
-            if (!m_useNoRigidMotionConstraint) {
+            if (!m_useRigidMotionConstraint ||
+                 m_rigidMotionConstraintRHS.size() != 0) {
+                m_rigidMotionConstraintRHS.clear();
                 m_system.clear();
-                m_useNoRigidMotionConstraint = true;
+                m_useRigidMotionConstraint = true;
             }
         }
 
+        // Apply a constraint to match the rigid motion of u
+        // This is the same as the no rigid motion constraint, but with a RHS
+        // given by the product R * u
+        void applyRigidMotionConstraint(const VField &u) {
+            applyNoRigidMotionConstraint();
+            // Currently we must rebuild the system--in the future, we should
+            // support rebuilding the constraint RHS without
+            // rebuilding/factoring the system matrix.
+            m_system.clear();
+            getRigidInnerProduct(u, m_rigidMotionConstraintRHS);
+        }
+
         void removeNoRigidMotionConstraint() {
-            if (m_useNoRigidMotionConstraint) {
+            if (m_useRigidMotionConstraint) {
                 m_system.clear();
-                m_useNoRigidMotionConstraint = false;
+                m_useRigidMotionConstraint = false;
+            }
+        }
+
+        // Compute R * u. This is useful for computing a no-rigid-motion right
+        // hand side that is compatible with a particular Dirichlet solution.
+        void getRigidInnerProduct(const VField &u, std::vector<Real> &innerProduct) const {
+            TMatrix R;
+            m_assembleRigidModeMatrix(R);
+            assert(R.n == _N * numDoFs());
+
+            // Compute row norm and inner product;
+            innerProduct.assign(R.m, 0.0);
+            for (size_t i = 0; i < R.nnz(); ++i) {
+                const auto &nz = R.nz[i];
+                innerProduct.at(nz.i) += nz.v * u[nz.j];
             }
         }
 
         // Remove the rigid transform component from a per-DoF vector field.
         // v = v - sum_i (R(i, :) * v) * R(i, :)' / ||R(i, :)||^2;
-        void projectOutRigidComponent(VField &v) const {
+        // If dofMask is passed then nodes i for which dofMask[i] is false are
+        // ignored.
+        // This allows only rigid motion in a vector field over a subset of the
+        // object to be projected out (originally I thought this was needed for
+        // local/global material optimization--maybe it's not so useful).
+        void projectOutRigidComponent(VField &v,
+                const std::vector<bool> &dofMask = std::vector<bool>()) const {
             assert(v.domainSize() == numDoFs());
+            bool hasDofMask = dofMask.size() == numDoFs();
             TMatrix R;
             // Note: rows of rigid mode matrix are orthogonal, but not
             // normalized.
             m_assembleRigidModeMatrix(R);
+            assert(R.n == _N * numDoFs());
 
             // Note: the following operations assume the rigid mode matrix has
             // no repeated indices.
@@ -288,42 +326,41 @@ namespace LinearElasticity {
             // Compute row norm and inner product;
             std::vector<Real> rowSqNorms(R.m, 0.0), innerProduct(R.m, 0.0);
             for (size_t i = 0; i < R.nnz(); ++i) {
-                auto nz = R.nz[i];
-                rowSqNorms.at(nz.i) += nz.v * nz.v;
-                innerProduct.at(nz.i) = nz.v * v[nz.j];
+                const auto &nz = R.nz[i];
+                if (hasDofMask && dofMask.at(nz.j / _N)) continue;
+                rowSqNorms.at(nz.i)   += nz.v * nz.v;
+                innerProduct.at(nz.i) += nz.v * v[nz.j];
             }
 
             // Subtract off projection onto rigid transform basis
             for (size_t i = 0; i < R.nnz(); ++i) {
-                auto nz = R.nz[i];
+                const auto &nz = R.nz[i];
+                if (hasDofMask && dofMask.at(nz.j / _N)) continue;
                 v[nz.j] -= innerProduct[nz.i] * nz.v / rowSqNorms[nz.i];
             }
         }
 
         // Remove the rigid motion component from the specified Dirichlet
-        // displacements.
+        // displacements (leaving all non-Dirichlet-node components untouched
         void projectOutRigidDirichlet() {
             VField u_dirichlet(numDoFs());
             u_dirichlet.clear();
+            std::vector<bool> dofMask(numDoFs(), true);
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                auto bv = m_mesh.boundaryNode(i);
-                if (bv->hasDirichlet) {
-                    size_t dof = DoF(bv.volumeVertex().index());
-                    u_dirichlet(dof) = bv->dirichletDisplacement;
+                auto bn = m_mesh.boundaryNode(i);
+                if (bn->hasDirichlet) {
+                    size_t dof = DoF(bn.volumeVertex().index());
+                    u_dirichlet(dof) = bn->dirichletDisplacement;
+                    dofMask[dof] = false;
                 }
             }
-            projectOutRigidComponent(u_dirichlet);
+            projectOutRigidComponent(u_dirichlet, dofMask);
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                auto bv = m_mesh.boundaryNode(i);
-                if (bv->hasDirichlet) {
-                    size_t dof = DoF(bv.volumeVertex().index());
-                    bv->dirichletDisplacement = u_dirichlet(dof);
-                    u_dirichlet[dof] *= 0.0;
+                auto bn = m_mesh.boundaryNode(i);
+                if (bn->hasDirichlet) {
+                    size_t dof = DoF(bn.volumeVertex().index());
+                    bn->dirichletDisplacement = u_dirichlet(dof);
                 }
-            }
-            // Projection shouldn't have introduced any new nonzeros...
-            for (size_t i = 0; i < u_dirichlet.size(); ++i) {
-                assert(u_dirichlet[i] == 0.0);
             }
 
             // In the future, we should make this simply update the constraint
@@ -337,12 +374,19 @@ namespace LinearElasticity {
         typedef TripletMatrix<Triplet<Real> > TMatrix;
         void m_assembleConstrainedSystem() const {
             TMatrix C;
+
+            std::vector<Real> constraintRHS;
             m_assembleStiffnessMatrix(C);
             TMatrix R, D;
-            if (m_useNoRigidMotionConstraint)
+            if (m_useRigidMotionConstraint) {
                 m_assembleRigidModeMatrix(R);
+                constraintRHS = m_rigidMotionConstraintRHS;
+                // By default we do a no-rigid-motion constraint
+                if (constraintRHS.size() == 0) constraintRHS.assign(R.m, 0);
+                if (constraintRHS.size() != R.m)
+                    throw std::runtime_error("Invalid rigid motion RHS");
+            }
 
-            std::vector<Real> constraintRHS(R.m, 0.0);
             m_assembleDirichletConstraint(D, constraintRHS);
 
             // Build constrained system with Lagrange multipliers
@@ -351,7 +395,7 @@ namespace LinearElasticity {
             // [ D      ] [lambda_D ] = [ D ]
             //  --- C ---   -- u_l --    -rhs-
             // Append boolean arguments:        pad   transpose
-            if (m_useNoRigidMotionConstraint) {
+            if (m_useRigidMotionConstraint) {
                 C.append(R, TMatrix::APPEND_BELOW, false, false);
                 C.append(R, TMatrix::APPEND_RIGHT,  true,  true);
             }
@@ -497,7 +541,8 @@ namespace LinearElasticity {
 
         // Note: a "DoF" here is actually vector-valued--there are actualy
         //_N * m_numDoFs variables in the elastostatic equation.
-        bool m_useNoRigidMotionConstraint;
+        bool m_useRigidMotionConstraint;
+        std::vector<Real> m_rigidMotionConstraintRHS;
         size_t m_numDoFs;
         std::vector<int> m_dofForNode;
 

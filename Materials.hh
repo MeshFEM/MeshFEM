@@ -36,7 +36,6 @@ struct Isotropic {
     void getETensorDerivative(size_t p, ETensor &d) const {
         assert(p == 0 || p == 1);
         d.clear();
-        if (p == 1) return;
         Real E = vars[0], nu = vars[1];
         Real dL, dmu;
         if (_N == 2) {

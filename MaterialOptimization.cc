@@ -12,26 +12,20 @@ namespace MaterialOptimization {
 
 template<class _Simulator>
 void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations) {
-    // // Clear rigid components from target and Dirichlet conditions.
-    // m_sim.projectOutRigidDirichlet();
-    // m_sim.swapTargetDirichlet();
-    // m_sim.projectOutRigidDirichlet();
-    // m_sim.swapTargetDirichlet();
+    auto neumannLoad = m_sim.neumannLoad();
+    m_sim.projectOutRigidComponent(neumannLoad);
     for (size_t its = 0; its < iterations; ++its) {
-        // Solve normally
-        auto neumannLoad = m_sim.neumannLoad();
-        m_sim.projectOutRigidComponent(neumannLoad);
-        auto u = m_sim.solve(neumannLoad);
-        const auto s = m_sim.stress(u);
-
+        // Target-as-Dirichlet solve
         m_sim.swapTargetDirichlet();
         m_sim.removeNoRigidMotionConstraint();
-
-        auto u_dirichletTargets = m_sim.solve();
+        auto u_dirichletTargets = m_sim.solve(neumannLoad);
         const auto e_dirichletTargets = m_sim.strain(u_dirichletTargets);
 
+        // Neumann solve
         m_sim.swapTargetDirichlet();
-        m_sim.applyNoRigidMotionConstraint();
+        m_sim.applyRigidMotionConstraint(u_dirichletTargets);
+        auto u = m_sim.solve(neumannLoad);
+        const auto s = m_sim.stress(u);
 
         writer.addField("u " + to_string(its), u, MSHFieldWriter::PER_NODE);
         writer.addField("u_dirichletTargets " + to_string(its), u_dirichletTargets, MSHFieldWriter::PER_NODE);
