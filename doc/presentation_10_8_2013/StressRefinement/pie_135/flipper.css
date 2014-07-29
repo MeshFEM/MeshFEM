@@ -1,0 +1,143 @@
+body {
+    font-family: arial, verdana;
+}
+
+table {
+    margin: 0px; padding: 0px;
+}
+
+th {
+    text-align: left;
+    background-color: #AAA;
+    padding: 3px;
+    margin: 0px;
+    border: 1px solid #9F9F9F;
+}
+
+td {
+    text-align: right;
+    background-color: #DDD;
+    padding: 3px;
+    margin: 0px;
+    border: 1px solid #9F9F9F;
+}
+
+#header {
+    font-weight: bold;
+    background: #EFEFEF;
+    padding: 3px;
+    margin: 0px;
+    margin-bottom: 5px;
+    border: 1px solid #9F9F9F;
+}
+
+#header a {
+    text-decoration: none;
+    color: #444;
+}
+#header a:hover {
+    color: #888;
+}
+
+#variants a {
+    display: inline-block;
+    padding: 4px;
+    text-decoration: none;
+    background-color: #DDD;
+    font-weight: bold;
+    color: #000;
+    border: 1px solid #9F9F9F;
+    /* border-left: 0px; */
+    margin: 2px 0px 2px 0px;
+}
+
+#variants a:first-child {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-left: 1px solid #9F9F9F;
+    margin-left: 2px;
+}
+#variants a:last-child {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    margin-right: 2px;
+}
+
+#variants a:hover {
+    background-color: #777;
+    color: #FFF;
+}
+
+#variants a.selected {
+    background-color: #68F;
+    color: #FFF;
+    border: 3px solid #24B;
+    padding: 2px;
+}
+
+#title {
+    font-size: 18pt;
+    display: inline-block;
+}
+
+#help {
+    font-size: 11pt;
+    display: none;
+}
+
+#img_frame {
+    border: 1px solid #9F9F9F;
+    max-width: 100%;
+    height: auto;
+}
+
+#frameList a {
+    display: inline-block;
+    padding: 4px;
+    text-decoration: none;
+    background-color: #DDD;
+    font-weight: bold;
+    color: #000;
+    border-radius: 5px;
+    border: 1px solid #9F9F9F;
+    margin: 2px;
+}
+
+#frameList a:hover {
+    background-color: #777;
+    color: #FFF;
+}
+
+#frameList a.selected {
+    background-color: #68F;
+    color: #FFF;
+    border: 3px solid #24B;
+    padding: 2px;
+}
+
+#frameList a.previous {
+    border: 3px solid #666;
+    padding: 2px;
+}
+
+#frameList a.disabled {
+    opacity: .25;
+}
+
+#frameData {
+    margin: 2px 0px 2px 0px;
+}
+
+#dataTable a {
+    display: inline-block;
+    text-align: center;
+    line-height: 14pt;
+    width: 14pt;
+    text-decoration: none;
+    text-decoration: none;
+    background-color: #DDD;
+    color: #000;
+    border-radius: 5px;
+    border: 1px solid #9F9F9F;
+    margin-right: 5px;
+}

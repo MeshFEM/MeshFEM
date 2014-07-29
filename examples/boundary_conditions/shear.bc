@@ -1,0 +1,2 @@
+{ "regions": [
+ { "type": "dirichlet", "value": [0.003, 0, 0], "box": { "minCorner": [-2.55, -3, 0], "maxCorner": [2.55, -2.524, 0] } },  { "type": "traction", "value": [-0.003, 0, 0], "box": { "minCorner": [-2.55, 2.524, 0], "maxCorner": [2.55, 3, 0] } }] }

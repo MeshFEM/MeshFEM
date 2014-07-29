@@ -1,0 +1,30 @@
+<html>
+    <head>
+        <title>Image Flipper</title>
+        <link href='flipper.css' rel='stylesheet' type='text/css'>
+        <script language='javascript' src='jquery.min.js'></script>
+        <script language='javascript' src='frames.js'></script>
+        <script language='javascript' src='flipper.js'></script>
+    </head>
+    <body onload='init_flipper()'>
+        <div id='header'>
+            <div id='title'></div>
+            &nbsp;
+            <a id='helpLink' href='javascript: $("#help").toggle();'>+/- help</a>
+            <div id='help' style='padding: 4px;'>
+                <table><tr><th>Left/right arrow</th><td>Change frame</td></tr>
+                       <tr><th>Spacebar</th><td>Toggle between frames</td></tr>
+                       <tr><th>Right click</th><td>Disable/enable frame</td></tr>
+                       <tr><th>D key</th><td>Disable all frames</td></tr>
+                       <tr><th>E key</th><td>Enable all frames</td></tr>
+                       <tr><th>T key</th><td>Toggle all frames</td></tr>
+                </table>
+            </div>
+            <div id='frameList'></div>
+            <div id='variants'></div>
+        </div>
+        <img id='img_frame' >
+        <div id='frameData'></div>
+        <div id='dataTable'></div>
+    </body>
+</html>

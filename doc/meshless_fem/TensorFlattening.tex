@@ -1,0 +1,486 @@
+\documentclass[10pt]{article}
+
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{upgreek}
+\usepackage{amsthm}
+\usepackage{fullpage}
+\usepackage{graphicx}
+\usepackage{cancel}
+\usepackage{subfigure}
+\usepackage{mathrsfs}
+%\usepackage{outlines}
+\usepackage[font={sf,it}, labelfont={sf,bf}, labelsep=space, belowskip=5pt]{caption}
+\usepackage{hyperref}
+%\usepackage{minted}
+\usepackage{xcolor}
+
+\usepackage{fancyhdr}
+\usepackage[title]{appendix}
+
+\DeclareMathOperator{\sgn}{sgn}
+
+\pagestyle{fancy}
+\headheight 24pt
+\headsep    12pt
+\lhead{Tensor Flattening}
+\fancyfoot[C]{} % hide the default page number at the bottom
+\lfoot{}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand\footrulewidth{0.4pt}
+\providecommand{\abs}[1]{\lvert#1\rvert}
+\providecommand{\norm}[1]{\lVert#1\rVert}
+\providecommand{\dx}{\, \mathrm{d}x}
+% \providecommand{\vint}[2]{\int_{#1} \! #2 \, \mathrm{d}x}
+% \providecommand{\sint}[2]{\int_{\partial #1} \! #2 \, \mathrm{d}A}
+\renewcommand{\div}{\nabla \cdot}
+\providecommand{\shape}{\Omega(p)}
+\providecommand{\boundary}{\partial \shape}
+\providecommand{\vint}[1]{\int_{\shape} \! #1 \, \mathrm{d}x}
+\providecommand{\sint}[1]{\int_{\boundary} \! #1 \, \mathrm{d}A}
+\providecommand{\pder}[2]{\frac{\partial #1}{\partial #2}}
+\providecommand{\tder}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+\providecommand{\evalat}[2]{\left.#1\right|_{#2}}
+\providecommand{\e}{\epsilon}
+\newcommand{\defeq}{\vcentcolon=}
+\newtheorem{lemma}{Lemma}
+
+\makeatletter
+\usepackage{mathtools}
+\newcases{mycases}{\quad}{%
+  \hfil$\m@th\displaystyle{##}$}{$\m@th\displaystyle{##}$\hfil}{\lbrace}{.}
+\makeatother
+
+\title{Tensor Flattening}
+\author{Julian Panetta}
+
+% BEGIN DOCUMENT
+\begin{document}
+
+\maketitle
+
+We discuss how symmetric rank 2 and rank 4 tensors are flattened into vectors
+and matrices so that contractions can be implemented efficiently as dot products
+and matrix multiplies. We use summation notation for our tensors, where
+summation over repeated indices is implied. The range of indices is $0..2$ in
+3D and $0..1$ in 2D.
+
+\section{Voigt Notation}
+Our approach is to use Voigt notation with zero indexing.
+\subsection{Symmetric Rank 2 Tensors}
+In this notation, symmetric rank 2 tensors are flattened into vectors in the order:
+$$
+\text{3D:} \quad
+\begin{pmatrix}
+    0 & 5 & 4 \\
+    \textcolor{lightgray}{5} & 1 & 3 \\
+    \textcolor{lightgray}{4} & \textcolor{lightgray}{3} & 2
+\end{pmatrix} \quad
+\text{2D:} \quad
+\begin{pmatrix}
+    0 & 3 \\
+    \textcolor{lightgray}{3} & 1
+\end{pmatrix}.
+$$
+For example, strain tensors are flattened as:
+$$
+\text{3D:} \quad
+\begin{pmatrix}
+    \e_{xx} & \e_{xy} & \e_{xz} \\
+    \e_{xy} & \e_{yy} & \e_{yz} \\
+    \e_{xz} & \e_{yz} & \e_{zz}
+\end{pmatrix} \mapsto
+\begin{pmatrix}
+    \e_{xx} \\
+    \e_{yy} \\
+    \e_{zz} \\
+    \e_{yz} \\
+    \e_{xz} \\
+    \e_{xy}
+\end{pmatrix}, \quad \quad
+\text{2D:} \quad
+\begin{pmatrix}
+    \e_{xx} & \e_{xy}\\
+    \e_{xy} & \e_{yy}\\
+\end{pmatrix} \mapsto
+\begin{pmatrix}
+    \e_{xx} \\
+    \e_{yy} \\
+    \e_{xy}
+\end{pmatrix} \quad
+$$
+This flattening is implemented by the following formula for flattened index
+$\overline{ij}$ in $N$ dimensions:
+$$
+\overline{ij}(i, j) = \begin{cases}
+    i & \text{if } i = j \\
+    \frac{N (N + 1)}{2} - \left(i + \frac{j (j - 1)}{2} + 1\right) & i < j \\
+    \overline{ij}(j, i)            & i > j
+\end{cases} .
+$$
+We can also go the other direction by solving for the upper triangle $(i, j)$ associated with $\overline{ij}$.
+This is done by picking the largest $j$ possible (to ensure we're in the upper
+triangle), and then solving for the $i$ index:
+$$
+j(\overline{ij}) = \begin{cases}
+    \overline{ij}  & \text{if } \overline{ij} < N \\
+    \left\lfloor \frac{1 + \sqrt{1 + 8 \left(\frac{N (N + 1)}{2} - 1 - \overline{ij} \right)}}{2} \right\rfloor & \text{otherwise}
+\end{cases} \quad \quad
+i(\overline{ij}) = \begin{cases}
+    \overline{ij}  & \text{if } \overline{ij} < N \\
+    \frac{N (N + 1)}{2} - 1 - \overline{ij} - \frac{j(\overline{ij}) (j(\overline{ij}) - 1)}{2} & \text{otherwise}
+\end{cases}.
+$$
+\subsection{Symmetric Rank 4 Tensors}
+The symmetric rank 2 tensor flattening induces a flattening of symmetric rank 4
+tensors that act on symmetric rank 2 tensors by double contraction. We consider
+tensors with the symmetries of an elasticity tensor:
+\begin{equation}
+\label{eqn:symmetry}
+E_{ijkl} = E_{jikl} = E_{ijlk} = E_{klij}.
+\end{equation}
+The idea is to flatten this tensor into a matrix so that matrix multiplication
+can implement double contraction on both the left and the right: $E : \e =
+E_{ijkl} \e_{kl}$ and $\e : E = \e_{ij} E_{ijkl}$. Since $\e_{kl}$ is flattened
+into vector entry $\overline{kl}$, we want entries $E_{**kl}$ to end up in
+matrix column $\overline{kl}$ so that entries are paired properly for
+the left double contraction. Likewise, the right double contraction requires
+$E_{ij**}$ to end up in matrix row $\overline{ij}$. Accordingly, we flatten
+rank 4 tensors $E_{ijkl}$ into the matrix:
+$$ D_{\overline{ij}\,\overline{kl}} = E_{ijkl} \quad \quad \text{where } i = i(\overline{ij}),\ j = j(\overline{ij}),\ k = i(\overline{kl}),\ l = j(\overline{kl})$$
+The minor symmetries ($i\leftrightarrow j$ and $k \leftrightarrow l$) of tensor
+$E_{ijkl}$ mean no information is lost in this conversion, and
+the major symmetry $ij \leftrightarrow kl$ means $D$ is
+a symmetric matrix.
+
+\subsection{Examples}
+A general rank 4 tensor looks like:
+$$
+\text{3D:}\quad
+E_{ijkl} =
+\left(
+\begin{array}{ccc}
+ \left(
+\begin{array}{ccc}
+ E_{0000} & E_{0001} & E_{0002} \\
+ E_{0010} & E_{0011} & E_{0012} \\
+ E_{0020} & E_{0021} & E_{0022} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{0100} & E_{0101} & E_{0102} \\
+ E_{0110} & E_{0111} & E_{0112} \\
+ E_{0120} & E_{0121} & E_{0122} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{0200} & E_{0201} & E_{0202} \\
+ E_{0210} & E_{0211} & E_{0212} \\
+ E_{0220} & E_{0221} & E_{0222} \\
+\end{array}
+\right) \\
+ \left(
+\begin{array}{ccc}
+ E_{1000} & E_{1001} & E_{1002} \\
+ E_{1010} & E_{1011} & E_{1012} \\
+ E_{1020} & E_{1021} & E_{1022} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{1100} & E_{1101} & E_{1102} \\
+ E_{1110} & E_{1111} & E_{1112} \\
+ E_{1120} & E_{1121} & E_{1122} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{1200} & E_{1201} & E_{1202} \\
+ E_{1210} & E_{1211} & E_{1212} \\
+ E_{1220} & E_{1221} & E_{1222} \\
+\end{array}
+\right) \\
+ \left(
+\begin{array}{ccc}
+ E_{2000} & E_{2001} & E_{2002} \\
+ E_{2010} & E_{2011} & E_{2012} \\
+ E_{2020} & E_{2021} & E_{2022} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{2100} & E_{2101} & E_{2102} \\
+ E_{2110} & E_{2111} & E_{2112} \\
+ E_{2120} & E_{2121} & E_{2122} \\
+\end{array}
+\right) & \left(
+\begin{array}{ccc}
+ E_{2200} & E_{2201} & E_{2202} \\
+ E_{2210} & E_{2211} & E_{2212} \\
+ E_{2220} & E_{2221} & E_{2222} \\
+\end{array}
+\right) \\
+\end{array}
+\right)
+$$
+$$
+\text{2D:}\quad
+E_{ijkl} =
+\left(
+\begin{array}{cc}
+ \left(
+\begin{array}{cc}
+ E_{0000} & E_{0001} \\
+ E_{0010} & E_{0011} \\
+\end{array}
+\right) & \left(
+\begin{array}{cc}
+ E_{0100} & E_{0101} \\
+ E_{0110} & E_{0111} \\
+\end{array}
+\right) \\
+ \left(
+\begin{array}{cc}
+ E_{1000} & E_{1001} \\
+ E_{1010} & E_{1011} \\
+\end{array}
+\right) & \left(
+\begin{array}{cc}
+ E_{1100} & E_{1101} \\
+ E_{1110} & E_{1111} \\
+\end{array}
+\right) \\
+\end{array}
+\right)
+$$
+After accounting for the symmetries of an elasticity tensor (\ref{eqn:symmetry}),
+these tensors really only have 21 and 6 unique entries in 3D and 2D respectively:
+$$
+\text{3D:}\quad
+E_{ijkl} =
+\left(\begin{array}{ccc}
+ \left(\begin{array}{ccc}
+ E_{0000} & E_{0001} & E_{0002} \\
+ E_{0001} & E_{0011} & E_{0012} \\
+ E_{0002} & E_{0012} & E_{0022} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0001} & E_{0101} & E_{0201} \\
+ E_{0101} & E_{1101} & E_{1201} \\
+ E_{0201} & E_{1201} & E_{2201} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0002} & E_{0201} & E_{0202} \\
+ E_{0201} & E_{1102} & E_{1202} \\
+ E_{0202} & E_{1202} & E_{2202} \\ \end{array} \right) \\
+ \left( \begin{array}{ccc}
+ E_{0001} & E_{0101} & E_{0201} \\
+ E_{0101} & E_{1101} & E_{1201} \\
+ E_{0201} & E_{1201} & E_{2201} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0011} & E_{1101} & E_{1102} \\
+ E_{1101} & E_{1111} & E_{1112} \\
+ E_{1102} & E_{1112} & E_{1122} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0012} & E_{1201} & E_{1202} \\
+ E_{1201} & E_{1112} & E_{1212} \\
+ E_{1202} & E_{1212} & E_{2212} \\ \end{array} \right) \\
+ \left( \begin{array}{ccc}
+ E_{0002} & E_{0201} & E_{0202} \\
+ E_{0201} & E_{1102} & E_{1202} \\
+ E_{0202} & E_{1202} & E_{2202} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0012} & E_{1201} & E_{1202} \\
+ E_{1201} & E_{1112} & E_{1212} \\
+ E_{1202} & E_{1212} & E_{2212} \\ \end{array} \right) &
+ \left( \begin{array}{ccc}
+ E_{0022} & E_{2201} & E_{2202} \\
+ E_{2201} & E_{1122} & E_{2212} \\
+ E_{2202} & E_{2212} & E_{2222} \\ \end{array} \right) \\
+\end{array}
+\right)
+$$
+$$
+\text{2D:}\quad
+E_{ijkl} =
+\left(
+\begin{array}{cc}
+ \left(
+\begin{array}{cc}
+ E_{0000} & E_{0001} \\
+ E_{0001} & E_{0011} \\
+\end{array}
+\right) & \left(
+\begin{array}{cc}
+ E_{0001} & E_{0101} \\
+ E_{0101} & E_{1101} \\
+\end{array}
+\right) \\
+ \left(
+\begin{array}{cc}
+ E_{0001} & E_{0101} \\
+ E_{0101} & E_{1101} \\
+\end{array}
+\right) & \left(
+\begin{array}{cc}
+ E_{0011} & E_{1101} \\
+ E_{1101} & E_{1111} \\
+\end{array}
+\right) \\
+\end{array}
+\right)
+$$
+And flattening to a symmetric matrix as described gets a single copy of each of
+these entries in the upper triangle:
+$$
+\text{3D:}\quad
+D_{\overline{ij}\, \overline{kl}} = 
+\left(
+\begin{array}{cccccc}
+ E_{0000} & E_{0011} & E_{0022} & E_{0012} & E_{0002} & E_{0001} \\
+ E_{0011} & E_{1111} & E_{1122} & E_{1112} & E_{1102} & E_{1101} \\
+ E_{0022} & E_{1122} & E_{2222} & E_{2212} & E_{2202} & E_{2201} \\
+ E_{0012} & E_{1112} & E_{2212} & E_{1212} & E_{1202} & E_{1201} \\
+ E_{0002} & E_{1102} & E_{2202} & E_{1202} & E_{0202} & E_{0201} \\
+ E_{0001} & E_{1101} & E_{2201} & E_{1201} & E_{0201} & E_{0101} \\
+\end{array}
+\right)
+$$
+$$
+\text{2D:}\quad
+D_{\overline{ij}\, \overline{kl}} = 
+\left(
+\begin{array}{ccc}
+ E_{0000} & E_{0011} & E_{0001} \\
+ E_{0011} & E_{1111} & E_{1101} \\
+ E_{0001} & E_{1101} & E_{0101} \\
+\end{array}
+\right).
+$$
+Here $D$ is used to denote the matrix holding the flattened elasticity tensor,
+as is standard in engineering literature.
+
+\section{Implementing Double Contraction}
+\subsection{The Missing Factor of 2}
+We have flattened with the goal of using dot products to implement double contraction
+of two rank 2 tensors and matrix-vector multiplication to implement double
+contraction of a rank 4 tensor and a rank 2 tensor. However we're not done yet:
+the off diagonal entries aren't handled properly! Consider a double contraction
+of a stress tensor with a strain tensor in 3D:
+$$
+\left( \begin{array}{ccc}
+ \sigma_{xx} & \sigma_{xy} & \sigma_{xz} \\
+ \sigma_{xy} & \sigma_{yy} & \sigma_{yz} \\
+ \sigma_{xz} & \sigma_{yz} & \sigma_{zz} \\
+\end{array} \right) :
+\left( \begin{array}{ccc}
+ \epsilon_{xx} & \epsilon_{xy} & \epsilon_{xz} \\
+ \epsilon_{xy} & \epsilon_{yy} & \epsilon_{yz} \\
+ \epsilon_{xz} & \epsilon_{yz} & \epsilon_{zz} \\
+\end{array} \right) = 
+\sigma_{xx} \epsilon_{xx}+\sigma_{yy} \epsilon_{yy}+\sigma_{zz} \epsilon_{zz}+ 2\left(\sigma_{yz} \epsilon_{yz}+ \sigma_{xz} \epsilon_{xz} + \sigma_{xy} \epsilon_{xy} \right)
+$$
+Notice the factor of 2 on the off-diagonals, which isn't present in the dot product of the two tensors in flattened form:
+$$
+\begin{pmatrix}
+    \sigma_{xx} &
+    \sigma_{yy} &
+    \sigma_{zz} &
+    \sigma_{yz} &
+    \sigma_{xz} &
+    \sigma_{xy}
+\end{pmatrix}
+\begin{pmatrix}
+    \e_{xx} \\
+    \e_{yy} \\
+    \e_{zz} \\
+    \e_{yz} \\
+    \e_{xz} \\
+    \e_{xy}
+\end{pmatrix} = \sigma_{xx} \epsilon_{xx}+\sigma_{yy} \epsilon_{yy}+\sigma_{zz} \epsilon_{zz}+ \sigma_{yz} \epsilon_{yz}+ \sigma_{xz} \epsilon_{xz} + \sigma_{xy} \epsilon_{xy}
+$$
+A similar problem happens with a double contraction of a rank 4 tensor with a
+rank 2 tensor. Consider entries of the symmetric stress tensor $\sigma = E :
+\epsilon$:
+$$
+\begin{pmatrix}
+\sigma_{xx} \\
+\sigma_{yy} \\
+\sigma_{zz} \\
+\sigma_{yz} \\
+\sigma_{xz} \\
+\sigma_{xy}
+\end{pmatrix} =
+\begin{pmatrix}
+ E_{0000} \epsilon_{xx}+E_{0011} \epsilon_{yy}+E_{0022} \epsilon_{zz} +2 (E_{0012} \epsilon_{yz} + E_{0002} \epsilon_{xz}+ E_{0001} \epsilon_{xy}) \\
+ E_{0011} \epsilon_{xx}+E_{1111} \epsilon_{yy}+E_{1122} \epsilon_{zz} +2 (E_{1112} \epsilon_{yz} + E_{1102} \epsilon_{xz}+ E_{1101} \epsilon_{xy}) \\
+ E_{0022} \epsilon_{xx}+E_{1122} \epsilon_{yy}+E_{2222} \epsilon_{zz} +2 (E_{2212} \epsilon_{yz} + E_{2202} \epsilon_{xz}+ E_{2201} \epsilon_{xy}) \\
+ E_{0012} \epsilon_{xx}+E_{1112} \epsilon_{yy}+E_{2212} \epsilon_{zz} +2 (E_{1212} \epsilon_{yz} + E_{1202} \epsilon_{xz}+ E_{1201} \epsilon_{xy}) \\
+ E_{0002} \epsilon_{xx}+E_{1102} \epsilon_{yy}+E_{2202} \epsilon_{zz} +2 (E_{1202} \epsilon_{yz} + E_{0202} \epsilon_{xz}+ E_{0201} \epsilon_{xy}) \\
+ E_{0001} \epsilon_{xx}+E_{1101} \epsilon_{yy}+E_{2201} \epsilon_{zz} +2 (E_{1201} \epsilon_{yz} + E_{0201} \epsilon_{xz}+ E_{0101} \epsilon_{xy})
+\end{pmatrix}.
+$$
+Again, our flattened version of this operation (applying matrix $D$ to the flattened strain vector) gets almost the correct answer, but it misses
+the factor of 2 on the off-diagonal strain contributions:
+$$
+D {\bf e} \defeq D
+\begin{pmatrix}
+\epsilon_{xx} \\
+\epsilon_{yy} \\
+\epsilon_{zz} \\
+\epsilon_{yz} \\
+\epsilon_{xz} \\
+\epsilon_{xy}
+\end{pmatrix} =
+\begin{pmatrix}
+E_{0000} \epsilon_{xx} + E_{0011} \epsilon_{yy} + E_{0022} \epsilon_{zz} + E_{0012} \epsilon_{yz} + E_{0002} \epsilon_{xz} + E_{0001} \epsilon_{xy} \\
+E_{0011} \epsilon_{xx} + E_{1111} \epsilon_{yy} + E_{1122} \epsilon_{zz} + E_{1112} \epsilon_{yz} + E_{1102} \epsilon_{xz} + E_{1101} \epsilon_{xy} \\
+E_{0022} \epsilon_{xx} + E_{1122} \epsilon_{yy} + E_{2222} \epsilon_{zz} + E_{2212} \epsilon_{yz} + E_{2202} \epsilon_{xz} + E_{2201} \epsilon_{xy} \\
+E_{0012} \epsilon_{xx} + E_{1112} \epsilon_{yy} + E_{2212} \epsilon_{zz} + E_{1212} \epsilon_{yz} + E_{1202} \epsilon_{xz} + E_{1201} \epsilon_{xy} \\
+E_{0002} \epsilon_{xx} + E_{1102} \epsilon_{yy} + E_{2202} \epsilon_{zz} + E_{1202} \epsilon_{yz} + E_{0202} \epsilon_{xz} + E_{0201} \epsilon_{xy} \\
+E_{0001} \epsilon_{xx} + E_{1101} \epsilon_{yy} + E_{2201} \epsilon_{zz} + E_{1201} \epsilon_{yz} + E_{0201} \epsilon_{xz} + E_{0101} \epsilon_{xy}
+\end{pmatrix}
+$$
+Finally, by symmetry, an identical problem happens when implementing the double
+contraction $\e_{ij} E_{ijkl}$ as ${\bf e}^T D$.
+
+\subsection{Solving the Problem}
+There are several ways to introduce the factors of two. We can double the right
+half of the D matrix, but this breaks its symmetry. We can leave $D$ unchanged,
+but work with ``engineering strain'' $(\e_{xx}, \e_{yy}, \e_{zz}, 2 \e_{yz}, 2
+\e_{xz}, 2 \e_{xy})^T$, but this means strain and stress are flattened
+differently, which could lead to mistakes. We could weight the off diagonal
+terms of all symmetric rank 2 tensors by $\sqrt{2}$ (this is called Kelvin or
+Mandel notation) but this also requires modifying the $D$ matrix--though this
+time in a symmetric way.
+
+Instead of any of these, we choose to work with true, unmodified strain/stress
+quantities and the original, symmetric $D$, but to include a "shear doubling"
+matrix that doubles the off-diagonal entries each time a double contraction
+is taken. This means off diagonals of strain and stress are flattened the
+same way, $D$ remains symmetric, and entries in $D$ give the corresponding elasticity
+coefficients directly instead of some scaling of them. This shear doubling
+matrix is given by
+$$
+\text{3D: }\quad S = \begin{pmatrix}
+        1 & 0 & 0 & 0 & 0 & 0 \\
+        0 & 1 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 2 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 2 & 0 \\
+        0 & 0 & 0 & 0 & 0 & 2 \\
+    \end{pmatrix}, \quad \quad
+\text{2D: }\quad S = \begin{pmatrix}
+        1 & 0 & 0 \\
+        0 & 1 & 0 \\
+        0 & 0 & 2 \\
+    \end{pmatrix}
+$$
+\subsection{Examples}
+Finally, we show examples of double contraction implemented by matrix vector
+multiplies and inner products. We use $F$ to denote the flattening operation
+mapping symmetric rank 2 tensors to vectors. Letting ${\bf e} = F(\e)$ and
+${\bf s} = F(\sigma)$ (flattened stress and strain tensors), we show various
+identities of our notation:
+\begin{gather*}
+{\bf s} = F(\sigma) = F(E : \e) = F(E_{ijkl} \e_{kl}) = D S {\bf e}, \\
+\sigma : \e = \sigma_{ij} \e_{kl} = {\bf s}^T S {\bf e}, \\
+\e : E : \e = \e_{ij} E_{ijkl} \e_{kl} = {\bf e}^T S D S {\bf e}
+\end{gather*}
+\end{document}
