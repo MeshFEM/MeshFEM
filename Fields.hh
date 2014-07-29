@@ -47,15 +47,19 @@ public:
     typedef typename ArrayType::ColXpr         ValueType;
     typedef typename ArrayType::ConstColXpr    ConstValueType;
 
+    // Copy constructor
+    VectorField(const VectorField &b) : m_values(b.m_values) { }
+
+    // Flattened data constructor
     // Note: copies data
-    VectorField(const FlattenedType &values)
-    {
+    VectorField(const FlattenedType &values) {
         size_t domainSize = values.rows() / t_dim;
         assert(t_dim * domainSize == (size_t) values.rows());
         m_values = Eigen::Map<const ArrayType>(values.data(), t_dim,
                                                domainSize);
     }
 
+    // Flattened data constructor (std::vector version)
     template<typename Real2>
     VectorField(const std::vector<Real2> &values) {
         size_t domainSize = values.size() / t_dim;
@@ -64,13 +68,10 @@ public:
             (&values[0], t_dim, domainSize);
     }
 
+
+    // Uninitialized allocation constructor
     VectorField(size_t domainSize = 0)
         : m_values(t_dim, domainSize) { }
-
-    VectorField &operator*=(Real scalar) {
-        m_values *= scalar;
-        return *this;
-    }
 
     ConstValueType operator()(size_t i) const {
         assert(i < (size_t) m_values.cols());
@@ -81,6 +82,32 @@ public:
         assert(i < (size_t) m_values.cols());
         return m_values.col(i);
     }
+
+    // Arithmetic operations
+    VectorField &operator*=(Real scalar) {
+        m_values *= scalar;
+        return *this;
+    }
+
+    VectorField &operator+=(const VectorField &b) {
+        assert(domainSize() == b.domainSize());
+        for (size_t i = 0; i < domainSize(); ++i) {
+            m_values.col(i) += b.m_values.col(i);
+        }
+        return *this;
+    }
+
+    VectorField &operator-=(const VectorField &b) {
+        assert(domainSize() == b.domainSize());
+        for (size_t i = 0; i < domainSize(); ++i) {
+            m_values.col(i) -= b.m_values.col(i);
+        }
+        return *this;
+    }
+
+    VectorField operator*(Real s)               const { VectorField result(*this); result *= s; return result; }
+    VectorField operator+(const VectorField &b) const { VectorField result(*this); result += b; return result; }
+    VectorField operator-(const VectorField &b) const { VectorField result(*this); result -= b; return result; }
 
     void clear() { m_values = ArrayType::Zero(dim(), domainSize()); }
 
@@ -99,6 +126,14 @@ public:
         for (size_t i = 0; i < domainSize(); ++i)
             minNorm = std::min(minNorm, m_values.col(i).norm());
         return minNorm;
+    }
+
+    // Sum of squared norms of each vector.
+    Real frobeniusNormSq() const {
+        Real normSq = 0;
+        for (size_t i = 0; i < domainSize(); ++i)
+            normSq += m_values.col(i).squaredNorm();
+        return normSq;
     }
 
     const ArrayType &data() const { return m_values; }

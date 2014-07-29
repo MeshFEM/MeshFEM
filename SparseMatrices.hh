@@ -516,6 +516,7 @@ public:
         if (!m_cached) {
             assert(m_CFactors == NULL);
             m_CFactors = new _Factorizer(*m_C);
+            // std::cout << "Peak factorization memory:\t" << m_CFactors->peakMemoryMB() << "MB" << std::endl;
             m_cached = true;
         }
 
