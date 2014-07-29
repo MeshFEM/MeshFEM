@@ -118,6 +118,12 @@ namespace LinearFEM3D {
         template<typename Tets, typename Vertices>
         Mesh(const Tets &tets, const Vertices &vertices)
             : Base(tets, vertices.size()) {
+            setVertexPositions(vertices);
+        }
+
+        template<typename Vertices>
+        void setVertexPositions(const Vertices &vertices) {
+            assert(Base::numVertices() == vertices.size());
             // Fill out mesh data.
             for (size_t i = 0; i < Base::numVertices(); ++i) {
                 Base::vertex(i)->p = vertices[i];
@@ -272,6 +278,11 @@ namespace LinearFEM2D {
         template<typename Tris, typename Vertices>
         Mesh(const Tris &tris, const Vertices &vertices)
             : Base(tris, vertices.size()) {
+            setVertexPositions(vertices);
+        }
+
+        template<typename Vertices>
+        void setVertexPositions(const Vertices &vertices) {
             // Fill out mesh data.
             for (size_t i = 0; i < Base::numVertices(); ++i) {
                 Base::vertex(i)->p = truncateFrom3D<Point>(vertices[i]);

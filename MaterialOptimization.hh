@@ -25,6 +25,7 @@
 #include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "MaterialField.hh"
+#include "MSHFieldWriter.hh"
 #include <cassert>
 #include <stdexcept>
 #include <iostream>
@@ -85,9 +86,6 @@ public:
                     if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
                     bv->targetDisplacement = tvc->displacements[i];
                     bv->hasTarget = true;
-                    std::cout << "applied target " << bv->targetDisplacement[0]
-                              << ", " << bv->targetDisplacement[1] << " to vertex "
-                              << vi << " (" << bv.volumeVertex().index() << ")" << std::endl;
                 }
             }
             else filteredConditions.push_back(c);
@@ -101,6 +99,19 @@ public:
         for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
             m_mesh.boundaryNode(i)->hasTarget = false;
         }
+    }
+
+    // Swap the target and Dirichlet conditions so that target positions
+    // become Dirichlet constraints and vice versa. This is useful for the
+    // "Local Global" iteration where target positions are used as Dirichlet
+    // constraints every other solve.
+    void swapTargetDirichlet() {
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+            auto bn = m_mesh.boundaryNode(i);
+            std::swap(bn->hasTarget, bn->hasDirichlet);
+            std::swap(bn->targetDisplacement, bn->dirichletDisplacement);
+        }
+        Base::m_system.clear();
     }
 
     VField solveAdjoint(const VField &u) const {
@@ -148,11 +159,13 @@ class Optimizer {
 public:
     typedef typename _Simulator::VField  VField;
     typedef typename _Simulator::SField  SField;
+    typedef typename _Simulator::SMField SMField;
     typedef typename _Simulator::SMatrix SMatrix;
     typedef typename _Simulator::ETensor ETensor;
     typedef typename _Simulator::_Point  _Point;
     static constexpr size_t N = _Simulator::N;
-    typedef typename _Simulator::MField   MField;
+    typedef typename _Simulator::MField  MField;
+    typedef typename MField::Material    Material;
 
     template<typename Elems, typename Vertices>
     Optimizer(Elems inElems, Vertices inVertices,
@@ -219,7 +232,9 @@ public:
         return g;
     }
 
-    void run() {
+    void run(MSHFieldWriter &writer, size_t iterations = 3);
+
+    void runGradientBased() {
         _chooseProblem(this);
         OPTPP::NLF1 nlp(m_matField->numVars(), _optAlgoEval, _optAlgoInit);
 

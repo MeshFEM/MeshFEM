@@ -33,21 +33,21 @@ int main(int argc, char *argv[])
     bool noRigidMotion;
     auto bconds = readBoundaryConditions<Vector2D>(condPath, noRigidMotion);
 
-    MSHFieldParser<2> parser(mshPath);
+    // MSHFieldParser<2> parser(mshPath);
 
-    auto initialYoung = parser.scalarField("young");
-    auto initialPoisson = parser.scalarField("poisson");
+    // auto initialYoung = parser.scalarField("young");
+    // auto initialPoisson = parser.scalarField("poisson");
 
     load(mshPath, inVertices, inTris, MeshIO::FMT_GUESS,
          MeshIO::MESH_TRI);
     shared_ptr<IsotropicField> matField(new IsotropicField(inTris.size()));
 
-    assert(initialYoung.domainSize() == initialPoisson.domainSize());
-    assert(initialYoung.domainSize() == matField->numMaterials());
-    for (size_t i = 0; i < matField->numMaterials(); ++i) {
-        matField->material(i).vars[0] = initialYoung[i];
-        matField->material(i).vars[1] = initialPoisson[i];
-    }
+    // assert(initialYoung.domainSize() == initialPoisson.domainSize());
+    // assert(initialYoung.domainSize() == matField->numMaterials());
+    // for (size_t i = 0; i < matField->numMaterials(); ++i) {
+    //     matField->material(i).vars[0] = initialYoung[i];
+    //     matField->material(i).vars[1] = initialPoisson[i];
+    // }
 
     typedef Optimizer<IsotropicMaterial> Opt;
     Opt matOpt(inTris, inVertices, matField, bconds, noRigidMotion);
@@ -99,7 +99,8 @@ int main(int argc, char *argv[])
     writer.addField("initial gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
 
     std::cout << "Attempting optimization" << std::endl;
-    matOpt.run();
+    size_t iterations = (argc > 3) ? std::stoi(argv[3]) : 1;
+    matOpt.run(writer, iterations);
 
     matField->getVars(vars);
     assert(vars.size() == 2 * numElements);

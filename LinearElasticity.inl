@@ -99,7 +99,6 @@ namespace LinearElasticity2D {
         ElementData() { }
 
         void configure(t_ETensorGetter EGetter) { m_E = EGetter; }
-
         ETensor E() const { return m_E(); }
 
         template<class FlattenedType>

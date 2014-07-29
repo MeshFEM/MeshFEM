@@ -3,13 +3,13 @@ include platform_defs.mk
 CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o
 PERHOMO_OBJS=TestPeriodicHomogenization.o MeshIO.o Types.o
 PERHOMO2D_OBJS=TestPeriodicHomogenization2D.o MeshIO.o Types.o
-MATOPT2D_OBJS=TestMaterialOptimization2D.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o
+MATOPT2D_OBJS=TestMaterialOptimization2D.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o
 OBJS=$(CONVERT_OBJS) $(PERHOMO_OBJS) $(PERHOMO2D_OBJS)
 SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc
+SOURCES+=MaterialOptimization.cc
 TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D TestMaterialOptimization2D
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)
-# CPPFLAGS+=-O0 -fno-inline -g
 CPPFLAGS+=-O2
 CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 

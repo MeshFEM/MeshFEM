@@ -61,6 +61,7 @@ namespace LinearElasticity {
             return extractNodalField(x);
         }
 
+        // Get average strain on element i
         template<class _SymMat>
         void elementStrain(size_t i, const VField &u, _SymMat && e) const {
             assert(i < m_mesh.numElements());
@@ -68,6 +69,7 @@ namespace LinearElasticity {
             elem->strain(elem, u, e);
         }
 
+        // Get average stress on element i
         template<class _SymMat>
         void elementStress(size_t i, const VField &u, _SymMat && s) const {
             assert(i < m_mesh.numElements());
@@ -271,6 +273,66 @@ namespace LinearElasticity {
             }
         }
 
+        // Remove the rigid transform component from a per-DoF vector field.
+        // v = v - sum_i (R(i, :) * v) * R(i, :)' / ||R(i, :)||^2;
+        void projectOutRigidComponent(VField &v) const {
+            assert(v.domainSize() == numDoFs());
+            TMatrix R;
+            // Note: rows of rigid mode matrix are orthogonal, but not
+            // normalized.
+            m_assembleRigidModeMatrix(R);
+
+            // Note: the following operations assume the rigid mode matrix has
+            // no repeated indices.
+
+            // Compute row norm and inner product;
+            std::vector<Real> rowSqNorms(R.m, 0.0), innerProduct(R.m, 0.0);
+            for (size_t i = 0; i < R.nnz(); ++i) {
+                auto nz = R.nz[i];
+                rowSqNorms.at(nz.i) += nz.v * nz.v;
+                innerProduct.at(nz.i) = nz.v * v[nz.j];
+            }
+
+            // Subtract off projection onto rigid transform basis
+            for (size_t i = 0; i < R.nnz(); ++i) {
+                auto nz = R.nz[i];
+                v[nz.j] -= innerProduct[nz.i] * nz.v / rowSqNorms[nz.i];
+            }
+        }
+
+        // Remove the rigid motion component from the specified Dirichlet
+        // displacements.
+        void projectOutRigidDirichlet() {
+            VField u_dirichlet(numDoFs());
+            u_dirichlet.clear();
+            for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+                auto bv = m_mesh.boundaryNode(i);
+                if (bv->hasDirichlet) {
+                    size_t dof = DoF(bv.volumeVertex().index());
+                    u_dirichlet(dof) = bv->dirichletDisplacement;
+                }
+            }
+            projectOutRigidComponent(u_dirichlet);
+            for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+                auto bv = m_mesh.boundaryNode(i);
+                if (bv->hasDirichlet) {
+                    size_t dof = DoF(bv.volumeVertex().index());
+                    bv->dirichletDisplacement = u_dirichlet(dof);
+                    u_dirichlet[dof] *= 0.0;
+                }
+            }
+            // Projection shouldn't have introduced any new nonzeros...
+            for (size_t i = 0; i < u_dirichlet.size(); ++i) {
+                assert(u_dirichlet[i] == 0.0);
+            }
+
+            // In the future, we should make this simply update the constraint
+            // RHS by calling m_system.setConstraintRHS() to avoid
+            // refactorization.
+            m_system.clear();
+        }
+
+
     private:
         typedef TripletMatrix<Triplet<Real> > TMatrix;
         void m_assembleConstrainedSystem() const {
@@ -330,7 +392,7 @@ namespace LinearElasticity {
 
         void m_assembleRigidModeMatrix(TMatrix &R) const {
             constexpr size_t numRotModes = (_N == 3) ? 3 : 1;
-            R.reserve((_N + 2 * numRotModes) * m_mesh.numVertices());
+            R.reserve((_N + 2 * numRotModes) * m_mesh.numNodes());
             m_assembleTranslationMatrix(R);
 
             // Periodic boundary conditions pin down the rotational DoFs, so we

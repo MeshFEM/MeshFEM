@@ -29,6 +29,7 @@
 template<class _Material>
 class MaterialField {
 public:
+    typedef _Material Material;
     typedef typename _Material::ETensor ETensor;
 
     MaterialField(size_t numElements,
