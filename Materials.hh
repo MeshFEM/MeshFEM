@@ -90,8 +90,8 @@ struct Isotropic {
     //  [s_02]   [e_02,        -s_02]
     //  [s_01]   [e_01,        -s_01]
     template<class SMatrix>
-    struct stressStrainFitCostFunction {
-        stressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
+    struct StressStrainFitCostFunction {
+        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
             : strain(e), stress(s) { }
 
         template<typename T>
@@ -144,8 +144,14 @@ struct Isotropic {
         size_t var; Real value;
     };
 
+    // Upper bounds: Upper bounds should be based on base material's moduli.
+    //               Poisson ratio can't be greater than 0.5
+    // Lower bounds: Young's modulus must be positive and is hard to make
+    //               small--this minimum should be set based on homogenization results
+    //               Poisson ratio can't be less than -1, and for robustness we
+    //               limit it to -0.75
     std::vector<Bounds> upperBounds() const { return {                  Bounds(1,  0.5) }; }
-    std::vector<Bounds> lowerBounds() const { return { Bounds(0, 0.01), Bounds(1, -1.0) }; }
+    std::vector<Bounds> lowerBounds() const { return { Bounds(0, 0.01), Bounds(1, -0.75) }; }
 
     Real vars[numVars];
 };
@@ -168,8 +174,8 @@ struct IsotropicInvParam {
     }
 
     template<class SMatrix>
-    struct stressStrainFitCostFunction {
-        stressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
+    struct StressStrainFitCostFunction {
+        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
             : strain(e), stress(s) { }
 
         template<typename T>

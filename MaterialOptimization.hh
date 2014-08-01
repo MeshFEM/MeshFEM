@@ -232,7 +232,8 @@ public:
         return g;
     }
 
-    void run(MSHFieldWriter &writer, size_t iterations = 3);
+    void run(MSHFieldWriter &writer, size_t iterations = 15,
+             Real regularizationWeight = 0.0);
 
     void runGradientBased() {
         _chooseProblem(this);

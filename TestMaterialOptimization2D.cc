@@ -25,9 +25,12 @@ int main(int argc, char *argv[])
     vector<MeshIO::IOVertex>  inVertices;
     vector<MeshIO::IOElement> inTris;
     if (argc < 3) {
-        std::cout << "usage: ./TestMaterialOptimization2D mesh bc" << std::endl;
+        std::cout << "usage: ./TestMaterialOptimization2D mesh bc [numIters regularizationWeight]" << std::endl;
         exit(-1);
     }
+
+    size_t iterations = (argc > 3) ? std::stoi(argv[3]) : 1;
+    Real regularizationWeight = (argc > 4) ? std::stod(argv[4]) : 0.0;
 
     string mshPath(argv[1]), condPath(argv[2]);
     bool noRigidMotion;
@@ -99,8 +102,7 @@ int main(int argc, char *argv[])
     writer.addField("initial gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
 
     std::cout << "Attempting optimization" << std::endl;
-    size_t iterations = (argc > 3) ? std::stoi(argv[3]) : 1;
-    matOpt.run(writer, iterations);
+    matOpt.run(writer, iterations, regularizationWeight);
 
     matField->getVars(vars);
     assert(vars.size() == 2 * numElements);

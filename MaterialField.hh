@@ -24,6 +24,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef MATERIALFIELD_HH
 #define MATERIALFIELD_HH
+#include <vector>
+#include <set>
 
 // Per-element material field
 template<class _Material>
@@ -127,6 +129,39 @@ public:
     MaterialGetter getterForElement(size_t ei) const {
         assert(ei < domainSize());
         return MaterialGetter(this, m_matIdxForElement[ei]);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Get the material graph adjacencies. Two materials are considered
+    //  adjacent if they are assigned to neighboring elements.
+    //  @param[in]  mesh   mesh datastructure for element adjacency queries
+    //  @param[out] adj    set of adjacent materials for each material.
+    *///////////////////////////////////////////////////////////////////////////
+    template<class Mesh>
+    void materialAdjacencies(const Mesh &mesh,
+                             std::vector<std::set<size_t> > &adj) const {
+        if (mesh.numElements() != m_matIdxForElement.size())
+            throw std::runtime_error("Invalid material adjacency query mesh.");
+
+        adj.assign(numMaterials(), std::set<size_t>());
+
+        // Loop over all "dual eges" of the mesh--if differing materials are
+        // assigned to endpoint elements then these materials are adjacent.
+        for (size_t i = 0; i < mesh.numElements(); ++i) {
+            auto ei = mesh.element(i);
+            size_t mati = m_matIdxForElement[ei];
+            for (size_t j = 0; j < ei.numNeighbors(); ++j) {
+                auto ej = ei.neighbor(j);
+                // For our mesh data structure, a returned "neighbor" may not
+                // actually exist--check that we actually have one
+                if (!ej) continue;
+                size_t matj = m_matIdxForElement[ej];
+                if (mati != matj) {
+                    adj.at(mati).insert(matj);
+                    adj.at(matj).insert(mati);
+                }
+            }
+        }
     }
 
 private:

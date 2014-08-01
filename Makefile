@@ -11,6 +11,7 @@ TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D Tes
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)
 CPPFLAGS+=-O2
+# CPPFLAGS+=-O0 -g
 CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 
 all: $(TARGETS)
