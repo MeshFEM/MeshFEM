@@ -127,7 +127,7 @@ MeshIO *getMeshIO(Format &format) {
     IOs.push_back(&s_mshIO);
     IOs.push_back(&s_polyIO);
 
-    if (format < IOs.size() && format >= 0)
+    if ((size_t) format < IOs.size() && format >= 0)
         return IOs[format];
     
     throw std::runtime_error("Illegal Mesh Format: " + std::to_string(format));
@@ -354,13 +354,13 @@ void MeshIO_POLY::save(ostream &os, const vector<Vertex> &vertices,
     auto typeError = std::runtime_error("Only support triangle .poly.");
     if ((elements.size() < 1) || (elements[0].size() != 3))
         throw typeError;
-    int numCorners = 3;
+    size_t numCorners = 3;
     // #Vertices, 3D, 0 attr, 0 bdry marks
     os << vertices.size() << " 3 0 0" << std::endl; 
-    for (int i = 0; i < vertices.size(); ++i)
+    for (size_t i = 0; i < vertices.size(); ++i)
         os << i << ' ' << vertices[i];
     os << elements.size() << " 0" << std::endl; // 0 bdry marks
-    for (int i = 0; i < elements.size(); ++i) {
+    for (size_t i = 0; i < elements.size(); ++i) {
         if (elements[i].size() != numCorners) throw typeError;
         os << "1" << std::endl;
         os << elements[i];
@@ -381,40 +381,40 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
     if (!eleIs)  throw std::runtime_error("Couldn't open " + elePath);
     std::string line; getDataLine(nodeIs, line);
     std::istringstream iss(line);
-    int numNodes, dim, dummy;
+    size_t numNodes, dim, dummy;
     iss >> numNodes >> dim >> dummy >> dummy;
     std::runtime_error badFmt("Bad TetGen file format");
     std::runtime_error unsFmt("Unsupported TetGen file format");
     if (!iss || (dim != 3)) throw badFmt;
 
     vertices.resize(numNodes);
-    for (int i = 0; i < numNodes; ++i) {
+    for (size_t i = 0; i < numNodes; ++i) {
         getDataLine(nodeIs, line);
         if (!nodeIs) throw badFmt;
         iss.str(line), iss.clear();
-        int idx;
+        size_t idx;
         iss >> idx >> vertices[i][0] >> vertices[i][1] >> vertices[i][2];
         if (!iss || (idx != i)) throw badFmt;
     }
 
     getDataLine(eleIs, line);
     iss.str(line), iss.clear();
-    int numTets, numCorners, numAttributes;
+    size_t numTets, numCorners, numAttributes;
     iss >> numTets >> numCorners >> numAttributes;
     if (numCorners < 4)  throw badFmt;
     if (numCorners != 4) throw unsFmt;
     if (!iss) throw badFmt;
 
     elements.resize(numTets);
-    for (int i = 0; i < numTets; ++i) {
+    for (size_t i = 0; i < numTets; ++i) {
         getDataLine(eleIs, line);
         if (!eleIs) throw badFmt;
         iss.str(line), iss.clear();
-        int idx;
+        size_t idx;
         iss >> idx;
         // if (!iss || (idx != i)) throw badFmt; (don't care)
         elements[i].resize(numCorners);
-        for (int c = 0; c < numCorners; ++c) {
+        for (size_t c = 0; c < numCorners; ++c) {
             iss >> elements[i][c];
             if (elements[i][c] >= numNodes) throw badFmt;
         }
@@ -426,7 +426,8 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
 
 void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
                       const vector<Element> &elements, MeshType type) {
-    int elementType, numCorners;
+    int elementType;
+    size_t numCorners;
     if ((type == MESH_GUESS) && (elements.size() > 0)) {
         if      (elements.back().size() == 4) type = MESH_TET;
         else if (elements.back().size() == 3) type = MESH_TRI;
@@ -452,7 +453,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
         os << i + 1 << " " << elementType << " " << 0 /* no tags */;
         if (elements[i].size() != (size_t) numCorners)
             throw std::runtime_error("Illegal sized element");
-        for (int c = 0; c < numCorners; ++c)
+        for (size_t c = 0; c < numCorners; ++c)
             os << " " << elements[i][c] + 1;
         os << std::endl;
     }
@@ -462,7 +463,8 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
 
 MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
                           vector<Element> &elements, MeshType type) {
-    int elementType, numCorners;
+    int elementType;
+    size_t numCorners;
     if (type != MESH_GUESS)
         getElementInfo(type, elementType, numCorners);
     else { elementType = -1; }
@@ -550,11 +552,11 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
                 getElementInfo(type, elementType, numCorners);
             }
             if (header[0] != elementType) throw badFmt;
-            int newSize = readElements + header[1];
+            size_t newSize = readElements + header[1];
             if (newSize > numElements) throw badFmt;
             int intCount = 1 + header[2] + numCorners;
             data.resize(intCount);
-            for (int e = readElements; e < newSize; ++e) {
+            for (size_t e = readElements; e < newSize; ++e) {
                 is.read((char *) &data[0], intCount * sizeof(int));
                 elements[e].resize(numCorners);
                 for (size_t c = 0; c < numCorners; ++c)
@@ -571,7 +573,8 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
             getDataLine(is, line);
             std::istringstream iss(line);
             int idx; iss >> idx;
-            size_t etype,  numTags;
+            int etype;
+            size_t numTags;
             iss >> etype >> numTags;
             while (numTags-- > 0) { int dummy; iss >> dummy; }
 

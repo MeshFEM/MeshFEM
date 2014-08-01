@@ -16,11 +16,13 @@
 #ifndef MATERIALOPTIMIZATION_HH
 #define MATERIALOPTIMIZATION_HH
 
+#ifdef HAS_OPTPP
 // Make NEWMAT support the 0-based indexing operator[]
 #define SETUP_C_SUBSCRIPTS
 #include <OPT++/NLF.h>
 #include <OPT++/OptCG.h>
 #include <OPT++/OptLBFGS.h>
+#endif
 
 #include "LinearElasticity.hh"
 #include "Materials.hh"
@@ -235,6 +237,7 @@ public:
     void run(MSHFieldWriter &writer, size_t iterations = 15,
              Real regularizationWeight = 0.0);
 
+#ifdef HAS_OPTPP
     void runGradientBased() {
         _chooseProblem(this);
         OPTPP::NLF1 nlp(m_matField->numVars(), _optAlgoEval, _optAlgoInit);
@@ -256,13 +259,6 @@ public:
         _problem->m_sim.materialFieldUpdated();
         opt.cleanup();
     }
-
-    const typename _Simulator::Mesh &mesh() const { return m_sim.mesh(); }
-    const _Simulator &simulator() const { return m_sim; }
-
-private:
-    _Simulator m_sim;
-    std::shared_ptr<typename _Simulator::MField> m_matField;
 
     // Callback interface for OptPP
     static Optimizer *_problem;
@@ -298,10 +294,21 @@ private:
         }
         std::cout << fx << "\t" << sqrt(normSq) << std::endl;
     }
+#endif
+
+    const typename _Simulator::Mesh &mesh() const { return m_sim.mesh(); }
+    const _Simulator &simulator() const { return m_sim; }
+
+private:
+    _Simulator m_sim;
+    std::shared_ptr<typename _Simulator::MField> m_matField;
+
 };
 
+#ifdef HAS_OPTPP
 template<class _Simulator>
 Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
+#endif
 
 }
 

@@ -194,7 +194,7 @@ namespace MeshIO {
             typedef IOElement Element;
 
             void getElementInfo(MeshType meshType, int &elementType,
-                                int &numCorners) {
+                                size_t &numCorners) {
                 switch (meshType) {
                     case MESH_TRI:
                         elementType = 2;
