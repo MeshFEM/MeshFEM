@@ -80,7 +80,6 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
 
             if (regularizationWeight <= 0.0) continue;
             const set<size_t> &adj = materialAdj.at(mi);
-            if (adj.empty()) continue;
             for (size_t mj : adj) {
                 ceres::CostFunction *regularizeCost = new ceres::AutoDiffCostFunction<
                     GraphLaplacianTerm<Material::numVars>,

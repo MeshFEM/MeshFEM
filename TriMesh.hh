@@ -232,8 +232,8 @@ private:
         assert(size_t(t) < numTris() && size_t(adj) < 3);
         size_t cidx = 3 * t + adj;
         assert(cidx < O.size());
-        int t4 = O[cidx];
-        return (t4 >= 0) ? t4 / 4 : -1;
+        int t3 = O[cidx];
+        return (t3 >= 0) ? t3 / 3 : -1;
     }
 
     int m_halfEdgeOfTri(int e, int t) const {

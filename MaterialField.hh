@@ -149,13 +149,13 @@ public:
         // assigned to endpoint elements then these materials are adjacent.
         for (size_t i = 0; i < mesh.numElements(); ++i) {
             auto ei = mesh.element(i);
-            size_t mati = m_matIdxForElement[ei];
+            size_t mati = m_matIdxForElement.at(i);
             for (size_t j = 0; j < ei.numNeighbors(); ++j) {
                 auto ej = ei.neighbor(j);
                 // For our mesh data structure, a returned "neighbor" may not
                 // actually exist--check that we actually have one
                 if (!ej) continue;
-                size_t matj = m_matIdxForElement[ej];
+                size_t matj = m_matIdxForElement.at(ej.index());
                 if (mati != matj) {
                     adj.at(mati).insert(matj);
                     adj.at(matj).insert(mati);
