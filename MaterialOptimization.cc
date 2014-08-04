@@ -45,7 +45,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
     vector<set<size_t> > materialAdj;
     m_matField->materialAdjacencies(mesh(), materialAdj);
 
-    for (size_t its = 0; its < iterations; ++its) {
+
+    for (size_t its = 1; its <= iterations; ++its) {
         // Target-as-Dirichlet solve
         m_sim.swapTargetDirichlet();
         m_sim.removeNoRigidMotionConstraint();
@@ -57,6 +58,16 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         m_sim.applyRigidMotionConstraint(u_dirichletTargets);
         auto u = m_sim.solve(neumannLoad);
         const auto s = m_sim.stress(u);
+
+        if (its == 1) {
+            // Write inital ("iteration 0") objective and gradient norm.
+            vector<Real> g = objectiveGradient(u);
+            Real gradNormSq = 0;
+            for (size_t c = 0; c < g.size(); ++c) gradNormSq += g[c] * g[c];
+            cout << 0 << " objective, gradient norm:\t"
+                 << objective(u) << '\t' << sqrt(gradNormSq)
+                 << endl;
+        }
 
         writer.addField(to_string(its) + " u_neumann",          u,                  MSHFieldWriter::PER_NODE);
         writer.addField(to_string(its) + " u_dirichletTargets", u_dirichletTargets, MSHFieldWriter::PER_NODE);
