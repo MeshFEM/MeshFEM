@@ -26,6 +26,11 @@
 #define MATERIALFIELD_HH
 #include <vector>
 #include <set>
+#include <string>
+#include <stdexcept>
+
+#include "MSHFieldWriter.hh"
+#include <Fields.hh>
 
 // Per-element material field
 template<class _Material>
@@ -117,6 +122,36 @@ public:
         ETensor result;
         m_materials[mi].getTensor(result);
         return result;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Write a per-element scalar field for each material variable. If "values"
+    //  is empty (default), the data written comes from the field variable
+    //  values themselves. Otherwise, the data written comes from that vector of
+    //  variable values (useful for writing components of a gradient with
+    //  respect to the material field variables instead of the material field
+    //  variables themselves).
+    //
+    //  The passed prefix is added to the front of the variable names to
+    //  generate the field name.
+    *///////////////////////////////////////////////////////////////////////////
+    void writeVariableFields(MSHFieldWriter &writer, std::string prefix,
+            std::vector<Real> values = std::vector<Real>()) {
+        if (values.size() == 0) {
+            values.resize(numVars());
+            getVars(values);
+        }
+        if (values.size() != numVars())
+            throw std::runtime_error("Variables size mismatch");
+        for (size_t vi = 0; vi < _Material::numVars; ++vi) {
+            auto name = _Material::variableName(vi);
+            size_t numElements = m_matIdxForElement.size();
+            ScalarField<Real> varField(numElements);
+            for (size_t ei = 0; ei < numElements; ++ei)
+                varField[ei] = values[_Material::numVars * ei + vi];
+            writer.addField(prefix + name, varField,
+                            MSHFieldWriter::PER_ELEMENT);
+        }
     }
 
     // For use in tet/tri Data

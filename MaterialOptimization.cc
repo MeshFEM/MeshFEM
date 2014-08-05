@@ -124,21 +124,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         // Write current material variable and variable gradient fields.
         // Note: the following assumes all elements have the same set of
         // variables.
-        size_t nmatVars = m_matField->material(0).numVars;
-        size_t numElements = mesh().numElements();
-        for (size_t vi = 0; vi < nmatVars; ++vi) {
-            string name = m_matField->material(0).variableName(vi);
-            SField varField(numElements), gradVarField(numElements);
-            for (size_t ei = 0; ei < numElements; ++ei) {
-                varField[ei] = m_matField->materialForElement(ei).vars[vi];
-                gradVarField[ei] =
-                    g.at(nmatVars * m_matField->materialIndexForElement(ei) + vi);
-            }
-            writer.addField(to_string(its) + " " + name, varField,
-                            MSHFieldWriter::PER_ELEMENT);
-            writer.addField(to_string(its) + " grad_" + name, gradVarField,
-                            MSHFieldWriter::PER_ELEMENT);
-        }
+        m_matField->writeVariableFields(writer, to_string(its) + " ");
+        m_matField->writeVariableFields(writer, to_string(its) + " grad_", g);
     }
 }
 

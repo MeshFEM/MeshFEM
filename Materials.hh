@@ -12,9 +12,12 @@
 #ifndef MATERIAL_HH
 #define MATERIAL_HH
 
+#include "Types.hh"
 #include <Flattening.hh>
 #include <ElasticityTensor.hh>
 #include <stdexcept>
+#include <vector>
+#include <string>
 
 // Material parameter bounds
 struct Bounds {
@@ -33,7 +36,7 @@ struct Isotropic {
 
     Isotropic() { vars[0] = 1.0; vars[1] = 0.3; }
 
-    const std::string &variableName(size_t i) const {
+    static const std::string &variableName(size_t i) {
         static const std::vector<std::string> names = { "E", "nu" };
         return names.at(i);
     }
@@ -53,8 +56,7 @@ struct Isotropic {
         if (_N == 3) {
             // 3D Lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
             Real denSqrt = 1 - nu - 2 * nu * nu;
-            dL = (p == 0) ? nu / ((1.0 + nu) * (1.0 - 2 * nu))
-                          : E * (1 + 2 * nu * nu) / (denSqrt * denSqrt);
+            dL = (p == 0) ? nu / ((1.0 + nu) * (1.0 - 2 * nu)) : E * (1 + 2 * nu * nu) / (denSqrt * denSqrt);
         }
 
         // 2D and 3D mu: E / (2 (1 + nu))
@@ -165,7 +167,7 @@ struct Isotropic {
 // Axis-aligned orthotropic material.
 // 2D: 4 variables
 // Vars 0..1: Young's moduli,
-// Var     2: Poisson ratio
+// Var     2: Poisson ratio (YX)
 // Var     3: Shear modulus
 // 3D: 9 variables
 // Vars 0..2: Young's moduli,
@@ -174,7 +176,8 @@ struct Isotropic {
 template<size_t _N>
 struct Orthotropic {
     static constexpr size_t N = _N;
-    static constexpr size_t numVars = (_N == 3) ? 9 : 4;
+    static constexpr size_t nvarsForDim(size_t n) { return (_N == 3) ? 9 : 4; }
+    static constexpr size_t numVars = nvarsForDim(_N);
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
 
@@ -191,7 +194,7 @@ struct Orthotropic {
         }
     }
 
-    const std::string &variableName(size_t i) const {
+    static const std::string &variableName(size_t i) {
         if (_N == 3) {
             static const std::vector<std::string> names3D = {
                 "E_x", "E_y", "E_z",
@@ -201,15 +204,13 @@ struct Orthotropic {
         }
         else {
             static const std::vector<std::string> names2D = {
-                "E_x", "E_y", "nu", "mu" };
+                "E_x", "E_y", "nu_yx", "mu" };
             return names2D.at(i);
         }
     }
 
     // Used for adjoint method gradient-based optimization
-    void getETensorDerivative(size_t p, ETensor &d) const {
-        throw std::runtime_error("Unimplemented");
-    }
+    void getETensorDerivative(size_t p, ETensor &d) const;
 
     void getTensor(ETensor &tensor) const {
         if (_N == 3) {
@@ -234,21 +235,21 @@ struct Orthotropic {
         bool operator()(const T *x, T *e) const {
             // Nonlinear version
             if (_N == 3) {
-                e[0] = T(stress[0]) - x[1] * T(stress[1] + stress[2]);
-                e[1] = T(stress[1]) - x[1] * T(stress[0] + stress[2]);
-                e[2] = T(stress[2]) - x[1] * T(stress[0] + stress[1]);
-                e[3] = (T(1) + x[1]) * T(stress[3]);
-                e[4] = (T(1) + x[1]) * T(stress[4]);
-                e[5] = (T(1) + x[1]) * T(stress[5]);
+                T D01 =  -x[3] / x[1], // -nu_yx / E_y
+                  D02 =  -x[4] / x[2], // -nu_zx / E_z
+                  D12 =  -x[5] / x[2]; // -nu_zy / E_z
+                e[0] = T(stress[0]) / x[0] + T(stress[1]) *  D01 + T(stress[2]) *  D02;
+                e[1] = T(stress[0]) *  D01 + T(stress[1]) / x[1] + T(stress[2]) *  D12;
+                e[2] = T(stress[0]) *  D02 + T(stress[1]) *  D12 + T(stress[2]) / x[2];
+                e[3] = T(0.5 * stress[3]) / x[6];
+                e[4] = T(0.5 * stress[4]) / x[7];
+                e[5] = T(0.5 * stress[5]) / x[8];
             }
             else {
-                e[0] = T(stress[0]) - x[1] * T(stress[1]);
-                e[1] = T(stress[1]) - x[1] * T(stress[0]);
-                e[2] = (T(1) + x[1]) * T(stress[2]);
-            }
-            for (size_t i = 0; i < flatLen(_N); ++i) {
-                e[i] /= x[0];
-                e[i] -= T(strain[i]);
+                T D01 = -x[2] / x[1]; // -nu_yx / E_y
+                e[0] = T(stress[0]) / x[0] + T(stress[1]) *  D01;
+                e[1] = T(stress[0]) *  D01 + T(stress[1]) / x[1];
+                e[2] = T(0.5 * stress[2]) / x[3];
             }
             return true;
         }
@@ -280,7 +281,9 @@ struct Orthotropic {
                       Bounds(2, -0.75), Bounds(3,  0.01) };
     }
 
-
+    // Allocate enough space for the 3D even when N = 2 so that we don't get
+    // out-of-bounds warning in the getTensor call.
+    // Real vars[nvarsForDim(3)];
     Real vars[numVars];
 };
 

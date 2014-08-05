@@ -81,49 +81,18 @@ int main(int argc, char *argv[])
     SField gradE(numElements), gradNu(numElements);
 
     std::vector<Real> g = matOpt.objectiveGradient(u);
-    assert(g.size() == 2 * numElements);
-    for (size_t i = 0; i < numElements; ++i) {
-        gradE[i]  = g[2 * i + 0];
-        gradNu[i] = g[2 * i + 1];
-    }
-
-    SField E(numElements), nu(numElements);
-    std::vector<Real> vars(matField->numVars());
-    matField->getVars(vars);
-    assert(vars.size() == 2 * numElements);
-    for (size_t i = 0; i < numElements; ++i) {
-         E[i] = vars[2 * i + 0];
-        nu[i] = vars[2 * i + 1];
-    }
-
-    writer.addField("initial E" , E , MSHFieldWriter::PER_ELEMENT);
-    writer.addField("initial nu", nu, MSHFieldWriter::PER_ELEMENT);
-    writer.addField("initial gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
-    writer.addField("initial gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
+    matField->writeVariableFields(writer, "Initial ");
+    matField->writeVariableFields(writer, "Initial grad", g);
 
     std::cout << "Attempting optimization" << std::endl;
     matOpt.run(writer, iterations, regularizationWeight);
 
-    matField->getVars(vars);
-    assert(vars.size() == 2 * numElements);
-    for (size_t i = 0; i < numElements; ++i) {
-         E[i] = vars[2 * i + 0];
-        nu[i] = vars[2 * i + 1];
-    }
-
-    assert(g.size() == 2 * numElements);
     auto u_opt = matOpt.currentDisplacement();
     g = matOpt.objectiveGradient(u_opt);
-    for (size_t i = 0; i < numElements; ++i) {
-        gradE[i]  = g[2 * i + 0];
-        gradNu[i] = g[2 * i + 1];
-    }
 
-    writer.addField("final u", u_opt, MSHFieldWriter::PER_NODE);
-    writer.addField("final E" , E , MSHFieldWriter::PER_ELEMENT);
-    writer.addField("final nu", nu, MSHFieldWriter::PER_ELEMENT);
-    writer.addField("final gradE" , gradE , MSHFieldWriter::PER_ELEMENT);
-    writer.addField("final gradNu", gradNu, MSHFieldWriter::PER_ELEMENT);
+    writer.addField("Final u", u_opt, MSHFieldWriter::PER_NODE);
+    matField->writeVariableFields(writer, "Final ");
+    matField->writeVariableFields(writer, "Final grad", g);
 
     return 0;
 }

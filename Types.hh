@@ -22,6 +22,5 @@ template<class EmbeddingSpace>
 Point3D padTo3D(const EmbeddingSpace &p);
 template<class EmbeddingSpace> 
 EmbeddingSpace truncateFrom3D(const Point3D &p);
-    
 
 #endif /* end of include guard: TYPES_HH */
