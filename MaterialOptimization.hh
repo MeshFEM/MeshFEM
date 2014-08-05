@@ -314,8 +314,10 @@ Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
 
 namespace MaterialOptimization2D {
 
-typedef Materials::Isotropic<2> IsotropicMaterial;
-typedef MaterialField<IsotropicMaterial> IsotropicField;
+typedef Materials::Isotropic<2>     IsotropicMaterial;
+typedef Materials::Orthotropic<2> OrthotropicMaterial;
+typedef MaterialField<  IsotropicMaterial>   IsotropicField;
+typedef MaterialField<OrthotropicMaterial> OrthotropicField;
 
 struct BoundaryNodeData : LinearElasticity2D::BoundaryNodeData {
     bool hasTarget;

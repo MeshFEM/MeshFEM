@@ -106,8 +106,11 @@ public:
         }
     }
 
+    size_t materialIndexForElement(size_t ei) const { return m_matIdxForElement.at(ei); }
     const _Material &material(size_t mi) const { return m_materials.at(mi); }
           _Material &material(size_t mi)       { return m_materials.at(mi); }
+    const _Material &materialForElement(size_t ei) const { return material(materialIndexForElement(ei)); }
+          _Material &materialForElement(size_t ei)       { return material(materialIndexForElement(ei)); }
 
     ETensor getElasticityTensor(size_t mi) const {
         assert(mi < m_materials.size());

@@ -111,35 +111,34 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
 
         m_sim.materialFieldUpdated();
 
-        size_t numElements = mesh().numElements();
-        SField E(numElements), nu(numElements);
-        for (size_t i = 0; i < numElements; ++i) {
-             E[i] = m_matField->material(i).vars[0];
-            nu[i] = m_matField->material(i).vars[1];
-        }
-
-        writer.addField(to_string(its) +  " E",  E, MSHFieldWriter::PER_ELEMENT);
-        writer.addField(to_string(its) + " nu", nu, MSHFieldWriter::PER_ELEMENT);
-
+        // Write the post-iteration solution and print statistics
         u = m_sim.solve(neumannLoad);
         vector<Real> g = objectiveGradient(u);
         Real gradNormSq = 0;
         for (size_t c = 0; c < g.size(); ++c) gradNormSq += g[c] * g[c];
-
-        // TODO: make this mesh-material relationship agnostic
-        SField gradE(numElements), gradNu(numElements);
-        for (size_t i = 0; i < numElements; ++i) {
-            gradE[i]  = g[2 * i + 0];
-            gradNu[i] = g[2 * i + 1];
-        }
-
-        writer.addField(to_string(its) + " u"      ,      u, MSHFieldWriter::PER_NODE);
-        writer.addField(to_string(its) + " grad_E" ,  gradE, MSHFieldWriter::PER_ELEMENT);
-        writer.addField(to_string(its) + " grad_nu", gradNu, MSHFieldWriter::PER_ELEMENT);
-
         cout << its << " objective, gradient norm:\t"
              << objective(u) << '\t' << sqrt(gradNormSq)
              << endl;
+        writer.addField(to_string(its) + " u", u, MSHFieldWriter::PER_NODE);
+
+        // Write current material variable and variable gradient fields.
+        // Note: the following assumes all elements have the same set of
+        // variables.
+        size_t nmatVars = m_matField->material(0).numVars;
+        size_t numElements = mesh().numElements();
+        for (size_t vi = 0; vi < nmatVars; ++vi) {
+            string name = m_matField->material(0).variableName(vi);
+            SField varField(numElements), gradVarField(numElements);
+            for (size_t ei = 0; ei < numElements; ++ei) {
+                varField[ei] = m_matField->materialForElement(ei).vars[vi];
+                gradVarField[ei] =
+                    g.at(nmatVars * m_matField->materialIndexForElement(ei) + vi);
+            }
+            writer.addField(to_string(its) + " " + name, varField,
+                            MSHFieldWriter::PER_ELEMENT);
+            writer.addField(to_string(its) + " grad_" + name, gradVarField,
+                            MSHFieldWriter::PER_ELEMENT);
+        }
     }
 }
 
@@ -147,5 +146,6 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
 // Explicit Instantiations
 ////////////////////////////////////////////////////////////////////////////////
 template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::IsotropicMaterial> >;
+template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::OrthotropicMaterial> >;
 
 }
