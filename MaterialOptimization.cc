@@ -27,8 +27,8 @@ struct GraphLaplacianTerm {
 
     template<typename T>
     bool operator()(const T *mi_x, const T *mj_x, T *e) const {
-        for (size_t i = 0; i < _NVars; ++i)
-            e[i] = T(weightSqrt) * (mi_x[i] - mj_x[i]);
+        for (size_t v = 0; v < _NVars; ++v)
+            e[v] = T(weightSqrt) * (mi_x[v] - mj_x[v]);
         return true;
     }
 
@@ -57,7 +57,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         m_sim.swapTargetDirichlet();
         m_sim.applyRigidMotionConstraint(u_dirichletTargets);
         auto u = m_sim.solve(neumannLoad);
-        const auto s = m_sim.stress(u);
+        const auto s_neumann = m_sim.stress(u);
 
         if (its == 1) {
             // Write inital ("iteration 0") objective and gradient norm.
@@ -74,13 +74,20 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         
         ceres::Problem problem;
 
+        constexpr size_t _NVar = Material::numVars;
         typedef typename Material::template StressStrainFitCostFunction<typename SMField::ConstValueType> Fitter;
         for (size_t ei = 0; ei < mesh().numElements(); ++ei) {
             ceres::CostFunction *fitCost = new ceres::AutoDiffCostFunction<
-                Fitter, flatLen(N), Material::numVars>(new Fitter(e_dirichletTargets(ei), s(ei)));
-            auto &mat = m_matField->material(ei);
-            double *vars = mat.vars;
-            problem.AddResidualBlock(fitCost, NULL, vars);
+                Fitter, flatLen(N), _NVar>(new Fitter(e_dirichletTargets(ei), s_neumann(ei)));
+            problem.AddResidualBlock(fitCost, NULL,
+                                     m_matField->materialForElement(ei).vars);
+        }
+
+        ceres::CostFunction *regularizer = NULL;
+        if (regularizationWeight >= 0.0) {
+            regularizer = new ceres::AutoDiffCostFunction<
+                GraphLaplacianTerm<_NVar>, _NVar,  _NVar, _NVar>(
+                        new GraphLaplacianTerm<_NVar>(regularizationWeight));
         }
 
         // Add in variable bounds and regularization (if requested)
@@ -89,17 +96,14 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
             for (const auto &bd : mati.upperBounds()) problem.SetParameterUpperBound(mati.vars, bd.var, bd.value);
             for (const auto &bd : mati.lowerBounds()) problem.SetParameterLowerBound(mati.vars, bd.var, bd.value);
 
-            if (regularizationWeight <= 0.0) continue;
-            const set<size_t> &adj = materialAdj.at(mi);
-            for (size_t mj : adj) {
-                ceres::CostFunction *regularizeCost = new ceres::AutoDiffCostFunction<
-                    GraphLaplacianTerm<Material::numVars>,
-                    Material::numVars, // Residual size
-                    Material::numVars, // mi variable size
-                    Material::numVars>( // mj variable size
-                            new GraphLaplacianTerm<Material::numVars>(regularizationWeight));
-                auto &matj = m_matField->material(mj);
-                problem.AddResidualBlock(regularizeCost, NULL, mati.vars, matj.vars);
+            if (regularizer == NULL) continue;
+            for (size_t mj : materialAdj.at(mi)) {
+                // Make sure graph is undirected.
+                assert(materialAdj.at(mj).find(mi) != materialAdj.at(mj).end());
+                // Add one term per edge, not two
+                if (mi < mj) continue;
+                problem.AddResidualBlock(regularizer, NULL, mati.vars,
+                                         m_matField->material(mj).vars);
             }
         }
 
