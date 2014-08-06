@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
     load(mshPath, inVertices, inTris, MeshIO::FMT_GUESS,
          MeshIO::MESH_TRI);
-    shared_ptr<IsotropicField> matField(new IsotropicField(inTris.size()));
+    shared_ptr<OrthotropicField> matField(new OrthotropicField(inTris.size()));
 
     // assert(initialYoung.domainSize() == initialPoisson.domainSize());
     // assert(initialYoung.domainSize() == matField->numMaterials());
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     //     matField->material(i).vars[1] = initialPoisson[i];
     // }
 
-    typedef Optimizer<IsotropicMaterial> Opt;
+    typedef Optimizer<OrthotropicMaterial> Opt;
     Opt matOpt(inTris, inVertices, matField, bconds, noRigidMotion);
 
     typedef typename Opt::SField  SField;

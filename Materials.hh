@@ -233,7 +233,6 @@ struct Orthotropic {
 
         template<typename T>
         bool operator()(const T *x, T *e) const {
-            // Nonlinear version
             if (_N == 3) {
                 T D01 =  -x[3] / x[1], // -nu_yx / E_y
                   D02 =  -x[4] / x[2], // -nu_zx / E_z
@@ -251,6 +250,11 @@ struct Orthotropic {
                 e[1] = T(stress[0]) *  D01 + T(stress[1]) / x[1];
                 e[2] = T(0.5 * stress[2]) / x[3];
             }
+
+            for (size_t i = 0; i < flatLen(_N); ++i) {
+                e[i] -= T(strain[i]);
+            }
+
             return true;
         }
 
@@ -281,9 +285,6 @@ struct Orthotropic {
                       Bounds(2, -0.75), Bounds(3,  0.01) };
     }
 
-    // Allocate enough space for the 3D even when N = 2 so that we don't get
-    // out-of-bounds warning in the getTensor call.
-    // Real vars[nvarsForDim(3)];
     Real vars[numVars];
 };
 
