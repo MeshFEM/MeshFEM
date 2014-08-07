@@ -193,6 +193,8 @@ namespace MeshIO {
             typedef IOVertex  Vertex;
             typedef IOElement Element;
 
+            MeshIO_MSH() : m_binary(false) { }
+
             void getElementInfo(MeshType meshType, int &elementType,
                                 size_t &numCorners) {
                 switch (meshType) {
@@ -215,9 +217,11 @@ namespace MeshIO {
             MeshType load(std::istream &is, std::vector<Vertex> &vertices,
                           std::vector<Element> &elements, MeshType type);
 
-            void setBinaryOut(bool binary) { m_binaryOut = binary; }
+            bool binary() const { return m_binary; }
+            void setBinary(bool binary) { m_binary = binary; }
         private:
-            bool m_binaryOut = false;
+            // Whether parsed input was binary/output will be binary.
+            bool m_binary = false;
     };
 
     ////////////////////////////////////////////////////////////////////////////

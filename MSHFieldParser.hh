@@ -122,7 +122,7 @@ private:
 
     void parseField(std::istream &is, const std::string &header, std::string &name,
                     Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &fieldData,
-                    FieldType &type);
+                    FieldType &type, bool binary = false);
 };
 
 #endif /* end of include guard: MSHFIELDPARSER_HH */

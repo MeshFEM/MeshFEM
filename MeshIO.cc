@@ -479,9 +479,9 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     is >> version >> file_type >> data_size;
     if ((size_t(file_type) > 1) ||
         (data_size != sizeof(double))) throw unsFmt;
-    bool binary = file_type == 1;
+    m_binary = file_type == 1;
 
-    if (binary) {
+    if (m_binary) {
         is >> std::ws;
         int one;
         is.read((char *) &one, sizeof(int));
@@ -501,7 +501,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
 
     // We only support the case were vertices are consecutively numbered
     // and 1-indexed (this is the default for gmsh).
-    if (binary) {
+    if (m_binary) {
         is >> std::ws;
         int idx = 0;
         for (size_t i = 0; i < numVertices; ++i) {
@@ -537,7 +537,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
 
     elements.resize(numElements);
 
-    if (binary) {
+    if (m_binary) {
         is >> std::ws;
         size_t readElements = 0;
         std::vector<int> data;
@@ -594,10 +594,10 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
             }
             if (iss.fail()) throw badFmt;
         }
-
-        getDataLine(is, line);
-        if (line != "$EndElements") throw badFmt;
     }
+
+    getDataLine(is, line);
+    if (line != "$EndElements") throw badFmt;
 
     return type;
 }

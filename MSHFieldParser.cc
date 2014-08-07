@@ -7,6 +7,7 @@
 #include <map>
 
 using namespace std;
+using namespace MeshIO;
 
 int readIntLine(istream &is) {
     string tmp;
@@ -25,13 +26,15 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath) {
     ifstream infile(mshPath);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshPath);
 
-    MeshIO::load(infile, m_vertices, m_elements, MeshIO::FMT_MSH);
+    MeshIO_MSH io;
+    io.load(infile, m_vertices, m_elements, (N == 2) ? MESH_TRI : MESH_TET);
+
     string header;
     while (getline(infile, header)) {
         string fieldName;
         Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> fieldData;
         FieldType ftype;
-        parseField(infile, header, fieldName, fieldData, ftype);
+        parseField(infile, header, fieldName, fieldData, ftype, io.binary());
         if (fieldData.rows() == 1) {
             ScalarField<Real> field(fieldData.cols());
             for (size_t i = 0; i < (size_t) fieldData.cols(); ++i)
@@ -72,7 +75,7 @@ template<size_t N>
 void MSHFieldParser<N>::
 parseField(istream &is, const string &header, string &name,
            Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &fieldData,
-           FieldType &type)
+           FieldType &type, bool binary)
 {
     // enable input stream exceptions for parsing safety; we should be able
     // to parse through a field to completion without any trouble
@@ -103,22 +106,35 @@ parseField(istream &is, const string &header, string &name,
     int nRealTags = readIntLine(is);
     for (size_t i = 0; i < nRealTags; ++i)
         readDoubleLine(is);
+
     if (readIntLine(is) != 3) throw badFMT;
-    readIntLine(is);
-    int dim     = readIntLine(is);
-    int numVals = readIntLine(is);
-    if ((size_t) numVals != expectedSize)
+    readIntLine(is); // ignore timestep
+    size_t dim     = readIntLine(is);
+    size_t numVals = readIntLine(is);
+    if (numVals != expectedSize)
         throw runtime_error("Illegal number of field values");
 
     fieldData.resize(dim, numVals);
+    
+    is >> ws;
     for (size_t i = 0; i < numVals; ++i) {
-        string dataLine;
-        getline(is >> ws, dataLine);
-        vector<string> data;
-        boost::split(data, dataLine, boost::is_any_of("\t "));
-        if (data.size() != 1 + dim) throw badFMT;
-        for (size_t d = 0; d < dim; ++d)
-            fieldData(d, i) = stod(data[d + 1]);
+        if (binary) {
+            int elem_idx;
+            std::vector<double> value(dim);
+            is.read((char *) &elem_idx, sizeof(int));
+            is.read((char *) &value[0], dim * sizeof(double));
+            for (size_t d = 0; d < dim; ++d)
+                fieldData(d, i) = value[d];
+        }
+        else {
+            string dataLine;
+            getline(is >> ws, dataLine);
+            vector<string> data;
+            boost::split(data, dataLine, boost::is_any_of("\t "));
+            if (data.size() != 1 + dim) throw badFMT;
+            for (size_t d = 0; d < dim; ++d)
+                fieldData(d, i) = stod(data[d + 1]);
+        }
     }
 
     string footer;

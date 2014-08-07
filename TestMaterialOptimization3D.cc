@@ -10,6 +10,7 @@
 #include <iostream>
 #include <iomanip>
 #include <memory>
+#include <cmath>
 
 using namespace std;
 using namespace MaterialOptimization3D;
@@ -36,15 +37,24 @@ int main(int argc, char *argv[])
     bool noRigidMotion;
     auto bconds = readBoundaryConditions<Vector3D>(condPath, noRigidMotion);
 
-    load(mshPath, inVertices, inTets, MeshIO::FMT_GUESS,
-         MeshIO::MESH_TET);
-    shared_ptr<IsotropicField> matField(new IsotropicField(inTets.size()));
-
     typedef Optimizer<IsotropicMaterial> Opt;
-    Opt matOpt(inTets, inVertices, matField, bconds, noRigidMotion);
-
     typedef typename Opt::SField  SField;
     typedef typename Opt::VField  VField;
+
+    load(mshPath, inVertices, inTets, MeshIO::FMT_GUESS,
+         MeshIO::MESH_TET);
+
+    // Read in tet->hex association
+    MSHFieldParser<3> fieldParser(mshPath);
+    SField hex_index = fieldParser.scalarField("hex_index");
+    vector<size_t> matIdxForElement(inTets.size());
+    for (size_t i = 0; i < inTets.size(); ++i)
+        matIdxForElement.at(i) = (size_t) round(hex_index[i]);
+
+    shared_ptr<IsotropicField> matField(
+            new IsotropicField(inTets.size(), matIdxForElement));
+
+    Opt matOpt(inTets, inVertices, matField, bconds, noRigidMotion);
 
     VField targetDisplacements(matOpt.mesh().numNodes());
     targetDisplacements.clear();
