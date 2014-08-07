@@ -147,8 +147,10 @@ public:
             auto name = _Material::variableName(vi);
             size_t numElements = m_matIdxForElement.size();
             ScalarField<Real> varField(numElements);
-            for (size_t ei = 0; ei < numElements; ++ei)
-                varField[ei] = values[_Material::numVars * ei + vi];
+            for (size_t ei = 0; ei < numElements; ++ei) {
+                size_t mi = materialIndexForElement(ei);
+                varField[ei] = values[_Material::numVars * mi + vi];
+            }
             writer.addField(prefix + name, varField,
                             MSHFieldWriter::PER_ELEMENT);
         }
