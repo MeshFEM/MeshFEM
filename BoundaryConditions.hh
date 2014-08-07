@@ -116,9 +116,22 @@ struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
         m_vals[elem] = Value(traction);
     }
 
+    const Value &getValue(const UnorderedTriplet &elem) const {
+        return m_vals.at(elem);
+    }
+
     const Value &getValue(size_t v0, size_t v1, size_t v2 = 0) const {
         UnorderedTriplet elem(v0, v1, v2);
-        return m_vals.at(elem);
+        return getValue(elem);
+    }
+
+    bool hasValueForElement(const UnorderedTriplet &elem) const {
+        return m_vals.count(elem) == 1;
+    }
+
+    bool hasValueForElement(size_t v0, size_t v1, size_t v2 = 0) const {
+        UnorderedTriplet elem(v0, v1, v2);
+        return hasValueForElement(elem);
     }
 
     /*! Number of elements this condition affects. */

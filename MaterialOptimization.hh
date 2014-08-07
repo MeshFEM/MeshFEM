@@ -337,4 +337,29 @@ using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
 
 }
 
+namespace MaterialOptimization3D {
+
+typedef Materials::Isotropic<3>     IsotropicMaterial;
+typedef Materials::Orthotropic<3> OrthotropicMaterial;
+typedef MaterialField<  IsotropicMaterial>   IsotropicField;
+typedef MaterialField<OrthotropicMaterial> OrthotropicField;
+
+struct BoundaryNodeData : LinearElasticity3D::BoundaryNodeData {
+    bool hasTarget;
+    Vector3D targetDisplacement;
+};
+
+template<class _Material>
+using Mesh = LinearElasticity3D::Mesh<LinearFEM3D::NodeData,
+                                      LinearElasticity3D::ElementData<typename MaterialField<_Material>::MaterialGetter>,
+                                      BoundaryNodeData>;
+
+template<class _Material>
+using Simulator = MaterialOptimization::SimulatorND<_Material, Mesh<_Material> >;
+
+template<class _Material>
+using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
+
+}
+
 #endif /* end of include guard: MATERIALOPTIMIZATION_HH */

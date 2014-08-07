@@ -45,7 +45,6 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
     vector<set<size_t> > materialAdj;
     m_matField->materialAdjacencies(mesh(), materialAdj);
 
-
     for (size_t its = 1; its <= iterations; ++its) {
         // Target-as-Dirichlet solve
         m_sim.swapTargetDirichlet();
@@ -113,9 +112,11 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         ceres::Solve(options, &problem, &summary);
         // cout << summary.BriefReport() << "\n";
 
-        m_sim.materialFieldUpdated();
+        // Write current material variable fields
+        m_matField->writeVariableFields(writer, to_string(its) + " ");
 
         // Write the post-iteration solution and print statistics
+        m_sim.materialFieldUpdated();
         u = m_sim.solve(neumannLoad);
         vector<Real> g = objectiveGradient(u);
         Real gradNormSq = 0;
@@ -125,10 +126,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
              << endl;
         writer.addField(to_string(its) + " u", u, MSHFieldWriter::PER_NODE);
 
-        // Write current material variable and variable gradient fields.
-        // Note: the following assumes all elements have the same set of
-        // variables.
-        m_matField->writeVariableFields(writer, to_string(its) + " ");
+        // Write gradient component fields
         m_matField->writeVariableFields(writer, to_string(its) + " grad_", g);
     }
 }
@@ -138,5 +136,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
 ////////////////////////////////////////////////////////////////////////////////
 template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::IsotropicMaterial> >;
 template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::OrthotropicMaterial> >;
+template class Optimizer<MaterialOptimization3D::Simulator<MaterialOptimization3D::IsotropicMaterial> >;
+template class Optimizer<MaterialOptimization3D::Simulator<MaterialOptimization3D::OrthotropicMaterial> >;
 
 }

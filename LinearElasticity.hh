@@ -205,25 +205,20 @@ namespace LinearElasticity {
                     continue;
                 }
                 else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<_Point> >(cond)) {
-                    typename NeumannElementsCondition<_Point>::Value val;
                     size_t numSet = 0;
                     for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
                         auto be = m_mesh.boundaryElement(bei);
-                        if (_N == 2) {
-                            val = nec->getValue(
-                                    be.vertex(0).volumeVertex().index(),
-                                    be.vertex(1).volumeVertex().index());
+                        UnorderedTriplet elem(
+                                        be.vertex(0).volumeVertex().index(),
+                                        be.vertex(1).volumeVertex().index(),
+                            (_N == 3) ? be.vertex(2).volumeVertex().index() : 0);
+                        if (nec->hasValueForElement(elem)) {
+                            const auto &val = nec->getValue(elem);
+                            if (val.type == NeumannType::Pressure)
+                                 be->neumannTraction = -val.pressure() * be->normal();
+                            else be->neumannTraction =  val.traction();
+                            ++numSet;
                         }
-                        else if (_N == 3) {
-                            val = nec->getValue(
-                                    be.vertex(0).volumeVertex().index(),
-                                    be.vertex(1).volumeVertex().index(),
-                                    be.vertex(2).volumeVertex().index());
-                        }
-                        if (val.type == NeumannType::Pressure)
-                             be->neumannTraction = -val.pressure() * be->normal();
-                        else be->neumannTraction =  val.traction();
-                        ++numSet;
                     }
                     if (numSet != nec->numElements())
                         throw std::runtime_error("Some vertex boundary conditions weren't matched.");

@@ -100,15 +100,16 @@ void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corn
                 // Region is specified as a list of element corner lists
                 BOOST_FOREACH(const ptree::value_type &elem, tuple_entry.second) {
                     if (!elem.first.empty()) throw err;
+                    idx.clear();
                     BOOST_FOREACH(const ptree::value_type &cidx, elem.second) {
                         if (!cidx.first.empty()) throw err;
                         try { idx.push_back(cidx.second.get_value<int>()); }
                         catch (...) { throw err; }
-                        if (idx.size() == 2) idx.push_back(0);
-                        if (idx.size() != 3) throw err;
-                        values.push_back(truncateFrom3D<_Vec>(vecValue));
-                        corners.push_back(UnorderedTriplet(idx[0], idx[1], idx[2]));
                     }
+                    if (idx.size() == 2) idx.push_back(0);
+                    if (idx.size() != 3) throw err;
+                    values.push_back(truncateFrom3D<_Vec>(vecValue));
+                    corners.push_back(UnorderedTriplet(idx[0], idx[1], idx[2]));
                 }
             }
             else throw err;

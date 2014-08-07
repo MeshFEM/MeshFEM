@@ -12,7 +12,7 @@
 #include <memory>
 
 using namespace std;
-using namespace MaterialOptimization2D;
+using namespace MaterialOptimization3D;
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
@@ -23,7 +23,7 @@ using namespace MaterialOptimization2D;
 int main(int argc, char *argv[])
 {
     vector<MeshIO::IOVertex>  inVertices;
-    vector<MeshIO::IOElement> inTris;
+    vector<MeshIO::IOElement> inTets;
     if (argc < 3) {
         std::cout << "usage: ./TestMaterialOptimization2D mesh bc [numIters regularizationWeight]" << std::endl;
         exit(-1);
@@ -34,26 +34,14 @@ int main(int argc, char *argv[])
 
     string mshPath(argv[1]), condPath(argv[2]);
     bool noRigidMotion;
-    auto bconds = readBoundaryConditions<Vector2D>(condPath, noRigidMotion);
+    auto bconds = readBoundaryConditions<Vector3D>(condPath, noRigidMotion);
 
-    // MSHFieldParser<2> parser(mshPath);
+    load(mshPath, inVertices, inTets, MeshIO::FMT_GUESS,
+         MeshIO::MESH_TET);
+    shared_ptr<IsotropicField> matField(new IsotropicField(inTets.size()));
 
-    // auto initialYoung = parser.scalarField("young");
-    // auto initialPoisson = parser.scalarField("poisson");
-
-    load(mshPath, inVertices, inTris, MeshIO::FMT_GUESS,
-         MeshIO::MESH_TRI);
-    shared_ptr<OrthotropicField> matField(new OrthotropicField(inTris.size()));
-
-    // assert(initialYoung.domainSize() == initialPoisson.domainSize());
-    // assert(initialYoung.domainSize() == matField->numMaterials());
-    // for (size_t i = 0; i < matField->numMaterials(); ++i) {
-    //     matField->material(i).vars[0] = initialYoung[i];
-    //     matField->material(i).vars[1] = initialPoisson[i];
-    // }
-
-    typedef Optimizer<OrthotropicMaterial> Opt;
-    Opt matOpt(inTris, inVertices, matField, bconds, noRigidMotion);
+    typedef Optimizer<IsotropicMaterial> Opt;
+    Opt matOpt(inTets, inVertices, matField, bconds, noRigidMotion);
 
     typedef typename Opt::SField  SField;
     typedef typename Opt::VField  VField;
@@ -72,10 +60,6 @@ int main(int argc, char *argv[])
 
     auto u = matOpt.currentDisplacement();
     writer.addField("Initial u", u, MSHFieldWriter::PER_NODE);
-    // auto lambda = matOpt.simulator().solveAdjoint(u);
-    // writer.addField("lambda", lambda, MSHFieldWriter::PER_NODE);
-    // writer.addField("e_u", matOpt.simulator().strain(u), MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("e_lambda", matOpt.simulator().strain(lambda), MSHFieldWriter::PER_ELEMENT);
 
     size_t numElements = matOpt.mesh().numElements();
     SField gradE(numElements), gradNu(numElements);

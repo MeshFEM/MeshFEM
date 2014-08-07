@@ -153,12 +153,13 @@ struct Isotropic {
     };
 
     // Upper bounds: Upper bounds should be based on base material's moduli.
-    //               Poisson ratio can't be greater than 0.5
+    //               Poisson ratio can't be greater than or equal 0.5
+    //               (at 0.5, 3D lambda becomes Inf)
     // Lower bounds: Young's modulus must be positive and is hard to make
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratio can't be less than -1, and for robustness we
     //               limit it to -0.75
-    constexpr std::vector<Bounds> upperBounds() const { return {                  Bounds(1,  0.5) }; }
+    constexpr std::vector<Bounds> upperBounds() const { return {                  Bounds(1,  0.45) }; }
     constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 0.01), Bounds(1, -0.75) }; }
 
     Real vars[numVars];
