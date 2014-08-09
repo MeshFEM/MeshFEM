@@ -6,11 +6,13 @@ typedef double Real;
 
 template<int N>
 using PointND = Eigen::Matrix<Real, N, 1>;
+template<int N>
+using VectorND = Eigen::Matrix<Real, N, 1>;
 
-typedef PointND<3> Point3D;
-typedef PointND<3> Vector3D;
-typedef PointND<2> Point2D;
-typedef PointND<2> Vector2D;
+typedef  PointND<3>  Point3D;
+typedef VectorND<3> Vector3D;
+typedef  PointND<2>  Point2D;
+typedef VectorND<2> Vector2D;
 
 // vectors. Valid instantiations are provided in Types.cc; invalid generate
 // linker errors.

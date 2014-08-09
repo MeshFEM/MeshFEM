@@ -3,12 +3,11 @@ include platform_defs.mk
 CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o
 PERHOMO_OBJS=TestPeriodicHomogenization.o MeshIO.o Types.o
 PERHOMO2D_OBJS=TestPeriodicHomogenization2D.o MeshIO.o Types.o
-MATOPT2D_OBJS=TestMaterialOptimization2D.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o Materials.o
-MATOPT3D_OBJS=TestMaterialOptimization3D.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o Materials.o
+MATOPT_OBJS=MaterialOptimization_cli.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o Materials.o
 OBJS=$(CONVERT_OBJS) $(PERHOMO_OBJS) $(PERHOMO2D_OBJS) $(MATOPT2D_OBJS) $(MATOPT3D_OBJS)
-SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc TestMaterialOptimization3D.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc
+SOURCES=TestPeriodicHomogenization.cc TestPeriodicHomogenization2D.cc TestMaterialOptimization2D.cc TestMaterialOptimization3D.cc MaterialOptimization_cli.cc mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc
 SOURCES+=MaterialOptimization.cc Materials.cc
-TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D TestMaterialOptimization2D TestMaterialOptimization3D
+TARGETS=mesh_convert TestPeriodicHomogenization TestPeriodicHomogenization2D MaterialOptimization_cli
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)
 CPPFLAGS+=-O2
@@ -26,10 +25,7 @@ TestPeriodicHomogenization: $(PERHOMO_OBJS)
 TestPeriodicHomogenization2D: $(PERHOMO2D_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
-TestMaterialOptimization2D: $(MATOPT2D_OBJS)
-	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
-
-TestMaterialOptimization3D: $(MATOPT3D_OBJS)
+MaterialOptimization_cli: $(MATOPT_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 %.o: %.cc Makefile

@@ -274,7 +274,7 @@ struct Orthotropic {
     //               Poisson ratios can't be less than -1, and for robustness we
     //               limit them to -0.75
     std::vector<Bounds> upperBounds() const {
-        if (_N == 3) return { Bounds(3,  0.5), Bounds(4, 0.5), Bounds(5, 0.5) };
+        if (_N == 3) return { Bounds(3,  0.45), Bounds(4, 0.45), Bounds(5, 0.45) };
         else         return { Bounds(2,  0.5) };
     }
     std::vector<Bounds> lowerBounds() const {
