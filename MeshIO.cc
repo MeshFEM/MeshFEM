@@ -312,6 +312,7 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
     runtime_error badFMT("Bad OBJ face format.");
     while (getDataLine(is, line)) {
         deque<string> lineComponents;
+        boost::trim(line);
         boost::split(lineComponents, line, boost::is_any_of("\t "));
         string first = lineComponents.at(0);
         lineComponents.pop_front();
@@ -320,8 +321,9 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
             size_t ncomps = lineComponents.size();
             if (ncomps < 2 || ncomps > 3) throw badFMT;
             // Implicitly zero pad 2-vectors to 3-vectors
-            for (size_t i = 0; i < ncomps; ++i)
+            for (size_t i = 0; i < ncomps; ++i) {
                 v[i] = stod(lineComponents[i]);
+            }
             vertices.push_back(v);
         }
         else if (first == "f") {
