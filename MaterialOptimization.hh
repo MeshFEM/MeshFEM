@@ -365,14 +365,12 @@ using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
 // Specialized wrapper class chooses between typedefs. 
 template<size_t _N>
 struct MaterialOptimizationND { };
-template<>
-struct MaterialOptimizationND<2> {
+template<> struct MaterialOptimizationND<2> {
     template<template<size_t> class _MaterialND>
     using Optimizer = MaterialOptimization2D::Optimizer<_MaterialND<2> >;
 };
 
-template<>
-struct MaterialOptimizationND<3> {
+template<> struct MaterialOptimizationND<3> {
     template<template<size_t> class _MaterialND>
     using Optimizer = MaterialOptimization3D::Optimizer<_MaterialND<3> >;
 };

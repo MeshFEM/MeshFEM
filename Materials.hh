@@ -3,7 +3,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Parametrized materials that can be used with MaterialField for purposes
-//      of material optimization.
+//      of material optimization. Each material provides getETensorDerivative,
+//      which gives the derivative of the elasticity tensor with respect to one
+//      material parameter.
+//
+//      The exception is ConstantMaterial, which is intended to be read from a
+//      file and which doesn't support material optimization.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -287,6 +292,29 @@ struct Orthotropic {
     }
 
     Real vars[numVars];
+};
+
+template<size_t _N>
+struct Constant {
+    static constexpr size_t N = _N;
+    static constexpr size_t numVars = 0;
+    typedef ElasticityTensor<Real, _N> ETensor;
+
+    Constant() { m_E.setIsotropic(1.0, 0.3); }
+    Constant(const std::string &materialFile) { setFromFile(materialFile); }
+
+    void setFromFile(const std::string &materialFile);
+
+    // Used for adjoint method gradient-based optimization
+    void getETensorDerivative(size_t p, ETensor &d) const {
+        throw std::runtime_error("Constant material can't be optimized\n");
+    }
+
+    const ETensor &getTensor()      const { return m_E; }
+    void getTensor(ETensor &tensor) const { tensor = m_E; }
+
+private:
+    ETensor m_E;
 };
 
 }

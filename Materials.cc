@@ -1,5 +1,16 @@
 #include "Materials.hh"
 #include <cmath>
+#include <stdexcept>
+#include <iostream>
+#include <fstream>
+#include <map>
+
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/foreach.hpp>
+
+using namespace std;
+using boost::property_tree::ptree;
 
 namespace Materials {
 
@@ -93,11 +104,126 @@ void Orthotropic<_N>::getETensorDerivative(size_t p, Orthotropic<_N>::ETensor &d
     }
 }
 
+
+void parseNVector(size_t N, const ptree &pt, std::vector<Real> v) {
+    v.clear();
+    runtime_error err("Failed to parse vector of size " + to_string(N));
+    for (const auto &val : pt) {
+        if (!val.first.empty()) throw err;
+        v.push_back(val.second.get_value<Real>());
+    }
+    if (v.size() != N) throw err;
+}
+
+// Epected values:
+// "young": #
+// "poisson": #
+template<size_t _N>
+void parseIsotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+    Real young = pt.get<Real>("young");
+    Real poisson = pt.get<Real>("poisson");
+    E.setIsotropic(young, poisson);
+}
+
+// Expected values:
+// 3D: "young": [young_x, young_y, young_z],
+//     "poisson": [poisson_yz, poisson_zy,
+//                 poisson_zx, poisson_xz,
+//                 poisson_xy, poisson_yx],
+//     "shear": [shear_yz, shear_zx, shear_xy],
+// 2D: "young": [young_x, young_y],
+//     "poisson": [poisson_xy, poisson_yx],
+//     "shear": [shear_xy],
+template<size_t _N>
+void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+    std::vector<Real> poisson, young, shear;
+    if (_N == 2) {
+        parseNVector(2, pt, young);
+        parseNVector(2, pt, poisson);
+        parseNVector(1, pt, shear);
+        // Ex, Ey, nuYX, muXY
+        Real   E_x(  young[0]),   E_y(  young[1]),
+             nu_xy(poisson[0]), nu_yx(poisson[1]), mu(shear[0]);
+        E.setOrthotropic2D(E_x, E_y, nu_yx, mu);
+
+        if (std::abs(nu_yx / E_y - nu_xy / E_x) < 1e-10)
+            throw std::runtime_error("Orthotopic parameters violate symmetry");
+    }
+    else {
+        parseNVector(3, pt, young);
+        parseNVector(6, pt, poisson);
+        parseNVector(3, pt, shear);
+        Real   E_x(  young[0]),   E_y(  young[1]), E_z(young[2]),
+             nu_yz(poisson[0]), nu_zy(poisson[1]),
+             nu_zx(poisson[2]), nu_xz(poisson[3]),
+             nu_xy(poisson[4]), nu_yx(poisson[5]),
+             mu_yz(  shear[0]), mu_zx(  shear[1]), mu_xy(shear[2]);
+
+        E.setOrthotropic3D(E_x, E_y, E_z, nu_yx, nu_zx, nu_zy,
+                           mu_yz, mu_zx, mu_xy);
+
+        if ((std::abs(nu_yx / E_y - nu_xy / E_x) < 1e-10) ||
+            (std::abs(nu_yz / E_y - nu_zy / E_z) < 1e-10) ||
+            (std::abs(nu_zx / E_z - nu_xz / E_x) < 1e-10)) {
+            throw std::runtime_error("Orthotopic parameters violate symmetry");
+        }
+    }
+}
+
+// Epected values:
+// "material_matrix": [[C_00, C_01, C02, C03, C04, C05],
+//                     [C_10, C_11, C12, C13, C14, C15],
+//                     [C_20, C_21, C22, C23, C24, C25],
+//                     [C_30, C_31, C32, C33, C34, C35],
+//                     [C_40, C_41, C42, C43, C44, C45],
+//                     [C_50, C_51, C52, C53, C54, C55]],
+template<size_t _N>
+void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+    runtime_error err("Failed to parse material_matrix");
+    size_t row = 0;
+    for (const auto &rpt : pt) {
+        if (!rpt.first.empty()) throw err;
+        size_t col = 0;
+        for (const auto &cpt : rpt.second) {
+            if (!cpt.first.empty()) throw err;
+            Real val = cpt.second.get_value<Real>();
+            if (row <= col)
+                E.D(row, col) = val;
+            else if (std::abs(E.D(row, col) - val) > 1e-10) {
+                throw runtime_error("Asymmetric material_matrix");
+            }
+        }
+    }
+}
+
+template<size_t _N>
+void Constant<_N>::setFromFile(const string &materialPath) {
+    ifstream is(materialPath);
+    if (!is.is_open())
+        throw std::runtime_error("Couldn't open material" + materialPath);
+    ptree pt;
+    read_json(is, pt);
+    auto type = pt.get<string>("type");
+    // Both my and James' names
+    typedef function<void(const ptree &, ETensor &)> parser;
+    static const map<string, parser>  materialParser =
+        { {"isotropic_material",   parseIsotropic<_N>  },
+          {"isotropic",            parseIsotropic<_N>  },
+          {"orthotropic_material", parseOrthotropic<_N>},
+          {"orthotropic",          parseOrthotropic<_N>},
+          {"symmetric_material",   parseAnisotropic<_N>},
+          {"anisotropic",          parseAnisotropic<_N>} };
+    materialParser.at(type)(pt, m_E);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Explicit Instantiations
 // Has the nice side-effect that only code using valid dimensions 2 and 3 links.
 ////////////////////////////////////////////////////////////////////////////////
 template struct Orthotropic<2>;
 template struct Orthotropic<3>;
+
+template struct Constant<2>;
+template struct Constant<3>;
 
 }

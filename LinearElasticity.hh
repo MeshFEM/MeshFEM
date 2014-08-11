@@ -549,6 +549,31 @@ namespace LinearElasticity {
 
         _Mesh m_mesh;
     };
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Policies for getting material tensors
+    ////////////////////////////////////////////////////////////////////////////
+    template<size_t N>
+    struct ETensorStoreGetter {
+        typedef ElasticityTensor<Real, N> ETensor;
+        ETensorStoreGetter() : m_E(1, 0) { }
+        const ETensor &operator()() const { return m_E; }
+    private:
+        ETensor m_E;
+    };
+
+    // Homogenous materials are implemented as a "static" material that all
+    // elements share. NOTE: this material will be shared by all meshes
+    // (instantiated with the same _Material type)! If multiple meshes with
+    // different materials are needed, we need a different approach.
+    template<class _Material>
+    struct HomogenousMaterialGetter {
+        typedef typename _Material::ETensor ETensor;
+        static _Material material;
+        const ETensor &operator()() const { return material.getTensor(); }
+    };
+    template<class _Material>
+    _Material HomogenousMaterialGetter<_Material>::material;
 }
 
 namespace LinearElasticity3D {
@@ -564,13 +589,7 @@ namespace LinearElasticity3D {
     // t_ETensorGetter: policy for getting the elasticity tensor. The default
     //                  policy is to actually store a full tensor on each tet.
     ////////////////////////////////////////////////////////////////////////////
-    struct ETensorStoreGetter {
-        ETensorStoreGetter() : m_E(1, 0) { }
-        const ETensor &operator()() const { return m_E; }
-    private:
-        ETensor m_E;
-    };
-    template<class t_ETensorGetter = ETensorStoreGetter>
+    template<class t_ETensorGetter = LinearElasticity::ETensorStoreGetter<3> >
     struct ElementData;
 
     struct BoundaryNodeData {
@@ -617,13 +636,7 @@ namespace LinearElasticity2D {
     // t_ETensorGetter: policy for getting the elasticity tensor. The default
     //                  policy is to actually store a full tensor on each tet.
     ///////////////////////////////////////////////////////////////////////////
-    struct ETensorStoreGetter {
-        ETensorStoreGetter() : m_E(1, 0) { }
-        const ETensor &operator()() const { return m_E; }
-    private:
-        ETensor m_E;
-    };
-    template<class t_ETensorGetter = ETensorStoreGetter>
+    template<class t_ETensorGetter = LinearElasticity::ETensorStoreGetter<2> >
     struct ElementData;
 
     struct BoundaryNodeData {
@@ -657,6 +670,51 @@ namespace LinearElasticity2D {
              class BEData = BoundaryElementData>
     using Simulator = LinearElasticity::SimulatorND<Mesh<VData, TData, BVData, BEData> >;
 }
+
+// Specialized wrapper class chooses implementation. 
+template<size_t _N>
+struct LinearElasticityND { };
+template<> struct LinearElasticityND<2> {
+    typedef LinearElasticity2D::Simulator<> Simulator;
+
+    typedef LinearElasticity2D::SField   SField;
+    typedef LinearElasticity2D::VField   VField;
+    typedef LinearElasticity2D::SMField SMField;
+    typedef LinearElasticity2D::ETensor ETensor;
+
+    template<class _Mat>
+    using HMG = LinearElasticity::HomogenousMaterialGetter<_Mat>;
+    template<template<size_t> class _MaterialND>
+    static constexpr _MaterialND<2> &homogenousMaterial() {
+        return HMG<_MaterialND<2> >::material;
+    }
+
+    template<template<size_t> class _MaterialND>
+    using HomogenousSimulator =
+        LinearElasticity2D::Simulator<LinearFEM2D::NodeData<Point2D>,
+                     LinearElasticity2D::ElementData<HMG<_MaterialND<2> > > >;
+};
+
+template<> struct LinearElasticityND<3> {
+    typedef LinearElasticity3D::Simulator<> Simulator;
+
+    typedef LinearElasticity3D::SField   SField;
+    typedef LinearElasticity3D::VField   VField;
+    typedef LinearElasticity3D::SMField SMField;
+    typedef LinearElasticity3D::ETensor ETensor;
+
+    template<class _Mat>
+    using HMG = LinearElasticity::HomogenousMaterialGetter<_Mat>;
+    template<template<size_t> class _MaterialND>
+    static constexpr _MaterialND<3> &homogenousMaterial() {
+        return HMG<_MaterialND<3> >::material;
+    }
+    
+    template<template<size_t> class _MaterialND>
+    using HomogenousSimulator =
+        LinearElasticity3D::Simulator<LinearFEM3D::NodeData,
+                     LinearElasticity3D::ElementData<HMG<_MaterialND<3> > > >;
+};
 
 #include "LinearElasticity.inl"
 
