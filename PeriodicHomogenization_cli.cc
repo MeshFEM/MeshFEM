@@ -17,7 +17,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 void usage(int exitVal, const po::options_description &visible_opts) {
-    cout << "Usage: PeriodicHomogenization_cli [options] dimension mesh output.msh" << endl;
+    cout << "Usage: PeriodicHomogenization_cli [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
@@ -27,15 +27,14 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
         ("mesh",       po::value<string>(),                     "input mesh")
-        ("outputMSH",  po::value<string>()->default_value(""),  "output mesh")
         ;
     po::positional_options_description p;
-    p.add("mesh",                1)
-     .add("outputMSH",           1);
+    p.add("mesh",                1);
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
         ("material",       po::value<string>()->default_value(""),   "base material")
+        ("outputMSH",      po::value<string>()->default_value(""),   "output mesh")
         // ("parameterStep",  po::value<double>()->default_value(0.1),  "(fractional) ammount by which to attempt to change elastic coefficients")
         ;
 

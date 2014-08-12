@@ -274,6 +274,8 @@ struct Orthotropic {
 
     // Upper bounds: Upper bounds should be based on base material's moduli.
     //               Poisson ratios can't be greater than 0.5
+    //               (at 0.5, 3D isotropic lambda becomes Inf, so we avoid it
+    //               here too)
     // Lower bounds: Young's and sheer moduli must be positive and are hard to make
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratios can't be less than -1, and for robustness we
