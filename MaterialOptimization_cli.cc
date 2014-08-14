@@ -39,9 +39,10 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material",              po::value<string>()->default_value("isotropic"), "material type (isotropic,  orthotropic)")
-        ("numIters",              po::value<int>()->default_value(8),              "number of iterations")
-        ("regularizationWeight",  po::value<double>()->default_value(0.0),         "regularization weight")
+        ("material",               po::value<string>()->default_value("isotropic"), "material type (isotropic,  orthotropic)")
+        ("numIters",               po::value<int>()->default_value(8),              "number of iterations")
+        ("iterationsPerDirichlet", po::value<int>()->default_value(1),              "number of local/global iterations to run before re-solving the target dirichlet problem.")
+        ("regularizationWeight",   po::value<double>()->default_value(0.0),         "regularization weight")
         ;
 
     po::options_description cli_opts;
@@ -89,7 +90,8 @@ template<size_t _N, template<size_t> class _Material>
 void execute(const string &meshPath, const string &bcPath, const string &outMSH,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements, 
-             size_t iterations, Real regularizationWeight) {
+             size_t iterations, size_t iterationsPerDirichlet,
+             Real regularizationWeight) {
     typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
     typedef typename Opt::MField  MField;
     typedef typename Opt::SField  SField;
@@ -118,37 +120,38 @@ void execute(const string &meshPath, const string &bcPath, const string &outMSH,
 
     Opt matOpt(inElements, inVertices, matField, bconds, noRigidMotion);
 
-    VField targetDisplacements(matOpt.mesh().numNodes());
-    targetDisplacements.clear();
-    for (size_t i = 0; i < matOpt.mesh().numBoundaryNodes(); ++i) {
-        auto bn = matOpt.mesh().boundaryNode(i);
-        if (bn->hasTarget) {
-            targetDisplacements(bn.volumeVertex().index()) = bn->targetDisplacement;
-        }
-    }
+    // VField targetDisplacements(matOpt.mesh().numNodes());
+    // targetDisplacements.clear();
+    // for (size_t i = 0; i < matOpt.mesh().numBoundaryNodes(); ++i) {
+    //     auto bn = matOpt.mesh().boundaryNode(i);
+    //     if (bn->hasTarget) {
+    //         targetDisplacements(bn.volumeVertex().index()) = bn->targetDisplacement;
+    //     }
+    // }
 
     MSHFieldWriter writer(outMSH, matOpt.mesh());
-    writer.addField("target", targetDisplacements, MSHFieldWriter::PER_NODE);
+    // writer.addField("target", targetDisplacements, MSHFieldWriter::PER_NODE);
 
-    auto u = matOpt.currentDisplacement();
-    writer.addField("Initial u", u, MSHFieldWriter::PER_NODE);
+    // auto u = matOpt.currentDisplacement();
+    // writer.addField("Initial u", u, MSHFieldWriter::PER_NODE);
 
-    size_t numElements = matOpt.mesh().numElements();
-    SField gradE(numElements), gradNu(numElements);
+    // size_t numElements = matOpt.mesh().numElements();
+    // SField gradE(numElements), gradNu(numElements);
 
-    std::vector<Real> g = matOpt.objectiveGradient(u);
-    matField->writeVariableFields(writer, "Initial ");
-    matField->writeVariableFields(writer, "Initial grad", g);
+    // std::vector<Real> g = matOpt.objectiveGradient(u);
+    // matField->writeVariableFields(writer, "Initial ");
+    // matField->writeVariableFields(writer, "Initial grad", g);
 
     std::cout << "Attempting optimization" << std::endl;
-    matOpt.run(writer, iterations, regularizationWeight);
+    matOpt.run(writer, iterations, iterationsPerDirichlet,
+            regularizationWeight);
 
-    auto u_opt = matOpt.currentDisplacement();
-    g = matOpt.objectiveGradient(u_opt);
+    // auto u_opt = matOpt.currentDisplacement();
+    // g = matOpt.objectiveGradient(u_opt);
 
-    writer.addField("Final u", u_opt, MSHFieldWriter::PER_NODE);
-    matField->writeVariableFields(writer, "Final ");
-    matField->writeVariableFields(writer, "Final grad", g);
+    // writer.addField("Final u", u_opt, MSHFieldWriter::PER_NODE);
+    // matField->writeVariableFields(writer, "Final ");
+    // matField->writeVariableFields(writer, "Final grad", g);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -161,9 +164,10 @@ int main(int argc, const char *argv[])
 {
     po::variables_map args = parseCmdLine(argc, argv);
 
-    string materialType = args["material"].as<string>();
-    size_t iterations   = args["numIters"].as<int>();
-    Real regWeight      = args["regularizationWeight"].as<Real>();
+    string materialType  = args["material"].as<string>();
+    size_t iterations    = args["numIters"].as<int>();
+    size_t iPerDirichlet = args["iterationsPerDirichlet"].as<int>();
+    Real regWeight       = args["regularizationWeight"].as<Real>();
 
     vector<MeshIO::IOVertex>  inVertices;
     vector<MeshIO::IOElement> inElements;
@@ -186,7 +190,7 @@ int main(int argc, const char *argv[])
                                    : execute<2, Materials::Isotropic> );
     exec(meshPath, args["boundaryConditions"].as<string>(),
          args["outputMSH"].as<string>(), inVertices, inElements, iterations,
-         regWeight);
+         iPerDirichlet, regWeight);
 
     return 0;
 }

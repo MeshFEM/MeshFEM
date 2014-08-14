@@ -23,6 +23,7 @@
 #include <SparseMatrices.hh>
 #include <SymmetricMatrix.hh>
 #include <Fields.hh>
+#include <Flattening.hh>
 #include "TetMesh.hh"
 #include "TriMesh.hh"
 #include "BoundaryConditions.hh"
@@ -44,7 +45,7 @@ namespace LinearElasticity {
         typedef VectorField<Real, _N>          VField;
         typedef SymmetricMatrixField<Real, _N> SMField;
         typedef ElasticityTensor<Real, _N>     ETensor;
-        typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
+        typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
         typedef SymmetricMatrix<_N, FlattenedSymmetricMatrix> SMatrix;
 
         template<class Elements, class Vertices>
@@ -581,7 +582,7 @@ namespace LinearElasticity3D {
     typedef ScalarField<Real>             SField;
     typedef VectorField<Real, 3>          VField;
     typedef SymmetricMatrixField<Real, 3> SMField;
-    typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
+    typedef Eigen::Matrix<Real, flatLen(3), 1> FlattenedSymmetricMatrix;
     typedef SymmetricMatrix<3, FlattenedSymmetricMatrix> SMatrix;
 
     ////////////////////////////////////////////////////////////////////////////
@@ -628,7 +629,7 @@ namespace LinearElasticity2D {
     typedef ScalarField<Real>             SField;
     typedef VectorField<Real, 2>          VField;
     typedef SymmetricMatrixField<Real, 2> SMField;
-    typedef Eigen::Matrix<Real, SMField::FieldDim(), 1> FlattenedSymmetricMatrix;
+    typedef Eigen::Matrix<Real, flatLen(2), 1> FlattenedSymmetricMatrix;
     typedef SymmetricMatrix<2, FlattenedSymmetricMatrix> SMatrix;
 
     ///////////////////////////////////////////////////////////////////////////

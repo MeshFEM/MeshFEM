@@ -118,9 +118,8 @@ public:
           _Material &materialForElement(size_t ei)       { return material(materialIndexForElement(ei)); }
 
     ETensor getElasticityTensor(size_t mi) const {
-        assert(mi < m_materials.size());
         ETensor result;
-        m_materials[mi].getTensor(result);
+        m_materials.at(mi).getTensor(result);
         return result;
     }
 
