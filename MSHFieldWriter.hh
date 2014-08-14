@@ -26,9 +26,10 @@ public:
     typedef enum { PER_ELEMENT, PER_NODE } FieldType;
 
     template<typename Mesh>
-    MSHFieldWriter(const std::string &mshPath, const Mesh &mesh)
+    MSHFieldWriter(const std::string &mshPath, const Mesh &mesh,
+                   bool binary = true)
         : m_outStream(mshPath), m_numNodes(mesh.numNodes()),
-          m_numElements(mesh.numElements())
+          m_numElements(mesh.numElements()), m_binary(binary)
     {
         if (!m_outStream.is_open()) {
             std::cout << "Failed to open output file '"
@@ -50,7 +51,9 @@ public:
                 outElements.push_back(outElement);
             }
 
-            MeshIO::save(m_outStream, outNodes, outElements, MeshIO::FMT_MSH);
+            MeshIO::MeshIO_MSH io;
+            io.setBinary(binary);
+            io.save(m_outStream, outNodes, outElements, MeshIO::MESH_GUESS);
         }
     }
 
@@ -93,22 +96,30 @@ public:
                     << '0' << std::endl // Time step 0 (ignored)
                     << dim << std::endl // dimension
                     << f.domainSize() << std::endl; // number of nodal values
-        for (size_t i = 0; i < f.domainSize(); ++i) {
-            typename Field::ConstValueType val = f(i);
-            m_outStream << i + 1;
+        for (size_t i = 1; i <= f.domainSize(); ++i) {
+            typename Field::ConstValueType val = f(i - 1);
+            if (m_binary) m_outStream.write((char *) &i, sizeof(int));
+            else          m_outStream << i;
             if (f.fieldType() == FIELD_MATRIX) {
                 for (size_t k = 0; k < 3; ++k) {
                     for (size_t l = 0; l < 3; ++l) {
-                        m_outStream << ' ' << (((k < f.N()) && (l < f.N())) ?
-                            val[flattenIndices(f.N(), k, l)] : 0);
+                        // Pad to 3x3
+                        double value = (((k < f.N()) && (l < f.N())) ?
+                                        val[flattenIndices(f.N(), k, l)] : 0);
+                        if (m_binary) m_outStream.write((char *) &value, sizeof(double));
+                        else          m_outStream << ' ' << value;
                     }
                 }
             }
             else {
-                for (size_t c = 0; c < dim; ++c)
-                    m_outStream << ' ' << ((c < f.dim()) ? val[c] : 0);
+                for (size_t c = 0; c < dim; ++c) {
+                    double value = ((c < f.dim()) ? val[c] : 0);
+                    if (m_binary) m_outStream.write((char *) &value, sizeof(double));
+                    else          m_outStream << ' ' << value;
+                }
             }
-            m_outStream << std::endl;
+            if (!m_binary)
+                m_outStream << std::endl;
         }
         m_outStream << "$End" << sectionHeader << std::endl;
     }
@@ -125,6 +136,7 @@ public:
 private:
     std::ofstream m_outStream;
     size_t m_numNodes, m_numElements;
+    bool m_binary;
 };
 
 #endif // MSHFIELDWRITER_HH

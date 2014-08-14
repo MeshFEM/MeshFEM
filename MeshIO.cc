@@ -436,28 +436,65 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
     }
     getElementInfo(type, elementType, numCorners);
 
-    int file_type = 0; // ASCII
+    int file_type = m_binary ? 1 : 0;
     int data_size = sizeof(double);
     os << "$MeshFormat" << std::endl << 2.2 << " " << file_type << " "
-        << data_size << std::endl << "$EndMeshFormat" << std::endl;
+        << data_size << std::endl;
+    if (m_binary) {
+        int one = 1;
+        os.write((char *) &one, sizeof(int));
+        os << std::endl;
+    }
+        
+    os << "$EndMeshFormat" << std::endl;
     os << "$Nodes" << std::endl << vertices.size() << std::endl;
 
-    os << std::setprecision(16);
     // Note: all indices must be positive, so we use 1-indexing
     // Write vertex indices and coordinates, padding with z = 0 for 2D
-    for (size_t i = 0; i < vertices.size(); ++i)
-        os << i + 1 << " " << vertices[i];
+    if (m_binary) {
+        for (size_t i = 1; i <= vertices.size(); i++) {
+            os.write((char *) &i, sizeof(int));
+            double xyz[3] = { vertices[i - 1][0], vertices[i - 1][1],
+                              vertices[i - 1][2] };
+            os.write((char *) xyz, 3 * sizeof(double));
+        }
+        os << std::endl;
+    }
+    else {
+        os << std::setprecision(16);
+        for (size_t i = 0; i < vertices.size(); ++i)
+            os << i + 1 << " " << vertices[i];
+    }
     os << "$EndNodes" << std::endl;
 
     os << "$Elements" << std::endl << elements.size() << std::endl;
 
-    for (size_t i = 0; i < elements.size(); ++i) {
-        os << i + 1 << " " << elementType << " " << 0 /* no tags */;
-        if (elements[i].size() != (size_t) numCorners)
-            throw std::runtime_error("Illegal sized element");
-        for (size_t c = 0; c < numCorners; ++c)
-            os << " " << elements[i][c] + 1;
+    if (m_binary) {
+        int numElements = (int) elements.size();
+        int numTags = 0;
+        os.write((char *) &elementType, sizeof(int));
+        os.write((char *) &numElements, sizeof(int));
+        os.write((char *) &numTags, sizeof(int));
+        for (size_t i = 1; i <= elements.size(); ++i) {
+            os.write((char *) &i, sizeof(int));
+            if (elements[i - 1].size() != (size_t) numCorners)
+                throw std::runtime_error("Illegal sized element");
+            for (size_t c = 0; c < numCorners; ++c) {
+                int cidx = (int) (elements[i - 1][c] + 1);
+                os.write((char *) &cidx, sizeof(int));
+            }
+        }
         os << std::endl;
+    }
+    else {
+        for (size_t i = 0; i < elements.size(); ++i) {
+            os << i + 1 << " " << elementType << " " << 0 /* no tags */;
+            if (elements[i].size() != (size_t) numCorners)
+                throw std::runtime_error("Illegal sized element");
+            for (size_t c = 0; c < numCorners; ++c)
+                os << " " << elements[i][c] + 1;
+            os << std::endl;
+        }
     }
 
     os << "$EndElements" << std::endl;
