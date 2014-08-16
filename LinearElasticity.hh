@@ -180,8 +180,11 @@ namespace LinearElasticity {
             if (conds.size() > 0) m_system.clear();
             for (auto cond : conds) {
                 std::runtime_error illegalCondition("Illegal BC type");
+                std::runtime_error unimplemented("Unimplemented BC type");
                 std::string nonbdryMsg("Condition applied to non-boundary vertex ");
                 if (auto nc = std::dynamic_pointer_cast<const NeumannCondition<_Point> >(cond)) {
+                    Real regionArea = 0.0;
+                    std::vector<size_t> region;
                     for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
                         auto be = m_mesh.boundaryElement(i);
                         _Point center(_Point::Zero());
@@ -189,9 +192,28 @@ namespace LinearElasticity {
                             center += be.vertex(c).volumeVertex()->p;
                         center /= be.numVertices();
                         if (nc->containsPoint(center)) {
+                            regionArea += be->area();
+                            region.push_back(i);
                             if (nc->type == NeumannType::Pressure)
                                  be->neumannTraction = -nc->pressure * be->normal();
-                            else be->neumannTraction =  nc->traction;
+                            else if (nc->type == NeumannType::Traction)
+                                 be->neumannTraction =  nc->traction;
+                            else if (nc->type == NeumannType::Force) {
+                                // In the Force case, "traction" is actually a
+                                // force that will be distributed uniformly among all
+                                // boundary elements in the region.
+                                be->neumannTraction = nc->traction;
+                            }
+                            else throw unimplemented;
+                        }
+                    }
+                    if (region.size() == 0)
+                        throw std::runtime_error("Neumann region unmatched");
+                    if (nc->type == NeumannType::Force) {
+                        // Actual traction for the force condition is total
+                        // force (stored in neumannTraction) / region area.
+                        for (size_t bei : region) {
+                            m_mesh.boundaryElement(bei)->neumannTraction /= regionArea;
                         }
                     }
                 }
@@ -217,7 +239,9 @@ namespace LinearElasticity {
                             const auto &val = nec->getValue(elem);
                             if (val.type == NeumannType::Pressure)
                                  be->neumannTraction = -val.pressure() * be->normal();
-                            else be->neumannTraction =  val.traction();
+                            else if (val.type == NeumannType::Traction)
+                                be->neumannTraction =  val.traction();
+                            else throw unimplemented;
                             ++numSet;
                         }
                     }

@@ -149,6 +149,10 @@ void writeBoundaryConditions(ostream &os,
                     value = cc->traction;
                     os << "traction";
                     break;
+                case NeumannType::Force:
+                    value = cc->traction;
+                    os << "force";
+                    break;
                 default:
                     throw runtime_error("Illegal NeumannType");
             }
@@ -228,6 +232,7 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
         BoundaryCondition<_Vec> *c;
         if      (type == "pressure")  c = new   NeumannCondition<_Vec>(region, value[0]);
         else if (type == "traction")  c = new   NeumannCondition<_Vec>(region, value);
+        else if (type == "force")     c = new   NeumannCondition<_Vec>(region, value, NeumannType::Force);
         else if (type == "dirichlet") c = new DirichletCondition<_Vec>(region, value);
         else if (type == "target")    c = new    TargetCondition<_Vec>(region, value);
         else if (type == "dirichlet vertices") c = new DirichletVerticesCondition<_Vec>(vertex_indices, vertex_displacements);

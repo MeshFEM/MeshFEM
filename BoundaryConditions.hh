@@ -38,16 +38,18 @@ using CondPtr      = std::shared_ptr<BoundaryCondition<_Vec> >;
 template<class _Vec>
 using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_Vec> >;
 
-enum class NeumannType { Pressure, Traction };
+enum class NeumannType { Pressure, Traction, Force };
+// For the NeumannType::Force case, the force vector is stored in the "traction"
+// field, and it is divided by the regino's boundary area at application time.
 template<typename _Vec>
 struct NeumannCondition : public BoundaryCondition<_Vec> {
     NeumannCondition(const BBox<_Vec> &region, Real p)
         : BoundaryCondition<_Vec>(region), type(NeumannType::Pressure),
           pressure(p) { }
 
-    NeumannCondition(const BBox<_Vec> &region, const _Vec &t)
-        : BoundaryCondition<_Vec>(region), type(NeumannType::Traction),
-          traction(t) { }
+    NeumannCondition(const BBox<_Vec> &region, const _Vec &t,
+                     NeumannType _type = NeumannType::Force)
+        : BoundaryCondition<_Vec>(region), type(_type), traction(t) { }
 
     NeumannType type;
     Real pressure;
