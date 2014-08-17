@@ -98,6 +98,37 @@ public:
         m_d = m_d.inverse().eval();
     }
 
+    // Get the orthotropic material paramters (assuming the material is in fact
+    // 3D orthotropic)
+    void getOrthotropic3D(Real &  Ex, Real &  Ey, Real &  Ez,
+                          Real &nuYX, Real &nuZX, Real &nuZY,
+                          Real &muYZ, Real &muZX, Real &muXY) {
+        if (_Dim != 3)
+            throw std::runtime_error("getOrthotropic3D call on non-3D tensor");
+        ElasticityTensor Einv = this->inverse();
+        Ex = 1.0 / Einv.D(0, 0);
+        Ey = 1.0 / Einv.D(1, 1);
+        Ez = 1.0 / Einv.D(2, 2);
+        nuYX = -Einv.D(0, 1) * Ey;
+        nuZX = -Einv.D(0, 2) * Ez;
+        nuZY = -Einv.D(1, 2) * Ez;
+        muYZ = 1.0 / Einv.D(3, 3);
+        muZX = 1.0 / Einv.D(4, 4);
+        muXY = 1.0 / Einv.D(5, 5);
+    }
+
+    // Get the orthotropic material paramters (assuming the material is in fact
+    // 2D orthotropic)
+    void getOrthotropic2D(Real &Ex, Real &Ey, Real &nuYX, Real &muXY) {
+        if (_Dim != 2)
+            throw std::runtime_error("getOrthotropic2D call on non-2D tensor");
+        ElasticityTensor Einv = this->inverse();
+        Ex = 1.0 / Einv.D(0, 0);
+        Ey = 1.0 / Einv.D(1, 1);
+        nuYX = -Einv.D(0, 1) * Ey;
+        muXY = 1.0 / Einv.D(2, 2);
+    }
+
     void clear() {
         m_d =  DType::Zero();
     }
