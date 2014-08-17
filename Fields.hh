@@ -59,6 +59,9 @@ public:
                                                domainSize);
     }
 
+    // Eigen ArrayType constructor
+    VectorField(const ArrayType &values) : m_values(values) { }
+
     // Flattened data constructor (std::vector version)
     template<typename Real2>
     VectorField(const std::vector<Real2> &values) {
@@ -127,6 +130,9 @@ public:
             minNorm = std::min(minNorm, m_values.col(i).norm());
         return minNorm;
     }
+
+    // Component wise abs.
+    VectorField cwiseAbs() const { return VectorField(m_values.cwiseAbs().eval()); }
 
     // Sum of squared norms of each vector.
     Real frobeniusNormSq() const {
@@ -200,15 +206,17 @@ public:
 
     FieldType fieldType() const { return FIELD_SCALAR; }
 
-    Real min() const { return m_values.minCoeff(); }
-    Real max() const { return m_values.maxCoeff(); }
-    // Return the magnitude of the entry with maximum magnitude
-    Real maxMag() const { return std::max(std::abs(min()), std::abs(max())); }
-    // Return the (signed) entry with maximum magnitude
-    Real signedMaxMag() const {
-        Real minVal = min(), maxVal = max();
-        return (std::abs(minVal) > std::abs(maxVal)) ? minVal : maxVal;
-    }
+    Real norm() const { return m_values.norm(); }
+    Real  sum() const { return m_values.sum(); }
+    Real  min() const { return m_values.minCoeff(); }
+    Real  max() const { return m_values.maxCoeff(); }
+
+    // Return the entry with maximum/minimum magnitude
+    Real minMag() const { Real m = min(), M = max(); return (std::abs(m) < M) ? m : M; }
+    Real maxMag() const { Real m = min(), M = max(); return (std::abs(m) > M) ? m : M; }
+
+    // Component wise abs.
+    ScalarField cwiseAbs() const { return ScalarField(m_values.cwiseAbs().eval()); }
 
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
@@ -231,18 +239,19 @@ private:
     using VectorField<Real, 1>::m_values;
 };
 
-template<typename Real>
-std::ostream &operator<<(std::ostream &os, const ScalarField<Real> &sf)
+// Handles both VectorField and ScalarField output.
+template<typename Real, size_t N>
+std::ostream &operator<<(std::ostream &os, const VectorField<Real, N> &vf)
 {
-    os << std::scientific << std::setprecision(16);
-    size_t N = sf.size();
-    for (size_t i = 0; i < N; ++i) {
-        os << sf[i] << std::endl;
+    for (size_t i = 0; i < vf.domainSize(); ++i) {
+        for (size_t c = 0; c < N; ++c) {
+            os << (c ? "\t" : "") << vf(i)[c];
+        }
+        os << std::endl;
     }
 
     return os;
 }
-
 
 // Symmetric matrix NxN fields need only store the upper triangle of the NxN
 // matrix. This triangle is flattened into a 1D vector following Voigt notation.
@@ -274,6 +283,9 @@ public:
                                                domainSize);
     }
 
+    // Eigen ArrayType constructor
+    SymmetricMatrixField(const ArrayType values) : m_values(values) { }
+
     SymmetricMatrixField(size_t domainSize = 0)
         : m_values(dim(), domainSize) { }
     
@@ -301,6 +313,9 @@ public:
         return *this;
     }
 
+    // Component wise abs.
+    SymmetricMatrixField cwiseAbs() const { return SymmetricMatrixField(m_values.cwiseAbs()); }
+
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
 
@@ -308,5 +323,19 @@ private:
     /** Data storage */
     ArrayType m_values;
 };
+
+template<typename Real, size_t N>
+std::ostream &operator<<(std::ostream &os, const SymmetricMatrixField<Real, N> &smf)
+{
+    for (size_t i = 0; i < smf.domainSize(); ++i) {
+        for (size_t c = 0; c < smf.dim(); ++c) {
+            os << (c ? "\t" : "") << smf(i)[c];
+        }
+        os << std::endl;
+    }
+
+    return os;
+}
+
 
 #endif // FIELDS_HH

@@ -1007,7 +1007,7 @@ bool MeshlessFEM2D<Model>::modalAnalysis(RC *rc)
             m_modalStressNorms.push_back(
                     computeStressTensorNorms(m_modalStressTensors[i], true));
             if (m_consistentSigns) {
-                if (m_modalStressNorms.back().signedMaxMag() > 0) {
+                if (m_modalStressNorms.back().maxMag() > 0) {
                     m_modalStressNorms.back() *= -1.0;
                     m_modalStressTensors[i] *= -1.0;
                     m_modes[i] *= -1.0;
