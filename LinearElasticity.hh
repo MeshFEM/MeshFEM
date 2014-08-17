@@ -53,6 +53,7 @@ namespace LinearElasticity {
             : m_useRigidMotionConstraint(false), m_mesh(elems, vertices) { }
 
         const _Mesh &mesh() const { return m_mesh; }
+              _Mesh &mesh()       { return m_mesh; }
 
         // Solve for equilibrium under DoF load f
         VField solve(const VField &f) const {
@@ -581,8 +582,10 @@ namespace LinearElasticity {
     template<size_t N>
     struct ETensorStoreGetter {
         typedef ElasticityTensor<Real, N> ETensor;
+        ETensorStoreGetter(const ETensor &E) : m_E(E) { }
         ETensorStoreGetter() : m_E(1, 0) { }
         const ETensor &operator()() const { return m_E; }
+              ETensor &operator()() { return m_E; }
     private:
         ETensor m_E;
     };

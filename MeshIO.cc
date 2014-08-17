@@ -1,6 +1,7 @@
 #include "MeshIO.hh"
 #include <boost/algorithm/string.hpp>
 #include <deque>
+#include "util.h"
 
 using namespace std;
 
@@ -91,7 +92,7 @@ std::ostream & operator<<(std::ostream &os, const IOElement &e) {
 *///////////////////////////////////////////////////////////////////////////////
 Format guessFormat(const std::string &path) {
     // Extract file extension from the path (including the last .)
-    std::string ext = path.substr(path.find_last_of('.'));
+    std::string ext = fileExtension(path);
     // Make comparisons insensitive;
     for (unsigned int i = 0; i < ext.length(); ++i)
         ext[i] = tolower(ext[i]);

@@ -2,8 +2,8 @@
 #include "TetMesh.hh"
 #include "TriMesh.hh"
 #include "MeshIO.hh"
-#include "tools/subdivide.hh"
-#include "tools/quad_tri_subdiv.hh"
+#include "filters/subdivide.hh"
+#include "filters/quad_tri_subdiv.hh"
 
 #include <limits>
 #include <iostream>

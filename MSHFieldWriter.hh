@@ -13,7 +13,7 @@
 #define MSHFIELDWRITER_HH
 #include <iostream>
 #include <fstream>
-#include <cassert>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -23,7 +23,7 @@
 
 class MSHFieldWriter {
 public:
-    typedef enum { PER_ELEMENT, PER_NODE } FieldType;
+    typedef enum { PER_ELEMENT, PER_NODE, PER_GUESS } FieldType;
 
     template<typename Mesh>
     MSHFieldWriter(const std::string &mshPath, const Mesh &mesh,
@@ -60,32 +60,41 @@ public:
     template<typename Field>
     void addField(const std::string &name, const Field &f, FieldType type) {
         std::string sectionHeader;
+        std::runtime_error invalidSize("Invalid field domain size.");
+        std::runtime_error invalidDim("Invalid field dimension.");
+        if (type == PER_GUESS) {
+            if (f.domainSize() == m_numElements)
+                type = PER_ELEMENT;
+            else if (f.domainSize() == m_numNodes)
+                type = PER_NODE;
+            else throw invalidSize;
+        }
         if (type == PER_ELEMENT) {
-            assert(f.domainSize() == m_numElements);
+            if (f.domainSize() != m_numElements) throw invalidSize;
             sectionHeader = "ElementData";
         }
         else if (type == PER_NODE) {
-            assert(f.domainSize() == m_numNodes);
+            if (f.domainSize() != m_numNodes) throw invalidSize;
             sectionHeader = "NodeData";
         }
         size_t dim = f.dim();
         switch (f.fieldType()) {
             case FIELD_SCALAR:
-                assert(dim == 1);
+                if (dim != 1) throw invalidDim;
                 break;
             case FIELD_VECTOR:
                 // 2-vectors are padded to 3-vectors for GMSH compatibility.
                 if (dim == 2) dim = 3;
-                assert(dim == 3);
+                if (dim != 3) throw invalidDim;
                 break;
             case FIELD_MATRIX:
-                assert((f.N() == 2) || (f.N() == 3));
+                if ((f.N() != 2) && (f.N() != 3)) throw invalidDim;
                 // for GMSH compatibility, 2x2 matrices are padded to 3x3,
                 // which are output as a 9-vector in scanline
                 dim = 9;
                 break;
             default:
-                assert(false);
+                throw std::runtime_error("Invalid field type.");
         }
 
         m_outStream << '$' << sectionHeader << std::endl

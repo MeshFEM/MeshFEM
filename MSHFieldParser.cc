@@ -48,13 +48,13 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath) {
                 field(i) = truncateFrom3D<PointND<N> >(fieldData.col(i));
             m_vectorFields.emplace(make_pair(fieldName,
                         make_pair(ftype, field)));
-       }
+        }
         else if (fieldData.rows() == 9) {
             SymmetricMatrixField<Real, N> field(fieldData.cols());
             for (size_t i = 0; i < (size_t) fieldData.cols(); ++i) {
                 auto mat = fieldData.col(i);
                 for (size_t k = 0; k < 3; ++k) {
-                    for (size_t l = 0; l <= 3; ++l) {
+                    for (size_t l = 0; l <= k; ++l) {
                          Real val = mat(3 * k + l);
                          if (abs(val - mat(3 * l + k)) > 1e-6)
                              throw runtime_error("Only symmetric matrix fields are supported.");

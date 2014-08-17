@@ -95,7 +95,7 @@ void execute(const string &meshPath, const string &bcPath, const string &outMSH,
     typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
     typedef typename Opt::MField  MField;
     typedef typename Opt::SField  SField;
-    typedef typename Opt::VField  VField;
+    // typedef typename Opt::VField  VField;
 
     // If input is a.msh, try to read element->material associations.
     // Otherwise, we use one material per element.

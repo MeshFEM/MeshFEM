@@ -13,13 +13,23 @@
 
 #include <sys/stat.h>
 #include <string>
+#include <sstream>
+
+////////////////////////////////////////////////////////////////////////////
+/*! Get the file extension for a path.
+//  @param[in]  path
+//  @return     file extension including initial period.
+*///////////////////////////////////////////////////////////////////////////
+inline std::string fileExtension(const std::string &path) {
+    return path.substr(path.find_last_of('.'));
+}
 
 ////////////////////////////////////////////////////////////////////////////
 /*! Check if a file exists
 //  @param[in]  filename   description
 //  @return     true if the file exists
 *///////////////////////////////////////////////////////////////////////////
-bool fileExists(const std::string &filename)
+inline bool fileExists(const std::string &filename)
 {
     struct stat buf;
     if (stat(filename.c_str(), &buf) != -1) {
@@ -35,12 +45,12 @@ bool fileExists(const std::string &filename)
 //  @param[in]  ext     filename extension
 //  @return     available filename
 *///////////////////////////////////////////////////////////////////////////
-std::string nextNewFile(const std::string &base, const std::string &ext)
+inline std::string nextNewFile(const std::string &base, const std::string &ext)
 {
-    string result;
+    std::string result;
     int i = 0;
     do {
-        stringstream ss;
+        std::stringstream ss;
         ss << base << i << ext;
         result = ss.str();
         ++i;
