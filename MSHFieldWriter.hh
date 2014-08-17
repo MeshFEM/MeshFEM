@@ -25,6 +25,24 @@ class MSHFieldWriter {
 public:
     typedef enum { PER_ELEMENT, PER_NODE, PER_GUESS } FieldType;
 
+    MSHFieldWriter(const std::string &mshPath,
+                   const std::vector<MeshIO::IOVertex>  &vertices,
+                   const std::vector<MeshIO::IOElement> &elements,
+                   bool binary = true)
+        : m_outStream(mshPath), m_numNodes(vertices.size()),
+          m_numElements(elements.size()), m_binary(binary)
+    {
+        if (!m_outStream.is_open()) {
+            std::cout << "Failed to open output file '"
+                      << mshPath << '\'' << std::endl;
+        }
+        else {
+            MeshIO::MeshIO_MSH io;
+            io.setBinary(binary);
+            io.save(m_outStream, vertices, elements, MeshIO::MESH_GUESS);
+        }
+    }
+
     template<typename Mesh>
     MSHFieldWriter(const std::string &mshPath, const Mesh &mesh,
                    bool binary = true)

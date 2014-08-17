@@ -11,13 +11,19 @@
 //  Created:  08/16/2014 15:26:04
 ////////////////////////////////////////////////////////////////////////////////
 #include <MSHFieldParser.hh>
+#include <MSHFieldWriter.hh>
 #include <Types.hh>
 
 #include <boost/program_options.hpp>
+#include <iomanip>
 #include <regex>
 #include <vector>
+#include <map>
+#include <set>
 #include <stdexcept>
+#include <cmath>
 #include <memory>
+#include <functional>
 
 using namespace MeshIO;
 
@@ -25,7 +31,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 void usage(int status, const po::options_description &visible_opts) {
-    cout << "Usage: msh_field_extractor [options] in.msh" << endl;
+    cout << "Usage: msh_field_extractor in.msh [options]" << endl;
     cout << visible_opts << endl;
     exit(status);
 }
@@ -38,30 +44,49 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
     po::positional_options_description p;
     p.add("msh", 1);
 
-    po::options_description visible_opts;
-    visible_opts.add_options()("help,h", "Produce this help message")
-        ("extract,e", po::value<string>(),  "extract field(s) matching a given name (or name pattern)")
-        ("extractAll",                      "extract all fields")
-        ("print,p",                         "print top of stack")
-        ("rename,r",  po::value<string>(),  "rename the field(s) at the top of the stack (multiple names separated by commas)")
-        ("outMSH,o",  po::value<string>(),  "output msh file with named fields for each entry in the stack")
-        ("max,M",                           "max of scalar field (or element-wise for vector field)")
-        ("min,m",                           "min of scalar field (or element-wise for vector field)")
-        ("maxMag",                          "max magnitude of scalar field (or element-wise for vector field)")
-        ("minMag",                          "min magnitude of scalar field (or element-wise for vector field)")
-        ("abs,a",                           "componentwise abs of scalar field or vector field")
-        ("norm,n",                          "L2 norm of scalar field (or element-wise for vector field)")
-        ("eigenvalues,l",                   "eigenvalues for symmetric matrix field (vector field result)")
-        ("percentile", po::value<double>(), "extract a certain percentile of the msh file")
+    po::options_description parser_operations("Data source operations");
+    parser_operations.add_options()
+        ("list",                           "List all fields in the msh")
+        ("extract,e", po::value<string>(), "Extract field(s) matching a given name (or name pattern)")
+        ("extractAll",                     "Extract all fields")
+        ;
+    po::options_description stack_operations("Stack operations");
+    stack_operations.add_options()
+        ("dup,D",                          "Duplicate top of the stack")
+        ("pop,P",                          "Pop top of the stack")
+        ("print,p",                        "Print top of stack")
+        ("printName",                      "Print name of value at the top of the stack")
+        ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")
+        ("outMSH,o",  po::value<string>(), "Output msh file with named fields for each entry in the stack")
+        ;
+    po::options_description field_operations("Field operations");
+    field_operations.add_options()
+        ("applyAll,A",    "Apply next filter to all values on the stack")
+        ("max,M",         "Max of scalar field (element-wise for vector field)")
+        ("min,m",         "Min of scalar field (element-wise for vector field)")
+        ("maxMag",        "Max magnitude of scalar field (element-wise for vector field)")
+        ("minMag",        "Min magnitude of scalar field (element-wise for vector field)")
+        ("norm,n",        "L2 norm of scalar field (element-wise for vector field)")
+        ("abs,a",         "Componentwise abs of scalar field or vector field")
+        ("sum,s",         "Sum the elements of a (scalar|vector) field or vector")
+        ("mean",          "Element average of a {scalar,vector} field or vector")
+        ("eigenvalues,l", "Eigenvalues of sym matrix field (vector field result)")
+        // ("percentile", po::value<double>(), "extract a certain percentile of the msh file")
         ;
 
     po::options_description cli_opts;
-    cli_opts.add(visible_opts).add(hidden_opts);
+    cli_opts.add_options()("help,h", "Produce this help message");
+    cli_opts.add(parser_operations).add(stack_operations).add(field_operations).add(hidden_opts);
+
+    // Options visible in the help message.
+    po::options_description visible_opts;
+    visible_opts.add_options()("help,h", "Produce this help message");
+    visible_opts.add(parser_operations).add(stack_operations).add(field_operations);
 
     po::parsed_options *parsedOptions = NULL;
     try {
         parsedOptions = new po::parsed_options(po::command_line_parser(argc, argv).
-                            options(cli_opts).positional(p).run());
+                            options(visible_opts).positional(p).run());
     }
     catch (std::exception &e) {
         cout << "Error: " << e.what() << endl << endl;
@@ -90,55 +115,69 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
 ////////////////////////////////////////////////////////////////////////////////
 // Types of values that can live on the stack.
 ////////////////////////////////////////////////////////////////////////////////
-template<size_t N>
+typedef ScalarField<Real> SField;
+template<size_t N> using  VField =          VectorField<Real, N>;
+template<size_t N> using SMField = SymmetricMatrixField<Real, N>;
+typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> Vector;
+
+template<size_t _N>
 struct Value {
+    constexpr static size_t N = _N;
     Value(const string &n) : name(n) { }
     string name;
+    virtual size_t numElems() const = 0;
+    virtual void scale(Real s) = 0;
+    virtual void applyAbs() = 0;
     virtual void print(std::ostream &os = std::cout) const = 0;
 };
 
-template<size_t N>
-struct SFieldValue : public Value<N> {
+// Various in-place absolute value functions.
+template<class T> T absoluteValue(const T &in) { return in.cwiseAbs(); }
+  Real absoluteValue(const Real   &in) { return std::abs(in); }
+
+template<class T, size_t N>
+struct SpecificValue : public Value<N> {
     typedef Value<N> Base;
-    typedef ScalarField<Real> value_type;
+    typedef T value_type;
     value_type value;
-    SFieldValue(const string &n, const value_type &v) : Base(n), value(v) { }
+    SpecificValue(const string &n, const value_type &v) : Base(n), value(v) { }
+    void scale(Real s) { value *= s; }
+    void applyAbs() { value = absoluteValue(value); }
     virtual void print(std::ostream &os = std::cout) const {
-        os << value << std::endl;
+        os << value;
     }
 };
 
 template<size_t N>
-struct VFieldValue : public Value<N> {
-    typedef Value<N> Base;
-    typedef VectorField<Real, N> value_type;
-    value_type value;
-    VFieldValue(const string &n, const value_type &v) : Base(n), value(v) { }
-    virtual void print(std::ostream &os = std::cout) const {
-        // os << value << std::endl;
-    }
+struct SFieldValue : public SpecificValue<SField, N> {
+    SFieldValue(const string &n, const SField &v = SField()) : SpecificValue<SField, N>(n, v) { }
+    virtual size_t numElems() const { return this->value.domainSize(); }
 };
 
 template<size_t N>
-struct SMFieldValue : public Value<N> {
-    typedef Value<N> Base;
-    typedef SymmetricMatrixField<Real, N> value_type;
-    value_type value;
-    SMFieldValue(const string &n, const value_type &v) : Base(n), value(v) { }
-    virtual void print(std::ostream &os = std::cout) const {
-        // os << value << std::endl;
-    }
+struct VFieldValue : public SpecificValue<VField<N>, N> {
+    VFieldValue(const string &n, const VField<N> &v = VField<N>()) : SpecificValue<VField<N>, N>(n, v) { }
+    virtual size_t numElems() const { return this->value.domainSize(); }
 };
 
 template<size_t N>
-struct ScalarValue : public Value<N> {
-    typedef Value<N> Base;
-    typedef Real value_type;
-    value_type value;
-    ScalarValue(const string &n, const value_type &v) : Base(n), value(v) { }
-    virtual void print(std::ostream &os = std::cout) const {
-        // os << value << std::endl;
-    }
+struct SMFieldValue : public SpecificValue<SMField<N>, N> {
+    SMFieldValue(const string &n, const SMField<N> &v = SMField<N>()) : SpecificValue<SMField<N>, N>(n, v) { }
+    virtual size_t numElems() const { return this->value.domainSize(); }
+};
+
+template<size_t N>
+struct ScalarValue : public SpecificValue<Real, N> {
+    ScalarValue(const string &n, const Real &v = Real()) : SpecificValue<Real, N>(n, v) { }
+    virtual size_t numElems() const { return 1; }
+    virtual void print(std::ostream &os = std::cout) const { os << this->value << std::endl; }
+};
+
+template<size_t N>
+struct VectorValue : public SpecificValue<Vector, N> {
+    VectorValue(const string &n, const Vector &v = Vector()) : SpecificValue<Vector, N>(n, v) { }
+    virtual size_t numElems() const { return this->value.rows(); }
+    virtual void print(std::ostream &os = std::cout) const { os << this->value << std::endl; }
 };
 
 template<size_t N>
@@ -180,30 +219,144 @@ void extract(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
             ++numMatched;
         }
     }
-    if (numMatched == 0) throw runtime_error("No fields matched " + arg);
+    if (numMatched == 0) throw runtime_error("No fields matched '" + arg + "'");
+}
+
+template<size_t N>
+void extractAll(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+             const string &arg) {
+    for (const string &name : parser.scalarFieldNames()) {
+        stack.push_back(VPtr<N>(new SFieldValue<N>(name, parser.scalarField(name))));
+    }
+    for (const string &name : parser.vectorFieldNames()) {
+        stack.push_back(VPtr<N>(new VFieldValue<N>(name, parser.vectorField(name))));
+    }
+    for (const string &name : parser.symmetricMatrixFieldNames()) {
+        stack.push_back(VPtr<N>(new SMFieldValue<N>(name,
+                    parser.symmetricMatrixField(name))));
+    }
 }
 
 // Compute a value (e.g. element volume) from the mesh, pushing it on the top of
 // the stack
 // void compute
 
+template<size_t N>
+VPtr<N> getValue(vector<VPtr<N> > &stack, size_t offset = 0) {
+    if (stack.size() <= offset) throw std::runtime_error("Accessed out of stack bounds.");
+    size_t idx = stack.size() - 1 - offset;
+    return stack.at(idx);
+}
+
+template<typename T>
+shared_ptr<T> getTypedValue(vector<VPtr<T::N> > &stack, size_t offset = 0) {
+    VPtr<T::N> val = getValue(stack, offset);
+    shared_ptr<T> tVal = dynamic_pointer_cast<T>(val);
+    if (!tVal) { throw runtime_error("Invalid argument."); }
+    return tVal;
+}
+
+template<size_t N>
+void dup(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+         const string &arg) { stack.push_back(getValue(stack)); }
+template<size_t N>
+void pop(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+         const string &arg) { getValue(stack); stack.pop_back(); }
+
+
 // Single operand filters
+
+// partialReduction:
+// Operations reducing vector fields to scalar fields, scalar fields to scalars,
+// and vectors to scalars.
 template<size_t N>
-void max(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
+void partialReduction(const string &op, vector<VPtr<N> > &stack,
+                      const MSHFieldParser<N> &parser, const string &arg) {
+    auto top = getValue(stack);
+    stack.pop_back();
+    string name = op + "(" + top->name + ")";
+    static const map<string, function<Real(const SField &f)>> sfOps = {
+        { "min",    [](const SField &f) -> Real { return f.min(); } },
+        { "max",    [](const SField &f) -> Real { return f.max(); } },
+        { "minMag", [](const SField &f) -> Real { return f.minMag(); } },
+        { "maxMag", [](const SField &f) -> Real { return f.maxMag(); } },
+        { "norm",   [](const SField &f) -> Real { return f.norm(); } } };
+    static const map<string, function<Real(const Vector &)>> vOps = {
+        { "min",    [](const Vector &v) -> Real { return v.minCoeff(); } },
+        { "max",    [](const Vector &v) -> Real { return v.maxCoeff(); } },
+        { "minMag", [](const Vector &v) -> Real { Real m = v.minCoeff(), M = v.maxCoeff(); return (std::abs(m) < M) ? m : M; } },
+        { "maxMag", [](const Vector &v) -> Real { Real m = v.minCoeff(), M = v.maxCoeff(); return (std::abs(m) > M) ? m : M; } },
+        { "norm",   [](const Vector &v) -> Real { return v.norm(); } } };
+    if (auto sfVal = dynamic_pointer_cast<SFieldValue<N>>(top)) {
+        stack.push_back(VPtr<N>(new ScalarValue<N>(name, sfOps.at(op)(sfVal->value))));
+    }
+    else if (auto vfVal = dynamic_pointer_cast<VFieldValue<N>>(top)) {
+        auto vOp = vOps.at(op);
+        auto r = new SFieldValue<N>(name, SField(vfVal->value.domainSize()));
+        for (size_t i = 0; i < vfVal->value.domainSize(); ++i)
+            r->value[i] = vOp(vfVal->value(i));
+        stack.push_back(VPtr<N>(r));
+    }
+    else if (auto vVal = dynamic_pointer_cast<VectorValue<N>>(top)) {
+        stack.push_back(VPtr<N>(new ScalarValue<N>(name, sfOps.at(op)(vVal->value))));
+    }
+    else { throw runtime_error("Invalid argument."); }
+}
+
+// Scalar/vector mean and sum
+// Scalar field becomes scalar, vector field becomes vector,
+// vector becomes scalar
 template<size_t N>
-void min(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
+void sum(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    auto top = getValue(stack);
+    stack.pop_back();
+    string name = "sum(" + top->name + ")";
+    if (auto sfVal = dynamic_pointer_cast<SFieldValue<N>>(top))
+        stack.push_back(VPtr<N>(new ScalarValue<N>(name, sfVal->value.sum())));
+    else if (auto vfVal = dynamic_pointer_cast<VFieldValue<N>>(top)) {
+        auto r = new VectorValue<N>(name);
+        r->value.setZero(vfVal->value.dim());
+        for (size_t i = 0; i < vfVal->value.domainSize(); ++i) {
+            r->value += vfVal->value(i);
+        }
+        stack.push_back(VPtr<N>(r));
+    }
+    else if (auto vVal = dynamic_pointer_cast<VectorValue<N>>(top)) {
+        stack.push_back(VPtr<N>(new ScalarValue<N>(name, vVal->value.sum())));
+    }
+    else { throw runtime_error("Invalid argument."); }
+}
+
 template<size_t N>
-void sum(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
+void mean(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    Real numElems = getValue(stack)->numElems();
+    sum(stack, parser, arg);
+    auto result = getValue(stack);
+    result->scale(1 / numElems);
+    result->name = result->name.replace(0, 3, "mean");
+}
+
+// Componenent-wise abs
+// Data types are unchanged.
 template<size_t N>
-void maxMag(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
+void abs(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    auto top = getValue(stack);
+    top->applyAbs();
+    top->name = "abs(" + top->name + ")";
+}
+
 template<size_t N>
-void minMag(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
-template<size_t N>
-void abs(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
-template<size_t N>
-void norm(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
-template<size_t N>
-void eigenvalues(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
+void eigenvalues(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    auto top = getTypedValue<SMFieldValue<N> >(stack);
+    stack.pop_back();
+    auto *result = new VFieldValue<N>("eigenvalues(" + top->name + ")");
+    size_t numValues = top->value.domainSize();
+    result->value.resizeDomain(numValues);
+    for (size_t i = 0; i < numValues; ++i)
+        result->value(i) = top->value(i).eigenvalues();
+    stack.push_back(shared_ptr<VFieldValue<N> >(result));
+}
+
 template<size_t N>
 void percentile(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
 
@@ -212,15 +365,48 @@ void percentile(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const 
 // void multiply()
 
 // Report filters
+// List all fields parsed
+template<size_t N>
+void listNames(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    for (const string &name : parser.scalarFieldNames()) {
+        cout << "s\t" << name << endl;
+    }
+    for (const string &name : parser.vectorFieldNames()) {
+        cout << "v\t" << name << endl;
+    }
+    for (const string &name : parser.symmetricMatrixFieldNames()) {
+        cout << "sm\t" << name << endl;
+    }
+}
+
 // Print the top of the stack.
 template<size_t N>
 void print(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg)
 {
+    getValue(stack)->print();
 }
 
 template<size_t N>
-void rename(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg)
-{
+void printName(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    cout << getValue(stack)->name << endl;
+}
+
+template<size_t N>
+void outputMSH(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    MSHFieldWriter writer(arg, parser.vertices(), parser.elements());
+    for (auto s : stack) {
+        if      (auto  sfVal = dynamic_pointer_cast<SFieldValue<N>>(s))
+            writer.addField(s->name,  sfVal->value, MSHFieldWriter::PER_GUESS);
+        else if (auto  vfVal = dynamic_pointer_cast<VFieldValue<N>>(s))
+            writer.addField(s->name,  vfVal->value, MSHFieldWriter::PER_GUESS);
+        else if (auto smfVal = dynamic_pointer_cast<SMFieldValue<N>>(s))
+            writer.addField(s->name, smfVal->value, MSHFieldWriter::PER_GUESS);
+        else cout << "WARNING: ignored non-field value on stack" << endl;
+    }
+}
+
+template<size_t N>
+void rename(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
     vector<string> names;
     boost::split(names, arg, boost::is_any_of(","));
     if (names.size() > stack.size()) {
@@ -231,19 +417,62 @@ void rename(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const stri
         stack[--pos]->name = name;
 }
 
-// Print the entire stack.
-
 template<size_t N>
 void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
     MSHFieldParser<N> parser(mshFile);
 
+    cout << std::scientific << std::setprecision(16);
+
+    using namespace std::placeholders;
     map<string, function<void(vector<VPtr<N> > &,
                 const MSHFieldParser<N> &, const string &)> > filterLUT = {
-        {"extract", extract<N>}, {"print", print<N>}, {"rename", rename<N>} };
+        {"list", listNames<N>}, {"extract", extract<N>},
+        {"extractAll", extractAll<N>}, {"print", print<N>},
+        {"printName", printName<N>}, {"rename", rename<N>},
+        {"eigenvalues", eigenvalues<N>},
+        {"min",    bind(partialReduction<N>, "min",    _1, _2, _3)},
+        {"max",    bind(partialReduction<N>, "max",    _1, _2, _3)},
+        {"norm",   bind(partialReduction<N>, "norm",   _1, _2, _3)},
+        {"maxMag", bind(partialReduction<N>, "maxMag", _1, _2, _3)},
+        {"minMag", bind(partialReduction<N>, "minMag", _1, _2, _3)},
+        {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>}, {"dup", dup<N>},
+        {"pop", pop<N>}, {"outMSH", outputMSH<N>}
+    };
+
+    // The following commands suppress automatic output of stack at exit
+    set<string> noImplicitPrint = { "noprint", "print", "outMSH" };
+
     vector<VPtr<N> > stack;
-    for (const auto &f : filters) {
-        std::cout << "running " << f.first << "\t" << f.second << std::endl;
-        filterLUT.at(f.first)(stack, parser, f.second);
+    for (size_t fi = 0; fi < filters.size(); ++fi) {
+        const auto &f = filters[fi];
+        try {
+            // applyAll is special: apply next filter to each entry of stack
+            if (f.first == "applyAll") {
+                auto err = runtime_error("must be followed by a plain filter");
+                if (fi == filters.size() - 1) throw err;
+                const auto &nf = filters[++fi];
+                if (filterLUT.count(nf.first) == 0) throw err;
+                // Apply to all S elements on the stack by splitting into S auxiliary
+                // stacks and recombining
+                vector<VPtr<N>> auxiliaryStack, newStack;
+                for (auto sval : stack) {
+                    auxiliaryStack.assign(1, sval);
+                    filterLUT.at(nf.first)(auxiliaryStack, parser, nf.second);
+                    for (auto asval : auxiliaryStack) newStack.push_back(asval);
+                }
+                stack = newStack;
+            }
+            else filterLUT.at(f.first)(stack, parser, f.second);
+        }
+        catch (const exception &e) {
+            cout << "Filter '" << f.first << "' failed: " << e.what() << endl;
+            exit(-1);
+        }
+    }
+    // implicit list when filters are empty
+    if (filters.size() == 0) listNames<N>(stack, parser, "");
+    else if (noImplicitPrint.count(filters.back().first) == 0) {
+        if (stack.size() > 0) print<N>(stack, parser, "");
     }
 }
 

@@ -1,5 +1,6 @@
 # Read in definitions based on hostname
 # Adapted from openFTL's build system
+TOP := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # determine the hostname
 HOST=$(shell hostname -s)
@@ -22,7 +23,7 @@ ifneq (,$(findstring $(HOST), $(VLG_HOSTS)))
 endif
 
 # directory of local definitions
-LOCALDEFSDIR  = platform_config
+LOCALDEFSDIR = $(TOP)/platform_config
 
 # filename of local definitions file
 LOCALDEFSFILE = $(LOCALDEFSDIR)/$(HOST).mk
