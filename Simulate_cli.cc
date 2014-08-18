@@ -39,7 +39,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("matFieldName,f",       po::value<string>()->default_value(""), "name of material field to load from .msh passed as --material")
         ("boundaryConditions,b", po::value<string>(),                    "boundary conditions")
         ("outputMSH,o",          po::value<string>(),                    "output mesh")
-        ("dumpMatrix,d",         po::value<string>(),                    "dump system matrix in triplet format")
+        ("dumpMatrix,d",         po::value<string>()->default_value(""), "dump system matrix in triplet format")
         ;
 
     po::options_description cli_opts;
@@ -83,11 +83,11 @@ void execute(const po::variables_map &args,
     size_t numElements = inElements.size();
     typename LinearElasticityND<_N>::Simulator sim(inElements, inVertices);
     typedef typename LinearElasticityND<_N>::SField SField;
-    const string &materialPath = args["material"].as<string>(),
-                 &matFieldName = args["matFieldName"].as<string>(),
+    const string &materialPath = args[          "material"].as<string>(),
+                 &matFieldName = args[      "matFieldName"].as<string>(),
                  &bcPath       = args["boundaryConditions"].as<string>(),
-                 &outMSH       = args["outputMSH"].as<string>(),
-                 &matrixPath   = args["dumpMatrices"].as<string>();
+                 &outMSH       = args[         "outputMSH"].as<string>(),
+                 &matrixPath   = args[        "dumpMatrix"].as<string>();
 
     if (fileExtension(materialPath) == ".msh") {
         MSHFieldParser<_N> fieldParser(materialPath);
