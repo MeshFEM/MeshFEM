@@ -39,6 +39,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("matFieldName,f",       po::value<string>()->default_value(""), "name of material field to load from .msh passed as --material")
         ("boundaryConditions,b", po::value<string>(),                    "boundary conditions")
         ("outputMSH,o",          po::value<string>(),                    "output mesh")
+        ("dumpMatrix,d",         po::value<string>(),                    "dump system matrix in triplet format")
         ;
 
     po::options_description cli_opts;
@@ -76,13 +77,17 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 }
 
 template<size_t _N>
-void execute(const string &materialPath, const string &matFieldName,
-             const string &bcPath,       const string &outMSH,
+void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
     typename LinearElasticityND<_N>::Simulator sim(inElements, inVertices);
     typedef typename LinearElasticityND<_N>::SField SField;
+    const string &materialPath = args["material"].as<string>(),
+                 &matFieldName = args["matFieldName"].as<string>(),
+                 &bcPath       = args["boundaryConditions"].as<string>(),
+                 &outMSH       = args["outputMSH"].as<string>(),
+                 &matrixPath   = args["dumpMatrices"].as<string>();
 
     if (fileExtension(materialPath) == ".msh") {
         MSHFieldParser<_N> fieldParser(materialPath);
@@ -164,6 +169,13 @@ void execute(const string &materialPath, const string &matFieldName,
     auto e = sim.strain(u);
     auto s = sim.stress(u);
 
+    if (matrixPath != "") {
+        typename LinearElasticityND<_N>::Simulator::TMatrix C;
+        vector<Real> dummy;
+        sim.assembleConstrainedSystem(C, dummy);
+        C.dump(matrixPath);
+    }
+
     MSHFieldWriter writer(outMSH, sim.mesh());
     writer.addField("u",      u, MSHFieldWriter::PER_NODE);
     writer.addField("strain", e, MSHFieldWriter::PER_ELEMENT);
@@ -176,7 +188,6 @@ void execute(const string &materialPath, const string &matFieldName,
     writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
     writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
     writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
-    
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -188,7 +199,6 @@ void execute(const string &materialPath, const string &matFieldName,
 int main(int argc, const char *argv[])
 {
     po::variables_map args = parseCmdLine(argc, argv);
-
 
     vector<MeshIO::IOVertex>  inVertices;
     vector<MeshIO::IOElement> inElements;
@@ -205,10 +215,7 @@ int main(int argc, const char *argv[])
     // Look up and run appropriate homogenizer instantiation.
     auto exec = (dim == 3) ? execute<3> : execute<2>;
 
-    string material = args["material"].as<string>();
-    exec(args["material"].as<string>(),           args["matFieldName"].as<string>(),
-         args["boundaryConditions"].as<string>(), args["outputMSH"].as<string>(),
-         inVertices, inElements);
+    exec(args, inVertices, inElements);
 
     return 0;
 }

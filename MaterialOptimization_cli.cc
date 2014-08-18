@@ -39,10 +39,11 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material",               po::value<string>()->default_value("isotropic"), "material type (isotropic,  orthotropic)")
-        ("numIters",               po::value<int>()->default_value(8),              "number of iterations")
-        ("iterationsPerDirichlet", po::value<int>()->default_value(1),              "number of local/global iterations to run before re-solving the target dirichlet problem.")
-        ("regularizationWeight",   po::value<double>()->default_value(0.0),         "regularization weight")
+        ("material,m",               po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
+        ("numIters,n",               po::value<int>()->default_value(8),              "Number of iterations")
+        ("iterationsPerDirichlet,N", po::value<int>()->default_value(1),              "Number of local/global iterations to run before re-solving the target dirichlet problem.")
+        ("noRigidMotionDirichlet,R", po::value<bool>()->default_value(false),         "Apply no rigid motion constraint in Dirichlet solve.")
+        ("regularizationWeight,r",   po::value<double>()->default_value(0.0),         "Regularization weight")
         ;
 
     po::options_description cli_opts;
@@ -87,11 +88,16 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 /*! Run material optimization on a particular (mesh, bc) pair.
 *///////////////////////////////////////////////////////////////////////////
 template<size_t _N, template<size_t> class _Material>
-void execute(const string &meshPath, const string &bcPath, const string &outMSH,
-             const vector<MeshIO::IOVertex> &inVertices, 
-             const vector<MeshIO::IOElement> &inElements, 
-             size_t iterations, size_t iterationsPerDirichlet,
-             Real regularizationWeight) {
+void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOElement> &inElements,
+             const po::variables_map &args) {
+    const string &bcPath = args["boundaryConditions"].as<string>(),
+                 &outMSH = args["outputMSH"].as<string>();
+    Real regularizationWeight = args["regularizationWeight"].as<Real>();
+    size_t iterations = args["numIters"].as<Real>();
+    size_t iterationsPerDirichlet = args["iPerDirichlet"].as<Real>();
+    bool   noRigidMotionDirichlet = args["noRigidMotionDirichlet"].as<bool>();
+
     typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
     typedef typename Opt::MField  MField;
     typedef typename Opt::SField  SField;
@@ -144,7 +150,7 @@ void execute(const string &meshPath, const string &bcPath, const string &outMSH,
 
     std::cout << "Attempting optimization" << std::endl;
     matOpt.run(writer, iterations, iterationsPerDirichlet,
-            regularizationWeight);
+            regularizationWeight, noRigidMotionDirichlet);
 
     // auto u_opt = matOpt.currentDisplacement();
     // g = matOpt.objectiveGradient(u_opt);
@@ -165,9 +171,6 @@ int main(int argc, const char *argv[])
     po::variables_map args = parseCmdLine(argc, argv);
 
     string materialType  = args["material"].as<string>();
-    size_t iterations    = args["numIters"].as<int>();
-    size_t iPerDirichlet = args["iterationsPerDirichlet"].as<int>();
-    Real regWeight       = args["regularizationWeight"].as<Real>();
 
     vector<MeshIO::IOVertex>  inVertices;
     vector<MeshIO::IOElement> inElements;
@@ -188,9 +191,7 @@ int main(int argc, const char *argv[])
                            : ((materialType == "orthotropic")
                                    ? execute<2, Materials::Orthotropic>
                                    : execute<2, Materials::Isotropic> );
-    exec(meshPath, args["boundaryConditions"].as<string>(),
-         args["outputMSH"].as<string>(), inVertices, inElements, iterations,
-         iPerDirichlet, regWeight);
+    exec(meshPath, inVertices, inElements, args);
 
     return 0;
 }

@@ -57,7 +57,7 @@ namespace LinearElasticity {
 
         // Solve for equilibrium under DoF load f
         VField solve(const VField &f) const {
-            if (!m_system.cached()) m_assembleConstrainedSystem();
+            if (!m_system.cached()) m_cacheConstrainedSystem();
 
             std::vector<Real> x;
             m_system.solve(f, x);
@@ -390,13 +390,10 @@ namespace LinearElasticity {
             m_system.clear();
         }
 
-
-    private:
         typedef TripletMatrix<Triplet<Real> > TMatrix;
-        void m_assembleConstrainedSystem() const {
-            TMatrix C;
 
-            std::vector<Real> constraintRHS;
+        void assembleConstrainedSystem(TMatrix &C,
+                std::vector<Real> &constraintRHS) const {
             m_assembleStiffnessMatrix(C);
             TMatrix R, D;
             if (m_useRigidMotionConstraint) {
@@ -422,7 +419,13 @@ namespace LinearElasticity {
             }
             C.append(D, TMatrix::APPEND_BELOW,  true, false);
             C.append(D, TMatrix::APPEND_RIGHT,  true,  true);
+        }
 
+    private:
+        void m_cacheConstrainedSystem() const {
+            TMatrix C;
+            std::vector<Real> constraintRHS;
+            assembleConstrainedSystem(C, constraintRHS);
             m_system.setSystem(C, constraintRHS);
         }
 

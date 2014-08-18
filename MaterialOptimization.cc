@@ -37,7 +37,8 @@ struct GraphLaplacianTerm {
 
 template<class _Simulator>
 void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
-        size_t iterationsPerDirichletSolve, Real regularizationWeight) {
+        size_t iterationsPerDirichletSolve, Real regularizationWeight,
+        bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
 
@@ -52,7 +53,9 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
     for (size_t iter = 1; iter <= iterations; ++iter) {
         if (((iter - 1) % iterationsPerDirichletSolve) == 0) {
             m_sim.swapTargetDirichlet();
-            m_sim.removeNoRigidMotionConstraint();
+
+            if (noRigidMotionDirichlet) m_sim.applyNoRigidMotionConstraint();
+            else                        m_sim.removeNoRigidMotionConstraint();
 
             u_dirichletTargets = m_sim.solve(neumannLoad);
             e_dirichletTargets = m_sim.strain(u_dirichletTargets);

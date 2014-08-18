@@ -71,6 +71,7 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ("norm,n",                       "L2 norm of scalar field (element-wise for vector field)")
         ("abs,a",                        "Componentwise abs of scalar field or vector field")
         ("scale,s", po::value<string>(), "Multiply the top of the stack by a scalar.")
+        ("set",     po::value<string>(), "Set every component of the top value to arg.")
         ("sum,S",                        "Sum the elements of a (scalar|vector) field or vector")
         ("mean",                         "Element average of a {scalar,vector} field or vector")
         ("eigenvalues,l",                "Eigenvalues of sym matrix field (vector field result)")
@@ -130,13 +131,20 @@ struct Value {
     string name;
     virtual size_t numElems() const = 0;
     virtual void scale(Real s) = 0;
+    virtual void setTo(Real s) = 0;
     virtual void applyAbs() = 0;
+    virtual Value<N> binaryOp(const string &op, Value<N> &b) const = 0;
     virtual void print(std::ostream &os = std::cout) const = 0;
 };
 
 // Various in-place absolute value functions.
 template<class T> T absoluteValue(const T &in) { return in.cwiseAbs(); }
   Real absoluteValue(const Real   &in) { return std::abs(in); }
+
+// Various in-place absolute value functions.
+template<class T>
+void setConstant(T &inout, Real val) { inout.setConstant(val); }
+void setConstant(Real &inout, Real val) { inout = val; }
 
 template<class T, size_t N>
 struct SpecificValue : public Value<N> {
@@ -145,6 +153,7 @@ struct SpecificValue : public Value<N> {
     value_type value;
     SpecificValue(const string &n, const value_type &v) : Base(n), value(v) { }
     void scale(Real s) { value *= s; }
+    void setTo(Real s) { setConstant(value, s); }
     void applyAbs() { value = absoluteValue(value); }
     virtual void print(std::ostream &os = std::cout) const {
         os << value;
@@ -154,6 +163,9 @@ struct SpecificValue : public Value<N> {
 template<size_t N>
 struct SFieldValue : public SpecificValue<SField, N> {
     SFieldValue(const string &n, const SField &v = SField()) : SpecificValue<SField, N>(n, v) { }
+    virtual VPtr<N> binaryOp(const string &op, VPtr<N> b) const {
+        if (auto sfValue = dynamic_pointer_cast<
+    }
     virtual size_t numElems() const { return this->value.domainSize(); }
 };
 
@@ -250,6 +262,12 @@ VPtr<N> getValue(vector<VPtr<N> > &stack, size_t offset = 0) {
     size_t idx = stack.size() - 1 - offset;
     return stack.at(idx);
 }
+template<size_t N>
+VPtr<N> popValue(vector<VPtr<N> > &stack) {
+    auto val = getValue(stack);
+    stack.pop_back();
+    return val;
+}
 
 template<typename T>
 shared_ptr<T> getTypedValue(vector<VPtr<T::N> > &stack, size_t offset = 0) {
@@ -259,12 +277,19 @@ shared_ptr<T> getTypedValue(vector<VPtr<T::N> > &stack, size_t offset = 0) {
     return tVal;
 }
 
+template<typename T>
+shared_ptr<T> popTypedValue(vector<VPtr<T::N> > &stack) {
+    auto tVal = getTypedValue<T>(stack);
+    stack.pop_back();
+    return tVal;
+}
+
 template<size_t N>
 void dup(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) { stack.push_back(getValue(stack)); }
 template<size_t N>
 void pop(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
-         const string &arg) { getValue(stack); stack.pop_back(); }
+         const string &arg) { popValue(stack); }
 template<size_t N>
 void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) {
@@ -287,8 +312,7 @@ void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
 template<size_t N>
 void partialReduction(const string &op, vector<VPtr<N> > &stack,
                       const MSHFieldParser<N> &parser, const string &arg) {
-    auto top = getValue(stack);
-    stack.pop_back();
+    auto top = popValue(stack);
     string name = op + "(" + top->name + ")";
     static const map<string, function<Real(const SField &f)>> sfOps = {
         { "min",    [](const SField &f) -> Real { return f.min(); } },
@@ -318,13 +342,19 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
     else { throw runtime_error("Invalid argument."); }
 }
 
+void binaryOperator(const string &op, vector<VPtr<N> > &stack,
+                    const MSHFieldParser<N> &parser, const string &arg) {
+    auto a = popValue(stack);
+    auto b = popValue(stack);
+    stack.push_back(applyBinaryOperator(op, a, b));
+}
+
 // Scalar/vector mean and sum
 // Scalar field becomes scalar, vector field becomes vector,
 // vector becomes scalar
 template<size_t N>
 void sum(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
-    auto top = getValue(stack);
-    stack.pop_back();
+    auto top = popValue(stack);
     string name = "sum(" + top->name + ")";
     if (auto sfVal = dynamic_pointer_cast<SFieldValue<N>>(top))
         stack.push_back(VPtr<N>(new ScalarValue<N>(name, sfVal->value.sum())));
@@ -363,6 +393,18 @@ void scale(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
     top->name = arg.substr(0, end) + " * (" + top->name + ")";
 }
 
+template<size_t N>
+void setComponents(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+           const string &arg) {
+    auto top = getValue(stack);
+    size_t end;
+    double factor = stod(arg, &end);
+    for (char c : arg.substr(end))
+        if (!isspace(c)) throw runtime_error("Set filter's argument must be a real number");
+    top->setTo(factor);
+    top->name = arg.substr(0, end);
+}
+
 // Componenent-wise abs
 // Data types are unchanged.
 template<size_t N>
@@ -374,8 +416,7 @@ void abs(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string 
 
 template<size_t N>
 void eigenvalues(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
-    auto top = getTypedValue<SMFieldValue<N> >(stack);
-    stack.pop_back();
+    auto top = popTypedValue<SMFieldValue<N> >(stack);
     auto *result = new VFieldValue<N>("eigenvalues(" + top->name + ")");
     size_t numValues = top->value.domainSize();
     result->value.resizeDomain(numValues);
@@ -462,7 +503,8 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"norm",   bind(partialReduction<N>, "norm",   _1, _2, _3)},
         {"maxMag", bind(partialReduction<N>, "maxMag", _1, _2, _3)},
         {"minMag", bind(partialReduction<N>, "minMag", _1, _2, _3)},
-        {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>}, {"scale", scale<N>},
+        {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>},
+        {"scale", scale<N>}, {"set", setComponents<N>},
         {"dup", dup<N>}, {"pop", pop<N>}, {"pull", pull<N>},
         {"outMSH", outputMSH<N>},
     };
