@@ -94,8 +94,8 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     const string &bcPath = args["boundaryConditions"].as<string>(),
                  &outMSH = args["outputMSH"].as<string>();
     Real regularizationWeight = args["regularizationWeight"].as<Real>();
-    size_t iterations = args["numIters"].as<Real>();
-    size_t iterationsPerDirichlet = args["iPerDirichlet"].as<Real>();
+    size_t iterations = args["numIters"].as<int>();
+    size_t iterationsPerDirichlet = args["iterationsPerDirichlet"].as<int>();
     bool   noRigidMotionDirichlet = args["noRigidMotionDirichlet"].as<bool>();
 
     typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
