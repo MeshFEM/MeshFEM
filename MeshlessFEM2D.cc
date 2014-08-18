@@ -557,7 +557,7 @@ MeshlessFEM2D<Model>::elementStressTensors(const VField &displacement)
     for (size_t e = 0; e < numElements; ++e) {
         CornerVec cornerIndices;
         m_elementGrid.elementCorners(e, cornerIndices);
-        typename SMField::SymmetricMatrix tensor = stressTensorField(e);
+        auto tensor = stressTensorField(e);
         m_elementData[e].displacementToStress(displacement, cornerIndices, m_d,
                                               tensor);
     }

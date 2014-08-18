@@ -59,9 +59,6 @@ public:
                                                domainSize);
     }
 
-    // Eigen ArrayType constructor
-    VectorField(const ArrayType &values) : m_values(values) { }
-
     // Flattened data constructor (std::vector version)
     template<typename Real2>
     VectorField(const std::vector<Real2> &values) {
@@ -132,7 +129,10 @@ public:
     }
 
     // Component wise abs.
-    VectorField cwiseAbs() const { return VectorField(m_values.cwiseAbs().eval()); }
+    VectorField cwiseAbs() const { auto r = VectorField(*this); r.m_values = r.m_values.cwiseAbs(); return r; }
+
+    // Set all coefficients to a constant
+    void setConstant(Real val) { m_values.setConstant(val); }
 
     // Sum of squared norms of each vector.
     Real frobeniusNormSq() const {
@@ -216,7 +216,7 @@ public:
     Real maxMag() const { Real m = min(), M = max(); return (std::abs(m) > M) ? m : M; }
 
     // Component wise abs.
-    ScalarField cwiseAbs() const { return ScalarField(m_values.cwiseAbs().eval()); }
+    ScalarField cwiseAbs() const { auto r = ScalarField(*this); r.m_values = r.m_values.cwiseAbs(); return r; }
 
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
@@ -315,6 +315,8 @@ public:
 
     // Component wise abs.
     SymmetricMatrixField cwiseAbs() const { return SymmetricMatrixField(m_values.cwiseAbs()); }
+    // Set all coefficients to a constant
+    void setConstant(Real val) { m_values.setConstant(val); }
 
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }

@@ -352,7 +352,7 @@ public:
     void getVolumeForceForForces(const VField &bf, VField &f) {
         DVector f_vec = m_SF * Eigen::Map<const DVector>(bf.data().data(),
                                       bf.dim() * bf.domainSize());
-        f = VField(m_S_tr * f_vec); // Trim off constraint rows and convert
+        f = VField((m_S_tr * f_vec).eval()); // Trim off constraint rows and convert
     }
 
     virtual ~EigenSolver() { }

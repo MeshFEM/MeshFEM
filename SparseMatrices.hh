@@ -182,7 +182,7 @@ struct TripletMatrix {
         }
     }
 
-    void dump(const char *path) const {
+    void dump(const std::string &path) const {
         std::ofstream outFile(path);
         outFile << std::setprecision(16);
         if (!outFile.is_open()) {
