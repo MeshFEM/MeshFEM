@@ -61,8 +61,8 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")
         ("outMSH,o",  po::value<string>(), "Output msh file with named fields for each entry in the stack")
         ;
-    po::options_description field_operations("Field operations");
-    field_operations.add_options()
+    po::options_description unary_operations("Unary operations");
+    unary_operations.add_options()
         ("applyAll,A",                   "Apply next filter to entire stack instead of top")
         ("max,M",                        "Max of scalar field (element-wise for vector field)")
         ("min,m",                        "Min of scalar field (element-wise for vector field)")
@@ -77,15 +77,24 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ("eigenvalues,l",                "Eigenvalues of sym matrix field (vector field result)")
         // ("percentile", po::value<double>(), "extract a certain percentile of the msh file")
         ;
+    po::options_description binary_operations("Binary operations");
+    binary_operations.add_options()
+        ("add", "Add      the top two values on the stack")
+        ("sub", "Subtract the top two values on the stack (top - prev)")
+        ("mul", "Multiply the top two values on the stack")
+        ("div", "Divide   the top two values on the stack (top / prev)")
+        ;
 
     po::options_description cli_opts;
     cli_opts.add_options()("help,h", "Produce this help message");
-    cli_opts.add(parser_operations).add(stack_operations).add(field_operations).add(hidden_opts);
+    cli_opts.add(parser_operations).add(stack_operations).add(unary_operations)
+            .add(binary_operations).add(hidden_opts);
 
     // Options visible in the help message.
     po::options_description visible_opts;
     visible_opts.add_options()("help,h", "Produce this help message");
-    visible_opts.add(parser_operations).add(stack_operations).add(field_operations);
+    visible_opts.add(parser_operations).add(stack_operations)
+           .add(unary_operations).add(binary_operations);
 
     po::parsed_options *parsedOptions = NULL;
     try {
@@ -124,6 +133,24 @@ template<size_t N> using  VField =          VectorField<Real, N>;
 template<size_t N> using SMField = SymmetricMatrixField<Real, N>;
 typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> Vector;
 
+// Forward declarations
+template<size_t _N> struct  Value;
+template<size_t _N> struct  SFieldValue;
+template<size_t _N> struct  VFieldValue;
+template<size_t _N> struct SMFieldValue;
+template<size_t _N> struct ScalarValue;
+template<size_t _N> struct VectorValue;
+
+template<size_t N>
+using VPtr = shared_ptr<Value<N> >; 
+
+// Polymorphic binary operator functors.
+struct BinaryOperator {                virtual Real operator()(Real a, Real b) = 0; };
+struct AddOp : public BinaryOperator { virtual Real operator()(Real a, Real b) { return a + b; } };
+struct SubOp : public BinaryOperator { virtual Real operator()(Real a, Real b) { return a - b; } };
+struct MulOp : public BinaryOperator { virtual Real operator()(Real a, Real b) { return a * b; } };
+struct DivOp : public BinaryOperator { virtual Real operator()(Real a, Real b) { return a / b; } };
+
 template<size_t _N>
 struct Value {
     constexpr static size_t N = _N;
@@ -133,7 +160,7 @@ struct Value {
     virtual void scale(Real s) = 0;
     virtual void setTo(Real s) = 0;
     virtual void applyAbs() = 0;
-    virtual Value<N> binaryOp(const string &op, Value<N> &b) const = 0;
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const = 0;
     virtual void print(std::ostream &os = std::cout) const = 0;
 };
 
@@ -163,8 +190,44 @@ struct SpecificValue : public Value<N> {
 template<size_t N>
 struct SFieldValue : public SpecificValue<SField, N> {
     SFieldValue(const string &n, const SField &v = SField()) : SpecificValue<SField, N>(n, v) { }
-    virtual VPtr<N> binaryOp(const string &op, VPtr<N> b) const {
-        if (auto sfValue = dynamic_pointer_cast<
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        runtime_error illegal("Illegal arguments for binary operation");
+        runtime_error mismatch("Size mismatch in binary operation");
+        // Scalar field-scalar field op
+        if (auto sfValue = dynamic_pointer_cast<SFieldValue>(b)) {
+            if (sfValue->numElems() != this->numElems()) throw mismatch;
+            auto result = make_shared<SFieldValue>("result", SField(this->value));
+            for (size_t i = 0; i < this->numElems(); ++i)
+                result->value[i] = op(this->value[i], sfValue->value[i]);
+            return result;
+        }
+        // Scalar field-vector field op
+        else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
+            if (vfValue->numElems() != this->numElems()) throw mismatch;
+            auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value));
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < vfValue->value.dim(); ++c)
+                    result->value(i)(c) = op(this->value[i], vfValue->value(i)(c));
+            return result;
+        }
+        // Scalar field-matrix field op
+        else if (auto smfValue = dynamic_pointer_cast<SMFieldValue<N>>(b)) {
+            if (smfValue->numElems() != this->numElems()) throw mismatch;
+            auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value));
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < smfValue->value.dim(); ++c)
+                    result->value(i)[c] = op(this->value[i], smfValue->value(i)[c]);
+            return result;
+        }
+        // Scalar field-scalar op
+        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+            auto result = make_shared<SFieldValue>("result", SField(this->value));
+            for (size_t i = 0; i < this->numElems(); ++i)
+                result->value[i] = op(this->value[i], sValue->value);
+            return result;
+        }
+
+        throw illegal;
     }
     virtual size_t numElems() const { return this->value.domainSize(); }
 };
@@ -172,34 +235,141 @@ struct SFieldValue : public SpecificValue<SField, N> {
 template<size_t N>
 struct VFieldValue : public SpecificValue<VField<N>, N> {
     VFieldValue(const string &n, const VField<N> &v = VField<N>()) : SpecificValue<VField<N>, N>(n, v) { }
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        runtime_error illegal("Illegal arguments for binary operation");
+        runtime_error mismatch("Size mismatch in binary operation");
+        auto result = make_shared<VFieldValue>("result", VField<N>(this->value));
+        // Vector field-scalar field op
+        if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+            if (sfValue->numElems() != this->numElems()) throw mismatch;
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < this->value.dim(); ++c)
+                    result->value(i)(c) = op(this->value(i)(c), sfValue->value[i]);
+        }
+        // Vector field-vector field op
+        else if (auto vfValue = dynamic_pointer_cast<VFieldValue>(b)) {
+            if (vfValue->numElems() != this->numElems()) throw mismatch;
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < vfValue->value.dim(); ++c)
+                    result->value(i)(c) = op(this->value(i)(c), vfValue->value(i)(c));
+        }
+        // Vector field-scalar op
+        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < this->value.dim(); ++c)
+                    result->value(i)(c) = op(this->value(i)(c), sValue->value);
+        }
+
+        throw illegal;
+    }
     virtual size_t numElems() const { return this->value.domainSize(); }
 };
 
 template<size_t N>
 struct SMFieldValue : public SpecificValue<SMField<N>, N> {
     SMFieldValue(const string &n, const SMField<N> &v = SMField<N>()) : SpecificValue<SMField<N>, N>(n, v) { }
-    virtual size_t numElems() const { return this->value.domainSize(); }
-};
 
-template<size_t N>
-struct ScalarValue : public SpecificValue<Real, N> {
-    ScalarValue(const string &n, const Real &v = Real()) : SpecificValue<Real, N>(n, v) { }
-    virtual size_t numElems() const { return 1; }
-    virtual void print(std::ostream &os = std::cout) const { os << this->value << std::endl; }
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        runtime_error illegal("Illegal arguments for binary operation");
+        runtime_error mismatch("Size mismatch in binary operation");
+        auto result = make_shared<SMFieldValue>("result", SMField<N>(this->value));
+        // matrix field-scalar field op
+        if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+            if (sfValue->numElems() != this->numElems()) throw mismatch;
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < this->value.dim(); ++c)
+                    result->value(i)[c] = op(this->value(i)[c], sfValue->value[i]);
+            return result;
+        }
+        // matrix field-scalar op
+        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+            for (size_t i = 0; i < this->numElems(); ++i)
+                for (size_t c = 0; c < this->value.dim(); ++c)
+                    result->value(i)[c] = op(this->value(i)[c], sValue->value);
+            return result;
+        }
+        throw illegal;
+    }
+    virtual size_t numElems() const { return this->value.domainSize(); }
 };
 
 template<size_t N>
 struct VectorValue : public SpecificValue<Vector, N> {
     VectorValue(const string &n, const Vector &v = Vector()) : SpecificValue<Vector, N>(n, v) { }
     virtual size_t numElems() const { return this->value.rows(); }
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        runtime_error illegal("Illegal arguments for binary operation");
+        runtime_error mismatch("Size mismatch in binary operation");
+        // Vector-vector field op
+        if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
+            auto result = make_shared<VFieldValue<N>>("result", Vector(this->value));
+            if (this->numElems() != vfValue->value.dim()) throw mismatch;
+            for (size_t i = 0; i < vfValue->numElems(); ++i)
+                for (size_t c = 0; c < this->numElems(); ++c)
+                    result->value(i)[c] = op(this->value[c], vfValue->value(i)[c]);
+        }
+        // Vector-vector op
+        else if (auto vValue = dynamic_pointer_cast<VectorValue<N>>(b)) {
+            auto result = make_shared<VectorValue>("result", Vector(this->value));
+            if (this->numElems() != vValue->numElems()) throw mismatch;
+            for (size_t c = 0; c < this->numElems(); ++c)
+                result->value[c] = op(this->value[c], vValue->value[c]);
+        }
+        // Vector-scalar op
+        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+            auto result = make_shared<VectorValue>("result", Vector(this->value));
+            for (size_t c = 0; c < this->numElems(); ++c)
+                result->value[c] = op(this->value[c], sValue->value);
+            return result;
+        }
+
+        throw illegal;
+    }
     virtual void print(std::ostream &os = std::cout) const { os << this->value << std::endl; }
 };
 
 template<size_t N>
-using VPtr = shared_ptr<Value<N> >; 
+struct ScalarValue : public SpecificValue<Real, N> {
+    ScalarValue(const string &n, const Real &v = Real()) : SpecificValue<Real, N>(n, v) { }
+    virtual size_t numElems() const { return 1; }
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        runtime_error illegal("Illegal arguments for binary operation");
+        runtime_error mismatch("Size mismatch in binary operation");
+        // Scalar-scalar field op
+        if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+            auto result = make_shared<SFieldValue<N>>("result", SField(sfValue->value));
+            for (size_t i = 0; i < sfValue->numElems(); ++i)
+                result->value[i] = op(this->value, sfValue->value[i]);
+            return result;
+        }
+        // Scalar-vector field op
+        else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
+            auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value));
+            for (size_t i = 0; i < vfValue->numElems(); ++i)
+                for (size_t c = 0; c < vfValue->value.dim(); ++c)
+                    result->value(i)(c) = op(this->value, vfValue->value(i)(c));
+            return result;
+        }
+        // Scalar-matrix field op
+        else if (auto smfValue = dynamic_pointer_cast<SMFieldValue<N>>(b)) {
+            auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value));
+            for (size_t i = 0; i < smfValue->numElems(); ++i)
+                for (size_t c = 0; c < smfValue->value.dim(); ++c)
+                    result->value(i)[c] = op(this->value, smfValue->value(i)[c]);
+            return result;
+        }
+        // Scalar-vector op
+        else if (auto vValue = dynamic_pointer_cast<VectorValue<N>>(b)) {
+            auto result = make_shared<VectorValue<N>>("result", Vector(vValue->value));
+            for (size_t c = 0; c < vValue->numElems(); ++c)
+                result->value[c] = op(this->value, result->value[c]);
+            return result;
+        }
 
-// Filter invocation: (name, argument string)
-typedef pair<string, string> FilterInvocation;
+        throw illegal;
+    }
+    virtual void print(std::ostream &os = std::cout) const { os << this->value << std::endl; }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Filters - operate on the stack.
@@ -207,6 +377,8 @@ typedef pair<string, string> FilterInvocation;
 // template<size_t N>
 // void f(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg)
 ////////////////////////////////////////////////////////////////////////////////
+// Filter invocation: (name, argument string)
+typedef pair<string, string> FilterInvocation;
 // Data source filters
 // Extract field(s) matching the pattern in "arg", pushing them on the top of
 // the stack.
@@ -342,11 +514,17 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
     else { throw runtime_error("Invalid argument."); }
 }
 
+template<size_t N>
 void binaryOperator(const string &op, vector<VPtr<N> > &stack,
                     const MSHFieldParser<N> &parser, const string &arg) {
     auto a = popValue(stack);
     auto b = popValue(stack);
-    stack.push_back(applyBinaryOperator(op, a, b));
+    static const map<string, shared_ptr<BinaryOperator>> opLUT = {
+        { "+", make_shared<AddOp>()}, { "-", make_shared<SubOp>()},
+        { "*", make_shared<MulOp>()}, { "/", make_shared<DivOp>()} };
+    auto result = a->binaryOp(*opLUT.at(op), b);
+    result->name = a->name + " " + op + " " + b->name;
+    stack.push_back(result);
 }
 
 // Scalar/vector mean and sum
@@ -505,6 +683,10 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"minMag", bind(partialReduction<N>, "minMag", _1, _2, _3)},
         {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>},
         {"scale", scale<N>}, {"set", setComponents<N>},
+        {"add", bind(binaryOperator<N>, "+", _1, _2, _3)},
+        {"sub", bind(binaryOperator<N>, "-", _1, _2, _3)},
+        {"mul", bind(binaryOperator<N>, "*", _1, _2, _3)},
+        {"div", bind(binaryOperator<N>, "/", _1, _2, _3)},
         {"dup", dup<N>}, {"pop", pop<N>}, {"pull", pull<N>},
         {"outMSH", outputMSH<N>},
     };
