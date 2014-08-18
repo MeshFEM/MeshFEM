@@ -172,9 +172,9 @@ void execute(const string &materialPath, const string &matFieldName,
     SField Ex(numElements), Ey(numElements), nuYX(numElements), mu(numElements);
     for (size_t i = 0; i < sim.mesh().numElements(); ++i)
         sim.mesh().element(i)->E().getOrthotropic2D(Ex[i], Ey[i], nuYX[i], mu[i]);
-    writer.addField("Ex",    Ex,    MSHFieldWriter::PER_ELEMENT);
-    writer.addField("Ey",    Ey,    MSHFieldWriter::PER_ELEMENT);
-    writer.addField("nuYX",  nuYX,  MSHFieldWriter::PER_ELEMENT);
+    writer.addField("E_x",    Ex,    MSHFieldWriter::PER_ELEMENT);
+    writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
+    writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
     writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
     
 }

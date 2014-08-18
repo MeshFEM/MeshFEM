@@ -22,6 +22,7 @@
 #include <set>
 #include <stdexcept>
 #include <cmath>
+#include <cctype>
 #include <memory>
 #include <functional>
 
@@ -54,6 +55,7 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
     stack_operations.add_options()
         ("dup,D",                          "Duplicate top of the stack")
         ("pop,P",                          "Pop top of the stack")
+        ("pull",      po::value<string>(), "Pull a named value to the top of the stack")
         ("print,p",                        "Print top of stack")
         ("printName",                      "Print name of value at the top of the stack")
         ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")
@@ -61,16 +63,17 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ;
     po::options_description field_operations("Field operations");
     field_operations.add_options()
-        ("applyAll,A",    "Apply next filter to all values on the stack")
-        ("max,M",         "Max of scalar field (element-wise for vector field)")
-        ("min,m",         "Min of scalar field (element-wise for vector field)")
-        ("maxMag",        "Max magnitude of scalar field (element-wise for vector field)")
-        ("minMag",        "Min magnitude of scalar field (element-wise for vector field)")
-        ("norm,n",        "L2 norm of scalar field (element-wise for vector field)")
-        ("abs,a",         "Componentwise abs of scalar field or vector field")
-        ("sum,s",         "Sum the elements of a (scalar|vector) field or vector")
-        ("mean",          "Element average of a {scalar,vector} field or vector")
-        ("eigenvalues,l", "Eigenvalues of sym matrix field (vector field result)")
+        ("applyAll,A",                   "Apply next filter to entire stack instead of top")
+        ("max,M",                        "Max of scalar field (element-wise for vector field)")
+        ("min,m",                        "Min of scalar field (element-wise for vector field)")
+        ("maxMag",                       "Max magnitude of scalar field (element-wise for vector field)")
+        ("minMag",                       "Min magnitude of scalar field (element-wise for vector field)")
+        ("norm,n",                       "L2 norm of scalar field (element-wise for vector field)")
+        ("abs,a",                        "Componentwise abs of scalar field or vector field")
+        ("scale,s", po::value<string>(), "Multiply the top of the stack by a scalar.")
+        ("sum,S",                        "Sum the elements of a (scalar|vector) field or vector")
+        ("mean",                         "Element average of a {scalar,vector} field or vector")
+        ("eigenvalues,l",                "Eigenvalues of sym matrix field (vector field result)")
         // ("percentile", po::value<double>(), "extract a certain percentile of the msh file")
         ;
 
@@ -262,7 +265,19 @@ void dup(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
 template<size_t N>
 void pop(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) { getValue(stack); stack.pop_back(); }
-
+template<size_t N>
+void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+         const string &arg) {
+    for (auto it = stack.begin(); it != stack.end(); ++it) {
+        if ((*it)->name == arg) {
+            auto val = *it;
+            stack.erase(it);
+            stack.push_back(val);
+            return;
+        }
+    }
+    throw runtime_error("Couldn't find '" + arg + "' for pull.");
+}
 
 // Single operand filters
 
@@ -334,6 +349,18 @@ void mean(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string
     auto result = getValue(stack);
     result->scale(1 / numElems);
     result->name = result->name.replace(0, 3, "mean");
+}
+
+template<size_t N>
+void scale(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+           const string &arg) {
+    auto top = getValue(stack);
+    size_t end;
+    double factor = stod(arg, &end);
+    for (char c : arg.substr(end))
+        if (!isspace(c)) throw runtime_error("Scale filter's argument must be a real number");
+    top->scale(factor);
+    top->name = arg.substr(0, end) + " * (" + top->name + ")";
 }
 
 // Componenent-wise abs
@@ -435,8 +462,9 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"norm",   bind(partialReduction<N>, "norm",   _1, _2, _3)},
         {"maxMag", bind(partialReduction<N>, "maxMag", _1, _2, _3)},
         {"minMag", bind(partialReduction<N>, "minMag", _1, _2, _3)},
-        {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>}, {"dup", dup<N>},
-        {"pop", pop<N>}, {"outMSH", outputMSH<N>}
+        {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>}, {"scale", scale<N>},
+        {"dup", dup<N>}, {"pop", pop<N>}, {"pull", pull<N>},
+        {"outMSH", outputMSH<N>},
     };
 
     // The following commands suppress automatic output of stack at exit
