@@ -184,7 +184,7 @@ struct TripletMatrix {
 
     void dump(const std::string &path) const {
         std::ofstream outFile(path);
-        outFile << std::setprecision(16);
+        outFile << std::setprecision(20);
         if (!outFile.is_open()) {
             std::cout << "Failed to open output file '"
                       << path << '\'' << std::endl;
