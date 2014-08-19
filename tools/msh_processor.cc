@@ -56,6 +56,7 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ("dup,D",                          "Duplicate top of the stack")
         ("pop,P",                          "Pop top of the stack")
         ("pull",      po::value<string>(), "Pull a named value to the top of the stack")
+        ("push",      po::value<string>(), "Push a scalar literal to the top of the stack")
         ("print,p",                        "Print top of stack")
         ("printName",                      "Print name of value at the top of the stack")
         ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")
@@ -80,9 +81,9 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
     po::options_description binary_operations("Binary operations");
     binary_operations.add_options()
         ("add", "Add      the top two values on the stack")
-        ("sub", "Subtract the top two values on the stack (top - prev)")
+        ("sub", "Subtract the top two values on the stack (prev - top)")
         ("mul", "Multiply the top two values on the stack")
-        ("div", "Divide   the top two values on the stack (top / prev)")
+        ("div", "Divide   the top two values on the stack (prev / top)")
         ;
 
     po::options_description cli_opts;
@@ -160,6 +161,7 @@ struct Value {
     virtual void scale(Real s) = 0;
     virtual void setTo(Real s) = 0;
     virtual void applyAbs() = 0;
+    virtual VPtr<N> clone() const = 0;
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const = 0;
     virtual void print(std::ostream &os = std::cout) const = 0;
 };
@@ -173,7 +175,7 @@ template<class T>
 void setConstant(T &inout, Real val) { inout.setConstant(val); }
 void setConstant(Real &inout, Real val) { inout = val; }
 
-template<class T, size_t N>
+template<class T, size_t N, class Subtype>
 struct SpecificValue : public Value<N> {
     typedef Value<N> Base;
     typedef T value_type;
@@ -181,15 +183,17 @@ struct SpecificValue : public Value<N> {
     SpecificValue(const string &n, const value_type &v) : Base(n), value(v) { }
     void scale(Real s) { value *= s; }
     void setTo(Real s) { setConstant(value, s); }
-    void applyAbs() { value = absoluteValue(value); }
+    void applyAbs()    { value = absoluteValue(value); }
+    VPtr<N> clone() const { return make_shared<Subtype>(static_cast<const Subtype &>(*this)); }
     virtual void print(std::ostream &os = std::cout) const {
         os << value;
     }
 };
 
 template<size_t N>
-struct SFieldValue : public SpecificValue<SField, N> {
-    SFieldValue(const string &n, const SField &v = SField()) : SpecificValue<SField, N>(n, v) { }
+struct SFieldValue : public SpecificValue<SField, N, SFieldValue<N>> {
+    SFieldValue(const string &n, const SField &v = SField())
+        : SpecificValue<SField, N, SFieldValue>(n, v) { }
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
         runtime_error mismatch("Size mismatch in binary operation");
@@ -233,8 +237,9 @@ struct SFieldValue : public SpecificValue<SField, N> {
 };
 
 template<size_t N>
-struct VFieldValue : public SpecificValue<VField<N>, N> {
-    VFieldValue(const string &n, const VField<N> &v = VField<N>()) : SpecificValue<VField<N>, N>(n, v) { }
+struct VFieldValue : public SpecificValue<VField<N>, N, VFieldValue<N>> {
+    VFieldValue(const string &n, const VField<N> &v = VField<N>())
+        : SpecificValue<VField<N>, N, VFieldValue>(n, v) { }
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
         runtime_error mismatch("Size mismatch in binary operation");
@@ -266,8 +271,9 @@ struct VFieldValue : public SpecificValue<VField<N>, N> {
 };
 
 template<size_t N>
-struct SMFieldValue : public SpecificValue<SMField<N>, N> {
-    SMFieldValue(const string &n, const SMField<N> &v = SMField<N>()) : SpecificValue<SMField<N>, N>(n, v) { }
+struct SMFieldValue : public SpecificValue<SMField<N>, N, SMFieldValue<N>> {
+    SMFieldValue(const string &n, const SMField<N> &v = SMField<N>())
+        : SpecificValue<SMField<N>, N, SMFieldValue>(n, v) { }
 
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
@@ -294,8 +300,9 @@ struct SMFieldValue : public SpecificValue<SMField<N>, N> {
 };
 
 template<size_t N>
-struct VectorValue : public SpecificValue<Vector, N> {
-    VectorValue(const string &n, const Vector &v = Vector()) : SpecificValue<Vector, N>(n, v) { }
+struct VectorValue : public SpecificValue<Vector, N, VectorValue<N>> {
+    VectorValue(const string &n, const Vector &v = Vector())
+        : SpecificValue<Vector, N, VectorValue>(n, v) { }
     virtual size_t numElems() const { return this->value.rows(); }
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
@@ -329,8 +336,9 @@ struct VectorValue : public SpecificValue<Vector, N> {
 };
 
 template<size_t N>
-struct ScalarValue : public SpecificValue<Real, N> {
-    ScalarValue(const string &n, const Real &v = Real()) : SpecificValue<Real, N>(n, v) { }
+struct ScalarValue : public SpecificValue<Real, N, ScalarValue<N>> {
+    ScalarValue(const string &n, const Real &v = Real())
+        : SpecificValue<Real, N, ScalarValue>(n, v) { }
     virtual size_t numElems() const { return 1; }
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
@@ -456,12 +464,26 @@ shared_ptr<T> popTypedValue(vector<VPtr<T::N> > &stack) {
     return tVal;
 }
 
+double getDoubleArg(const string &arg) {
+    size_t end;
+    double factor = stod(arg, &end);
+    for (char c : arg.substr(end))
+        if (!isspace(c)) throw runtime_error("Argument must be a real number");
+    return factor;
+}
+
 template<size_t N>
 void dup(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
-         const string &arg) { stack.push_back(getValue(stack)); }
+         const string &arg) { stack.push_back(getValue(stack)->clone()); }
 template<size_t N>
 void pop(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) { popValue(stack); }
+template<size_t N>
+void push(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
+         const string &arg) {
+    double d = getDoubleArg(arg);
+    stack.push_back(make_shared<ScalarValue<N>>(to_string(d), d));
+}
 template<size_t N>
 void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) {
@@ -475,6 +497,8 @@ void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
     }
     throw runtime_error("Couldn't find '" + arg + "' for pull.");
 }
+
+
 
 // Single operand filters
 
@@ -517,8 +541,9 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
 template<size_t N>
 void binaryOperator(const string &op, vector<VPtr<N> > &stack,
                     const MSHFieldParser<N> &parser, const string &arg) {
-    auto a = popValue(stack);
+    // Top of stack is the second operand, next in stack is the first
     auto b = popValue(stack);
+    auto a = popValue(stack);
     static const map<string, shared_ptr<BinaryOperator>> opLUT = {
         { "+", make_shared<AddOp>()}, { "-", make_shared<SubOp>()},
         { "*", make_shared<MulOp>()}, { "/", make_shared<DivOp>()} };
@@ -563,12 +588,9 @@ template<size_t N>
 void scale(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
            const string &arg) {
     auto top = getValue(stack);
-    size_t end;
-    double factor = stod(arg, &end);
-    for (char c : arg.substr(end))
-        if (!isspace(c)) throw runtime_error("Scale filter's argument must be a real number");
+    Real factor = getDoubleArg(arg);
     top->scale(factor);
-    top->name = arg.substr(0, end) + " * (" + top->name + ")";
+    top->name = to_string(factor) + " * (" + top->name + ")";
 }
 
 template<size_t N>
@@ -687,7 +709,7 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"sub", bind(binaryOperator<N>, "-", _1, _2, _3)},
         {"mul", bind(binaryOperator<N>, "*", _1, _2, _3)},
         {"div", bind(binaryOperator<N>, "/", _1, _2, _3)},
-        {"dup", dup<N>}, {"pop", pop<N>}, {"pull", pull<N>},
+        {"dup", dup<N>}, {"pop", pop<N>}, {"push", push<N>}, {"pull", pull<N>},
         {"outMSH", outputMSH<N>},
     };
 

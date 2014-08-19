@@ -21,7 +21,8 @@
 //  @return     file extension including initial period.
 *///////////////////////////////////////////////////////////////////////////
 inline std::string fileExtension(const std::string &path) {
-    return path.substr(path.find_last_of('.'));
+    size_t last = path.find_last_of('.');
+    return (last == std::string::npos) ? "" : path.substr(last);
 }
 
 ////////////////////////////////////////////////////////////////////////////

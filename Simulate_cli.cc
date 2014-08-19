@@ -124,7 +124,7 @@ void execute(const po::variables_map &args,
             paramFields.clear();
             vector<vector<string> > orthotropicNames =
                 { { "E_x", "E_y", "nu_yx", "mu" },
-                { "E_x", "E_y", "E_z", "nu_yx", "nu_zx", "nu_zy", "mu_yz", "mu_zx", "mu_xy" } };
+                  { "E_x", "E_y", "E_z", "nu_yx", "nu_zx", "nu_zy", "mu_yz", "mu_zx", "mu_xy" } };
             for (string name : orthotropicNames.at(_N - 2)) {
                 name = matFieldName + name;
                 try { paramFields.push_back(fieldParser.scalarField(name,
@@ -152,9 +152,11 @@ void execute(const po::variables_map &args,
         }
     }
     else {
-        // Read homogenous material from .material file.
+        // Read homogenous material from .material file (or use default material
+        // if no file is given).
         Materials::Constant<_N> mat;
-        mat.setFromFile(materialPath);
+        if (materialPath != "")
+            mat.setFromFile(materialPath);
         LinearElasticity::ETensorStoreGetter<_N> store(mat.getTensor());
         for (size_t i = 0; i < sim.mesh().numElements(); ++i)
             sim.mesh().element(i)->configure(store);
