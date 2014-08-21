@@ -35,10 +35,32 @@ struct GraphLaplacianTerm {
     Real weightSqrt;
 };
 
+// Term for imposing similarity of orthotropic Young's moduli.
+template<size_t _NVars>
+struct AnisotropyTerm {
+    // Positive weights ony!
+    AnisotropyTerm(Real w) {
+        if (w < 0)
+            throw runtime_error("Anisotropy penalty term weight must be nonnegative.");
+        weightSqrt = sqrt(w);
+    }
+
+    template<typename T>
+    bool operator()(const T *m, T *e) const {
+        e[0] = T(weightSqrt) * (m[1] - m[0]);
+        if (_NVars == 1) return true;
+        e[1] = T(weightSqrt) * (m[2] - m[0]);
+        e[2] = T(weightSqrt) * (m[2] - m[1]);
+        return true;
+    }
+
+    Real weightSqrt;
+};
+
 template<class _Simulator>
 void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         size_t iterationsPerDirichletSolve, Real regularizationWeight,
-        bool noRigidMotionDirichlet) {
+        Real anisotropyPenaltyWeight, bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
 
@@ -97,11 +119,25 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
                         new GraphLaplacianTerm<_NVar>(regularizationWeight));
         }
 
+        ceres::CostFunction *anisotropyPenalty = NULL;
+        // Note: we have to always provide the same size for a given parameter
+        // block, so even though we only reference numE variables, we must claim
+        // the residual block is affected by all _NVar variables in each block.
+        if ((_NVar == 4 || _NVar == 9) && anisotropyPenaltyWeight > 0.0) {
+            constexpr size_t numE = (_NVar == 4) ? 1 : 3;
+            anisotropyPenalty = new ceres::AutoDiffCostFunction<
+                AnisotropyTerm<numE>, numE, _NVar>(
+                        new AnisotropyTerm<numE>(anisotropyPenaltyWeight));
+        }
+
         // Add in variable bounds and regularization (if requested)
         for (size_t mi = 0; mi < m_matField->numMaterials(); ++mi) {
             auto &mati = m_matField->material(mi);
             for (const auto &bd : mati.upperBounds()) problem.SetParameterUpperBound(&(mati.vars[0]), bd.var, bd.value);
             for (const auto &bd : mati.lowerBounds()) problem.SetParameterLowerBound(&(mati.vars[0]), bd.var, bd.value);
+
+            if (anisotropyPenalty)
+                problem.AddResidualBlock(anisotropyPenalty, NULL, &(mati.vars[0]));
 
             if (regularizer == NULL) continue;
             for (size_t mj : materialAdj.at(mi)) {

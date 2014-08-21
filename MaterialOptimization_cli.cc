@@ -39,11 +39,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material,m",               po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
-        ("numIters,n",               po::value<int>()->default_value(8),              "Number of iterations")
-        ("iterationsPerDirichlet,N", po::value<int>()->default_value(1),              "Number of local/global iterations to run before re-solving the target dirichlet problem.")
-        ("noRigidMotionDirichlet,R", po::value<bool>()->default_value(false),         "Apply no rigid motion constraint in Dirichlet solve.")
-        ("regularizationWeight,r",   po::value<double>()->default_value(0.0),         "Regularization weight")
+        ("material,m",                po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
+        ("numIters,n",                po::value<int>()->default_value(8),              "Number of iterations")
+        ("iterationsPerDirichlet,N",  po::value<int>()->default_value(1),              "Number of local/global iterations to run before re-solving the target dirichlet problem.")
+        ("noRigidMotionDirichlet,R",  po::value<bool>()->default_value(false),         "Apply no rigid motion constraint in Dirichlet solve.")
+        ("regularizationWeight,r",    po::value<double>()->default_value(0.0),         "Regularization weight")
+        ("anisotropyPenaltyWeight,a", po::value<double>()->default_value(0.0),         "Anisotropy penalty weight")
         ;
 
     po::options_description cli_opts;
@@ -94,6 +95,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     const string &bcPath = args["boundaryConditions"].as<string>(),
                  &outMSH = args["outputMSH"].as<string>();
     Real regularizationWeight = args["regularizationWeight"].as<Real>();
+    Real anisotropyPenaltyWeight = args["anisotropyPenaltyWeight"].as<Real>();
     size_t iterations = args["numIters"].as<int>();
     size_t iterationsPerDirichlet = args["iterationsPerDirichlet"].as<int>();
     bool   noRigidMotionDirichlet = args["noRigidMotionDirichlet"].as<bool>();
@@ -150,7 +152,8 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
 
     std::cout << "Attempting optimization" << std::endl;
     matOpt.run(writer, iterations, iterationsPerDirichlet,
-            regularizationWeight, noRigidMotionDirichlet);
+            regularizationWeight, anisotropyPenaltyWeight,
+            noRigidMotionDirichlet);
 
     // auto u_opt = matOpt.currentDisplacement();
     // g = matOpt.objectiveGradient(u_opt);

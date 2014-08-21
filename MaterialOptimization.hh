@@ -237,6 +237,7 @@ public:
     void run(MSHFieldWriter &writer, size_t iterations = 15,
              size_t iterationsPerDirichletSolve = 1,
              Real regularizationWeight = 0.0,
+             Real anisotropyPenaltyWeight = 0.0,
              bool noRigidMotionDirichlet = false);
 
 #ifdef HAS_OPTPP

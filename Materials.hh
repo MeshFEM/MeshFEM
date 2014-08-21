@@ -282,7 +282,7 @@ struct Orthotropic {
     //               limit them to -0.75
     std::vector<Bounds> upperBounds() const {
         if (_N == 3) return { Bounds(3,  0.45), Bounds(4, 0.45), Bounds(5, 0.45) };
-        else         return { Bounds(2,  0.5) };
+        else         return { Bounds(2,  0.45) };
     }
     std::vector<Bounds> lowerBounds() const {
         if (_N == 3)
