@@ -168,21 +168,28 @@ public:
             v[i] = operator[](i);
     }
 
+    void print(std::ostream &os, const std::string &componentSeparator = "\t",
+               const std::string &elementPrefix = "",
+               const std::string &elementSuffix = "",
+               const std::string &elementSeparator = "\n") const {
+        for (size_t i = 0; i < domainSize(); ++i) {
+            if (i) os << elementSeparator;
+            ConstValueType v = (*this)(i);
+            os << elementPrefix << v[0];
+            for (size_t j = 1; j < t_dim; ++j) {
+                os << componentSeparator << v[j];
+            }
+            os << elementSuffix;
+        }
+    }
+
     void dump(const std::string &path) const {
         std::ofstream of(path);
         if (!of.is_open())
             throw std::runtime_error(std::string("Couldn't open '") +
                         path + "' for writing.");
         of << std::scientific << std::setprecision(16);
-        size_t N = domainSize();
-        for (size_t i = 0; i < N; ++i) {
-            ConstValueType v = (*this)(i);
-            of << v[0];
-            for (size_t j = 1; j < t_dim; ++j) {
-                of << '\t' << v[j];
-            }
-            of << std::endl;
-        }
+        print(of);
     }
 
 protected:
