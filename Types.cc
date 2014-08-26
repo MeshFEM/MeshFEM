@@ -1,5 +1,11 @@
 #include "Types.hh"
 
+// Print points as [x, y, z]
+Eigen::IOFormat pointFormatter(Eigen::FullPrecision, Eigen::DontAlignCols,
+        /* coeff separator */ "", /* row separator */ ", ",
+        /* row prefix */ "", /* row suffix */ "", /* mat prefix */ "[",
+        /* mat suffix */ "]");
+
 template<> Point3D padTo3D<Point3D>(const Point3D &p) { return p; }
 template<> Point3D padTo3D<Point2D>(const Point2D &p) { return Point3D(p[0], p[1], 0); }
 

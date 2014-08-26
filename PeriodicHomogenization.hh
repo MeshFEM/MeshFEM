@@ -2,14 +2,13 @@
 #define PERIODICHOMOGENIZATION_HH
 
 #include "LinearElasticity.hh"
-#include "MSHFieldWriter.hh"
 #include <vector>
 #include <string>
 
 namespace PeriodicHomogenization {
-    template<class _Simulator>
+    template<class _Simulator, class _FieldWriter>
     void solveCellProblems(std::vector<typename _Simulator::VField> &w_ij,
-                           _Simulator &sim, MSHFieldWriter *mshWriter = NULL)
+                           _Simulator &sim, _FieldWriter *writer = NULL)
     {
         typedef typename _Simulator::VField  VField;
         typedef typename _Simulator::SMatrix SMatrix;
@@ -21,9 +20,9 @@ namespace PeriodicHomogenization {
         w_ij.reserve(numStrains), w_ij.clear();
         for (size_t i = 0; i < numStrains; ++i) {
             VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
-            if (mshWriter) {
-                mshWriter->addField(std::string("rhs ") + std::to_string(i),
-                        sim.extractNodalField(rhs), MSHFieldWriter::PER_NODE);
+            if (writer) {
+                writer->addField(std::string("rhs ") + std::to_string(i),
+                        sim.extractNodalField(rhs), _FieldWriter::PER_NODE);
             }
             w_ij.push_back(sim.solve(rhs));
         }

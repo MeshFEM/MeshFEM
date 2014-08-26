@@ -14,6 +14,8 @@ typedef VectorND<3> Vector3D;
 typedef  PointND<2>  Point2D;
 typedef VectorND<2> Vector2D;
 
+extern Eigen::IOFormat pointFormatter;
+
 // vectors. Valid instantiations are provided in Types.cc; invalid generate
 // linker errors.
 //
