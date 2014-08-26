@@ -18,18 +18,32 @@
 #include "../Types.hh"
 #include <vector>
 
+// quadIdx: index of the quad from which each output element originated
+//          This can be propagated across several subdivisions by passing the
+//          same array for each call.
 template<class Vertex, class Element>
-void quad_tri_subdiv(const std::vector<Vertex> &inVertices,
+void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
                      const std::vector<Element> &inElements,
-                            std::vector<Vertex> &outVertices,
-                            std::vector<Element> &outElements)
+                           std::vector<Vertex>  &outVertices,
+                           std::vector<Element> &outElements,
+                           std::vector<size_t> &quadIdx)
 {
     outVertices = inVertices;
     outElements.clear(), outElements.reserve(4 * inElements.size());
+
+    std::vector<size_t> oldQuadIdx(quadIdx);
+    if (oldQuadIdx.size() == 0) {
+        for (size_t i = 0; i < inElements.size(); ++i)
+            oldQuadIdx.push_back(i);
+    }
+    if (oldQuadIdx.size() != inElements.size())
+        throw std::runtime_error("Invalid quadIdx");
+    quadIdx.clear(), quadIdx.reserve(4 * inElements.size());
+
     Element newTri(3);
     for (size_t i = 0; i < inElements.size(); ++i) {
         auto e = inElements[i];
-        assert(e.size() == 4);
+        if (e.size() != 4) throw std::runtime_error("Non-quad encountered.");
         Point3D center = inVertices[e[0]];
         center += Point3D(inVertices[e[1]]);
         center += Point3D(inVertices[e[2]]);
@@ -44,6 +58,7 @@ void quad_tri_subdiv(const std::vector<Vertex> &inVertices,
             newTri[0] = e[t];
             newTri[1] = e[(t + 1) % 4];
             outElements.push_back(newTri);
+            quadIdx.push_back(oldQuadIdx[i]);
         }
     }
 }

@@ -2,8 +2,11 @@
 #include "TetMesh.hh"
 #include "TriMesh.hh"
 #include "MeshIO.hh"
+#include "util.h"
+#include "MSHFieldWriter.hh"
 #include "filters/subdivide.hh"
 #include "filters/quad_tri_subdiv.hh"
+#include "filters/quad_subdiv.hh"
 
 #include <limits>
 #include <iostream>
@@ -35,7 +38,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
         ("inFile",  po::value<string>(), "input mesh file")
-        ("outFile",  po::value<string>(), "output mesh file")
+        ("outFile",  po::value<string>()->default_value(""), "output mesh file")
         ;
 
     po::positional_options_description p;
@@ -47,6 +50,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("info,i",      "Get mesh information")
         ("boundary,b",  "Extract boundary surface")
         ("subdivide,s", "Subdivide geometry (surface mesh only)")
+        ("quadSubdivideAndTriangulate,q", po::value<size_t>(), "Run quad subdivision for #iterations and then triangulate symmetrically.")
         ;
 
     po::options_description cli_opts;
@@ -89,6 +93,7 @@ int main(int argc, const char *argv[])
     vector<MeshIO::IOElement> inElements, outElements;
 
     auto type = load(args["inFile"].as<string>(), inVertices, inElements);
+    string outPath = args["outFile"].as<string>();
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 
@@ -184,20 +189,35 @@ int main(int argc, const char *argv[])
         }
     }
     else if (type == MeshIO::MESH_QUAD) {
-        if (args.count("boundary")) {
-            throw runtime_error("Quad boundary extraction unsupported");
-        }
+        if (args.count("boundary"))  { throw runtime_error("Quad boundary extraction unsupported"); }
+        if (args.count("subdivide")) { throw runtime_error("Quad subdivision (only) unsupported"); }
 
-        if (args.count("subdivide")) {
-            quad_tri_subdiv(inVertices, inElements, outVertices, outElements);
+        if (args.count("quadSubdivideAndTriangulate")) {
+            size_t nSubdivs = args["quadSubdivideAndTriangulate"].as<size_t>();
+            vector<size_t> quadIdx;
+            for (size_t i = 0; i < nSubdivs; ++i) {
+                quad_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
+                inVertices.swap(outVertices);
+                inElements.swap(outElements);
+            }
+            quad_tri_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
+            if (fileExtension(outPath) == ".msh") {
+                MSHFieldWriter writer(outPath, outVertices, outElements);
+                ScalarField<Real> cellIndex(outElements.size());
+                for (size_t i = 0; i < outElements.size(); ++i)
+                    cellIndex[i] = quadIdx[i];
+                writer.addField("cell_index", cellIndex,
+                                MSHFieldWriter::PER_ELEMENT);
+                exit(0);
+            }
         }
     }
     else {
         throw runtime_error("Unrecognized mesh type.");
     }
 
-    if (args.count("outFile")) {
-        save(args["outFile"].as<string>(), outVertices, outElements); 
+    if (outPath != "") {
+        save(outPath, outVertices, outElements); 
     }
 
     return 0;
