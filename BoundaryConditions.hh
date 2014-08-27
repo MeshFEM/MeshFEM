@@ -25,13 +25,14 @@
 #include "CollisionGrid.hh"
 #include "Geometry.hh"
 #include "Types.hh"
+#include "ExpressionVector.hh"
 
-template<typename _Vec>
+template<size_t _N>
 struct BoundaryCondition {
     BoundaryCondition() { }
-    BoundaryCondition(const BBox<_Vec> &r) : region(r) { }
-    BBox<_Vec> region;
-    bool containsPoint(const _Vec &p) const { return region.containsPoint(p); }
+    BoundaryCondition(const BBox<VectorND<_N>> &r) : region(r) { }
+    BBox<VectorND<_N>> region;
+    bool containsPoint(const VectorND<_N> &p) const { return region.containsPoint(p); }
     virtual ~BoundaryCondition() { }
 };
 
@@ -92,54 +93,98 @@ private:
     std::bitset<3> m_active;
 };
 
-template<class _Vec>
-using CondPtr      = std::shared_ptr<BoundaryCondition<_Vec> >;
-template<class _Vec>
-using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_Vec> >;
+template<size_t _N>
+using CondPtr      = std::shared_ptr<BoundaryCondition<_N> >;
+template<size_t _N>
+using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_N> >;
 
 enum class NeumannType { Pressure, Traction, Force };
 // For the NeumannType::Force case, the force vector is stored in the "traction"
 // field, and it is divided by the region's boundary area at application time.
-template<typename _Vec>
-struct NeumannCondition : public BoundaryCondition<_Vec> {
-    NeumannCondition(const BBox<_Vec> &region, Real p)
-        : BoundaryCondition<_Vec>(region), type(NeumannType::Pressure),
-          pressure(p) { }
+template<size_t _N>
+struct NeumannCondition : public BoundaryCondition<_N> {
+    NeumannCondition(const BBox<VectorND<_N>> &region, Real p)
+        : BoundaryCondition<_N>(region), type(NeumannType::Pressure),
+          m_isExpr(false) { m_vecValue[0] = p; }
 
-    NeumannCondition(const BBox<_Vec> &region, const _Vec &t,
+    NeumannCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &t,
                      NeumannType _type = NeumannType::Force)
-        : BoundaryCondition<_Vec>(region), type(_type), traction(t) { }
+        : BoundaryCondition<_N>(region), type(_type), m_vecValue(t),
+          m_isExpr(false) { }
+
+    NeumannCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+                     NeumannType _type = NeumannType::Force)
+        : BoundaryCondition<_N>(region), type(_type), m_isExpr(true),
+          m_exprVecValue(ev) {
+        if (m_exprVecValue.size() != _N)
+            throw std::runtime_error("Bad expression vector length");
+    }
+
+    VectorND<_N> traction(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        assert((type == NeumannType::Traction) ||
+               (type == NeumannType::Force && !m_isExpr));
+        if (m_isExpr) return m_exprVecValue.eval<_N>(env);
+        else          return m_vecValue;
+    }
+
+    Real pressure(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        assert(type == NeumannType::Pressure);
+        if (m_isExpr)
+            throw std::runtime_error("Unimplemented");
+        return m_vecValue[0];
+    }
 
     NeumannType type;
-    Real pressure;
-    _Vec traction;
+private:
+    VectorND<_N> m_vecValue;
+    VectorND<_N> m_traction;
+    bool m_isExpr;
+    ExpressionVector m_exprVecValue;
     virtual ~NeumannCondition() { }
 };
 
-template<typename _Vec>
-struct DirichletCondition : public BoundaryCondition<_Vec> {
-    DirichletCondition(const BBox<_Vec> &region, const _Vec &d, const ComponentMask &m)
-        : BoundaryCondition<_Vec>(region), componentMask(m), displacement(d) { }
-    ComponentMask componentMask; // 1 if condition affects component
-    _Vec displacement;
+template<size_t _N>
+struct DirichletCondition : public BoundaryCondition<_N> {
+    DirichletCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
+        : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(false), m_displacement(d) { }
+
+    DirichletCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+                       const ComponentMask &m)
+        : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(true),
+          m_displacementExpr(ev) {
+        if (m_displacementExpr.size() != _N)
+            throw std::runtime_error("Bad expression vector length");
+    }
+
+    VectorND<_N> displacement(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        if (m_isExpr) return m_displacementExpr.eval<_N>(env);
+        else          return m_displacement;
+    }
+
     virtual ~DirichletCondition() { }
+
+    ComponentMask componentMask; // 1 if condition affects component
+private:
+    bool m_isExpr;
+    VectorND<_N> m_displacement;
+    ExpressionVector m_displacementExpr;
 };
 
-template<typename _Vec>
-struct TargetCondition : public BoundaryCondition<_Vec> {
-    TargetCondition(const BBox<_Vec> &region, const _Vec &d, const ComponentMask &m)
-        : BoundaryCondition<_Vec>(region), componentMask(m), displacement(d) { }
-
-    ComponentMask componentMask; // 1 if condition affects component
-    _Vec displacement;
+// Behaves just like Dirichlet
+template<size_t _N>
+struct TargetCondition : public DirichletCondition<_N> {
+    TargetCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
+        : DirichletCondition<_N>(region, d, m) { }
+    TargetCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev, const ComponentMask &m)
+        : DirichletCondition<_N>(region, ev, m) { }
     virtual ~TargetCondition() { }
 };
 
-template<typename _Vec>
-struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
+template<size_t _N>
+struct NeumannElementsCondition : public BoundaryCondition<_N> {
     NeumannElementsCondition(NeumannType t,
                              const std::vector<UnorderedTriplet> &element_corners,
-                             const std::vector<_Vec> &values) {
+                             const std::vector<VectorND<_N>> &values) {
         assert(element_corners.size() == values.size());
         for (size_t i = 0; i < element_corners.size(); ++i) {
             if      (t == NeumannType::Traction) m_vals[element_corners[i]] = Value(values[i]);
@@ -149,7 +194,7 @@ struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
 
     struct Value {
         Value(Real p = 0.0) : type(NeumannType::Pressure) { m_val[0] = p; }
-        Value(const _Vec &t) : type(NeumannType::Traction), m_val(t) { }
+        Value(const VectorND<_N> &t) : type(NeumannType::Traction), m_val(t) { }
         NeumannType type;
         
         Real pressure() const {
@@ -158,14 +203,14 @@ struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
             return m_val[0];
         }
 
-        const _Vec &traction() const {
+        const VectorND<_N> &traction() const {
             if (type != NeumannType::Traction)
                 throw std::runtime_error("Neumann condition isn't traction.");
             return m_val;
         }
 
     private:
-        _Vec m_val;
+        VectorND<_N> m_val;
     };
 
     void setValue(Real pressure, size_t v0, size_t v1, size_t v2 = 0) {
@@ -173,7 +218,7 @@ struct NeumannElementsCondition : public BoundaryCondition<_Vec> {
         m_vals[elem] = Value(pressure);
     }
 
-    void setValue(const _Vec &traction, size_t v0, size_t v1, size_t v2 = 0) {
+    void setValue(const VectorND<_N> &traction, size_t v0, size_t v1, size_t v2 = 0) {
         UnorderedTriplet elem(v0, v1, v2);
         m_vals[elem] = Value(traction);
     }
@@ -204,58 +249,58 @@ private:
     std::map<UnorderedTriplet, Value> m_vals;
 };
 
-template<typename _Vec>
-struct DirichletVerticesCondition : public BoundaryCondition<_Vec> {
-    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps, const ComponentMask &m)
+template<size_t _N>
+struct DirichletVerticesCondition : public BoundaryCondition<_N> {
+    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<VectorND<_N>> vdisps, const ComponentMask &m)
         : componentMask(m), indices(vidxs), displacements(vdisps) { }
 
     // All vertices in the condition get the same mask
     ComponentMask componentMask;
     std::vector<size_t> indices;
-    std::vector<_Vec> displacements;
+    std::vector<VectorND<_N>> displacements;
     virtual ~DirichletVerticesCondition() { }
 };
 
-template<typename _Vec>
-struct TargetVerticesCondition : public BoundaryCondition<_Vec> {
-    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps, const ComponentMask &m)
+template<size_t _N>
+struct TargetVerticesCondition : public BoundaryCondition<_N> {
+    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<VectorND<_N>> vdisps, const ComponentMask &m)
         : componentMask(m), indices(vidxs), displacements(vdisps) { }
 
     // All vertices in the condition get the same mask
     ComponentMask componentMask;
     std::vector<size_t> indices;
-    std::vector<_Vec> displacements;
+    std::vector<VectorND<_N>> displacements;
     virtual ~TargetVerticesCondition() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Boundary Condition I/O
 ////////////////////////////////////////////////////////////////////////////////
-template<class _Vec> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_Vec> > &conds);
-template<class _Vec> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_Vec> > &conds);
-template<typename _Vec> std::vector<CondPtr<_Vec> > readBoundaryConditions(const std::string &cpath, bool &noRigidMotion);
-template<typename _Vec> std::vector<CondPtr<_Vec> > readBoundaryConditions(std::istream &is,         bool &noRigidMotion);
+template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         bool &noRigidMotion);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation
 // (Nothing to read from input files--just specified either in code or command
 //  line switch.)
 ////////////////////////////////////////////////////////////////////////////////
-template<typename _Vec>
+template<size_t _N>
 class PeriodicCondition {
 public:
     template<typename Mesh>
     PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-5) {
-        BBox<_Vec> cell = mesh.boundingBox();
+        BBox<VectorND<_N>> cell = mesh.boundingBox();
         // Choose a cell size on the order of epsilon. This should be safe since
         // the max vertex coordinate shouldn't anyhere near large enough that
         // dividing by epsilon causes an overflow. We don't want any larger than
         // epsilon because then we'd have to check for many (empty) boxes.
-        CollisionGrid<Real, _Vec> cgrid(epsilon);
+        CollisionGrid<Real, VectorND<_N>> cgrid(epsilon);
         // Match boundary vertices on opposite faces of the periodic cell
         std::vector<std::pair<int, int> > pairs;
         pairs.clear();
-        for (int d = 0; d < _Vec::RowsAtCompileTime; ++d) {
+        for (int d = 0; d < _N; ++d) {
             cgrid.reset();
             std::vector<int> maxfaceVertices;
             for (size_t i = 0; i < mesh.numBoundaryVertices(); ++i) {
@@ -267,7 +312,7 @@ public:
             }
             for (size_t i = 0; i < maxfaceVertices.size(); ++i) {
                 int vi = maxfaceVertices[i];
-                _Vec query(mesh.vertex(vi)->p);
+                VectorND<_N> query(mesh.vertex(vi)->p);
                 query[d] = cell.minCorner[d];
                 auto result = cgrid.getClosestPoint(query, epsilon);
                 if (result.first == -1) {

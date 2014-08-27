@@ -67,18 +67,30 @@ public:
 
     // Apply the target displacement "boundary conditions", letting Base handle
     // the rest.
-    void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
-        std::vector<CondPtr<_Point> > filteredConditions;
+    void applyBoundaryConditions(const std::vector<CondPtr<N> > &conds) {
+        // Set up evaluator environment
+        ExpressionEnvironment env;
+        auto mbb = m_mesh.boundingBox();
+        env.setVectorValue("mesh_size_", mbb.dimensions());
+        env.setVectorValue("mesh_min_", mbb.minCorner);
+        env.setVectorValue("mesh_max_", mbb.maxCorner);
+
+        std::vector<CondPtr<N> > filteredConditions;
         std::string nonbdryMsg("Condition applied to non-boundary vertex ");
         for (auto c : conds) {
-            if (auto tc = std::dynamic_pointer_cast<const TargetCondition<_Point> >(c)) {
+            env.setVectorValue("region_size_", c->region.dimensions());
+            env.setVectorValue("region_min_",  c->region.minCorner);
+            env.setVectorValue("region_max_",  c->region.maxCorner);
+            if (auto tc = std::dynamic_pointer_cast<const TargetCondition<N> >(c)) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                     auto bv = m_mesh.boundaryNode(i);
-                    if (tc->containsPoint(bv.volumeVertex()->p))
-                        bv->setTarget(tc->componentMask, tc->displacement);
+                    if (tc->containsPoint(bv.volumeVertex()->p)) {
+                        env.setXYZ(bv.volumeVertex()->p);
+                        bv->setTarget(tc->componentMask, tc->displacement(env));
+                    }
                 }
             }
-            else if (auto tvc = std::dynamic_pointer_cast<const TargetVerticesCondition<_Point> >(c)) {
+            else if (auto tvc = std::dynamic_pointer_cast<const TargetVerticesCondition<N> >(c)) {
                 for (size_t i = 0; i < tvc->indices.size(); ++i) {
                     size_t vi = tvc->indices[i];
                     auto v = m_mesh.vertex(vi);
@@ -191,7 +203,7 @@ public:
     template<typename Elems, typename Vertices>
     Optimizer(Elems inElems, Vertices inVertices,
               std::shared_ptr<MField> matField,
-              const std::vector<CondPtr<_Point> > &boundaryConditions,
+              const std::vector<CondPtr<N> > &boundaryConditions,
               bool noRigidMotion)
         : m_sim(inElems, inVertices, matField), m_matField(matField)
     {

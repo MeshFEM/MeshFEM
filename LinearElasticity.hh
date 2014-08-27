@@ -168,7 +168,7 @@ namespace LinearElasticity {
         *///////////////////////////////////////////////////////////////////////
         void applyPeriodicConditions() {
             m_system.clear();
-            PeriodicCondition<_Point> pc(m_mesh);
+            PeriodicCondition<_N> pc(m_mesh);
             m_dofForNode = pc.periodicDoFsForVertices();
             m_numDoFs = pc.numPeriodicDoFs();
         }
@@ -178,13 +178,23 @@ namespace LinearElasticity {
             m_dofForNode.clear();
         }
 
-        void applyBoundaryConditions(const std::vector<CondPtr<_Point> > &conds) {
+        void applyBoundaryConditions(const std::vector<CondPtr<_N> > &conds) {
+            // Set up evaluator environment
+            ExpressionEnvironment env;
+            auto mbb = m_mesh.boundingBox();
+            env.setVectorValue("mesh_size_", mbb.dimensions());
+            env.setVectorValue("mesh_min_", mbb.minCorner);
+            env.setVectorValue("mesh_max_", mbb.maxCorner);
+
             if (conds.size() > 0) m_system.clear();
             for (auto cond : conds) {
+                env.setVectorValue("region_size_", cond->region.dimensions());
+                env.setVectorValue("region_min_",  cond->region.minCorner);
+                env.setVectorValue("region_max_",  cond->region.maxCorner);
                 std::runtime_error illegalCondition("Illegal BC type");
                 std::runtime_error unimplemented("Unimplemented BC type");
                 std::string nonbdryMsg("Condition applied to non-boundary vertex ");
-                if (auto nc = std::dynamic_pointer_cast<const NeumannCondition<_Point> >(cond)) {
+                if (auto nc = std::dynamic_pointer_cast<const NeumannCondition<_N> >(cond)) {
                     Real regionArea = 0.0;
                     std::vector<size_t> region;
                     for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
@@ -194,17 +204,18 @@ namespace LinearElasticity {
                             center += be.vertex(c).volumeVertex()->p;
                         center /= be.numVertices();
                         if (nc->containsPoint(center)) {
+                            env.setXYZ(center);
                             regionArea += be->area();
                             region.push_back(i);
                             if (nc->type == NeumannType::Pressure)
-                                 be->neumannTraction = -nc->pressure * be->normal();
+                                 be->neumannTraction = -nc->pressure(env) * be->normal();
                             else if (nc->type == NeumannType::Traction)
-                                 be->neumannTraction =  nc->traction;
+                                 be->neumannTraction =  nc->traction(env);
                             else if (nc->type == NeumannType::Force) {
                                 // In the Force case, "traction" is actually a
                                 // force that will be distributed uniformly among all
                                 // boundary elements in the region.
-                                be->neumannTraction = nc->traction;
+                                be->neumannTraction = nc->traction(env);
                             }
                             else throw unimplemented;
                         }
@@ -219,15 +230,17 @@ namespace LinearElasticity {
                         }
                     }
                 }
-                else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_Point> >(cond)) {
+                else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_N> >(cond)) {
                     for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                         auto bv = m_mesh.boundaryNode(i);
-                        if (dc->containsPoint(bv.volumeVertex()->p))
-                            bv->setDirichlet(dc->componentMask, dc->displacement);
+                        if (dc->containsPoint(bv.volumeVertex()->p)) {
+                            env.setXYZ(bv.volumeVertex()->p);
+                            bv->setDirichlet(dc->componentMask, dc->displacement(env));
+                        }
                     }
                     continue;
                 }
-                else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<_Point> >(cond)) {
+                else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<_N> >(cond)) {
                     size_t numSet = 0;
                     for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
                         auto be = m_mesh.boundaryElement(bei);
@@ -248,7 +261,7 @@ namespace LinearElasticity {
                     if (numSet != nec->numElements())
                         throw std::runtime_error("Some vertex boundary conditions weren't matched.");
                 }
-                else if (auto dvc = std::dynamic_pointer_cast<const DirichletVerticesCondition<_Point> >(cond)) {
+                else if (auto dvc = std::dynamic_pointer_cast<const DirichletVerticesCondition<_N> >(cond)) {
                     for (size_t i = 0; i < dvc->indices.size(); ++i) {
                         size_t vi = dvc->indices[i];
                         auto v = m_mesh.vertex(vi);

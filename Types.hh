@@ -4,9 +4,9 @@
 #include <Eigen/Dense>
 typedef double Real;
 
-template<int N>
+template<size_t N>
 using PointND = Eigen::Matrix<Real, N, 1>;
-template<int N>
+template<size_t N>
 using VectorND = Eigen::Matrix<Real, N, 1>;
 
 typedef  PointND<3>  Point3D;

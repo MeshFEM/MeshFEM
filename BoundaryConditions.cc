@@ -51,9 +51,20 @@ Vector3D parseVectorLenient(const ptree &pt) {
     return v;
 }
 
-template <typename _Vec>
+// Parse a vector of expressions
+std::vector<string> parseExpressionVector(const ptree &pt) {
+    runtime_error err("Failed to parse expression vector");
+    vector<string> result;
+    for (const auto &val : pt) {
+        if (!val.first.empty()) throw err;
+        result.push_back(val.second.get_value<string>());
+    }
+    return result;
+}
+
+template <size_t _N>
 void parseVertexConditionValues(const ptree &pt, vector<size_t> &indices,
-                                vector<_Vec> &displacements) {
+                                vector<VectorND<_N>> &displacements) {
     Vector3D disp;
     indices.clear(), displacements.clear();
     runtime_error err("Error parsing vertex condition values.");
@@ -72,7 +83,7 @@ void parseVertexConditionValues(const ptree &pt, vector<size_t> &indices,
                     if (!vtx.first.empty()) throw err;
                     try { indices.push_back(vtx.second.get_value<int>()); }
                     catch (...) { throw err; }
-                    displacements.push_back(truncateFrom3D<_Vec>(disp));
+                    displacements.push_back(truncateFrom3D<VectorND<_N>>(disp));
                 }
             }
             else throw err;
@@ -82,9 +93,9 @@ void parseVertexConditionValues(const ptree &pt, vector<size_t> &indices,
     }
 }
 
-template <typename _Vec>
+template <size_t _N>
 void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corners,
-                                vector<_Vec> &values) {
+                                vector<VectorND<_N>> &values) {
     Vector3D vecValue;
     corners.clear(), values.clear();
     runtime_error err("Error parsing element condition values.");
@@ -110,7 +121,7 @@ void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corn
                     }
                     if (idx.size() == 2) idx.push_back(0);
                     if (idx.size() != 3) throw err;
-                    values.push_back(truncateFrom3D<_Vec>(vecValue));
+                    values.push_back(truncateFrom3D<VectorND<_N>>(vecValue));
                     corners.push_back(UnorderedTriplet(idx[0], idx[1], idx[2]));
                 }
             }
@@ -121,9 +132,9 @@ void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corn
 }
 
 // Write in a 3D compatible format: unused components are ignored
-template<class _Vec>
+template<size_t _N>
 void writeBoundaryConditions(const string &cpath,
-                             const vector<ConstCondPtr<_Vec> > &conds) {
+                             const vector<ConstCondPtr<_N> > &conds) {
     ofstream outFile(cpath);
     if (!outFile.is_open())
         cout << "Couldn't open BC file:" << cpath << '\'' << endl;
@@ -131,73 +142,71 @@ void writeBoundaryConditions(const string &cpath,
         writeBoundaryConditions(outFile, conds);
 }
 
-template<class _Vec>
+template<size_t _N>
 void writeBoundaryConditions(ostream &os,
-                             const vector<ConstCondPtr<_Vec> > &conds) {
+                             const vector<ConstCondPtr<_N> > &conds) {
     os << "{ \"regions\": [" << endl;
 
     for (size_t i = 0; i < conds.size(); ++i) {
-        ConstCondPtr<_Vec> c = conds[i];
+        ConstCondPtr<_N> c = conds[i];
         if (i > 0) os << ", ";
         os << " { \"type\": \"";
-        _Vec value = _Vec::Zero();
-        if (auto cc = dynamic_pointer_cast<const NeumannCondition<_Vec> >(c)) {
+        VectorND<_N> value = VectorND<_N>::Zero();
+        if (auto cc = dynamic_pointer_cast<const NeumannCondition<_N> >(c)) {
             switch (cc->type) {
                 case NeumannType::Pressure:
-                    value[0] = cc->pressure;
+                    value[0] = cc->pressure();
                     os << "pressure";
                     break;
                 case NeumannType::Traction:
-                    value = cc->traction;
+                    value = cc->traction();
                     os << "traction";
                     break;
                 case NeumannType::Force:
-                    value = cc->traction;
+                    value = cc->traction();
                     os << "force";
                     break;
                 default:
                     throw runtime_error("Illegal NeumannType");
             }
         }
-        else if (auto cc = dynamic_pointer_cast<const DirichletCondition<_Vec> >(c)) {
+        else if (auto cc = dynamic_pointer_cast<const DirichletCondition<_N> >(c)) {
             os << "dirichlet";
-            value = cc->displacement;
+            value = cc->displacement();
         }
-        else if (auto cc = dynamic_pointer_cast<const TargetCondition<_Vec> >(c)) {
+        else if (auto cc = dynamic_pointer_cast<const TargetCondition<_N> >(c)) {
             os << "target";
-            value = cc->displacement;
+            value = cc->displacement();
         }
         else throw runtime_error("Illegal condition type.");
 
-        constexpr size_t N = _Vec::RowsAtCompileTime;
-
         os << "\", \"value\": ["
-           << value[0] << ", " << value[1] << ", " << ((N == 2) ?  0 : value[2])
+           << value[0] << ", " << value[1] << ", " << ((_N == 2) ?  0 : value[2])
            << "], \"box\": { \"minCorner\": ["
            << c->region.minCorner[0] << ", " << c->region.minCorner[1] << ", "
-           << ((N == 2) ?  0 : c->region.minCorner[2])
+           << ((_N == 2) ?  0 : c->region.minCorner[2])
            <<  "], \"maxCorner\": ["
            << c->region.maxCorner[0] << ", " << c->region.maxCorner[1] << ", "
-           << ((N == 2) ?  0 : c->region.maxCorner[2])
+           << ((_N == 2) ?  0 : c->region.maxCorner[2])
            <<  "] } }";
     }
 
     os << "] }" << endl;
 }
 
-template<typename _Vec>
-vector<CondPtr<_Vec> > readBoundaryConditions(const string &cpath, bool &noRigidMotion) {
+template<size_t _N>
+vector<CondPtr<_N> > readBoundaryConditions(const string &cpath, bool &noRigidMotion) {
     ifstream inFile(cpath);
     if (!inFile.is_open()) throw runtime_error("Couldn't open BC file");
-    return readBoundaryConditions<_Vec>(inFile, noRigidMotion);
+    return readBoundaryConditions<_N>(inFile, noRigidMotion);
 }
 
-template<typename _Vec>
-vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) {
+template<size_t _N>
+vector<CondPtr<_N> > readBoundaryConditions(istream &is, bool &noRigidMotion) {
     ptree pt;
     read_json(is, pt);
 
-    vector<CondPtr<_Vec> > conds;
+    vector<CondPtr<_N> > conds;
 
     noRigidMotion = pt.get<bool>("no_rigid_motion", false);
     ptree regions = pt.get_child("regions");
@@ -209,14 +218,15 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
         // value, a collection of vertex sets and their associated
         // displacements, or a collection of elements (identified by corner
         // indices) and their values.
-        vector<size_t> vertex_indices;
-        vector<_Vec> vertex_displacements;
+        vector<size_t>       vertex_indices;
+        vector<VectorND<_N>> vertex_displacements;
 
         vector<UnorderedTriplet> element_corners;
-        vector<_Vec>             element_values;
+        vector<VectorND<_N>>     element_values;
 
-        BBox<_Vec> region;
-        _Vec value;
+        BBox<VectorND<_N>> region;
+        VectorND<_N> value;
+        ExpressionVector exprVec; // filled out if expression vector is provided
         regex xyzFinder("(dirichlet|target)([xyz]{1,3})(.*)");
         smatch matchResult;
         ComponentMask cmask("xyz");
@@ -226,32 +236,55 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
             type = matchResult[1].str() + matchResult[3].str();
         }
         if (type.find("vertices") != string::npos) {
-            parseVertexConditionValues(tcond.get_child("values"), vertex_indices, vertex_displacements);
+            parseVertexConditionValues<_N>(tcond.get_child("values"), vertex_indices, vertex_displacements);
             assert(vertex_indices.size() == vertex_displacements.size());
         }
         else if (type.find("elements") != string::npos) {
-            parseElementConditionValues(tcond.get_child("values"), element_corners, element_values);
+            parseElementConditionValues<_N>(tcond.get_child("values"), element_corners, element_values);
             assert(element_corners.size() == element_values.size());
         }
         else {
-            region.minCorner = truncateFrom3D<_Vec>(parseVectorLenient(tcond.get_child("box.minCorner")));
-            region.maxCorner = truncateFrom3D<_Vec>(parseVectorLenient(tcond.get_child("box.maxCorner")));
-            value            = truncateFrom3D<_Vec>(parseVectorLenient(tcond.get_child("value")));
+            region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.minCorner")));
+            region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.maxCorner")));
+            // Try to parse as plain vector first
+            try {
+                value        = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("value")));
+            }
+            catch (...) {
+                // Try to parse as expression vector
+                auto expressions = parseExpressionVector(tcond.get_child("value"));
+                if ((_N == 2) && (expressions.size() == 3) && (stod(expressions[2]) == 0))
+                    expressions.pop_back();
+                if (expressions.size() != _N)
+                    throw runtime_error("Incorrect expression vector size");
+                for (const auto &expr : expressions)
+                    exprVec.add(expr);
+            }
         }
 
-        BoundaryCondition<_Vec> *c;
-        if      (type == "pressure")  c = new   NeumannCondition<_Vec>(region, value[0]);
-        else if (type == "traction")  c = new   NeumannCondition<_Vec>(region, value);
-        else if (type == "force")     c = new   NeumannCondition<_Vec>(region, value, NeumannType::Force);
-        else if (type == "dirichlet") c = new DirichletCondition<_Vec>(region, value, cmask);
-        else if (type == "target")    c = new    TargetCondition<_Vec>(region, value, cmask);
-        else if (type == "dirichlet vertices") c = new DirichletVerticesCondition<_Vec>(vertex_indices, vertex_displacements, cmask);
-        else if (type == "target vertices")    c = new    TargetVerticesCondition<_Vec>(vertex_indices, vertex_displacements, cmask);
-        else if (type == "traction elements")  c = new   NeumannElementsCondition<_Vec>(NeumannType::Traction, element_corners, element_values);
-        else if (type == "pressure elements")  c = new   NeumannElementsCondition<_Vec>(NeumannType::Pressure, element_corners, element_values);
-        else    throw runtime_error(string("Invalid type '") + type + "'");
+        BoundaryCondition<_N> *c;
+        if (exprVec.size() > 0) {
+            // Expression vector
+            if      (type == "traction")  c = new   NeumannCondition<_N>(region, exprVec);
+            else if (type == "dirichlet") c = new DirichletCondition<_N>(region, exprVec, cmask);
+            else if (type == "target")    c = new    TargetCondition<_N>(region, exprVec, cmask);
+            else throw runtime_error("Only traction, dirichlet, and target support expression vectors");
+        }
+        else {
+            // Plain vector/scalar
+            if      (type == "pressure")  c = new   NeumannCondition<_N>(region, value[0]);
+            else if (type == "traction")  c = new   NeumannCondition<_N>(region, value);
+            else if (type == "force")     c = new   NeumannCondition<_N>(region, value, NeumannType::Force);
+            else if (type == "dirichlet") c = new DirichletCondition<_N>(region, value, cmask);
+            else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
+            else if (type == "dirichlet vertices") c = new DirichletVerticesCondition<_N>(vertex_indices, vertex_displacements, cmask);
+            else if (type == "target vertices")    c = new    TargetVerticesCondition<_N>(vertex_indices, vertex_displacements, cmask);
+            else if (type == "traction elements")  c = new   NeumannElementsCondition<_N>(NeumannType::Traction, element_corners, element_values);
+            else if (type == "pressure elements")  c = new   NeumannElementsCondition<_N>(NeumannType::Pressure, element_corners, element_values);
+            else    throw runtime_error("Invalid type '" + type + "'");
+        }
 
-        conds.push_back(CondPtr<_Vec>(c));
+        conds.push_back(CondPtr<_N>(c));
     }
 
     return conds;
@@ -260,16 +293,16 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
 ////////////////////////////////////////////////////////////////////////////////
 // Instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template void writeBoundaryConditions<Vector3D>(const string &cpath,
-                           const vector<ConstCondPtr<Vector3D> > &conds);
-template void writeBoundaryConditions<Vector3D>(ostream &os,
-                           const vector<ConstCondPtr<Vector3D> > &conds);
-template vector<CondPtr<Vector3D> > readBoundaryConditions<Vector3D>(const string &cpath, bool &noRigidMotion);
-template vector<CondPtr<Vector3D> > readBoundaryConditions<Vector3D>(istream &is,         bool &noRigidMotion); 
+template void writeBoundaryConditions<3>(const string &cpath,
+                           const vector<ConstCondPtr<3> > &conds);
+template void writeBoundaryConditions<3>(ostream &os,
+                           const vector<ConstCondPtr<3> > &conds);
+template vector<CondPtr<3> > readBoundaryConditions<3>(const string &cpath, bool &noRigidMotion);
+template vector<CondPtr<3> > readBoundaryConditions<3>(istream &is,         bool &noRigidMotion); 
 
-template void writeBoundaryConditions<Vector2D>(const string &cpath,
-                           const vector<ConstCondPtr<Vector2D> > &conds);
-template void writeBoundaryConditions<Vector2D>(ostream &os,
-                           const vector<ConstCondPtr<Vector2D> > &conds);
-template vector<CondPtr<Vector2D> > readBoundaryConditions<Vector2D>(const string &cpath, bool &noRigidMotion);
-template vector<CondPtr<Vector2D> > readBoundaryConditions<Vector2D>(istream &is,         bool &noRigidMotion); 
+template void writeBoundaryConditions<2>(const string &cpath,
+                           const vector<ConstCondPtr<2> > &conds);
+template void writeBoundaryConditions<2>(ostream &os,
+                           const vector<ConstCondPtr<2> > &conds);
+template vector<CondPtr<2> > readBoundaryConditions<2>(const string &cpath, bool &noRigidMotion);
+template vector<CondPtr<2> > readBoundaryConditions<2>(istream &is,         bool &noRigidMotion); 

@@ -109,11 +109,12 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     // Otherwise, we use one material per element.
     vector<size_t> matIdxForElement;
 
+    SField cell_index;
     if (MeshIO::guessFormat(meshPath) == MeshIO::FMT_MSH) {
         // Read in tri/tet->cell association
         MSHFieldParser<_N> fieldParser(meshPath);
         try {
-            SField cell_index = fieldParser.scalarField("cell_index");
+            cell_index = fieldParser.scalarField("cell_index");
             matIdxForElement.reserve(inElements.size());
             for (size_t i = 0; i < inElements.size(); ++i)
                 matIdxForElement.push_back((size_t) round(cell_index[i]));
@@ -124,7 +125,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     shared_ptr<MField> matField(new MField(inElements.size(), matIdxForElement));
 
     bool noRigidMotion;
-    auto bconds = readBoundaryConditions<VectorND<_N> >(bcPath, noRigidMotion);
+    auto bconds = readBoundaryConditions<_N>(bcPath, noRigidMotion);
 
     Opt matOpt(inElements, inVertices, matField, bconds, noRigidMotion);
 
@@ -138,6 +139,10 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     // }
 
     MSHFieldWriter writer(outMSH, matOpt.mesh());
+
+    // Propagate the cell_index field.
+    if (cell_index.domainSize() == matOpt.mesh().numElements())
+        writer.addField("cell_index", cell_index, MSHFieldWriter::PER_ELEMENT);
     // writer.addField("target", targetDisplacements, MSHFieldWriter::PER_NODE);
 
     // auto u = matOpt.currentDisplacement();
@@ -159,7 +164,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     // g = matOpt.objectiveGradient(u_opt);
 
     // writer.addField("Final u", u_opt, MSHFieldWriter::PER_NODE);
-    // matField->writeVariableFields(writer, "Final ");
+    matField->writeVariableFields(writer, "Final ");
     // matField->writeVariableFields(writer, "Final grad", g);
 }
 
