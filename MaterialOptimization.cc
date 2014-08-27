@@ -108,7 +108,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         typedef typename Material::template StressStrainFitCostFunction<typename SMField::ValueType> Fitter;
         for (size_t ei = 0; ei < mesh().numElements(); ++ei) {
             ceres::CostFunction *fitCost = new ceres::AutoDiffCostFunction<
-                Fitter, flatLen(N), _NVar>(new Fitter(e_dirichletTargets(ei), s_neumann(ei)));
+                Fitter, flatLen(N), _NVar>(new Fitter(e_dirichletTargets(ei), s_neumann(ei),
+                                           mesh().element(ei)->volume()));
             problem.AddResidualBlock(fitCost, NULL,
                                      &(m_matField->materialForElement(ei).vars[0]));
         }

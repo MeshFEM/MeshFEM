@@ -104,8 +104,11 @@ struct Isotropic {
     //  [s_01]   [e_01,        -s_01]
     template<class SMatrix>
     struct StressStrainFitCostFunction {
-        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
-            : strain(e), stress(s) { }
+        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s, Real vol)
+            : strain(e), stress(s) {
+            if (vol <= 0) throw std::runtime_error("Volume must be positive");
+            volSqrt = sqrt(vol);
+        }
 
         template<typename T>
         bool operator()(const T *x, T *e) const {
@@ -126,6 +129,8 @@ struct Isotropic {
             for (size_t i = 0; i < flatLen(_N); ++i) {
                 e[i] /= x[0];
                 e[i] -= T(strain[i]);
+                if (i >= _N) e[i] *= T(sqrt(2.0));
+                e[i] *= T(volSqrt);
             }
 
             // // Linear version
@@ -150,6 +155,7 @@ struct Isotropic {
         }
 
         SMatrix strain, stress;
+        Real volSqrt;
     };
 
     struct Bounds {
@@ -165,7 +171,7 @@ struct Isotropic {
     //               Poisson ratio can't be less than -1, and for robustness we
     //               limit it to -0.75
     constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 384), Bounds(1,  0.35) }; }
-    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 18), Bounds(1, 0.25) }; }
+    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 18), Bounds(1, 0.1) }; }
 
     Real vars[numVars];
 };
@@ -194,9 +200,9 @@ struct Orthotropic {
             vars[6] = vars[7] = vars[8] = 1 / (2.0 * (1 + 0.3));
         }
         else {
-            vars[0] = vars[1] = 1.0;
+            vars[0] = vars[1] = 200.0;
             vars[2] = 0.3;
-            vars[3] = 1 / (2.0 * (1 + 0.3));
+            vars[3] = 200.0 / (2.0 * (1 + 0.3));
         }
     }
 
@@ -234,8 +240,11 @@ struct Orthotropic {
     //      e ~= E^(-1)(Y_x, Y_y, ...) : s
     template<class SMatrix>
     struct StressStrainFitCostFunction {
-        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s)
-            : strain(e), stress(s) { }
+        StressStrainFitCostFunction(const SMatrix &e, const SMatrix &s, Real vol)
+            : strain(e), stress(s) {
+            if (vol <= 0) throw std::runtime_error("Volume must be positive");
+            volSqrt = sqrt(vol);
+        }
 
         template<typename T>
         bool operator()(const T *x, T *e) const {
@@ -259,11 +268,14 @@ struct Orthotropic {
 
             for (size_t i = 0; i < flatLen(_N); ++i) {
                 e[i] -= T(strain[i]);
+                if (i >= _N) e[i] *= T(sqrt(2.0));
+                e[i] *= T(volSqrt);
             }
 
             return true;
         }
 
+        Real volSqrt;
         SMatrix strain, stress;
     };
 
