@@ -74,10 +74,8 @@ public:
             if (auto tc = std::dynamic_pointer_cast<const TargetCondition<_Point> >(c)) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                     auto bv = m_mesh.boundaryNode(i);
-                    if (tc->containsPoint(bv.volumeVertex()->p)) {
-                        bv->hasTarget = true;
-                        bv->targetDisplacement = tc->displacement;
-                    }
+                    if (tc->containsPoint(bv.volumeVertex()->p))
+                        bv->setTarget(tc->componentMask, tc->displacement);
                 }
             }
             else if (auto tvc = std::dynamic_pointer_cast<const TargetVerticesCondition<_Point> >(c)) {
@@ -86,8 +84,7 @@ public:
                     auto v = m_mesh.vertex(vi);
                     auto bv = v.boundaryVertex();
                     if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
-                    bv->targetDisplacement = tvc->displacements[i];
-                    bv->hasTarget = true;
+                    bv->setTarget(tvc->componentMask, tvc->displacements[i]);
                 }
             }
             else filteredConditions.push_back(c);
@@ -98,9 +95,8 @@ public:
 
     // Remove all target displacements
     void removeTargets() {
-        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-            m_mesh.boundaryNode(i)->hasTarget = false;
-        }
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i)
+            m_mesh.boundaryNode(i)->targetComponents.clear();
     }
 
     // Swap the target and Dirichlet conditions so that target positions
@@ -110,7 +106,7 @@ public:
     void swapTargetDirichlet() {
         for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
             auto bn = m_mesh.boundaryNode(i);
-            std::swap(bn->hasTarget, bn->hasDirichlet);
+            std::swap(bn->targetComponents,   bn->dirichletComponents);
             std::swap(bn->targetDisplacement, bn->dirichletDisplacement);
         }
         Base::m_system.clear();
@@ -119,7 +115,7 @@ public:
     VField solveAdjoint(const VField &u) const {
         // Compute load on the DoFs caused by the adjoint problem's Neuman
         // traction:
-        //  u_target - u
+        //      componentMask * (u_target - u)
         // This traction is defined per-vertex and linearly interpolated over
         // each boundary element, so we can't use the inherited constant
         // per-boundary-element traction load computation. Instead, the load is
@@ -130,9 +126,10 @@ public:
             auto be = m_mesh.boundaryElement(bei);
             // 2D boundary elements have 2 nodes, 3D have 3 nodes.
             for (size_t j = 0; j < N; ++j) {
-                if (be.vertex(j)->hasTarget) {
-                    auto dist_j = be.vertex(j)->targetDisplacement -
-                                u(be.vertex(j).volumeVertex().index());
+                if (be.vertex(j)->hasTarget()) {
+                    auto dist_j = be.vertex(j)->targetComponents.apply(
+                            (be.vertex(j)->targetDisplacement -
+                            u(be.vertex(j).volumeVertex().index())).eval());
                     for (size_t i = 0; i < N; ++i) {
                         dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
                                           be->massMatrixContribution(i, j) * dist_j;
@@ -154,6 +151,28 @@ public:
 
 private:
     std::shared_ptr<const MField> m_matField;
+};
+
+template<size_t _N>
+struct BoundaryNodeDataND : LinearElasticity::BoundaryNodeDataND<_N> {
+    ComponentMask targetComponents;
+    VectorND<_N> targetDisplacement;
+    bool hasTarget() const { return targetComponents.hasAny(_N); }
+    void setTarget(ComponentMask mask, const VectorND<_N> &val) {
+        for (size_t c = 0; c < _N; ++c) {
+            if (!mask.has(c)) continue;
+            // If a new component is being constrained, merge
+            if (!targetComponents.has(c)) {
+                targetComponents.set(c);
+                targetDisplacement[c] = val[c];
+            }
+            // Otherwise, make sure there isn't a conflict
+            else {
+                if (std::abs(targetDisplacement[c] - val[c]) > 1e-10)
+                    throw std::runtime_error("Conflicting target displacements.");
+            }
+        }
+    }
 };
 
 template<class _Simulator>
@@ -186,9 +205,9 @@ public:
     }
 
     // 1/2 int_bdry ||u - t||^2 dA = 1/2 int_bdry ||d||^2 dA
-    // where d = u - t is the distance-to-target vector field (linearly
-    // interpolated over each boundary element). The per-element
-    // contribution to this integral is:
+    // where d = componentMask * (u - t) is the component-masked
+    // distance-to-target vector field (linearly interpolated over each boundary
+    // element). The per-element contribution to this integral is:
     //      area * ||d_i phi_i||^2 = area * phi_i phi_j <d_i, d_j>.
     // area * phi_i phi_j terms are entries of the boundary element mass matrix.
     Real objective(const VField &u) const {
@@ -199,9 +218,8 @@ public:
             _Point d[N];
             for (size_t i = 0; i < N; ++i) {
                 auto bv = be.vertex(i);
-                d[i] = bv->hasTarget ? (u(bv.volumeVertex().index()) -
-                                         bv->targetDisplacement).eval()
-                                     : _Point::Zero();
+                d[i] = bv->targetComponents.apply((u(bv.volumeVertex().index())
+                            - bv->targetDisplacement).eval());
             }
             for (size_t i = 0; i < N; ++i) {
                 for (size_t j = 0; j < N; ++j) {
@@ -322,10 +340,7 @@ typedef Materials::Orthotropic<2> OrthotropicMaterial;
 typedef MaterialField<  IsotropicMaterial>   IsotropicField;
 typedef MaterialField<OrthotropicMaterial> OrthotropicField;
 
-struct BoundaryNodeData : LinearElasticity2D::BoundaryNodeData {
-    bool hasTarget;
-    Vector2D targetDisplacement;
-};
+typedef MaterialOptimization::BoundaryNodeDataND<2> BoundaryNodeData;
 
 template<class _Material>
 using Mesh = LinearElasticity2D::Mesh<LinearFEM2D::NodeData<Point2D>,
@@ -347,10 +362,7 @@ typedef Materials::Orthotropic<3> OrthotropicMaterial;
 typedef MaterialField<  IsotropicMaterial>   IsotropicField;
 typedef MaterialField<OrthotropicMaterial> OrthotropicField;
 
-struct BoundaryNodeData : LinearElasticity3D::BoundaryNodeData {
-    bool hasTarget;
-    Vector3D targetDisplacement;
-};
+typedef MaterialOptimization::BoundaryNodeDataND<3> BoundaryNodeData;
 
 template<class _Material>
 using Mesh = LinearElasticity3D::Mesh<LinearFEM3D::NodeData,

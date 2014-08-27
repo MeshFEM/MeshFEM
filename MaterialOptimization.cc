@@ -63,13 +63,14 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         Real anisotropyPenaltyWeight, bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
+    writer.addField("Neumann load", m_sim.extractNodalField(neumannLoad), MSHFieldWriter::PER_NODE);
 
     // Get "material graph" adjacences for Laplacian (smoothness) regularization
     vector<set<size_t> > materialAdj;
     m_matField->materialAdjacencies(mesh(), materialAdj);
 
-    auto u_dirichletTargets = m_sim.solve(neumannLoad);
-    auto e_dirichletTargets = m_sim.strain(u_dirichletTargets);
+    VField u_dirichletTargets;
+    SMField e_dirichletTargets;
 
     constexpr size_t _NVar = Material::numVars;
     for (size_t iter = 1; iter <= iterations; ++iter) {

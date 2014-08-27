@@ -110,13 +110,13 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     vector<size_t> matIdxForElement;
 
     if (MeshIO::guessFormat(meshPath) == MeshIO::FMT_MSH) {
-        // Read in tet->hex association
+        // Read in tri/tet->cell association
         MSHFieldParser<_N> fieldParser(meshPath);
         try {
-            SField hex_index = fieldParser.scalarField("hex_index");
+            SField cell_index = fieldParser.scalarField("cell_index");
             matIdxForElement.reserve(inElements.size());
             for (size_t i = 0; i < inElements.size(); ++i)
-                matIdxForElement.push_back((size_t) round(hex_index[i]));
+                matIdxForElement.push_back((size_t) round(cell_index[i]));
         }
         catch(...) { }
     }
@@ -132,7 +132,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     // targetDisplacements.clear();
     // for (size_t i = 0; i < matOpt.mesh().numBoundaryNodes(); ++i) {
     //     auto bn = matOpt.mesh().boundaryNode(i);
-    //     if (bn->hasTarget) {
+    //     if (bn->hasTarget()) {
     //         targetDisplacements(bn.volumeVertex().index()) = bn->targetDisplacement;
     //     }
     // }

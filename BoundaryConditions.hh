@@ -20,8 +20,11 @@
 #include <queue>
 #include <memory>
 #include <iostream>
+#include <bitset>
+#include <cassert>
 #include "CollisionGrid.hh"
 #include "Geometry.hh"
+#include "Types.hh"
 
 template<typename _Vec>
 struct BoundaryCondition {
@@ -32,6 +35,62 @@ struct BoundaryCondition {
     virtual ~BoundaryCondition() { }
 };
 
+class ComponentMask {
+public:
+    ComponentMask(const std::string &components = "") {
+        setComponentString(components);
+    }
+
+    void setComponentString(const std::string &components) {
+        static const std::map<std::string, std::bitset<3>> cmasks = {
+            {   "x", std::bitset<3>("001") }, {  "y", std::bitset<3>("010") },
+            {   "z", std::bitset<3>("100") }, { "xy", std::bitset<3>("011") },
+            {  "yz", std::bitset<3>("110") }, { "xz", std::bitset<3>("101") },
+            { "xyz", std::bitset<3>("111") }, {   "", std::bitset<3>("000") } };
+        if (cmasks.count(components) == 0)
+            throw std::runtime_error("invalid component specifier: " + components);
+        m_active = cmasks.at(components);
+    }
+
+    bool hasX()        const { return m_active[0]; }
+    bool hasY()        const { return m_active[1]; }
+    bool hasZ()        const { return m_active[2]; }
+    bool hasAny(size_t dim) const { return count(dim) > 0; }
+    bool has(size_t c) const { return m_active.test(c); }
+    // Number of active components for dimension (2 or 3)
+    size_t count(size_t dim) const {
+        if (dim == 3)      return m_active.count();
+        else if (dim == 2) return m_active.count() - (hasZ() ? 1 : 0);
+        else throw std::runtime_error("Illegal dimension");
+    }
+
+    void set()           { m_active.set(); }
+    void set(size_t c)   { m_active.set(c); }
+    void clear()         { m_active.reset(); }
+    void clear(size_t c) { m_active.reset(c); }
+
+    bool operator==(const ComponentMask &b) const { return m_active == b.m_active; }
+    bool operator!=(const ComponentMask &b) const { return m_active != b.m_active; }
+
+    // Apply the mask to a vector, clearing any component not set in the mask.
+    template<int N>
+    VectorND<N> apply(const VectorND<N> &v) const {
+        VectorND<N> result(v);
+        for (size_t c = 0; c < N; ++c)
+            if (!has(c)) result[c] = 0;
+        return result;
+    }
+
+    std::string componentString() const {
+        std::string result;
+        if (hasX()) result += "x";
+        if (hasY()) result += "y";
+        if (hasZ()) result += "z";
+        return result;
+    }
+private:
+    std::bitset<3> m_active;
+};
 
 template<class _Vec>
 using CondPtr      = std::shared_ptr<BoundaryCondition<_Vec> >;
@@ -59,18 +118,19 @@ struct NeumannCondition : public BoundaryCondition<_Vec> {
 
 template<typename _Vec>
 struct DirichletCondition : public BoundaryCondition<_Vec> {
-    DirichletCondition(const BBox<_Vec> &region, const _Vec &d)
-        : BoundaryCondition<_Vec>(region), displacement(d) { }
-
+    DirichletCondition(const BBox<_Vec> &region, const _Vec &d, const ComponentMask &m)
+        : BoundaryCondition<_Vec>(region), componentMask(m), displacement(d) { }
+    ComponentMask componentMask; // 1 if condition affects component
     _Vec displacement;
     virtual ~DirichletCondition() { }
 };
 
 template<typename _Vec>
 struct TargetCondition : public BoundaryCondition<_Vec> {
-    TargetCondition(const BBox<_Vec> &region, const _Vec &d)
-        : BoundaryCondition<_Vec>(region), displacement(d) { }
+    TargetCondition(const BBox<_Vec> &region, const _Vec &d, const ComponentMask &m)
+        : BoundaryCondition<_Vec>(region), componentMask(m), displacement(d) { }
 
+    ComponentMask componentMask; // 1 if condition affects component
     _Vec displacement;
     virtual ~TargetCondition() { }
 };
@@ -146,9 +206,11 @@ private:
 
 template<typename _Vec>
 struct DirichletVerticesCondition : public BoundaryCondition<_Vec> {
-    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps)
-        : indices(vidxs), displacements(vdisps) { }
+    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps, const ComponentMask &m)
+        : componentMask(m), indices(vidxs), displacements(vdisps) { }
 
+    // All vertices in the condition get the same mask
+    ComponentMask componentMask;
     std::vector<size_t> indices;
     std::vector<_Vec> displacements;
     virtual ~DirichletVerticesCondition() { }
@@ -156,9 +218,11 @@ struct DirichletVerticesCondition : public BoundaryCondition<_Vec> {
 
 template<typename _Vec>
 struct TargetVerticesCondition : public BoundaryCondition<_Vec> {
-    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps)
-        : indices(vidxs), displacements(vdisps) { }
+    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<_Vec> vdisps, const ComponentMask &m)
+        : componentMask(m), indices(vidxs), displacements(vdisps) { }
 
+    // All vertices in the condition get the same mask
+    ComponentMask componentMask;
     std::vector<size_t> indices;
     std::vector<_Vec> displacements;
     virtual ~TargetVerticesCondition() { }

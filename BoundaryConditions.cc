@@ -18,6 +18,8 @@
 #include <fstream>
 #include <stdexcept>
 #include <memory>
+#include <regex>
+#include <map>
 
 using namespace std;
 
@@ -215,6 +217,14 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
 
         BBox<_Vec> region;
         _Vec value;
+        regex xyzFinder("(dirichlet|target)([xyz]{1,3})(.*)");
+        smatch matchResult;
+        ComponentMask cmask("xyz");
+        if (regex_match(type, matchResult, xyzFinder)) {
+            cmask.setComponentString(matchResult[2].str());
+            // Update type. Warning: this invalidates matchResults!!!
+            type = matchResult[1].str() + matchResult[3].str();
+        }
         if (type.find("vertices") != string::npos) {
             parseVertexConditionValues(tcond.get_child("values"), vertex_indices, vertex_displacements);
             assert(vertex_indices.size() == vertex_displacements.size());
@@ -233,10 +243,10 @@ vector<CondPtr<_Vec> > readBoundaryConditions(istream &is, bool &noRigidMotion) 
         if      (type == "pressure")  c = new   NeumannCondition<_Vec>(region, value[0]);
         else if (type == "traction")  c = new   NeumannCondition<_Vec>(region, value);
         else if (type == "force")     c = new   NeumannCondition<_Vec>(region, value, NeumannType::Force);
-        else if (type == "dirichlet") c = new DirichletCondition<_Vec>(region, value);
-        else if (type == "target")    c = new    TargetCondition<_Vec>(region, value);
-        else if (type == "dirichlet vertices") c = new DirichletVerticesCondition<_Vec>(vertex_indices, vertex_displacements);
-        else if (type == "target vertices")    c = new    TargetVerticesCondition<_Vec>(vertex_indices, vertex_displacements);
+        else if (type == "dirichlet") c = new DirichletCondition<_Vec>(region, value, cmask);
+        else if (type == "target")    c = new    TargetCondition<_Vec>(region, value, cmask);
+        else if (type == "dirichlet vertices") c = new DirichletVerticesCondition<_Vec>(vertex_indices, vertex_displacements, cmask);
+        else if (type == "target vertices")    c = new    TargetVerticesCondition<_Vec>(vertex_indices, vertex_displacements, cmask);
         else if (type == "traction elements")  c = new   NeumannElementsCondition<_Vec>(NeumannType::Traction, element_corners, element_values);
         else if (type == "pressure elements")  c = new   NeumannElementsCondition<_Vec>(NeumannType::Pressure, element_corners, element_values);
         else    throw runtime_error(string("Invalid type '") + type + "'");

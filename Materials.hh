@@ -39,7 +39,7 @@ struct Isotropic {
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
 
-    Isotropic() { vars[0] = 1.0; vars[1] = 0.3; }
+    Isotropic() { vars[0] = 200.0; vars[1] = 0.3; }
 
     static const std::string &variableName(size_t i) {
         static const std::vector<std::string> names = { "E", "nu" };
@@ -164,8 +164,8 @@ struct Isotropic {
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratio can't be less than -1, and for robustness we
     //               limit it to -0.75
-    constexpr std::vector<Bounds> upperBounds() const { return {                  Bounds(1,  0.45) }; }
-    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 0.01), Bounds(1, -0.75) }; }
+    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 384),  Bounds(1,  0.4) }; }
+    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 18), Bounds(1, 0.1) }; }
 
     Real vars[numVars];
 };
@@ -276,21 +276,21 @@ struct Orthotropic {
     //               Poisson ratios can't be greater than 0.5
     //               (at 0.5, 3D isotropic lambda becomes Inf, so we avoid it
     //               here too)
-    // Lower bounds: Young's and sheer moduli must be positive and are hard to make
+    // Lower bounds: Young's and shear moduli must be positive and are hard to make
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratios can't be less than -1, and for robustness we
     //               limit them to -0.75
     std::vector<Bounds> upperBounds() const {
         if (_N == 3) return { Bounds(3,  0.45), Bounds(4, 0.45), Bounds(5, 0.45) };
-        else         return { Bounds(2,  0.45) };
+        else         return { Bounds(0, 384), Bounds(1, 384), Bounds(2,  0.45), Bounds(2, 102) };
     }
     std::vector<Bounds> lowerBounds() const {
         if (_N == 3)
              return { Bounds(0,  0.01), Bounds(1,  0.01), Bounds(2,  0.01),
                       Bounds(3, -0.75), Bounds(4, -0.75), Bounds(5, -0.75),
                       Bounds(6,  0.01), Bounds(7,  0.01), Bounds(8,  0.01) };
-        else return { Bounds(0,  0.01), Bounds(1,  0.01),
-                      Bounds(2, -0.75), Bounds(3,  0.01) };
+        else return { Bounds(0,  18), Bounds(1,  18),
+                      Bounds(2, 0.0), Bounds(3,  2) };
     }
 
     Real vars[numVars];

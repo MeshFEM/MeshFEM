@@ -17,6 +17,7 @@
 
 #include <vector>
 #include <Eigen/Dense>
+#include <cassert>
 
 #include "Types.hh"
 #include <ElasticityTensor.hh>
@@ -221,10 +222,8 @@ namespace LinearElasticity {
                 else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_Point> >(cond)) {
                     for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                         auto bv = m_mesh.boundaryNode(i);
-                        if (dc->containsPoint(bv.volumeVertex()->p)) {
-                            bv->hasDirichlet = true;
-                            bv->dirichletDisplacement = dc->displacement;
-                        }
+                        if (dc->containsPoint(bv.volumeVertex()->p))
+                            bv->setDirichlet(dc->componentMask, dc->displacement);
                     }
                     continue;
                 }
@@ -255,8 +254,7 @@ namespace LinearElasticity {
                         auto v = m_mesh.vertex(vi);
                         auto bv = v.boundaryVertex();
                         if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
-                        bv->hasDirichlet = true;
-                        bv->dirichletDisplacement = dvc->displacements[i];
+                        bv->setDirichlet(dvc->componentMask, dvc->displacements[i]);
                     }
                 }
                 else throw illegalCondition;
@@ -267,8 +265,8 @@ namespace LinearElasticity {
             int removeCount = 0;
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                 auto bv = m_mesh.boundaryNode(i);
-                if (bv->hasDirichlet) {
-                    bv->hasDirichlet = false;
+                if (bv->hasDirichlet()) {
+                    bv->dirichletComponents.clear();
                     ++removeCount;
                 }
             }
@@ -361,37 +359,32 @@ namespace LinearElasticity {
             }
         }
 
-        // Remove the rigid motion component from the specified Dirichlet
-        // displacements (leaving all non-Dirichlet-node components untouched
-        void projectOutRigidDirichlet() {
-            VField u_dirichlet(numDoFs());
-            u_dirichlet.clear();
-            std::vector<bool> dofMask(numDoFs(), true);
+        // If not enough Dirichlet conditions are applied, or if some components
+        // aren't constrained, we may need to add partial no-rigid-motion
+        // constraints to make the problem well-posed.
+        void analyzeDirichletPosedness(ComponentMask &needsTranslations,
+                                       ComponentMask &needsRotations) const {
+            std::vector<size_t> counts(_N, 0);
+            needsTranslations.set();
+            size_t totalConstrained = 0;
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                auto bn = m_mesh.boundaryNode(i);
-                if (bn->hasDirichlet) {
-                    size_t dof = DoF(bn.volumeVertex().index());
-                    u_dirichlet(dof) = bn->dirichletDisplacement;
-                    dofMask[dof] = false;
+                auto bv = m_mesh.boundaryNode(i);
+                for (size_t c = 0; c < _N; ++c) {
+                    if (bv->dirichletComponents.has(c)) {
+                        ++counts[c]; ++totalConstrained;
+                    }
+                    needsTranslations.clear(c);
                 }
             }
-            projectOutRigidComponent(u_dirichlet, dofMask);
-            for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                auto bn = m_mesh.boundaryNode(i);
-                if (bn->hasDirichlet) {
-                    size_t dof = DoF(bn.volumeVertex().index());
-                    bn->dirichletDisplacement = u_dirichlet(dof);
-                }
+            needsRotations.clear();
+            if (needsTranslations.hasAny(_N) ||
+                    (totalConstrained < ((_N == 2) ? 3 : 6))) {
+                std::cerr << "WARNING: analysis of Dirichlet rotational posedness not yet implemented!"
+                    << std::endl;
             }
-
-            // In the future, we should make this simply update the constraint
-            // RHS by calling m_system.setConstraintRHS() to avoid
-            // refactorization.
-            m_system.clear();
         }
 
         typedef TripletMatrix<Triplet<Real> > TMatrix;
-
         void assembleConstrainedSystem(TMatrix &C,
                 std::vector<Real> &constraintRHS) const {
             m_assembleStiffnessMatrix(C);
@@ -399,10 +392,19 @@ namespace LinearElasticity {
             if (m_useRigidMotionConstraint) {
                 m_assembleRigidModeMatrix(R);
                 constraintRHS = m_rigidMotionConstraintRHS;
-                // By default we do a no-rigid-motion constraint
+                // We do a rigid-motion = 0 constraint if no RHS is supplied
                 if (constraintRHS.size() == 0) constraintRHS.assign(R.m, 0);
                 if (constraintRHS.size() != R.m)
                     throw std::runtime_error("Invalid rigid motion RHS");
+            }
+            else {
+                ComponentMask needsTranslations, needsRotations;
+                analyzeDirichletPosedness(needsTranslations, needsRotations);
+                if (needsTranslations.hasAny(_N)) {
+                    m_assembleTranslationMatrix(R, needsTranslations);
+                    constraintRHS.assign(needsTranslations.count(_N), 0);
+                }
+                if (needsRotations.hasAny(_N)) throw std::runtime_error("Unimplemented");
             }
 
             m_assembleDirichletConstraint(D, constraintRHS);
@@ -500,49 +502,61 @@ namespace LinearElasticity {
             else assert(false);
         }
 
-        void m_assembleTranslationMatrix(TMatrix &T) const {
+        void m_assembleTranslationMatrix(TMatrix &T,
+                const ComponentMask &components = ComponentMask("xyz")) const {
             // If we've removed some degrees of freedom (e.g. by imposing
             // periodic boundary conditions), the translational constraints only
             // act on the remaining variables.
-            T.init(_N, _N * numDoFs());
-            T.reserve(_N * numDoFs());
+            // "components" determines which components of the DoFs are
+            // constrained.
+            size_t numComps = components.count(_N);
+            T.init(numComps, _N * numDoFs());
+            T.reserve(numComps * numDoFs());
             for (size_t i = 0; i < numDoFs(); ++i) {
-                T.addNZ(0, _N * i    , 1.0);
-                T.addNZ(1, _N * i + 1, 1.0);
-                if (_N == 3) T.addNZ(2, _N * i + 2, 1.0);
+                size_t rows = 0;
+                if (components.hasX())              T.addNZ(rows++, _N * i    , 1.0);
+                if (components.hasY())              T.addNZ(rows++, _N * i + 1, 1.0);
+                if ((_N == 3) && components.hasZ()) T.addNZ(rows++, _N * i + 2, 1.0);
             }
+            assert(T.nnz() == numComps * numDoFs());
         }
 
-        // D is overwritten with Dirichlet constraint matrix
+        // Dirichlet constraint matrix is appended to D,
         // Dirichlet constraint RHS is appended to rhs
         void m_assembleDirichletConstraint(TMatrix &D,
                 std::vector<Real> &rhs) const {
             // Validate and convert to per-periodic DoF constraints.
-            // constraintDisplacements[i] holds the displacement to which DoF
-            // constraintDoFs[i] is constrained.
-            std::vector<_Point> constraintDisplacements;
-            std::vector<int>    constraintDoFs;
+            // constraintDisplacements[i] holds the displacement to which
+            // components constraintComponents[i] of DoF constraintDoFs[i] are
+            // constrained.
+            std::vector<_Point>        constraintDisplacements;
+            std::vector<int>           constraintDoFs;
+            std::vector<ComponentMask> constraintComponents;
             // Index into the above arrays a DoF's constraint, or -1 for none.
             // I.e. if constraintDoFs[i] > -1, the following holds:
             //  constraintDoFs[constraintIndex[i]] = i
             std::vector<int>    constraintIndex(numDoFs(), -1);
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                 auto bv = m_mesh.boundaryNode(i);
-                if (bv->hasDirichlet) {
+                if (bv->hasDirichlet()) {
                     int dof = DoF(bv.volumeVertex().index());
                     if (constraintIndex[dof] < 0) {
                         constraintIndex[dof] = constraintDoFs.size();
                         constraintDoFs.push_back(dof);
                         constraintDisplacements.push_back(
                                 bv->dirichletDisplacement);
+                        constraintComponents.push_back(
+                                bv->dirichletComponents);
                     }
                     else {
-                        std::cout << "Warning: Dirichlet condition on periodic "
+                        std::cerr << "Warning: Dirichlet condition on periodic "
                             << "boundary applies to all identified vertices."
                             << std::endl;
                         auto diff = bv->dirichletDisplacement -
                             constraintDisplacements[constraintIndex[dof]];
-                        if (diff.norm() > 1e-10) {
+                        bool cdiffer = (bv->dirichletComponents !=
+                                        constraintComponents[constraintIndex[dof]]);
+                        if ((diff.norm() > 1e-10) || cdiffer) {
                             throw std::runtime_error("Mismatched Dirichlet "
                                 "constraint on periodic DoF");
                         }
@@ -551,16 +565,24 @@ namespace LinearElasticity {
                 }
             }
 
+            // Count constraint rows (number of constrained components)
             size_t numConstraints = constraintDoFs.size();
-            D.init(_N * numConstraints, _N * numDoFs());
-            D.reserve(_N * numConstraints);
-            rhs.reserve(rhs.size() + _N * numConstraints);
+            size_t constraintRows = 0;
+            for (size_t i = 0; i < numConstraints; ++i)
+                constraintRows += constraintComponents[i].count(_N);
+            if (D.n == 0) D.n = _N * numDoFs();
+            assert(D.n == _N * numDoFs());
+            D.m += constraintRows;
+            size_t origSize = rhs.size();
+            rhs.reserve(origSize + constraintRows);
             for (size_t i = 0; i < numConstraints; ++i) {
                 for (size_t c = 0; c < _N; ++c) {
-                    D.addNZ(_N * i + c, _N * constraintDoFs[i] + c, 1.0);
+                    if (!constraintComponents[i].has(c)) continue;
+                    D.addNZ(rhs.size(), _N * constraintDoFs[i] + c, 1.0);
                     rhs.push_back(constraintDisplacements[i][c]);
                 }
             }
+            assert(rhs.size() == origSize + constraintRows);
         }
 
         // Note: a "DoF" here is actually vector-valued--there are actualy
@@ -605,6 +627,29 @@ namespace LinearElasticity {
     };
     template<class _Material>
     _Material HomogenousMaterialGetter<_Material>::material;
+
+    template<size_t _N>
+    struct BoundaryNodeDataND {
+        BoundaryNodeDataND() { }
+        ComponentMask dirichletComponents;
+        VectorND<_N> dirichletDisplacement;
+        bool hasDirichlet() const { return dirichletComponents.hasAny(_N); }
+        void setDirichlet(ComponentMask mask, const VectorND<_N> &val) {
+            for (size_t c = 0; c < _N; ++c) {
+                if (!mask.has(c)) continue;
+                // If a new component is being constrained, merge
+                if (!dirichletComponents.has(c)) {
+                    dirichletComponents.set(c);
+                    dirichletDisplacement[c] = val[c];
+                }
+                // Otherwise, make sure there isn't a conflict
+                else {
+                    if (std::abs(dirichletDisplacement[c] - val[c]) > 1e-10)
+                        throw std::runtime_error("Conflicting dirichlet displacements.");
+                }
+            }
+        }
+    };
 }
 
 namespace LinearElasticity3D {
@@ -623,11 +668,7 @@ namespace LinearElasticity3D {
     template<class t_ETensorGetter = LinearElasticity::ETensorStoreGetter<3> >
     struct ElementData;
 
-    struct BoundaryNodeData {
-        BoundaryNodeData() : hasDirichlet(false) { }
-        bool hasDirichlet;
-        Vector3D dirichletDisplacement;
-    };
+    typedef LinearElasticity::BoundaryNodeDataND<3> BoundaryNodeData;
 
     struct BoundaryElementData : LinearFEM3D::BoundaryElementData {
         BoundaryElementData() : neumannTraction(Vector3D::Zero()) { }
@@ -670,11 +711,7 @@ namespace LinearElasticity2D {
     template<class t_ETensorGetter = LinearElasticity::ETensorStoreGetter<2> >
     struct ElementData;
 
-    struct BoundaryNodeData {
-        BoundaryNodeData() : hasDirichlet(false) { }
-        bool hasDirichlet;
-        Vector2D dirichletDisplacement;
-    };
+    typedef LinearElasticity::BoundaryNodeDataND<2> BoundaryNodeData;
 
     struct BoundaryElementData : LinearFEM2D::BoundaryElementData<Point2D> {
         typedef LinearFEM2D::BoundaryElementData<Point2D> Base;
