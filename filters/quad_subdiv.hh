@@ -18,6 +18,7 @@
 #ifndef QUAD_SUBDIV_HH
 #define QUAD_SUBDIV_HH
 #include <stdexcept>
+#include "../CollisionGrid.hh"
 
 // quadIdx: index of the quad from which each output element originated
 //          This can be propagated across several subdivisions by passing the
@@ -42,6 +43,10 @@ void quad_subdiv(const std::vector<Vertex>  &inVertices,
     quadIdx.clear(), quadIdx.reserve(4 * inElements.size());
 
     Element newQuad(4);
+
+    // Use collision grid to merge midpoint vertices of adjacent cells.
+    Real epsilon = 1e-8;
+    CollisionGrid<Real, Point3D> cgrid(epsilon);
     for (size_t i = 0; i < inElements.size(); ++i) {
         auto e = inElements[i];
         if (e.size() != 4) throw std::runtime_error("Non-quad encountered.");
@@ -53,18 +58,24 @@ void quad_subdiv(const std::vector<Vertex>  &inVertices,
                          (Point3D(inVertices[e[2]]) + Point3D(inVertices[e[3]])) / 2,
                          (Point3D(inVertices[e[3]]) + Point3D(inVertices[e[0]])) / 2 };
         Point3D center = (m[0] + m[2]) / 2;
-        size_t voffset = outVertices.size();
-        // center is vertex "voffset", followed by m0, m1, ...
-        outVertices.push_back(Vertex(center));
-        for (size_t c = 0; c < 4; ++c)
-            outVertices.push_back(Vertex(m[c]));
+        int midx[4];
+        for (size_t c = 0; c < 4; ++c) {
+            midx[c] = cgrid.getClosestPoint(m[c], epsilon).first;
+            if (midx[c] < 0) {
+                midx[c] = outVertices.size();
+                outVertices.push_back(m[c]);
+                cgrid.addPoint(m[c], midx[c]);
+            }
+        }
+        size_t centerIdx = outVertices.size();
+        outVertices.push_back(center);
 
         // Generate all new quads in ccw order starting at original vertex.
-        newQuad[2] = voffset; // center is always the 3rd vertex
+        newQuad[2] = centerIdx; // center is always the 3rd vertex
         for (size_t q = 0; q < 4; ++q) {
             newQuad[0] = e[q];
-            newQuad[1] = (voffset + 1) + q;
-            newQuad[3] = (voffset + 1) + (q + 3) % 4;
+            newQuad[1] = midx[q];
+            newQuad[3] = midx[(q + 3) % 4];
             outElements.push_back(newQuad);
             quadIdx.push_back(oldQuadIdx[i]);
         }
