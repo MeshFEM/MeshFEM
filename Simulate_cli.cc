@@ -182,14 +182,14 @@ void execute(const po::variables_map &args,
     writer.addField("u",      u, MSHFieldWriter::PER_NODE);
     writer.addField("strain", e, MSHFieldWriter::PER_ELEMENT);
     writer.addField("stress", s, MSHFieldWriter::PER_ELEMENT);
-    // Write mat parameter fields
-    SField Ex(numElements), Ey(numElements), nuYX(numElements), mu(numElements);
-    for (size_t i = 0; i < sim.mesh().numElements(); ++i)
-        sim.mesh().element(i)->E().getOrthotropic2D(Ex[i], Ey[i], nuYX[i], mu[i]);
-    writer.addField("E_x",    Ex,    MSHFieldWriter::PER_ELEMENT);
-    writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
-    writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
-    writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
+    // // Write mat parameter fields
+    // SField Ex(numElements), Ey(numElements), nuYX(numElements), mu(numElements);
+    // for (size_t i = 0; i < sim.mesh().numElements(); ++i)
+    //     sim.mesh().element(i)->E().getOrthotropic2D(Ex[i], Ey[i], nuYX[i], mu[i]);
+    // writer.addField("E_x",    Ex,    MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

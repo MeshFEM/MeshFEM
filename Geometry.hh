@@ -189,7 +189,10 @@ private:
 // Pairs that compare equal if they hold the same 2 integers regardless of
 // order. Useful for representing edges while determining half-edge pairs.
 struct UnorderedPair {
-    UnorderedPair(int v0, int v1) {
+    UnorderedPair() : vmin(-1), vmax(-1) { }
+    UnorderedPair(int v0, int v1) { set(v0, v1); }
+
+    void set(int v0, int v1) {
         vmin = std::min(v0, v1);
         vmax = std::max(v0, v1);
     }

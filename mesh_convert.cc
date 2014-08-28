@@ -5,6 +5,7 @@
 #include "util.h"
 #include "MSHFieldWriter.hh"
 #include "filters/subdivide.hh"
+#include "filters/extrude.hh"
 #include "filters/quad_tri_subdiv.hh"
 #include "filters/quad_subdiv.hh"
 #include "filters/quad_subdiv_high_aspect.hh"
@@ -49,6 +50,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     visible_opts.add_options()("help", "Produce this help message")
         ("info,i",      "Get mesh information")
         ("boundary,b",  "Extract boundary surface")
+        ("extrude,e", po::value<double>(),  "Extrude a planar mesh in its normal direction by a distance.")
         ("Sx", po::value<double>(), "Scale x coordinates")
         ("Sy", po::value<double>(), "Scale y coordinates")
         ("Sz", po::value<double>(), "Scale z coordinates")
@@ -194,6 +196,17 @@ int main(int argc, const char *argv[])
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);
         }
+        else if (args.count("extrude")) {
+            extrude(mesh, args["extrude"].as<double>(), inVertices, inElements);
+            vector<size_t> dummy;
+            while (quad_subdiv_high_aspect(inVertices, inElements,
+                        outVertices, outElements,
+                        dummy, args["quadAspectThreshold"].as<double>())) {
+                inVertices.swap(outVertices);
+                inElements.swap(outElements);
+            }
+            quad_tri_subdiv(inVertices, inElements, outVertices, outElements, dummy);
+        }
         else {
             // Output is the unmodified triangle mesh
             outVertices = inVertices;
@@ -206,8 +219,8 @@ int main(int argc, const char *argv[])
 
         vector<size_t> quadIdx;
         if (args.count("quadAspectSubdiv")) {
-            while (quad_subdiv_high_aspect(inVertices, inElements, outVertices,
-                        outElements, quadIdx, true,
+            while (quad_subdiv_high_aspect(inVertices, inElements,
+                        outVertices, outElements, quadIdx,
                         args["quadAspectThreshold"].as<double>())) {
                 inVertices.swap(outVertices);
                 inElements.swap(outElements);
