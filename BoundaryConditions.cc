@@ -14,6 +14,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <fstream>
 #include <stdexcept>
@@ -229,14 +230,30 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         BBox<VectorND<_N>> region;
         VectorND<_N> value;
         ExpressionVector exprVec; // filled out if expression vector is provided
-        regex xyzFinder("(dirichlet|target)([xyz]{1,3})(.*)");
-        smatch matchResult;
+        // Regex doesn't work on g++4.8... :(
+        // regex xyzFinder("(dirichlet|target)([xyz]{1,3})(.*)");
+        // smatch matchResult;
+        // if (regex_match(type, matchResult, xyzFinder)) {
+        //     cmask.setComponentString(matchResult[2].str());
+        //     // Update type. Warning: this invalidates matchResults!!!
+        //     type = matchResult[1].str() + matchResult[3].str();
+        // }
         ComponentMask cmask("xyz");
-        if (regex_match(type, matchResult, xyzFinder)) {
-            cmask.setComponentString(matchResult[2].str());
-            // Update type. Warning: this invalidates matchResults!!!
-            type = matchResult[1].str() + matchResult[3].str();
+        string prefix;
+        if      ((prefix = type.substr(0, 9)) == "dirichlet") type = type.substr(9);
+        else if ((prefix = type.substr(0, 6)) == "target")    type = type.substr(6);
+        else (prefix = "");
+        if (prefix.size()) {
+            size_t len = 0;
+            for (char c : type) {
+                if (!(boost::is_any_of("xyz")(c))) break;
+                ++len;
+            }
+            if (len > 3) throw runtime_error("invalid mask");
+            cmask.setComponentString(type.substr(0, len));
+            type = prefix + type.substr(len);
         }
+        
         if (type.find("vertices") != string::npos) {
             parseVertexConditionValues<_N>(tcond.get_child("values"), vertex_indices, vertex_displacements);
             assert(vertex_indices.size() == vertex_displacements.size());
