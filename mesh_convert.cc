@@ -39,7 +39,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
         ("inFile",  po::value<string>(), "input mesh file")
-        ("outFile",  po::value<string>()->default_value(""), "output mesh file")
+        ("outFile",  po::value<string>(), "output mesh file")
         ;
 
     po::positional_options_description p;
@@ -100,7 +100,8 @@ int main(int argc, const char *argv[])
     vector<MeshIO::IOElement> inElements, outElements;
 
     auto type = load(args["inFile"].as<string>(), inVertices, inElements);
-    string outPath = args["outFile"].as<string>();
+    string outPath;
+    if (args.count("outFile")) outPath = args["outFile"].as<string>();
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 
@@ -259,9 +260,7 @@ int main(int argc, const char *argv[])
         throw runtime_error("Unrecognized mesh type.");
     }
 
-    if (outPath != "") {
-        save(outPath, outVertices, outElements); 
-    }
+    if (outPath != "") save(outPath, outVertices, outElements); 
 
     return 0;
 }
