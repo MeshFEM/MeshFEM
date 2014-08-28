@@ -27,7 +27,7 @@ namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_POLY = 3, FMT_NODE_ELE = 4,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
-    typedef enum { MESH_TRI, MESH_TET, MESH_QUAD, MESH_GUESS, MESH_INVALID } MeshType;
+    typedef enum { MESH_TRI, MESH_TET, MESH_QUAD, MESH_TRI_QUAD, MESH_GUESS, MESH_INVALID } MeshType;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex

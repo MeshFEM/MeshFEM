@@ -212,7 +212,7 @@ int main(int argc, const char *argv[])
     size_t dim;
     if      (type == MeshIO::MESH_TET) dim = 3;
     else if (type == MeshIO::MESH_TRI) dim = 2;
-    else    throw std::runtime_error("Mesh must be triangle or tet.");
+    else    throw std::runtime_error("Mesh must be pure triangle or tet.");
 
     // Look up and run appropriate homogenizer instantiation.
     auto exec = (dim == 3) ? execute<3> : execute<2>;

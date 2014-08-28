@@ -184,6 +184,8 @@ TetMesh(const Tets &tets, size_t nVertices) {
     // Corner Creation
     V.resize(4 * tets.size());
     for (size_t t = 0; t < tets.size(); ++t) {
+        if (tets[t].size() != 4)
+            throw std::runtime_error("Mesh must be pure tet");
         V[4 * t + 0] = tets[t][0];
         V[4 * t + 1] = tets[t][1];
         V[4 * t + 2] = tets[t][2];

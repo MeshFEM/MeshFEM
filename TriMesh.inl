@@ -220,6 +220,8 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // Corner Creation
     V.resize(3 * tris.size());
     for (size_t t = 0; t < tris.size(); ++t) {
+        if (tris[t].size() != 3)
+            throw std::runtime_error("Mesh must be pure triangle");
         V[3 * t + 0] = tris[t][0];
         V[3 * t + 1] = tris[t][1];
         V[3 * t + 2] = tris[t][2];

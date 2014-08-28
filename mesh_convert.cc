@@ -7,6 +7,7 @@
 #include "filters/subdivide.hh"
 #include "filters/quad_tri_subdiv.hh"
 #include "filters/quad_subdiv.hh"
+#include "filters/quad_subdiv_high_aspect.hh"
 
 #include <limits>
 #include <iostream>
@@ -49,7 +50,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     visible_opts.add_options()("help", "Produce this help message")
         ("info,i",      "Get mesh information")
         ("boundary,b",  "Extract boundary surface")
+        ("Sx", po::value<double>(), "Scale x coordinates")
+        ("Sy", po::value<double>(), "Scale y coordinates")
+        ("Sz", po::value<double>(), "Scale z coordinates")
         ("subdivide,s", "Subdivide geometry (surface mesh only)")
+        ("quadAspectSubdiv,A", "Subdivide rectangular quads their aspect ratios all improve")
+        ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
         ("quadSubdivideAndTriangulate,q", po::value<size_t>(), "Run quad subdivision for #iterations and then triangulate symmetrically.")
         ;
 
@@ -96,6 +102,13 @@ int main(int argc, const char *argv[])
     string outPath = args["outFile"].as<string>();
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
+
+    // Apply coordinate scalings
+    for (size_t i = 0; i < inVertices.size(); ++i) {
+        if (args.count("Sx")) inVertices[i][0] *= args["Sx"].as<double>();
+        if (args.count("Sy")) inVertices[i][1] *= args["Sy"].as<double>();
+        if (args.count("Sz")) inVertices[i][2] *= args["Sz"].as<double>();
+    }
 
     if (type == MeshIO::MESH_TET) {
         typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, VertexData,
@@ -188,28 +201,46 @@ int main(int argc, const char *argv[])
             outElements = inElements;
         }
     }
-    else if (type == MeshIO::MESH_QUAD) {
+    else if ((type == MeshIO::MESH_QUAD) || (type == MeshIO::MESH_TRI_QUAD)) {
         if (args.count("boundary"))  { throw runtime_error("Quad boundary extraction unsupported"); }
         if (args.count("subdivide")) { throw runtime_error("Quad subdivision (only) unsupported"); }
 
+        vector<size_t> quadIdx;
+        if (args.count("quadAspectSubdiv")) {
+            while (quad_subdiv_high_aspect(inVertices, inElements, outVertices,
+                        outElements, quadIdx, true,
+                        args["quadAspectThreshold"].as<double>())) {
+                inVertices.swap(outVertices);
+                inElements.swap(outElements);
+            }
+            inVertices.swap(outVertices);
+            inElements.swap(outElements);
+        }
         if (args.count("quadSubdivideAndTriangulate")) {
+            // Operate on the output of previous filter, if one was run.
+            if (outElements.size() > 0) {
+                inVertices.swap(outVertices);
+                inElements.swap(outElements);
+            }
             size_t nSubdivs = args["quadSubdivideAndTriangulate"].as<size_t>();
-            vector<size_t> quadIdx;
             for (size_t i = 0; i < nSubdivs; ++i) {
                 quad_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
                 inVertices.swap(outVertices);
                 inElements.swap(outElements);
             }
             quad_tri_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
-            if (fileExtension(outPath) == ".msh") {
-                MSHFieldWriter writer(outPath, outVertices, outElements);
-                ScalarField<Real> cellIndex(outElements.size());
-                for (size_t i = 0; i < outElements.size(); ++i)
-                    cellIndex[i] = quadIdx[i];
-                writer.addField("cell_index", cellIndex,
-                                MSHFieldWriter::PER_ELEMENT);
-                exit(0);
-            }
+        }
+
+        // Write mesh with cell_index field if the output is .msh
+        if ((fileExtension(outPath) == ".msh") &&
+                (quadIdx.size() == outElements.size())) {
+            MSHFieldWriter writer(outPath, outVertices, outElements);
+            ScalarField<Real> cellIndex(outElements.size());
+            for (size_t i = 0; i < outElements.size(); ++i)
+                cellIndex[i] = quadIdx[i];
+            writer.addField("cell_index", cellIndex,
+                            MSHFieldWriter::PER_ELEMENT);
+            exit(0);
         }
     }
     else {

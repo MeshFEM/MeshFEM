@@ -276,14 +276,20 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &vertices,
     elements.resize(eSize);
     for (size_t i = 0; is && (i < eSize); ++i)
         is >> elements[i];
-
-    size_t polyVertices = elements[0].size();
-    for (size_t i = 0; i < eSize; ++i) {
-        if (elements[i].size() != polyVertices)
-            throw std::runtime_error("All elements must have same number of vertices.");
-    }
-
     if (!is) throw std::runtime_error("Error in load: bad i/o");
+
+    // Validate polygon sizes--detect mixed tri/quad
+    size_t polyVertices = elements.at(0).size();
+    std::runtime_error uns("Unsupported element size");
+    if (polyVertices < 3 || polyVertices > 4) throw uns;
+    bool mixed = false;
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (elements[i].size() != polyVertices) {
+            if (elements[i].size() < 3 || elements[i].size() > 4) throw uns;
+            mixed = true;
+        }
+    }
+    if (mixed) return MESH_TRI_QUAD;
 
     // Only surface meshes are supported by OFF
     return (polyVertices == 3) ? MESH_TRI
@@ -340,12 +346,18 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
         else { /* Ignore everything else... */ }
     }
 
-    // Validate polygon sizes
+    // Validate polygon sizes--detect mixed tri/quad
     size_t polyVertices = elements.at(0).size();
+    std::runtime_error uns("Unsupported element size");
+    if (polyVertices < 3 || polyVertices > 4) throw uns;
+    bool mixed = false;
     for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i].size() != polyVertices)
-            throw std::runtime_error("All elements must have same number of vertices.");
+        if (elements[i].size() != polyVertices) {
+            if (elements[i].size() < 3 || elements[i].size() > 4) throw uns;
+            mixed = true;
+        }
     }
+    if (mixed) return MESH_TRI_QUAD;
 
     // Only surface meshes are supported by OFF
     return (polyVertices == 3) ? MESH_TRI

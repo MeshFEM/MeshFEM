@@ -44,20 +44,21 @@ void quad_subdiv(const std::vector<Vertex>  &inVertices,
 
     Element newQuad(4);
 
-    // Use collision grid to merge midpoint vertices of adjacent cells.
+    // Use collision grid to merge new vertices with those from adjacent cells
     Real epsilon = 1e-8;
     CollisionGrid<Real, Point3D> cgrid(epsilon);
     for (size_t i = 0; i < inElements.size(); ++i) {
         auto e = inElements[i];
         if (e.size() != 4) throw std::runtime_error("Non-quad encountered.");
 
-        assert(e.size() == 4);
         // Midpoint vertices
         Point3D m[4] = { (Point3D(inVertices[e[0]]) + Point3D(inVertices[e[1]])) / 2,
                          (Point3D(inVertices[e[1]]) + Point3D(inVertices[e[2]])) / 2,
                          (Point3D(inVertices[e[2]]) + Point3D(inVertices[e[3]])) / 2,
                          (Point3D(inVertices[e[3]]) + Point3D(inVertices[e[0]])) / 2 };
+
         Point3D center = (m[0] + m[2]) / 2;
+        // Generate/merge new midpoint vertices.
         int midx[4];
         for (size_t c = 0; c < 4; ++c) {
             midx[c] = cgrid.getClosestPoint(m[c], epsilon).first;

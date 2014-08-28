@@ -26,7 +26,8 @@ void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
                      const std::vector<Element> &inElements,
                            std::vector<Vertex>  &outVertices,
                            std::vector<Element> &outElements,
-                           std::vector<size_t> &quadIdx)
+                           std::vector<size_t> &quadIdx,
+                           bool ignoreNonQuads = true)
 {
     outVertices = inVertices;
     outElements.clear(), outElements.reserve(4 * inElements.size());
@@ -43,7 +44,14 @@ void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
     Element newTri(3);
     for (size_t i = 0; i < inElements.size(); ++i) {
         auto e = inElements[i];
-        if (e.size() != 4) throw std::runtime_error("Non-quad encountered.");
+        if (e.size() != 4) {
+            if (ignoreNonQuads) {
+                quadIdx.push_back(oldQuadIdx[i]);
+                outElements.push_back(e);
+                continue;
+            }
+            throw std::runtime_error("Non-quad encountered.");
+        }
         Point3D center = inVertices[e[0]];
         center += Point3D(inVertices[e[1]]);
         center += Point3D(inVertices[e[2]]);
