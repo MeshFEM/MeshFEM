@@ -125,7 +125,8 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     shared_ptr<MField> matField(new MField(inElements.size(), matIdxForElement));
 
     bool noRigidMotion;
-    auto bconds = readBoundaryConditions<_N>(bcPath, noRigidMotion);
+    auto bconds = readBoundaryConditions<_N>(bcPath,
+            BBox<VectorND<_N>>(inVertices), noRigidMotion);
 
     Opt matOpt(inElements, inVertices, matField, bconds, noRigidMotion);
 

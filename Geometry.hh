@@ -22,6 +22,12 @@ struct BBox {
     BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
     BBox(const Vector &minCorner, const Vector &maxCorner)
         : minCorner(minCorner), maxCorner(maxCorner) { }
+    template<class _VectorCollection>
+    BBox(const _VectorCollection &vectors) {
+        minCorner = maxCorner = Vector::Zero();
+        for (const auto &v : vectors)
+            unionPoint(v);
+    }
 
     Vector minCorner, maxCorner;
 

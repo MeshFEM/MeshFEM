@@ -195,14 +195,16 @@ void writeBoundaryConditions(ostream &os,
 }
 
 template<size_t _N>
-vector<CondPtr<_N> > readBoundaryConditions(const string &cpath, bool &noRigidMotion) {
+vector<CondPtr<_N> > readBoundaryConditions(const string &cpath,
+        const BBox<VectorND<_N>> &bbox, bool &noRigidMotion) {
     ifstream inFile(cpath);
     if (!inFile.is_open()) throw runtime_error("Couldn't open BC file");
-    return readBoundaryConditions<_N>(inFile, noRigidMotion);
+    return readBoundaryConditions<_N>(inFile, bbox, noRigidMotion);
 }
 
 template<size_t _N>
-vector<CondPtr<_N> > readBoundaryConditions(istream &is, bool &noRigidMotion) {
+vector<CondPtr<_N> > readBoundaryConditions(istream &is,
+        const BBox<VectorND<_N>> &bbox, bool &noRigidMotion) {
     ptree pt;
     read_json(is, pt);
 
@@ -244,8 +246,17 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is, bool &noRigidMotion) {
             assert(element_corners.size() == element_values.size());
         }
         else {
-            region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.minCorner")));
-            region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.maxCorner")));
+            if (tcond.count("box")) {
+                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.minCorner")));
+                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.maxCorner")));
+            }
+            else if (tcond.count("box%")) {
+                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box%.minCorner")));
+                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box%.maxCorner")));
+                // Convert relative coordinates to absolute coordinates
+                region.minCorner = bbox.interpolatePoint(region.minCorner);
+                region.maxCorner = bbox.interpolatePoint(region.maxCorner);
+            }
             // Try to parse as plain vector first
             try {
                 value        = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("value")));
@@ -297,12 +308,12 @@ template void writeBoundaryConditions<3>(const string &cpath,
                            const vector<ConstCondPtr<3> > &conds);
 template void writeBoundaryConditions<3>(ostream &os,
                            const vector<ConstCondPtr<3> > &conds);
-template vector<CondPtr<3> > readBoundaryConditions<3>(const string &cpath, bool &noRigidMotion);
-template vector<CondPtr<3> > readBoundaryConditions<3>(istream &is,         bool &noRigidMotion); 
+template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &);
+template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &); 
 
 template void writeBoundaryConditions<2>(const string &cpath,
                            const vector<ConstCondPtr<2> > &conds);
 template void writeBoundaryConditions<2>(ostream &os,
                            const vector<ConstCondPtr<2> > &conds);
-template vector<CondPtr<2> > readBoundaryConditions<2>(const string &cpath, bool &noRigidMotion);
-template vector<CondPtr<2> > readBoundaryConditions<2>(istream &is,         bool &noRigidMotion); 
+template vector<CondPtr<2> > readBoundaryConditions<2>(const string &, const BBox<VectorND<2>> &, bool &);
+template vector<CondPtr<2> > readBoundaryConditions<2>(istream &,      const BBox<VectorND<2>> &, bool &); 

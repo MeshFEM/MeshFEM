@@ -163,7 +163,8 @@ void execute(const po::variables_map &args,
     }
 
     bool noRigidMotion;
-    auto bconds = readBoundaryConditions<_N>(bcPath, noRigidMotion);
+    auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(),
+                                             noRigidMotion);
     sim.applyBoundaryConditions(bconds);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
 

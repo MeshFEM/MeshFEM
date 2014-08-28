@@ -278,8 +278,8 @@ struct TargetVerticesCondition : public BoundaryCondition<_N> {
 ////////////////////////////////////////////////////////////////////////////////
 template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_N> > &conds);
 template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, bool &noRigidMotion);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation

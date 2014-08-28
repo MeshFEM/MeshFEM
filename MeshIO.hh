@@ -55,6 +55,7 @@ namespace MeshIO {
 
         operator const Point3D &() const { return point; }
         operator       Point3D &()       { return point; }
+        operator Point2D() const { return truncateFrom3D<Point2D>(point); }
     };
 
     ////////////////////////////////////////////////////////////////////////////
