@@ -115,10 +115,8 @@ bool quad_subdiv_high_aspect(
     // 2) BFS-style conflict resolution
     std::queue<QSEdgeData *> edgeQueue;
     for (auto &entry :  edgeData) {
-        if (entry.second.wantSplitCount == 1) {
-            assert(elemData.at(entry.second.splittingElementIdx).wantsSplit());
+        if (entry.second.wantSplitCount == 1)
             edgeQueue.push(&(entry.second));
-        }
     }
     while (!edgeQueue.empty()) {
         QSEdgeData *ed = edgeQueue.front();
