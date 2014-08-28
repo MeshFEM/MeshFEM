@@ -34,7 +34,6 @@ void usage(int exitVal, const po::options_description &visible_opts) {
     exit(exitVal);
 }
 
-
 po::variables_map parseCmdLine(int argc, const char *argv[]) {
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
@@ -54,7 +53,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("Sy", po::value<double>(), "Scale y coordinates")
         ("Sz", po::value<double>(), "Scale z coordinates")
         ("subdivide,s", "Subdivide geometry (surface mesh only)")
-        ("quadAspectSubdiv,A", "Subdivide rectangular quads their aspect ratios all improve")
+        ("quadAspectSubdiv,A", "Split rectangular quads until aspect ratios are below threshold")
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
         ("quadSubdivideAndTriangulate,q", po::value<size_t>(), "Run quad subdivision for #iterations and then triangulate symmetrically.")
         ;
