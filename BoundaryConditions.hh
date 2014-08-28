@@ -11,6 +11,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef BOUNDARYCONDITIONS_HH
 #define BOUNDARYCONDITIONS_HH
+#include "CollisionGrid.hh"
+#include "Geometry.hh"
+#include "Types.hh"
+#include "ExpressionVector.hh"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -22,10 +26,6 @@
 #include <iostream>
 #include <bitset>
 #include <cassert>
-#include "CollisionGrid.hh"
-#include "Geometry.hh"
-#include "Types.hh"
-#include "ExpressionVector.hh"
 
 template<size_t _N>
 struct BoundaryCondition {

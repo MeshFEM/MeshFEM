@@ -315,5 +315,5 @@ template void writeBoundaryConditions<2>(const string &cpath,
                            const vector<ConstCondPtr<2> > &conds);
 template void writeBoundaryConditions<2>(ostream &os,
                            const vector<ConstCondPtr<2> > &conds);
-template vector<CondPtr<2> > readBoundaryConditions<2>(const string &, const BBox<VectorND<2>> &, bool &);
-template vector<CondPtr<2> > readBoundaryConditions<2>(istream &,      const BBox<VectorND<2>> &, bool &); 
+template vector<CondPtr<2> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<2> > &bbox, bool &noRigidMotion);
+template vector<CondPtr<2> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<2> > &bbox, bool &noRigidMotion);

@@ -11,8 +11,8 @@
 #ifndef GEOMETRY_HH
 #define GEOMETRY_HH
 
-#include <vector>
 #include "Types.hh"
+#include <vector>
 
 template<typename _Vector>
 struct BBox {

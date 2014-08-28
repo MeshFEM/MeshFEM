@@ -16,12 +16,13 @@
 #ifndef MESH_IO_HH
 #define MESH_IO_HH
 
+#include "Geometry.hh"
+#include "Types.hh"
+
 #include <string>
 #include <fstream>
 #include <stdexcept>
 #include <iomanip>
-#include "Geometry.hh"
-#include "Types.hh"
 
 namespace MeshIO {
     /** Supported file formats */
@@ -194,7 +195,7 @@ namespace MeshIO {
             typedef IOVertex  Vertex;
             typedef IOElement Element;
 
-            MeshIO_MSH() : m_binary(false) { }
+            MeshIO_MSH() : m_binary(true) { }
 
             void getElementInfo(MeshType meshType, int &elementType,
                                 size_t &numCorners) {
