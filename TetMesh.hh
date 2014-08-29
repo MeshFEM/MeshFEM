@@ -93,6 +93,11 @@ public:
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
 
+    size_t numElements()         const { return numTets(); }
+    size_t numNodes()            const { return numVertices(); }
+    size_t numBoundaryElements() const { return numBoundaryFaces(); }
+    size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
+
     // Entity handles (declared out-of-line in TetMesh.inl).
     template<template<class, class, class, class> class _HType> class   VHandle;
     template<template<class, class, class, class> class _HType> class  HFHandle;
@@ -123,6 +128,16 @@ public:
     ConstBoundaryHalfEdgeHandle boundaryHalfEdge(size_t i) const { return ConstBoundaryHalfEdgeHandle(i, *this); }
              BoundaryFaceHandle     boundaryFace(size_t i)       { return          BoundaryFaceHandle(i, *this); }
         ConstBoundaryFaceHandle     boundaryFace(size_t i) const { return     ConstBoundaryFaceHandle(i, *this); }
+
+              VertexHandle                  node(size_t i)       { return vertex(i); }
+         ConstVertexHandle                  node(size_t i) const { return vertex(i); }
+              TetHandle                  element(size_t i)       { return tet(i); }
+         ConstTetHandle                  element(size_t i) const { return tet(i); }
+              BoundaryVertexHandle  boundaryNode(size_t i)       { return boundaryVertex(i); }
+         ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return boundaryVertex(i); }
+              BoundaryFaceHandle boundaryElement(size_t i)       { return boundaryFace(i); }
+         ConstBoundaryFaceHandle boundaryElement(size_t i) const { return boundaryFace(i); }
+
 
     //////////////////////////////////////////////////////////////////////////
     // Container iterator access

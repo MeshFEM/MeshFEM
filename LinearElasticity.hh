@@ -385,13 +385,12 @@ namespace LinearElasticity {
                 for (size_t c = 0; c < _N; ++c) {
                     if (bv->dirichletComponents.has(c)) {
                         ++counts[c]; ++totalConstrained;
+                        needsTranslations.clear(c);
                     }
-                    needsTranslations.clear(c);
                 }
             }
             needsRotations.clear();
-            if (needsTranslations.hasAny(_N) ||
-                    (totalConstrained < ((_N == 2) ? 3 : 6))) {
+            if (needsTranslations.hasAny(_N) || (totalConstrained < ((_N == 2) ? 3 : 6))) {
                 std::cerr << "WARNING: analysis of Dirichlet rotational posedness not yet implemented!"
                     << std::endl;
             }
@@ -428,7 +427,7 @@ namespace LinearElasticity {
             // [ D      ] [lambda_D ] = [ D ]
             //  --- C ---   -- u_l --    -rhs-
             // Append boolean arguments:        pad   transpose
-            if (m_useRigidMotionConstraint) {
+            if (R.m > 0) {
                 C.append(R, TMatrix::APPEND_BELOW, false, false);
                 C.append(R, TMatrix::APPEND_RIGHT,  true,  true);
             }
@@ -534,7 +533,7 @@ namespace LinearElasticity {
             assert(T.nnz() == numComps * numDoFs());
         }
 
-        // Dirichlet constraint matrix is appended to D,
+        // Dirichlet constraint matrix is put in D
         // Dirichlet constraint RHS is appended to rhs
         void m_assembleDirichletConstraint(TMatrix &D,
                 std::vector<Real> &rhs) const {
@@ -583,15 +582,15 @@ namespace LinearElasticity {
             size_t constraintRows = 0;
             for (size_t i = 0; i < numConstraints; ++i)
                 constraintRows += constraintComponents[i].count(_N);
-            if (D.n == 0) D.n = _N * numDoFs();
-            assert(D.n == _N * numDoFs());
-            D.m += constraintRows;
+            assert((D.m == 0) && (D.n == 0)); // just checking-
+            D.init(constraintRows, _N * numDoFs());
             size_t origSize = rhs.size();
             rhs.reserve(origSize + constraintRows);
+            size_t row = 0;
             for (size_t i = 0; i < numConstraints; ++i) {
                 for (size_t c = 0; c < _N; ++c) {
                     if (!constraintComponents[i].has(c)) continue;
-                    D.addNZ(rhs.size(), _N * constraintDoFs[i] + c, 1.0);
+                    D.addNZ(row++, _N * constraintDoFs[i] + c, 1.0);
                     rhs.push_back(constraintDisplacements[i][c]);
                 }
             }

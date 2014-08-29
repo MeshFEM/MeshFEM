@@ -17,10 +17,11 @@ template<class _HalfEdge, class Vertex, class Element>
 void extrude(_HalfEdge &mesh, Real dist, std::vector<Vertex>
              &outVertices, std::vector<Element> &outElements) {
     // Choose extrusion direction based on first triangle's normal.
+    // (extrude in negative normal direction)
     auto firstTri = mesh.tri(0);
     Vector3D displacement = (firstTri.vertex(2)->p - firstTri.vertex(1)->p).
                        cross(firstTri.vertex(0)->p - firstTri.vertex(1)->p);
-    displacement *= dist / displacement.norm();
+    displacement *= -dist / displacement.norm();
 
     size_t nV = mesh.numVertices();
     outVertices.resize(2 * nV); outElements.clear();

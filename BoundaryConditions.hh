@@ -89,6 +89,14 @@ public:
         if (hasZ()) result += "z";
         return result;
     }
+
+    friend std::ostream &operator<<(std::ostream &os, const ComponentMask &cm) {
+        if (cm.hasX()) os << "x";
+        if (cm.hasY()) os << "y";
+        if (cm.hasZ()) os << "z";
+        return os;
+    }
+
 private:
     std::bitset<3> m_active;
 };

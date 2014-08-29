@@ -97,14 +97,6 @@ namespace MeshIO {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    /*! Reads data line from ASCII file (skipping whitespace and comment lines)
-    //  @param[in]  is   input stream to read from
-    //  @param[out] line string output to hold data line
-    //  @return     reference to input stream for operator chaining
-    *///////////////////////////////////////////////////////////////////////////
-    std::istream &getDataLine(std::istream &is, std::string &line);
-
-    ////////////////////////////////////////////////////////////////////////////
     /*! IOVertex ASCII input  (for implementing OFF I/O)
     //  @param[in]  is      input stream
     //  @param[out] p       vertex to read

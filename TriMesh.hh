@@ -51,6 +51,11 @@ public:
     size_t numTris()          const { return V.size() / 3; }
     size_t numFaces()         const { return numTris(); }
 
+    size_t numElements()         const { return numTris(); }
+    size_t numNodes()            const { return numVertices(); }
+    size_t numBoundaryElements() const { return numBoundaryEdges(); }
+    size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
+
     size_t numBoundaryVertices() const { return bV.size(); }
     size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
 
@@ -82,6 +87,16 @@ public:
     ConstBoundaryVertexHandle boundaryVertex(size_t i) const { return ConstBoundaryVertexHandle(i, *this); }
            BoundaryEdgeHandle   boundaryEdge(size_t i)       { return        BoundaryEdgeHandle(i, *this); }
       ConstBoundaryEdgeHandle   boundaryEdge(size_t i) const { return   ConstBoundaryEdgeHandle(i, *this); }
+
+          VertexHandle                  node(size_t i)       { return vertex(i); }
+     ConstVertexHandle                  node(size_t i) const { return vertex(i); }
+          TriHandle                  element(size_t i)       { return tri(i); }
+     ConstTriHandle                  element(size_t i) const { return tri(i); }
+          BoundaryVertexHandle  boundaryNode(size_t i)       { return boundaryVertex(i); }
+     ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return boundaryVertex(i); }
+          BoundaryEdgeHandle boundaryElement(size_t i)       { return boundaryEdge(i); }
+     ConstBoundaryEdgeHandle boundaryElement(size_t i) const { return boundaryEdge(i); }
+
 
     // Higher-level entity access
          HalfEdgeHandle halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }

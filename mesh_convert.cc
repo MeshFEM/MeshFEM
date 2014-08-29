@@ -4,6 +4,7 @@
 #include "MeshIO.hh"
 #include "util.h"
 #include "MSHFieldWriter.hh"
+#include "JSFieldWriter.hh"
 #include "filters/subdivide.hh"
 #include "filters/extrude.hh"
 #include "filters/quad_tri_subdiv.hh"
@@ -50,7 +51,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     visible_opts.add_options()("help", "Produce this help message")
         ("info,i",      "Get mesh information")
         ("boundary,b",  "Extract boundary surface")
-        ("extrude,e", po::value<double>(),  "Extrude a planar mesh in its normal direction by a distance.")
+        ("extrude,e", po::value<double>(),  "Extrude a planar mesh in its (negative) normal direction by a distance.")
         ("Sx", po::value<double>(), "Scale x coordinates")
         ("Sy", po::value<double>(), "Scale y coordinates")
         ("Sz", po::value<double>(), "Scale z coordinates")
@@ -213,12 +214,24 @@ int main(int argc, const char *argv[])
             outVertices = inVertices;
             outElements = inElements;
         }
+
+        if (fileExtension(outPath) == ".js") {
+            Mesh outMesh(outElements, outVertices.size());
+            for (size_t vi = 0; vi < mesh.numVertices(); ++vi)
+                outMesh.vertex(vi)->p = inVertices[vi];
+            JSFieldWriter<2>(outPath, outMesh);
+            exit(0);
+        }
     }
     else if ((type == MeshIO::MESH_QUAD) || (type == MeshIO::MESH_TRI_QUAD)) {
-        if (args.count("boundary"))  { throw runtime_error("Quad boundary extraction unsupported"); }
-        if (args.count("subdivide")) { throw runtime_error("Quad subdivision (only) unsupported"); }
-
         vector<size_t> quadIdx;
+        if (args.count("boundary"))  { throw runtime_error("Quad boundary extraction unsupported"); }
+        if (args.count("subdivide")) {
+            if (fileExtension(outPath) == ".msh") throw runtime_error("quad .msh unsupported.");
+
+            quad_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
+        }
+
         if (args.count("quadAspectSubdiv")) {
             while (quad_subdiv_high_aspect(inVertices, inElements,
                         outVertices, outElements, quadIdx,

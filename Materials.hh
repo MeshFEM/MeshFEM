@@ -170,8 +170,8 @@ struct Isotropic {
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratio can't be less than -1, and for robustness we
     //               limit it to -0.75
-    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 384), Bounds(1,  0.35) }; }
-    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 18), Bounds(1, 0.1) }; }
+    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 292), Bounds(1,  0.6) }; }
+    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 25), Bounds(1, 0.1) }; }
 
     Real vars[numVars];
 };
@@ -294,15 +294,14 @@ struct Orthotropic {
     //               limit them to -0.75
     std::vector<Bounds> upperBounds() const {
         if (_N == 3) return { Bounds(3,  0.45), Bounds(4, 0.45), Bounds(5, 0.45) };
-        else         return { Bounds(0, 384), Bounds(1, 384), Bounds(2,  0.45), Bounds(2, 102) };
+        else         return { Bounds(0, 384), Bounds(1, 384), Bounds(2,  0.45), Bounds(3, 102) };
     }
     std::vector<Bounds> lowerBounds() const {
         if (_N == 3)
              return { Bounds(0,  0.01), Bounds(1,  0.01), Bounds(2,  0.01),
                       Bounds(3, -0.75), Bounds(4, -0.75), Bounds(5, -0.75),
                       Bounds(6,  0.01), Bounds(7,  0.01), Bounds(8,  0.01) };
-        else return { Bounds(0,  18), Bounds(1,  18),
-                      Bounds(2, 0.0), Bounds(3,  2) };
+        else return { Bounds(0,  18), Bounds(1,  18), Bounds(2, 0.0), Bounds(3,  2) };
     }
 
     Real vars[numVars];
