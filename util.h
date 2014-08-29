@@ -14,6 +14,20 @@
 #include <sys/stat.h>
 #include <string>
 #include <sstream>
+#include <iostream>
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Reads a data line from ASCII file (skipping whitespace and comment lines).
+//  @param[in]  is   input stream to read from
+//  @param[out] line string output to hold data line
+//  @return     reference to input stream for operator chaining
+*///////////////////////////////////////////////////////////////////////////////
+inline std::istream &getDataLine(std::istream &is, std::string &line) {
+    do  {
+        std::getline(is >> std::ws, line);
+    } while (is && (line[0] == '#'));
+    return is;
+}
 
 ////////////////////////////////////////////////////////////////////////////
 /*! Get the file extension for a path.

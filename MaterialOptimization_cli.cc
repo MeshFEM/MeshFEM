@@ -42,7 +42,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("material,m",                po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
         ("numIters,n",                po::value<int>()->default_value(8),              "Number of iterations")
         ("iterationsPerDirichlet,N",  po::value<int>()->default_value(1),              "Number of local/global iterations to run before re-solving the target dirichlet problem.")
-        ("noRigidMotionDirichlet,R",  po::value<bool>()->default_value(false),         "Apply no rigid motion constraint in Dirichlet solve.")
+        ("noRigidMotionDirichlet,R",                                                   "Apply no rigid motion constraint in Dirichlet solve.")
         ("regularizationWeight,r",    po::value<double>()->default_value(0.0),         "Regularization weight")
         ("anisotropyPenaltyWeight,a", po::value<double>()->default_value(0.0),         "Anisotropy penalty weight")
         ;
@@ -98,7 +98,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     Real anisotropyPenaltyWeight = args["anisotropyPenaltyWeight"].as<Real>();
     size_t iterations = args["numIters"].as<int>();
     size_t iterationsPerDirichlet = args["iterationsPerDirichlet"].as<int>();
-    bool   noRigidMotionDirichlet = args["noRigidMotionDirichlet"].as<bool>();
+    bool   noRigidMotionDirichlet = args.count("noRigidMotionDirichlet");
 
     typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
     typedef typename Opt::MField  MField;
