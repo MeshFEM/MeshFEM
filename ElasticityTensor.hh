@@ -63,7 +63,7 @@ public:
             m_d(3, 3) = m_d(4, 4) = m_d(5, 5) = mu;
         }
         else {
-            // For 2D (plane strain) lambda is actually different...
+            // For 2D (plane strain), lambda is actually different...
             // This can be found by inverting 2D orthotropic tensor with equal
             // Young's moduli
             Real lambda = (nu * E) / (1.0 - nu * nu);

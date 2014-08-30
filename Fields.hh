@@ -34,6 +34,8 @@
 #include <cmath>
 #include <limits>
 
+#include <boost/algorithm/string.hpp>
+
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
@@ -248,8 +250,7 @@ private:
 
 // Handles both VectorField and ScalarField output.
 template<typename Real, size_t N>
-std::ostream &operator<<(std::ostream &os, const VectorField<Real, N> &vf)
-{
+std::ostream &operator<<(std::ostream &os, const VectorField<Real, N> &vf) {
     for (size_t i = 0; i < vf.domainSize(); ++i) {
         for (size_t c = 0; c < N; ++c) {
             os << (c ? "\t" : "") << vf(i)[c];
@@ -275,9 +276,8 @@ std::ostream &operator<<(std::ostream &os, const VectorField<Real, N> &vf)
 template<typename Real, size_t t_N>
 class SymmetricMatrixField {
 public:
-    static constexpr size_t FieldDim() { return t_N * (t_N + 1) / 2; }
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
-    typedef Eigen::Matrix<Real, FieldDim(), Eigen::Dynamic> ArrayType;
+    typedef Eigen::Matrix<Real, flatLen(t_N), Eigen::Dynamic> ArrayType;
 
     typedef SymmetricMatrixRef<t_N, typename ArrayType::ColXpr,
             typename ArrayType::ConstColXpr> ValueType;
@@ -296,7 +296,7 @@ public:
     SymmetricMatrixField(size_t domainSize = 0)
         : m_values(dim(), domainSize) { }
     
-    size_t dim() const { return ((t_N * (t_N + 1)) / 2); }
+    constexpr size_t dim() const { return flatLen(t_N); }
     size_t N()   const { return t_N; }
     size_t domainSize() const { return m_values.cols(); }
     FieldType fieldType() const { return FIELD_MATRIX; }
@@ -325,8 +325,50 @@ public:
     // Set all coefficients to a constant
     void setConstant(Real val) { m_values.setConstant(val); }
 
+    SymmetricMatrixField &operator=(const SymmetricMatrixField &b) {
+        if (this == &b) return *this;
+        m_values = b.m_values;
+        return *this;
+    }
+
     const ArrayType &data() const { return m_values; }
           ArrayType &data()       { return m_values; }
+
+    void dump(const std::string &path) const {
+        std::ofstream of(path);
+        if (!of.is_open())
+            throw std::runtime_error(std::string("Couldn't open '") +
+                        path + "' for writing.");
+        of << std::scientific << std::setprecision(16);
+        for (size_t i = 0; i < domainSize(); ++i) {
+            ConstValueType v = (*this)(i);
+            of << v[0];
+            for (size_t j = 1; j < dim(); ++j) {
+                of << '\t' << v[j];
+            }
+            of << std::endl;
+        }
+    }
+
+    void load(const std::string &path) {
+        std::ifstream is(path);
+        if (!is.is_open())
+            throw std::runtime_error(std::string("Couldn't open '") + path);
+
+        std::string line;
+        std::vector<Real> data;
+        while (std::getline(is >> std::ws, line)) {
+            std::vector<Real> v;
+            std::istringstream iss(line);
+            Real c;
+            size_t i = 0;
+            while (iss >> c) { data.push_back(c); ++i; }
+            if (i != dim()) throw std::runtime_error("Read wrong number of components.");
+        }
+        assert(data.size() % dim() == 0);
+        int domSize = data.size() / dim();
+        m_values = Eigen::Map<const ArrayType>(&data[0], dim(), domSize);
+    }
 
 private:
     /** Data storage */
@@ -342,9 +384,90 @@ std::ostream &operator<<(std::ostream &os, const SymmetricMatrixField<Real, N> &
         }
         os << std::endl;
     }
-
     return os;
 }
 
+// Simple field class that can change dimension, but is less efficient/checked.
+// Stores in flattened x0 y0 x1 y1 ... format
+class DynamicField {
+    DynamicField(size_t dimensions, size_t domSize) {
+        m_storage.resize(dimensions, domSize);
+    }
+
+    template<size_t _N>
+    DynamicField(const VectorField<Real, _N> &vf) {
+        resize(vf.dim(), vf.domainSize());
+        for (size_t i = 0; i < vf.dim(); ++i)
+            for (size_t j = 0; j < vf.domainSize(); ++j)
+                (*this)(i, j) = vf(i, j);
+    }
+
+    void resize(size_t domSize) { m_storage.resize(domSize * m_dim); }
+    void resize(size_t dim, size_t domSize) { m_dim = dim; resize(domSize); }
+
+    size_t domainSize() const {
+        assert(m_storage.size() % m_dim == 0);
+        return m_storage.size() / m_dim;
+    }
+
+    size_t dim() const { return m_dim; }
+
+    // Flattened access
+    Real &operator[](size_t i)       { return m_storage.at(i); }
+    Real  operator[](size_t i) const { return m_storage.at(i); }
+
+    Real &operator()(size_t i, size_t j) {
+        if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
+        return m_storage[j * domainSize() + i];
+    }
+
+    Real  operator()(size_t i, size_t j) const {
+        if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
+        return m_storage[j * domainSize() + i];
+    }
+
+    // Casts to Field types.
+    operator ScalarField<Real>() const {
+        if (m_dim != 1) throw std::runtime_error("Illegal cast of vector field to scalar field.");
+        return ScalarField<Real>(m_storage);
+    }
+    template<size_t _dim>
+    operator VectorField<Real, _dim>() const {
+        if (m_dim != _dim) throw std::runtime_error("Vector field cast dimension mismatch.");
+        return VectorField<Real, _dim>(m_storage);
+    }
+    template<size_t _dim>
+    operator SymmetricMatrixField<Real, _dim>() const {
+        if (m_dim != _dim) throw std::runtime_error("Vector field cast dimension mismatch.");
+        return SymmetricMatrixField<Real, _dim>(m_storage);
+    }
+
+    void read(std::istream &is, size_t dim, size_t dSize) {
+        resize(dim, dSize);
+        for (size_t j = 0; j < dSize; ++j) {
+            std::string line;
+            // Get non-comment line
+            do  { std::getline(is >> std::ws, line); } while (is && (line[0] == '#'));
+            std::vector<std::string> lineComponents;
+            boost::split(lineComponents, line, boost::is_any_of("\t "));
+            if (lineComponents.size() != dim) throw std::runtime_error("Invalid field data line");
+            for (size_t i = 0; i < dim; ++i)
+                (*this)(i, j) = std::stod(lineComponents[i]);
+        }
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const DynamicField &f) {
+        for (size_t j = 0; j < f.domainSize(); ++j) {
+            for (size_t i = 0; i < f.dim(); ++i)
+                os << (i ? "\t" : "") << f(i, j);
+            os << std::endl;
+        }
+        return os;
+    }
+    
+private:
+    size_t m_dim;
+    std::vector<Real> m_storage;
+};
 
 #endif // FIELDS_HH

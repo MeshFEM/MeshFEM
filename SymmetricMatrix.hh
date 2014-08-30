@@ -41,6 +41,12 @@ public:
 
     _Real maxEigenvalue() const { return eigenvalues().maxCoeff(); }
     _Real minEigenvalue() const { return eigenvalues().minCoeff(); }
+    _Real maxMagnitudeEigenvalue() const {
+        auto eigs = eigenvalues();
+        _Real maxEig = eigs.maxCoeff();
+        _Real minEig = eigs.minCoeff();
+        return (maxEig > std::abs(minEig)) ? maxEig : minEig;
+    }
 
     _Real doubleContract(const ConstSymmetricMatrixBase &b) const {
         _Real result(0);
@@ -56,6 +62,9 @@ public:
     _Real operator[](size_t i) const {
         return (*static_cast<const _ConstSymmetricMatrix *>(this))[i];
     }
+
+    // Allow us to masquarade as an eigen vector too.
+    size_t rows() const { return flatSize(); }
 
     friend std::ostream &operator<<(std::ostream &os, const ConstSymmetricMatrixBase &m) {
         for (size_t i = 0; i < t_N; ++i) {
