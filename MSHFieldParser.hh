@@ -29,7 +29,8 @@
 template<size_t N>
 class MSHFieldParser {
 public:
-    enum class FieldType { PER_ELEMENT, PER_NODE, ANY };
+    // Numbers match MSHFieldWriter enum
+    enum class FieldType { PER_ELEMENT = 0, PER_NODE = 1, ANY };
     typedef VectorField<Real, N>          VField;
     typedef ScalarField<Real>             SField;
     typedef SymmetricMatrixField<Real, N> SMField;
@@ -52,18 +53,33 @@ public:
     // Also report back the domain type if it isn't specified.
     ////////////////////////////////////////////////////////////////////////////
     const VField &vectorField(const std::string &name,
-                              FieldType &&type = FieldType::ANY) const {
-        return m_getField(m_vectorFields, name, type);
+                              FieldType reqType = FieldType::ANY) const {
+        return m_getField(m_vectorFields, name, reqType);
+    }
+    const VField &vectorField(const std::string &name,
+                              FieldType reqType, FieldType &actualType) const {
+        actualType = reqType;
+        return m_getField(m_vectorFields, name, actualType);
     }
 
     const SField &scalarField(const std::string &name,
-                              FieldType &&type = FieldType::ANY) const {
-        return m_getField(m_scalarFields, name, type);
+                              FieldType reqType = FieldType::ANY) const {
+        return m_getField(m_scalarFields, name, reqType);
+    }
+    const SField &scalarField(const std::string &name,
+                              FieldType reqType, FieldType &actualType) const {
+        actualType = reqType;
+        return m_getField(m_scalarFields, name, actualType);
     }
 
     const SMField &symmetricMatrixField(const std::string &name,
-                              FieldType &&type = FieldType::ANY) const {
-        return m_getField(m_symmetricMatrixFields, name, type);
+                              FieldType reqType = FieldType::ANY) const {
+        return m_getField(m_symmetricMatrixFields, name, reqType);
+    }
+    const SMField &symmetricMatrixField(const std::string &name,
+                              FieldType reqType, FieldType &actualType) const {
+        actualType = reqType;
+        return m_getField(m_symmetricMatrixFields, name, actualType);
     }
 
     ////////////////////////////////////////////////////////////////////////////

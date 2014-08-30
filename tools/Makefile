@@ -2,6 +2,7 @@ include ../platform_defs.mk
 
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES) -I..
 CPPFLAGS+=-O2
+# CPPFLAGS+=-O0 -g
 TARGETS=msh_processor
 
 MSH_PROC_OBJS=msh_processor.o ../MeshIO.o ../MSHFieldParser.o ../Types.o

@@ -200,8 +200,12 @@ namespace MeshIO {
                         elementType = 4;
                         numCorners = 4;
                         break;
+                    case MESH_QUAD:
+                        elementType = 3;
+                        numCorners = 4;
+                        break;
                     default:
-                        throw std::runtime_error("MSH only supports tri and tet");
+                        throw std::runtime_error("MSH io only supports tri, quad and tet");
                 }
             }
 

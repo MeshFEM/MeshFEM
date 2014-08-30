@@ -23,7 +23,8 @@
 
 class MSHFieldWriter {
 public:
-    typedef enum { PER_ELEMENT, PER_NODE, PER_GUESS } FieldType;
+    // Numbers match MSHFieldParser enum
+    typedef enum { PER_ELEMENT = 0, PER_NODE = 1, PER_GUESS } FieldType;
 
     MSHFieldWriter(const std::string &mshPath,
                    const std::vector<MeshIO::IOVertex>  &vertices,

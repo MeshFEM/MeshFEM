@@ -586,6 +586,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
             is.read((char *) header, 3 * sizeof(int));
             if (elementType == -1) {
                 if      (header[0] == 2) type = MESH_TRI;
+                else if (header[0] == 3) type = MESH_QUAD;
                 else if (header[0] == 4) type = MESH_TET;
                 else throw unsFmt;
                 getElementInfo(type, elementType, numCorners);
@@ -619,6 +620,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
 
             if (elementType == -1) {
                 if      (etype == 2) type = MESH_TRI;
+                else if (etype == 3) type = MESH_QUAD;
                 else if (etype == 4) type = MESH_TET;
                 else throw unsFmt;
                 getElementInfo(type, elementType, numCorners);

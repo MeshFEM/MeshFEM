@@ -4,6 +4,7 @@
 #include "MeshIO.hh"
 #include "util.h"
 #include "MSHFieldWriter.hh"
+#include "MSHFieldParser.hh"
 #include "JSFieldWriter.hh"
 #include "filters/subdivide.hh"
 #include "filters/extrude.hh"
@@ -59,6 +60,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("quadAspectSubdiv,A", "Split rectangular quads until aspect ratios are below threshold")
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
         ("quadSubdivideAndTriangulate,q", po::value<size_t>(), "Run quad subdivision for #iterations and then triangulate symmetrically.")
+        ("propagateFields,f", "propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
         ;
 
     po::options_description cli_opts;
@@ -87,6 +89,23 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     return vm;
 }
 
+// Transfer per-element fields to output mesh, using cellIndex to track output
+// elements back to their origin element.
+template<class _Field, class _FT>
+void transferField(const std::vector<size_t> cellIndex,
+        const _Field &inField, const string &name, _FT type,
+        MSHFieldWriter &writer) {
+    if (type == _FT::PER_NODE) {
+        cout << "per-node field transfer unsupported; skipping "
+             << name << endl;
+        return;
+    }
+    _Field outField(cellIndex.size());
+    for (size_t i = 0; i < cellIndex.size(); ++i)
+        outField(i) = inField(cellIndex[i]);
+    writer.addField(name, outField, MSHFieldWriter::PER_ELEMENT);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Program entry point
 //  @param[in]  argc    Number of arguments
@@ -100,7 +119,8 @@ int main(int argc, const char *argv[])
     vector<MeshIO::IOVertex > inVertices, outVertices;
     vector<MeshIO::IOElement> inElements, outElements;
 
-    auto type = load(args["inFile"].as<string>(), inVertices, inElements);
+    string inPath = args["inFile"].as<string>();
+    auto type = load(inPath, inVertices, inElements);
     string outPath;
     if (args.count("outFile")) outPath = args["outFile"].as<string>();
     
@@ -257,6 +277,11 @@ int main(int argc, const char *argv[])
             quad_tri_subdiv(inVertices, inElements, outVertices, outElements, quadIdx);
         }
 
+        if (outElements.size() == 0) {
+            outElements = inElements;
+            outVertices = inVertices;
+        }
+
         // Write mesh with cell_index field if the output is .msh
         if ((fileExtension(outPath) == ".msh") &&
                 (quadIdx.size() == outElements.size())) {
@@ -266,6 +291,26 @@ int main(int argc, const char *argv[])
                 cellIndex[i] = quadIdx[i];
             writer.addField("cell_index", cellIndex,
                             MSHFieldWriter::PER_ELEMENT);
+            if (args.count("propagateFields")) {
+                MSHFieldParser<2> fields(inPath);
+                std::vector<string> fnames = fields.vectorFieldNames();
+                typedef MSHFieldParser<2>::FieldType FT;
+                FT type;
+                for (const string &name: fnames) {
+                    auto vf = fields.vectorField(name, FT::ANY, type);
+                    transferField(quadIdx, vf, name, type, writer);
+                }
+                fnames = fields.scalarFieldNames();
+                for (const string &name: fnames) {
+                    auto sf = fields.scalarField(name, FT::ANY, type);
+                    transferField(quadIdx, sf, name, type, writer);
+                }
+                fnames = fields.symmetricMatrixFieldNames();
+                for (const string &name: fnames) {
+                    auto smf = fields.symmetricMatrixField(name, FT::ANY, type);
+                    transferField(quadIdx, smf, name, type, writer);
+                }
+            }
             exit(0);
         }
     }

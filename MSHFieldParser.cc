@@ -27,7 +27,11 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath) {
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshPath);
 
     MeshIO_MSH io;
-    io.load(infile, m_vertices, m_elements, (N == 2) ? MESH_TRI : MESH_TET);
+    auto type = io.load(infile, m_vertices, m_elements, MESH_GUESS);
+    if ((N == 2 && type != MESH_TRI && type != MESH_QUAD) ||
+        (N == 3 && type != MESH_TET)) {
+        throw runtime_error("Illegal mesh type for " + to_string(N) + "D MSHFieldParser");
+    }
 
     string header;
     while (getline(infile, header)) {

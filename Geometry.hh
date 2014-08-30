@@ -203,6 +203,13 @@ struct UnorderedPair {
         vmax = std::max(v0, v1);
     }
 
+    // (accesses in sorted order)
+    int operator[](size_t i) const {
+        if (i == 0) return vmin;
+        if (i == 1) return vmax;
+        return -1;
+    }
+
     // Lexicographic comparison
     bool operator<(const UnorderedPair &b) const {
         if (vmin < b.vmin) return true;

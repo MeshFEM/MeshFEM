@@ -1,6 +1,6 @@
 include platform_defs.mk
 
-CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o
+CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o MSHFieldParser.o
 PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshIO.o Types.o Materials.o
 MATOPT_OBJS=MaterialOptimization_cli.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o Materials.o
 SIM_OBJS=Simulate_cli.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o Materials.o
