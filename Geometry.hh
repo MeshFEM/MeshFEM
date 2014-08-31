@@ -210,6 +210,10 @@ struct UnorderedPair {
         return -1;
     }
 
+    bool operator==(const UnorderedPair &b) const {
+        return (vmin == b.vmin) && (vmax == b.vmax);
+    }
+
     // Lexicographic comparison
     bool operator<(const UnorderedPair &b) const {
         if (vmin < b.vmin) return true;

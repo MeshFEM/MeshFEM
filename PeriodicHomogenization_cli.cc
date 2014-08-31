@@ -67,6 +67,26 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 }
 
 template<size_t _N>
+using ETensor = typename LinearElasticityND<_N>::ETensor;
+template<size_t _N>
+using VField = typename LinearElasticityND<_N>::VField;
+typedef ScalarField<Real> SField;
+
+template<size_t _N, class Simulator>
+void writeTargetTensorShapeDerivative(JSFieldWriter<_N> &writer,
+                const string &name, const ETensor<_N> &target,
+                const std::vector<VField<_N>> &w_ij, const Simulator &sim) {
+    SField v_n = homogenizedElasticityTensorShapeDerivative(
+            target, w_ij, sim);
+    writer.addField(name + " v_n", v_n, JSFieldWriter<_N>::PER_BDRY_ELEM);
+    VField<_N> descent(sim.mesh().numBoundaryElements());
+    for (size_t i = 0; i < sim.mesh().numBoundaryElements(); ++i)
+        descent(i) = v_n[i] * sim.mesh().boundaryElement(i)->normal();
+    writer.addField(name + " descent", descent,
+                    JSFieldWriter<_N>::PER_BDRY_NODE);
+}
+
+template<size_t _N>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
@@ -80,9 +100,7 @@ void execute(const po::variables_map &args,
     if (args.count("output"))
         writer = new JSFieldWriter<_N>(args["output"].as<string>(), sim.mesh());
 
-    typedef typename LinearElasticityND<_N>::VField VField;
-    typedef typename LinearElasticityND<_N>::SField SField;
-    std::vector<VField> w_ij;
+    std::vector<VField<_N>> w_ij;
     solveCellProblems(w_ij, sim, writer);
 
     if (writer) {
@@ -95,14 +113,13 @@ void execute(const po::variables_map &args,
         }
     }
 
-    typedef typename LinearElasticityND<_N>::ETensor ETensor;
-    ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
+    ETensor<_N> Eh = homogenizedElasticityTensor(w_ij, sim);
 
     cout << setprecision(16) << endl;
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;
 
-    ETensor Einv = Eh.inverse();
+    ETensor<_N> Einv = Eh.inverse();
     auto moduli((1.0 / Einv.diag().array()).eval());
     if (_N == 2)  {
         cout << "Approximate Young moduli:\t"  << moduli[0] << "\t" << moduli[1] << endl;
@@ -125,35 +142,40 @@ void execute(const po::variables_map &args,
                                       << -Einv.D(2, 1) / Einv.D(1, 1) << endl;
     }
 
-    ETensor ETargetinv(Einv);
-    // // Try to double x Young's modulus
-    // ETargetinv.D(0, 0) /= 2.0;
-    // ETargetinv.D(0, 1) /= 2.0;
-    
-    // Try to reduce all Poisson ratios
-    // Scalar parameterStep = args["parameterStep"].as<double>();
     if (args.count("parameterStep")) {
         Real parameterStep = args["parameterStep"].as<double>();
         cout << "Parameter step: " << parameterStep << endl;
+
+        ETensor<_N> ETargetinv(Einv);
         Real currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(1, 1);
         Real targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
-        cout << "currentPoisson, targetPoisson:\t" << currentPoisson << "\t"
-             << targetPoisson << endl;
-
         ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
+        writeTargetTensorShapeDerivative(*writer, "v_yx decreasing", ETargetinv.inverse(), w_ij, sim);
 
-        // // Try to double all Young's moduli
-        // ETargetinv.D(0, 0) /= 2.0;
-        // ETargetinv.D(1, 1) /= 2.0;
-        // ETargetinv.D(0, 1) /= 2.0;
+        ETargetinv = Einv;
+        currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(0, 0);
+        targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
+        ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
+        writeTargetTensorShapeDerivative(*writer, "v_yx decreasing", ETargetinv.inverse(), w_ij, sim);
 
-        SField v_n = homogenizedElasticityTensorShapeDerivative(
-                ETargetinv.inverse(), w_ij, sim);
-        writer->addField("v_n", v_n, JSFieldWriter<_N>::PER_BDRY_ELEM);
-        VField descent(sim.mesh().numBoundaryElements());
-        for (size_t i = 0; i < sim.mesh().numBoundaryElements(); ++i)
-            descent(i) = v_n[i] * sim.mesh().boundaryElement(i)->normal();
-        writer->addField("descent", descent, JSFieldWriter<_N>::PER_BDRY_NODE);
+        // Step a bit toward the tensor with Ex halved.
+        ETargetinv = Einv;
+        ETargetinv.D(0, 0) *= 2;
+        ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / Einv.D(0, 0);
+        // ETargetinv.D(0, 0) += parameterStep * ETargetinv.D(0, 0);
+        // ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / Einv.D(0, 0);
+        writeTargetTensorShapeDerivative(*writer, "Ex decreasing, v_xy fixed", ETargetinv.inverse(), w_ij, sim);
+
+        ETargetinv = Einv;
+        ETargetinv.D(1, 1) *= 2;
+        ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / Einv.D(1, 1);
+        // ETargetinv.D(1, 1) += parameterStep * ETargetinv.D(1, 1);
+        // ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / Einv.D(1, 1);
+        writeTargetTensorShapeDerivative(*writer, "Ey decreasing, v_yx fixed", ETargetinv.inverse(), w_ij, sim);
+
+        ETargetinv = Einv;
+        ETargetinv.D(2, 2) += parameterStep * ETargetinv.D(2, 2);
+        writeTargetTensorShapeDerivative(*writer, "mu decreasing", ETargetinv.inverse(), w_ij, sim);
     }
 
     if (writer) delete writer;

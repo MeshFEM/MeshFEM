@@ -1,4 +1,5 @@
 #include "EdgeFields.hh"
+#include "util.h"
 
 using namespace std;
 
@@ -19,12 +20,9 @@ void parseNVector(size_t N, const string &line, vector<T> &vals) {
 template<typename T>
 void parseNVector(size_t N, istream &is, vector<T> &vals) {
     string line;
-    getDataLine(line);
+    getDataLine(is, line);
     parseNVector<T>(N, line, vals);
 }
-
-template<typename T>
-void parseNVector(size_t N, const string &line, vector<T> &vals) {
 
 void EdgeFields::read(istream &is) {
     m_fields.clear();
@@ -47,18 +45,18 @@ void EdgeFields::read(istream &is) {
 
     for (size_t f = 0; f < nfields; ++f) {
         string name;
-        getDataLine(name);
+        getDataLine(is, name);
         parseNVector(1, is, ivec);
         size_t ncomps = ivec[0];
         vector<double> rvec;
         DynamicField field(ncomps, nedges);
         for (size_t j = 0; j < nedges; ++j) {
-            parseNVectorAppend(ncomps, is, rvec);
+            parseNVector(ncomps, is, rvec);
             for (size_t i = 0; i < ncomps; ++i)
-                field(i, j) = ncomps[i];
+                field(i, j) = rvec[i];
         }
+        addField(name, field);
     }
-    addField(name, field);
 }
 
 void EdgeFields::write(std::ostream &os) const {

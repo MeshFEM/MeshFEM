@@ -67,6 +67,11 @@ namespace MeshIO {
         std::vector<size_t> m_idxs;
     public:
         IOElement(size_t n = 0) : m_idxs(n) { }
+        IOElement(size_t v0, size_t v1, size_t v2)
+            : m_idxs(3) { m_idxs[0] = v0; m_idxs[1] = v1; m_idxs[2] = v2; }
+        IOElement(size_t v0, size_t v1, size_t v2, size_t v3)
+            : m_idxs(4) { m_idxs[0] = v0; m_idxs[1] = v1; m_idxs[2] = v2; m_idxs[3] = v3; }
+
         int operator[](size_t i) const {
             assert(i < m_idxs.size());
             return m_idxs[i];

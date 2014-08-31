@@ -38,9 +38,10 @@ public:
     void addField(const std::string &name, const DynamicField &field) {
         if (field.domainSize() != numEdges())
             throw std::runtime_error("Attempted to add incompatibly sized field");
-        if (m_edgeIdx.count(name))
+        if (m_fields.count(name))
             std::cout << "Warning, overwriting field " << name << std::endl;
-        m_edgeIdx[name] = field;
+        m_fields.emplace(name, field);
+        // m_fields.insert(std::make_pair(name, field));
     }
 
     template<size_t _N>
@@ -61,24 +62,36 @@ public:
     void add(const EdgeFields &f) {
         if (!isCompatible(f))
             throw std::runtime_error("Attempted to add incompatible fields");
-        for (const auto &entry e : f.m_fields)
-            addField(e.first, e.second);
+        for (const auto &entry : f.m_fields)
+            addField(entry.first, entry.second);
     }
 
     // *Overwrite* this field collection with one from a file. 
     void read(std::istream &is);
+    void read(const std::string &path) {
+        std::ifstream inFile(path);
+        if (!inFile.is_open()) throw std::runtime_error("Couldn't open " + path);
+        read(inFile);
+    }
+
     void write(std::ostream &os) const;
+    void write(const std::string &path) const {
+        std::ofstream outFile(path);
+        if (!outFile.is_open()) throw std::runtime_error("Couldn't open " + path);
+        write(outFile);
+    }
 
 private:
-    m_setEdges(const std::vector<UnorderedPair> &edges) {
+    void m_setEdges(const std::vector<UnorderedPair> &edges) {
         assert(m_fields.size() == 0);
         m_edges = edges;
         m_edgeIdx.clear();
         for (size_t i = 0; i < edges.size(); ++i)
-            m_edgeIdx[e] = edges[i];
+            m_edgeIdx[edges[i]] = i;
     }
 
-    std::map<names, DynamicField> m_fields;
+    // name => field
+    std::map<std::string, DynamicField> m_fields;
     std::map<UnorderedPair, size_t> m_edgeIdx;
     std::vector<UnorderedPair> m_edges;
 };
