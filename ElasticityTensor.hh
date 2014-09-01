@@ -169,6 +169,7 @@ public:
     ElasticityTensor &operator-=(const ElasticityTensor &b) { m_d -= b.m_d; return *this; }
     ElasticityTensor  operator+ (const ElasticityTensor &b) const { ElasticityTensor E(*this); E += b; return E; }
     ElasticityTensor  operator- (const ElasticityTensor &b) const { ElasticityTensor E(*this); E -= b; return E; }
+    ElasticityTensor  operator- () const { ElasticityTensor E(*this); E.m_d = -E.m_d; return E; }
 
     ElasticityTensor inverse() const {
         ElasticityTensor result;
@@ -203,12 +204,44 @@ public:
     SymmetricMatrix<N, FlattenedRank2Tensor>
     doubleContract(const SymmetricMatrixBase<Real2, N, SM> &b) const {
         SymmetricMatrix<N, FlattenedRank2Tensor> result;
+        // Note, this could easily be optimized to take advantage of symmetries.
         for (size_t i = 0; i < _Dim; ++i) {
             for (size_t j = 0; j < _Dim; ++j) {
-                result(i, j) = 0;
+                result(i, j) = 0; // Necessary so we don't get doubled off-diags
                 for (size_t k = 0; k < _Dim; ++k) {
                     for (size_t l = 0; l < _Dim; ++l) {
                         result(i, j) += (*this)(i, j, k, l) * b(k, l);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+
+    // NOTE: plain tensor double contraction is illegal because the result
+    // is asymmetric, however we do support the following operation that we
+    // call "double double contract" since it obtains a symmetric result:
+    //      A : B : A       (A_ijpq B_pqrs A_rskl)
+    // Tensor A is "this", B is passed as an argument.
+    ElasticityTensor doubleDoubleContract(const ElasticityTensor &B) const {
+        ElasticityTensor result;
+        // Note, this could easily be optimized to take advantage of symmetries.
+        for (size_t i = 0; i < _Dim; ++i) {
+            for (size_t j = 0; j < _Dim; ++j) {
+                for (size_t k = 0; k < _Dim; ++k) {
+                    for (size_t l = 0; l < _Dim; ++l) {
+                        Real entry = 0;
+                        for (size_t p = 0; p < _Dim; ++p)
+                            for (size_t q = 0; q < _Dim; ++q)
+                                for (size_t r = 0; r < _Dim; ++r)
+                                    for (size_t s = 0; s < _Dim; ++s)
+                                        entry += (*this)(i, j, p, q) * B(p, q, r, s) * (*this)(r, s, k, l);
+                        size_t I = flattenIndices(_Dim, i, j); 
+                        size_t J = flattenIndices(_Dim, k, l); 
+                        // Better get a symmetric result...
+                        assert(result.D(I, J) == 0 || std::abs(result.D(J, I) - entry) < 1e-9);
+                        result.D(I, J) = entry;
                     }
                 }
             }

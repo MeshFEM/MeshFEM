@@ -387,11 +387,18 @@ std::ostream &operator<<(std::ostream &os, const SymmetricMatrixField<Real, N> &
     return os;
 }
 
-// Simple field class that can change dimension, but is less efficient/checked.
+// Simple field class that can change dimension but is less efficient/statically
+// checked.
 // Stores in flattened x0 y0 x1 y1 ... format
 class DynamicField {
+public:
     DynamicField(size_t dimensions, size_t domSize) {
-        m_storage.resize(dimensions, domSize);
+        resize(dimensions, domSize);
+    }
+
+    DynamicField(const DynamicField &b) {
+        m_dim = b.m_dim;
+        m_storage = b.m_storage;
     }
 
     template<size_t _N>
@@ -418,12 +425,12 @@ class DynamicField {
 
     Real &operator()(size_t i, size_t j) {
         if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
-        return m_storage[j * domainSize() + i];
+        return m_storage.at(j * dim() + i);
     }
 
     Real  operator()(size_t i, size_t j) const {
         if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
-        return m_storage[j * domainSize() + i];
+        return m_storage.at(j * dim() + i);
     }
 
     // Casts to Field types.
