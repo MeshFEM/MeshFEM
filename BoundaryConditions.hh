@@ -307,6 +307,7 @@ public:
         CollisionGrid<Real, VectorND<_N>> cgrid(epsilon);
         // Match boundary vertices on opposite faces of the periodic cell
         std::vector<std::pair<int, int> > pairs;
+        std::vector<bool> vertexIsPeriodic(mesh.numVertices());
         pairs.clear();
         for (int d = 0; d < _N; ++d) {
             cgrid.reset();
@@ -330,7 +331,18 @@ public:
                     throw std::runtime_error(ss.str());
                 }
                 pairs.push_back(std::make_pair(vi, result.first));
+                vertexIsPeriodic[vi] = vertexIsPeriodic[result.first] = true;
             }
+        }
+
+        // Mark the periodic boundary elements.
+        m_isPeriodicBoundaryElement.resize(mesh.numBoundaryElements());
+        for (size_t i = 0; i < mesh.numBoundaryElements(); ++i) {
+            auto be = mesh.boundaryElement(i);
+            bool all = true; // are all the element's vertices periodic?
+            for (size_t j = 0; j < be.numVertices(); ++j)
+                all &= vertexIsPeriodic[be.vertex(j).volumeVertex().index()];
+            m_isPeriodicBoundaryElement[i] = all;
         }
 
         // Determine the "DoF index" for every node on the mesh. for every node
@@ -377,9 +389,15 @@ public:
         return m_dofForVertex;
     }
 
+    // Check if a given boundary element is periodic
+    bool isPeriodicBE(size_t be) const {
+        return m_isPeriodicBoundaryElement.at(be);
+    }
+
     size_t numPeriodicDoFs() const { return m_numDoFs; }
 
 private:
+    std::vector<bool> m_isPeriodicBoundaryElement;
     size_t m_numDoFs;
     std::vector<int> m_dofForVertex;
 };

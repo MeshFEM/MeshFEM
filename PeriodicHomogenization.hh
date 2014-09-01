@@ -76,57 +76,64 @@ namespace PeriodicHomogenization {
         return Eh;
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Computes the steepest ascent direction (i.e. the theta maximizing the
+    //  shape derivative DS[theta]) of each component of the homogenized
+    //  elasticity tensor. This is a per-boundary-element rank 4 tensor field.
+    //  @param[in]  w       fluctuation displacements (cell problem solutions)
+    //  @param[in]  sim     linear elasticity solver
+    //  @return     per-boundary-element rank 4 tensor field.
+    *///////////////////////////////////////////////////////////////////////////
     template<class _Simulator>
-    typename _Simulator::SField homogenizedElasticityTensorShapeDerivative(
-            const typename _Simulator::ETensor &target,
-            const std::vector<typename _Simulator::VField> &w_ij,
+    std::vector<typename _Simulator::ETensor> homogenizedTensorGradient(
+            const std::vector<typename _Simulator::VField> &w,
             const _Simulator &sim)
     {
         typedef typename _Simulator::ETensor ETensor;
-        typedef typename _Simulator::SField  SField;
         typedef typename _Simulator::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
-        assert(w_ij.size() == numStrains);
+        assert(w.size() == numStrains);
 
         const auto &mesh = sim.mesh();
-        ETensor diff = target - homogenizedElasticityTensor(w_ij, sim);
         // Shape derivative evaluated on normal velocity v_n:
-        // diff_ijkl int_dt -<E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
-        // So the steepest descent is to evolve with
-        //      v_n = diff_ijkl <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
-        //         := diff_ijkl DS_ijkl where
+        // DS(E_H)[v_n n] = int_dt <E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
+        // So the steepest ascent direction is to evolve with
+        //      v_n(x) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)> := G_ijkl(x)
+        // for each non-periodic boundary point x.
         //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
-        // DS is constant on each element
-        SField descentVelocity(mesh.numBoundaryElements());
-        ETensor DS;
+        // For linear FEM, G_ijkl is constant on each element, so is stored as a
+        // tensor per boundary edge.
+        // NOTE: for higher order FEM, we will probably have to settle for a
+        // function that computes an inner product with G instead of returning
+        // a representation of G itself (unless what we are taking an inner
+        // product with is constant, in which case we can return average of G
+        // over the boundary element, which is actually probably the case.)
+        std::vector<ETensor> gradient(mesh.numBoundaryElements());
         SMatrix we_ij, we_kl;
-        for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
-            auto e = mesh.element(ei);
+        for (size_t elemIdx = 0; elemIdx < mesh.numElements(); ++elemIdx) { 
+            auto e = mesh.element(elemIdx);
             if (!e.isBoundary()) continue;
+            ETensor G_elem;
             for (size_t ij = 0; ij < numStrains; ++ij) {
-                sim.elementStrain(ei, w_ij[ij], we_ij);
+                sim.elementStrain(elemIdx, w[ij], we_ij);
                 we_ij += SMatrix::CanonicalBasis(ij);
                 for (size_t kl = ij; kl < numStrains; ++kl) {
-                    sim.elementStrain(ei, w_ij[kl], we_kl);
+                    sim.elementStrain(elemIdx, w[kl], we_kl);
                     we_kl += SMatrix::CanonicalBasis(kl);
-                    DS.D(ij, kl) = e->E().doubleContract(we_ij)
-                                         .doubleContract(we_kl);
+                    G_elem.D(ij, kl) = e->E().doubleContract(we_ij)
+                                             .doubleContract(we_kl);
                 }
             }
-            Real vn = diff.quadrupleContract(DS);
 
-            // distribute vn to all of this element's boundary faces/edges
-            for (size_t f = 0; f < mesh.element(ei).numNeighbors(); ++f) {
-                auto h = mesh.element(ei).interface(f);
-                if (h.isBoundary()) {
-                    auto bh = h.boundaryEntity();
-                    assert(bh);
-                    descentVelocity[bh.index()] = vn;
-                }
+            // Distribute G_elem to all of this element's boundary faces/edges
+            for (size_t f = 0; f < mesh.element(elemIdx).numNeighbors(); ++f) {
+                auto h = mesh.element(elemIdx).interface(f).boundaryEntity();
+                if (h && !h->isPeriodic)
+                    gradient.at(h.index()) = G_elem;
             }
         }
 
-        return descentVelocity;
+        return gradient;
     }
 }
 

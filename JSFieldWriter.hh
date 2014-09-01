@@ -81,7 +81,11 @@ private:
             }
             m_outStream << "]";
         }
-
+        m_outStream << " ];" << std::endl << "boundaryNodes = [ ";
+        for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
+            m_outStream << (i ? ", " : "")
+                        << mesh.boundaryVertex(i).volumeVertex().index();
+        }
         m_outStream << " ];" << std::endl;
     }
 

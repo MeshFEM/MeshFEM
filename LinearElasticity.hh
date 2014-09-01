@@ -171,6 +171,8 @@ namespace LinearElasticity {
             PeriodicCondition<_N> pc(m_mesh);
             m_dofForNode = pc.periodicDoFsForVertices();
             m_numDoFs = pc.numPeriodicDoFs();
+            for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
+                m_mesh.boundaryElement(i)->isPeriodic = pc.isPeriodicBE(i);
         }
 
         void removePeriodicConditions() {
@@ -683,7 +685,8 @@ namespace LinearElasticity3D {
     typedef LinearElasticity::BoundaryNodeDataND<3> BoundaryNodeData;
 
     struct BoundaryElementData : LinearFEM3D::BoundaryElementData {
-        BoundaryElementData() : neumannTraction(Vector3D::Zero()) { }
+        BoundaryElementData() : neumannTraction(Vector3D::Zero()),
+                                isPeriodic(false) { }
         // Get the load this triangle's Neumann condition places on its corner
         // nodes. Note: the integral of a picewise constant function, f, times
         // the nodes' shape functions is f * A / 3
@@ -692,6 +695,7 @@ namespace LinearElasticity3D {
         }
 
         Vector3D neumannTraction;
+        bool isPeriodic;
     };
 
     template<class VData  = LinearFEM3D::NodeData,
@@ -727,7 +731,8 @@ namespace LinearElasticity2D {
 
     struct BoundaryElementData : LinearFEM2D::BoundaryElementData<Point2D> {
         typedef LinearFEM2D::BoundaryElementData<Point2D> Base;
-        BoundaryElementData() : neumannTraction(Vector2D::Zero()) { }
+        BoundaryElementData() : neumannTraction(Vector2D::Zero()),
+                                isPeriodic(false) { }
         // Get the load this edge's Neumann condition places on its corner
         // nodes. Note: the integral of a picewise constant function, f, times
         // the nodes' shape functions is f * A / 2
@@ -736,6 +741,7 @@ namespace LinearElasticity2D {
         }
 
         Vector2D neumannTraction;
+        bool isPeriodic;
     };
 
     template<class VData  = LinearFEM2D::NodeData<Point2D>,
