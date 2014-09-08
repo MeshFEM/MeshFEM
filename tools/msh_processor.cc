@@ -510,6 +510,8 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
                       const MSHFieldParser<N> &parser, const string &arg) {
     auto top = popValue(stack);
     string name = op + "(" + top->name + ")";
+    // NOTE: we could cast all quantities to ScalarField and use only the sfOps
+    // table, but that would require a bunch of memory allocations/copies.
     static const map<string, function<Real(const SField &f)>> sfOps = {
         { "min",    [](const SField &f) -> Real { return f.min(); } },
         { "max",    [](const SField &f) -> Real { return f.max(); } },
@@ -533,7 +535,7 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
         stack.push_back(VPtr<N>(r));
     }
     else if (auto vVal = dynamic_pointer_cast<VectorValue<N>>(top)) {
-        stack.push_back(VPtr<N>(new ScalarValue<N>(name, sfOps.at(op)(vVal->value))));
+        stack.push_back(VPtr<N>(new ScalarValue<N>(name, vOps.at(op)(vVal->value))));
     }
     else { throw runtime_error("Invalid argument."); }
 }

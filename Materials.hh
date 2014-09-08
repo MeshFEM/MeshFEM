@@ -170,8 +170,8 @@ struct Isotropic {
     //               small--this minimum should be set based on homogenization results
     //               Poisson ratio can't be less than -1, and for robustness we
     //               limit it to -0.75
-    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 292), Bounds(1,  0.6) }; }
-    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 25), Bounds(1, 0.1) }; }
+    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 292), Bounds(1,  0.85) }; }
+    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 25), Bounds(1, -0.3) }; }
 
     Real vars[numVars];
 };
