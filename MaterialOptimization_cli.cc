@@ -40,6 +40,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m",                po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
+        ("bounds,b",                  po::value<string>(),                             "Material variable bounds")
         ("numIters,n",                po::value<int>()->default_value(8),              "Number of iterations")
         ("iterationsPerDirichlet,N",  po::value<int>()->default_value(1),              "Number of local/global iterations to run before re-solving the target dirichlet problem.")
         ("noRigidMotionDirichlet,R",                                                   "Apply no rigid motion constraint in Dirichlet solve.")
@@ -123,6 +124,8 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     }
 
     shared_ptr<MField> matField(new MField(inElements.size(), matIdxForElement));
+    if (args.count("bounds"))
+        _Material<_N>::setBoundsFromFile(args["bounds"].as<string>());
 
     bool noRigidMotion;
     auto bconds = readBoundaryConditions<_N>(bcPath,

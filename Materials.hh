@@ -24,22 +24,86 @@
 #include <vector>
 #include <string>
 
-// Material parameter bounds
-struct Bounds {
-    Bounds(size_t _var, Real _val) : var(_var), value(_val) { }
-    size_t var; Real value;
-};
 
 namespace Materials {
+
+// Material parameter bounds
+struct Bounds {
+    struct Bound {
+        Bound(size_t _var, Real _val) : var(_var), value(_val) { }
+        size_t var; Real value;
+    };
+
+    Bounds() { }
+    Bounds(const std::vector<Bound> &l, const std::vector<Bound> &u)
+        : m_lower(l), m_upper(u) { }
+
+    void setFromFile(const std::string &boundsPath);
+
+    const std::vector<Bound> &lower() const { return m_lower; }
+    const std::vector<Bound> &upper() const { return m_upper; }
+
+    void setLower(const std::vector<Bound> &l) { m_lower = l; }
+    void setUpper(const std::vector<Bound> &u) { m_upper = u; }
+private:
+    std::vector<Bound> m_lower, m_upper;
+};
+
 // Var 0: Young's modulus, var 1: Poisson ratio
+template<size_t _N, template<size_t> class _Mat, size_t _NVars>
+struct VariableMaterial {
+    typedef ElasticityTensor<Real, _N> ETensor;
+    static constexpr size_t numVars = _NVars;
+
+    virtual void getETensorDerivative(size_t p, ETensor &d) const = 0;
+    virtual void getTensor(ETensor &tensor) const = 0;
+
+    static const std::vector<Bounds::Bound> &upperBounds() { return _Mat<_N>::g_bounds.upper(); }
+    static const std::vector<Bounds::Bound> &lowerBounds() { return _Mat<_N>::g_bounds.lower(); }
+
+    static void setUpperBounds(const std::vector<Bounds::Bound> &u) { _Mat<_N>::g_bounds.setUpper(u); }
+    static void setLowerBounds(const std::vector<Bounds::Bound> &l) { _Mat<_N>::g_bounds.setLower(l); }
+
+    static void setBoundsFromFile(const std::string &path) {
+        _Mat<_N>::g_bounds.setFromFile(path);
+        // Validate bounds.
+        std::runtime_error indexError("Bounds variable index out-of-bounds.");
+        for (const auto &b : _Mat<_N>::g_bounds.lower()) if (b.var >= numVars) throw indexError;
+        for (const auto &b : _Mat<_N>::g_bounds.upper()) if (b.var >= numVars) throw indexError;
+    }
+
+    Real vars[numVars];
+};
+
 template<size_t _N>
-struct Isotropic {
+struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     static constexpr size_t N = _N;
-    static constexpr size_t numVars = 2;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
+    typedef VariableMaterial<N, Materials::Isotropic, 2> Base;
+    using Base::vars;
 
-    Isotropic() { vars[0] = 200.0; vars[1] = 0.3; }
+    // WARNING: bounds are shared by all isotropic materials! (static)
+    struct IsotropicBounds : Bounds {
+        IsotropicBounds() {
+            // Default Bounds
+            // Upper: Upper bounds should be based on base material's moduli.
+            //        Poisson ratio can't be greater than or equal 0.5
+            //        (at 0.5, 3D lambda becomes Inf)
+            // Lower: Young's modulus must be positive and is hard to make
+            //        small--this minimum should be set based on homogenization results
+            //        Poisson ratio can't be less than -1, and for robustness we
+            //        limit it to -0.75
+            Bounds::setUpper({ Bounds::Bound(0, 292), Bounds::Bound(1, 0.6) });
+            Bounds::setLower({ Bounds::Bound(0, 25),  Bounds::Bound(1, 0.1) });
+        }
+    };
+
+    Isotropic() {
+        // Default Parameters
+        vars[0] = 200.0;
+        vars[1] = 0.3;
+    }
 
     static const std::string &variableName(size_t i) {
         static const std::vector<std::string> names = { "E", "nu" };
@@ -157,24 +221,14 @@ struct Isotropic {
         SMatrix strain, stress;
         Real volSqrt;
     };
-
-    struct Bounds {
-        Bounds(size_t _var, Real _val) : var(_var), value(_val) { }
-        size_t var; Real value;
-    };
-
-    // Upper bounds: Upper bounds should be based on base material's moduli.
-    //               Poisson ratio can't be greater than or equal 0.5
-    //               (at 0.5, 3D lambda becomes Inf)
-    // Lower bounds: Young's modulus must be positive and is hard to make
-    //               small--this minimum should be set based on homogenization results
-    //               Poisson ratio can't be less than -1, and for robustness we
-    //               limit it to -0.75
-    constexpr std::vector<Bounds> upperBounds() const { return { Bounds(0, 292), Bounds(1,  0.85) }; }
-    constexpr std::vector<Bounds> lowerBounds() const { return { Bounds(0, 25), Bounds(1, -0.3) }; }
-
-    Real vars[numVars];
+private:
+    friend Base;
+    static IsotropicBounds g_bounds;
 };
+
+// Static variable needs to be explicitly defined...
+template<size_t _N>
+typename Isotropic<_N>::IsotropicBounds Isotropic<_N>::g_bounds;
 
 // Axis-aligned orthotropic material.
 // 2D: 4 variables
@@ -185,15 +239,43 @@ struct Isotropic {
 // Vars 0..2: Young's moduli,
 // Vars 3..5: Poisson ratios (YX, ZX, ZY)
 // Vars 6..8: Shear ratios   (YZ, ZX, XY)
+size_t constexpr nOrthotropicVars(size_t n) { return (n == 3) ? 9 : 4; }
 template<size_t _N>
-struct Orthotropic {
+struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
     static constexpr size_t N = _N;
-    static constexpr size_t nvarsForDim(size_t n) { return (_N == 3) ? 9 : 4; }
-    static constexpr size_t numVars = nvarsForDim(_N);
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
 
+    typedef VariableMaterial<N, Materials::Orthotropic, nOrthotropicVars(N)> Base;
+    using Base::vars;
+
+    // WARNING: bounds are shared by all orthotropic materials! (static)
+    struct OrthotropicBounds : Bounds {
+        OrthotropicBounds() {
+            // Default Bounds
+            // Upper: Upper bounds should be based on base material's moduli.
+            //        Poisson ratios can't be greater than 0.5
+            //        (at 0.5, 3D isotropic lambda becomes Inf, so we avoid it
+            //        here too)
+            // Lower: Young's and shear moduli must be positive and are hard to make
+            //        small--this minimum should be set based on homogenization results
+            //        Poisson ratios can't be less than -1, and for robustness we
+            //        limit them to -0.75
+            typedef Bounds::Bound Bound;
+            if (_N == 3) Base::setUpperBounds({ Bound(3, 0.45), Bound(4, 0.45), Bound(5, 0.45) });
+            else         Base::setUpperBounds({ Bound(0,  384), Bound(1,  384), Bound(2, 0.45), Bound(3, 102) });
+            if (_N == 3) {
+                Base::setLowerBounds({ Bound(0,  0.01), Bound(1,  0.01), Bound(2,  0.01),
+                                       Bound(3, -0.75), Bound(4, -0.75), Bound(5, -0.75),
+                                       Bound(6,  0.01), Bound(7,  0.01), Bound(8,  0.01) });
+            }
+            else Base::setLowerBounds({ Bound(0,  18), Bound(1,  18),
+                                        Bound(2, 0.0), Bound(3,  2) });
+        }
+    };
+
     Orthotropic() {
+        // Default Parameters
         if (_N == 3) {
             vars[0] = vars[1] = vars[2] = 1.0;
             vars[3] = vars[4] = vars[5] = 0.3;
@@ -278,34 +360,14 @@ struct Orthotropic {
         Real volSqrt;
         SMatrix strain, stress;
     };
-
-    struct Bounds {
-        Bounds(size_t _var, Real _val) : var(_var), value(_val) { }
-        size_t var; Real value;
-    };
-
-    // Upper bounds: Upper bounds should be based on base material's moduli.
-    //               Poisson ratios can't be greater than 0.5
-    //               (at 0.5, 3D isotropic lambda becomes Inf, so we avoid it
-    //               here too)
-    // Lower bounds: Young's and shear moduli must be positive and are hard to make
-    //               small--this minimum should be set based on homogenization results
-    //               Poisson ratios can't be less than -1, and for robustness we
-    //               limit them to -0.75
-    std::vector<Bounds> upperBounds() const {
-        if (_N == 3) return { Bounds(3,  0.45), Bounds(4, 0.45), Bounds(5, 0.45) };
-        else         return { Bounds(0, 384), Bounds(1, 384), Bounds(2,  0.45), Bounds(3, 102) };
-    }
-    std::vector<Bounds> lowerBounds() const {
-        if (_N == 3)
-             return { Bounds(0,  0.01), Bounds(1,  0.01), Bounds(2,  0.01),
-                      Bounds(3, -0.75), Bounds(4, -0.75), Bounds(5, -0.75),
-                      Bounds(6,  0.01), Bounds(7,  0.01), Bounds(8,  0.01) };
-        else return { Bounds(0,  18), Bounds(1,  18), Bounds(2, 0.0), Bounds(3,  2) };
-    }
-
-    Real vars[numVars];
+private:
+    friend Base;
+    static OrthotropicBounds g_bounds;
 };
+
+// Static variable needs to be explicitly defined...
+template<size_t _N>
+typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
 
 template<size_t _N>
 struct Constant {
