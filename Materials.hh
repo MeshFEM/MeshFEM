@@ -101,7 +101,7 @@ struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
 
     Isotropic() {
         // Default Parameters
-        vars[0] = 200.0;
+        vars[0] = 50.0;
         vars[1] = 0.3;
     }
 

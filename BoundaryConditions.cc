@@ -250,7 +250,8 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
                 ++len;
             }
             if (len > 3) throw runtime_error("invalid mask");
-            cmask.setComponentString(type.substr(0, len));
+            if (len > 0)
+                cmask.setComponentString(type.substr(0, len));
             type = prefix + type.substr(len);
         }
         
