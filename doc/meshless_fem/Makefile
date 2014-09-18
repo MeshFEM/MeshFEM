@@ -1,4 +1,4 @@
-all: view
+all: TensorFlattening.pdf
 
 view: TensorFlattening.pdf
 	skim-load TensorFlattening.pdf

@@ -19,6 +19,7 @@
 \usepackage[title]{appendix}
 
 \DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator{\tr}{tr}
 
 \pagestyle{fancy}
 \headheight 24pt
@@ -475,12 +476,97 @@ $$
 \subsection{Examples}
 Finally, we show examples of double contraction implemented by matrix vector
 multiplies and inner products. We use $F$ to denote the flattening operation
-mapping symmetric rank 2 tensors to vectors. Letting ${\bf e} = F(\e)$ and
-${\bf s} = F(\sigma)$ (flattened stress and strain tensors), we show various
-identities of our notation:
+mapping symmetric rank 2 tensors to vectors and symmetric rank 4 tensors to
+symmetric matrices. Letting ${\bf e} = F(\e)$ and ${\bf s} = F(\sigma)$
+(flattened stress and strain tensors), we show various identities of our
+notation:
 \begin{gather*}
 {\bf s} = F(\sigma) = F(E : \e) = F(E_{ijkl} \e_{kl}) = D S {\bf e}, \\
 \sigma : \e = \sigma_{ij} \e_{kl} = {\bf s}^T S {\bf e}, \\
-\e : E : \e = \e_{ij} E_{ijkl} \e_{kl} = {\bf e}^T S D S {\bf e}
+\e : E : \e = \e_{ij} E_{ijkl} \e_{kl} = {\bf e}^T S D S {\bf e}, \\
+F(A : B) = F(A_{ijpq} B_{pqkl}) = F(A) S F(B)
 \end{gather*}
+
+Note, however, that the last operation does not result in a tensor with major
+symmetries unless $A_{ijpq} = B_{pqij}$. This means that the matrix representing
+the flattened result is not necessarily symmetric.
+
+\section{Quadruple Contraction}
+We can also implement quadruple contraction in flattened form:
+$$
+A_{ijkl} B_{ijkl}
+$$
+This is useful in several settings, including computing the Frobenius norm of a
+tensor. Each term of the sum will be an entry of F(A) multiplied by the
+corresponding entry of F(B)---we just need to determine how many times each term
+appears. That is, we can instead sum over entries of the flattened tensor,
+weighting each term by how many components are flattened down to that
+particular entry.
+This can be determined from the minor symmetries alone; major symmetry just
+causes a symmetric flattened tensor as opposed to flattening more components of
+the tensor to a single flattened entry.
+
+Below are the counts of how many tensor components are represented by each
+flattened entry:
+$$
+\text{3D: }\begin{pmatrix}
+        1 & 1 & 1 & 2 & 2 & 2 \\
+        1 & 1 & 1 & 2 & 2 & 2 \\
+        1 & 1 & 1 & 2 & 2 & 2 \\
+        2 & 2 & 2 & 4 & 4 & 4 \\
+        2 & 2 & 2 & 4 & 4 & 4 \\
+        2 & 2 & 2 & 4 & 4 & 4 \\
+    \end{pmatrix}, \quad \quad
+\text{2D: }\begin{pmatrix}
+        1 & 1 & 2 \\
+        1 & 1 & 2 \\
+        2 & 2 & 4 \\
+    \end{pmatrix}
+$$
+This per-entry weighting can be applied to a flattened tensor by ``shear
+doubling'' both the rows and columns,
+$$
+S F(A) S,
+$$
+allowing us to implement the quadruple contraction as a double contraction of
+the scaled flattened tensors:
+$$
+A_{ijkl} B_{ijkl} = [S F(A) S] : F(B) = [F(A)S] : [S F(B)] = [SF(A)] : [F(B)S]
+$$
+In linear algebra terms, this is:
+$$
+A_{ijkl} B_{ijkl} = \tr\left(S F(A)^T S F(B)\right) = \tr\left(F(A)^T S F(B) S\right)
+$$
+\subsection{Examples}
+As an example, we compute the squared Frobenius norm of an orthotropic elasticity
+tensor:
+$$
+\text{3D: } \quad F(E) = \begin{pmatrix}
+    E_{0000} & E_{0011} & E_{0022} & 0 & 0 & 0 \\
+    E_{0011} & E_{1111} & E_{1122} & 0 & 0 & 0 \\
+    E_{0022} & E_{1122} & E_{2222} & 0 & 0 & 0 \\
+           0 &        0 &        0 & E_{1212} & 0 & 0 \\
+           0 &        0 &        0 & 0 & E_{0202} & 0 \\
+           0 &        0 &        0 & 0 & 0 & E_{0101} \\
+\end{pmatrix}, \quad \quad
+\text{2D: } \quad F(E) = \begin{pmatrix}
+    E_{0000} & E_{0011} & 0 \\
+    E_{0011} & E_{1111} & 0 \\
+           0 &        0 & E_{0101} \\
+\end{pmatrix}
+$$
+In 3D the Frobenius norm is
+\begin{align*}
+\norm{E}^2_F = &E_{ijkl} : E_{ijkl} = \norm{S^{1/2} F(E) S^{1/2}}^2_F = \\
+&E_{0000}^2 + E_{1111}^2 + E_{2222}^2 + 2 E_{0011}^2 + 2 E_{0022}^2 + 2 E_{1122}^2
++ 4 E_{1212}^2 + 4 E_{0202}^2 + 4 E_{0101}^2,
+\end{align*}
+and in 2D:
+\begin{align*}
+\norm{E}^2_F = E_{ijkl} : E_{ijkl} = \norm{S^{1/2} F(E) S^{1/2}}^2_F = E_{0000}^2 + E_{1111}^2 + 2 E_{0011}^2 + 4 E_{0101}^2.
+\end{align*}
+Notice that the only difference between $\norm{E}_F^2$ and $\norm{F(E)}_F^2$
+for orthotropic tensors is the weight of 4 on the ``shear'' terms.
+
+
 \end{document}

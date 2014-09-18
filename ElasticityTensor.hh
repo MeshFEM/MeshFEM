@@ -219,7 +219,7 @@ public:
     }
 
 
-    // NOTE: plain tensor double contraction is illegal because the result
+    // NOTE: plain tensor double contraction is forbidden because the result
     // is asymmetric, however we do support the following operation that we
     // call "double double contract" since it obtains a symmetric result:
     //      A : B : A       (A_ijpq B_pqrs A_rskl)
