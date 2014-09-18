@@ -12,6 +12,8 @@
 #define LINEARFEM_HH
 #include "Types.hh"
 #include <stdexcept>
+#include <vector>
+#include <array>
 
 // FEM on a 3-Manifold embedded in 3D
 namespace LinearFEM3D {
@@ -255,21 +257,19 @@ namespace LinearFEM2D {
 
         template<typename Vertices>
         void setVertexPositions(const Vertices &vertices) {
-            // Fill out mesh data.
-            for (size_t i = 0; i < Base::numVertices(); ++i) {
+            for (size_t i = 0; i < Base::numVertices(); ++i)
                 Base::vertex(i)->p = truncateFrom3D<Point>(vertices[i]);
+            m_computeData();
+        }
+
+        // Also support reading from Luigi/Nico's vertex format
+        void setVertexPositions(const std::vector<std::array<double, _N>> &vertices) {
+            for (size_t i = 0; i < Base::numVertices(); ++i) {
+                Base::vertex(i)->p[0] = vertices[i][0];
+                Base::vertex(i)->p[1] = vertices[i][1];
+                if (_N == 3) Base::vertex(i)->p[2] = vertices[i][2];
             }
-            for (size_t i = 0; i < Base::numTris(); ++i) {
-                auto tri = Base::tri(i);
-                tri->computeData(tri.vertex(0)->p, tri.vertex(1)->p,
-                                 tri.vertex(2)->p);
-            }
-            for (size_t i = 0; i < Base::numBoundaryEdges(); ++i) {
-                auto be = Base::boundaryEdge(i);
-                auto oppV = be.volumeHalfEdge().next().tip();
-                be->computeData(be.tail().volumeVertex()->p,
-                                be. tip().volumeVertex()->p, oppV->p);
-            }
+            m_computeData();
         }
 
         BBox<Point> boundingBox() const {
@@ -285,6 +285,21 @@ namespace LinearFEM2D {
             for (size_t i = 0; i < Base::numTris(); ++i)
                 vol += Base::tri(i)->volume();
             return vol;
+        }
+    private:
+        // Fill out computed mesh data (vertex positions must already be set).
+        void m_computeData() {
+            for (size_t i = 0; i < Base::numTris(); ++i) {
+                auto tri = Base::tri(i);
+                tri->computeData(tri.vertex(0)->p, tri.vertex(1)->p,
+                                 tri.vertex(2)->p);
+            }
+            for (size_t i = 0; i < Base::numBoundaryEdges(); ++i) {
+                auto be = Base::boundaryEdge(i);
+                auto oppV = be.volumeHalfEdge().next().tip();
+                be->computeData(be.tail().volumeVertex()->p,
+                                be. tip().volumeVertex()->p, oppV->p);
+            }
         }
     };
 }
