@@ -497,14 +497,13 @@ $$
 A_{ijkl} B_{ijkl}
 $$
 This is useful in several settings, including computing the Frobenius norm of a
-tensor. Each term of the sum will be an entry of F(A) multiplied by the
-corresponding entry of F(B)---we just need to determine how many times each term
-appears. That is, we can instead sum over entries of the flattened tensor,
-weighting each term by how many components are flattened down to that
-particular entry.
-This can be determined from the minor symmetries alone; major symmetry just
-causes a symmetric flattened tensor as opposed to flattening more components of
-the tensor to a single flattened entry.
+tensor. Each term of the contraction will be an entry of F(A) multiplied by the
+corresponding entry of F(B)---we just need to determine how many times each
+flattened entry appears. That is, we can compute the contraction by instead sum over
+entries of the flattened tensor, weighting each term by how many components are
+flattened down to that particular entry. This can be determined from the minor
+symmetries alone; major symmetry just causes a symmetric flattened tensor as
+opposed to flattening more components of the tensor to a single flattened entry.
 
 Below are the counts of how many tensor components are represented by each
 flattened entry:
