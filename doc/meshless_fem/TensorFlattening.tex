@@ -631,23 +631,23 @@ F(I^{-1}) = \mathscr{D}^{-1} F(I)^{-1} \mathscr{D}^{-1} = \mathscr{D}^{-1} \math
 $$
 
 \subsubsection{Orthotropic Material}
-An orthotropic material parametrized by Young's moduli $Y$, Poisson ratios $\nu$
+An orthotropic material parametrized by Young's moduli $E$, Poisson ratios $\nu$
 and shear moduli $\mu$ has a compliance tensor, $C^{-1}$, with a particularly simple
 flattened form. The mapping from stress to strain tensors can be expressed as:
 $$
 \text{3D: } F(\epsilon) =
 \begin{pmatrix}
-    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & -\frac{\nu_{zx}}{Y_z} & 0 & 0 & 0 \\
-    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y} & -\frac{\nu_{zy}}{Y_z} & 0 & 0 & 0 \\
-    -\frac{\nu_{zx}}{Y_z} & -\frac{\nu_{zy}}{Y_z} & \frac{1}{Y_z} & 0 & 0 & 0 \\
+    \frac{1}{E_x} & -\frac{\nu_{yx}}{E_y} & -\frac{\nu_{zx}}{E_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{yx}}{E_y} & \frac{1}{E_y} & -\frac{\nu_{zy}}{E_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{zx}}{E_z} & -\frac{\nu_{zy}}{E_z} & \frac{1}{E_z} & 0 & 0 & 0 \\
     0 & 0 & 0 & \frac{1}{2 \mu_{yz}} & 0 & 0 \\
     0 & 0 & 0 & 0 & \frac{1}{2 \mu_{zx}} & 0 \\
     0 & 0 & 0 & 0 & 0 & \frac{1}{2 \mu_{xy}}
 \end{pmatrix} F(\sigma), \quad
 \text{2D: } F(\epsilon) = 
 \begin{pmatrix}
-    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & 0 \\
-    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y}  & 0 \\
+    \frac{1}{E_x} & -\frac{\nu_{yx}}{E_y} & 0 \\
+    -\frac{\nu_{yx}}{E_y} & \frac{1}{E_y}  & 0 \\
     0 & 0 & \frac{1}{2 \mu_{xy}}
 \end{pmatrix} F(\sigma)
 $$
@@ -657,17 +657,17 @@ arguments, we need to apply $\mathscr{D}^{-1}$ to the matrix above to arrive at 
 $$
 \text{3D: } F(C^{-1}) =
 \begin{pmatrix}
-    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & -\frac{\nu_{zx}}{Y_z} & 0 & 0 & 0 \\
-    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y} & -\frac{\nu_{zy}}{Y_z} & 0 & 0 & 0 \\
-    -\frac{\nu_{zx}}{Y_z} & -\frac{\nu_{zy}}{Y_z} & \frac{1}{Y_z} & 0 & 0 & 0 \\
+    \frac{1}{E_x} & -\frac{\nu_{yx}}{E_y} & -\frac{\nu_{zx}}{E_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{yx}}{E_y} & \frac{1}{E_y} & -\frac{\nu_{zy}}{E_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{zx}}{E_z} & -\frac{\nu_{zy}}{E_z} & \frac{1}{E_z} & 0 & 0 & 0 \\
     0 & 0 & 0 & \frac{1}{4 \mu_{yz}} & 0 & 0 \\
     0 & 0 & 0 & 0 & \frac{1}{4 \mu_{zx}} & 0 \\
     0 & 0 & 0 & 0 & 0 & \frac{1}{4 \mu_{xy}}
 \end{pmatrix}, \quad
 \text{2D: } F(C^{-1}) = 
 \begin{pmatrix}
-    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & 0 \\
-    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y}  & 0 \\
+    \frac{1}{E_x} & -\frac{\nu_{yx}}{E_y} & 0 \\
+    -\frac{\nu_{yx}}{E_y} & \frac{1}{E_y}  & 0 \\
     0 & 0 & \frac{1}{4 \mu}
 \end{pmatrix}.
 $$
@@ -677,24 +677,24 @@ F(C) = \mathscr{D}^{-1} F\left(C^{-1}\right)^{-1} \mathscr{D}^{-1}$ to get:
 \begin{gather*}
 \text{3D: } F(C) =
 \begin{pmatrix}
- \frac{Y_{x} Y_{y} \left(Y_{y} v_{zy}^2-Y_{z}\right)}{\text{denominator}} & -\frac{Y_{x} Y_{y} (Y_{z} v_{yx}+Y_{y} v_{zx} v_{zy})}{\text{denominator}} & -\frac{Y_{x} Y_{y} Y_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
- -\frac{Y_{x} Y_{y} (Y_{z} v_{yx}+Y_{y} v_{zx} v_{zy})}{\text{denominator}} & \frac{Y_{y}^2 \left(Y_{x} v_{zx}^2-Y_{z}\right)}{\text{denominator}} & -\frac{Y_{y} Y_{z} (Y_{x} v_{yx} v_{zx}+Y_{y} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
- -\frac{Y_{x} Y_{y} Y_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & -\frac{Y_{y} Y_{z} (Y_{x} v_{yx} v_{zx}+Y_{y} v_{zy})}{\text{denominator}} & \frac{Y_{z}^2 \left(Y_{x} v_{yx}^2-Y_{y}\right)}{\text{denominator}} & 0 & 0 & 0 \\
+ \frac{E_{x} E_{y} \left(E_{y} v_{zy}^2-E_{z}\right)}{\text{denominator}} & -\frac{E_{x} E_{y} (E_{z} v_{yx}+E_{y} v_{zx} v_{zy})}{\text{denominator}} & -\frac{E_{x} E_{y} E_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
+ -\frac{E_{x} E_{y} (E_{z} v_{yx}+E_{y} v_{zx} v_{zy})}{\text{denominator}} & \frac{E_{y}^2 \left(E_{x} v_{zx}^2-E_{z}\right)}{\text{denominator}} & -\frac{E_{y} E_{z} (E_{x} v_{yx} v_{zx}+E_{y} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
+ -\frac{E_{x} E_{y} E_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & -\frac{E_{y} E_{z} (E_{x} v_{yx} v_{zx}+E_{y} v_{zy})}{\text{denominator}} & \frac{E_{z}^2 \left(E_{x} v_{yx}^2-E_{y}\right)}{\text{denominator}} & 0 & 0 & 0 \\
  0 & 0 & 0 & \mu_{yz} & 0 & 0 \\
  0 & 0 & 0 & 0 & \mu_{zx} & 0 \\
  0 & 0 & 0 & 0 & 0 & \mu_{xy} \\
 \end{pmatrix}, \\
 \text{2D: } F(C) =
 \begin{pmatrix}
-    \frac{Y_{x} Y_{y}}{Y_{y}-Y_{x} \nu_{yx}^2} &
-    \frac{Y_{x} Y_{y} \nu_{yx}}{Y_{y}-Y_{x} \nu_{yx}^2}
+    \frac{E_{x} E_{y}}{E_{y}-E_{x} \nu_{yx}^2} &
+    \frac{E_{x} E_{y} \nu_{yx}}{E_{y}-E_{x} \nu_{yx}^2}
     & 0 \\
-     \frac{Y_{x} Y_{y} \nu_{yx}}{Y_{y}-Y_{x} \nu_{yx}^2}
-     & \frac{Y_{y}^2}{Y_{y}-Y_{x} \nu_{yx}^2} & 0 \\
+     \frac{E_{x} E_{y} \nu_{yx}}{E_{y}-E_{x} \nu_{yx}^2}
+     & \frac{E_{y}^2}{E_{y}-E_{x} \nu_{yx}^2} & 0 \\
       0 & 0 & \mu \\
  \end{pmatrix}
 \end{gather*}
-with 3D denominator $Y_x Y_z \nu_{yx}^2 + Y_y^2 \nu_{zy}^2 + Y_y (-Y_z + Y_x
+with 3D denominator $E_x E_z \nu_{yx}^2 + E_y^2 \nu_{zy}^2 + E_y (-E_z + E_x
 \nu_{zx} (\nu_{zx} + 2 \nu_{yx} \nu_{zy}))$.
 
 \end{document}
