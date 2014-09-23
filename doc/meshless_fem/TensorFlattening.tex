@@ -136,7 +136,8 @@ $$
 \subsection{Symmetric Rank 4 Tensors}
 The symmetric rank 2 tensor flattening induces a flattening of symmetric rank 4
 tensors that act on symmetric rank 2 tensors by double contraction. We consider
-tensors with the symmetries of an elasticity tensor:
+tensors with the symmetries of an elasticity tensor (i.e. major and minor
+symmetries):
 \begin{equation}
 \label{eqn:symmetry}
 E_{ijkl} = E_{jikl} = E_{ijlk} = E_{klij}.
@@ -530,11 +531,13 @@ $$
 allowing us to implement the quadruple contraction as a double contraction of
 the scaled flattened tensors:
 $$
-A_{ijkl} B_{ijkl} = [S F(A) S] : F(B) = [F(A)S] : [S F(B)] = [SF(A)] : [F(B)S]
+A_{ijkl} B_{ijkl} = [S F(A) S] : F(B) = [F(A)S] : [S F(B)] = [SF(A)] : [F(B)S] =
+S^{\frac{1}{2}} F(A) S^{\frac{1}{2}} : S^{\frac{1}{2}} F(B) S^{\frac{1}{2}} : 
 $$
 In linear algebra terms, this is:
 $$
 A_{ijkl} B_{ijkl} = \tr\left(S F(A)^T S F(B)\right) = \tr\left(F(A)^T S F(B) S\right)
+= \tr\left(S^{\frac{1}{2}} F(A)^T S^{\frac{1}{2}} S^{\frac{1}{2}} F(B) S^{\frac{1}{2}} \right)
 $$
 \subsection{Examples}
 As an example, we compute the squared Frobenius norm of an orthotropic elasticity
@@ -567,5 +570,133 @@ and in 2D:
 Notice that the only difference between $\norm{E}_F^2$ and $\norm{F(E)}_F^2$
 for orthotropic tensors is the weight of 4 on the ``shear'' terms.
 
+\section{Rank 4 Identities and Inverses}
+Defining the rank 4 identity and inverse operators in a way that is consistent
+with our flattening and contraction conventions requires a bit of care. While
+linear mappings on symmetric rank 2 tensors, $Sym^{n\times n} \to Sym^{n\times
+n}$, do not have a unique representation as a rank 4 tensor, they do have a
+unique representation with the symmetries required for flattening. We provide
+this unique definition below.
+
+\subsection{Symmetric Rank 4 Identity}
+We flatten the identity tensor defined by its action  on $X \in Sym^{n \times
+n}$:
+
+\begin{equation}
+\label{eqn:identityDef}
+I_{ijkl} X_{kl} =  X_{ij}.
+\end{equation}
+
+Obviously the tensor $\delta_{ik} \delta_{jl}$ implements this map, but it
+doesn't have the symmetries of an elasticity tensor and cannot be flattened.
+However, since (\ref{eqn:identityDef}) does not
+uniquely define I, we are free to choose the unique rank 4 tensor that has major and
+minor symmetries:
+$I_{ijkl} = \frac{1}{2}\left(\delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk} \right)$.
+This choice can be derived/motivated as follows.
+
+We wish to find the symmetric tensor $I$ such that for all $X \in Sym^{nxn}$:
+\begin{gather*}
+F(I : X) = F(X) \quad \Longrightarrow \quad
+F(I) S F(X) = F(X) \quad \Longrightarrow \quad
+\boxed{
+F(I) = S^{-1},}
+\end{gather*}
+which is indeed what we get when flattening the symmetrized identity,
+$I_{ijkl} = \frac{1}{2}\left(\delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk} \right)$. As
+a sanity check, we can verify that this acts as an identity for double contraction of
+rank 4 tensors as well:
+$$
+F(I : A) = F(I) S F(A) = S^{-1} S F(A) = F(A). \quad \checkmark
+$$
+
+\subsection{Symmetric Rank 4 Inverse}
+Now we define the inverse, $A^{-1}$, of a symmetric rank 4 tensor $A$ by
+\begin{equation}
+\label{eqn:identityDef}
+A_{ijpq} A^{-1}_{pqkl} = I_{ijkl},
+\end{equation}
+but again, due to symmetries, the definition is not unique. We derive the
+unique inverse that has major and minor symmetries:
+$$
+F(A:A^{-1}) = F(I) \quad \Longrightarrow \quad  F(A) S F(A^{-1}) = S^{-1} \quad
+\Longrightarrow \quad \boxed{F(A^{-1}) = S^{-1} F(A)^{-1} S^{-1},}
+$$
+and recover $A^{-1}$ itself by unflattening.
+
+\subsection{Examples}
+\subsubsection{Inverse of the Identity}
+We do another simple sanity check of our notation, that the identity is its own
+inverse:
+$$
+F(I^{-1}) = S^{-1} F(I)^{-1} S^{-1} = S^{-1} S S^{-1} = S^{-1} = F(I) \quad \checkmark
+$$
+
+\subsubsection{Orthotropic Material}
+An orthotropic material parametrized by Young's moduli $Y$, Poisson ratios $\nu$
+and shear moduli $\mu$ has a compliance tensor, $E^{-1}$ with a particularly simple
+flattened form. The mapping from stress to strain tensors can be expressed as:
+$$
+\text{3D: } F(\epsilon) =
+\begin{pmatrix}
+    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & -\frac{\nu_{zx}}{Y_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y} & -\frac{\nu_{zy}}{Y_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{zx}}{Y_z} & -\frac{\nu_{zy}}{Y_z} & \frac{1}{Y_z} & 0 & 0 & 0 \\
+    0 & 0 & 0 & \frac{1}{2 \mu_{yz}} & 0 & 0 \\
+    0 & 0 & 0 & 0 & \frac{1}{2 \mu_{zx}} & 0 \\
+    0 & 0 & 0 & 0 & 0 & \frac{1}{2 \mu_{xy}}
+\end{pmatrix} F(\sigma), \quad
+\text{2D: } F(\epsilon) = 
+\begin{pmatrix}
+    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & 0 \\
+    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y}  & 0 \\
+    0 & 0 & \frac{1}{2 \mu_{xy}}
+\end{pmatrix} F(\sigma)
+$$
+Since our flattened double contraction formula inserts a shear doubler $S$ between its
+arguments, we need to apply $S^{-1}$ to the matrix above to arrive at $F(E^{-1})$
+(so that the double contraction $E^{-1} : \sigma$ is this mapping):
+$$
+\text{3D: } F(E^{-1}) =
+\begin{pmatrix}
+    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & -\frac{\nu_{zx}}{Y_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y} & -\frac{\nu_{zy}}{Y_z} & 0 & 0 & 0 \\
+    -\frac{\nu_{zx}}{Y_z} & -\frac{\nu_{zy}}{Y_z} & \frac{1}{Y_z} & 0 & 0 & 0 \\
+    0 & 0 & 0 & \frac{1}{4 \mu_{yz}} & 0 & 0 \\
+    0 & 0 & 0 & 0 & \frac{1}{4 \mu_{zx}} & 0 \\
+    0 & 0 & 0 & 0 & 0 & \frac{1}{4 \mu_{xy}}
+\end{pmatrix}, \quad
+\text{2D: } F(E^{-1}) = 
+\begin{pmatrix}
+    \frac{1}{Y_x} & -\frac{\nu_{yx}}{Y_y} & 0 \\
+    -\frac{\nu_{yx}}{Y_y} & \frac{1}{Y_y}  & 0 \\
+    0 & 0 & \frac{1}{4 \mu_{xy}}
+\end{pmatrix}.
+$$
+Then we can apply our inverse formula, 
+$
+F(E) = S^{-1} F\left(E^{-1}\right)^{-1} S^{-1}$ to get:
+\begin{gather*}
+\text{3D: } F(E) =
+\begin{pmatrix}
+ \frac{Y_{x} Y_{y} \left(Y_{y} v_{zy}^2-Y_{z}\right)}{\text{denominator}} & -\frac{Y_{x} Y_{y} (Y_{z} v_{yx}+Y_{y} v_{zx} v_{zy})}{\text{denominator}} & -\frac{Y_{x} Y_{y} Y_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
+ -\frac{Y_{x} Y_{y} (Y_{z} v_{yx}+Y_{y} v_{zx} v_{zy})}{\text{denominator}} & \frac{Y_{y}^2 \left(Y_{x} v_{zx}^2-Y_{z}\right)}{\text{denominator}} & -\frac{Y_{y} Y_{z} (Y_{x} v_{yx} v_{zx}+Y_{y} v_{zy})}{\text{denominator}} & 0 & 0 & 0 \\
+ -\frac{Y_{x} Y_{y} Y_{z} (v_{zx}+v_{yx} v_{zy})}{\text{denominator}} & -\frac{Y_{y} Y_{z} (Y_{x} v_{yx} v_{zx}+Y_{y} v_{zy})}{\text{denominator}} & \frac{Y_{z}^2 \left(Y_{x} v_{yx}^2-Y_{y}\right)}{\text{denominator}} & 0 & 0 & 0 \\
+ 0 & 0 & 0 & \mu_{yz} & 0 & 0 \\
+ 0 & 0 & 0 & 0 & \mu_{zx} & 0 \\
+ 0 & 0 & 0 & 0 & 0 & \mu_{xy} \\
+\end{pmatrix}, \\
+\text{2D: } F(E) =
+\begin{pmatrix}
+    \frac{Y_{x} Y_{y}}{Y_{y}-Y_{x} \nu_{yx}^2} &
+    \frac{Y_{x} Y_{y} \nu_{yx}}{Y_{y}-Y_{x} \nu_{yx}^2}
+    & 0 \\
+     \frac{Y_{x} Y_{y} \nu_{yx}}{Y_{y}-Y_{x} \nu_{yx}^2}
+     & \frac{Y_{y}^2}{Y_{y}-Y_{x} \nu_{yx}^2} & 0 \\
+      0 & 0 & \mu_{xy} \\
+ \end{pmatrix}
+\end{gather*}
+with 3D denominator $Y_x Y_z \nu_{yx}^2 + Y_y^2 \nu_{zy}^2 + Y_y (-Y_z + Y_x
+\nu_{zx} (\nu_{zx} + 2 \nu_{yx} \nu_{zy}))$.
 
 \end{document}

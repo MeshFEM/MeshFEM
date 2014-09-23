@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       157,          7]
-NotebookDataLength[     46997,       1356]
-NotebookOptionsPosition[     44755,       1277]
-NotebookOutlinePosition[     45110,       1293]
-CellTagsIndexPosition[     45067,       1290]
+NotebookDataLength[     55674,       1610]
+NotebookOptionsPosition[     53167,       1522]
+NotebookOutlinePosition[     53520,       1538]
+CellTagsIndexPosition[     53477,       1535]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -910,9 +910,8 @@ Cell[BoxData[
 Cell[BoxData[
  RowBox[{
   StyleBox[
-   RowBox[{"TensorContract", "::", "contr"}], "MessageName"], 
-  RowBox[{
-  ":", " "}], "\<\"Invalid contraction \[NoBreak]\\!\\({\[Epsilon]\\_xx, \
+   RowBox[{"TensorContract", "::", "contr"}], "MessageName"], ":", 
+  " ", "\<\"Invalid contraction \[NoBreak]\\!\\({\[Epsilon]\\_xx, \
 \[Epsilon]\\_xy}\\)\[NoBreak]. \\!\\(\\*ButtonBox[\\\"\[RightSkeleton]\\\", \
 ButtonStyle->\\\"Link\\\", ButtonFrame->None, \
 ButtonData:>\\\"paclet:ref/TensorContract\\\", ButtonNote -> \
@@ -1273,12 +1272,258 @@ Cell[BoxData[
     RowBox[{"E2201", " ", 
      SubscriptBox["\[Epsilon]", "zz"]}]}]}], "}"}]], "Output",
  CellChangeTimes->{3.608400364678645*^9}]
+}, Open  ]],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"DOrthoInv3D", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"1", " ", "/", " ", "Ex"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzx"}], " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", 
+       "0", ",", " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzy"}], " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", 
+       "0", ",", " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vzx"}], " ", "/", " ", "Ez"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzy"}], " ", "/", " ", "Ez"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", "0", ",", 
+       " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muyz"}], ",", " ", "0", ",", " ", "0"}], "}"}], ",",
+      "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muzx"}], ",", " ", "0"}], "}"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+      "0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", 
+       " ", 
+       RowBox[{"1", "/", "muxy"}]}], "}"}]}], "\[IndentingNewLine]", "}"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DOrthoInv2D", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"1", " ", "/", " ", "Ex"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", "0"}], "}"}], 
+     ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ey"}], ",", " ", "0"}], "}"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muxy"}]}], "}"}]}], "\[IndentingNewLine]", "}"}]}], 
+  ";"}]}], "Input",
+ CellChangeTimes->{{3.616257139792561*^9, 3.616257319356694*^9}, {
+  3.6162607972521963`*^9, 3.616260797689762*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"DOrtho3D", " ", "=", " ", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"FullSimplify", "[", 
+     RowBox[{"Inverse", "[", "DOrthoInv3D", "]"}], "]"}], " ", "/.", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"Ex", " ", "Ez", " ", 
+        SuperscriptBox["vyx", "2"]}], "+", 
+       RowBox[{
+        SuperscriptBox["Ey", "2"], " ", 
+        SuperscriptBox["vzy", "2"]}], "+", 
+       RowBox[{"Ey", " ", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"-", "Ez"}], "+", 
+          RowBox[{"Ex", " ", "vzx", " ", 
+           RowBox[{"(", 
+            RowBox[{"vzx", "+", 
+             RowBox[{"2", " ", "vyx", " ", "vzy"}]}], ")"}]}]}], ")"}]}]}], 
+      "\[Rule]", "\[CapitalDelta]"}], "}"}]}], "//", " ", 
+   "MatrixForm"}]}]], "Input",
+ CellChangeTimes->{{3.616260760963759*^9, 3.6162607850099077`*^9}, {
+   3.620415796464395*^9, 3.620415821494164*^9}, {3.620416155092339*^9, 
+   3.620416169193899*^9}, 3.620416293705257*^9}],
+
+Cell[BoxData[
+ TagBox[
+  RowBox[{"(", "\[NoBreak]", GridBox[{
+     {
+      FractionBox[
+       RowBox[{"Ex", " ", "Ey", " ", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"-", "Ez"}], "+", 
+          RowBox[{"Ey", " ", 
+           SuperscriptBox["vzy", "2"]}]}], ")"}]}], "\[CapitalDelta]"], 
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ex", " ", "Ey", " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{"Ez", " ", "vyx"}], "+", 
+           RowBox[{"Ey", " ", "vzx", " ", "vzy"}]}], ")"}]}], 
+        "\[CapitalDelta]"]}], 
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ex", " ", "Ey", " ", "Ez", " ", 
+         RowBox[{"(", 
+          RowBox[{"vzx", "+", 
+           RowBox[{"vyx", " ", "vzy"}]}], ")"}]}], "\[CapitalDelta]"]}], "0", 
+      "0", "0"},
+     {
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ex", " ", "Ey", " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{"Ez", " ", "vyx"}], "+", 
+           RowBox[{"Ey", " ", "vzx", " ", "vzy"}]}], ")"}]}], 
+        "\[CapitalDelta]"]}], 
+      FractionBox[
+       RowBox[{
+        SuperscriptBox["Ey", "2"], " ", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"-", "Ez"}], "+", 
+          RowBox[{"Ex", " ", 
+           SuperscriptBox["vzx", "2"]}]}], ")"}]}], "\[CapitalDelta]"], 
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ey", " ", "Ez", " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{"Ex", " ", "vyx", " ", "vzx"}], "+", 
+           RowBox[{"Ey", " ", "vzy"}]}], ")"}]}], "\[CapitalDelta]"]}], "0", 
+      "0", "0"},
+     {
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ex", " ", "Ey", " ", "Ez", " ", 
+         RowBox[{"(", 
+          RowBox[{"vzx", "+", 
+           RowBox[{"vyx", " ", "vzy"}]}], ")"}]}], "\[CapitalDelta]"]}], 
+      RowBox[{"-", 
+       FractionBox[
+        RowBox[{"Ey", " ", "Ez", " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{"Ex", " ", "vyx", " ", "vzx"}], "+", 
+           RowBox[{"Ey", " ", "vzy"}]}], ")"}]}], "\[CapitalDelta]"]}], 
+      FractionBox[
+       RowBox[{
+        SuperscriptBox["Ez", "2"], " ", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"-", "Ey"}], "+", 
+          RowBox[{"Ex", " ", 
+           SuperscriptBox["vyx", "2"]}]}], ")"}]}], "\[CapitalDelta]"], "0", 
+      "0", "0"},
+     {"0", "0", "0", "muyz", "0", "0"},
+     {"0", "0", "0", "0", "muzx", "0"},
+     {"0", "0", "0", "0", "0", "muxy"}
+    },
+    GridBoxAlignment->{
+     "Columns" -> {{Center}}, "ColumnsIndexed" -> {}, "Rows" -> {{Baseline}}, 
+      "RowsIndexed" -> {}},
+    GridBoxSpacings->{"Columns" -> {
+        Offset[0.27999999999999997`], {
+         Offset[0.7]}, 
+        Offset[0.27999999999999997`]}, "ColumnsIndexed" -> {}, "Rows" -> {
+        Offset[0.2], {
+         Offset[0.4]}, 
+        Offset[0.2]}, "RowsIndexed" -> {}}], "\[NoBreak]", ")"}],
+  Function[BoxForm`e$, 
+   MatrixForm[BoxForm`e$]]]], "Output",
+ CellChangeTimes->{{3.620415796890486*^9, 3.620415822397648*^9}, 
+   3.620416294485078*^9, 3.620416792257019*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"DOrtho2D", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"Simplify", "[", 
+    RowBox[{"Inverse", "[", "DOrthoInv2D", "]"}], "]"}], " ", "//", " ", 
+   "MatrixForm"}]}]], "Input",
+ CellChangeTimes->{{3.616260801494706*^9, 3.6162608117056437`*^9}, 
+   3.6204157904094677`*^9, {3.620415832265583*^9, 3.620415833425026*^9}, {
+   3.62041587017826*^9, 3.620415872698987*^9}}],
+
+Cell[BoxData[
+ TagBox[
+  RowBox[{"(", "\[NoBreak]", GridBox[{
+     {
+      FractionBox[
+       RowBox[{"Ex", " ", "Ey"}], 
+       RowBox[{"Ey", "-", 
+        RowBox[{"Ex", " ", 
+         SuperscriptBox["vyx", "2"]}]}]], 
+      FractionBox[
+       RowBox[{"Ex", " ", "Ey", " ", "vyx"}], 
+       RowBox[{"Ey", "-", 
+        RowBox[{"Ex", " ", 
+         SuperscriptBox["vyx", "2"]}]}]], "0"},
+     {
+      FractionBox[
+       RowBox[{"Ex", " ", "Ey", " ", "vyx"}], 
+       RowBox[{"Ey", "-", 
+        RowBox[{"Ex", " ", 
+         SuperscriptBox["vyx", "2"]}]}]], 
+      FractionBox[
+       SuperscriptBox["Ey", "2"], 
+       RowBox[{"Ey", "-", 
+        RowBox[{"Ex", " ", 
+         SuperscriptBox["vyx", "2"]}]}]], "0"},
+     {"0", "0", "muxy"}
+    },
+    GridBoxAlignment->{
+     "Columns" -> {{Center}}, "ColumnsIndexed" -> {}, "Rows" -> {{Baseline}}, 
+      "RowsIndexed" -> {}},
+    GridBoxSpacings->{"Columns" -> {
+        Offset[0.27999999999999997`], {
+         Offset[0.7]}, 
+        Offset[0.27999999999999997`]}, "ColumnsIndexed" -> {}, "Rows" -> {
+        Offset[0.2], {
+         Offset[0.4]}, 
+        Offset[0.2]}, "RowsIndexed" -> {}}], "\[NoBreak]", ")"}],
+  Function[BoxForm`e$, 
+   MatrixForm[BoxForm`e$]]]], "Output",
+ CellChangeTimes->{
+  3.6204157908644876`*^9, {3.620415828649735*^9, 3.6204158337001133`*^9}, 
+   3.620415872907378*^9, 3.62041679454196*^9}]
 }, Open  ]]
 },
 WindowSize->{960, 1152},
 WindowMargins->{{Automatic, 0}, {Automatic, 0}},
-FrontEndVersion->"9.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (January 25, \
-2013)",
+FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (June 27, \
+2014)",
 StyleDefinitions->"Default.nb"
 ]
 (* End of Notebook Content *)
@@ -1321,7 +1566,7 @@ Cell[23080, 636, 735, 16, 28, "Input"],
 Cell[23818, 654, 1090, 34, 46, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[24945, 693, 639, 15, 28, InheritFromParent],
+Cell[24945, 693, 639, 15, 28, "Input"],
 Cell[25587, 710, 3086, 85, 165, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
@@ -1334,29 +1579,38 @@ Cell[31643, 887, 405, 10, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
 Cell[32085, 902, 266, 5, 28, "Input"],
-Cell[32354, 909, 478, 10, 26, "Message"],
-Cell[32835, 921, 785, 25, 35, "Output"]
+Cell[32354, 909, 465, 9, 26, "Message"],
+Cell[32822, 920, 785, 25, 35, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[33657, 951, 602, 14, 28, "Input"],
-Cell[34262, 967, 472, 13, 32, "Output"]
+Cell[33644, 950, 602, 14, 28, "Input"],
+Cell[34249, 966, 472, 13, 32, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[34771, 985, 401, 11, 28, "Input"],
-Cell[35175, 998, 686, 20, 32, "Output"]
+Cell[34758, 984, 401, 11, 28, "Input"],
+Cell[35162, 997, 686, 20, 32, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[35898, 1023, 598, 16, 28, "Input"],
-Cell[36499, 1041, 3096, 82, 133, "Output"]
+Cell[35885, 1022, 598, 16, 28, "Input"],
+Cell[36486, 1040, 3096, 82, 133, "Output"]
 }, Open  ]],
-Cell[39610, 1126, 1068, 29, 46, "Input"],
+Cell[39597, 1125, 1068, 29, 46, "Input"],
 Cell[CellGroupData[{
-Cell[40703, 1159, 828, 20, 46, "Input"],
-Cell[41534, 1181, 177, 3, 28, "Output"]
+Cell[40690, 1158, 828, 20, 46, "Input"],
+Cell[41521, 1180, 177, 3, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[41748, 1189, 145, 2, 28, "Input"],
-Cell[41896, 1193, 2843, 81, 133, "Output"]
+Cell[41735, 1188, 145, 2, 28, "Input"],
+Cell[41883, 1192, 2843, 81, 133, "Output"]
+}, Open  ]],
+Cell[44741, 1276, 2530, 64, 233, "Input"],
+Cell[CellGroupData[{
+Cell[47296, 1344, 973, 26, 53, "Input"],
+Cell[48272, 1372, 3079, 91, 176, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[51388, 1468, 386, 8, 28, "Input"],
+Cell[51777, 1478, 1374, 41, 160, "Output"]
 }, Open  ]]
 }
 ]
