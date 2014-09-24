@@ -139,18 +139,22 @@ void execute(const po::variables_map &args,
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;
 
-    ETensor<_N> Einv = Eh.inverse();
-    auto moduli((1.0 / Einv.diag().array()).eval());
+    ETensor<_N> S = Eh.inverse();
+    vector<Real> moduli(flatLen(_N));
+
+    // Shear moduli are multiplied by 4 in flattened compliance tensor...
+    for (size_t i = 0; i < flatLen(_N); ++i)
+        moduli[i] = ((i < _N) ? 1.0 : 0.25) / S.D(i, i);
 
     vector<Real> poisson;
-    if (_N == 2) poisson = { -Einv.D(0, 1) / Einv.D(1, 1),   // v_yx
-                             -Einv.D(1, 0) / Einv.D(0, 0) }; // v_xy
-    else         poisson = { -Einv.D(0, 1) / Einv.D(1, 1),   // v_yx
-                             -Einv.D(0, 2) / Einv.D(2, 2),   // v_zx
-                             -Einv.D(1, 2) / Einv.D(2, 2),   // v_zy
-                             -Einv.D(1, 0) / Einv.D(0, 0),   // v_xy
-                             -Einv.D(2, 0) / Einv.D(0, 0),   // v_xz
-                             -Einv.D(2, 1) / Einv.D(1, 1) }; // v_zy
+    if (_N == 2) poisson = { -S.D(0, 1) / S.D(1, 1),   // v_yx
+                             -S.D(1, 0) / S.D(0, 0) }; // v_xy
+    else         poisson = { -S.D(0, 1) / S.D(1, 1),   // v_yx
+                             -S.D(0, 2) / S.D(2, 2),   // v_zx
+                             -S.D(1, 2) / S.D(2, 2),   // v_zy
+                             -S.D(1, 0) / S.D(0, 0),   // v_xy
+                             -S.D(2, 0) / S.D(0, 0),   // v_xz
+                             -S.D(2, 1) / S.D(1, 1) }; // v_zy
 
     if (_N == 2)  {
         cout << "Approximate Young moduli:\t"  << moduli[0] << "\t" << moduli[1] << endl;
@@ -176,7 +180,7 @@ void execute(const po::variables_map &args,
         // Gradient of the compliance tensor--useful for moduli derivatives.
         std::vector<ETensor<_N>> gradEhinv;
         for (const auto &G : gradEh)
-            gradEhinv.push_back(-Einv.doubleDoubleContract(G));
+            gradEhinv.push_back(-S.doubleDoubleContract(G));
 
         size_t numBE = sim.mesh().numBoundaryElements();
         SField gradEx(numBE), gradEy(numBE), gradVyx(numBE), gradVxy(numBE),
@@ -184,8 +188,8 @@ void execute(const po::variables_map &args,
         for (size_t i = 0; i < numBE; ++i) {
              gradEx[i] = -moduli[0] * moduli[0] * gradEhinv[i].D(0, 0);
              gradEy[i] = -moduli[1] * moduli[1] * gradEhinv[i].D(1, 1);
-            gradVyx[i] = -gradEy[i] * Einv.D(0, 1) - moduli[1] * gradEhinv[i].D(0, 1);
-            gradVxy[i] = -gradEx[i] * Einv.D(1, 0) - moduli[0] * gradEhinv[i].D(1, 0);
+            gradVyx[i] = -gradEy[i] * S.D(0, 1) - moduli[1] * gradEhinv[i].D(0, 1);
+            gradVxy[i] = -gradEx[i] * S.D(1, 0) - moduli[0] * gradEhinv[i].D(1, 0);
              gradmu[i] =  gradEh[i].D(2, 2);
         }
         writer->addField( "gradEx",  gradEx, JSFieldWriter<_N>::PER_BDRY_ELEM);
@@ -204,14 +208,14 @@ void execute(const po::variables_map &args,
     //     Real parameterStep = args["parameterStep"].as<double>();
     //     cout << "Parameter step: " << parameterStep << endl;
 
-    //     ETensor<_N> ETargetinv(Einv);
+    //     ETensor<_N> ETargetinv(S);
     //     Real currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(1, 1);
     //     Real targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
     //     ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
     //     writeTargetTensorShapeDerivative(*writer, "v_yx decreasing",
     //             ETargetinv.inverse(), Eh, gradEh, w_ij, sim);
 
-    //     ETargetinv = Einv;
+    //     ETargetinv = S;
     //     currentPoisson = -ETargetinv.D(0, 1) / ETargetinv.D(0, 0);
     //     targetPoisson = currentPoisson + parameterStep * (-0.5 - currentPoisson);
     //     ETargetinv.D(0, 1) = -targetPoisson * ETargetinv.D(1, 1);
@@ -219,23 +223,23 @@ void execute(const po::variables_map &args,
     //             ETargetinv.inverse(), Eh, gradEh, w_ij, sim);
 
     //     // Step a bit toward the tensor with Ex halved.
-    //     ETargetinv = Einv;
+    //     ETargetinv = S;
     //     ETargetinv.D(0, 0) *= 2;
-    //     ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / Einv.D(0, 0);
+    //     ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / S.D(0, 0);
     //     // ETargetinv.D(0, 0) += parameterStep * ETargetinv.D(0, 0);
-    //     // ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / Einv.D(0, 0);
+    //     // ETargetinv.D(1, 0) *= ETargetinv.D(0, 0) / S.D(0, 0);
     //     writeTargetTensorShapeDerivative(*writer, "Ex decreasing, v_xy fixed",
     //             ETargetinv.inverse(), Eh, gradEh, w_ij, sim);
 
-    //     ETargetinv = Einv;
+    //     ETargetinv = S;
     //     ETargetinv.D(1, 1) *= 2;
-    //     ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / Einv.D(1, 1);
+    //     ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / S.D(1, 1);
     //     // ETargetinv.D(1, 1) += parameterStep * ETargetinv.D(1, 1);
-    //     // ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / Einv.D(1, 1);
+    //     // ETargetinv.D(0, 1) *= ETargetinv.D(1, 1) / S.D(1, 1);
     //     writeTargetTensorShapeDerivative(*writer, "Ey decreasing, v_yx fixed",
     //             ETargetinv.inverse(), Eh, gradEh, w_ij, sim);
 
-    //     ETargetinv = Einv;
+    //     ETargetinv = S;
     //     ETargetinv.D(2, 2) += parameterStep * ETargetinv.D(2, 2);
     //     writeTargetTensorShapeDerivative(*writer, "mu decreasing",
     //             ETargetinv.inverse(), Eh, gradEh, w_ij, sim);
