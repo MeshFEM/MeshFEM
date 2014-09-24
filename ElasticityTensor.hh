@@ -78,6 +78,8 @@ public:
                           Real muYZ, Real muZX, Real muXY) {
         if (_Dim != 3)
             throw std::runtime_error("setOrthotropic3D call on non-3D tensor");
+        // Note: this isn't the flattened compliance tensor! Rather, it is the
+        // matrix inverse of the flattened elasticity tensor.
         m_d << 1.0 / Ex, -nuYX / Ey, -nuZX / Ez,        0.0,        0.0,        0.0,
                     0.0,   1.0 / Ey, -nuZY / Ez,        0.0,        0.0,        0.0,
                     0.0,        0.0,   1.0 / Ez,        0.0,        0.0,        0.0,
@@ -91,6 +93,8 @@ public:
     void setOrthotropic2D(Real Ex, Real Ey, Real nuYX, Real muXY) {
         if (_Dim != 2)
             throw std::runtime_error("setOrthotropic2D call on non-2D tensor");
+        // Note: this isn't the flattened compliance tensor! Rather, it is the
+        // matrix inverse of the flattened elasticity tensor.
         m_d << 1.0 / Ex, -nuYX / Ey,        0.0,
                     0.0,   1.0 / Ey,        0.0,
                     0.0,        0.0, 1.0 / muXY;
@@ -112,9 +116,11 @@ public:
         nuYX = -Einv.D(0, 1) * Ey;
         nuZX = -Einv.D(0, 2) * Ez;
         nuZY = -Einv.D(1, 2) * Ez;
-        muYZ = 1.0 / Einv.D(3, 3);
-        muZX = 1.0 / Einv.D(4, 4);
-        muXY = 1.0 / Einv.D(5, 5);
+        // Recall: shear terms in the compliance tensor are actually 1/(4mu)
+        // (See Tensor Flatteneing writeup)
+        muYZ = 0.25 / Einv.D(3, 3);
+        muZX = 0.25 / Einv.D(4, 4);
+        muXY = 0.25 / Einv.D(5, 5);
     }
 
     // Get the orthotropic material paramters (assuming the material is in fact
@@ -126,7 +132,9 @@ public:
         Ex = 1.0 / Einv.D(0, 0);
         Ey = 1.0 / Einv.D(1, 1);
         nuYX = -Einv.D(0, 1) * Ey;
-        muXY = 1.0 / Einv.D(2, 2);
+        // Recall: shear terms in the compliance tensor are actually 1/(4mu)
+        // (See Tensor Flatteneing writeup)
+        muXY = 0.25 / Einv.D(2, 2);
     }
 
     void clear() {
@@ -171,15 +179,56 @@ public:
     ElasticityTensor  operator- (const ElasticityTensor &b) const { ElasticityTensor E(*this); E -= b; return E; }
     ElasticityTensor  operator- () const { ElasticityTensor E(*this); E.m_d = -E.m_d; return E; }
 
+    // Get the tensor Einv such that E : Einv = Identity
+    // Note this is different from just inverting the flattened representation:
+    // F(E^-1) = S^-1 F(E)^-1 S^-1
     ElasticityTensor inverse() const {
         ElasticityTensor result;
         result.m_d = m_d.template selfadjointView<Eigen::Upper>();
         result.m_d = result.m_d.inverse().eval();
+         leftApplyShearDoublerInverse(result.m_d);
+        rightApplyShearDoublerInverse(result.m_d);
         return result;
     }
 
+    template<class T>
+    void leftApplyShearDoubler(T &val) const {
+        // Applying on right doubles "shear rows" of a matrix or vector
+        assert(val.rows() == flatLen(_Dim));
+        for (size_t i = _Dim; i < flatLen(_Dim); ++i)
+            for (size_t j = 0; j < val.cols(); ++j)
+                val(i, j) *= 2.0;
+    }
+
+    template<class T>
+    void rightApplyShearDoubler(T &val) const {
+        // Applying on left doubles "shear columns" of a matrix or row vector
+        assert(val.cols() == flatLen(_Dim));
+        for (size_t j = _Dim; j < flatLen(_Dim); ++j)
+            for (size_t i = 0; i < val.rows(); ++i)
+                val(i, j) *= 2.0;
+    }
+
+    template<class T>
+    void leftApplyShearDoublerInverse(T &val) const {
+        // Applying on right halves "shear rows" of a matrix or vector
+        assert(val.rows() == flatLen(_Dim));
+        for (size_t i = _Dim; i < flatLen(_Dim); ++i)
+            for (size_t j = 0; j < val.cols(); ++j)
+                val(i, j) *= 0.5;
+    }
+
+    template<class T>
+    void rightApplyShearDoublerInverse(T &val) const {
+        // Applying on left halves "shear columns" of a matrix or row vector
+        assert(val.cols() == flatLen(_Dim));
+        for (size_t j = _Dim; j < flatLen(_Dim); ++j)
+            for (size_t i = 0; i < val.rows(); ++i)
+                val(i, j) *= 0.5;
+    }
+
     // Doubles the off-diagonal entries of a flattened symmetric rank 2 tensor.
-    FlattenedRank2Tensor shearDoubler(FlattenedRank2Tensor t) const {
+    FlattenedRank2Tensor shearDoubled(FlattenedRank2Tensor t) const {
         for (size_t i = _Dim; i < t.rows(); ++i)
             t[i] *= 2.0;
         return t;
@@ -189,7 +238,7 @@ public:
     // need to implement contraction E_ijkl e_kl
     // (see doc/meshless_fem/TensorFlattening.pdf)
     FlattenedRank2Tensor doubleContract(const FlattenedRank2Tensor &in) const {
-        return m_d.template selfadjointView<Eigen::Upper>() * shearDoubler(in);
+        return m_d.template selfadjointView<Eigen::Upper>() * shearDoubled(in);
     }
 
     // Apply matrix D itself to a vector or a matrix. For this to have physical
@@ -200,52 +249,26 @@ public:
         return m_d.template selfadjointView<Eigen::Upper>() * in;
     }
 
-    template<typename Real2, size_t N, class SM>
+    template<typename Real2, size_t N, class _Storage, class _ConstRef>
     SymmetricMatrix<N, FlattenedRank2Tensor>
-    doubleContract(const SymmetricMatrixBase<Real2, N, SM> &b) const {
-        SymmetricMatrix<N, FlattenedRank2Tensor> result;
-        // Note, this could easily be optimized to take advantage of symmetries.
-        for (size_t i = 0; i < _Dim; ++i) {
-            for (size_t j = 0; j < _Dim; ++j) {
-                result(i, j) = 0; // Necessary so we don't get doubled off-diags
-                for (size_t k = 0; k < _Dim; ++k) {
-                    for (size_t l = 0; l < _Dim; ++l) {
-                        result(i, j) += (*this)(i, j, k, l) * b(k, l);
-                    }
-                }
-            }
-        }
-        return result;
+    doubleContract(const ConstSymmetricMatrixBase<Real2, N, _Storage, _ConstRef> &b) const {
+        return SymmetricMatrix<N, FlattenedRank2Tensor>(applyD(shearDoubled(b.flattened())));
     }
-
 
     // NOTE: plain tensor double contraction is forbidden because the result
     // is asymmetric, however we do support the following operation that we
     // call "double double contract" since it obtains a symmetric result:
     //      A : B : A       (A_ijpq B_pqrs A_rskl)
     // Tensor A is "this", B is passed as an argument.
+    // The operation is implemented as:
+    // F(A) S F(B) S F(A)
     ElasticityTensor doubleDoubleContract(const ElasticityTensor &B) const {
         ElasticityTensor result;
-        // Note, this could easily be optimized to take advantage of symmetries.
-        for (size_t i = 0; i < _Dim; ++i) {
-            for (size_t j = 0; j < _Dim; ++j) {
-                for (size_t k = 0; k < _Dim; ++k) {
-                    for (size_t l = 0; l < _Dim; ++l) {
-                        Real entry = 0;
-                        for (size_t p = 0; p < _Dim; ++p)
-                            for (size_t q = 0; q < _Dim; ++q)
-                                for (size_t r = 0; r < _Dim; ++r)
-                                    for (size_t s = 0; s < _Dim; ++s)
-                                        entry += (*this)(i, j, p, q) * B(p, q, r, s) * (*this)(r, s, k, l);
-                        size_t I = flattenIndices(_Dim, i, j); 
-                        size_t J = flattenIndices(_Dim, k, l); 
-                        // Better get a symmetric result...
-                        assert(result.D(I, J) == 0 || std::abs(result.D(J, I) - entry) < 1e-9);
-                        result.D(I, J) = entry;
-                    }
-                }
-            }
-        }
+        result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        leftApplyShearDoubler(result.m_d);
+        result.m_d = B.applyD(result.m_d);
+        leftApplyShearDoubler(result.m_d);
+        result.m_d = applyD(result.m_d);
         return result;
     }
 
