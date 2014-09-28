@@ -6,10 +6,9 @@
 #include <string>
 
 namespace PeriodicHomogenization {
-    template<class _Simulator, class _FieldWriter>
+    template<class _Simulator>
     void solveCellProblems(std::vector<typename _Simulator::VField> &w_ij,
-                           _Simulator &sim, _FieldWriter *writer = NULL)
-    {
+                           _Simulator &sim) {
         typedef typename _Simulator::VField  VField;
         typedef typename _Simulator::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
@@ -20,10 +19,6 @@ namespace PeriodicHomogenization {
         w_ij.reserve(numStrains), w_ij.clear();
         for (size_t i = 0; i < numStrains; ++i) {
             VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
-            if (writer) {
-                writer->addField(std::string("rhs ") + std::to_string(i),
-                        sim.extractNodalField(rhs), _FieldWriter::PER_NODE);
-            }
             w_ij.push_back(sim.solve(rhs));
         }
     }

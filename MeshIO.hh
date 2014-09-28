@@ -265,6 +265,31 @@ namespace MeshIO {
               const std::vector<IOElement> &elements, Format format = FMT_GUESS,
               MeshType type = MESH_GUESS);
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Writes a mesh with per-vertex positions in vertex field "p"
+    //  @param[in]  path      the path to which geometry is written
+    //  @param[in]  mesh      mesh to write
+    //  @param[in]  format    file format (default: guess from extension)
+    //  @param[in]  type      mesh element type (default: guess from first)
+    *///////////////////////////////////////////////////////////////////////////
+    template<class _Mesh>
+    void save(const std::string &path, const _Mesh &mesh,
+            Format format = FMT_GUESS, MeshType type = MESH_GUESS) {
+        std::vector<IOVertex>  outVertices;
+        std::vector<IOElement> outElements;
+        outElements.resize(mesh.numElements());
+        for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
+            auto e = mesh.element(ei);
+            for (size_t c = 0; c < e.numVertices(); ++c)
+                outElements[ei].push_back(e.vertex(c).index());
+        }
+        outVertices.reserve(mesh.numVertices());
+        for (size_t vi = 0; vi < mesh.numVertices(); ++vi)
+            outVertices.push_back(mesh.vertex(vi)->p);
+
+        save(path, outVertices, outElements, format, type);
+    }
+
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Reads an element soup from an input stream
