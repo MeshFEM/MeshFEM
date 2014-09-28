@@ -1,6 +1,8 @@
 #include "EdgeFields.hh"
 #include "util.h"
 
+#include <boost/algorithm/string.hpp>
+
 using namespace std;
 
 template<typename T>
@@ -64,7 +66,8 @@ void EdgeFields::write(std::ostream &os) const {
     for (const auto &e : m_edges)
         os << e[0] << "\t" << e[1] << endl;
     for (const auto &entry : m_fields) {
-        os << entry.first << endl; // name
+        os << entry.first << endl; // field_name
+        os << entry.second.dim() << endl; // #components
         os << entry.second; // field
     }
 }

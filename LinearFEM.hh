@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <vector>
 #include <array>
+#include "TriMesh.hh"
+#include "TetMesh.hh"
 
 // FEM on a 3-Manifold embedded in 3D
 namespace LinearFEM3D {

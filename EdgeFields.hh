@@ -8,6 +8,7 @@
 //      #edges #fields
 //      v0 v1
 //      ...
+//      field_0_name
 //      #components
 //      comp0...
 //      ...
@@ -32,6 +33,17 @@
 
 class EdgeFields {
 public:
+    template<class _Mesh>
+    EdgeFields(const _Mesh &mesh) {
+        std::vector<UnorderedPair> edges;
+        for (size_t i = 0; i < mesh.numBoundaryEdges(); ++i) {
+            auto be = mesh.boundaryEdge(i);
+            edges.push_back(UnorderedPair(be.vertex(0).volumeVertex().index(),
+                        be.vertex(1).volumeVertex().index()));
+        }
+        m_setEdges(edges);
+    }
+
     EdgeFields(const std::vector<UnorderedPair> &edges) { m_setEdges(edges); }
     EdgeFields(const std::string &path) { read(path); }
 
@@ -48,6 +60,10 @@ public:
     void addField(const std::string &name, const VectorField<Real, _N> &vf) {
         DynamicField field(vf);
         addField(name, field);
+    }
+
+    const DynamicField &field(const std::string &name) const {
+        return m_fields.at(name);
     }
 
     size_t numEdges() const { return m_edges.size(); }
@@ -81,6 +97,10 @@ public:
         write(outFile);
     }
 
+    size_t edgeIndex(size_t v0, size_t v1) const {
+        return m_edgeIdx.at(UnorderedPair(v0, v1));
+    }
+
 private:
     void m_setEdges(const std::vector<UnorderedPair> &edges) {
         assert(m_fields.size() == 0);
@@ -92,6 +112,7 @@ private:
 
     // name => field
     std::map<std::string, DynamicField> m_fields;
+    // vertex pair -> edge index
     std::map<UnorderedPair, size_t> m_edgeIdx;
     std::vector<UnorderedPair> m_edges;
 };
