@@ -34,8 +34,6 @@
 #include <cmath>
 #include <limits>
 
-#include <boost/algorithm/string.hpp>
-
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
@@ -406,7 +404,7 @@ public:
         resize(vf.dim(), vf.domainSize());
         for (size_t i = 0; i < vf.dim(); ++i)
             for (size_t j = 0; j < vf.domainSize(); ++j)
-                (*this)(i, j) = vf(i, j);
+                (*this)(i, j) = vf(j)[i];
     }
 
     void resize(size_t domSize) { m_storage.resize(domSize * m_dim); }
@@ -447,20 +445,6 @@ public:
     operator SymmetricMatrixField<Real, _dim>() const {
         if (m_dim != _dim) throw std::runtime_error("Vector field cast dimension mismatch.");
         return SymmetricMatrixField<Real, _dim>(m_storage);
-    }
-
-    void read(std::istream &is, size_t dim, size_t dSize) {
-        resize(dim, dSize);
-        for (size_t j = 0; j < dSize; ++j) {
-            std::string line;
-            // Get non-comment line
-            do  { std::getline(is >> std::ws, line); } while (is && (line[0] == '#'));
-            std::vector<std::string> lineComponents;
-            boost::split(lineComponents, line, boost::is_any_of("\t "));
-            if (lineComponents.size() != dim) throw std::runtime_error("Invalid field data line");
-            for (size_t i = 0; i < dim; ++i)
-                (*this)(i, j) = std::stod(lineComponents[i]);
-        }
     }
 
     friend std::ostream &operator<<(std::ostream &os, const DynamicField &f) {

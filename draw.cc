@@ -1,5 +1,6 @@
+#include <Eigen/Dense>
 #include "draw.hh"
-#include "GlobalTypes.hh"
+#include "Geometry.hh"
 
 #ifdef USE_MESA
 #include <GL/gl.h>
@@ -9,8 +10,11 @@
 #include <OpenGL/OpenGL.h>
 #endif
 
+#include <string>
+#include <sstream>
+
 void drawColorbar(float x, float y, float width, float height,
-                  const ColorMap<RGBColorf, Scalar> &colorMap,
+                  const ColorMap<RGBColorf, double> &colorMap,
                   FTGLBitmapFont &font)
 {
     // Draw background box
@@ -86,4 +90,24 @@ void drawQuad(float minx, float miny, float maxx, float maxy)
     glEnd();
 }
 
+void drawArrow2D(float x, float y, float dx, float dy) {
+    Eigen::Vector2f tail(x, y);
+    Eigen::Vector2f vec(dx, dy);
+    Eigen::Vector2f tip(tail + vec);
+    FastRotation2D<float, Eigen::Vector2f> rot(M_PI / 4);
+    Eigen::Vector2f  leftHead = tip + rot.inverse(-0.25 * vec);
+    Eigen::Vector2f rightHead = tip +         rot(-0.25 * vec);
+
+    glBegin(GL_LINES);
+    glVertex2f(tail[0], tail[1]);
+    glVertex2f(tip[0], tip[1]);
+
+    glVertex2f(tip[0], tip[1]);
+    glVertex2f(rightHead[0], rightHead[1]);
+
+    glVertex2f(tip[0], tip[1]);
+    glVertex2f(leftHead[0], leftHead[1]);
+
+    glEnd();
+}
 
