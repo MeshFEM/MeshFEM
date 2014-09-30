@@ -106,7 +106,7 @@ public:
     // 3D orthotropic)
     void getOrthotropic3D(Real &  Ex, Real &  Ey, Real &  Ez,
                           Real &nuYX, Real &nuZX, Real &nuZY,
-                          Real &muYZ, Real &muZX, Real &muXY) {
+                          Real &muYZ, Real &muZX, Real &muXY) const {
         if (_Dim != 3)
             throw std::runtime_error("getOrthotropic3D call on non-3D tensor");
         ElasticityTensor Einv = this->inverse();
@@ -125,7 +125,7 @@ public:
 
     // Get the orthotropic material paramters (assuming the material is in fact
     // 2D orthotropic)
-    void getOrthotropic2D(Real &Ex, Real &Ey, Real &nuYX, Real &muXY) {
+    void getOrthotropic2D(Real &Ex, Real &Ey, Real &nuYX, Real &muXY) const {
         if (_Dim != 2)
             throw std::runtime_error("getOrthotropic2D call on non-2D tensor");
         ElasticityTensor Einv = this->inverse();
@@ -135,6 +135,21 @@ public:
         // Recall: shear terms in the compliance tensor are actually 1/(4mu)
         // (See Tensor Flatteneing writeup)
         muXY = 0.25 / Einv.D(2, 2);
+    }
+
+    void printOrthotropic(std::ostream &os) const {
+        if (_Dim == 2) {
+            Real Ex, Ey, nuYX, muXY;
+            getOrthotropic2D(Ex, Ey, nuYX, muXY);
+            os << Ex << "\t" << Ey << "\t" << nuYX << "\t" << muXY << std::endl;
+        }
+        else {
+            Real Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY;
+            getOrthotropic3D(Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY);
+            os << Ex << "\t" << Ey << "\t" << Ez << "\t"
+               << nuYX << "\t" << nuZX << "\t" << nuZY << "\t"
+               << muYZ << "\t" << muZX << "\t" << muXY << std::endl;
+        }
     }
 
     void clear() {
