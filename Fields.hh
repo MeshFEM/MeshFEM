@@ -225,6 +225,16 @@ public:
     // Component wise abs.
     ScalarField cwiseAbs() const { auto r = ScalarField(*this); r.m_values = r.m_values.cwiseAbs(); return r; }
 
+    // operator() should return numbers rather than column vectors...
+    Real operator()(size_t i) const {
+        assert(i < (size_t) m_values.cols());
+        return m_values(0, i);
+    }
+    Real &operator()(size_t i) {
+        assert(i < (size_t) m_values.cols());
+        return m_values(0, i);
+    }
+
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
     template<size_t dim>
