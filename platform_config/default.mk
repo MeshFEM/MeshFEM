@@ -10,6 +10,8 @@ CERES_INC=/usr/local/include
 CERES_LIB=/usr/local/lib
 LIBMATHEVAL_INC=/opt/local/include
 LIBMATHEVAL_LIB=/opt/local/lib
+VCG_INC=$(HOME)/Research/libraries/vcglib
+DLIB_INC=$(HOME)/Research/libraries
 
 INCLUDES=-I$(CSGFEM_INC) -I$(EIGEN_INC) -I$(SUITESPARSE_INC) -I$(BOOST_INC) \
 		 -I$(CERES_INC) -I$(LIBMATHEVAL_INC)
