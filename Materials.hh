@@ -24,6 +24,7 @@
 #include <vector>
 #include <string>
 
+#include <boost/property_tree/ptree_fwd.hpp>
 
 namespace Materials {
 
@@ -379,6 +380,7 @@ struct Constant {
     Constant(const std::string &materialFile) { setFromFile(materialFile); }
 
     void setFromFile(const std::string &materialFile);
+    void setFromPTree(const boost::property_tree::ptree &pt);
 
     // Used for adjoint method gradient-based optimization
     void getETensorDerivative(size_t p, ETensor &d) const {

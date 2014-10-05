@@ -13,7 +13,6 @@
 #include "BoundaryConditions.hh"
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include <fstream>
@@ -31,7 +30,7 @@ using boost::property_tree::ptree;
 Vector3D parseVectorLenient(const ptree &pt) {
     Vector3D v;
     int nComponentsRead = 0;
-    BOOST_FOREACH(const ptree::value_type &val, pt) {
+    for (const ptree::value_type &val : pt) {
         if (!val.first.empty()) {
             nComponentsRead = -1; break;
         }
@@ -71,16 +70,16 @@ void parseVertexConditionValues(const ptree &pt, vector<size_t> &indices,
     runtime_error err("Error parsing vertex condition values.");
 
     // The values key holds a list of assignments
-    BOOST_FOREACH(const ptree::value_type &val, pt) {
+    for (const ptree::value_type &val : pt) {
         if (!val.first.empty()) throw err;
         // Each assignment is a tuple: (value, region)
         int i = 0;
-        BOOST_FOREACH(const ptree::value_type &tuple_entry, val.second) {
+        for (const ptree::value_type &tuple_entry : val.second) {
             if (!tuple_entry.first.empty()) throw err;
             if (i == 0) disp = parseVectorLenient(tuple_entry.second);
             else if (i == 1) {
                 // Region is specified as a list of vertex indices
-                BOOST_FOREACH(const ptree::value_type &vtx, tuple_entry.second) {
+                for (const ptree::value_type &vtx : tuple_entry.second) {
                     if (!vtx.first.empty()) throw err;
                     try { indices.push_back(vtx.second.get_value<int>()); }
                     catch (...) { throw err; }
@@ -103,19 +102,19 @@ void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corn
     std::vector<size_t> idx;
 
     // The values key holds a list of assignments
-    BOOST_FOREACH(const ptree::value_type &val, pt) {
+    for (const ptree::value_type &val : pt) {
         if (!val.first.empty()) throw err;
         // Each assignment is a tuple: (value, region)
         int i = 0;
-        BOOST_FOREACH(const ptree::value_type &tuple_entry, val.second) {
+        for (const ptree::value_type &tuple_entry : val.second) {
             if (!tuple_entry.first.empty()) throw err;
             if (i == 0) vecValue = parseVectorLenient(tuple_entry.second);
             else if (i == 1) {
                 // Region is specified as a list of element corner lists
-                BOOST_FOREACH(const ptree::value_type &elem, tuple_entry.second) {
+                for (const ptree::value_type &elem : tuple_entry.second) {
                     if (!elem.first.empty()) throw err;
                     idx.clear();
-                    BOOST_FOREACH(const ptree::value_type &cidx, elem.second) {
+                    for (const ptree::value_type &cidx : elem.second) {
                         if (!cidx.first.empty()) throw err;
                         try { idx.push_back(cidx.second.get_value<int>()); }
                         catch (...) { throw err; }
@@ -213,7 +212,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
 
     noRigidMotion = pt.get<bool>("no_rigid_motion", false);
     ptree regions = pt.get_child("regions");
-    BOOST_FOREACH(const ptree::value_type &val, regions) {
+    for (const ptree::value_type &val : regions) {
         ptree tcond = val.second;
         string type = tcond.get_child("type").get_value<string>();
 

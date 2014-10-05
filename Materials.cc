@@ -7,7 +7,6 @@
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/foreach.hpp>
 
 using namespace std;
 using boost::property_tree::ptree;
@@ -197,14 +196,8 @@ void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
 }
 
 template<size_t _N>
-void Constant<_N>::setFromFile(const string &materialPath) {
-    ifstream is(materialPath);
-    if (!is.is_open())
-        throw std::runtime_error("Couldn't open material " + materialPath);
-    ptree pt;
-    read_json(is, pt);
+void Constant<_N>::setFromPTree(const ptree &pt) {
     auto type = pt.get<string>("type");
-    // Both my and James' names
     typedef function<void(const ptree &, ETensor &)> parser;
     static const map<string, parser>  materialParser =
         { {"isotropic_material",   parseIsotropic<_N>  },
@@ -214,6 +207,16 @@ void Constant<_N>::setFromFile(const string &materialPath) {
           {"symmetric_material",   parseAnisotropic<_N>},
           {"anisotropic",          parseAnisotropic<_N>} };
     materialParser.at(type)(pt, m_E);
+}
+
+template<size_t _N>
+void Constant<_N>::setFromFile(const string &materialPath) {
+    ifstream is(materialPath);
+    if (!is.is_open())
+        throw std::runtime_error("Couldn't open material " + materialPath);
+    ptree pt;
+    read_json(is, pt);
+    setFromPTree(pt);
 }
 
 void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
