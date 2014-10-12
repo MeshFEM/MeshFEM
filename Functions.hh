@@ -26,6 +26,9 @@
 //
 //      Notice that the list of linear nodes is a prefix of the full node list.
 //
+//      The function call operator evaluates the function at the passed
+//      BARYCENTRIC COORDINATES (not coordinates in the embedding space).
+//
 //      Interpolation:
 //          For linear interpolation, the shape functions are the barycentric
 //          coordinates in all cases.
@@ -41,9 +44,10 @@
 #ifndef FUNCTIONS_HH
 #define FUNCTIONS_HH
 #include "Types.hh"
-#include "GaussQuadrature.hh"
+#include "function_traits.hh"
 #include <vector>
 #include <functional>
+#include <iostream>
 
 namespace Simplex { enum { Edge = 1, Triangle = 2, Tetrahedron = 3}; };
 namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; };
@@ -56,11 +60,6 @@ class DefaultNodalStoragePolicy;
 template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy = DefaultNodalStoragePolicy>
 class Interpolant;
-template<typename _T, size_t _K>
-class DefaultExpressionStoragePolicy;
-template<typename _T, size_t _K, size_t _Deg,
-    template<typename, size_t> class ExpressionStoragePolicy = DefaultExpressionStoragePolicy>
-class Expression;
 
 // Hidden implementations of interpolated functions
 // (Not easily implemented in the interpolant class because member function
@@ -141,7 +140,7 @@ namespace {
     // Constant Simplex
     template<typename _T, size_t _K, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, _K, Degree::Constant, NS> &f, Real volume) {
-        return volume * f[2];
+        return volume * f[0];
     }
 
     // Linear Simplex
@@ -159,8 +158,7 @@ namespace {
     _T _integrate(const Interpolant<_T, Edge, Degree::Quadratic, NS> &f, Real volume) {
         _T result(f[2]);
         result *= 4;
-        result += f[0];
-        result += f[1];
+        result += f[0]; result += f[1];
         result *= (volume / 6.0);
         return result;
     }
@@ -170,7 +168,7 @@ namespace {
     template<typename _T, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, Triangle, Degree::Quadratic, NS> &f, Real volume) {
         _T result(f[0]);
-        for (size_t i = 1; i < 3; ++i) result += f[i];
+        result += f[1]; result += f[2];
         result *= volume / 3.0;
         return result;
     }
@@ -188,39 +186,41 @@ namespace {
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    // Integration of expressions
-    ////////////////////////////////////////////////////////////////////////////
-    // Forwards to routines in GaussQuadrature.hh
-    template<typename _T, size_t _Deg, template<typename, size_t> class _ESP> _T _integrate(const Expression<_T, Edge,        _Deg, _ESP> &expr, Real vol) { return integrate_edge(expr, vol); }
-    template<typename _T, size_t _Deg, template<typename, size_t> class _ESP> _T _integrate(const Expression<_T, Triangle,    _Deg, _ESP> &expr, Real vol) { return integrate_tri( expr, vol); }
-    template<typename _T, size_t _Deg, template<typename, size_t> class _ESP> _T _integrate(const Expression<_T, Tetrahedron, _Deg, _ESP> &expr, Real vol) { return integrate_tet( expr, vol); }
-
-    ////////////////////////////////////////////////////////////////////////////
     // Interpolation of expressions
     ////////////////////////////////////////////////////////////////////////////
     // --0--   0---1   0-2-1
-    template<typename _T, size_t _Deg1, size_t _Deg2>
-    Interpolant<_T, Edge, _Deg2, DefaultNodalStoragePolicy>
-    _interpolant(const Expression<_T, Edge, _Deg1> &expr) {
-        Interpolant<_T, Edge, _Deg2, DefaultNodalStoragePolicy> result;
-        if (_Deg2 == 0) { result[0] = expr(0.5, 0.5); }
-        if (_Deg2 == 1) { result[0] = expr(1.0, 0.0); result[1] = expr(0.0, 1.0); }
-        if (_Deg2 == 2) { result[0] = expr(1.0, 0.0); result[1] = expr(0.0, 1.0);  result[2] = expr(0.5, 0.5); }
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_edge(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(0.5, 0.5); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0); result[1] = f(0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0); result[1] = f(0.0, 1.0);  result[2] = f(0.5, 0.5); }
         return result;
+    }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_edge(const F &f) {
+        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(VectorND<2>(p0, p1)); });
     }
 
     //   +       2       2
     //  /0\     / \     5 4
     // +---+   0---1   0 3 1
-    template<typename _T, size_t _Deg1, size_t _Deg2>
-    Interpolant<_T, Triangle, _Deg2, DefaultNodalStoragePolicy>
-    _interpolant(const Expression<_T, Triangle, _Deg1> &expr) {
-        Interpolant<_T, Triangle, _Deg2, DefaultNodalStoragePolicy> result;
-        if (_Deg2 == 0) { result[0] = expr(1 / 3.0, 1 / 3.0, 1 / 3.0); }
-        if (_Deg2 == 1) { result[0] = expr(1.0, 0.0, 0.0); result[1] = expr(0.0, 1.0, 0.0); result[2] = expr(0.0, 0.0, 1.0); }
-        if (_Deg2 == 2) { result[0] = expr(1.0, 0.0, 0.0); result[1] = expr(0.0, 1.0, 0.0); result[2] = expr(0.0, 0.0, 1.0);
-                          result[3] = expr(0.5, 0.5, 0.0); result[4] = expr(0.0, 0.5, 0.5); result[5] = expr(0.5, 0.0, 0.5); }
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tri(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(1 / 3.0, 1 / 3.0, 1 / 3.0); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0); result[2] = f(0.0, 0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0); result[2] = f(0.0, 0.0, 1.0);
+                         result[3] = f(0.5, 0.5, 0.0); result[4] = f(0.0, 0.5, 0.5); result[5] = f(0.5, 0.0, 0.5); }
         return result;
+    }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tri(const F &f) {
+        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(VectorND<3>(p0, p1, p2)); });
     }
 
     //                       3                 3
@@ -229,18 +229,32 @@ namespace {
     //    / 0 \ `+         /   \ `* 2        7   9 `* 2
     //   / __--\ /        / __--\ /         / _6--\ /5
     //  +-------+       0*-------* 1      0*---4---* 1
-    template<typename _T, size_t _Deg1, size_t _Deg2>
-    Interpolant<_T, Triangle, _Deg2, DefaultNodalStoragePolicy>
-    _interpolant(const Expression<_T, Tetrahedron, _Deg1> &expr) {
-        Interpolant<_T, Tetrahedron, _Deg2, DefaultNodalStoragePolicy> result;
-        if (_Deg2 == 0) { result[0] = expr(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); }
-        if (_Deg2 == 1) { result[0] = expr(1.0, 0.0, 0.0, 0.0); result[1] = expr(0.0, 1.0, 0.0, 0.0); result[2] = expr(0.0, 0.0, 1.0, 0.0); result[3] = expr(0.0, 0.0, 0.0, 1.0); }
-        if (_Deg2 == 2) { result[0] = expr(1.0, 0.0, 0.0, 0.0); result[1] = expr(0.0, 1.0, 0.0, 0.0); result[2] = expr(0.0, 0.0, 1.0, 0.0); result[3] = expr(0.0, 0.0, 0.0, 1.0);
-                          result[4] = expr(0.5, 0.5, 0.0, 0.0); result[5] = expr(0.0, 0.5, 0.5, 0.0); result[6] = expr(0.5, 0.0, 0.5, 0.0);
-                          result[7] = expr(0.5, 0.0, 0.0, 0.5); result[8] = expr(0.0, 0.0, 0.5, 0.5); result[9] = expr(0.0, 0.5, 0.0, 0.5); }
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tet(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0, 0.0); result[2] = f(0.0, 0.0, 1.0, 0.0); result[3] = f(0.0, 0.0, 0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0, 0.0); result[2] = f(0.0, 0.0, 1.0, 0.0); result[3] = f(0.0, 0.0, 0.0, 1.0);
+                         result[4] = f(0.5, 0.5, 0.0, 0.0); result[5] = f(0.0, 0.5, 0.5, 0.0); result[6] = f(0.5, 0.0, 0.5, 0.0);
+                         result[7] = f(0.5, 0.0, 0.0, 0.5); result[8] = f(0.0, 0.0, 0.5, 0.5); result[9] = f(0.0, 0.5, 0.0, 0.5); }
         return result;
     }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tet(const F &f) {
+        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(VectorND<4>(p0, p1, p2, p3)); });
+    }
 }
+
+// Interpolation on a _K simplex (runs the implementations above).
+// Usage:
+// Interpolation<Simplex::{Edge,Triangle,Tetrahedron}, Degree>::interpolate(f);
+template<size_t _K, size_t _Deg>
+class Interpolation { };
+template<size_t _Deg> class Interpolation<Simplex::Edge,        _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_edge<_Deg>(f)) { return _interpolant_edge<_Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tet< _Deg>(f)) { return _interpolant_tet< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tri< _Deg>(f)) { return _interpolant_tri< _Deg>(f); } };
 
 template<typename _T, size_t _K, size_t _Deg>
 class DefaultNodalStoragePolicy {
@@ -421,89 +435,5 @@ Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> operator-
     result -= f2;
     return result;
 }
-
-// WARNING: for expressions created from functions capturing by reference, care
-// must be taken that the referenced objects aren't destroyed before the
-// expression. For instance, this means that the lifetime of Expression objects
-// referencing temporaries should only be a single c++ expression so that the
-// temporary arguments are guaranteed to still exist.
-template<typename _T, size_t _K>
-class DefaultExpressionStoragePolicy {
-public:
-    typedef VectorND<_numVertices(_K)> BaryCoords;
-
-    // Copies interpolant for safety when dealing with temporaries
-    template<size_t _Deg, template<typename, size_t, size_t> class _NS>
-    DefaultExpressionStoragePolicy(const Interpolant<_T, _K, _Deg, _NS> &i) {
-        m_expr = [=](const BaryCoords &p) { return i(p); };
-    }
-
-protected:
-    std::function<_T(const BaryCoords &p)> m_expr;
-};
-
-template<typename _T, size_t _K>
-class ReferenceExpressionStoragePolicy {
-public:
-    typedef VectorND<_numVertices(_K)> BaryCoords;
-
-    // Captures interpolant by reference--potentially dangerous depending on the
-    // argument and expression lifetimes.
-    template<size_t _Deg, template<typename, size_t, size_t> class _NS>
-    ReferenceExpressionStoragePolicy(const Interpolant<_T, _K, _Deg, _NS> &i) {
-        m_expr = [&](const BaryCoords &p) { return i(p); };
-    }
-protected:
-    std::function<_T(const BaryCoords &p)> m_expr;
-};
-
-template<typename _T, size_t _K, size_t _Deg,
-         template<typename, size_t> class ExpressionStoragePolicy>
-class Expression : ExpressionStoragePolicy<_T, _K> {
-    typedef ExpressionStoragePolicy<_T, _K> SP;
-    using SP::m_expr;
-public:
-    // All constructor calls are forward to the storage policy
-    template<typename... Args>
-    Expression(Args&&... args) : SP(std::forward<Args>(args)...) { }
-
-    typedef VectorND<_numVertices(_K)> BaryCoords;
-    ////////////////////////////////////////////////////////////////////////////
-    // Evaluation (function call operator)
-    ////////////////////////////////////////////////////////////////////////////
-    // Pass in a column vector of barycentric coordinates...
-    _T operator()(const BaryCoords &p) const {
-        return m_expr(p);
-    }
-
-    // ... or a list of them, which is converted into a column vector
-    // This list must be either of length 0 or 2+, so we use enable_if to ensure
-    // the operator()(VectorND) isn't hidden in the 1-argument case.
-    template<typename... Args, typename std::enable_if<sizeof...(Args) != 1, int>::type = 0>
-    _T operator()(Args&&... baryCoords) const {
-        static_assert(_numVertices(_K) == sizeof...(baryCoords),
-                "Invalid number of barycentric coordinates passed.");
-        // Eigen provides constructors for vectors of size 2..4, which is
-        // perfect for us!
-        VectorND<_numVertices(_K)> bc(std::forward<Args>(baryCoords)...);
-        return m_expr(bc);
-    }
-
-    // Return an approximate interpolant of a particular degree
-    // (exact if _Deg2 >= _Deg).
-    template<size_t _Deg2>
-    Interpolant<_T, _K, _Deg2, DefaultNodalStoragePolicy> interpolant() const {
-        return _interpolant<_T, _Deg, _Deg2>(*this);
-    }
-
-    // Interpolate the expression exactly by evaluating at the nodes (typecast).
-    operator Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy>() const {
-        return interpolant<_T, _Deg>();
-    }
-};
-
-template<typename _T, size_t _K, size_t _Deg>
-using TemporaryExpression =
-    Expression<_T, _K, _Deg, ReferenceExpressionStoragePolicy>;
 
 #endif /* end of include guard: FUNCTIONS_HH */
