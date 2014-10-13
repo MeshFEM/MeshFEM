@@ -70,9 +70,9 @@ namespace {
 
     constexpr size_t _numVertices(size_t K) { return K + 1; }
     constexpr size_t _numEdges(size_t K)    { return (K * (K + 1)) / 2; }
-    constexpr size_t _numNodalValues(size_t dim, size_t deg) {
-        return deg == 0 ? 1 : (deg == 1 ? _numVertices(dim)
-                                        : _numVertices(dim) + _numEdges(dim));
+    constexpr size_t _numNodalValues(size_t K, size_t deg) {
+        return deg == 0 ? 1 : (deg == 1 ? _numVertices(K)
+                                        : _numVertices(K) + _numEdges(K));
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -89,43 +89,46 @@ namespace {
     static const size_t edgeEndNode[]   = { 1, 2, 0, 3, 3, 3 };
 
     // Constant functions don't interpolate...
-    template<typename _T, size_t _K, typename... Args>
-    _T _interpolate(const Interpolant<_T, _K, 0> &f, Args&&... args) { return f[0]; }
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+    _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... args) { return f[0]; }
 
-    // Barycentric coordinates are the linear shape functions for all dims.
-    template<typename _T, size_t _K, typename BaryCoords>
-    _T _interpolate(const Interpolant<_T, _K, 1> &f, const BaryCoords &c) {
+    // Barycentric coordinates are the linear shape functions for all simplices.
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
         _T result = c[0] * f[0];
         for (size_t i = 1; i < _numNodalValues(_K, 1); ++i)
             result += c[i] * f[i];
         return result;
     }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Edge,        1> &f, Real c0, Real c1                  ) { _T result = c0 * f[0]; result += c1 * f[1];                                           return result; }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Triangle,    1> &f, Real c0, Real c1, Real c2         ) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2];                    ; return result; }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Tetrahedron, 1> &f, Real c0, Real c1, Real c2, Real c3) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2]; result += c3 * f[3]; return result; }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Edge,        1, _NS> &f, Real c0, Real c1                  ) { _T result = c0 * f[0]; result += c1 * f[1];                                           return result; }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Triangle,    1, _NS> &f, Real c0, Real c1, Real c2         ) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2];                    ; return result; }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Tetrahedron, 1, _NS> &f, Real c0, Real c1, Real c2, Real c3) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2]; result += c3 * f[3]; return result; }
 
     // Quadratic shape functions are simple functions of the barycentric coords:
     //    Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
     //    Edge   node  : 4 * lambda_j * lambda_k
     //                   where j, k are the edge endpoint (vertex) nodes
-    template<typename _T, size_t _K, typename BaryCoords>
-    _T _interpolate(const Interpolant<_T, _K, 2> &f, const BaryCoords &c) {
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
         _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
         for (size_t i = 1; i < _numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
-        for (size_t i = 0; i <    _numEdges(_K); ++i) result += (4 * c[edgeStartNode[i]] * c[edgeEndNode[i]]) * f[i];
+        for (size_t i = 0; i <    _numEdges(_K); ++i) result += (4 * c[edgeStartNode[i]] * c[edgeEndNode[i]]) * f[i + _numVertices(_K)];
         return result;
     }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Edge, 2> &f, Real c0, Real c1) {
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Edge, 2, _NS> &f, Real c0, Real c1) {
         _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]);
         result += (4 * c0 * c1) * f[2];
         return result;
     }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Triangle, 2> &f, Real c0, Real c1, Real c2) {
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Triangle, 2, _NS> &f, Real c0, Real c1, Real c2) {
         _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]);
         result += (4 * c0 * c1) * f[3]; result += (4 * c1 * c2) * f[4]; result += (4 * c2 * c0) * f[5];
         return result;
     }
-    template<typename _T> _T _interpolate(const Interpolant<_T, Tetrahedron, 2> &f, Real c0, Real c1, Real c2, Real c3) {
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Tetrahedron, 2, _NS> &f, Real c0, Real c1, Real c2, Real c3) {
         _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]); result += ((2 * c3 * (c3 - 0.5)) * f[3]);
         result += (4 * c0 * c1) * f[4]; result += (4 * c1 * c2) * f[5]; result += (4 * c2 * c0) * f[6]; result += (4 * c0 * c3) * f[7]; result += (4 * c2 * c3) * f[8]; result += (4 * c1 * c3) * f[9];
         return result;
@@ -164,11 +167,11 @@ namespace {
     }
 
     // Quadratic Triangle
-    // (vol / 3) (f_0 + f_1 + f_2)
+    // (vol / 3) (f_3 + f_4 + f_5)
     template<typename _T, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, Triangle, Degree::Quadratic, NS> &f, Real volume) {
-        _T result(f[0]);
-        result += f[1]; result += f[2];
+        _T result(f[3]);
+        result += f[4]; result += f[5];
         result *= volume / 3.0;
         return result;
     }
@@ -253,8 +256,8 @@ namespace {
 template<size_t _K, size_t _Deg>
 class Interpolation { };
 template<size_t _Deg> class Interpolation<Simplex::Edge,        _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_edge<_Deg>(f)) { return _interpolant_edge<_Deg>(f); } };
-template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tet< _Deg>(f)) { return _interpolant_tet< _Deg>(f); } };
-template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tri< _Deg>(f)) { return _interpolant_tri< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tri< _Deg>(f)) { return _interpolant_tri< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tet< _Deg>(f)) { return _interpolant_tet< _Deg>(f); } };
 
 template<typename _T, size_t _K, size_t _Deg>
 class DefaultNodalStoragePolicy {
@@ -391,6 +394,16 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     _T integrate(Real vol = 1.0) const { return _integrate(*this, vol); }
 };
+
+template<typename _T, size_t _K, size_t _Deg, 
+         template<typename, size_t, size_t> class _NS>
+std::ostream & operator<<(std::ostream &os, const Interpolant<_T, _K, _Deg, _NS> &f) {
+    os << "Deg " << _Deg << " over " << _K << "-simplex:";
+    for (size_t i = 0; i < _numNodalValues(_K, _Deg); ++i)
+        os << '\t' << f[i];
+    os << std::endl;
+    return os;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Binary arithmetic operations.
