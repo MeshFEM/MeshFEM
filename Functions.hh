@@ -46,6 +46,7 @@
 #include "Types.hh"
 #include "function_traits.hh"
 #include <vector>
+#include <array>
 #include <functional>
 #include <iostream>
 
@@ -85,8 +86,15 @@ namespace {
     // 3-simplices, these are found using (prefixes of) the following lookup tables.
     // To use these tables, edge nodes are re-indexed so that the first edge is index
     // 0 (i.e. edge index = node index - _numVertices)
-    static const size_t edgeStartNode[] = { 0, 1, 2, 0, 2, 1 };
-    static const size_t edgeEndNode[]   = { 1, 2, 0, 3, 3, 3 };
+    static const size_t edgeStartNode[6] = { 0, 1, 2, 0, 2, 1 };
+    static const size_t edgeEndNode[6]   = { 1, 2, 0, 3, 3, 3 };
+    // For gradients of edge shape functions, we need to know the "other nodes"
+    // not incident each edge. Again, these are found using (prefixes of) the
+    // following lookup table after re-indexing. For 1-simplices, no lookup is
+    // needed. For 1-simplices, only the first sub-entry of the first three
+    // entries are used. For 2-simplices, all entries are used.
+    static const size_t otherNodes[6][2] = { {2, 3}, {0, 3}, {1, 3},
+                                             {1, 2}, {0, 1}, {0, 2} };
 
     // Constant functions don't interpolate...
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
@@ -266,9 +274,8 @@ public:
     // Default constructor leaves values uninitialized
     DefaultNodalStoragePolicy() { }
 
-    DefaultNodalStoragePolicy(VectorND<numNodalValues> &values) {
-        for (size_t i = 0; i < numNodalValues; ++i)
-            m_nodeVal[i] = values[i];
+    DefaultNodalStoragePolicy(const std::array<_T, numNodalValues> &values) {
+        m_nodeVal = values;
     }
 
     template<typename... Args>
@@ -290,7 +297,7 @@ private:
            "DefaultNodalStoragePolicy constructor got illegal number of arguments");
     }
 
-    _T m_nodeVal[numNodalValues];
+    std::array<_T, numNodalValues> m_nodeVal;
 };
 
 template<typename _T, size_t _K, size_t _Deg,

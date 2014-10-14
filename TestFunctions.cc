@@ -1,5 +1,6 @@
 #include "Functions.hh"
 #include "GaussQuadrature.hh"
+#include "EmbeddedElement.hh"
 #include <iostream>
 #include <iomanip>
 
@@ -31,7 +32,7 @@ int main(int argc, char *argv[])
     cout << fConst() << endl;
     cout << fConst(1.0, 2.0, 3.0) << endl;
 
-    VectorND<2> vals(1/3., 1/3.);
+    std::array<Real, 2> vals = {{1/3., 1/3.}};
     Interpolant<Real, Edge, Linear> efLin(0.5, 1.0);
     Interpolant<Real, Edge, Linear> efLin2(vals);
     cout << efLin(0.5, 0.5) << endl;
