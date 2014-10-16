@@ -159,18 +159,6 @@ struct TriangleIndex {
         size_t v[3];
 };
 
-struct Tetrahedron {
-    Tetrahedron() { v[0] = v[1] = v[2] = v[3] = 0; }
-    Tetrahedron(size_t v0, size_t v1, size_t v2, size_t v3) {
-        v[0] = v0; v[1] = v1; v[2] = v2; v[3] = v3;
-    }
-    size_t  operator[](size_t i) const { assert(i < 4); return v[i]; }
-    size_t &operator[](size_t i)       { assert(i < 4); return v[i]; }
-    size_t size() const { return 4; }
-private:
-    size_t v[4];
-};
-
 // Triplets that compare equal if they hold the same 3 integers regardless of
 // order. Useful for representing faces while determining half-face pairs.
 struct UnorderedTriplet {

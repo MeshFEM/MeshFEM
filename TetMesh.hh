@@ -93,25 +93,37 @@ public:
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
 
+    // TODO: REPLACE WITH  numSimplices, numBoundarySimplices
     size_t numElements()         const { return numTets(); }
     size_t numNodes()            const { return numVertices(); }
     size_t numBoundaryElements() const { return numBoundaryFaces(); }
     size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
 
-    // Entity handles (declared out-of-line in TetMesh.inl).
-    template<template<class, class, class, class> class _HType> class   VHandle;
-    template<template<class, class, class, class> class _HType> class  HFHandle;
-    template<template<class, class, class, class> class _HType> class   THandle;
-    template<template<class, class, class, class> class _HType> class  BVHandle;
-    template<template<class, class, class, class> class _HType> class BHEHandle;
-    template<template<class, class, class, class> class _HType> class  BFHandle;
+    size_t numSimplices()         const { return numTets(); }
+    size_t numBoundarySimplices() const { return numBoundaryFaces(); }
 
-    typedef   VHandle<Handle>           VertexHandle; typedef   VHandle<ConstHandle> ConstVertexHandle;
-    typedef  HFHandle<Handle>         HalfFaceHandle; typedef  HFHandle<ConstHandle> ConstHalfFaceHandle;
-    typedef   THandle<Handle>              TetHandle; typedef   THandle<ConstHandle> ConstTetHandle;
-    typedef  BVHandle<Handle>   BoundaryVertexHandle; typedef  BVHandle<ConstHandle> ConstBoundaryVertexHandle;
-    typedef BHEHandle<Handle> BoundaryHalfEdgeHandle; typedef BHEHandle<ConstHandle> ConstBoundaryHalfEdgeHandle;
-    typedef  BFHandle<Handle>     BoundaryFaceHandle; typedef  BFHandle<ConstHandle> ConstBoundaryFaceHandle;
+    // Entity handles (declared out-of-line in TetMesh.inl).
+    // These are templated by mesh type so that subclasses of TetMesh can more
+    // easily derive from them.
+    template<class _Mesh, template<class, class, class, class> class _HType> class   VHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class  HFHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class   THandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class  BVHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class BHEHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class  BFHandle;
+
+    template<class _Mesh, template<class, class, class, class> class _HType> using  SHandle =  THandle<_Mesh, _HType>;
+    template<class _Mesh, template<class, class, class, class> class _HType> using BSHandle = BFHandle<_Mesh, _HType>;
+
+    typedef   VHandle<TetMesh, Handle>           VertexHandle; typedef   VHandle<TetMesh, ConstHandle> ConstVertexHandle;
+    typedef  HFHandle<TetMesh, Handle>         HalfFaceHandle; typedef  HFHandle<TetMesh, ConstHandle> ConstHalfFaceHandle;
+    typedef   THandle<TetMesh, Handle>              TetHandle; typedef   THandle<TetMesh, ConstHandle> ConstTetHandle;
+    typedef  BVHandle<TetMesh, Handle>   BoundaryVertexHandle; typedef  BVHandle<TetMesh, ConstHandle> ConstBoundaryVertexHandle;
+    typedef BHEHandle<TetMesh, Handle> BoundaryHalfEdgeHandle; typedef BHEHandle<TetMesh, ConstHandle> ConstBoundaryHalfEdgeHandle;
+    typedef  BFHandle<TetMesh, Handle>     BoundaryFaceHandle; typedef  BFHandle<TetMesh, ConstHandle> ConstBoundaryFaceHandle;
+
+    typedef   SHandle<TetMesh, Handle>         SimplexHandle; typedef   SHandle<TetMesh, ConstHandle>         ConstSimplexHandle;
+    typedef  BSHandle<TetMesh, Handle> BoundarySimplexHandle; typedef  BSHandle<TetMesh, ConstHandle> ConstBoundarySimplexHandle;
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
@@ -138,6 +150,10 @@ public:
               BoundaryFaceHandle boundaryElement(size_t i)       { return boundaryFace(i); }
          ConstBoundaryFaceHandle boundaryElement(size_t i) const { return boundaryFace(i); }
 
+                 SimplexHandle         simplex(size_t i)       { return tet(i); }
+            ConstSimplexHandle         simplex(size_t i) const { return tet(i); }
+         BoundarySimplexHandle boundarySimplex(size_t i)       { return boundaryFace(i); }
+    ConstBoundarySimplexHandle boundarySimplex(size_t i) const { return boundaryFace(i); }
 
     //////////////////////////////////////////////////////////////////////////
     // Container iterator access
@@ -230,7 +246,7 @@ public:
         size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
         size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
 
-        // For volume meshes, faces are elements and vertices are nodes.
+        // For boundary meshes, faces are elements and vertices are nodes.
         size_t numElements() const { return numFaces(); }
         size_t numNodes()    const { return numVertices(); }
 

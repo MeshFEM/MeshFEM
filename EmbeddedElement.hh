@@ -12,6 +12,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EMBEDDEDELEMENT_HH
 #define EMBEDDEDELEMENT_HH
+#include "Simplex.hh"
+#include "Functions.hh"
 
 // The LinearlyEmbeddedSimplex class stores the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the
@@ -47,8 +49,8 @@ public:
                 result[i] = 2 * m_gradBarycentric.col(i);
             else {
                 i -= numVertices;
-                result[edgeStartNode[i]] = 4 * m_gradBarycentric.col(edgeEndNode[i]);
-                result[edgeEndNode[i]]   = 4 * m_gradBarycentric.col(edgeStartNode[i]);
+                result[Simplex::edgeStartNode(i)] = 4 * m_gradBarycentric.col(edgeEndNode(i));
+                result[Simplex::edgeEndNode(i)]   = 4 * m_gradBarycentric.col(edgeStartNode(i));
             }
         }
         return result;

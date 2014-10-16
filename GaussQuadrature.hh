@@ -23,11 +23,11 @@
 #include "function_traits.hh"
 
 // Edge function (1D)
-// 1 point quadrature for const and linear, 2 point for quadratic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 2), int>::type = 0>
+// 1 point quadrature for const and linear, 2 point for quadratic and cubic
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 3), int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(0.5, 0.5); }
-    if (_Deg == 2) {
+    if ((_Deg == 2) || (_Deg == 3)) {
         constexpr double c0 = 0.78867513459481288225; // (3 + sqrt(3)) / 6
         constexpr double c1 = 0.21132486540518711775; // (3 - sqrt(3)) / 6
         typename function_traits<F>::result_type result(f(c0, c1));
@@ -43,7 +43,7 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
 
 // Triangle function (2D)
 // 1 point quadrature for const and linear, 3 point for quadratic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 2), int>::type = 0>
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 3), int>::type = 0>
 typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(1 / 3.0, 1 / 3.0, 1 / 3.0); }
     if (_Deg == 2) {
@@ -55,6 +55,17 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
         result *= vol / 3.0;
         return result;
     }
+    if (_Deg == 3) {
+        constexpr double c0 = 3 / 5.0;
+        constexpr double c1 = 1 / 5.0;
+        typename function_traits<F>::result_type result(f(c0, c1, c1));
+        result += f(c1, c0, c1);
+        result += f(c1, c1, c0);
+        result *= (25.0 / 48);
+        result += (-9.0 / 16) * f(1 / 3.0, 1 / 3.0, 1 / 3.0);
+        result *= vol;
+        return result;
+    }
     assert(false);
 }
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
@@ -64,7 +75,7 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 
 // Tet function (3D)
 // 1 point quadrature for const and linear, 4 point for quadratic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 2), int>::type = 0>
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 3), int>::type = 0>
 typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); }
     if (_Deg == 2) {
@@ -75,6 +86,18 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
         result += f(c1, c1, c0, c1);
         result += f(c1, c1, c1, c0);
         result *= vol / 4;
+        return result;
+    }
+    if (_Deg == 3) {
+        constexpr double c0 = 0.5;
+        constexpr double c1 = 1 / 6.0;
+        typename function_traits<F>::result_type result(f(c0, c1, c1, c1));
+        result += f(c1, c0, c1, c1);
+        result += f(c1, c1, c0, c1);
+        result += f(c1, c1, c1, c0);
+        result *= 0.45;
+        result += (-0.8) * f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0);
+        result *= vol;
         return result;
     }
     assert(false);

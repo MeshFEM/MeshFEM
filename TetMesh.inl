@@ -3,21 +3,26 @@
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-VHandle : public _HType<TetMesh, VHandle<Handle>, VHandle<ConstHandle>, VertexData> {
-    typedef _HType<TetMesh, VHandle<Handle>, VHandle<ConstHandle>, VertexData> _H;
+VHandle : public _HType<_Mesh, VHandle<_Mesh, Handle>, VHandle<_Mesh, ConstHandle>, VertexData> {
+protected:
+    typedef _HType<_Mesh, VHandle<_Mesh, Handle>, VHandle<_Mesh, ConstHandle>, VertexData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
+    typedef typename _Mesh::template BVHandle<_Mesh, _HType> BVH;
+    typedef typename _Mesh::template HFHandle<_Mesh, _HType> HFH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numVertices(); }
 
     bool isBoundary() const { return m_mesh.m_bdryVertexIdx(m_idx) >= 0; }
-    BVHandle<_HType> boundaryVertex() const { return BVHandle<_HType>(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
-    HFHandle<_HType>       halfFace() const { return HFHandle<_HType>(m_mesh.m_halfFaceOfVertex(m_idx), m_mesh); }
+    BVH boundaryVertex() const { return BVH(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
+    HFH       halfFace() const { return HFH(m_mesh.m_halfFaceOfVertex(m_idx), m_mesh); }
 
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)
-    VHandle<_HType> volumeVertex() const { return VHandle<_HType>(m_idx, m_mesh); }
+    VH volumeVertex() const { return VH(m_idx, m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_vertexData[m_idx]; }
@@ -28,20 +33,23 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-HFHandle : public _HType<TetMesh, HFHandle<Handle>, HFHandle<ConstHandle>, HalfFaceData> {
-    typedef _HType<TetMesh, HFHandle<Handle>, HFHandle<ConstHandle>, HalfFaceData> _H;
+HFHandle : public _HType<_Mesh, HFHandle<_Mesh, Handle>, HFHandle<_Mesh, ConstHandle>, HalfFaceData> {
+protected:
+    typedef _HType<_Mesh, HFHandle<_Mesh, Handle>, HFHandle<_Mesh, ConstHandle>, HalfFaceData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
+    typedef typename _Mesh::template BFHandle<_Mesh, _HType> BFH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
     bool isBoundary()                 const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
-    BFHandle<_HType>   boundaryFace() const { return BFHandle<_HType>(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
+    BFH   boundaryFace() const { return BFH(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
     // Dimension-independent terminology:
-    BFHandle<_HType> boundaryEntity() const { return boundaryFace(); }
+    BFH boundaryEntity() const { return boundaryFace(); }
 
-     VHandle<_HType> vertex(size_t i) const { return VHandle<_HType>(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
-
+     VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_halfFaceData[m_idx]; }
@@ -52,11 +60,16 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-THandle : public _HType<TetMesh, THandle<Handle>, THandle<ConstHandle>, TetData> {
-    typedef _HType<TetMesh, THandle<Handle>, THandle<ConstHandle>, TetData> _H;
+THandle : public _HType<_Mesh, THandle<_Mesh, Handle>, THandle<_Mesh, ConstHandle>, TetData> {
+protected:
+    typedef _HType<_Mesh, THandle<_Mesh, Handle>, THandle<_Mesh, ConstHandle>, TetData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template  THandle<_Mesh, _HType>  TH;
+    typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
+    typedef typename _Mesh::template HFHandle<_Mesh, _HType> HFH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numTets(); }
     bool isBoundary() const {
@@ -69,14 +82,14 @@ public:
     constexpr size_t numNeighbors() const { return 4; }
     constexpr size_t numVertices()  const { return 4; }
 
-     VHandle<_HType>   vertex(size_t i) const { return  VHandle<_HType>(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
-     THandle<_HType> neighbor(size_t i) const { return  THandle<_HType>(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
-    HFHandle<_HType> halfFace(size_t i) const { return HFHandle<_HType>(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
+     VH   vertex(size_t i) const { return  VH(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
+     TH neighbor(size_t i) const { return  TH(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
+    HFH halfFace(size_t i) const { return HFH(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
 
     // Dimension-independent terminology:
     //  interface of a tet is a half-face
     //  interface of a tri is a half-edge
-    HFHandle<_HType> interface(size_t i) const { return halfFace(i); }
+    HFH interface(size_t i) const { return halfFace(i); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_tetData[m_idx]; }
@@ -87,22 +100,27 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-BVHandle : public _HType<TetMesh, BVHandle<Handle>, BVHandle<ConstHandle>, BoundaryVertexData> {
-    typedef _HType<TetMesh, BVHandle<Handle>, BVHandle<ConstHandle>, BoundaryVertexData> _H;
+BVHandle : public _HType<_Mesh, BVHandle<_Mesh, Handle>, BVHandle<_Mesh, ConstHandle>, BoundaryVertexData> {
+protected:
+    typedef _HType<_Mesh, BVHandle<_Mesh, Handle>, BVHandle<_Mesh, ConstHandle>, BoundaryVertexData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template   VHandle<_Mesh, _HType>   VH;
+    typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
+    typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryVertices(); }
     // The boundary of a tet mesh has no border.
     bool isBorder() const { return false; }
     
     // Get handle for tet mesh vertex corresponding to this boundary vertex.
-     VHandle<_HType> volumeVertex() const { return VHandle<_HType>(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
+     VH volumeVertex() const { return VH(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
     // Get some incident boundary face. This works because the incident half-face
     // for a vertex on the boundary is guaranteed to be on the boundary.
-     BFHandle<_HType>        face() const { assert(valid()); BFHandle<_HType> bf = volumeVertex().halfFace().boundaryFace(); assert(bf); return bf; }
-    BHEHandle<_HType>    halfEdge() const { return BHEHandle<_HType>(m_mesh.m_bdryHEOfBdryVertex(m_idx), m_mesh); }
+     BFH        face() const { assert(valid()); BFH bf = volumeVertex().halfFace().boundaryFace(); assert(bf); return bf; }
+    BHEH    halfEdge() const { return BHEH(m_mesh.m_bdryHEOfBdryVertex(m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryVertexData[m_idx]; }
@@ -114,33 +132,33 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-BHEHandle : public _HType<TetMesh, BHEHandle<Handle>, BHEHandle<ConstHandle>, BoundaryHalfEdgeData> {
-    typedef _HType<TetMesh, BHEHandle<Handle>, BHEHandle<ConstHandle>, BoundaryHalfEdgeData> _H;
+BHEHandle : public _HType<_Mesh, BHEHandle<_Mesh, Handle>, BHEHandle<_Mesh, ConstHandle>, BoundaryHalfEdgeData> {
+protected:
+    typedef _HType<_Mesh, BHEHandle<_Mesh, Handle>, BHEHandle<_Mesh, ConstHandle>, BoundaryHalfEdgeData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template  BVHandle<_Mesh, _HType>  BVH;
+    typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
+    typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryHalfEdges(); }
     // The boundary of a tet mesh has no border.
     bool isBorder()     const { return false; }
     bool isBorderEdge() const { return false; }
 
-    BHEHandle<_HType>     next() const { return BHEHandle<_HType>(m_mesh.template m_bdryHE<Direction::NEXT>(m_idx), m_mesh); }
-    BHEHandle<_HType>     prev() const { return BHEHandle<_HType>(m_mesh.template m_bdryHE<Direction::PREV>(m_idx), m_mesh); }
-    BHEHandle<_HType> opposite() const { return BHEHandle<_HType>(m_mesh.template m_bdryHE<Direction::OPP >(m_idx), m_mesh); }
-    BVHandle<_HType>       tip() const { return BVHandle<_HType>(m_mesh.template m_bdryVertexOfBdryHE<HEVertex::TIP>(m_idx), m_mesh); }
-    BVHandle<_HType>      tail() const { return BVHandle<_HType>(m_mesh.template m_bdryVertexOfBdryHE<HEVertex::TAIL>(m_idx), m_mesh); }
-
-    BHEHandle<_HType>  primary() const {
-        int opp = m_mesh.template m_bdryHE<Direction::OPP>(m_idx);
-        return BHEHandle<_HType>((opp < m_idx) ? opp : m_idx, m_mesh);
-    }
+    BHEH     next() const { return BHEH(m_mesh.template m_bdryHE<Direction::NEXT>(m_idx), m_mesh); }
+    BHEH     prev() const { return BHEH(m_mesh.template m_bdryHE<Direction::PREV>(m_idx), m_mesh); }
+    BHEH opposite() const { return BHEH(m_mesh.template m_bdryHE<Direction::OPP >(m_idx), m_mesh); }
+     BVH      tip() const { return  BVH(m_mesh.template m_bdryVertexOfBdryHE<HEVertex::TIP>(m_idx), m_mesh); }
+     BVH     tail() const { return  BVH(m_mesh.template m_bdryVertexOfBdryHE<HEVertex::TAIL>(m_idx), m_mesh); }
+    BHEH  primary() const {   int opp = m_mesh.template m_bdryHE<Direction::OPP>(m_idx); return BHEH((opp < m_idx) ? opp : m_idx, m_mesh); }
 
     // Circulation around tip
-    BHEHandle<_HType>  ccw() const { return opposite().prev(); }
-    BHEHandle<_HType>   cw() const { return next().opposite(); }
-     BFHandle<_HType> face() const { return BFHandle<_HType>(m_mesh.m_bdryFaceOfBdryHE(m_idx), m_mesh); }
-
+    BHEH  ccw() const { return opposite().prev(); }
+    BHEH   cw() const { return next().opposite(); }
+     BFH face() const { return BFH(m_mesh.m_bdryFaceOfBdryHE(m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryHalfEdgeData[m_idx]; }
@@ -151,21 +169,27 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData,         class HalfFaceData,         class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
-template<template<class, class, class, class> class _HType>
+template<class _Mesh, template<class, class, class, class> class _HType>
 class TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-BFHandle : public _HType<TetMesh, BFHandle<Handle>, BFHandle<ConstHandle>, BoundaryFaceData> {
-    typedef _HType<TetMesh, BFHandle<Handle>, BFHandle<ConstHandle>, BoundaryFaceData> _H;
+BFHandle : public _HType<_Mesh, BFHandle<_Mesh, Handle>, BFHandle<_Mesh, ConstHandle>, BoundaryFaceData> {
+protected:
+    typedef _HType<_Mesh, BFHandle<_Mesh, Handle>, BFHandle<_Mesh, ConstHandle>, BoundaryFaceData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    typedef typename _Mesh::template  BVHandle<_Mesh, _HType>  BVH;
+    typedef typename _Mesh::template  HFHandle<_Mesh, _HType>  HFH;
+    typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
+    typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
     bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryFaces(); }
 
     constexpr int numNeighbors() const { return 3; }
     constexpr int numVertices()  const { return 3; }
 
-    HFHandle<_HType>    volumeHalfFace() const { return HFHandle<_HType>(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
-    BVHandle<_HType>    vertex(size_t i) const { BVHandle<_HType> bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }
-    BFHandle<_HType>  neighbor(size_t i) const { return BFHandle<_HType>(m_mesh.m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
-    BHEHandle<_HType> halfEdge(size_t i) const { return BHEHandle<_HType>(m_mesh.m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
+     HFH   volumeHalfFace() const { return  HFH(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
+     BVH   vertex(size_t i) const { BVH bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }
+     BFH neighbor(size_t i) const { return  BFH(m_mesh.m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
+    BHEH halfEdge(size_t i) const { return BHEH(m_mesh.m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryFaceData[m_idx]; }

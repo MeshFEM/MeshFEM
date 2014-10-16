@@ -44,13 +44,13 @@
 #ifndef FUNCTIONS_HH
 #define FUNCTIONS_HH
 #include "Types.hh"
+#include "Simplex.hh"
 #include "function_traits.hh"
 #include <vector>
 #include <array>
 #include <functional>
 #include <iostream>
 
-namespace Simplex { enum { Edge = 1, Triangle = 2, Tetrahedron = 3}; };
 namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -69,33 +69,11 @@ namespace {
     using namespace Degree;
     using namespace Simplex;
 
-    constexpr size_t _numVertices(size_t K) { return K + 1; }
-    constexpr size_t _numEdges(size_t K)    { return (K * (K + 1)) / 2; }
-    constexpr size_t _numNodalValues(size_t K, size_t deg) {
-        return deg == 0 ? 1 : (deg == 1 ? _numVertices(K)
-                                        : _numVertices(K) + _numEdges(K));
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     // Interpolation
     // Two versions of each interpolation operation are proved: one taking K + 1
     // (i.e. number of K-simplex vertices) and one taking a single VectorND<K+1>
     ////////////////////////////////////////////////////////////////////////////
-    // For interpolation of values at the edge nodes, we need to know the nodes
-    // indices at the endpoints of the corresponding edges. For 1- 2- and
-    // 3-simplices, these are found using (prefixes of) the following lookup tables.
-    // To use these tables, edge nodes are re-indexed so that the first edge is index
-    // 0 (i.e. edge index = node index - _numVertices)
-    static const size_t edgeStartNode[6] = { 0, 1, 2, 0, 2, 1 };
-    static const size_t edgeEndNode[6]   = { 1, 2, 0, 3, 3, 3 };
-    // For gradients of edge shape functions, we need to know the "other nodes"
-    // not incident each edge. Again, these are found using (prefixes of) the
-    // following lookup table after re-indexing. For 1-simplices, no lookup is
-    // needed. For 1-simplices, only the first sub-entry of the first three
-    // entries are used. For 2-simplices, all entries are used.
-    static const size_t otherNodes[6][2] = { {2, 3}, {0, 3}, {1, 3},
-                                             {1, 2}, {0, 1}, {0, 2} };
-
     // Constant functions don't interpolate...
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
     _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... args) { return f[0]; }
@@ -104,7 +82,7 @@ namespace {
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
     _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
         _T result = c[0] * f[0];
-        for (size_t i = 1; i < _numNodalValues(_K, 1); ++i)
+        for (size_t i = 1; i < numNodes(_K, 1); ++i)
             result += c[i] * f[i];
         return result;
     }
@@ -119,8 +97,8 @@ namespace {
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
     _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
         _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
-        for (size_t i = 1; i < _numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
-        for (size_t i = 0; i <    _numEdges(_K); ++i) result += (4 * c[edgeStartNode[i]] * c[edgeEndNode[i]]) * f[i + _numVertices(_K)];
+        for (size_t i = 1; i < numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
+        for (size_t i = 0; i <    numEdges(_K); ++i) result += (4 * c[edgeStartNode(i)] * c[edgeEndNode(i)]) * f[i + numVertices(_K)];
         return result;
     }
     template<typename _T, template<typename, size_t, size_t> class _NS>
@@ -158,8 +136,8 @@ namespace {
     template<typename _T, size_t _K, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, _K, Degree::Linear, NS> &f, Real volume) {
         _T result(f[0]);
-        for (size_t i = 1; i < _numNodalValues(_K, 1); ++i) result += f[i];
-        result *= volume / _numNodalValues(_K, 1);
+        for (size_t i = 1; i < numNodes(_K, 1); ++i) result += f[i];
+        result *= volume / numNodes(_K, 1);
         return result;
     }
     
@@ -270,7 +248,7 @@ template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: 
 template<typename _T, size_t _K, size_t _Deg>
 class DefaultNodalStoragePolicy {
 public:
-    static constexpr size_t numNodalValues = _numNodalValues(_K, _Deg);
+    static constexpr size_t numNodalValues = Simplex::numNodes(_K, _Deg);
     // Default constructor leaves values uninitialized
     DefaultNodalStoragePolicy() { }
 
@@ -304,7 +282,7 @@ template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy>
 class Interpolant : public NodalStoragePolicy<_T, _K, _Deg> {
     typedef NodalStoragePolicy<_T, _K, _Deg> SP;
-    static constexpr size_t numNodalValues = _numNodalValues(_K, _Deg);
+    static constexpr size_t numNodalValues = Simplex::numNodes(_K, _Deg);
 public:
     Interpolant() : SP() { }
 
@@ -331,7 +309,7 @@ public:
     // Evaluation (function call operator)
     ////////////////////////////////////////////////////////////////////////////
     // Pass in a column vector of barycentric coordinates...
-    _T operator()(const VectorND<_numVertices(_K)> &baryCoords) const {
+    _T operator()(const VectorND<Simplex::numVertices(_K)> &baryCoords) const {
         return _interpolate(*this, baryCoords);
     }
     // ... or a list of them, which is converted into a column vector
@@ -340,7 +318,7 @@ public:
     template<typename... Args, typename std::enable_if<sizeof...(Args) != 1, int>::type = 0>
     _T operator()(Args&&... baryCoords) const {
         static_assert(((_Deg == 0) && (sizeof...(baryCoords) == 0))
-                || (_numVertices(_K) == sizeof...(baryCoords)),
+                || (Simplex::numVertices(_K) == sizeof...(baryCoords)),
                 "Invalid number of barycentric coordinates passed.");
         return _interpolate(*this, baryCoords...);
     }
@@ -359,11 +337,11 @@ public:
         if (_Deg2 == 0) for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[0];
         else if (_Deg2 == 1) {
             // Copy the linear function's values at the vertices
-            for (size_t i = 0; i < _numVertices(_K); ++i) (*this)[i] = b[i];
+            for (size_t i = 0; i < Simplex::numVertices(_K); ++i) (*this)[i] = b[i];
             // Evaluate linear function at the edge nodes by averaging endpoints
-            for (size_t i = 0; i < _numEdges(_K); ++i) {
-                (*this)[_numVertices(_K) + i] = 
-                        0.5 * (b[edgeStartNode[i]] + b[edgeEndNode[i]]);
+            for (size_t i = 0; i < Simplex::numEdges(_K); ++i) {
+                (*this)[Simplex::numVertices(_K) + i] = 
+                        0.5 * (b[Simplex::edgeStartNode(i)] + b[Simplex::edgeEndNode(i)]);
             }
         }
         return *this;
@@ -406,7 +384,7 @@ template<typename _T, size_t _K, size_t _Deg,
          template<typename, size_t, size_t> class _NS>
 std::ostream & operator<<(std::ostream &os, const Interpolant<_T, _K, _Deg, _NS> &f) {
     os << "Deg " << _Deg << " over " << _K << "-simplex:";
-    for (size_t i = 0; i < _numNodalValues(_K, _Deg); ++i)
+    for (size_t i = 0; i < numNodes(_K, _Deg); ++i)
         os << '\t' << f[i];
     os << std::endl;
     return os;

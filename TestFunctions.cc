@@ -1,6 +1,5 @@
 #include "Functions.hh"
 #include "GaussQuadrature.hh"
-#include "EmbeddedElement.hh"
 #include <iostream>
 #include <iomanip>
 
@@ -135,13 +134,15 @@ int main(int argc, char *argv[])
         // Compare versions of integration
         assert_eq(__LINE__, integrate_edge<1>([&] (Real a, Real b) { return efl(a, b); }), efl.integrate());
         assert_eq(__LINE__, integrate_edge<2>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate());
+        assert_eq(__LINE__, integrate_edge<3>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate());
 
         assert_eq(__LINE__, integrate_tri<1>([&] (Real a, Real b, Real c) { return tfl(a, b, c); }), tfl.integrate());
         assert_eq(__LINE__, integrate_tri<2>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate());
+        assert_eq(__LINE__, integrate_tri<3>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate());
 
         assert_eq(__LINE__, integrate_tet<1>([&] (Real a, Real b, Real c, Real d) { return tetfl(a, b, c, d); }), tetfl.integrate());
         assert_eq(__LINE__, integrate_tet<2>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate());
-
+        assert_eq(__LINE__, integrate_tet<3>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate());
 
         // Test expression interpolants
         Interpolant<Real, Edge,    Constant> efc(randDouble());

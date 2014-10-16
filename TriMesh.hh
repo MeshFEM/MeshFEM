@@ -51,26 +51,38 @@ public:
     size_t numTris()          const { return V.size() / 3; }
     size_t numFaces()         const { return numTris(); }
 
+    size_t numBoundaryVertices() const { return bV.size(); }
+    size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
+
+    // TODO: REPLACE WITH  numSimplices, numBoundarySimplices
     size_t numElements()         const { return numTris(); }
     size_t numNodes()            const { return numVertices(); }
     size_t numBoundaryElements() const { return numBoundaryEdges(); }
     size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
 
-    size_t numBoundaryVertices() const { return bV.size(); }
-    size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
+    size_t numSimplices()         const { return numTris(); }
+    size_t numBoundarySimplices() const { return numBoundaryEdges(); }
 
     // Entity handles (declared out-of-line in TriMesh.inl).
-    template<template<class, class, class, class> class _HType> class  VHandle;
-    template<template<class, class, class, class> class _HType> class HEHandle;
-    template<template<class, class, class, class> class _HType> class  THandle;
-    template<template<class, class, class, class> class _HType> class BVHandle;
-    template<template<class, class, class, class> class _HType> class BEHandle;
+    // These are templated by mesh type so that subclasses of TriMesh can more
+    // easily derive from them.
+    template<class _Mesh, template<class, class, class, class> class _HType> class  VHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class HEHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class  THandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class BVHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> class BEHandle;
 
-    typedef  VHandle<Handle>         VertexHandle; typedef  VHandle<ConstHandle>         ConstVertexHandle;
-    typedef HEHandle<Handle>       HalfEdgeHandle; typedef HEHandle<ConstHandle>       ConstHalfEdgeHandle;
-    typedef  THandle<Handle>            TriHandle; typedef  THandle<ConstHandle>            ConstTriHandle;
-    typedef BVHandle<Handle> BoundaryVertexHandle; typedef BVHandle<ConstHandle> ConstBoundaryVertexHandle;
-    typedef BEHandle<Handle>   BoundaryEdgeHandle; typedef BEHandle<ConstHandle>   ConstBoundaryEdgeHandle;
+    template<class _Mesh, template<class, class, class, class> class _HType> using  SHandle =  THandle<_Mesh, _HType>;
+    template<class _Mesh, template<class, class, class, class> class _HType> using BSHandle = BEHandle<_Mesh, _HType>;
+
+    typedef  VHandle<TriMesh, Handle>         VertexHandle; typedef  VHandle<TriMesh, ConstHandle>         ConstVertexHandle;
+    typedef HEHandle<TriMesh, Handle>       HalfEdgeHandle; typedef HEHandle<TriMesh, ConstHandle>       ConstHalfEdgeHandle;
+    typedef  THandle<TriMesh, Handle>            TriHandle; typedef  THandle<TriMesh, ConstHandle>            ConstTriHandle;
+    typedef BVHandle<TriMesh, Handle> BoundaryVertexHandle; typedef BVHandle<TriMesh, ConstHandle> ConstBoundaryVertexHandle;
+    typedef BEHandle<TriMesh, Handle>   BoundaryEdgeHandle; typedef BEHandle<TriMesh, ConstHandle>   ConstBoundaryEdgeHandle;
+
+    typedef  SHandle<TriMesh, Handle>         SimplexHandle; typedef  SHandle<TriMesh, ConstHandle>         ConstSimplexHandle;
+    typedef BSHandle<TriMesh, Handle> BoundarySimplexHandle; typedef BSHandle<TriMesh, ConstHandle> ConstBoundarySimplexHandle;
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
@@ -96,6 +108,11 @@ public:
      ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return boundaryVertex(i); }
           BoundaryEdgeHandle boundaryElement(size_t i)       { return boundaryEdge(i); }
      ConstBoundaryEdgeHandle boundaryElement(size_t i) const { return boundaryEdge(i); }
+
+                 SimplexHandle         simplex(size_t i)       { return tri(i); }
+            ConstSimplexHandle         simplex(size_t i) const { return tri(i); }
+         BoundarySimplexHandle boundarySimplex(size_t i)       { return boundaryEdge(i); }
+    ConstBoundarySimplexHandle boundarySimplex(size_t i) const { return boundaryEdge(i); }
 
 
     // Higher-level entity access
