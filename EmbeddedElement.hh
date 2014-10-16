@@ -170,11 +170,11 @@ public:
         // the opposite edge. This means the gradient points perpendicularly
         // up from the opposite edge, b, and has magnitude 1 / h.
         // Since area = b * h / 2, this magnitude is b / (2 area).
-        //       2           ^ y
-        //       *           |
+        //       2
+        //       *           ^ y
         //      / \          |
-        //     1   0         +-----> x 
-        //    /     \
+        //     1   0         |
+        //    /     \        +-----> x 
         //  0*---2---* 1
         // Inward-pointing edge perpendiculars
         Vector2D e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);

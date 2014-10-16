@@ -92,9 +92,6 @@ struct NodeData {
     EmbeddingSpace p;
 };
 
-template<size_t _K, size_t _Deg, class EmbeddingSpace>
-using EmbeddingSpace = TMEmptyData;
-
 // Wrapper for all the data types to be included in the FEMMesh.
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
 struct DefaultFEMData {
