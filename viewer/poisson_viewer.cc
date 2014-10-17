@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 #include <string>
+#include <limits>
 
 #include <OpenGL/gl.h>
 #include <OpenGL/glu.h>
@@ -12,7 +13,7 @@
 #include "MeshIO.hh"
 #include "Geometry.hh"
 
-#include "NewPoisson.hh"
+#include "Poisson.hh"
 #include "colors.hh"
 #include "draw.hh"
 
@@ -24,9 +25,9 @@ vector<Point2D>       vertices;
 vector<Point2D>       gradU;
 vector<double>        soln;
 
-size_t g_selectedVertex;
+size_t g_selectedNode;
 
-typedef PoissonMesh<2, 1, Point2D> PMesh;
+typedef PoissonMesh<2, 2, Point2D> PMesh;
 PMesh *mesh;
 
 void drawTriangle2D(const TriangleIndex &tri)
@@ -130,7 +131,6 @@ void Display()
         smax = max(soln[i], smax);
         smin = min(soln[i], smin);
     }
-    std::cout << "smin, smax: " << smin << ", " << smax << std::endl;
     ColorMap<RGBColorf, double> colorMap(COLORMAP_FIREPRINT, smax, smin);
 
     glBegin(GL_TRIANGLES);
@@ -191,6 +191,17 @@ void Display()
     }
     glEnd();
 
+    if (g_selectedNode < mesh->numNodes()) {
+        glBegin(GL_POINTS);
+            glColor3f(1.0f, 1.0f, 1.0f);
+            auto n = mesh->node(g_selectedNode);
+            glVertex2f(n->p[0], n->p[1]);
+        glEnd();
+        glColor3f(0.0f, 0.0f, 0.0f);
+        string str("Val for node " + to_string(g_selectedNode) + ": "
+                 + to_string(soln.at(g_selectedNode)));
+        drawString(1, 1, str.c_str());
+    }
     // if (g_selectedVertex < vertices.size()) {
     //     glLineWidth(2.0f);
 
@@ -234,7 +245,6 @@ void Display()
     //     glEnd();
     // }
 
-
     glutSwapBuffers();
 }
 
@@ -269,13 +279,13 @@ void selectVertex(int x, int y)
     getWorldCoords(x, y, 0, wx, wy, wz);
     Point2D p(wx, wy);
     double closestDist = .05;
-    g_selectedVertex = vertices.size();
+    g_selectedNode = mesh->numNodes();
     // Would be better to do threshold check in screen coords...
-    for (size_t i = 0; i < vertices.size(); ++i) {
-        float dist = (vertices[i] - p).norm();
+    for (size_t i = 0; i < mesh->numNodes(); ++i) {
+        float dist = (mesh->node(i)->p - p).norm();
          if (dist < closestDist) {
              closestDist = dist;
-             g_selectedVertex = i;
+             g_selectedNode = i;
          }
     }
 }
@@ -379,6 +389,7 @@ int main(int argc, char *argv[])
     cout << "Elements: " << mesh->numBoundaryElements() << std::endl;
     cout << "Boundary Nodes: " << mesh->numBoundaryNodes() << std::endl;
     size_t numConstrained = 0;
+    Real minVal = numeric_limits<Real>::max(), maxVal = numeric_limits<Real>::min();
     for (size_t i = 0; i < mesh->numBoundaryNodes(); ++i) {
         auto bn = mesh->boundaryNode(i);
         Point2D origP = bn.volumeNode()->p * maxDim + minCoords;
@@ -386,13 +397,26 @@ int main(int argc, char *argv[])
             bn->constraintType = CONSTRAINT_DIRICHLET;
             bn->constraintData = sin(.5 * M_PI * origP[0]);
             ++numConstrained;
+
+            minVal = min(minVal, bn->constraintData);
+            maxVal = max(maxVal, bn->constraintData);
         }
     }
+
+    cout << "minVal = " << minVal << ", maxVal = " << maxVal << endl;
+
 
     mesh->solve(soln);
     gradU = mesh->gradUAverage(soln);
 
-    g_selectedVertex = vertices.size();
+    double smax = -1e16, smin = 1e16;
+    for (size_t i = 0; i < soln.size(); ++i) {
+        smax = max(soln[i], smax);
+        smin = min(soln[i], smin);
+    }
+    std::cout << "smin, smax: " << smin << ", " << smax << std::endl;
+
+    g_selectedNode = mesh->numNodes();
 
     // Set GLUT view callbacks
     glutDisplayFunc(Display);

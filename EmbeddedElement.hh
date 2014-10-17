@@ -40,17 +40,21 @@ public:
         SFGradient result;
         if (_Deg == 1)  result[0] = m_gradBarycentric.col(i);
         if (_Deg == 2) {
-            // For vertex shape functions, only the ith vertex value is nonzero
-            // (value: 2 gradBarycentric) For edge shape functions, only the
-            // incident vertices are nonzero (value: 4 gradBarycentricOpposite)
-            for (size_t j = 0; j < numVertices; ++j)
-                result[j] = EmbeddingSpace::Zero();
-            if (i < numVertices)
-                result[i] = 2 * m_gradBarycentric.col(i);
+            // For vertex shape functions, all vertex values are nonzero.
+            // For edge shape functions, only the incident vertices are nonzero.
+            if (i < numVertices) {
+                result[i] = 3 * m_gradBarycentric.col(i);
+                for (size_t j = 1; j < numVertices; ++j)
+                    result[(i + j) % numVertices] = -m_gradBarycentric.col(i);
+            }
             else {
+                for (size_t j = 0; j < numVertices; ++j)
+                    result[j] = EmbeddingSpace::Zero();
                 i -= numVertices;
                 result[Simplex::edgeStartNode(i)] = 4 * m_gradBarycentric.col(edgeEndNode(i));
                 result[Simplex::edgeEndNode(i)]   = 4 * m_gradBarycentric.col(edgeStartNode(i));
+                // if (_K > 1) result[Simplex::oppositeNode(i)] = EmbeddingSpace::Zero();
+                // if (_K > 2) result[Simplex::otherOppositeNode(i)] = EmbeddingSpace::Zero();
             }
         }
         return result;

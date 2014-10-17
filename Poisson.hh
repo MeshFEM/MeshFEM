@@ -69,7 +69,7 @@ public:
             }
         }
         // Enforce Dirichlet constraints with Lagrange multipliers
-        std::vector<Real> b(Base::numNodes(), 0.0);
+        std::vector<Real> cRHS;
         for (size_t ni = 0; ni < Base::numBoundaryNodes(); ++ni) {
             auto bn = Base::boundaryNode(ni);
             if (bn->constraintType == CONSTRAINT_DIRICHLET) {
@@ -77,15 +77,12 @@ public:
                 int vni = bn.volumeNode().index();
                 L.addNZ(vni, newRow, 1.0);
                 L.addNZ(newRow, vni, 1.0);
-                b.push_back(bn->constraintData);
+                cRHS.push_back(bn->constraintData);
             }
         }
 
-        SuiteSparseMatrix ssL(L);
-        UmfpackFactorizer LFactor(ssL);
-        LFactor.solve(b, x);
-        // Discard Lagrange multipliers
-        x.resize(Base::numNodes());
+        ConstrainedSystem<Real> system(L, cRHS);
+        system.solve(std::vector<Real>(Base::numNodes(), 0), x);
     }
 
     // Compute the average gradient over each element.
