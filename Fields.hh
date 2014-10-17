@@ -203,6 +203,28 @@ public:
     using typename VectorField<Real, 1>::FlattenedType;
     typedef Real value_type;
 
+    // ScalarField's value type should act both like a vector (to mimic
+    // base class VectorField<Real, 1>) and like a scalar (via typecasts)
+    class ValueType {
+    public:
+        ValueType(Real &val) : m_val(val) { }
+        Real &operator[](size_t i)       { assert(i == 0); return m_val; }
+        Real  operator[](size_t i) const { assert(i == 0); return m_val; }
+        operator Real&()      { return m_val; }
+        operator Real() const { return m_val; }
+        ValueType &operator=(Real val) { m_val = val; return *this; }
+    private:
+        Real &m_val;
+    };
+    class ConstValueType {
+    public:
+        ConstValueType(const Real &val) : m_val(val) { }
+        Real  operator[](size_t i) const { assert(i == 0); return m_val; }
+        operator Real() const { return m_val; }
+    private:
+        const Real &m_val;
+    };
+
     ScalarField(const FlattenedType &values)
         : VectorField<Real, 1>(values) { }
     ScalarField(size_t domainSize = 0)
@@ -224,6 +246,16 @@ public:
 
     // Component wise abs.
     ScalarField cwiseAbs() const { auto r = ScalarField(*this); r.m_values = r.m_values.cwiseAbs(); return r; }
+
+    // operator() should return numbers rather than column vectors...
+    ConstValueType operator()(size_t i) const {
+        assert(i < (size_t) m_values.cols());
+        return ConstValueType(m_values(0, i));
+    }
+    ValueType operator()(size_t i) {
+        assert(i < (size_t) m_values.cols());
+        return ValueType(m_values(0, i));
+    }
 
     const Real *data() const { return m_values.data(); }
           Real *data()       { return m_values.data(); }
