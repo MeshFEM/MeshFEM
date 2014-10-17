@@ -1,0 +1,51 @@
+To build on Mac OS X
+1) Install dependencies listed in 'dependencies.txt'
+2) mkdir build
+   cd build
+   qmake ..
+   make
+3) make install     # Install resources into .app bundle
+
+*Should* be cross platform, but different build rules must be written for the
+different platforms.
+
+For older versions of QT, I had to use custom build specs so that c++11 features
+were brought in:
+   qmake -spec ../build_specs/macx-g++47 -o Makefile ../CSGFEM.pro
+   make
+
+   Or, for clang:
+   qmake -spec /opt/local/share/qt4/mkspecs/unsupported/macx-clang ../CSGFEM.pro
+
+================================================================================
+Results File Format (Binary)
+All integers are 64-bit, all floating point numbers are doubles
+================================================================================
+RESULT_2D    (magic ASCII number)
+Result Name  (null-terminated string)
+Gridcell_overlaps.size()
+Gridcell_overlaps (sequence of doubles)
+Model Name     (null-terminated string)
+Model:
+    BBox: vector, vector
+    null-terminated json string
+Settings Name  (null-terminated string)
+Settings       (null-terminated string)
+NumElements NumNodes NumBoundary    (not strictly needed because we have
+                                     cell overlaps, but simplifies parsing)
+NumFields (NF)
+NF { Field Type (NODE_SCALAR, NODE_VECTOR, ELEM_SCALAR, ELEM_VECTOR)
+*  {    FieldData
+
+================================================================================
+Running on the HPC cluster.
+================================================================================
+There are some oddities with the modules on the HPC cluster, but the following
+seems to work:
+Include in .bash_profile:
+    module load eigen/3.0.5
+    module load suitesparse/intel/3.6.1
+    module load gcc/4.7.3 
+    module load intel/11.1.046 
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/usr/lib
+$ make -f MakefileBowery
