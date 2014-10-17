@@ -36,7 +36,7 @@ public:
     const decltype(m_gradBarycentric) &gradBarycentric() const { return m_gradBarycentric; }
     Real volume() const { return m_volume; }
 
-    EmbeddingSpace gradPhi(size_t i) const {
+    SFGradient gradPhi(size_t i) const {
         SFGradient result;
         if (_Deg == 1)  result[0] = m_gradBarycentric.col(i);
         if (_Deg == 2) {
@@ -55,7 +55,6 @@ public:
         }
         return result;
     }
-
 };
 
 // Edges in 3D do not store normals, since the normal is ambiguous.

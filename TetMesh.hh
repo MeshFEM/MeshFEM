@@ -294,7 +294,7 @@ public:
     template<class Mesh, class Subtype, class ConstSubtype, class Data>
     friend class ConstHandle;
 
-private:
+protected:
     std::vector<VertexData>           m_vertexData;
     std::vector<HalfFaceData>         m_halfFaceData;
     std::vector<TetData>              m_tetData;

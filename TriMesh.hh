@@ -119,7 +119,7 @@ public:
          HalfEdgeHandle halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }
     ConstHalfEdgeHandle halfEdge(size_t s, size_t e) const { return halfEdge(m_halfedgeIndex(s, e)); }
 
-private:
+protected:
     ////////////////////////////////////////////////////////////////////////////
     std::vector<VertexData>         m_vertexData;
     std::vector<HalfEdgeData>       m_halfEdgeData;

@@ -1,3 +1,16 @@
+////////////////////////////////////////////////////////////////////////////////
+// FEMMesh.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Provides a mesh with basic support for linear and quadratic FEM
+//      discretizations.
+//      For linear FEM, nodes are located only on the vertices, and for
+//      quadratic FEM, nodes are located on both vertices and edge midpoints.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  10/16/2014 16:22:51
+////////////////////////////////////////////////////////////////////////////////
 #ifndef FEMMESH_HH
 #define FEMMESH_HH
 
@@ -69,21 +82,6 @@ template<> struct Embedder<3> {
     }
 };
 
-
-// Hidden wrappers for various simplex-dimension-dependent functions.
-namespace {
-    // TODO: remove and just have FEMMesh call base mesh's numSimplices/numBoundarySimplices
-    template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
-    size_t _numElements(const FEMMesh<2, _Deg, EmbeddingSpace, _FEMData> &mesh) { return mesh.numTris(); }
-    template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
-    size_t _numElements(const FEMMesh<3, _Deg, EmbeddingSpace, _FEMData> &mesh) { return mesh.numTets(); }
-
-    template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
-    size_t _numBoundaryElements(const FEMMesh<2, _Deg, EmbeddingSpace, _FEMData> &mesh) { return mesh.numBoundaryEdges(); }
-    template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
-    size_t _numBoundaryElements(const FEMMesh<3, _Deg, EmbeddingSpace, _FEMData> &mesh) { return mesh.numBoundaryFaces(); }
-}
-
 // Store positions on all nodes (this will allow support for nonlinear
 // elasticity in the future). Typically, the edge node positions will be the
 // average of the edge endpoint node positions.
@@ -150,13 +148,13 @@ public:
     size_t numVertexNodes()  const { return BaseMesh::numVertices(); }
     size_t numEdgeNodes()    const { return m_edgeForEdgeNode.size(); }
     size_t numNodes()        const { return numVertexNodes() +  numEdgeNodes() + numElementNodes(); }
-    size_t numElements()     const { return _numElements(*this); }
+    size_t numElements()     const { return BaseMesh::numSimplices(); }
 
     size_t numBoundaryElementNodes() const { return 0; }
     size_t numBoundaryVertexNodes()  const { return BaseMesh::numBoundaryVertices(); }
     size_t numBoundaryEdgeNodes()    const { return m_edgeForBdryEdgeNode.size();  }
     size_t numBoundaryNodes()        const { return numBoundaryVertexNodes() + numBoundaryEdgeNodes() + numBoundaryElementNodes(); }
-    size_t numBoundaryElements()     const { return _numBoundaryElements(*this); }
+    size_t numBoundaryElements()     const { return BaseMesh::numBoundarySimplices(); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
@@ -177,15 +175,18 @@ public:
 
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
-        for (size_t i = 0; i < BaseMesh::numNodes(); ++i) {
+        for (size_t i = 0; i < numNodes(); ++i) {
             NodeHandle n = node(i);
+            assert(n.isVertexNode() || n.isEdgeNode());
             if (n.isVertexNode())
-                truncateFrom3D<EmbeddingSpace>(vertices.at(n.vertex().index()));
-            else if (node(i).isEdgeNode()) {
+                n->p = truncateFrom3D<EmbeddingSpace>(vertices.at(n.vertex().index()));
+        }
+        for (size_t i = 0; i < numNodes(); ++i) {
+            NodeHandle n = node(i);
+            if (n.isEdgeNode()) {
                 const UnorderedPair &edge = m_edgeForEdgeNode.at(n.edgeNodeIndex());
                 n->p = 0.5 * (vertex(edge[0]).node()->p + vertex(edge[1]).node()->p);
             }
-            else assert(false);
         }
 
         m_embedElements();
@@ -222,19 +223,28 @@ public:
 private:
     // Table of **non-vertex** node indices for each element. We needn't store
     // vertex node indices because our mesh data structure knows them.
+    // The true node index is numVertexNodes() + m_N[i]
     std::vector<int>  m_N;
     // Table of **non-vertex** boundary node indices for each boundary element.
     // We needn't store boundary vertex node indices because our mesh data
     // structure knows them.
+    // The true node index is numBoundaryVertexNodes() + m_BN[i]
     std::vector<int> m_BN;
 
     // The (undirected) edge each edge node is sitting on.
+    // Not currently used, but would support extra traversal operations.
     std::vector<UnorderedPair> m_edgeForEdgeNode;
     std::vector<UnorderedPair> m_edgeForBdryEdgeNode;
 
+    // Look up the boundary/volume edge coinciding with a volume/boundary edge
+    // Every boundary edge has a corresponding volume edge but not the other way
+    // around--m_bdryEdgeForVolEdge is -1 for edges without a boundary edge
+    std::vector<int> m_bdryEdgeForVolEdge;
+    std::vector<int> m_volEdgeForBdryEdge;
+
     // Node data storage
-    std::vector<NodeData>            m_nodeData;
-    std::vector<BoundaryNodeData>    m_boundaryNodeData;
+    std::vector<NodeData>         m_nodeData;
+    std::vector<BoundaryNodeData> m_boundaryNodeData;
 
     // A pointer to the following is returned when accessing the data of type
     // "TMEmptyData" to avoid allocating the above vectors
@@ -278,7 +288,7 @@ private:
         else {
             n -= Simplex::numVertices(_K);
             assert(n < Simplex::numEdges(_K));
-            nidx = m_N[Simplex::numEdges(_K) * e + n];
+            nidx = numVertexNodes() + m_N[Simplex::numEdges(_K) * e + n];
         }
         assert(nidx < numNodes());
         return nidx;
@@ -291,7 +301,7 @@ private:
         else {
             bn -= Simplex::numVertices(_K - 1);
             assert(bn < Simplex::numEdges(_K - 1));
-            bnidx = m_BN[Simplex::numEdges(_K - 1) * be + bn];
+            bnidx = numBoundaryVertexNodes() + m_BN[Simplex::numEdges(_K - 1) * be + bn];
         }
         assert(bnidx < numBoundaryNodes());
         return bnidx;
@@ -302,15 +312,28 @@ private:
         if (n < BaseMesh::numVertices())
             return -1;
         n -= BaseMesh::numVertices();
-        assert(n < m_edgeForEdgeNode.size());
+        assert(n < numEdgeNodes());
         return n;
     }
     int m_bdryEdgeNodeIndex(size_t bn) const {
         if (bn < BaseMesh::numBoundaryVertices())
             return -1;
         bn -= BaseMesh::numBoundaryVertices();
-        assert(bn < m_edgeForBdryEdgeNode.size());
+        assert(bn < numBoundaryEdgeNodes());
         return bn;
+    }
+
+    // Must be called on the global index of an edge node!
+    int m_bdryEdgeNodeForVolEdgeNode(size_t n) const {
+        size_t eidx = m_edgeNodeIndex(n);
+        assert(eidx < m_bdryEdgeForVolEdge.size());
+        return m_bdryEdgeForVolEdge[eidx] + numBoundaryVertexNodes();
+    }
+    // Must be called on the global index of a boundary edge node!
+    int m_volEdgeNodeForBdryEdgeNode(size_t n) const {
+        size_t beidx = m_bdryEdgeNodeIndex(n);
+        assert(beidx < m_volEdgeForBdryEdge.size());
+        return m_volEdgeForBdryEdge[beidx] + numVertexNodes();
     }
 
     // (re-)embed the elements in EmbeddingSpace (when vertex positions change)

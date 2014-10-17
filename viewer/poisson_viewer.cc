@@ -12,13 +12,12 @@
 #include "MeshIO.hh"
 #include "Geometry.hh"
 
-#include "Poisson.hh"
+#include "NewPoisson.hh"
 #include "colors.hh"
 #include "draw.hh"
 
 using namespace std;
-using namespace MESH_IO;
-
+using namespace MeshIO;
 
 vector<TriangleIndex> triangles;
 vector<Point2D>       vertices;
@@ -27,7 +26,7 @@ vector<double>        soln;
 
 size_t g_selectedVertex;
 
-typedef poisson::PoissonMesh<Point2D> PMesh;
+typedef PoissonMesh<2, 1, Point2D> PMesh;
 PMesh *mesh;
 
 void drawTriangle2D(const TriangleIndex &tri)
@@ -131,6 +130,7 @@ void Display()
         smax = max(soln[i], smax);
         smin = min(soln[i], smin);
     }
+    std::cout << "smin, smax: " << smin << ", " << smax << std::endl;
     ColorMap<RGBColorf, double> colorMap(COLORMAP_FIREPRINT, smax, smin);
 
     glBegin(GL_TRIANGLES);
@@ -184,54 +184,55 @@ void Display()
     glColor3ub(242, 135, 5);
     glBegin(GL_POINTS);
     // Highlight fixed vertices
-    for (unsigned int i = 0; i < vertices.size(); ++i) {
-        if (mesh->vertex(i)->constraintType == poisson::CONSTRAINT_DIRICHLET)
-            glVertex2f(vertices[i][0], vertices[i][1]);
+    for (unsigned int i = 0; i < mesh->numBoundaryNodes(); ++i) {
+        auto bn = mesh->boundaryNode(i);
+        if (bn->constraintType == CONSTRAINT_DIRICHLET)
+            glVertex2f(bn.volumeNode()->p[0], bn.volumeNode()->p[1]);
     }
     glEnd();
 
-    if (g_selectedVertex < vertices.size()) {
-        glLineWidth(2.0f);
+    // if (g_selectedVertex < vertices.size()) {
+    //     glLineWidth(2.0f);
 
-        int numHalfedges = 2 * mesh->vertex(g_selectedVertex)->valence();
-        HSVColorf edgeColor(0.0, 1.0, 0.75);
-        int textHeight = 1;
+    //     int numHalfedges = 2 * mesh->vertex(g_selectedVertex)->valence();
+    //     HSVColorf edgeColor(0.0, 1.0, 0.75);
+    //     int textHeight = 1;
 
-        size_t hi = mesh->halfedge_index(
-                mesh->vertex(g_selectedVertex)->halfedge());
-        size_t he = hi;
-        do {
-            size_t h = hi;
-            for (size_t i = 0; i < 2; ++i) {
-                if (mesh->halfedge(h)->facet()) {
-                    Point2D ev = mesh->outwardEdgeVector(h);
-                    Point2D mp = mesh->midpoint(h);
-                    glColor3fv(RGBColorf(edgeColor));
-                    drawArrow(mp, mp + .25 * ev);
-                    
-                    size_t fi = mesh->facet_index(mesh->halfedge(h)->facet());
-                    assert(fi < gradU.size());
-                    string str("Flux for ");
-                    if (mesh->halfedge(h)->isBoundaryEdge())
-                        str += "boundary ";
-                    str += "halfedge ";
-                    str += to_string(h) + ": ";
-                    str += to_string(gradU[fi].dot(ev));
-                    double flux = gradU[fi].dot(ev);
-                    drawString(1, textHeight, str.c_str());
-                    textHeight += 10;
-                }
-                h = mesh->halfedge_index(mesh->halfedge(h)->opposite());
-                edgeColor.h += 1.0 / numHalfedges;
-            }
-        } while ((hi = mesh->halfedge_index(mesh->halfedge(hi)->cw())) != he);
+    //     size_t hi = mesh->halfedge_index(
+    //             mesh->vertex(g_selectedVertex)->halfedge());
+    //     size_t he = hi;
+    //     do {
+    //         size_t h = hi;
+    //         for (size_t i = 0; i < 2; ++i) {
+    //             if (mesh->halfedge(h)->facet()) {
+    //                 Point2D ev = mesh->outwardEdgeVector(h);
+    //                 Point2D mp = mesh->midpoint(h);
+    //                 glColor3fv(RGBColorf(edgeColor));
+    //                 drawArrow(mp, mp + .25 * ev);
+    //                 
+    //                 size_t fi = mesh->facet_index(mesh->halfedge(h)->facet());
+    //                 assert(fi < gradU.size());
+    //                 string str("Flux for ");
+    //                 if (mesh->halfedge(h)->isBoundaryEdge())
+    //                     str += "boundary ";
+    //                 str += "halfedge ";
+    //                 str += to_string(h) + ": ";
+    //                 str += to_string(gradU[fi].dot(ev));
+    //                 double flux = gradU[fi].dot(ev);
+    //                 drawString(1, textHeight, str.c_str());
+    //                 textHeight += 10;
+    //             }
+    //             h = mesh->halfedge_index(mesh->halfedge(h)->opposite());
+    //             edgeColor.h += 1.0 / numHalfedges;
+    //         }
+    //     } while ((hi = mesh->halfedge_index(mesh->halfedge(hi)->cw())) != he);
 
-        glBegin(GL_POINTS);
-            glColor3f(1.0f, 1.0f, 1.0f);
-            glVertex2f(vertices[g_selectedVertex][0],
-                       vertices[g_selectedVertex][1]);
-        glEnd();
-    }
+    //     glBegin(GL_POINTS);
+    //         glColor3f(1.0f, 1.0f, 1.0f);
+    //         glVertex2f(vertices[g_selectedVertex][0],
+    //                    vertices[g_selectedVertex][1]);
+    //     glEnd();
+    // }
 
 
     glutSwapBuffers();
@@ -341,7 +342,7 @@ int main(int argc, char *argv[])
     snprintf(title, 512, "Poisson: %s", name);
     glutCreateWindow(title);
 
-    vector<IOVertex<Point3D> > in_vertices;
+    vector<IOVertex>  in_vertices;
     vector<IOElement> in_triangles;
     load(meshPath, in_vertices, in_triangles);
     
@@ -361,6 +362,8 @@ int main(int argc, char *argv[])
     for (unsigned int i = 0; i < in_vertices.size(); ++i) {
         Point2D p(in_vertices[i][0], in_vertices[i][1]);
         vertices.push_back((p - minCoords) / maxDim);
+        in_vertices[i][0] = vertices.back()[0];
+        in_vertices[i][1] = vertices.back()[1];
     }
     for (unsigned int i = 0; i < in_triangles.size(); ++i) {
         triangles.push_back(TriangleIndex(in_triangles[i][0],
@@ -368,18 +371,26 @@ int main(int argc, char *argv[])
                                           in_triangles[i][2]));
     }
 
-    mesh = new PMesh(triangles, vertices);
-    typedef poisson::PoissonMesh<Point2D>::Vertex Vertex;
-    for (size_t i = 0; i < mesh->vertex_size(); ++i) {
-        Vertex *v = mesh->vertex(i);
-        if ((in_vertices[i].point.norm() > 2.0) && (v->isBoundary())) {
-            v->constraintType = poisson::CONSTRAINT_DIRICHLET;
-            v->constraintData = sin(.5 * M_PI * in_vertices[i].point[0]);
+    mesh = new PMesh(in_triangles, in_vertices);
+    cout << "Vertices: " << mesh->numVertices() << std::endl;
+    cout << "Elements: " << mesh->numElements() << std::endl;
+    cout << "Nodes: " << mesh->numNodes() << std::endl;
+    cout << "BoundaryVertices: " << mesh->numBoundaryVertices() << std::endl;
+    cout << "Elements: " << mesh->numBoundaryElements() << std::endl;
+    cout << "Boundary Nodes: " << mesh->numBoundaryNodes() << std::endl;
+    size_t numConstrained = 0;
+    for (size_t i = 0; i < mesh->numBoundaryNodes(); ++i) {
+        auto bn = mesh->boundaryNode(i);
+        Point2D origP = bn.volumeNode()->p * maxDim + minCoords;
+        if (origP.norm() > 2.0) {
+            bn->constraintType = CONSTRAINT_DIRICHLET;
+            bn->constraintData = sin(.5 * M_PI * origP[0]);
+            ++numConstrained;
         }
     }
 
-    poisson::solve(*mesh, soln);
-    gradU = mesh->gradU(soln);
+    mesh->solve(soln);
+    gradU = mesh->gradUAverage(soln);
 
     g_selectedVertex = vertices.size();
 

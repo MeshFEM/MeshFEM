@@ -35,7 +35,10 @@ public:
     VH vertex() const { return VH(m_mesh.m_vertexForNode(m_idx), m_mesh); }
 
     // Get the boundary node collocated with this volume node.
-    BNH boundaryNode() const { return vertex().boundaryVertex().node(); }
+    BNH boundaryNode() const {
+        if (isVertexNode()) return vertex().boundaryVertex().node();
+        else return BNH(m_mesh.m_bdryEdgeNodeForVolEdgeNode(m_idx), m_mesh);
+    }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_nodeData[m_idx]; }
@@ -77,7 +80,11 @@ public:
     bool isVertexNode() const { return m_mesh.m_boundaryVertexForBoundaryNode(m_idx) >= 0; }
 
     BVH        vertex() const { return BVH(m_mesh.m_boundaryVertexForBoundaryNode(m_idx), m_mesh); }
-     NH    volumeNode() const { return vertex().volumeVertex().node(); }
+    // Get the volume node collocated with this boundary node.
+     NH    volumeNode() const {
+        if (isVertexNode()) return vertex().volumeVertex().node();
+        else return NH(m_mesh.m_volEdgeNodeForBdryEdgeNode(m_idx), m_mesh);
+    }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryNodeData[m_idx]; }
@@ -130,7 +137,6 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
         // We could optimize this in the future by using BaseMesh's
         // traversal operations.
         size_t edgesPerSimplex = Simplex::numEdges(_K);
-        size_t numEdgeNodes = 0;
         m_edgeForEdgeNode.clear();
         m_N.resize(BaseMesh::numSimplices() * edgesPerSimplex);
         for (size_t si = 0; si < BaseMesh::numSimplices(); ++si) {
@@ -147,21 +153,20 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
                 else {
                     nodeIdx = it->second;
                     // Note: we can't erase the entry in the tet case
-                    // because many elements share the same edge. It would
-                    // would be more efficient in the triangle case to
-                    // specialize and delete edge entry as soon as possible.
+                    // because many elements share the same edge.
+                    // Also, we need to use edgeNodes to efficiently link the
+                    // boundary/volume edges together below.
                 }
                 m_N[si * edgesPerSimplex + ei] = nodeIdx;
             }
         }
-        edgeNodes.clear();
 
+        std::map<UnorderedPair, int> boundaryEdgeNodes;
         // Construct a boundary edge node for each surface edge.
         // Again, we could optimize this by using BaseMesh's traversal
         // operations.
         // Also, for triangle meshes, there is a unique edge node per
         // element (none is shared), so we don't need any gluing.
-        size_t numBoundaryEdgeNodes = 0;
         m_edgeForBdryEdgeNode.clear();
         size_t edgesPerBoundarySimplex = Simplex::numEdges(_K - 1);
         m_BN.resize(BaseMesh::numBoundarySimplices() * edgesPerBoundarySimplex);
@@ -170,18 +175,32 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
             for (size_t ei = 0; ei < edgesPerBoundarySimplex; ++ei) {
                 UnorderedPair edge(s.vertex(Simplex::edgeStartNode(ei)).index(),
                                    s.vertex(  Simplex::edgeEndNode(ei)).index());
-                auto it = edgeNodes.find(edge);
+                auto it = boundaryEdgeNodes.find(edge);
                 size_t nodeIdx;
-                if (it == edgeNodes.end()) {
-                    edgeNodes[edge] = nodeIdx = m_edgeForBdryEdgeNode.size();
+                if (it == boundaryEdgeNodes.end()) {
+                    boundaryEdgeNodes[edge] = nodeIdx = m_edgeForBdryEdgeNode.size();
                     m_edgeForBdryEdgeNode.push_back(edge);
                 }
                 else {
                     nodeIdx = it->second;
-                    edgeNodes.erase(it);
+                    boundaryEdgeNodes.erase(it);
                 }
                 m_BN[si * edgesPerBoundarySimplex + ei] = nodeIdx;
             }
+        }
+
+        // Link the boundary and volume edges
+        // (Allows traversal between boundary nodes and collocated volume nodes
+        //  on the edges)
+        m_bdryEdgeForVolEdge.assign(numEdgeNodes(), -1);
+        m_volEdgeForBdryEdge.assign(numBoundaryEdgeNodes(), -1);
+        for (size_t bni = 0; bni < numBoundaryEdgeNodes(); ++bni) {
+            auto be = m_edgeForBdryEdgeNode[bni];
+            UnorderedPair vbe(BaseMesh::m_vertexForBdryVertex(be[0]),
+                              BaseMesh::m_vertexForBdryVertex(be[1]));
+            m_volEdgeForBdryEdge[bni] = edgeNodes.at(vbe);
+            assert(m_bdryEdgeForVolEdge.at(m_volEdgeForBdryEdge[bni]) == -1);
+            m_bdryEdgeForVolEdge[m_volEdgeForBdryEdge[bni]] = bni;
         }
     }
 
