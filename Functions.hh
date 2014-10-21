@@ -51,7 +51,7 @@
 #include <functional>
 #include <iostream>
 
-namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; };
+namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward declarations

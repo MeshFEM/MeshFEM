@@ -650,7 +650,7 @@ private:
             elem->perElementStiffness(Ke);
 
             // Accumulate into full stiffness matrix.
-            constexpr size_t nNodes = elem.numNodes();
+            constexpr size_t nNodes = Mesh::ElementData::nNodes;
             for (size_t i = 0; i < nNodes; ++i) {
                 int vi = DoF(elem.node(i).index());
                 for (size_t j = 0; j < nNodes; ++j) {

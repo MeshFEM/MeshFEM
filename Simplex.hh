@@ -26,8 +26,8 @@ namespace Simplex {
     // 3-simplices, these are found using (prefixes of) the following lookup tables.
     // To use these tables, edge nodes are re-indexed so that the first edge is index
     // 0 (i.e. edge index = node index - numVertices)
-    constexpr size_t edgeStartNode(size_t i) { return (i < 3) ? i : (6 - i) % 3; };
-    constexpr size_t edgeEndNode(size_t i)   { return (i < 3) ? (i + 1) % 3 : 3; };
+    constexpr size_t edgeStartNode(size_t i) { return (i < 3) ? i : (6 - i) % 3; }
+    constexpr size_t edgeEndNode(size_t i)   { return (i < 3) ? (i + 1) % 3 : 3; }
     //   const size_t edgeStartNode[6] = { 0, 1, 2, 0, 2, 1 };
     //   const size_t edgeEndNode[6]   = { 1, 2, 0, 3, 3, 3 };
 
@@ -38,6 +38,6 @@ namespace Simplex {
     //   // entries are used. For 2-simplices, all entries are used.
     //   const size_t otherNodes[6][2] = { {2, 3}, {0, 3}, {1, 3},
     //                                     {1, 2}, {0, 1}, {0, 2} };
-}; 
+}
 
 #endif /* end of include guard: SIMPLEX_HH */
