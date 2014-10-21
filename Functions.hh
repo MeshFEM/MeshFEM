@@ -290,6 +290,7 @@ class Interpolant : public NodalStoragePolicy<_T, _K, _Deg> {
     typedef NodalStoragePolicy<_T, _K, _Deg> SP;
 public:
     using SP::numNodalValues;
+    using SP::SP;
     Interpolant() : SP() { }
     Interpolant(const Interpolant &b) { *this = b; }
     Interpolant(Interpolant &&b) : SP(std::move(b)) { }

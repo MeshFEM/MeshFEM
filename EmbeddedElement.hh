@@ -155,7 +155,6 @@ public:
         m_gradBarycentric.col(1) = m_normal.cross(e1) / doubleA;
         m_gradBarycentric.col(2) = m_normal.cross(e2) / doubleA;
     }
-    const Vector3D &normal();
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
