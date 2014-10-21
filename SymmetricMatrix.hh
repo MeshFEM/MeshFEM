@@ -26,17 +26,17 @@ template<typename _Real, size_t t_N,
 class ConstSymmetricMatrixBase {
 public:
     ConstSymmetricMatrixBase(const _Storage_t &data) : m_data(data) { }
-    static constexpr size_t N()        { return t_N; }
-    static constexpr size_t flatSize() { return (N() * (N() + 1)) / 2; }
+    static constexpr size_t N = t_N;
+    static constexpr size_t flatSize() { return (N * (N + 1)) / 2; }
 
     _Real operator()(size_t i, size_t j) const {
-        assert((i < N()) && (j < N()));
-        return operator[](flattenIndices(N(), i, j));
+        assert((i < N) && (j < N));
+        return operator[](flattenIndices(N, i, j));
     }
 
-    Eigen::Matrix<_Real, N(), 1> eigenvalues() const {
-        Eigen::Matrix<_Real, N(), N()> mat;
-        for (size_t j = 0; j < N(); ++j)
+    Eigen::Matrix<_Real, N, 1> eigenvalues() const {
+        Eigen::Matrix<_Real, N, N> mat;
+        for (size_t j = 0; j < N; ++j)
             for (size_t i = 0; i <= j; ++i)
                 mat(i, j) = operator()(i, j);
         return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
