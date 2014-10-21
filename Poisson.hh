@@ -43,7 +43,7 @@ struct PoissonFEMData : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         }
     };
 
-    struct BoundaryNode : public BaseData::BoundaryNode {
+    struct BoundaryNode {
         ConstraintType constraintType = CONSTRAINT_NONE;
         Real constraintData;
     };
@@ -93,7 +93,7 @@ public:
             auto e = Base::element(ei);
             for (size_t ni = 0; ni < Simplex::numNodes(_K, _Deg); ++ni)
                 nodeVals[ni] = u.at(e.node(ni).index());
-            grads[ei] = e->gradient(nodeVals).integrate();
+            grads[ei] = e->gradient(nodeVals).average();
         }
         return grads;
     }

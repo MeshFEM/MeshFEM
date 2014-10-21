@@ -1,9 +1,8 @@
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
 #include "MSHFieldParser.hh"
-#include "LinearElasticity.hh"
+#include "NewLinearElasticity.hh"
 #include "Materials.hh"
-#include "PeriodicHomogenization.hh"
 #include "util.h"
 #include <vector>
 #include <queue>
@@ -81,8 +80,9 @@ void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
-    typename LinearElasticityND<_N>::Simulator sim(inElements, inVertices);
-    typedef typename LinearElasticityND<_N>::SField SField;
+    typedef LinearElasticity::Mesh<_N, 1> Mesh;
+    typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
+    typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
                  &matFieldName = args[      "matFieldName"].as<string>(),
                  &bcPath       = args["boundaryConditions"].as<string>(),
@@ -168,11 +168,11 @@ void execute(const po::variables_map &args,
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
 
     auto u = sim.solve();
-    auto e = sim.strain(u);
-    auto s = sim.stress(u);
+    auto e = sim.averageStrainField(u);
+    auto s = sim.averageStressField(u);
 
     if (matrixPath != "") {
-        typename LinearElasticityND<_N>::Simulator::TMatrix C;
+        typename LinearElasticity::Simulator<Mesh>::TMatrix C;
         vector<Real> dummy;
         sim.assembleConstrainedSystem(C, dummy);
         C.dump(matrixPath);

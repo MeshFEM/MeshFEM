@@ -129,7 +129,9 @@ namespace {
     // Constant Simplex
     template<typename _T, size_t _K, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, _K, Degree::Constant, NS> &f, Real volume) {
-        return volume * f[0];
+        _T result(f[0]);
+        result *= volume;
+        return result;
     }
 
     // Linear Simplex
@@ -261,6 +263,10 @@ public:
         m_set<0>(val, args...);
     }
 
+    // Move constructor.
+    DefaultNodalStoragePolicy(DefaultNodalStoragePolicy<_T, _K, _Deg> &&b)
+        : m_nodeVal(std::move(b.m_nodeVal)) { }
+
     const _T &operator[](size_t i) const { assert(i < numNodalValues); return m_nodeVal[i]; }
           _T &operator[](size_t i)       { assert(i < numNodalValues); return m_nodeVal[i]; }
 private:
@@ -282,27 +288,18 @@ template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy>
 class Interpolant : public NodalStoragePolicy<_T, _K, _Deg> {
     typedef NodalStoragePolicy<_T, _K, _Deg> SP;
-    static constexpr size_t numNodalValues = Simplex::numNodes(_K, _Deg);
 public:
+    using SP::numNodalValues;
     Interpolant() : SP() { }
+    Interpolant(const Interpolant &b) { *this = b; }
+    Interpolant(Interpolant &&b) : SP(std::move(b)) { }
 
-    // All constructor calls are forward to the storage policy, except for those
-    // matching the copy constructor (determined by looking at whether there is
-    // a matching assignment operator other than the assignment from constant
-    // value one)
-    // This is done with one ugly enable_if hack :(
-    template<typename Arg1, typename... Args, typename
-    std::enable_if<std::is_convertible<Arg1, _T>::value ||
-                 !(std::is_assignable<Interpolant, Arg1>::value &&
-                         (sizeof...(Args) == 0)), int>::type = 0>
-    Interpolant(Arg1 &&arg1, Args&&... args)
-        : SP(std::forward<Arg1>(arg1), std::forward<Args>(args)...) { }
-
-    // Allow a (potentially promoting) copy constructor from interpolants of the
+    // Allow a promoting copy constructor from interpolants of the
     // same degree or lower via the assignment operator.
     // Only works for NodalStoragePolicies that support default construction
     // (i.e. non-reference types).
-    template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2>
+    template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
+             typename std::enable_if<_Deg2 < _Deg, int>::type = 0>
     Interpolant(const Interpolant<_T, _K, _Deg2, _NSP2> &b) : SP() { *this = b; }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -377,7 +374,8 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Integration over a (linearly deformed) simplex with volume vol
     ////////////////////////////////////////////////////////////////////////////
-    _T integrate(Real vol = 1.0) const { return _integrate(*this, vol); }
+    _T integrate(Real vol) const { return _integrate(*this, vol); }
+    _T average()           const { return _integrate(*this, 1.0); }
 };
 
 template<typename _T, size_t _K, size_t _Deg, 

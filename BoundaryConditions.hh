@@ -257,28 +257,29 @@ private:
     std::map<UnorderedTriplet, Value> m_vals;
 };
 
+// TODO: rename "dirichlet nodes condition"
 template<size_t _N>
-struct DirichletVerticesCondition : public BoundaryCondition<_N> {
-    DirichletVerticesCondition(std::vector<size_t> vidxs, std::vector<VectorND<_N>> vdisps, const ComponentMask &m)
-        : componentMask(m), indices(vidxs), displacements(vdisps) { }
+struct DirichletNodesCondition : public BoundaryCondition<_N> {
+    DirichletNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> ndisps, const ComponentMask &m)
+        : componentMask(m), indices(nidxs), displacements(ndisps) { }
 
-    // All vertices in the condition get the same mask
+    // All nodes in the condition get the same mask
     ComponentMask componentMask;
     std::vector<size_t> indices;
     std::vector<VectorND<_N>> displacements;
-    virtual ~DirichletVerticesCondition() { }
+    virtual ~DirichletNodesCondition() { }
 };
 
 template<size_t _N>
-struct TargetVerticesCondition : public BoundaryCondition<_N> {
-    TargetVerticesCondition(std::vector<size_t> vidxs, std::vector<VectorND<_N>> vdisps, const ComponentMask &m)
-        : componentMask(m), indices(vidxs), displacements(vdisps) { }
+struct TargetNodesCondition : public BoundaryCondition<_N> {
+    TargetNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> ndisps, const ComponentMask &m)
+        : componentMask(m), indices(nidxs), displacements(ndisps) { }
 
-    // All vertices in the condition get the same mask
+    // All nodes in the condition get the same mask
     ComponentMask componentMask;
     std::vector<size_t> indices;
     std::vector<VectorND<_N>> displacements;
-    virtual ~TargetVerticesCondition() { }
+    virtual ~TargetNodesCondition() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -301,37 +302,37 @@ public:
     PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-5) {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
         // Choose a cell size on the order of epsilon. This should be safe since
-        // the max vertex coordinate shouldn't anyhere near large enough that
+        // the max node coordinate shouldn't anyhere near large enough that
         // dividing by epsilon causes an overflow. We don't want any larger than
         // epsilon because then we'd have to check for many (empty) boxes.
         CollisionGrid<Real, VectorND<_N>> cgrid(epsilon);
-        // Match boundary vertices on opposite faces of the periodic cell
+        // Match boundary nodes on opposite faces of the periodic cell
         std::vector<std::pair<int, int> > pairs;
-        std::vector<bool> vertexIsPeriodic(mesh.numVertices());
+        std::vector<bool> nodeIsPeriodic(mesh.numNodes());
         pairs.clear();
         for (int d = 0; d < _N; ++d) {
             cgrid.reset();
-            std::vector<int> maxfaceVertices;
-            for (size_t i = 0; i < mesh.numBoundaryVertices(); ++i) {
-                auto v = mesh.boundaryVertex(i).volumeVertex();
-                if (std::abs(v->p[d] - cell.minCorner[d]) < epsilon)
-                    cgrid.addPoint(v->p, v.index());
-                if (std::abs(v->p[d] - cell.maxCorner[d]) < epsilon)
-                    maxfaceVertices.push_back(v.index());
+            std::vector<int> maxfaceNodes;
+            for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
+                auto vn = mesh.boundaryNode(i).volumeNode();
+                if (std::abs(vn->p[d] - cell.minCorner[d]) < epsilon)
+                    cgrid.addPoint(vn->p, vn.index());
+                if (std::abs(vn->p[d] - cell.maxCorner[d]) < epsilon)
+                    maxfaceNodes.push_back(vn.index());
             }
-            for (size_t i = 0; i < maxfaceVertices.size(); ++i) {
-                int vi = maxfaceVertices[i];
-                VectorND<_N> query(mesh.vertex(vi)->p);
+            for (size_t i = 0; i < maxfaceNodes.size(); ++i) {
+                int ni = maxfaceNodes[i];
+                VectorND<_N> query(mesh.node(ni)->p);
                 query[d] = cell.minCorner[d];
                 auto result = cgrid.getClosestPoint(query, epsilon);
                 if (result.first == -1) {
                     std::stringstream ss;
-                    ss << "Couldn't match periodic boundary vertex " << vi << " "
-                       << mesh.vertex(vi)->p << "; looking for: " << query << std::endl;
+                    ss << "Couldn't match periodic boundary node " << ni << " "
+                       << mesh.node(ni)->p << "; looking for: " << query << std::endl;
                     throw std::runtime_error(ss.str());
                 }
-                pairs.push_back(std::make_pair(vi, result.first));
-                vertexIsPeriodic[vi] = vertexIsPeriodic[result.first] = true;
+                pairs.push_back(std::make_pair(ni, result.first));
+                nodeIsPeriodic[ni] = nodeIsPeriodic[result.first] = true;
             }
         }
 
@@ -339,19 +340,19 @@ public:
         m_isPeriodicBoundaryElement.resize(mesh.numBoundaryElements());
         for (size_t i = 0; i < mesh.numBoundaryElements(); ++i) {
             auto be = mesh.boundaryElement(i);
-            bool all = true; // are all the element's vertices periodic?
-            for (size_t j = 0; j < be.numVertices(); ++j)
-                all &= vertexIsPeriodic[be.vertex(j).volumeVertex().index()];
+            bool all = true; // are all the element's nodes periodic?
+            for (size_t j = 0; j < be.numNodes(); ++j)
+                all &= nodeIsPeriodic[be.node(j).volumeNode().index()];
             m_isPeriodicBoundaryElement[i] = all;
         }
 
-        // Determine the "DoF index" for every node on the mesh. for every node
-        // in the mesh. For internal nodes, these are all unique. On the
-        // periodic boundary, these will be shared by identified nodes. These
-        // indices are created assuming one variable per node. For elasticity,
-        // there will actually be three DOFs per node i, with indices
-        //   [ 3 * m_dofForVertex[i] + 0, 3 * m_dofForVertex[i] + 1,
-        //     3 * m_dofForVertex[i] + 2 ]
+        // Determine the "DoF index" for every node in the mesh. For internal
+        // nodes, these are all unique. On the periodic boundary, these will be
+        // shared by identified nodes. These indices are created assuming one
+        // variable per node. For elasticity, there will actually be three DOFs
+        // per node i, with indices
+        //   [ 3 * m_dofForNode[i] + 0, 3 * m_dofForNode[i] + 1,
+        //     3 * m_dofForNode[i] + 2 ]
          
         // First, build traversable graph representation
         std::map<int, std::list<int> > adj;
@@ -361,13 +362,13 @@ public:
         }
 
         // BFS connected components
-        // Assign each vertex in a connected component of identified vertices
+        // Assign each node in a connected component of identified nodes
         // the same DoF
-        m_dofForVertex.assign(mesh.numVertices(), -1);
+        m_dofForNode.assign(mesh.numNodes(), -1);
         m_numDoFs = 0;
-        for (size_t i = 0; i < mesh.numVertices(); ++i) {
-            if (m_dofForVertex[i] >= 0) continue;
-            m_dofForVertex[i] = m_numDoFs++;
+        for (size_t i = 0; i < mesh.numNodes(); ++i) {
+            if (m_dofForNode[i] >= 0) continue;
+            m_dofForNode[i] = m_numDoFs++;
             std::queue<size_t> bfsQueue;
             bfsQueue.push(i);
             while (!bfsQueue.empty()) {
@@ -375,9 +376,9 @@ public:
                 if (adj.find(u) == adj.end()) continue;
                 const std::list<int> adj_u = adj[u];
                 for (int v: adj_u) {
-                    if (m_dofForVertex[v] < 0) {
-                        assert(m_dofForVertex[u] == m_numDoFs - 1);
-                        m_dofForVertex[v] = m_dofForVertex[u];
+                    if (m_dofForNode[v] < 0) {
+                        assert(m_dofForNode[u] == m_numDoFs - 1);
+                        m_dofForNode[v] = m_dofForNode[u];
                         bfsQueue.push(v);
                     }
                 }
@@ -385,8 +386,8 @@ public:
         }
     }
 
-    const std::vector<int> &periodicDoFsForVertices() const {
-        return m_dofForVertex;
+    const std::vector<int> &periodicDoFsForNodes() const {
+        return m_dofForNode;
     }
 
     // Check if a given boundary element is periodic
@@ -399,7 +400,7 @@ public:
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;
     size_t m_numDoFs;
-    std::vector<int> m_dofForVertex;
+    std::vector<int> m_dofForNode;
 };
 
 #endif /* end of include guard: BOUNDARYCONDITIONS_HH */

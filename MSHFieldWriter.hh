@@ -4,6 +4,10 @@
 /*! @file
 //      Write scalar/vector/matrix fields in the MSH format for viewing with
 //      Gmsh
+//      Currently, when higher order FEM is used, we still only write a
+//      per-vertex field (i.e. the piecewise linear interpolation of the higher
+//      degree field). The implementation assumes that the vertex nodes are at
+//      indices 0..numVertices-1.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -30,8 +34,9 @@ public:
                    const std::vector<MeshIO::IOVertex>  &vertices,
                    const std::vector<MeshIO::IOElement> &elements,
                    bool binary = true)
-        : m_outStream(mshPath), m_numNodes(vertices.size()),
-          m_numElements(elements.size()), m_binary(binary)
+        : m_outStream(mshPath), m_numVertices(vertices.size()),
+          m_numNodes(vertices.size()), m_numElements(elements.size()),
+          m_binary(binary)
     {
         if (!m_outStream.is_open()) {
             std::cout << "Failed to open output file '"
@@ -47,8 +52,9 @@ public:
     template<typename Mesh>
     MSHFieldWriter(const std::string &mshPath, const Mesh &mesh,
                    bool binary = true)
-        : m_outStream(mshPath), m_numNodes(mesh.numNodes()),
-          m_numElements(mesh.numElements()), m_binary(binary)
+        : m_outStream(mshPath), m_numVertices(mesh.numVertices()),
+          m_numNodes(mesh.numNodes()), m_numElements(mesh.numElements()),
+          m_binary(binary)
     {
         if (!m_outStream.is_open()) {
             std::cout << "Failed to open output file '"
@@ -57,10 +63,10 @@ public:
         else {
             typedef MeshIO::IOVertex  OutVertex;
             typedef MeshIO::IOElement OutElement;
-            std::vector<OutVertex> outNodes;
+            std::vector<OutVertex> outVertices;
             std::vector<OutElement> outElements;
-            for (size_t i = 0; i < m_numNodes; ++i)
-                outNodes.emplace_back(OutVertex(mesh.vertex(i).volumeVertex()->p));
+            for (size_t i = 0; i < m_numVertices; ++i)
+                outVertices.emplace_back(OutVertex(mesh.vertex(i).node()->p));
             OutElement outElement;
             for (size_t i = 0; i < m_numElements; ++i) {
                 outElement.clear();
@@ -72,7 +78,7 @@ public:
 
             MeshIO::MeshIO_MSH io;
             io.setBinary(binary);
-            io.save(m_outStream, outNodes, outElements, MeshIO::MESH_GUESS);
+            io.save(m_outStream, outVertices, outElements, MeshIO::MESH_GUESS);
         }
     }
 
@@ -84,17 +90,20 @@ public:
         if (type == PER_GUESS) {
             if (f.domainSize() == m_numElements)
                 type = PER_ELEMENT;
-            else if (f.domainSize() == m_numNodes)
+            else if ((f.domainSize() == m_numVertices) || (f.domainSize() == m_numNodes))
                 type = PER_NODE;
             else throw invalidSize;
         }
+        size_t numEntries = 0; // We might be writing a subset of the domainSize() entries.
         if (type == PER_ELEMENT) {
             if (f.domainSize() != m_numElements) throw invalidSize;
             sectionHeader = "ElementData";
+            numEntries = f.domainSize();
         }
         else if (type == PER_NODE) {
-            if (f.domainSize() != m_numNodes) throw invalidSize;
+            if ((f.domainSize() != m_numVertices) && (f.domainSize() != m_numNodes)) throw invalidSize;
             sectionHeader = "NodeData";
+            numEntries = m_numVertices;
         }
         size_t dim = f.dim();
         switch (f.fieldType()) {
@@ -123,8 +132,8 @@ public:
                     << '3' << std::endl // 3 Integer tags:
                     << '0' << std::endl // Time step 0 (ignored)
                     << dim << std::endl // dimension
-                    << f.domainSize() << std::endl; // number of nodal values
-        for (size_t i = 1; i <= f.domainSize(); ++i) {
+                    << numEntries << std::endl;
+        for (size_t i = 1; i <= numEntries; ++i) {
             typename Field::ConstValueType val = f(i - 1);
             if (m_binary) m_outStream.write((char *) &i, sizeof(int));
             else          m_outStream << i;
@@ -163,7 +172,7 @@ public:
         
 private:
     std::ofstream m_outStream;
-    size_t m_numNodes, m_numElements;
+    size_t m_numVertices, m_numNodes, m_numElements;
     bool m_binary;
 };
 

@@ -169,7 +169,7 @@ namespace LinearElasticity {
         void applyPeriodicConditions() {
             m_system.clear();
             PeriodicCondition<_N> pc(m_mesh);
-            m_dofForNode = pc.periodicDoFsForVertices();
+            m_dofForNode = pc.periodicDoFsForNodes();
             m_numDoFs = pc.numPeriodicDoFs();
             for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
                 m_mesh.boundaryElement(i)->isPeriodic = pc.isPeriodicBE(i);

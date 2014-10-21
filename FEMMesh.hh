@@ -25,7 +25,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
 ////////////////////////////////////////////////////////////////////////////////
-template<size_t _K, size_t _Deg, class EmbeddingSpace> class DefaultFEMData;
+template<size_t _K, size_t _Deg, class EmbeddingSpace> struct DefaultFEMData;
 template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData = DefaultFEMData>
 class FEMMesh;

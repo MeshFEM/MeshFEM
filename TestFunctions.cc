@@ -39,31 +39,31 @@ int main(int argc, char *argv[])
     cout << efLin(0.0, 1.0) << endl;
     cout << efLin(1, 0) << endl;
 
-    // cout << efLin.integrate() << endl;
+    // cout << efLin.integrate(1.0) << endl;
 
     Interpolant<Real, Triangle, Quadratic> fQuad(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
-    cout << fQuad.integrate() << endl;
+    cout << fQuad.integrate(1.0) << endl;
 
     Interpolant<Real, Tetrahedron, Quadratic> fQuadTet(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0);
-    cout << fQuadTet.integrate() << endl;
+    cout << fQuadTet.integrate(1.0) << endl;
 
     Interpolant<Real, Tetrahedron, Quadratic> fQuadTet2(fQuadTet);
     fQuadTet2 *= 2;
     fQuadTet2 += fQuadTet2;
-    cout << fQuadTet2.integrate() << endl;
-    cout << (2 * (fQuadTet + fQuadTet)).integrate() << endl;
+    cout << fQuadTet2.integrate(1.0) << endl;
+    cout << (2 * (fQuadTet + fQuadTet)).integrate(1.0) << endl;
 
     Interpolant<Real, Triangle, Quadratic> fPromote(f);
-    cout << "linear integral: " << f.integrate() << endl;
-    cout << "quadratic integral: " << fPromote.integrate() << endl;
+    cout << "linear integral: " << f.integrate(1.0) << endl;
+    cout << "quadratic integral: " << fPromote.integrate(1.0) << endl;
 
     Interpolant<Real, Triangle, Quadratic> fPromoteFromConst(fConst);
-    cout << "quadratic integral of const: " << fPromoteFromConst.integrate() << endl;
-    cout << "integral of sum: " << (fPromoteFromConst + f + 1).integrate() << endl;
+    cout << "quadratic integral of const: " << fPromoteFromConst.integrate(1.0) << endl;
+    cout << "integral of sum: " << (fPromoteFromConst + f + 1).integrate(1.0) << endl;
 
     Interpolant<Real, Tetrahedron, Constant> fConstTet(1.0);
     fQuadTet2 = 99;
-    cout << "fQuadTet2 = 99, integral: " << (fQuadTet2 + fConstTet).integrate() << endl;
+    cout << "fQuadTet2 = 99, integral: " << (fQuadTet2 + fConstTet).integrate(1.0) << endl;
 
 
     size_t numPass = 0, numTests = 0;
@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
     assert_eq(__LINE__, Quadrature<Simplex::Edge, 2>::integrate([] (Real, Real) { return 1.0; }), 1.0);
 
     auto ecfi = Interpolation<Simplex::Edge, 0>::interpolant([] (Real, Real) { return 1.0; });
-    assert_eq(__LINE__, ecfi.integrate(), 1.0);
+    assert_eq(__LINE__, ecfi.integrate(1.0), 1.0);
     size_t runs = 200000;
 
     for (size_t i = 0; i < runs; ++i) {
@@ -132,17 +132,17 @@ int main(int argc, char *argv[])
         assert_eq(__LINE__, tetfa(tetSample), tetfa(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
 
         // Compare versions of integration
-        assert_eq(__LINE__, integrate_edge<1>([&] (Real a, Real b) { return efl(a, b); }), efl.integrate());
-        assert_eq(__LINE__, integrate_edge<2>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate());
-        assert_eq(__LINE__, integrate_edge<3>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate());
+        assert_eq(__LINE__, integrate_edge<1>([&] (Real a, Real b) { return efl(a, b); }), efl.integrate(1.0));
+        assert_eq(__LINE__, integrate_edge<2>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
+        assert_eq(__LINE__, integrate_edge<3>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
 
-        assert_eq(__LINE__, integrate_tri<1>([&] (Real a, Real b, Real c) { return tfl(a, b, c); }), tfl.integrate());
-        assert_eq(__LINE__, integrate_tri<2>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate());
-        assert_eq(__LINE__, integrate_tri<3>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate());
+        assert_eq(__LINE__, integrate_tri<1>([&] (Real a, Real b, Real c) { return tfl(a, b, c); }), tfl.integrate(1.0));
+        assert_eq(__LINE__, integrate_tri<2>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
+        assert_eq(__LINE__, integrate_tri<3>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
 
-        assert_eq(__LINE__, integrate_tet<1>([&] (Real a, Real b, Real c, Real d) { return tetfl(a, b, c, d); }), tetfl.integrate());
-        assert_eq(__LINE__, integrate_tet<2>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate());
-        assert_eq(__LINE__, integrate_tet<3>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate());
+        assert_eq(__LINE__, integrate_tet<1>([&] (Real a, Real b, Real c, Real d) { return tetfl(a, b, c, d); }), tetfl.integrate(1.0));
+        assert_eq(__LINE__, integrate_tet<2>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
+        assert_eq(__LINE__, integrate_tet<3>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
 
         // Test expression interpolants
         Interpolant<Real, Edge,    Constant> efc(randDouble());
