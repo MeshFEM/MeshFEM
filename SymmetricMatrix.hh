@@ -19,12 +19,20 @@
 #define SYMMETRICMATRIX_HH
 
 #include "Flattening.hh"
+#include <Eigen/Dense>
 #include <iostream>
+
+////////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+////////////////////////////////////////////////////////////////////////////////
+template<size_t t_N, typename Storage>
+class SymmetricMatrix;
 
 template<typename _Real, size_t t_N,
          typename _Storage_t, typename _ConstStorageRef_t>
 class ConstSymmetricMatrixBase {
 public:
+    static_assert(t_N > 0, "Dimension must be positive");
     ConstSymmetricMatrixBase(const _Storage_t &data) : m_data(data) { }
     static constexpr size_t N = t_N;
     static constexpr size_t flatSize() { return (N * (N + 1)) / 2; }
@@ -52,12 +60,13 @@ public:
     }
 
     _Real doubleContract(const ConstSymmetricMatrixBase &b) const {
-        _Real result(0);
-        for (size_t i = 0; i < t_N; ++i) {
-            for (size_t j = 0; j < t_N; ++j) {
-                result += operator()(i, j) * b(i, j);
-            }
-        }
+        // Diagonals
+        _Real result(m_data[0] * b.m_data[0]);
+        for (size_t i = 1; i < t_N; ++i)
+            result += m_data[i] * b.m_data[i];
+        // Off diagonals
+        for (size_t i = t_N; i < flatSize(); ++i)
+            result += 2 * m_data[i] * b.m_data[i];
         return result;
     }
 
@@ -79,6 +88,11 @@ public:
     }
 protected:
     _Storage_t m_data;
+
+    // SymmetricMatrix needs access to our m_data for efficient copy
+    // construction.
+    template<size_t t_N2, typename Storage>
+    friend class SymmetricMatrix;
 };
 
 template<typename _Real, size_t t_N,
@@ -102,6 +116,9 @@ public:
 
     // Warning: template hidden by derived class's default operator=, preventing
     // mixed derived assignments unless subclass has "using Base::operator="
+    // Note: this can work both for flatened data types and
+    // ConstSymmetricMatrixBase due to symmetric matrices' flattened access
+    // operators.
     template<typename FType>
     SymmetricMatrixBase &operator=(const FType &f) { assign(f); return *this; }
 
@@ -128,8 +145,11 @@ public:
     // Bring in the base classes' definitions so they aren't hidden!!!
     using Base::operator[];
     using Base::flattened;
-    _StorageRef_t flattened() { return Base::m_data; }
-    _Real &operator[](size_t i) { return Base::m_data[i]; }
+    _StorageRef_t flattened() { return m_data; }
+    _Real &operator[](size_t i) { return m_data[i]; }
+
+protected:
+    using Base::m_data;
 };
 
 // SymmetricMatrixRef and ConstStorageRef are now just aliases to the bases...
@@ -150,14 +170,15 @@ class SymmetricMatrix
     typedef typename Storage::Scalar _Real;
     typedef SymmetricMatrixBase<_Real, t_N, Storage, const Storage &, Storage &> Base;
 public:
+    using Base::Base;
     SymmetricMatrix() : Base(Storage::Zero()) { }
     SymmetricMatrix(size_t i) : Base(Storage::Zero()) {
         if (i >= Base::flatSize())
             throw std::runtime_error("Illegal basis element number.");
         this->operator[](i) = (i < t_N) ? 1.0 : 0.5;
     }
-
-    SymmetricMatrix(const Storage &values) : Base(values) { }
+    template<typename _ST2, typename _CSRT2>
+    SymmetricMatrix(const ConstSymmetricMatrixBase<_Real, t_N, _ST2, _CSRT2> &b) : Base(b.m_data) { }
 
     // Construct a unit canonical basis symmetric matrix:
     // e_ij = .5 * (e_i e_j^T + e_j e_i^T)
@@ -172,5 +193,26 @@ public:
     using Base::operator=; // Would be hidden by default operator=!!!
     SymmetricMatrix operator-() const { SymmetricMatrix result(*this); result *= -1.0; return result; }
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// Arithmetic operators--always have a storage-backed result.
+////////////////////////////////////////////////////////////////////////////////
+template<typename _Real, size_t t_N,
+         typename _Storage_t, typename _ConstStorageRef_t>
+SymmetricMatrix<t_N, Eigen::Matrix<Real, flatLen(t_N), 1>> operator*(_Real s, const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat)
+{
+    SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> result(mat);
+    result *= s;
+    return result;
+}
+
+template<typename _Real, size_t t_N,
+         typename _Storage_t, typename _ConstStorageRef_t>
+SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> operator*(const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat, _Real s)
+{
+    SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> result(mat);
+    result *= s;
+    return result;
+}
 
 #endif /* end of include guard: SYMMETRICMATRIX_HH */
