@@ -59,7 +59,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     // All of these routines can be heavily optimized...
     struct Element : public BaseData::Element {
         typedef typename BaseData::Element Base;
-        using Base::volume; using Base::gradPhi;
+        using Base::gradPhi;
 
         static constexpr size_t nNodes = Simplex::numNodes(_K, _Deg);
         static constexpr size_t nVecPhi = N * nNodes;
@@ -72,21 +72,20 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
 
         std::vector<Strain> vecPhiStrains() const {
             std::vector<Strain> strains(N * nNodes);
-            // Compute the strain of vector basis function phi_i * N + c.
+            // Compute the strain of vector basis function i * N + c.
             // In 2D, these vector basis functions look like:
             // (phi0, 0), (0, phi0), (phi1, 0), (0, phi1), ...
             for (size_t i = 0; i < nNodes; ++i) {
                 for (size_t c = 0; c < N; ++c) {
                     // We need the strain value at each interpolation node.
                     for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
-                        strains[i * N + c][inode](c, c) = gradPhi(i)[inode](c);
-                        for (size_t var = c + 1; var < N; ++var) {
-                            strains[i * N + var][inode](c, var) = 0.5 * gradPhi(i)[inode](var);
+                        for (size_t var = 0; var < N; ++var) {
+                            strains[i * N + c][inode](c, var) +=
+                                ((var == c) ? 1.0 : 0.5) * gradPhi(i)[inode](var);
                         }
                     }
                 }
             }
-
             return strains;
         }
 
@@ -96,11 +95,12 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             for (size_t i = 0; i < nNodes; ++i) {
                 const auto &ui = u(elem.node(i).index());
                 for (size_t c = 0; c < N; ++c) {
+                    auto ui_c = ui[c];
                     // We need the strain value at each interpolation node.
                     for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
-                        out[inode](c, c) = ui[c] * gradPhi(i)[inode](c);
-                        for (size_t var = c + 1; var < N; ++var) {
-                            out[inode](c, var) = 0.5 * ui[c] * gradPhi(i)[inode](var);
+                        for (size_t var = 0; var < N; ++var) {
+                            out[inode](c, var) += ((var == c) ? 1.0 : 0.5) *
+                                ui_c * gradPhi(i)[inode](var);
                         }
                     }
                 }
@@ -123,14 +123,14 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                     l(c, i) = Quadrature<_K, _Deg - 1>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
                             phiStrains[i * N + c](p).doubleContract(s);
-                        }, volume());
+                        }, Base::volume());
                 }
             }
         }
 
         // Gets upper triangle of the per-element stiffness matrix.
         void perElementStiffness(PerElementStiffness &Ke) const {
-            std::vector<Strain>  strains = vecPhiStrains();
+            std::vector<Strain> strains = vecPhiStrains();
             std::vector<Stress> stresses(strains.size());
             for (size_t i = 0; i < strains.size(); ++i)
                 stresses[i] = strains[i].doubleContract(m_E());
@@ -149,15 +149,14 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
 
     struct BoundaryElement : public BaseData::BoundaryElement {
         typedef typename BaseData::BoundaryElement Base;
-        using Base::volume;
 
         // Note: this could be optimized by adding a lookup table of shape
         // function integrals.
         Vector nodalNeumannLoad(size_t ni) const {
-            Interpolant<Real, _K, _Deg> phi;
+            Interpolant<Real, _K - 1, _Deg> phi;
             phi = 0;
             phi[ni] = 1.0;
-            Real weight = phi.integrate(volume());
+            Real weight = phi.integrate(Base::volume());
             return weight * neumannTraction;
         }
 
@@ -652,16 +651,16 @@ private:
             // Accumulate into full stiffness matrix.
             constexpr size_t nNodes = Mesh::ElementData::nNodes;
             for (size_t i = 0; i < nNodes; ++i) {
-                int vi = DoF(elem.node(i).index());
+                int di = DoF(elem.node(i).index());
                 for (size_t j = 0; j < nNodes; ++j) {
-                    int vj = DoF(elem.node(j).index());
+                    int dj = DoF(elem.node(j).index());
                     // xx, xy, xz, yx, yy, yz, zx, zy, zz
                     for (size_t ci = 0; ci < N; ++ci) {
                         for (size_t cj = 0; cj < N; ++cj) {
-                            int row = N *  i + ci, col = N *  j + cj;
+                            int row = N * i + ci, col = N * j + cj;
                             // Only read upper triangle of symmetric Ke.
                             Real val = (row <= col) ? Ke(row, col) : Ke(col, row);
-                            K.addNZ(N * vi + ci, N * vj + cj, val);
+                            K.addNZ(N * di + ci, N * dj + cj, val);
                         }
                     }
                 }

@@ -80,7 +80,7 @@ void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
-    typedef LinearElasticity::Mesh<_N, 1> Mesh;
+    typedef LinearElasticity::Mesh<_N, 2> Mesh;
     typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
     typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
@@ -167,10 +167,6 @@ void execute(const po::variables_map &args,
     sim.applyBoundaryConditions(bconds);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
 
-    auto u = sim.solve();
-    auto e = sim.averageStrainField(u);
-    auto s = sim.averageStressField(u);
-
     if (matrixPath != "") {
         typename LinearElasticity::Simulator<Mesh>::TMatrix C;
         vector<Real> dummy;
@@ -178,8 +174,20 @@ void execute(const po::variables_map &args,
         C.dump(matrixPath);
     }
 
+    typename Mesh::ElementData::PerElementStiffness Ke;
+    sim.mesh().element(0)->perElementStiffness(Ke);
+    cout << "element 0 stiffness:" << endl;
+    cout << Ke;
+    cout << endl;
+
+    auto u = sim.solve();
+    auto e = sim.averageStrainField(u);
+    auto s = sim.averageStressField(u);
+    auto f = sim.dofToNodeField(sim.neumannLoad());
+
     MSHFieldWriter writer(outMSH, sim.mesh());
     writer.addField("u",      u, MSHFieldWriter::PER_NODE);
+    writer.addField("load",   f, MSHFieldWriter::PER_NODE);
     writer.addField("strain", e, MSHFieldWriter::PER_ELEMENT);
     writer.addField("stress", s, MSHFieldWriter::PER_ELEMENT);
     // // Write mat parameter fields

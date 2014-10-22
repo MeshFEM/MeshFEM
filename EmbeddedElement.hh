@@ -40,8 +40,11 @@ public:
         SFGradient result;
         if (_Deg == 1)  result[0] = m_gradBarycentric.col(i);
         if (_Deg == 2) {
-            // For vertex shape functions, all vertex values are nonzero.
-            // For edge shape functions, only the incident vertices are nonzero.
+            // For vertex shape functions, all vertex values are nonzero:
+            //      3 grad(phi_i) on vertex i, -grad(phi_i) on others
+            // For edge shape functions, only the incident vertices are nonzero:
+            //      4 * grad(phi_j) on vertex i, 4 * grad(phi_i) on vertex j
+            //      where (i, j) are the endpoints of the edge node's edge.
             if (i < numVertices) {
                 result[i] = 3 * m_gradBarycentric.col(i);
                 for (size_t j = 1; j < numVertices; ++j)
