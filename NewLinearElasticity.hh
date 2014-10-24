@@ -24,19 +24,20 @@ private:
     ETensor m_E;
 };
 
+template<class _Material>
+struct _HMG {
+    typedef typename _Material::ETensor ETensor;
+    static _Material material;
+    const ETensor &operator()() const { return material.getTensor(); }
+          ETensor &operator()()       { return material.getTensor(); }
+};
+template<class _Material>
+_Material _HMG<_Material>::material;
 template<template<size_t> class _Material>
 struct HomogenousMaterialGetter {
-    template<size_t N>
-    struct Getter {
-        typedef typename _Material<N>::ETensor ETensor;
-        static _Material<N> material;
-        const ETensor &operator()() const { return material.getTensor(); }
-              ETensor &operator()()       { return material.getTensor(); }
-    };
+    template<size_t _N>
+    using Getter = _HMG<_Material<_N>>;
 };
-template<template<size_t> class _Material>
-template<size_t N>
-_Material<N> HomogenousMaterialGetter<_Material>::template Getter<N>::material;
 
 // To allow extra configuration of the linear elasticity data we store on the
 // FEMMesh, LinearElasticityData is a templated wrapper class that contains the
