@@ -1,7 +1,6 @@
 #ifndef PERIODICHOMOGENIZATION_HH
 #define PERIODICHOMOGENIZATION_HH
 
-#include "LinearElasticity.hh"
 #include <vector>
 #include <string>
 
@@ -38,10 +37,15 @@ namespace PeriodicHomogenization {
         // Where |Y| = Yvol = periodic cell (grid bounding box) volume
         //        w  = periodic base cell geometry
         typename _Simulator::ETensor Eh;
+        typename _Simulator::Strain  strain_ij;
         for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
             typename _Simulator::ETensor Econtrib;
-            for (size_t i = 0; i < w_ij.size(); ++i)
-                sim.elementStress(ei, w_ij[i], Econtrib.DRowAsSymMatrix(i));
+            for (size_t i = 0; i < w_ij.size(); ++i) {
+                sim.elementStrain(ei, w_ij[i], strain_ij);
+                Econtrib.DRowAsSymMatrix(i) =
+                    mesh.element(ei)->E().doubleContract(strain_ij.average());
+            }
+            // Elasticity tensor is always constant on each element.
             Econtrib += mesh.element(ei)->E();
             Econtrib *= mesh.element(ei)->volume();
             Eh += Econtrib;

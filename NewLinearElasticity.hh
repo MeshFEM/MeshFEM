@@ -23,19 +23,19 @@ private:
     ETensor m_E;
 };
 
-// Homogenous materials are implemented as a "static" material that all
-// elements share. NOTE: this material will be shared by all meshes
-// (instantiated with the same _Material type)! If multiple meshes with
-// different materials are needed, we need a different approach.
-template<class _Material>
+template<template<size_t> class _Material>
 struct HomogenousMaterialGetter {
-    typedef typename _Material::ETensor ETensor;
-    static _Material material;
-    const ETensor &operator()() const { return material.getTensor(); }
+    template<size_t N>
+    struct Getter {
+        typedef typename _Material<N>::ETensor ETensor;
+        static _Material<N> material;
+        const ETensor &operator()() const { return material.getTensor(); }
+              ETensor &operator()()       { return material.getTensor(); }
+    };
 };
-
-template<class _Material>
-_Material HomogenousMaterialGetter<_Material>::material;
+template<template<size_t> class _Material>
+template<size_t N>
+_Material<N> HomogenousMaterialGetter<_Material>::template Getter<N>::material;
 
 // To allow extra configuration of the linear elasticity data we store on the
 // FEMMesh, LinearElasticityData is a templated wrapper class that contains the
@@ -56,6 +56,11 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     typedef Strain Stress;
     typedef VectorField<Real, N> VField;
 
+    template<size_t _Deg2>
+    using VolumeIntegral  = Quadrature<_K, _Deg2>;
+    template<size_t _Deg2>
+    using SurfaceIntegral = Quadrature<_K - 1, _Deg2>;
+
     // All of these routines can be heavily optimized...
     struct Element : public BaseData::Element {
         typedef typename BaseData::Element Base;
@@ -66,9 +71,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         typedef Eigen::Matrix<Real, N,  nNodes> ElementLoad;
         typedef Eigen::Matrix<Real, nVecPhi, nVecPhi> PerElementStiffness;
 
-        void configure(const _ETensorGetter<N> &EGetter) {
-            m_E = EGetter;
-        }
+        void configure(const _ETensorGetter<N> &EGetter) { m_E = EGetter; }
+        decltype(((const _ETensorGetter<N> *) 0)->operator()()) E() const { return m_E(); }
 
         std::vector<Strain> vecPhiStrains() const {
             std::vector<Strain> strains(N * nNodes);
@@ -120,9 +124,9 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             SMatrix s(m_E().doubleContract(strain));
             for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
                 for (size_t c = 0; c < N; ++c) {
-                    l(c, i) = Quadrature<_K, _Deg - 1>::integrate(
+                    l(c, i) = VolumeIntegral<_Deg - 1>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
-                            phiStrains[i * N + c](p).doubleContract(s);
+                            return phiStrains[i * N + c](p).doubleContract(s);
                         }, Base::volume());
                 }
             }
@@ -136,7 +140,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                 stresses[i] = strains[i].doubleContract(m_E());
             for (size_t i = 0; i < strains.size(); ++i) {
                 for (size_t j = i; j < stresses.size(); ++j) {
-                    Ke(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
+                    Ke(i, j) = VolumeIntegral<2 * (_Deg - 1)>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
                             return stresses[i](p).doubleContract(strains[j](p));
                     }, Base::volume());
@@ -242,6 +246,10 @@ public:
         auto elem  = m_mesh.element(i);
         elem->stress(elem, u, s);
     }
+
+    // Element strain/stress by return value.
+    Strain elementStrain(size_t i, const VField &u) const { Strain result; elementStrain(result); return result; }
+    Stress elementStress(size_t i, const VField &u) const { Stress result; elementStress(result); return result; }
 
     // Strain averaged over each element.
     SMField averageStrainField(const VField &u) const {

@@ -1,6 +1,6 @@
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
-#include "LinearElasticity.hh"
+#include "NewLinearElasticity.hh"
 #include "Materials.hh"
 #include "PeriodicHomogenization.hh"
 #include <vector>
@@ -34,7 +34,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material,m",      po::value<string>(), "base material")
+        ("material,m", po::value<string>(), "base material")
+        ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ;
 
     po::options_description cli_opts;
@@ -57,6 +58,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         fail = true;
     }
 
+    int d = vm["degree"].as<int>();
+    if (d < 1 || d > 2) {
+        cout << "Error: FEM Degree must be 1 or 2" << endl;
+        fail = true;
+    }
+
     if (fail || vm.count("help"))
         usage(fail, visible_opts);
 
@@ -64,31 +71,39 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 }
 
 template<size_t _N>
-using ETensor = typename LinearElasticityND<_N>::ETensor;
-template<size_t _N>
-using VField = typename LinearElasticityND<_N>::VField;
-typedef ScalarField<Real> SField;
+using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::template Getter<_N>;
 
-template<size_t _N>
+template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
-    auto &mat = LinearElasticityND<_N>::
-        template homogenousMaterial<Materials::Constant>();
+    auto &mat = HMG<_N>::material;
     if (args.count("material")) mat.setFromFile(args["material"].as<string>());
-    typename LinearElasticityND<_N>:: template
-        HomogenousSimulator<Materials::Constant> sim(inElements, inVertices);
 
-    std::vector<VField<_N>> w_ij;
+    typedef LinearElasticity::Mesh<_N, _FEMDegree, HMG> Mesh;
+    typedef LinearElasticity::Simulator<Mesh> Simulator;
+    Simulator sim(inElements, inVertices);
+    typedef typename Simulator::ETensor ETensor;
+    typedef typename Simulator::VField  VField;
+
+    std::vector<VField> w_ij;
     solveCellProblems(w_ij, sim);
 
-    ETensor<_N> Eh = homogenizedElasticityTensor(w_ij, sim);
+    // MSHFieldWriter writer("phomog.msh", sim.mesh());
+    // for (size_t i = 0; i < w_ij.size(); ++i) {
+    //     VField rhs(sim.constantStrainLoad(-Simulator::SMatrix::CanonicalBasis(i)));
+    //     // NOTE: constant strain load on vertex nodes is actually zero in deg 2!
+    //     writer.addField("load " + to_string(i), sim.dofToNodeField(rhs), MSHFieldWriter::PER_NODE);
+    //     writer.addField("w_ij " + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
+    // }
+
+    ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
 
     cout << setprecision(16) << endl;
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;
 
-    ETensor<_N> S = Eh.inverse();
+    ETensor S = Eh.inverse();
     cout << "Homogenized compliance tensor:" << endl;
     cout << S << endl;
     vector<Real> moduli(flatLen(_N));
@@ -147,7 +162,9 @@ int main(int argc, const char *argv[])
     else    throw std::runtime_error("Mesh must be triangle or tet.");
 
     // Look up and run appropriate homogenizer instantiation.
-    auto exec = (dim == 3) ? execute<3> : execute<2>;
+    int deg = args["degree"].as<int>();
+    auto exec = (dim == 3) ? ((deg == 2) ? execute<3, 2> : execute<3, 1>)
+                           : ((deg == 2) ? execute<2, 2> : execute<2, 1>);
 
     exec(args, inVertices, inElements);
 

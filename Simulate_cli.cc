@@ -174,12 +174,6 @@ void execute(const po::variables_map &args,
         C.dump(matrixPath);
     }
 
-    typename Mesh::ElementData::PerElementStiffness Ke;
-    sim.mesh().element(0)->perElementStiffness(Ke);
-    cout << "element 0 stiffness:" << endl;
-    cout << Ke;
-    cout << endl;
-
     auto u = sim.solve();
     auto e = sim.averageStrainField(u);
     auto s = sim.averageStressField(u);

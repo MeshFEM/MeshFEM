@@ -50,7 +50,7 @@ private:
     std::vector<Bound> m_lower, m_upper;
 };
 
-// Var 0: Young's modulus, var 1: Poisson ratio
+// Base class for variable materials
 template<size_t _N, template<size_t> class _Mat, size_t _NVars>
 struct VariableMaterial {
     typedef ElasticityTensor<Real, _N> ETensor;
@@ -76,6 +76,7 @@ struct VariableMaterial {
     Real vars[numVars];
 };
 
+// Var 0: Young's modulus, var 1: Poisson ratio
 template<size_t _N>
 struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     static constexpr size_t N = _N;
