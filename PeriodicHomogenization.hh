@@ -12,12 +12,16 @@ namespace PeriodicHomogenization {
         typedef typename _Simulator::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
 
+        BENCHMARK_START_TIMER("Apply Cell Conditions");
         sim.applyPeriodicConditions();
         sim.applyNoRigidMotionConstraint();
+        BENCHMARK_STOP_TIMER("Apply Cell Conditions");
 
         w_ij.reserve(numStrains), w_ij.clear();
         for (size_t i = 0; i < numStrains; ++i) {
+            BENCHMARK_START_TIMER("Constant Strain Load");
             VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
+            BENCHMARK_STOP_TIMER("Constant Strain Load");
             w_ij.push_back(sim.solve(rhs));
         }
     }

@@ -87,10 +87,10 @@ void execute(const po::variables_map &args,
     typedef typename Simulator::ETensor ETensor;
     typedef typename Simulator::VField  VField;
 
-    BENCHMARK_START_TIMER_SECTION("Homogenize");
-
+    BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
     solveCellProblems(w_ij, sim);
+    BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
 
     // MSHFieldWriter writer("phomog.msh", sim.mesh());
     // for (size_t i = 0; i < w_ij.size(); ++i) {
@@ -100,9 +100,9 @@ void execute(const po::variables_map &args,
     //     writer.addField("w_ij " + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
     // }
 
+    BENCHMARK_START_TIMER_SECTION("Compute Tensor");
     ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
-
-    BENCHMARK_STOP_TIMER_SECTION("Homogenize");
+    BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
     cout << setprecision(16) << endl;
     cout << "Homogenized elasticity tensor:" << endl;

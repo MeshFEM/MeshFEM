@@ -230,10 +230,10 @@ public:
     VField solve(const VField &f) const {
         if (!m_system.cached()) m_cacheConstrainedSystem();
 
-        BENCHMARK_START_TIMER("solve system");
+        BENCHMARK_START_TIMER("Solve");
         std::vector<Real> x;
         m_system.solve(f, x);
-        BENCHMARK_STOP_TIMER("solve system");
+        BENCHMARK_STOP_TIMER("Solve");
         return dofToNodeField(x);
     }
 
@@ -605,6 +605,7 @@ public:
 
     void assembleConstrainedSystem(TMatrix &C,
             std::vector<Real> &constraintRHS) const {
+        BENCHMARK_START_TIMER("Assemble System");
         m_assembleStiffnessMatrix(C);
         TMatrix R, D;
         if (m_useRigidMotionConstraint) {
@@ -639,6 +640,8 @@ public:
         }
         C.append(D, TMatrix::APPEND_BELOW,  true, false);
         C.append(D, TMatrix::APPEND_RIGHT,  true,  true);
+
+        BENCHMARK_STOP_TIMER("Assemble System");
     }
 
 private:
@@ -646,7 +649,9 @@ private:
         TMatrix C;
         std::vector<Real> constraintRHS;
         assembleConstrainedSystem(C, constraintRHS);
+        BENCHMARK_START_TIMER("Set System");
         m_system.setSystem(C, constraintRHS);
+        BENCHMARK_STOP_TIMER("Set System");
     }
 
     void m_assembleStiffnessMatrix(TMatrix &K) const {
@@ -745,7 +750,6 @@ private:
     // Dirichlet constraint RHS is appended to rhs
     void m_assembleDirichletConstraint(TMatrix &D,
             std::vector<Real> &rhs) const {
-        BENCHMARK_START_TIMER("assemble system");
         // Validate and convert to per-periodic DoF constraints.
         // constraintDisplacements[i] holds the displacement to which
         // components constraintComponents[i] of DoF constraintDoFs[i] are
@@ -804,7 +808,6 @@ private:
             }
         }
         assert(rhs.size() == origSize + constraintRows);
-        BENCHMARK_STOP_TIMER("assemble system");
     }
 
     // Note: a "DoF" here is actually vector-valued--there are actualy
