@@ -1,0 +1,7 @@
+{
+  "no_rigid_motion": true,
+  "regions": [
+         { "type": "force", "value": [ 100, 0], "box%": { "minCorner": [-0.0001, -0.0001], "maxCorner": [0.0001, 1.0001] } },
+         { "type": "force", "value": [-100, 0], "box%": { "minCorner": [ 0.9999, -0.0001], "maxCorner": [1.0001, 1.0001] } }
+  ]
+}
