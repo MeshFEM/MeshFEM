@@ -16,13 +16,13 @@
 #ifndef MESH_IO_HH
 #define MESH_IO_HH
 
-#include "Geometry.hh"
 #include "Types.hh"
 
 #include <string>
 #include <fstream>
 #include <stdexcept>
 #include <iomanip>
+#include <vector>
 
 namespace MeshIO {
     /** Supported file formats */
