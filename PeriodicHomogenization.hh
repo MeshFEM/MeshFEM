@@ -1,15 +1,16 @@
 #ifndef PERIODICHOMOGENIZATION_HH
 #define PERIODICHOMOGENIZATION_HH
 
+#include "GaussQuadrature.hh"
 #include <vector>
 #include <string>
 
 namespace PeriodicHomogenization {
-    template<class _Simulator>
-    void solveCellProblems(std::vector<typename _Simulator::VField> &w_ij,
-                           _Simulator &sim) {
-        typedef typename _Simulator::VField  VField;
-        typedef typename _Simulator::SMatrix SMatrix;
+    template<class _Sim>
+    void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim)
+    {
+        typedef typename _Sim::VField  VField;
+        typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
 
         BENCHMARK_START_TIMER("Apply Cell Conditions");
@@ -26,13 +27,11 @@ namespace PeriodicHomogenization {
         }
     }
 
-    template<class _Simulator>
-    typename _Simulator::ETensor homogenizedElasticityTensor(
-            const std::vector<typename _Simulator::VField> &w_ij,
-            const _Simulator &sim)
-    {
+    template<class _Sim>
+    typename _Sim::ETensor homogenizedElasticityTensor(
+            const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
         const auto &mesh = sim.mesh();
-        typedef typename _Simulator::SMatrix SMatrix;
+        typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
         assert(w_ij.size() == numStrains);
 
@@ -40,10 +39,10 @@ namespace PeriodicHomogenization {
         // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dV
         // Where |Y| = Yvol = periodic cell (grid bounding box) volume
         //        w  = periodic base cell geometry
-        typename _Simulator::ETensor Eh;
-        typename _Simulator::Strain  strain_ij;
+        typename _Sim::ETensor Eh;
+        typename _Sim::Strain  strain_ij;
         for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
-            typename _Simulator::ETensor Econtrib;
+            typename _Sim::ETensor Econtrib;
             for (size_t i = 0; i < w_ij.size(); ++i) {
                 sim.elementStrain(ei, w_ij[i], strain_ij);
                 Econtrib.DRowAsSymMatrix(i) =
@@ -55,28 +54,33 @@ namespace PeriodicHomogenization {
             Eh += Econtrib;
         }
         Eh /= mesh.boundingBox().volume();
+        return Eh;
 
         // // The following "energy-like" version is equivalent to the more efficient
         // // "stress-like" version above:
         // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
-        // typename _Simulator::ETensor EhE;
-        // SMatrix we_ij, we_kl;
+        // typename _Sim::ETensor EhE;
+        // typename _Sim::Strain  strain_ij, strain_kl;
         // for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
         //     auto e = mesh.element(ei);
         //     for (size_t ij = 0; ij < numStrains; ++ij) {
-        //         sim.elementStrain(ei, w_ij[ij], we_ij);
-        //         we_ij += SMatrix::CanonicalBasis(ij);
+        //         sim.elementStrain(ei, w_ij[ij], strain_ij);
+        //         strain_ij += SMatrix::CanonicalBasis(ij);
         //         for (size_t kl = ij; kl < numStrains; ++kl) {
-        //             sim.elementStrain(ei, w_ij[kl], we_kl);
-        //             we_kl += SMatrix::CanonicalBasis(kl);
-        //             EhE.D(ij, kl) += e->volume() * (e->E().
-        //                     doubleContract(we_ij).doubleContract(we_kl));
+        //             sim.elementStrain(ei, w_ij[kl], strain_kl);
+        //             strain_kl += SMatrix::CanonicalBasis(kl);
+        //             EhE.D(ij, kl) +=
+        //                 _Sim::template VolInt<2 * (_Sim::Degree - 1)>::integrate(
+        //                     [&] (const VectorND<_Sim::numElemVertices> &p) {
+        //                         return e->E().doubleContract(strain_ij(p))
+        //                                      .doubleContract(strain_kl(p));
+        //                     }, e->volume());
         //         }
         //     }
         // }
         // EhE /= mesh.boundingBox().volume();
 
-        return Eh;
+        // return EhE;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -87,13 +91,11 @@ namespace PeriodicHomogenization {
     //  @param[in]  sim     linear elasticity solver
     //  @return     per-boundary-element rank 4 tensor field.
     *///////////////////////////////////////////////////////////////////////////
-    template<class _Simulator>
-    std::vector<typename _Simulator::ETensor> homogenizedTensorGradient(
-            const std::vector<typename _Simulator::VField> &w,
-            const _Simulator &sim)
-    {
-        typedef typename _Simulator::ETensor ETensor;
-        typedef typename _Simulator::SMatrix SMatrix;
+    template<class _Sim>
+    std::vector<typename _Sim::ETensor> homogenizedTensorGradient(
+            const std::vector<typename _Sim::VField> &w, const _Sim &sim) {
+        typedef typename _Sim::ETensor ETensor;
+        typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
         assert(w.size() == numStrains);
 

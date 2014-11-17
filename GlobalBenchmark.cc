@@ -1,3 +1,6 @@
+#ifndef BENCHMARK
+#define BENCHMARK
+#endif
 #include "GlobalBenchmark.hh"
 #include <iostream>
 

@@ -13,7 +13,7 @@ TARGETS=mesh_convert PeriodicHomogenization_cli MaterialOptimization_cli Simulat
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES)
 CPPFLAGS+=-O2 -DBENCHMARK
 # CPPFLAGS+=-O0 -g
-CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
+# CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 
 all: $(TARGETS)
 

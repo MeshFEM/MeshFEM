@@ -307,7 +307,7 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
     while (getDataLine(is, line)) {
         deque<string> lineComponents;
         boost::trim(line);
-        boost::split(lineComponents, line, boost::is_any_of("\t "));
+        boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
         string first = lineComponents.at(0);
         lineComponents.pop_front();
         if (first == "v") {
