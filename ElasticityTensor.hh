@@ -211,7 +211,7 @@ public:
         // Applying on right doubles "shear rows" of a matrix or vector
         assert(val.rows() == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
-            for (size_t j = 0; j < val.cols(); ++j)
+            for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= 2.0;
     }
 
@@ -220,7 +220,7 @@ public:
         // Applying on left doubles "shear columns" of a matrix or row vector
         assert(val.cols() == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
-            for (size_t i = 0; i < val.rows(); ++i)
+            for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= 2.0;
     }
 
@@ -229,7 +229,7 @@ public:
         // Applying on right halves "shear rows" of a matrix or vector
         assert(val.rows() == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
-            for (size_t j = 0; j < val.cols(); ++j)
+            for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= 0.5;
     }
 
@@ -238,13 +238,13 @@ public:
         // Applying on left halves "shear columns" of a matrix or row vector
         assert(val.cols() == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
-            for (size_t i = 0; i < val.rows(); ++i)
+            for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= 0.5;
     }
 
     // Doubles the off-diagonal entries of a flattened symmetric rank 2 tensor.
     FlattenedRank2Tensor shearDoubled(FlattenedRank2Tensor t) const {
-        for (size_t i = _Dim; i < t.rows(); ++i)
+        for (size_t i = _Dim; i < (size_t) t.rows(); ++i)
             t[i] *= 2.0;
         return t;
     }

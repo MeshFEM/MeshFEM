@@ -216,7 +216,7 @@ struct TripletMatrix {
             Ap[j + 1] = i;
         }
 
-        assert(Ap[n] == num_nz);
+        assert(size_t(Ap[n]) == num_nz);
     }
 
     void setIdentity(size_t I_n) {
@@ -668,7 +668,7 @@ public:
         for (size_t i = 0; i < fixedVars.size(); ++i) {
             int rv = m_reducedVarForVar[fixedVars[i]];
             if (rv < 0) continue;
-            assert(rv < rvNewlyFixedValue.size());
+            assert(size_t(rv) < rvNewlyFixedValue.size());
             rvNewlyFixedValue[rv] = fixedVarValues[i];
         }
 
@@ -762,7 +762,7 @@ public:
         for (size_t v = 0; v < m_reducedVarForVar.size(); ++v) {
             int r = m_reducedVarForVar[v];
             if (r < 0) continue;
-            assert(r < bReduced.size());
+            assert(size_t(r) < bReduced.size());
             bReduced[r] =
                 ((v < nPrimaryVars) ? f[v] : m_constraintRHS[v - nPrimaryVars])
                     + m_fixedVarRHSContribution[r];
