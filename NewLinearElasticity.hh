@@ -6,6 +6,7 @@
 #include "FEMMesh.hh"
 #include "BoundaryConditions.hh"
 #include "GlobalBenchmark.hh"
+#include <Fields.hh>
 #include <SparseMatrices.hh>
 
 namespace LinearElasticity {

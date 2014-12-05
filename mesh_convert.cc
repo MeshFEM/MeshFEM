@@ -14,6 +14,7 @@
 
 #include <limits>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <queue>
 #include <boost/program_options.hpp>
@@ -114,6 +115,8 @@ void transferField(const std::vector<size_t> cellIndex,
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, const char *argv[])
 {
+    cout << setprecision(16) << endl;
+
     po::variables_map args = parseCmdLine(argc, argv);
 
     vector<MeshIO::IOVertex > inVertices, outVertices;
