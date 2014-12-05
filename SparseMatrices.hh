@@ -88,43 +88,56 @@ struct TripletMatrix {
     void sumRepeated() {
         BENCHMARK_START_TIMER("Compress Matrix");
 
-        // Organize columns into buckets
-        std::vector<size_t> colSize(n, 0);
-        for (const Triplet &t : nz)
-            ++colSize[t.j];
+        // Organize columns into buckets all stored contiguously in a vector.
+        // First compute the start/end of each bucket.
+        // (bucketStart[j] is the start of bucket j and end of bucket j - 1)
+        std::vector<size_t> bucketStart(n + 1, 0);
+        for (const Triplet &t : nz) ++bucketStart[t.j + 1]; // get bucket sizes.
+        for (size_t j = 1; j <= n; ++j) // get bucket offsets
+            bucketStart[j] += bucketStart[j - 1];
+        assert(bucketStart[n] == nz.size());
+
+        // Index of current end of bucket (initially at the start since buckets
+        // are empty).
+        std::vector<size_t> bucketEndIndex(bucketStart);
+
+        // Fill the buckets.
         typedef std::pair<size_t, Real> CEntry;
-        std::vector<std::vector<CEntry>> columnBuckets(n);
-        for (size_t j = 0; j < n; ++j)
-            columnBuckets[j].reserve(colSize[n]);
-        for (const Triplet &t : nz)
-            columnBuckets[t.j].emplace_back(t.i, t.v);
+        std::vector<CEntry> columnBuckets(nz.size());
+        for (const Triplet &t : nz) {
+            auto &entry = columnBuckets[bucketEndIndex[t.j]];
+            entry.first = t.i;
+            entry.second = t.v;
+            ++bucketEndIndex[t.j];
+        }
+        for (size_t j = 0; j < n; ++j) // make sure we filled each bucket.
+            assert(bucketEndIndex[j] == bucketStart[j + 1]);
+
         int backIndex = -1;
 
-        // Sort and sum each bucket
+        // Sort and sum each bucket's repeated entries into nz array
+        auto bucketBegin = columnBuckets.begin();
         for (size_t j = 0; j < n; ++j) {
-            auto &bucket = columnBuckets[j];
-            std::sort(bucket.begin(), bucket.end(),
-                [](const CEntry &a, const CEntry &b) { return a.first < b.first; });
-
-            size_t bucketCount = bucket.size();
-            if (bucketCount == 0) continue;
-            ++backIndex;
+            auto bucketEnd = columnBuckets.begin() + bucketStart[j + 1];
+            std::sort(bucketBegin, bucketEnd, [](const CEntry &a, const CEntry &b) { return a.first < b.first; });
+            if (bucketBegin == bucketEnd) continue;
+            ++backIndex; // new column
             nz[backIndex].j = j;
-            nz[backIndex].i = bucket[0].first;
-            nz[backIndex].v = bucket[0].second;
-            for (size_t i = 1; i < bucketCount; ++i) {
-                const auto &bucketItem = bucket[i];
+            nz[backIndex].i = bucketBegin->first;
+            nz[backIndex].v = bucketBegin->second;
+            for (auto it = bucketBegin + 1; it != bucketEnd; ++it) {
                 auto &backEntry = nz[backIndex];
-                if (backEntry.i == bucketItem.first)
-                    backEntry.v += bucketItem.second;
+                if (backEntry.i == it->first)
+                    backEntry.v += it->second;
                 else {
                     ++backIndex;
                     auto &newEntry = nz[backIndex];
                     newEntry.j = j;
-                    newEntry.i = bucketItem.first;
-                    newEntry.v = bucketItem.second;
+                    newEntry.i = it->first;
+                    newEntry.v = it->second;
                 }
             }
+            bucketBegin = bucketEnd; // move to next bucket
         }
         assert(size_t(backIndex) < nz.size());
         nz.erase(nz.begin() + backIndex + 1, nz.end());
