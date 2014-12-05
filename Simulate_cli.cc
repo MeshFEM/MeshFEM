@@ -3,6 +3,7 @@
 #include "MSHFieldParser.hh"
 #include "NewLinearElasticity.hh"
 #include "Materials.hh"
+#include "GlobalBenchmark.hh"
 #include "util.h"
 #include <vector>
 #include <queue>
@@ -38,7 +39,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("matFieldName,f",       po::value<string>()->default_value(""), "name of material field to load from .msh passed as --material")
         ("boundaryConditions,b", po::value<string>(),                    "boundary conditions")
         ("outputMSH,o",          po::value<string>(),                    "output mesh")
-        ("dumpMatrix,d",         po::value<string>()->default_value(""), "dump system matrix in triplet format")
+        ("dumpMatrix,D",         po::value<string>()->default_value(""), "dump system matrix in triplet format")
+        ("degree,d",             po::value<int>()->default_value(2),     "FEM degree (1 or 2)")
         ;
 
     po::options_description cli_opts;
@@ -75,12 +77,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     return vm;
 }
 
-template<size_t _N>
+template<size_t _N, size_t _Deg>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
-    typedef LinearElasticity::Mesh<_N, 2> Mesh;
+    typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
     typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
     typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
@@ -167,12 +169,7 @@ void execute(const po::variables_map &args,
     sim.applyBoundaryConditions(bconds);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
 
-    if (matrixPath != "") {
-        typename LinearElasticity::Simulator<Mesh>::TMatrix C;
-        vector<Real> dummy;
-        sim.assembleConstrainedSystem(C, dummy);
-        C.dump(matrixPath);
-    }
+    if (matrixPath != "") sim.dumpSystem(matrixPath);
 
     auto u = sim.solve();
     auto e = sim.averageStrainField(u);
@@ -192,6 +189,8 @@ void execute(const po::variables_map &args,
     // writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
     // writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
     // writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
+
+    BENCHMARK_REPORT();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -216,8 +215,10 @@ int main(int argc, const char *argv[])
     else if (type == MeshIO::MESH_TRI) dim = 2;
     else    throw std::runtime_error("Mesh must be pure triangle or tet.");
 
-    // Look up and run appropriate homogenizer instantiation.
-    auto exec = (dim == 3) ? execute<3> : execute<2>;
+    // Look up and run appropriate simulation instantiation.
+    int deg = args["degree"].as<int>();
+    auto exec = (dim == 3) ? ((deg == 2) ? execute<3, 2> : execute<3, 1>)
+                           : ((deg == 2) ? execute<2, 2> : execute<2, 1>);
 
     exec(args, inVertices, inElements);
 

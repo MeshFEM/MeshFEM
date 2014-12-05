@@ -16,6 +16,7 @@ namespace PeriodicHomogenization {
         BENCHMARK_START_TIMER("Apply Cell Conditions");
         sim.applyPeriodicConditions();
         sim.applyNoRigidMotionConstraint();
+        sim.setUsePinNoRigidTranslationConstraint(true);
         BENCHMARK_STOP_TIMER("Apply Cell Conditions");
 
         w_ij.reserve(numStrains), w_ij.clear();

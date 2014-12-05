@@ -226,19 +226,19 @@ public:
     template<size_t _Deg2>
     using SurfInt = typename LEData::template SurfInt<_Deg2>;
 
-
     typedef TripletMatrix<Triplet<Real> > TMatrix;
 
     template<class Elements, class Vertices>
     Simulator(const Elements &elems, const Vertices &vertices)
-        : m_useRigidMotionConstraint(false), m_mesh(elems, vertices) { }
+        : m_useRigidMotionConstraint(false), m_useNRTPinConstraint(false),
+          m_mesh(elems, vertices) { }
 
     const _Mesh &mesh() const { return m_mesh; }
           _Mesh &mesh()       { return m_mesh; }
 
     // Solve for equilibrium under DoF load f
     VField solve(const VField &f) const {
-        if (!m_system.cached()) m_cacheConstrainedSystem();
+        if (!m_system.isSet()) m_buildConstrainedSystem();
 
         BENCHMARK_START_TIMER("Solve");
         std::vector<Real> x;
@@ -388,6 +388,7 @@ public:
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
             m_mesh.boundaryElement(i)->isPeriodic = pc.isPeriodicBE(i);
     }
+
     void removePeriodicConditions() {
         m_system.clear();
         m_dofForNode.clear();
@@ -516,6 +517,12 @@ public:
         }
     }
 
+    // Set whether the no rigid translation constraint should be implemented
+    // using a node pinning constraint.
+    void setUsePinNoRigidTranslationConstraint(bool use) {
+        m_useNRTPinConstraint = use;
+    }
+
     // Apply a constraint to match the rigid motion of u
     // This is the same as the no rigid motion constraint, but with a RHS
     // given by the product R * u
@@ -613,15 +620,37 @@ public:
         }
     }
 
-    void assembleConstrainedSystem(TMatrix &C,
-            std::vector<Real> &constraintRHS) const {
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Build up the components of the constrained system.
+    //  @param[out] K               unconstrained stiffness matrix
+    //  @param[out] constraintRows  arbitrary linear constraints on variables
+    //  @param[out] constraintRHS   RHS for those arbitrary constraints
+    //  @param[out] fixedVars       indices of vars to fix at specified values
+    //                              (i.e. for Dirichlet constraints).
+    //  @param[out] fixedVarValues  the values variables are fixed to.
+    *///////////////////////////////////////////////////////////////////////////
+    void assembleConstrainedSystem(TMatrix &K, TMatrix &constraintRows,
+            std::vector<Real> &constraintRHS,
+            std::vector<size_t> &fixedVars,
+            std::vector<Real>   &fixedVarValues) const {
         BENCHMARK_START_TIMER("Assemble System");
-        m_assembleStiffnessMatrix(C);
-        TMatrix R, D;
+        m_assembleStiffnessMatrix(K);
+
+        constraintRows.clear();
+        constraintRHS.clear();
+        fixedVars.clear();
+        fixedVarValues.clear();
+
+        TMatrix R;
         if (m_useRigidMotionConstraint) {
-            m_assembleRigidModeMatrix(R);
-            constraintRHS = m_rigidMotionConstraintRHS;
+            m_assembleInfinitesimalRotationMatrix(R);
+            if (m_useNRTPinConstraint) m_pinNode(fixedVars, fixedVarValues);
+            else                       m_assembleTranslationMatrix(R);
+
             // We do a rigid-motion = 0 constraint if no RHS is supplied
+            // Note: if a RHS was supplied but m_useNRTPinConstraint is true, an
+            // error will be thrown if the RHS has a translation part.
+            constraintRHS = m_rigidMotionConstraintRHS;
             if (constraintRHS.size() == 0) constraintRHS.assign(R.m, 0);
             if (constraintRHS.size() != R.m)
                 throw std::runtime_error("Invalid rigid motion RHS");
@@ -630,45 +659,53 @@ public:
             ComponentMask needsTranslations, needsRotations;
             analyzeDirichletPosedness(needsTranslations, needsRotations);
             if (needsTranslations.hasAny(N)) {
-                m_assembleTranslationMatrix(R, needsTranslations);
-                constraintRHS.assign(needsTranslations.count(N), 0);
+                if (m_useNRTPinConstraint) {
+                    m_pinNode(fixedVars, fixedVarValues, needsTranslations);
+                }
+                else {
+                    m_assembleTranslationMatrix(R, needsTranslations);
+                    constraintRHS.assign(needsTranslations.count(N), 0);
+                }
             }
             if (needsRotations.hasAny(N)) throw std::runtime_error("Unimplemented");
         }
 
-        m_assembleDirichletConstraint(D, constraintRHS);
+        constraintRows = R;
 
-        // Build constrained system with Lagrange multipliers
-        // [ K R' D'] [u        ]   [ f ]
-        // [ R      ] [lambda_R ] = [ 0 ]
-        // [ D      ] [lambda_D ] = [ D ]
-        //  --- C ---   -- u_l --    -rhs-
-        // Append boolean arguments:        pad   transpose
-        if (R.m > 0) {
-            C.append(R, TMatrix::APPEND_BELOW, false, false);
-            C.append(R, TMatrix::APPEND_RIGHT,  true,  true);
-        }
-        C.append(D, TMatrix::APPEND_BELOW,  true, false);
-        C.append(D, TMatrix::APPEND_RIGHT,  true,  true);
+        // TODO: test by fixing variables in batches.
+        m_getDirichletVarsAndValues(fixedVars, fixedVarValues);
 
         BENCHMARK_STOP_TIMER("Assemble System");
     }
 
-private:
-    void m_cacheConstrainedSystem() const {
-        TMatrix C;
-        std::vector<Real> constraintRHS;
-        assembleConstrainedSystem(C, constraintRHS);
-        BENCHMARK_START_TIMER("Set System");
-        m_system.setSystem(C, constraintRHS);
-        BENCHMARK_STOP_TIMER("Set System");
+    void dumpSystem(const std::string &path) const {
+        if (!m_system.isSet()) m_buildConstrainedSystem();
+        m_system.dump(path);
     }
 
+private:
+    void m_buildConstrainedSystem() const {
+        TMatrix K, C;
+        std::vector<Real> constraintRHS;
+        std::vector<size_t> fixedVars;
+        std::vector<Real>   fixedVarValues;
+        assembleConstrainedSystem(K, C, constraintRHS, fixedVars, fixedVarValues);
+        BENCHMARK_START_TIMER_SECTION("Set System");
+        m_system.setConstrained(K, C, constraintRHS);
+        BENCHMARK_STOP_TIMER_SECTION("Set System");
+        BENCHMARK_START_TIMER_SECTION("Fix Variables");
+        m_system.fixVariables(fixedVars, fixedVarValues);
+        BENCHMARK_STOP_TIMER_SECTION("Fix Variables");
+    }
+
+    // Build *upper triangle* of stiffness matrix
     void m_assembleStiffnessMatrix(TMatrix &K) const {
         typedef typename _Mesh::ElementData::PerElementStiffness PerElementStiffness;
         constexpr size_t KeSize = PerElementStiffness::RowsAtCompileTime;
         K.init(N * numDoFs(), N * numDoFs());
-        K.reserve(KeSize * KeSize * m_mesh.numElements());
+        // size_t preallocSize = KeSize * KeSize * m_mesh.numElements();
+        size_t preallocSize = KeSize * (KeSize + 1) * m_mesh.numElements() / 2;
+        K.reserve(preallocSize);
         typename _Mesh::ElementData::PerElementStiffness Ke;
 
         for (size_t i = 0; i < m_mesh.numElements(); ++i) {
@@ -681,24 +718,36 @@ private:
                 int di = DoF(elem.node(i).index());
                 for (size_t j = 0; j < nNodes; ++j) {
                     int dj = DoF(elem.node(j).index());
+                    if (di > dj) continue;
                     // xx, xy, xz, yx, yy, yz, zx, zy, zz
                     for (size_t ci = 0; ci < N; ++ci) {
                         for (size_t cj = 0; cj < N; ++cj) {
                             int row = N * i + ci, col = N * j + cj;
                             // Only read upper triangle of symmetric Ke.
                             Real val = (row <= col) ? Ke(row, col) : Ke(col, row);
+                            if (N * di + ci > N * dj + cj) continue;
                             K.addNZ(N * di + ci, N * dj + cj, val);
                         }
                     }
                 }
             }
         }
+
+        // Make sure our upper bound was correct--reallocation is undesirable.
+        assert(K.nnz() <= preallocSize);
     }
 
+    static constexpr size_t numRotModes = (N == 3) ? 3 : 1;
     void m_assembleRigidModeMatrix(TMatrix &R) const {
-        constexpr size_t numRotModes = (N == 3) ? 3 : 1;
         R.reserve((N + 2 * numRotModes) * m_mesh.numNodes());
+        m_assembleInfinitesimalRotationMatrix(R);
         m_assembleTranslationMatrix(R);
+    }
+
+    // Append no rigid rotation constraint rows to R.
+    void m_assembleInfinitesimalRotationMatrix(TMatrix &R) const {
+        if (R.n == 0) R.n = N * numDoFs(); // Make sure matrix is sized properly
+        if (R.n != N * numDoFs()) throw std::runtime_error("Invalid R size.");
 
         // Periodic boundary conditions pin down the rotational DoFs, so we
         // only need to constrain the translational ones.
@@ -737,6 +786,7 @@ private:
         else assert(false);
     }
 
+    // Append no rigid translation constraint rows to T.
     void m_assembleTranslationMatrix(TMatrix &T,
             const ComponentMask &components = ComponentMask("xyz")) const {
         // If we've removed some degrees of freedom (e.g. by imposing
@@ -744,22 +794,49 @@ private:
         // act on the remaining variables.
         // "components" determines which components of the DoFs are
         // constrained.
+        if (T.n == 0) T.n = N * numDoFs(); // Make sure matrix is sized properly
+        if (T.n != N * numDoFs()) throw std::runtime_error("Invalid T size.");
         size_t numComps = components.count(N);
-        T.init(numComps, N * numDoFs());
-        T.reserve(numComps * numDoFs());
+        size_t oldRows = T.m, oldSize = T.nnz();
+        T.m += numComps;
+        T.reserve(oldSize + numComps * numDoFs());
         for (size_t i = 0; i < numDoFs(); ++i) {
-            size_t rows = 0;
-            if (components.hasX())             T.addNZ(rows++, N * i    , 1.0);
-            if (components.hasY())             T.addNZ(rows++, N * i + 1, 1.0);
-            if ((N == 3) && components.hasZ()) T.addNZ(rows++, N * i + 2, 1.0);
+            size_t row = oldRows;
+            if (components.hasX())             T.addNZ(row++, N * i    , 1.0);
+            if (components.hasY())             T.addNZ(row++, N * i + 1, 1.0);
+            if ((N == 3) && components.hasZ()) T.addNZ(row++, N * i + 2, 1.0);
         }
-        assert(T.nnz() == numComps * numDoFs());
+        assert(T.nnz() == oldSize + numComps * numDoFs());
     }
 
-    // Dirichlet constraint matrix is put in D
-    // Dirichlet constraint RHS is appended to rhs
-    void m_assembleDirichletConstraint(TMatrix &D,
-            std::vector<Real> &rhs) const {
+    void m_pinNode(std::vector<size_t> &fixedVars,
+                   std::vector<Real> &fixedVarValues,
+                   const ComponentMask &components = ComponentMask("xyz")) const
+    {
+        size_t nodeToPin = m_mesh.numNodes();
+        for (size_t i = 0; i < m_mesh.numNodes(); ++i) {
+            // Prefer to fix an interior node
+            if (!m_mesh.node(i).boundaryNode()) {
+                nodeToPin = i;
+                break;
+            }
+        }
+        // But fix a boundary vertex if necessary
+        if (nodeToPin == m_mesh.numNodes())
+            nodeToPin = 0;
+
+        assert(nodeToPin < m_mesh.numNodes());
+        for (size_t d = 0; d < N; ++d) {
+            if (components.has(d)) {
+                fixedVars.push_back(N * nodeToPin + d);
+                fixedVarValues.push_back(0.0);
+            }
+        }
+    }
+
+    // Append to dirichletVars and dirichletValues
+    void m_getDirichletVarsAndValues(std::vector<size_t> &dirichletVars,
+                                     std::vector<Real> &dirichletValues) const {
         // Validate and convert to per-periodic DoF constraints.
         // constraintDisplacements[i] holds the displacement to which
         // components constraintComponents[i] of DoF constraintDoFs[i] are
@@ -800,24 +877,29 @@ private:
             }
         }
 
-        // Count constraint rows (number of constrained components)
-        size_t numConstraints = constraintDoFs.size();
-        size_t constraintRows = 0;
-        for (size_t i = 0; i < numConstraints; ++i)
-            constraintRows += constraintComponents[i].count(N);
-        assert((D.m == 0) && (D.n == 0)); // just checking...
-        D.init(constraintRows, N * numDoFs());
-        size_t origSize = rhs.size();
-        rhs.reserve(origSize + constraintRows);
-        size_t row = 0;
-        for (size_t i = 0; i < numConstraints; ++i) {
+        for (size_t i = 0; i < constraintDoFs.size(); ++i) {
             for (size_t c = 0; c < N; ++c) {
                 if (!constraintComponents[i].has(c)) continue;
-                D.addNZ(row++, N * constraintDoFs[i] + c, 1.0);
-                rhs.push_back(constraintDisplacements[i][c]);
+                dirichletVars.push_back(N * constraintDoFs[i] + c);
+                dirichletValues.push_back(constraintDisplacements[i][c]);
             }
         }
-        assert(rhs.size() == origSize + constraintRows);
+    }
+
+    // Dirichlet constraint matrix is put in D
+    // Dirichlet constraint RHS is appended to rhs
+    void m_assembleDirichletConstraint(TMatrix &D, std::vector<Real> &rhs) const {
+        std::vector<size_t> dirichletVars;
+        std::vector<Real> dirichletValues;
+        m_getDirichletVarsAndValues(dirichletVars, dirichletValues);
+
+        assert((D.m == 0) && (D.n == 0)); // just checking...
+        D.init(dirichletVars.size(), N * numDoFs());
+        rhs.reserve(rhs.size() + dirichletVars.size());
+        for (size_t i = 0; i < dirichletVars.size(); ++i) {
+            D.addNZ(i, dirichletVars[i], 1.0);
+            rhs.push_back(dirichletValues[i]);
+        }
     }
 
     // Note: a "DoF" here is actually vector-valued--there are actualy
@@ -827,12 +909,16 @@ private:
 
     bool m_useRigidMotionConstraint;
     std::vector<Real> m_rigidMotionConstraintRHS;
+    // Pin a single node (or a subset of its components) with direct elimination
+    // instead of using a Lagrange multiplier-based no rigid translation
+    // constraint.
+    bool m_useNRTPinConstraint;
 
 protected:
     // m_system implements caching of system matrices for multiple solves.
     // It should be mutable because building and solving the system doesn't
     // affect user-visible state.
-    mutable ConstrainedSystem<Real> m_system;
+    mutable SPSDSystem<Real> m_system;
 
     _Mesh m_mesh;
 };
