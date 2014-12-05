@@ -133,7 +133,7 @@ public:
         Ey = 1.0 / Einv.D(1, 1);
         nuYX = -Einv.D(0, 1) * Ey;
         // Recall: shear terms in the compliance tensor are actually 1/(4mu)
-        // (See Tensor Flatteneing writeup)
+        // (See Tensor Flattening writeup)
         muXY = 0.25 / Einv.D(2, 2);
     }
 
