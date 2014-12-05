@@ -161,7 +161,7 @@ bool quad_subdiv_high_aspect(
                          (Point3D(inVertices[e[2 + ed.splitPair]]) + Point3D(inVertices[e[(3 + ed.splitPair) % 4]])) / 2, };
 
         // Look up or generate new midpoint vertices.
-        int midx[2];
+        size_t midx[2];
         UnorderedPair edges[2];
         ed.getSplitEdges(e, edges[0], edges[1]);
         for (size_t c = 0; c < 2; ++c) {

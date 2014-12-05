@@ -60,11 +60,6 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     typedef Strain Stress;
     typedef VectorField<Real, N> VField;
 
-    template<size_t _Deg2>
-    using VolInt  = Quadrature<_K, _Deg2>;
-    template<size_t _Deg2>
-    using SurfInt = Quadrature<_K - 1, _Deg2>;
-
     // All of these routines can be heavily optimized...
     struct Element : public BaseData::Element {
         typedef typename BaseData::Element Base;
@@ -128,7 +123,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             SMatrix s(m_E().doubleContract(strain));
             for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
                 for (size_t c = 0; c < N; ++c) {
-                    l(c, i) = VolInt<_Deg - 1>::integrate(
+                    l(c, i) = Quadrature<_K, _Deg - 1>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
                             return phiStrains[i * N + c](p).doubleContract(s);
                         }, Base::volume());
@@ -144,7 +139,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                 stresses[i] = strains[i].doubleContract(m_E());
             for (size_t i = 0; i < strains.size(); ++i) {
                 for (size_t j = i; j < stresses.size(); ++j) {
-                    Ke(i, j) = VolInt<2 * (_Deg - 1)>::integrate(
+                    Ke(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
                             return stresses[i](p).doubleContract(strains[j](p));
                     }, Base::volume());
@@ -221,11 +216,6 @@ public:
     typedef SymmetricMatrixField<Real, N> SMField;
     typedef typename LEData::Strain Strain;
     typedef typename LEData::Strain Stress;
-
-    template<size_t _Deg2>
-    using VolInt  = typename LEData::template VolInt<_Deg2>;
-    template<size_t _Deg2>
-    using SurfInt = typename LEData::template SurfInt<_Deg2>;
 
     typedef TripletMatrix<Triplet<Real> > TMatrix;
 
@@ -354,7 +344,7 @@ public:
         load.clear();
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
             auto be = m_mesh.boundaryElement(i);
-            for (int n = 0; n < be.numNodes(); ++n)
+            for (size_t n = 0; n < be.numNodes(); ++n)
                 load(DoF(be.node(n).volumeNode().index()))
                     += be->nodalNeumannLoad(n);
         }

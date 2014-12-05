@@ -503,7 +503,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
 MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
                           vector<Element> &elements, MeshType type) {
     int elementType;
-    size_t numCorners;
+    size_t numCorners = 0; // gcc complains about possible uninitialzation here...
     if (type != MESH_GUESS)
         getElementInfo(type, elementType, numCorners);
     else { elementType = -1; }

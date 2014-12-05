@@ -107,7 +107,7 @@ parseField(istream &is, const string &header, string &name,
     name = name.substr(1, name.size() - 2);
 
     // Discard real tags...
-    int nRealTags = readIntLine(is);
+    size_t nRealTags = readIntLine(is);
     for (size_t i = 0; i < nRealTags; ++i)
         readDoubleLine(is);
 

@@ -14,7 +14,7 @@ protected:
     typedef typename _Mesh::template BVHandle<_Mesh, _HType> BVH;
     typedef typename _Mesh::template HFHandle<_Mesh, _HType> HFH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numVertices(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numVertices()); }
 
     bool isBoundary() const { return m_mesh.m_bdryVertexIdx(m_idx) >= 0; }
     BVH boundaryVertex() const { return BVH(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
@@ -71,7 +71,7 @@ protected:
     typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
     typedef typename _Mesh::template HFHandle<_Mesh, _HType> HFH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numTets(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numTets()); }
     bool isBoundary() const {
         return halfFace(0).isBoundary() || halfFace(1).isBoundary() ||
                halfFace(2).isBoundary() || halfFace(3).isBoundary();
@@ -111,7 +111,7 @@ protected:
     typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
     typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryVertices(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryVertices()); }
     // The boundary of a tet mesh has no border.
     bool isBorder() const { return false; }
     
@@ -143,7 +143,7 @@ protected:
     typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
     typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryHalfEdges(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryHalfEdges()); }
     // The boundary of a tet mesh has no border.
     bool isBorder()     const { return false; }
     bool isBorderEdge() const { return false; }
@@ -181,10 +181,10 @@ protected:
     typedef typename _Mesh::template  BFHandle<_Mesh, _HType>  BFH;
     typedef typename _Mesh::template BHEHandle<_Mesh, _HType> BHEH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numBoundaryFaces(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryFaces()); }
 
-    constexpr int numNeighbors() const { return 3; }
-    constexpr int numVertices()  const { return 3; }
+    constexpr size_t numNeighbors() const { return 3; }
+    constexpr size_t numVertices()  const { return 3; }
 
      HFH   volumeHalfFace() const { return  HFH(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
      BVH   vertex(size_t i) const { BVH bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }

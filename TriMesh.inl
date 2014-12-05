@@ -208,8 +208,8 @@ public:
     }
 
     // Dimension-independent access
-    constexpr int  numVertices() const { return 2; }
-    constexpr int numNeighbors() const { return 2; }
+    constexpr size_t  numVertices() const { return 2; }
+    constexpr size_t numNeighbors() const { return 2; }
     BVH   vertex(size_t i) const { return (i == 0) ? tail() : tip(); }
     BEH neighbor(size_t i) const { return (i == 0) ? prev() : next(); }
 

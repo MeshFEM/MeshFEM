@@ -258,22 +258,22 @@ private:
     // Nodes 0..#Vertices are located on the corresponding vertex.
     // The remaining nodes do not have vertices.
     int m_vertexForNode(int n) const {
-        if (n < BaseMesh::numVertices()) return n;
+        if (size_t(n) < BaseMesh::numVertices()) return n;
         else return -1;
     }
     int m_nodeForVertex(int v) const {
-        if (v < BaseMesh::numVertices()) return v;
+        if (size_t(v) < BaseMesh::numVertices()) return v;
         else return -1;
     }
 
     // Boundary Nodes 0..#BdryVertices are located on the corresponding boundary
     // vertex. The remaining nodes do not have vertices.
     int m_boundaryVertexForBoundaryNode(int bn) const {
-        if (bn < BaseMesh::numBoundaryVertices()) return bn;
+        if (size_t(bn) < BaseMesh::numBoundaryVertices()) return bn;
         else return -1;
     }
     int m_nodeForBoundaryVertex(int bv) const {
-        if (bv < BaseMesh::numBoundaryVertices()) return bv;
+        if (size_t(bv) < BaseMesh::numBoundaryVertices()) return bv;
         else return -1;
     }
 
@@ -290,7 +290,7 @@ private:
             assert(n < Simplex::numEdges(_K));
             nidx = numVertexNodes() + m_N[Simplex::numEdges(_K) * e + n];
         }
-        assert(nidx < numNodes());
+        assert(size_t(nidx) < numNodes());
         return nidx;
     }
     int m_nodeOfBdryElement(size_t bn, size_t be) const {
@@ -303,7 +303,7 @@ private:
             assert(bn < Simplex::numEdges(_K - 1));
             bnidx = numBoundaryVertexNodes() + m_BN[Simplex::numEdges(_K - 1) * be + bn];
         }
-        assert(bnidx < numBoundaryNodes());
+        assert(size_t(bnidx) < numBoundaryNodes());
         return bnidx;
     }
 

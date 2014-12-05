@@ -25,7 +25,7 @@ NHandle : public _HType<_Mesh, NHandle<_Mesh, Handle>, NHandle<_Mesh, ConstHandl
     typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
     typedef typename _Mesh::template BNHandle<_Mesh, _HType> BNH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numNodes(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numNodes()); }
 
     int edgeNodeIndex() const { return m_mesh.m_edgeNodeIndex(m_idx); }
     bool isEdgeNode()   const { return edgeNodeIndex() >= 0; }
@@ -73,7 +73,7 @@ BNHandle : public _HType<_Mesh, BNHandle<_Mesh, Handle>, BNHandle<_Mesh, ConstHa
     typedef typename _Mesh::template  NHandle<_Mesh, _HType>  NH;
     typedef typename _Mesh::template BVHandle<_Mesh, _HType> BVH;
 public:
-    bool valid() const { return m_idx >= 0 && m_idx < m_mesh.numNodes(); }
+    bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numNodes()); }
 
     int edgeNodeIndex() const { return m_mesh.m_bdryEdgeNodeIndex(m_idx); }
     bool   isEdgeNode() const { return edgeNodeIndex() >= 0; }

@@ -274,7 +274,7 @@ public:
             ConstHalfEdgeHandle h = v.halfEdge();
             ConstHalfEdgeHandle hit = h;
             do {
-                if (hit.tail().index() == s) {
+                if (size_t(hit.tail().index()) == s) {
                     return hit.index();
                 }
             } while ((hit = hit.cw()) != h);

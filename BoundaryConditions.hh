@@ -310,7 +310,7 @@ public:
         std::vector<std::pair<int, int> > pairs;
         std::vector<bool> nodeIsPeriodic(mesh.numNodes());
         pairs.clear();
-        for (int d = 0; d < _N; ++d) {
+        for (size_t d = 0; d < _N; ++d) {
             cgrid.reset();
             std::vector<int> maxfaceNodes;
             for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
@@ -377,7 +377,7 @@ public:
                 const std::list<int> adj_u = adj[u];
                 for (int v: adj_u) {
                     if (m_dofForNode[v] < 0) {
-                        assert(m_dofForNode[u] == m_numDoFs - 1);
+                        assert(size_t(m_dofForNode[u]) == m_numDoFs - 1);
                         m_dofForNode[v] = m_dofForNode[u];
                         bfsQueue.push(v);
                     }

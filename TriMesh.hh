@@ -188,7 +188,7 @@ protected:
     }
     int m_bdryEBdryIdxToVolIdx(int bhe) const {
         // This better be a boundary half-edge
-        assert(bhe < numBoundaryEdges());
+        assert(size_t(bhe) < numBoundaryEdges());
         return -2 - bhe;
     }
     int m_bdryEVolIdxToBdryIdx(int he) const {
@@ -330,7 +330,7 @@ protected:
         ConstHalfEdgeHandle h = v.halfEdge();
         ConstHalfEdgeHandle hit = h;
         do {
-            if (hit.tail().index() == s) {
+            if (size_t(hit.tail().index()) == s) {
                 return hit.index();
             }
         } while ((hit = hit.cw()) != h);
