@@ -93,8 +93,7 @@ struct TripletMatrix {
         for (const Triplet &t : nz)
             ++colSize[t.j];
         typedef std::pair<size_t, Real> CEntry;
-        std::vector<std::vector<CEntry>> columnBuckets;
-        columnBuckets.reserve(n);
+        std::vector<std::vector<CEntry>> columnBuckets(n);
         for (size_t j = 0; j < n; ++j)
             columnBuckets[j].reserve(colSize[n]);
         for (const Triplet &t : nz)
