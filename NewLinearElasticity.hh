@@ -687,6 +687,10 @@ private:
         BENCHMARK_START_TIMER_SECTION("Fix Variables");
         m_system.fixVariables(fixedVars, fixedVarValues);
         BENCHMARK_STOP_TIMER_SECTION("Fix Variables");
+
+        // We promise not to modify the system after solving without rebuilding
+        // it from scratch--save some memory.
+        m_system.setEconomyMode(true);
     }
 
     // Build *upper triangle* of stiffness matrix
