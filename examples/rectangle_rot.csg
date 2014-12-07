@@ -1,0 +1,7 @@
+{
+    "name": "Rectangle",
+    "type": "rectangle",
+    "center": [0, 0],
+    "dimensions": [30, 6],
+    "rotation": 45
+}
