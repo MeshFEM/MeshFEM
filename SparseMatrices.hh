@@ -658,7 +658,9 @@ public:
         m_constraintRHS = constraintRHS;
     }
 
-    bool isSet() const { return m_AUpper.nnz() != 0; }
+    // Note: in economy mode, we could have cleared m_AUpper's triplets before
+    // factorizing.
+    bool isSet() const { return factorized() || (m_AUpper.nnz() != 0); }
 
     // Eliminate DoFs in fixedVars from the system. The system matrix is shrunk,
     // and variables are re-indexed in a way that the original system's solution
@@ -667,6 +669,9 @@ public:
                       const std::vector<_Real>  &fixedVarValues) {
         assert(fixedVars.size() == fixedVarValues.size());
         if (fixedVars.size() == 0) return;
+        clearFactorization();
+        if (m_AUpper.nnz() == 0)
+            throw std::runtime_error("Empty triplets--attempted to modify system post-solve in economy mode?");
 
         // replacementIndex tracks what the current reduced variable indices are
         // remapped to. Initially it is used to flag (reduced) variables for
@@ -764,7 +769,7 @@ public:
         // number of non-Lagrange multiplier variables
         size_t nPrimaryVars = f.size();
 
-        if (m_AUpper.nnz() == 0) throw std::runtime_error("No system to solve");
+        if (!isSet()) throw std::runtime_error("No system to solve");
         if (nPrimaryVars + m_constraintRHS.size() != m_numVars) throw std::runtime_error("Bad RHS");
 
         // Reduced system rhs (reduced f and  Lagrange multipliers)
@@ -784,8 +789,11 @@ public:
         std::vector<_Real> uReduced(m_AUpper.m);
 
         if (m_isSPD) {
-            if (!m_LLT)
+            if (!m_LLT) {
                 m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper));
+                if (m_economyMode) m_clearAUpperTriplets();
+            }
+
             m_LLT->solve(bReduced, uReduced);
         }
         else {
@@ -794,6 +802,7 @@ public:
                 TMatrix A;
                 A.reserve(m_AUpper.nnz() + m_AUpper.strictUpperTriangleNNZ());
                 A = m_AUpper;
+                if (m_economyMode) m_clearAUpperTriplets();
                 A.reflectUpperTriangle();
                 m_LU = std::unique_ptr<_LUFactorizer>(new _LUFactorizer(A));
             }
@@ -816,13 +825,23 @@ public:
         }
     }
 
-    void clear() {
+    bool factorized() const {
+        return (m_isSPD && m_LLT) || (!m_isSPD && m_LU);
+    }
+
+    void clearFactorization() {
         m_LU = NULL;
         m_LLT = NULL;
+    }
+
+    void clear() {
+        clearFactorization();
         m_AUpper.init(0, 0);
         m_numVars = 0;
         m_initReducedVariables();
     }
+
+    void setEconomyMode(bool emode) { m_economyMode = emode; }
 
     void dump(const std::string &path) const { m_AUpper.dump(path); }
 
@@ -840,8 +859,21 @@ private:
         m_fixedVarValues.clear();
     }
 
-    bool m_set, m_isSPD;
+    // Keep matrix size information, but clear out contents.
+    void m_clearAUpperTriplets() {
+        m_AUpper.nz.clear();
+        m_AUpper.nz.shrink_to_fit();
+    }
+
+    bool m_isSPD = false;
     std::vector<_Real> m_constraintRHS;
+
+    // Whether we're in "economy mode." In economy mode, the triplet
+    // form of the system is zero-ed out the moment a factorization object has
+    // been built from it to avoid the storage of redundant copies. However,
+    // the system cannot be modified (e.g. fixing variables) after a
+    // factorization call in this mode.
+    bool m_economyMode = false;
 
     // Track fixed variables after fixVariables have been called.
     // >=  0: index of reduced variable corresponding to a variable
