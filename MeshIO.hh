@@ -284,12 +284,13 @@ namespace MeshIO {
                 outElements[ei].push_back(e.vertex(c).index());
         }
         outVertices.reserve(mesh.numVertices());
+        // Note: requires vertex-node index to coincide with vertex index!
+        // This is the case for our FEMMesh.
         for (size_t vi = 0; vi < mesh.numVertices(); ++vi)
-            outVertices.push_back(mesh.vertex(vi)->p);
+            outVertices.push_back(mesh.node(vi)->p);
 
         save(path, outVertices, outElements, format, type);
     }
-
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Reads an element soup from an input stream

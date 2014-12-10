@@ -267,6 +267,7 @@ public:
     DefaultNodalStoragePolicy(DefaultNodalStoragePolicy<_T, _K, _Deg> &&b)
         : m_nodeVal(std::move(b.m_nodeVal)) { }
 
+    constexpr size_t size() const { return numNodalValues; }
     const _T &operator[](size_t i) const { assert(i < numNodalValues); return m_nodeVal[i]; }
           _T &operator[](size_t i)       { assert(i < numNodalValues); return m_nodeVal[i]; }
 private:
@@ -289,6 +290,8 @@ template<typename _T, size_t _K, size_t _Deg,
 class Interpolant : public NodalStoragePolicy<_T, _K, _Deg> {
     typedef NodalStoragePolicy<_T, _K, _Deg> SP;
 public:
+    static constexpr size_t K = _K;
+    static constexpr size_t Deg = _Deg;
     using SP::numNodalValues;
     using SP::SP;
     Interpolant() : SP() { }

@@ -84,20 +84,31 @@ namespace PeriodicHomogenization {
         // return EhE;
     }
 
+
+    // Per-boundary-element interpolant type needed to express the homogenized
+    // tensor shape derivative.
+    template<class _Sim>
+    using BEHTensorGradInterpolant = Interpolant<typename _Sim::ETensor,
+        _Sim::K - 1, 2 * (_Sim::Degree - 1)>;
+
     ////////////////////////////////////////////////////////////////////////////
     /*! Computes the steepest ascent direction (i.e. the theta maximizing the
     //  shape derivative DS[theta]) of each component of the homogenized
-    //  elasticity tensor. This is a per-boundary-element rank 4 tensor field.
+    //  elasticity tensor. This is a per-boundary-element piecewise constant
+    //  (FEM degree 1) or quadratic (FEM degree 2) rank 4 tensor field.
     //  @param[in]  w       fluctuation displacements (cell problem solutions)
     //  @param[in]  sim     linear elasticity solver
     //  @return     per-boundary-element rank 4 tensor field.
     *///////////////////////////////////////////////////////////////////////////
     template<class _Sim>
-    std::vector<typename _Sim::ETensor> homogenizedTensorGradient(
+    std::vector<BEHTensorGradInterpolant<_Sim>>
+    homogenizedElasticityTensorGradient(
             const std::vector<typename _Sim::VField> &w, const _Sim &sim) {
         typedef typename _Sim::ETensor ETensor;
         typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
+        constexpr size_t K = _Sim::K;
+        constexpr size_t Deg = _Sim::Degree;
         assert(w.size() == numStrains);
 
         const auto &mesh = sim.mesh();
@@ -107,35 +118,65 @@ namespace PeriodicHomogenization {
         //      v_n(x) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)> := G_ijkl(x)
         // for each non-periodic boundary point x.
         //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
-        // For linear FEM, G_ijkl is constant on each element, so is stored as a
-        // tensor per boundary edge.
-        // NOTE: for higher order FEM, we will probably have to settle for a
-        // function that computes an inner product with G instead of returning
-        // a representation of G itself (unless what we are taking an inner
-        // product with is constant, in which case we can return average of G
-        // over the boundary element, which is actually probably the case.)
-        std::vector<ETensor> gradient(mesh.numBoundaryElements());
-        SMatrix we_ij, we_kl;
+        // For degree d FEM, G_ijkl is a degree 2 * (d - 1) polynomial on each
+        // boundary element and is stored as a rank 4 tensor interpolant per
+        // boundary element.
+        constexpr size_t GDeg = 2 * (Deg - 1);
+        typedef Interpolant<ETensor, K - 1, GDeg> G_t;
+        std::vector<G_t> gradient(mesh.numBoundaryElements());
+        typename _Sim::Strain  we_ij, we_kl;
+        // Compute volume quantity
+        Interpolant<ETensor, K, GDeg> G_elem;
         for (size_t elemIdx = 0; elemIdx < mesh.numElements(); ++elemIdx) { 
             auto e = mesh.element(elemIdx);
             if (!e.isBoundary()) continue;
-            ETensor G_elem;
             for (size_t ij = 0; ij < numStrains; ++ij) {
                 sim.elementStrain(elemIdx, w[ij], we_ij);
                 we_ij += SMatrix::CanonicalBasis(ij);
                 for (size_t kl = ij; kl < numStrains; ++kl) {
                     sim.elementStrain(elemIdx, w[kl], we_kl);
                     we_kl += SMatrix::CanonicalBasis(kl);
-                    G_elem.D(ij, kl) = e->E().doubleContract(we_ij)
-                                             .doubleContract(we_kl);
+                    auto G_ijkl = Interpolation<K, GDeg>::interpolant(
+                        [&] (const VectorND<_Sim::numElemVertices> &p) {
+                            return e->E().doubleContract(we_ij(p))
+                                         .doubleContract(we_kl(p));
+                        });
+                    // Copy single entry interpolant over into interpolated rank
+                    // 4 tensor's entries.
+                    for (size_t n = 0; n < Simplex::numNodes(K, GDeg); ++n)
+                        G_elem[n].D(ij, kl) = G_ijkl[n];
                 }
             }
 
             // Distribute G_elem to all of this element's boundary faces/edges
-            for (size_t f = 0; f < mesh.element(elemIdx).numNeighbors(); ++f) {
-                auto h = mesh.element(elemIdx).interface(f).boundaryEntity();
-                if (h && !h->isPeriodic)
-                    gradient.at(h.index()) = G_elem;
+            for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
+                auto f = e.interface(fi).boundaryEntity();
+                if (!f) continue;
+                auto &beGrad = gradient.at(f.index());
+                // gradient is zero on the periodic boundary.
+                if (f->isPeriodic)
+                    beGrad *= 0;
+                else {
+                    if (GDeg == 0) beGrad[0] = G_elem[0];
+                    else {
+                        // Pick out nodal values from volume interpolant.
+                        // TODO: optimize this to use traversal operations instead
+                        // of a brute force search.
+                        for (size_t bnc = 0; bnc < Simplex::numNodes(K - 1, GDeg); ++bnc) {
+                            assert(bnc < f.numNodes());
+                            size_t vni = f.node(bnc).volumeNode().index();
+                            bool set = false;
+                            for (size_t nc = 0; nc < e.numNodes(); ++nc) {
+                                if (e.node(nc).index() == vni) {
+                                    beGrad[bnc] = G_elem[nc];
+                                    set = true;
+                                    break;
+                                }
+                            }
+                            assert(set);
+                        }
+                    }
+                }
             }
         }
 

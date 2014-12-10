@@ -17,7 +17,7 @@
 
 // The LinearlyEmbeddedSimplex class stores the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the
-// jacbobian from the reference simplex is constant:
+// jacobian from the reference simplex is constant:
 //      1) simplex volume
 //      2) barycentric coordinate gradients
 //      3) [optional] normal (only for K-simplices embedded in K + 1 space)

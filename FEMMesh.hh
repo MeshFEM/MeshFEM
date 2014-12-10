@@ -200,12 +200,12 @@ public:
     // Also support reading from Luigi/Nico's vertex format
     void setNodePositions(const std::vector<std::array<double,
             EmbeddingSpace::RowsAtCompileTime>> &vertices) {
-        std::vector<EmbeddingSpace> convertedVertices(vertices.size()); 
+        std::vector<Vector3D> convertedVertices(vertices.size()); 
         for (size_t i = 0; i < vertices.size(); ++i) {
             convertedVertices[i][0] = vertices[i][0];
             convertedVertices[i][1] = vertices[i][1];
-            if (EmbeddingSpace::RowsAtCompileTime == 3)
-                convertedVertices[i][2] = vertices[i][2];
+            convertedVertices[i][2] = (EmbeddingSpace::RowsAtCompileTime == 3)
+                                        ? vertices[i][2] : 0.0;
         }
         setNodePositions(convertedVertices);
     }

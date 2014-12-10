@@ -48,8 +48,10 @@
 //     /   \ `* 2      | ^ y
 //    / __--\ /        |/  
 //  0*-------* 1       +----->x
-//  meaning the tet's (outward-oriented) half-faces are 1-2-3, 0-3-2, 0-1-3, and
-//  0-2-1.
+//  meaning the tet's (outward-oriented) half-faces are, in order,
+//  1-2-3, 0-3-2, 0-1-3, and 0-2-1. The (boundary) faces adopt the same vertex
+//  numbering: vertex i of (boundary) face j is the (boundary vertex corresponding
+//  to) tet's volume vertex k, where k is the ith entry of the jth list above.
 //
 //  Connectivity is index-based rather than pointer-based, and for convenience,
 //  entities can be accessed through the pointer-like "handle" classes which

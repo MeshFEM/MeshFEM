@@ -10,13 +10,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef SIMPLEX_HH
 #define SIMPLEX_HH
+#include <stdexcept>
 
 namespace Simplex {
     constexpr size_t numVertices(size_t K) { return K + 1; }
     constexpr size_t numEdges(size_t K)    { return (K * (K + 1)) / 2; }
     constexpr size_t numNodes(size_t K, size_t deg) {
         return deg == 0 ? 1 : (deg == 1 ? numVertices(K)
-                                        : numVertices(K) + numEdges(K));
+                                        : (deg == 2 ? numVertices(K) + numEdges(K)
+                                                    : throw std::logic_error("Only support up to degree 2")));
     }
 
     enum { Edge = 1, Triangle = 2, Tetrahedron = 3};
