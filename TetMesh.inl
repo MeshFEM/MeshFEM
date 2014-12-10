@@ -79,8 +79,8 @@ public:
     
     // Note: true neighbor count can be less than 4; must check if neighbor(i)
     // is valid.
-    constexpr size_t numNeighbors() const { return 4; }
-    constexpr size_t numVertices()  const { return 4; }
+    static constexpr size_t numNeighbors() { return 4; }
+    static constexpr size_t numVertices()  { return 4; }
 
      VH   vertex(size_t i) const { return  VH(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
      TH neighbor(size_t i) const { return  TH(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
@@ -183,8 +183,8 @@ protected:
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryFaces()); }
 
-    constexpr size_t numNeighbors() const { return 3; }
-    constexpr size_t numVertices()  const { return 3; }
+    static constexpr size_t numNeighbors() { return 3; }
+    static constexpr size_t numVertices()  { return 3; }
 
      HFH   volumeHalfFace() const { return  HFH(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
      BVH   vertex(size_t i) const { BVH bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }

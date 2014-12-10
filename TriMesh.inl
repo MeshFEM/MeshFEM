@@ -117,8 +117,8 @@ public:
 
     // Note: true neighbor count can be less than 3; must check if neighbor(i)
     // is valid.
-    constexpr size_t numNeighbors() const { return 3; }
-    constexpr size_t numVertices()  const { return 3; }
+    static constexpr size_t numNeighbors() { return 3; }
+    static constexpr size_t numVertices()  { return 3; }
 
      VH   vertex(size_t i) const { return  VH(m_mesh.m_vertexOfTri(i, m_idx), m_mesh); }
      TH neighbor(size_t i) const { return  TH(m_mesh.m_triAdjTri(i, m_idx), m_mesh); }
@@ -208,8 +208,8 @@ public:
     }
 
     // Dimension-independent access
-    constexpr size_t  numVertices() const { return 2; }
-    constexpr size_t numNeighbors() const { return 2; }
+    static constexpr size_t  numVertices() { return 2; }
+    static constexpr size_t numNeighbors() { return 2; }
     BVH   vertex(size_t i) const { return (i == 0) ? tail() : tip(); }
     BEH neighbor(size_t i) const { return (i == 0) ? prev() : next(); }
 

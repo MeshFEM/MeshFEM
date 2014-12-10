@@ -167,7 +167,7 @@ namespace PeriodicHomogenization {
                             size_t vni = f.node(bnc).volumeNode().index();
                             bool set = false;
                             for (size_t nc = 0; nc < e.numNodes(); ++nc) {
-                                if (e.node(nc).index() == vni) {
+                                if (size_t(e.node(nc).index()) == vni) {
                                     beGrad[bnc] = G_elem[nc];
                                     set = true;
                                     break;
