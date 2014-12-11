@@ -36,8 +36,8 @@ public:
     template<class _Mesh>
     EdgeFields(const _Mesh &mesh) {
         std::vector<UnorderedPair> edges;
-        for (size_t i = 0; i < mesh.numBoundaryEdges(); ++i) {
-            auto be = mesh.boundaryEdge(i);
+        for (size_t i = 0; i < mesh.numBoundaryElements(); ++i) {
+            auto be = mesh.boundaryElement(i);
             edges.push_back(UnorderedPair(be.vertex(0).volumeVertex().index(),
                         be.vertex(1).volumeVertex().index()));
         }

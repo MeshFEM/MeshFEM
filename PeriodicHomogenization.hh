@@ -150,7 +150,7 @@ namespace PeriodicHomogenization {
 
             // Distribute G_elem to all of this element's boundary faces/edges
             for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
-                auto f = e.interface(fi).boundaryEntity();
+                auto f = mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                 if (!f) continue;
                 auto &beGrad = gradient.at(f.index());
                 // gradient is zero on the periodic boundary.
