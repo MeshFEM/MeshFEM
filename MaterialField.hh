@@ -157,6 +157,7 @@ public:
 
     // For use in tet/tri Data
     struct MaterialGetter {
+        typedef MaterialField MaterialField;
         MaterialGetter() : m_field(NULL), m_mat(0) { }
         MaterialGetter(const MaterialField *fld, size_t mat) : m_field(fld), m_mat(mat) { }
         ETensor operator()() const { return m_field->getElasticityTensor(m_mat); }

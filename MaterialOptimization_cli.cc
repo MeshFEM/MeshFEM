@@ -89,7 +89,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 ////////////////////////////////////////////////////////////////////////////
 /*! Run material optimization on a particular (mesh, bc) pair.
 *///////////////////////////////////////////////////////////////////////////
-template<size_t _N, template<size_t> class _Material>
+template<size_t _N, size_t _FEMDegree, template<size_t> class _Material>
 void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements,
              const po::variables_map &args) {
@@ -101,7 +101,10 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     size_t iterationsPerDirichlet = args["iterationsPerDirichlet"].as<int>();
     bool   noRigidMotionDirichlet = args.count("noRigidMotionDirichlet");
 
-    typedef typename MaterialOptimizationND<_N>::template Optimizer<_Material> Opt;
+    typedef MaterialOptimization::Mesh<_N, _FEMDegree, _Material> Mesh;
+    typedef MaterialOptimization::Simulator<Mesh>           Simulator;
+    typedef MaterialOptimization::Optimizer<Simulator>      Opt;
+
     typedef typename Opt::MField  MField;
     typedef typename Opt::SField  SField;
     // typedef typename Opt::VField  VField;
@@ -196,13 +199,24 @@ int main(int argc, const char *argv[])
     else if (type == MeshIO::MESH_TRI) dim = 2;
     else    throw std::runtime_error("Mesh must be triangle or tet.");
 
+    size_t deg = 1;
+
     // Look up and run appropriate optimizer instantiation.
-    auto exec = (dim == 3) ? ((materialType == "orthotropic")
-                                   ? execute<3, Materials::Orthotropic>
-                                   : execute<3, Materials::Isotropic> )
-                           : ((materialType == "orthotropic")
-                                   ? execute<2, Materials::Orthotropic>
-                                   : execute<2, Materials::Isotropic> );
+    auto exec = (deg == 1) ? (
+                    (dim == 3) ? ((materialType == "orthotropic")
+                                       ? execute<3, 1, Materials::Orthotropic>
+                                       : execute<3, 1, Materials::Isotropic> )
+                               : ((materialType == "orthotropic")
+                                       ? execute<2, 1,  Materials::Orthotropic>
+                                       : execute<2, 1,  Materials::Isotropic> )
+                ) : (
+                    (dim == 3) ? ((materialType == "orthotropic")
+                                       ? execute<3, 2, Materials::Orthotropic>
+                                       : execute<3, 2, Materials::Isotropic> )
+                               : ((materialType == "orthotropic")
+                                       ? execute<2, 2,  Materials::Orthotropic>
+                                       : execute<2, 2,  Materials::Isotropic> )
+                );
     exec(meshPath, inVertices, inElements, args);
 
     return 0;

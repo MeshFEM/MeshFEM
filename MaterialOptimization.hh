@@ -24,7 +24,8 @@
 #include <OPT++/OptLBFGS.h>
 #endif
 
-#include "LinearElasticity.hh"
+#include "NewLinearElasticity.hh"
+#include "GaussQuadrature.hh"
 #include "Materials.hh"
 #include "MaterialField.hh"
 #include "MSHFieldWriter.hh"
@@ -36,21 +37,26 @@
 
 namespace MaterialOptimization {
 
-// Simulator supporting material field attachment and solution of the material
-// optimization adjoint problem.
-template<class _Material, class _Mesh>
-class SimulatorND : public LinearElasticity::SimulatorND<_Mesh>
+// Simulator supporting material field attachment, target boundary conditions,
+// and solution of the material optimization adjoint problem.
+// _Mesh: LinearElasticity mesh whose type element's ETensorGetter policy
+// is a MaterialField::MaterialGetter (i.e. a MaterialOptimization::Mesh).
+template<class _Mesh>
+class Simulator : public LinearElasticity::Simulator<_Mesh>
 {
-    typedef LinearElasticity::SimulatorND<_Mesh> Base;
+    typedef LinearElasticity::Simulator<_Mesh> Base;
     using Base::m_mesh;
 public:
-    static constexpr size_t N = _Material::N;
-    typedef MaterialField<_Material> MField;
-    typedef typename Base::VField VField;
-    typedef typename Base::_Point _Point;
+    static constexpr size_t N = Base::N;
+    static constexpr size_t K = Base::K;
+    static constexpr size_t Degree = Base::Degree;
+
+    typedef typename Base::LEData::ETensorGetter::MaterialField MField;
+    typedef typename Base::VField    VField;
+    typedef typename Base::Point    _Point;
 
     template<typename Elems, typename Vertices>
-    SimulatorND(const Elems &elems, const Vertices &vertices,
+    Simulator(const Elems &elems, const Vertices &vertices,
                 std::shared_ptr<const MField> mfield)
         : Base(elems, vertices) {
         attachMaterialField(mfield);
@@ -76,27 +82,27 @@ public:
         env.setVectorValue("mesh_max_", mbb.maxCorner);
 
         std::vector<CondPtr<N> > filteredConditions;
-        std::string nonbdryMsg("Condition applied to non-boundary vertex ");
+        std::string nonbdryMsg("Condition applied to non-boundary node ");
         for (auto c : conds) {
             env.setVectorValue("region_size_", c->region.dimensions());
             env.setVectorValue("region_min_",  c->region.minCorner);
             env.setVectorValue("region_max_",  c->region.maxCorner);
             if (auto tc = std::dynamic_pointer_cast<const TargetCondition<N> >(c)) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                    auto bv = m_mesh.boundaryNode(i);
-                    if (tc->containsPoint(bv.volumeVertex()->p)) {
-                        env.setXYZ(bv.volumeVertex()->p);
-                        bv->setTarget(tc->componentMask, tc->displacement(env));
+                    auto bn = m_mesh.boundaryNode(i);
+                    if (tc->containsPoint(bn.volumeNode()->p)) {
+                        env.setXYZ(bn.volumeNode()->p);
+                        bn->setTarget(tc->componentMask, tc->displacement(env));
                     }
                 }
             }
-            else if (auto tvc = std::dynamic_pointer_cast<const TargetVerticesCondition<N> >(c)) {
-                for (size_t i = 0; i < tvc->indices.size(); ++i) {
-                    size_t vi = tvc->indices[i];
-                    auto v = m_mesh.vertex(vi);
-                    auto bv = v.boundaryVertex();
-                    if (!bv) throw std::runtime_error(nonbdryMsg + std::to_string(vi));
-                    bv->setTarget(tvc->componentMask, tvc->displacements[i]);
+            else if (auto tnc = std::dynamic_pointer_cast<const TargetNodesCondition<N> >(c)) {
+                for (size_t i = 0; i < tnc->indices.size(); ++i) {
+                    size_t ni = tnc->indices[i];
+                    auto n = m_mesh.node(ni);
+                    auto bn = n.boundaryNode();
+                    if (!bn) throw std::runtime_error(nonbdryMsg + std::to_string(ni));
+                    bn->setTarget(tnc->componentMask, tnc->displacements[i]);
                 }
             }
             else filteredConditions.push_back(c);
@@ -128,25 +134,33 @@ public:
         // Compute load on the DoFs caused by the adjoint problem's Neuman
         // traction:
         //      componentMask * (u_target - u)
-        // This traction is defined per-vertex and linearly interpolated over
-        // each boundary element, so we can't use the inherited constant
-        // per-boundary-element traction load computation. Instead, the load is
-        // computed by applying the mass matrix.
-        VField dofLoad(m_mesh.numVertices());
+        // This traction is defined per-boundary-node and is interpolated over
+        // each boundary element. Thus, the load is computed by integrating a
+        // quadratic (for degree 1) or quartic (for degree 2) function over the
+        // boundary element.
+        VField dofLoad(Base::numDoFs());
         dofLoad.clear();
+        Interpolant<_Point, K - 1, Degree> traction;
+        Interpolant<  Real, K - 1, Degree> phi;
+        phi = 0;
         for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
             auto be = m_mesh.boundaryElement(bei);
-            // 2D boundary elements have 2 nodes, 3D have 3 nodes.
-            for (size_t j = 0; j < N; ++j) {
-                if (be.vertex(j)->hasTarget()) {
-                    auto dist_j = be.vertex(j)->targetComponents.apply(
-                            (be.vertex(j)->targetDisplacement -
-                            u(be.vertex(j).volumeVertex().index())).eval());
-                    for (size_t i = 0; i < N; ++i) {
-                        dofLoad(Base::DoF(be.vertex(i).volumeVertex().index())) +=
-                                          be->massMatrixContribution(i, j) * dist_j;
-                    }
-                }
+            assert(traction.size() == be.numNodes());
+            for (size_t j = 0; j < be.numNodes(); ++j) {
+                auto bn = be.node(j);
+                traction[j] = bn->targetComponents.apply((be.node(j)->targetDisplacement -
+                           u(be.node(j).volumeNode().index())).eval());
+            }
+            // Integrate traction against each scalar basis function to get load
+            for (size_t j = 0; j < be.numNodes(); ++j) {
+                phi[j] = 1.0;
+                // Note: type deduction of integrand doesn't work here because
+                // of eigen weirdness (even calling eval() doesn't work)...
+                dofLoad(Base::DoF(be.node(j).volumeNode().index())) +=
+                    Quadrature<K - 1, Degree * Degree>::integrate(
+                        [&](const VectorND<Simplex::numVertices(K - 1)> &p) -> VectorND<K>
+                            { return traction(p) * phi(p); }, be->volume());
+                phi[j] = 0.0;
             }
         }
 
@@ -165,38 +179,60 @@ private:
     std::shared_ptr<const MField> m_matField;
 };
 
-template<size_t _N>
-struct BoundaryNodeDataND : LinearElasticity::BoundaryNodeDataND<_N> {
-    ComponentMask targetComponents;
-    VectorND<_N> targetDisplacement;
-    bool hasTarget() const { return targetComponents.hasAny(_N); }
-    void setTarget(ComponentMask mask, const VectorND<_N> &val) {
-        for (size_t c = 0; c < _N; ++c) {
-            if (!mask.has(c)) continue;
-            // If a new component is being constrained, merge
-            if (!targetComponents.has(c)) {
-                targetComponents.set(c);
-                targetDisplacement[c] = val[c];
-            }
-            // Otherwise, make sure there isn't a conflict
-            else {
-                if (std::abs(targetDisplacement[c] - val[c]) > 1e-10)
-                    throw std::runtime_error("Conflicting target displacements.");
+// The mesh data for MaterialOptimization just has the extra fields for boundary
+// nodes needed to specify target displacements (on top of the typical
+// LinearElasticityData)
+template<template<size_t> class _ETensorGetter>
+struct MaterialOptimizationLEData {
+template<size_t _K, size_t _Deg, class EmbeddingSpace>
+struct Data : public LinearElasticity::LinearElasticityData<_ETensorGetter>::template Data<_K, _Deg, EmbeddingSpace> {
+    typedef typename LinearElasticity::LinearElasticityData<_ETensorGetter>::template Data<_K, _Deg, EmbeddingSpace> BaseData;
+    struct BoundaryNode : public BaseData::BoundaryNode {
+        ComponentMask targetComponents;
+        VectorND<_K> targetDisplacement;
+        bool hasTarget() const { return targetComponents.hasAny(_K); }
+        void setTarget(ComponentMask mask, const VectorND<_K> &val) {
+            for (size_t c = 0; c < _K; ++c) {
+                if (!mask.has(c)) continue;
+                // If a new component is being constrained, merge
+                if (!targetComponents.has(c)) {
+                    targetComponents.set(c);
+                    targetDisplacement[c] = val[c];
+                }
+                // Otherwise, make sure there isn't a conflict
+                else {
+                    if (std::abs(targetDisplacement[c] - val[c]) > 1e-10)
+                        throw std::runtime_error("Conflicting target displacements.");
+                }
             }
         }
-    }
+    };
 };
+};
+
+template<template<size_t> class _Mat>
+struct MaterialFieldGetter {
+    template<size_t _N>
+    using Getter = typename MaterialField<_Mat<_N>>::MaterialGetter;
+};
+
+template<size_t _K, size_t _Deg, template<size_t> class _Mat>
+using Mesh = FEMMesh<_K, _Deg, VectorND<_K>,
+        MaterialOptimizationLEData<MaterialFieldGetter<_Mat>::template Getter>::template Data>;
 
 template<class _Simulator>
 class Optimizer {
 public:
-    typedef typename _Simulator::VField  VField;
+    static constexpr size_t N = _Simulator::N;
+    static constexpr size_t K = _Simulator::K;
+    static constexpr size_t Degree = _Simulator::Degree;
+
     typedef typename _Simulator::SField  SField;
+    typedef typename _Simulator::VField  VField;
     typedef typename _Simulator::SMField SMField;
     typedef typename _Simulator::SMatrix SMatrix;
     typedef typename _Simulator::ETensor ETensor;
     typedef typename _Simulator::_Point  _Point;
-    static constexpr size_t N = _Simulator::N;
     typedef typename _Simulator::MField  MField;
     typedef typename MField::Material    Material;
 
@@ -218,46 +254,48 @@ public:
 
     // 1/2 int_bdry ||u - t||^2 dA = 1/2 int_bdry ||d||^2 dA
     // where d = componentMask * (u - t) is the component-masked
-    // distance-to-target vector field (linearly interpolated over each boundary
-    // element). The per-element contribution to this integral is:
-    //      area * ||d_i phi_i||^2 = area * phi_i phi_j <d_i, d_j>.
-    // area * phi_i phi_j terms are entries of the boundary element mass matrix.
+    // distance-to-target vector field (linearly/quadratically interpolated over
+    // each boundary element).
     Real objective(const VField &u) const {
         Real obj = 0;
+        Interpolant<_Point, K - 1, Degree> dist;
         for (size_t bei = 0; bei < m_sim.mesh().numBoundaryElements(); ++bei) {
             auto be = m_sim.mesh().boundaryElement(bei);
-            _Point totalDist(_Point::Zero());
-            _Point d[N];
-            for (size_t i = 0; i < N; ++i) {
-                auto bv = be.vertex(i);
-                d[i] = bv->targetComponents.apply((u(bv.volumeVertex().index())
-                            - bv->targetDisplacement).eval());
+            for (size_t i = 0; i < be.numNodes(); ++i) {
+                auto bn = be.node(i);
+                dist[i] = bn->targetComponents.apply((u(bn.volumeNode().index())
+                            - bn->targetDisplacement).eval());
             }
-            for (size_t i = 0; i < N; ++i) {
-                for (size_t j = 0; j < N; ++j) {
-                    obj += d[i].dot(d[j]) * be->massMatrixContribution(i, j);
-                }
-            }
+            obj += Quadrature<K - 1, Degree * Degree>::integrate(
+                    [&](const VectorND<Simplex::numVertices(K - 1)> &p)
+                        { return dist(p).dot(dist(p)); }, be->volume());
         }
 
         return obj / 2;
     }
 
+    // From adjoint method:
+    // dJ/dp = int_omega strain(u) : dE/dp : strain(lambda) dv
     std::vector<Real> objectiveGradient(const VField &u) const {
         auto lambda = m_sim.solveAdjoint(u);
         std::vector<Real> g(m_matField->numVars(), 0);
         std::vector<size_t> elems;
+        typename _Simulator::Strain e_u, e_lambda;
         for (size_t var = 0; var < m_matField->numVars(); ++var) {
+            // Support of dE/dp on the mesh.
             m_matField->getInfluenceRegion(var, elems);
             ETensor dE;
             m_matField->getETensorDerivative(var, dE);
             for (size_t i = 0; i < elems.size(); ++i) {
                 size_t ei = elems[i];
                 auto e = m_sim.mesh().element(ei);
-                SMatrix e_u, e_lambda;
                 m_sim.elementStrain(ei,      u,      e_u);
                 m_sim.elementStrain(ei, lambda, e_lambda);
-                g[var] += e->volume() * (dE.doubleContract(e_u).doubleContract(e_lambda));
+                g[var] += Quadrature<K, (Degree - 1) * (Degree - 1)>::integrate(
+                    [&](const VectorND<Simplex::numVertices(K)> &p)
+                        { return dE.doubleContract(e_u(p))
+                                   .doubleContract(e_lambda(p)); },
+                    e->volume());
             }
         }
 
@@ -344,62 +382,5 @@ Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
 #endif
 
 }
-
-namespace MaterialOptimization2D {
-
-typedef Materials::Isotropic<2>     IsotropicMaterial;
-typedef Materials::Orthotropic<2> OrthotropicMaterial;
-typedef MaterialField<  IsotropicMaterial>   IsotropicField;
-typedef MaterialField<OrthotropicMaterial> OrthotropicField;
-
-typedef MaterialOptimization::BoundaryNodeDataND<2> BoundaryNodeData;
-
-template<class _Material>
-using Mesh = LinearElasticity2D::Mesh<LinearFEM2D::NodeData<Point2D>,
-                                      LinearElasticity2D::ElementData<typename MaterialField<_Material>::MaterialGetter>,
-                                      BoundaryNodeData>;
-
-template<class _Material>
-using Simulator = MaterialOptimization::SimulatorND<_Material, Mesh<_Material> >;
-
-template<class _Material>
-using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
-
-}
-
-namespace MaterialOptimization3D {
-
-typedef Materials::Isotropic<3>     IsotropicMaterial;
-typedef Materials::Orthotropic<3> OrthotropicMaterial;
-typedef MaterialField<  IsotropicMaterial>   IsotropicField;
-typedef MaterialField<OrthotropicMaterial> OrthotropicField;
-
-typedef MaterialOptimization::BoundaryNodeDataND<3> BoundaryNodeData;
-
-template<class _Material>
-using Mesh = LinearElasticity3D::Mesh<LinearFEM3D::NodeData,
-                                      LinearElasticity3D::ElementData<typename MaterialField<_Material>::MaterialGetter>,
-                                      BoundaryNodeData>;
-
-template<class _Material>
-using Simulator = MaterialOptimization::SimulatorND<_Material, Mesh<_Material> >;
-
-template<class _Material>
-using Optimizer = MaterialOptimization::Optimizer<Simulator<_Material> >;
-
-}
-
-// Specialized wrapper class chooses between typedefs. 
-template<size_t _N>
-struct MaterialOptimizationND { };
-template<> struct MaterialOptimizationND<2> {
-    template<template<size_t> class _MaterialND>
-    using Optimizer = MaterialOptimization2D::Optimizer<_MaterialND<2> >;
-};
-
-template<> struct MaterialOptimizationND<3> {
-    template<template<size_t> class _MaterialND>
-    using Optimizer = MaterialOptimization3D::Optimizer<_MaterialND<3> >;
-};
 
 #endif /* end of include guard: MATERIALOPTIMIZATION_HH */

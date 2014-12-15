@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "Types.hh"
 #include <Flattening.hh>
 #include <ElasticityTensor.hh>
 #include "MaterialOptimization.hh"
@@ -63,14 +64,14 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         Real anisotropyPenaltyWeight, bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
-    writer.addField("Neumann load", m_sim.extractNodalField(neumannLoad), MSHFieldWriter::PER_NODE);
+    writer.addField("Neumann load", m_sim.dofToNodeField(neumannLoad), MSHFieldWriter::PER_NODE);
 
     // Get "material graph" adjacences for Laplacian (smoothness) regularization
     vector<set<size_t> > materialAdj;
     m_matField->materialAdjacencies(mesh(), materialAdj);
 
     VField u_dirichletTargets;
-    SMField e_dirichletTargets;
+    SMField e_dirichletTargets_avg;
 
     constexpr size_t _NVar = Material::numVars;
     for (size_t iter = 1; iter <= iterations; ++iter) {
@@ -81,14 +82,14 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
             else                        m_sim.removeNoRigidMotionConstraint();
 
             u_dirichletTargets = m_sim.solve(neumannLoad);
-            e_dirichletTargets = m_sim.strain(u_dirichletTargets);
+            e_dirichletTargets_avg = m_sim.averageStrainField(u_dirichletTargets);
 
             m_sim.swapTargetDirichlet();
             m_sim.applyRigidMotionConstraint(u_dirichletTargets);
         }
 
         auto u = m_sim.solve(neumannLoad);
-        auto s_neumann = m_sim.stress(u);
+        auto s_neumann_avg = m_sim.averageStressField(u);
 
         if (iter == 1) {
             // Write inital ("iteration 0") objective and gradient norm.
@@ -108,7 +109,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         typedef typename Material::template StressStrainFitCostFunction<typename SMField::ValueType> Fitter;
         for (size_t ei = 0; ei < mesh().numElements(); ++ei) {
             ceres::CostFunction *fitCost = new ceres::AutoDiffCostFunction<
-                Fitter, flatLen(N), _NVar>(new Fitter(e_dirichletTargets(ei), s_neumann(ei),
+                Fitter, flatLen(N), _NVar>(new Fitter(e_dirichletTargets_avg(ei), s_neumann_avg(ei),
                                            mesh().element(ei)->volume()));
             problem.AddResidualBlock(fitCost, NULL,
                                      &(m_matField->materialForElement(ei).vars[0]));
@@ -181,9 +182,14 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
 ////////////////////////////////////////////////////////////////////////////////
 // Explicit Instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::IsotropicMaterial> >;
-template class Optimizer<MaterialOptimization2D::Simulator<MaterialOptimization2D::OrthotropicMaterial> >;
-template class Optimizer<MaterialOptimization3D::Simulator<MaterialOptimization3D::IsotropicMaterial> >;
-template class Optimizer<MaterialOptimization3D::Simulator<MaterialOptimization3D::OrthotropicMaterial> >;
+//                                      Dim  Deg  Material
+template class Optimizer<Simulator<Mesh<2,   1,   Materials::Isotropic  >>>;
+template class Optimizer<Simulator<Mesh<2,   1,   Materials::Orthotropic>>>;
+template class Optimizer<Simulator<Mesh<2,   2,   Materials::Isotropic  >>>;
+template class Optimizer<Simulator<Mesh<2,   2,   Materials::Orthotropic>>>;
+template class Optimizer<Simulator<Mesh<3,   1,   Materials::Isotropic  >>>;
+template class Optimizer<Simulator<Mesh<3,   1,   Materials::Orthotropic>>>;
+template class Optimizer<Simulator<Mesh<3,   2,   Materials::Isotropic  >>>;
+template class Optimizer<Simulator<Mesh<3,   2,   Materials::Orthotropic>>>;
 
 }

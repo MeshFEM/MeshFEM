@@ -23,8 +23,8 @@
 #include "function_traits.hh"
 
 // Edge function (1D)
-// 1 point quadrature for const and linear, 2 point for quadratic and cubic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 3), int>::type = 0>
+// 1 point quadrature for const and linear, 2 point for quadratic and cubic, 3 for quartic and quintic
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 5), int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(0.5, 0.5); }
     if ((_Deg == 2) || (_Deg == 3)) {
@@ -35,18 +35,36 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
         result *= vol / 2.0;
         return result;
     }
+    if ((_Deg == 4) || (_Deg == 5)) {
+        constexpr double c0 = 0.11270166537925831148; // (1 - sqrt(3/5)) / 2
+        constexpr double c1 = 0.88729833462074168852; // (1 + sqrt(3/5)) / 2
+        typename function_traits<F>::result_type result(f(c0, c1));
+        result += f(c1, c0);
+        result *= 5.0 / 18.0;
+        result += (4.0 / 9.0) * f(0.5, 0.5);
+        result *= vol;
+        return result;
+    }
     assert(false);
 }
+
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
     return integrate_edge<_Deg>([&](Real p0, Real p1) { return f(VectorND<2>(p0, p1)); }, vol); }
 
 // Triangle function (2D)
-// 1 point quadrature for const and linear, 3 point for quadratic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 3), int>::type = 0>
+// 1 point quadrature for const and linear, 3 for quadratic, 4 for cubic, and 6
+// for quartic
+// For efficiency, a negative weight rule is used for cubic 
+// integrals (the nonnegative weight rule would use 6 points)
+// This means that the rule should not be used for stiffness matrix construction
+// to avoid ruining positive semidefiniteness (This is only a problem for FEM
+// degree 3+, which is not currently implemented)
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 4), int>::type = 0>
 typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(1 / 3.0, 1 / 3.0, 1 / 3.0); }
     if (_Deg == 2) {
+        // More accurate than the simpler midpoint rule
         constexpr double c0 = 2 / 3.0;
         constexpr double c1 = 1 / 6.0;
         typename function_traits<F>::result_type result(f(c0, c1, c1));
@@ -62,7 +80,32 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
         result += f(c1, c0, c1);
         result += f(c1, c1, c0);
         result *= (25.0 / 48);
-        result += (-9.0 / 16) * f(1 / 3.0, 1 / 3.0, 1 / 3.0);
+        result += (-9.0 / 16) * f(1 / 3.0, 1 / 3.0, 1 / 3.0); // NEGATIVE WEIGHT
+        result *= vol;
+        return result;
+    }
+    if (_Deg == 4) {
+        // The analytic expressions of these weights are complicated...
+        // See Derivations/TriangleGaussFelippa.nb
+        // (From the Mathematica code in:
+        // http://www.colorado.edu/engineering/cas/courses.d/IFEM.d/IFEM.Ch24.d/IFEM.Ch24.pdf )
+        constexpr double w_0 =  0.22338158967801146570;
+        constexpr double c0_0 = 0.10810301816807022736;
+        constexpr double c1_0 = 0.44594849091596488632;
+        typename function_traits<F>::result_type tmp(f(c0_0, c1_0, c1_0));
+        tmp += f(c1_0, c0_0, c1_0);
+        tmp += f(c1_0, c1_0, c0_0);
+        tmp *= w_0;
+
+        constexpr double w_1 =  0.10995174365532186764;
+        constexpr double c0_1 = 0.81684757298045851308;
+        constexpr double c1_1 = 0.09157621350977074346;
+        typename function_traits<F>::result_type result(f(c0_1, c1_1, c1_1));
+        result += f(c1_1, c0_1, c1_1);
+        result += f(c1_1, c1_1, c0_1);
+        result *= w_1;
+
+        result += tmp;
         result *= vol;
         return result;
     }
@@ -74,8 +117,14 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 }
 
 // Tet function (3D)
-// 1 point quadrature for const and linear, 4 point for quadratic
-template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 3), int>::type = 0>
+// 1 point quadrature for const and linear, 4 point for quadratic, 5 for cubic,
+// and 11 for quartic.
+// For efficiency, negative weight rules are used for cubic and quartic
+// integrals (the nonnegative weight rules use 8 and 16 points respectively).
+// This means that those rules should not be used for stiffness matrix
+// construction to avoid ruining positive semidefiniteness (This is only a
+// problem for FEM degree 3+, which is not currently implemented)
+template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 4), int>::type = 0>
 typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); }
     if (_Deg == 2) {
@@ -89,6 +138,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
         return result;
     }
     if (_Deg == 3) {
+        // http://www.cs.rpi.edu/~flaherje/pdf/fea6.pdf
         constexpr double c0 = 0.5;
         constexpr double c1 = 1 / 6.0;
         typename function_traits<F>::result_type result(f(c0, c1, c1, c1));
@@ -96,7 +146,37 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
         result += f(c1, c1, c0, c1);
         result += f(c1, c1, c1, c0);
         result *= 0.45;
-        result += (-0.8) * f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0);
+        result += (-0.8) * f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); // NEGATIVE WEIGHT
+        result *= vol;
+        return result;
+    }
+    if (_Deg == 4) {
+        // This rule is from
+        // http://www.cs.rpi.edu/~flaherje/pdf/fea6.pdf
+        // but the weights there are off by a factor of 6!
+        typename function_traits<F>::result_type result(f(0.25, 0.25, 0.25, 0.25));
+        result *= -148.0 / 1875.0; // NEGATIVE WEIGHT
+
+        constexpr double c0_0 = 11.0 / 14.0;
+        constexpr double c1_0 =  1.0 / 14.0;
+        typename function_traits<F>::result_type tmp(f(c0_0, c1_0, c1_0, c1_0));
+        tmp += f(c1_0, c0_0, c1_0, c1_0);
+        tmp += f(c1_0, c1_0, c0_0, c1_0);
+        tmp += f(c1_0, c1_0, c1_0, c0_0);
+        tmp *= 343.0 / 7500.0;
+        result += tmp;
+        
+        constexpr double c0_1 = 0.39940357616679920500; // (14 + sqrt(70)) / 56
+        constexpr double c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
+        tmp  = f(c0_1, c0_1, c1_1, c1_1);
+        tmp += f(c0_1, c1_1, c0_1, c1_1);
+        tmp += f(c0_1, c1_1, c1_1, c0_1);
+        tmp += f(c1_1, c0_1, c0_1, c1_1);
+        tmp += f(c1_1, c0_1, c1_1, c0_1);
+        tmp += f(c1_1, c1_1, c0_1, c0_1);
+        tmp *= 56.0 / 375.0;
+        result += tmp;
+
         result *= vol;
         return result;
     }
@@ -114,7 +194,7 @@ template<size_t _K, size_t _Deg>
 class Quadrature { };
 
 template<size_t _Deg> class Quadrature<Simplex::Edge,        _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); } };
-template<size_t _Deg> class Quadrature<Simplex::Triangle,    _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_tri< _Deg>(f, vol); } };
-template<size_t _Deg> class Quadrature<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_tet< _Deg>(f, vol); } };
+template<size_t _Deg> class Quadrature<Simplex::Triangle,    _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); } };
+template<size_t _Deg> class Quadrature<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); } };
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */

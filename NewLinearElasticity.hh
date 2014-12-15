@@ -42,7 +42,7 @@ struct HomogenousMaterialGetter {
 
 // To allow extra configuration of the linear elasticity data we store on the
 // FEMMesh, LinearElasticityData is a templated wrapper class that contains the
-// templated FEMData subclass.
+// templated FEMData "Data" subclass.
 template<template<size_t> class _ETensorGetter = ETensorStoreGetter>
 struct LinearElasticityData {
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
@@ -51,6 +51,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                  "Embedding space dimension, N, must match simplex dimension, K.");
     static constexpr size_t N = _K;
     static constexpr size_t Degree = _Deg;
+    typedef _ETensorGetter<N> ETensorGetter;
     typedef EmbeddingSpace Vector;
     typedef EmbeddingSpace Point;
     typedef DefaultFEMData<_K, _Deg, Vector>   BaseData;
@@ -209,6 +210,7 @@ public:
     static constexpr size_t Degree = Mesh::FEMData::Degree;
     static constexpr size_t numElemVertices = Simplex::numVertices(N);
 
+    typedef ScalarField<Real>             SField;
     typedef VectorField<Real, N>          VField;
     typedef ElasticityTensor<Real, N>     ETensor;
     typedef Eigen::Matrix<Real, flatLen(N), 1> FlattenedSymmetricMatrix;
