@@ -29,7 +29,7 @@
 #include <SymmetricMatrix.hh>
 #include "FEMMesh.hh"
 #include "MeshIO.hh"
-#include "NewLinearElasticity.hh"
+#include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "PeriodicHomogenization.hh"
 #include "MSHFieldWriter.hh"

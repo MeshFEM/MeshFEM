@@ -1,7 +1,7 @@
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
 #include "MSHFieldParser.hh"
-#include "NewLinearElasticity.hh"
+#include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "GlobalBenchmark.hh"
 #include "util.h"

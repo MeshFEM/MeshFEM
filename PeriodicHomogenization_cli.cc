@@ -1,6 +1,6 @@
 #include "MeshIO.hh"
 #include "MSHFieldWriter.hh"
-#include "NewLinearElasticity.hh"
+#include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "PeriodicHomogenization.hh"
 #include "GlobalBenchmark.hh"

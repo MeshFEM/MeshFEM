@@ -24,7 +24,7 @@
 #include <OPT++/OptLBFGS.h>
 #endif
 
-#include "NewLinearElasticity.hh"
+#include "LinearElasticity.hh"
 #include "GaussQuadrature.hh"
 #include "Materials.hh"
 #include "MaterialField.hh"
