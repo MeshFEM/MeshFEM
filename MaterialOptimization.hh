@@ -51,7 +51,7 @@ public:
     static constexpr size_t K = Base::K;
     static constexpr size_t Degree = Base::Degree;
 
-    typedef typename Base::LEData::ETensorGetter::MaterialField MField;
+    typedef typename Base::LEData::ETensorGetter::MField MField;
     typedef typename Base::VField    VField;
     typedef typename Base::Point    _Point;
 
