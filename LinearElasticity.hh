@@ -554,9 +554,8 @@ public:
     // Remove the rigid transform component from a per-DoF vector field.
     // v = v - sum_i (R(i, :) * v) * R(i, :)' / ||R(i, :)||^2;
     // If dofMask is passed then nodes i for which dofMask[i] is false are
-    // ignored.
-    // This allows rigid motion in a vector field over only a subset of the
-    // object to be projected out (originally I thought this was needed for
+    // ignored. This allows rigid motion in a vector field over only a subset of
+    // the object to be projected out (originally I thought this was needed for
     // local/global material optimization--maybe it's not so useful).
     void projectOutRigidComponent(VField &v,
             const std::vector<bool> &dofMask = std::vector<bool>()) const {
@@ -636,9 +635,9 @@ public:
 
         TMatrix R;
         if (m_useRigidMotionConstraint) {
-            m_assembleInfinitesimalRotationMatrix(R);
+            m_appendInfinitesimalRotationMatrix(R);
             if (m_useNRTPinConstraint) m_pinNode(fixedVars, fixedVarValues);
-            else                       m_assembleTranslationMatrix(R);
+            else                       m_appendTranslationMatrix(R);
 
             // We do a rigid-motion = 0 constraint if no RHS is supplied
             // Note: if a RHS was supplied but m_useNRTPinConstraint is true, an
@@ -656,7 +655,7 @@ public:
                     m_pinNode(fixedVars, fixedVarValues, needsTranslations);
                 }
                 else {
-                    m_assembleTranslationMatrix(R, needsTranslations);
+                    m_appendTranslationMatrix(R, needsTranslations);
                     constraintRHS.assign(needsTranslations.count(N), 0);
                 }
             }
@@ -736,13 +735,14 @@ private:
 
     static constexpr size_t numRotModes = (N == 3) ? 3 : 1;
     void m_assembleRigidModeMatrix(TMatrix &R) const {
+        R.init(); // empty the matrix
         R.reserve((N + 2 * numRotModes) * m_mesh.numNodes());
-        m_assembleInfinitesimalRotationMatrix(R);
-        m_assembleTranslationMatrix(R);
+        m_appendInfinitesimalRotationMatrix(R);
+        m_appendTranslationMatrix(R);
     }
 
     // Append no rigid rotation constraint rows to R.
-    void m_assembleInfinitesimalRotationMatrix(TMatrix &R) const {
+    void m_appendInfinitesimalRotationMatrix(TMatrix &R) const {
         if (R.n == 0) R.n = N * numDoFs(); // Make sure matrix is sized properly
         if (R.n != N * numDoFs()) throw std::runtime_error("Invalid R size.");
 
@@ -756,19 +756,20 @@ private:
         if (numDoFs() < m_mesh.numNodes())
             throw std::runtime_error("Single pair periodic BC unsupported in 3D.");
 
+        size_t oldRows = R.m;
         if (N == 3) {
             R.m += numRotModes;
             for (size_t k = 0; k < m_mesh.numNodes(); ++k) {
                 const auto &x = m_mesh.node(k)->p;
                 // x axis infinitesimal rotation (0, -z, y)
-                R.addNZ(3, N * k + 1, -x[2]);
-                R.addNZ(3, N * k + 2,  x[1]);
+                R.addNZ(oldRows    , N * k + 1, -x[2]);
+                R.addNZ(oldRows    , N * k + 2,  x[1]);
                 // y axis infinitesimal rotation (z, 0, -x)
-                R.addNZ(4, N * k    ,  x[2]);
-                R.addNZ(4, N * k + 2, -x[0]);
+                R.addNZ(oldRows + 1, N * k    ,  x[2]);
+                R.addNZ(oldRows + 1, N * k + 2, -x[0]);
                 // z axis infinitesimal rotation (-y, x, 0)
-                R.addNZ(5, N * k    , -x[1]);
-                R.addNZ(5, N * k + 1,  x[0]);
+                R.addNZ(oldRows + 2, N * k    , -x[1]);
+                R.addNZ(oldRows + 2, N * k + 1,  x[0]);
             }
         }
         else if (N == 2) {
@@ -776,15 +777,15 @@ private:
             for (size_t k = 0; k < m_mesh.numNodes(); ++k) {
                 const auto &x = m_mesh.node(k)->p;
                 // "z axis" infinitesimal rotation (-y, x, 0)
-                R.addNZ(2, N * k    , -x[1]);
-                R.addNZ(2, N * k + 1,  x[0]);
+                R.addNZ(oldRows, N * k    , -x[1]);
+                R.addNZ(oldRows, N * k + 1,  x[0]);
             }
         }
         else assert(false);
     }
 
     // Append no rigid translation constraint rows to T.
-    void m_assembleTranslationMatrix(TMatrix &T,
+    void m_appendTranslationMatrix(TMatrix &T,
             const ComponentMask &components = ComponentMask("xyz")) const {
         // If we've removed some degrees of freedom (e.g. by imposing
         // periodic boundary conditions), the translational constraints only
