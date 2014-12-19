@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <vector>
 #include <string>
+#include <iostream>
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
@@ -390,6 +391,28 @@ struct Constant {
 
     const ETensor &getTensor()      const { return m_E; }
     void getTensor(ETensor &tensor) const { tensor = m_E; }
+    void setTensor(const ETensor &tensor) { m_E = tensor; }
+
+    // "type": "anisotropic",
+    // "dim": 3,
+    // "material_matrix": [[C_00, C_01, C02, C03, C04, C05],
+    //                     [C_10, C_11, C12, C13, C14, C15],
+    //                     [C_20, C_21, C22, C23, C24, C25],
+    //                     [C_30, C_31, C32, C33, C34, C35],
+    //                     [C_40, C_41, C42, C43, C44, C45],
+    //                     [C_50, C_51, C52, C53, C54, C55]]
+    friend std::ostream &operator<<(std::ostream &os, const Constant &cmat) {
+        os << "{ \"type\": \"anisotropic\"," << std::endl;
+        os << "\"material_matrix\": [";
+        for (size_t i = 0; i < flatLen(N); ++i) {
+            for (size_t j = 0; j < flatLen(N); ++j) {
+                os << (j ? ", " : "[") << cmat.m_E.D(i, j);
+            }
+            os << (i == flatLen(N) - 1 ? "]]" : "],") << std::endl;
+        }
+        os << "}";
+        return os;
+    }
 
 private:
     ETensor m_E;

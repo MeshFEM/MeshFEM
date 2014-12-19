@@ -153,8 +153,8 @@ void execute(const po::variables_map &args,
         // the face is zero.
         for (size_t i = 0; i < w_ij.size(); ++i) {
             VField &w = w_ij[i];
-            VectorND<_N> translation;
-            vector<int> numAveraged(_N, 0);
+            VectorND<_N> translation(VectorND<_N>::Zero());
+            vector<int> numAveraged(_N);
             
             for (size_t bni = 0; bni < mesh.numBoundaryNodes(); ++bni) {
                 auto n = mesh.boundaryNode(bni).volumeNode();
@@ -181,6 +181,8 @@ void execute(const po::variables_map &args,
     }
 
     writer.addField("u_cstrain", cstrainDisp, MSHFieldWriter::PER_NODE);
+
+    writer.addField("stress", sim.averageStressField(cstrainDisp), MSHFieldWriter::PER_ELEMENT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

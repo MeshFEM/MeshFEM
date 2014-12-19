@@ -39,6 +39,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
+        ("degree,d",                  po::value<int>()->default_value(2),              "degree of finite elements")
         ("material,m",                po::value<string>()->default_value("isotropic"), "Material type (isotropic,  orthotropic)")
         ("bounds,b",                  po::value<string>(),                             "Material variable bounds")
         ("numIters,n",                po::value<int>()->default_value(8),              "Number of iterations")
@@ -78,6 +79,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     }
     if (vm.count("outputMSH") == 0) {
         cout << "Error: must specify output msh file" << endl;
+        fail = true;
+    }
+
+    int d = vm["degree"].as<int>();
+    if (d < 1 || d > 2) {
+        cout << "Error: FEM Degree must be 1 or 2" << endl;
         fail = true;
     }
 
@@ -199,7 +206,7 @@ int main(int argc, const char *argv[])
     else if (type == MeshIO::MESH_TRI) dim = 2;
     else    throw std::runtime_error("Mesh must be triangle or tet.");
 
-    size_t deg = 1;
+    size_t deg = args["degree"].as<int>();
 
     // Look up and run appropriate optimizer instantiation.
     auto exec = (deg == 1) ? (

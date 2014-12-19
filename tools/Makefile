@@ -3,10 +3,11 @@ include ../platform_defs.mk
 CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES) -I..
 CPPFLAGS+=-O2
 # CPPFLAGS+=-O0 -g
-TARGETS=msh_processor selector
+TARGETS=msh_processor selector gen_bar_with_shell
 
 MSH_PROC_OBJS=msh_processor.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
 SELECTOR_OBJS=selector.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
+GEN_BAR_WSHELL_OBJS=gen_bar_with_shell.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
 
 all: $(TARGETS)
 
@@ -14,6 +15,9 @@ selector: $(SELECTOR_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 msh_processor: $(MSH_PROC_OBJS)
+	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
+
+gen_bar_with_shell: $(GEN_BAR_WSHELL_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 %.o: %.cc Makefile

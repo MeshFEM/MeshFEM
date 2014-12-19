@@ -145,7 +145,7 @@ void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
              nu_xy(poisson[0]), nu_yx(poisson[1]), mu(shear[0]);
         E.setOrthotropic2D(E_x, E_y, nu_yx, mu);
 
-        if (std::abs(nu_yx / E_y - nu_xy / E_x) < 1e-10)
+        if (std::abs(nu_yx / E_y - nu_xy / E_x) > 1e-10)
             throw std::runtime_error("Orthotopic parameters violate symmetry");
     }
     else {
@@ -161,9 +161,9 @@ void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
         E.setOrthotropic3D(E_x, E_y, E_z, nu_yx, nu_zx, nu_zy,
                            mu_yz, mu_zx, mu_xy);
 
-        if ((std::abs(nu_yx / E_y - nu_xy / E_x) < 1e-10) ||
-            (std::abs(nu_yz / E_y - nu_zy / E_z) < 1e-10) ||
-            (std::abs(nu_zx / E_z - nu_xz / E_x) < 1e-10)) {
+        if ((std::abs(nu_yx / E_y - nu_xy / E_x) > 1e-10) ||
+            (std::abs(nu_yz / E_y - nu_zy / E_z) > 1e-10) ||
+            (std::abs(nu_zx / E_z - nu_xz / E_x) > 1e-10)) {
             throw std::runtime_error("Orthotopic parameters violate symmetry");
         }
     }
