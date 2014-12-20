@@ -38,19 +38,21 @@ Point3D faceMidpoint(const vector<IOVertex> &vertices, const vector<size_t> &vid
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[])
 {
-    if (argc != 7) {
-        cerr << "usage: gen_bar_with_shell scale shell_thickness xtile ytile ztile out.msh" << endl;;
+    if (argc != 9) {
+        cerr << "usage: gen_bar_with_shell shell_thickness xscale yscale zscale xtile ytile ztile out.msh" << endl;;
         exit(-1);
     }
     vector<IOElement> elements;
     vector<IOVertex>  vertices;
 
-    Real scale = stod(argv[1]);
-    size_t shellThickness = stoi(argv[2]);
-    size_t xTile = stoi(argv[3]);
-    size_t yTile = stoi(argv[4]);
-    size_t zTile = stoi(argv[5]);
-    string outMsh(argv[6]);
+    size_t shellThickness = stoi(argv[1]);
+    Real xscale           = stod(argv[2]);
+    Real yscale           = stod(argv[3]);
+    Real zscale           = stod(argv[4]);
+    size_t xTile          = stoi(argv[5]);
+    size_t yTile          = stoi(argv[6]);
+    size_t zTile          = stoi(argv[7]);
+    string                outMsh(argv[8]);
 
     size_t nSlices = zTile, nRows = yTile, nCols = xTile;
 
@@ -69,7 +71,7 @@ int main(int argc, char *argv[])
     for (size_t s = 0; s <= nSlices; ++s) {
         for (size_t r = 0; r <= nRows; ++r) {
             for (size_t c = 0; c <= nCols; ++c) {
-                vertices.push_back(IOVertex(scale * c, scale * r, scale * s));
+                vertices.push_back(IOVertex(xscale * c, yscale * r, zscale * s));
             }
         }
     }
@@ -169,8 +171,8 @@ int main(int argc, char *argv[])
                     const vector<size_t> &q = quads[f];
                     for (size_t v = 0; v < 4; ++v) {
                         shellIndicator(elements.size()) = isShell ? 1.0 : 0.0;
-                        elements.push_back(IOElement(vidx[q[v]],
-                                    vidx[q[(v + 1) % 4]], vidx[9 + f], vidx[8]));
+                        elements.push_back(IOElement(vidx[q[(v + 1) % 4]],
+                                    vidx[q[v]], vidx[9 + f], vidx[8]));
                     }
                 }
             }
