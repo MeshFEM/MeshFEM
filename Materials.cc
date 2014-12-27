@@ -169,7 +169,7 @@ void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
     }
 }
 
-// Epected values:
+// Expected values:
 // "material_matrix": [[C_00, C_01, C02, C03, C04, C05],
 //                     [C_10, C_11, C12, C13, C14, C15],
 //                     [C_20, C_21, C22, C23, C24, C25],
@@ -191,7 +191,9 @@ void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
             else if (std::abs(E.D(row, col) - val) > 1e-10) {
                 throw runtime_error("Asymmetric material_matrix");
             }
+            ++col;
         }
+        ++row;
     }
 }
 

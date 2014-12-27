@@ -7,6 +7,6 @@ LIBS=-L$(HOME)/usr/lib64 -L$(HOME)/usr/lib -L/usr/lib6 -fPIC -lboost_program_opt
 	-lceres -lglog -lgflags -lcholmod -lamd -lcamd -lcolamd -lccolamd -lsuitesparseconfig -lmatheval
 RENDER_LIBS=-lOSMesa -lpng -lftgl
 
-CXX=g++48
-CC=gcc48
+CXX=g++49
+CC=gcc49
 CPPFLAGS=-fopenmp
