@@ -113,11 +113,10 @@ namespace PeriodicHomogenization {
 
         const auto &mesh = sim.mesh();
         // Shape derivative evaluated on normal velocity v_n:
-        // DS(E_H)[v_n n] = int_dt <E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
+        // DS(E_H)[v_n n] = 1/|Y| int_dt <E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
         // So the steepest ascent direction is to evolve with
-        //      v_n(x) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)> := G_ijkl(x)
+        //      v_n(x) = 1/|Y| <E [e_ij + e(w_ij)], e_kl + e(w_kl)> := G_ijkl(x)
         // for each non-periodic boundary point x.
-        //      DS_ijkl(y) = <E [e_ij + e(w_ij)], e_kl + e(w_kl)>
         // For degree d FEM, G_ijkl is a degree 2 * (d - 1) polynomial on each
         // boundary element and is stored as a rank 4 tensor interpolant per
         // boundary element.
@@ -141,6 +140,7 @@ namespace PeriodicHomogenization {
                             return e->E().doubleContract(we_ij(p))
                                          .doubleContract(we_kl(p));
                         });
+                    G_ijkl /= mesh.boundingBox().volume();
                     // Copy single entry interpolant over into interpolated rank
                     // 4 tensor's entries.
                     for (size_t n = 0; n < Simplex::numNodes(K, GDeg); ++n)
