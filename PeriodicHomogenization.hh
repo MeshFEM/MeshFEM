@@ -112,6 +112,8 @@ namespace PeriodicHomogenization {
         assert(w.size() == numStrains);
 
         const auto &mesh = sim.mesh();
+        Real bboxVol = mesh.boundingBox().volume();
+
         // Shape derivative evaluated on normal velocity v_n:
         // DS(E_H)[v_n n] = 1/|Y| int_dt <E [e_ij + e(w_ij)], e_kl + e(w_kl)> v_n dA
         // So the steepest ascent direction is to evolve with
@@ -140,7 +142,7 @@ namespace PeriodicHomogenization {
                             return e->E().doubleContract(we_ij(p))
                                          .doubleContract(we_kl(p));
                         });
-                    G_ijkl /= mesh.boundingBox().volume();
+                    G_ijkl /= bboxVol;
                     // Copy single entry interpolant over into interpolated rank
                     // 4 tensor's entries.
                     for (size_t n = 0; n < Simplex::numNodes(K, GDeg); ++n)

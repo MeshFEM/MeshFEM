@@ -178,6 +178,7 @@ public:
         BoundaryElementHandle boundaryElement(size_t i)       { return      BoundaryElementHandle(i, *this); }
    ConstBoundaryElementHandle boundaryElement(size_t i) const { return ConstBoundaryElementHandle(i, *this); }
 
+    // (re-)embed the mesh elements.
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
         for (size_t i = 0; i < numNodes(); ++i) {
@@ -195,6 +196,7 @@ public:
         }
 
         m_embedElements();
+        m_computeBBox();
     }
 
     // Also support reading from Luigi/Nico's vertex format
@@ -210,12 +212,8 @@ public:
         setNodePositions(convertedVertices);
     }
 
-    BBox<EmbeddingSpace> boundingBox() const {
-        if (BaseMesh::numVertices() == 0) return BBox<EmbeddingSpace>();
-        BBox<EmbeddingSpace> result(node(0)->p, node(0)->p);
-        for (size_t i = 1; i < numNodes(); ++i)
-            result.unionPoint(node(i)->p);
-        return result;
+    const BBox<EmbeddingSpace> &boundingBox() const {
+        return m_bbox;
     }
 
     Real volume() const {
@@ -248,6 +246,10 @@ private:
     // Node data storage
     std::vector<NodeData>         m_nodeData;
     std::vector<BoundaryNodeData> m_boundaryNodeData;
+
+    // Mesh bounding box, updated every time the node positions change with
+    // setNodePositions()
+    BBox<EmbeddingSpace> m_bbox;
 
     // A pointer to the following is returned when accessing the data of type
     // "TMEmptyData" to avoid allocating the above vectors
@@ -343,6 +345,18 @@ private:
     void m_embedElements() {
         Embedder<_K>::embed(*this);
         Embedder<_K>::embed(*this);
+    }
+
+
+    // (re-)compute the bounding box (when vertex positions change)
+    void  m_computeBBox() {
+        if (BaseMesh::numVertices() == 0) {
+            m_bbox = BBox<EmbeddingSpace>();
+            return;
+        }
+        m_bbox = BBox<EmbeddingSpace>(node(0)->p, node(0)->p);
+        for (size_t i = 1; i < numNodes(); ++i)
+            m_bbox.unionPoint(node(i)->p);
     }
 };
 
