@@ -514,7 +514,11 @@ public:
         mat.sumRepeated();
 
         cholmod_l_start(&m_c);
-        m_c.default_nesdis = 1.0; // Use NESDIS since plain Metis is failing on large matrices.
+#ifdef TOO_LARGE_FOR_METIS
+         // Use NESDIS since plain Metis is failing on large matrices.
+         // This can be slower for some matrices, so we make this an option.
+        m_c.default_nesdis = 1.0;
+#endif
 
         // Completely bypass Metis/NESDIS (for large matrices, this fails...)
         // Note: this shouldn't be done for smaller matrices because it results in slower solves.
