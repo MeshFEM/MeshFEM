@@ -702,12 +702,27 @@ private:
         // size_t preallocSize = KeSize * KeSize * m_mesh.numElements();
         size_t preallocSize = KeSize * (KeSize + 1) * m_mesh.numElements() / 2;
         K.reserve(preallocSize);
-        typename _Mesh::ElementData::PerElementStiffness Ke;
+
+#ifdef _OPENMP
+        // Build all the per-element matrices in parallel at once, then insert
+        // them into the nonzeros list serially. This approach uses more memory,
+        // but shouldn't be the memory bottleneck. It is much faster on parallel
+        // machines, but may be slightly slower without OpenMP support.
+        std::vector<PerElementStiffness> KeMatrices(m_mesh.numElements());
+#pragma omp parallel for default(shared)
+        for (size_t i = 0; i < m_mesh.numElements(); ++i) {
+            m_mesh.element(i)->perElementStiffness(KeMatrices[i]);
+        }
 
         for (size_t i = 0; i < m_mesh.numElements(); ++i) {
             auto elem = m_mesh.element(i);
+            auto &Ke = KeMatrices[i];
+#else
+        PerElementStiffness Ke;
+        for (size_t i = 0; i < m_mesh.numElements(); ++i) {
+            auto elem = m_mesh.element(i);
             elem->perElementStiffness(Ke);
-
+#endif
             // Accumulate into full stiffness matrix.
             constexpr size_t nNodes = Mesh::ElementData::nNodes;
             for (size_t i = 0; i < nNodes; ++i) {

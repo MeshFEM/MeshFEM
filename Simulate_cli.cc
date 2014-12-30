@@ -171,10 +171,13 @@ void execute(const po::variables_map &args,
 
     if (matrixPath != "") sim.dumpSystem(matrixPath);
 
+
+    BENCHMARK_START_TIMER_SECTION("Simulation");
     auto u = sim.solve();
     auto e = sim.averageStrainField(u);
     auto s = sim.averageStressField(u);
     auto f = sim.dofToNodeField(sim.neumannLoad());
+    BENCHMARK_STOP_TIMER_SECTION("Simulation");
 
     MSHFieldWriter writer(outMSH, sim.mesh());
     writer.addField("u",      u, MSHFieldWriter::PER_NODE);
@@ -206,6 +209,7 @@ int main(int argc, const char *argv[])
     vector<MeshIO::IOVertex>  inVertices;
     vector<MeshIO::IOElement> inElements;
     string meshPath = args["mesh"].as<string>();
+
     auto type = load(meshPath, inVertices, inElements, MeshIO::FMT_GUESS,
                      MeshIO::MESH_GUESS);
 
