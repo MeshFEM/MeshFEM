@@ -92,7 +92,13 @@ struct TripletMatrix {
         // First compute the start/end of each bucket.
         // (bucketStart[j] is the start of bucket j and end of bucket j - 1)
         std::vector<size_t> bucketStart(n + 1, 0);
-        for (const Triplet &t : nz) ++bucketStart[t.j + 1]; // get bucket sizes.
+#pragma omp parallel for
+        for (size_t ti = 0; ti < nz.size(); ++ti) {
+            size_t &bucketEnd = bucketStart[nz[ti].j + 1];
+#pragma omp atomic
+            ++bucketEnd;
+        }
+
         for (size_t j = 1; j <= n; ++j) // get bucket offsets
             bucketStart[j] += bucketStart[j - 1];
         assert(bucketStart[n] == nz.size());
@@ -104,22 +110,34 @@ struct TripletMatrix {
         // Fill the buckets.
         typedef std::pair<size_t, Real> CEntry;
         std::vector<CEntry> columnBuckets(nz.size());
-        for (const Triplet &t : nz) {
-            auto &entry = columnBuckets[bucketEndIndex[t.j]];
+#pragma omp parallel for
+        for (size_t ti = 0; ti < nz.size(); ++ti) {
+            auto &t = nz[ti];
+            size_t &end = bucketEndIndex[t.j];
+            size_t newEntry;
+ #pragma omp atomic capture
+            newEntry = end++;
+            auto &entry = columnBuckets[newEntry];
             entry.first = t.i;
             entry.second = t.v;
-            ++bucketEndIndex[t.j];
         }
         for (size_t j = 0; j < n; ++j) // make sure we filled each bucket.
             assert(bucketEndIndex[j] == bucketStart[j + 1]);
 
         int backIndex = -1;
 
-        // Sort and sum each bucket's repeated entries into nz array
+        // Sort each bucket in parallel. 
+#pragma omp parallel for
+        for (size_t j = 0; j < n; ++j) {
+            std::sort(columnBuckets.begin() + bucketStart[j],
+                      columnBuckets.begin() + bucketStart[j + 1],
+                      [](const CEntry &a, const CEntry &b) { return a.first < b.first; });
+        }
+
+        // sum each bucket's repeated entries into nz array
         auto bucketBegin = columnBuckets.begin();
         for (size_t j = 0; j < n; ++j) {
             auto bucketEnd = columnBuckets.begin() + bucketStart[j + 1];
-            std::sort(bucketBegin, bucketEnd, [](const CEntry &a, const CEntry &b) { return a.first < b.first; });
             if (bucketBegin == bucketEnd) continue;
             ++backIndex; // new column
             nz[backIndex].j = j;
