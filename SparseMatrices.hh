@@ -514,7 +514,16 @@ public:
         mat.sumRepeated();
 
         cholmod_l_start(&m_c);
-        m_c.error_handler = error_handler;
+        m_c.default_nesdis = 1.0; // Use NESDIS since plain Metis is failing on large matrices.
+
+        // Completely bypass Metis/NESDIS (for large matrices, this fails...)
+        // Note: this shouldn't be done for smaller matrices because it results in slower solves.
+        //// This version avoids Metis, but fails for even more matrices due to fill-in.
+        //// m_c.nmethods = 1;
+        //// m_c.method[0].ordering = CHOLMOD_AMD;
+        //// m_c.postorder = 1; // TRUE
+        //// m_c.error_handler = error_handler;
+        //
         // // This puts us in LDL' mode
         // // "To factorize a large indefinite matrix, set Common->supernodal to
         // // CHOLMOD_SIMPLICIAL, and the simplicial LDL' method will always be
@@ -806,6 +815,15 @@ public:
         // Allocate space for solution + Lagrange multipliers
         std::vector<_Real> uReduced(m_AUpper.m);
 
+        // { 
+        //     static int solve = 0;
+        //     std::ofstream rhsOut("rhs_" + std::to_string(solve));
+        //     for (_Real val : bReduced) {
+        //         rhsOut << val << std::endl;
+        //     }
+        //     ++solve;
+        // }
+
         if (m_isSPD) {
             if (!m_LLT) {
                 m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper));
@@ -860,6 +878,7 @@ public:
     }
 
     void setEconomyMode(bool emode) { m_economyMode = emode; }
+    bool economyMode() const { return m_economyMode; }
 
     void dump(const std::string &path) const { m_AUpper.dump(path); }
 
