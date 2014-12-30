@@ -430,6 +430,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
                       const vector<Element> &elements, MeshType type) {
     int elementType;
     size_t numCorners;
+    if (elements.size() == 0) throw std::runtime_error("Empty mesh.");
     if ((type == MESH_GUESS) && (elements.size() > 0)) {
         if      (elements.back().size() == 4) type = MESH_TET;
         else if (elements.back().size() == 3) type = MESH_TRI;

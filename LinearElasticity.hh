@@ -671,6 +671,9 @@ public:
     }
 
     void dumpSystem(const std::string &path) const {
+        if (m_system.economyMode())
+            std::cerr << "WARNING: attempting to dump system triplet matrix in "
+                      << "economy mode--may be empty." << std::endl;
         if (!m_system.isSet()) m_buildConstrainedSystem();
         m_system.dump(path);
     }
