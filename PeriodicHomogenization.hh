@@ -30,7 +30,8 @@ namespace PeriodicHomogenization {
 
     template<class _Sim>
     typename _Sim::ETensor homogenizedElasticityTensor(
-            const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
+            const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
+            Real baseCellVolume) {
         const auto &mesh = sim.mesh();
         typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
@@ -54,7 +55,7 @@ namespace PeriodicHomogenization {
             Econtrib *= mesh.element(ei)->volume();
             Eh += Econtrib;
         }
-        Eh /= mesh.boundingBox().volume();
+        Eh /= baseCellVolume;
         return Eh;
 
         // // The following "energy-like" version is equivalent to the more efficient
@@ -79,11 +80,18 @@ namespace PeriodicHomogenization {
         //         }
         //     }
         // }
-        // EhE /= mesh.boundingBox().volume();
+        // EhE /= baseCellVolume;
 
         // return EhE;
     }
 
+    // Assumes the base cell is the axis-aligned mesh bounding box
+    // (not true, e.g., for rotated base cells).
+    template<class _Sim>
+    typename _Sim::ETensor homogenizedElasticityTensor(
+            const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
+        return homogenizedElasticityTensor(w_ij, sim, sim.mesh().boundingBox().volume());
+    }
 
     // Per-boundary-element interpolant type needed to express the homogenized
     // tensor shape derivative.

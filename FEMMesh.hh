@@ -344,7 +344,6 @@ private:
     // (re-)embed the elements in EmbeddingSpace (when vertex positions change)
     void m_embedElements() {
         Embedder<_K>::embed(*this);
-        Embedder<_K>::embed(*this);
     }
 
 

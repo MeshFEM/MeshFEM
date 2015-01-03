@@ -678,6 +678,13 @@ public:
         m_system.dump(path);
     }
 
+    // (re-)embed the mesh elements.
+    template<typename Vertices>
+    void updateMeshNodePositions(const Vertices &vertices) {
+        m_mesh.setNodePositions(vertices);
+        m_system.clear();
+    }
+
 private:
     void m_buildConstrainedSystem() const {
         TMatrix K, C;
@@ -702,8 +709,12 @@ private:
         typedef typename _Mesh::ElementData::PerElementStiffness PerElementStiffness;
         constexpr size_t KeSize = PerElementStiffness::RowsAtCompileTime;
         K.init(N * numDoFs(), N * numDoFs());
-        // size_t preallocSize = KeSize * KeSize * m_mesh.numElements();
-        size_t preallocSize = KeSize * (KeSize + 1) * m_mesh.numElements() / 2;
+        // Note: it's difficult to predict the nonzero count of the stiffness
+        // matrix's upper triangle due to periodic DoFs. For now, allocate space
+        // for the full matrix's triplets. If memory is an issue, we can
+        // precompute the size by using a loop similar to the accumulation loop
+        // below.
+        size_t preallocSize = KeSize * KeSize * m_mesh.numElements();
         K.reserve(preallocSize);
 
 #ifdef _OPENMP
