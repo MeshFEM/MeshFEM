@@ -1,0 +1,40 @@
+////////////////////////////////////////////////////////////////////////////////
+// ShaderCompiler.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Compiles glsl shaders into GPU programs.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  05/09/2012 23:46:08
+////////////////////////////////////////////////////////////////////////////////
+#ifndef SHADER_COMPILER_HH
+#define SHADER_COMPILER_HH
+
+#include <OpenGL/gl.h>
+#include <string>
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Print an info log on the creation of a vertex or fragment shader
+//  @param[in]  obj   which shader whose status to query
+*///////////////////////////////////////////////////////////////////////////////
+void printShaderInfoLog(GLuint obj);
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Print an info log on the creation of a GPU program
+//  @param[in]  obj   which program whose status to query
+*///////////////////////////////////////////////////////////////////////////////
+void printProgramInfoLog(GLuint obj);
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Read a vertex and fragment shader sources and compile them into a program.
+//  @param[in]  vertProgFilename    vertex shader source file
+//  @param[in]  fragProgFilename    fragment shader source
+//  @param[out] program             shader program index
+//  @return     true on success
+*///////////////////////////////////////////////////////////////////////////////
+bool readShader(const std::string &vertProgFilename,
+                const std::string &fragProgFilename,
+                GLuint &program);
+
+#endif // SHADER_COMPILER_HH

@@ -1,0 +1,8 @@
+Qt
+opencl
+opengl
+FTGL
+Gurobi
+SuiteSparse (UmfPack)
+Matlab Engine
+Boost 1.55.0 or newer (previous versions had a bug in ellint_2)

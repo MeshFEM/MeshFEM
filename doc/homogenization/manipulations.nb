@@ -1,0 +1,440 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 9.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       157,          7]
+NotebookDataLength[     15729,        430]
+NotebookOptionsPosition[     14389,        383]
+NotebookOutlinePosition[     14747,        399]
+CellTagsIndexPosition[     14704,        396]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"FbarAf", "[", 
+   RowBox[{"i_", ",", "j_", ",", " ", "k_", ",", " ", "l_"}], "]"}], " ", "=",
+   " ", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"KroneckerDelta", "[", 
+     RowBox[{"i", ",", "k"}], "]"}], " ", "*", " ", 
+    RowBox[{"Subscript", "[", 
+     RowBox[{"e", ",", " ", "j"}], "]"}], " ", "*", " ", 
+    RowBox[{"Subscript", "[", 
+     RowBox[{"e", ",", " ", "l"}], "]"}]}], " ", "+", " ", 
+   RowBox[{
+    RowBox[{"KroneckerDelta", "[", 
+     RowBox[{"j", ",", " ", "k"}], "]"}], " ", "*", " ", 
+    RowBox[{"Subscript", "[", 
+     RowBox[{"e", ",", " ", "i"}], "]"}], " ", "*", " ", 
+    RowBox[{"Subscript", "[", 
+     RowBox[{"e", ",", " ", "l"}], "]"}]}]}]}]], "Input",
+ CellChangeTimes->{{3.6000387677430763`*^9, 3.6000387983067303`*^9}, {
+   3.6000389241636763`*^9, 3.600039017078652*^9}, 3.6000390632250643`*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"FbarAf", "[", 
+  RowBox[{"i", ",", " ", "j", ",", " ", "k", ",", " ", "l"}], "]"}]], "Input",
+ 
+ CellChangeTimes->{{3.600039074772032*^9, 3.600039077186504*^9}, {
+  3.6000399268889017`*^9, 3.60003994887702*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"KroneckerDelta", "[", 
+    RowBox[{"j", ",", "k"}], "]"}], " ", 
+   SubscriptBox["e", "i"], " ", 
+   SubscriptBox["e", "l"]}], "+", 
+  RowBox[{
+   RowBox[{"KroneckerDelta", "[", 
+    RowBox[{"i", ",", "k"}], "]"}], " ", 
+   SubscriptBox["e", "j"], " ", 
+   SubscriptBox["e", "l"]}]}]], "Output",
+ CellChangeTimes->{{3.60003993097574*^9, 3.600039949659761*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"FbarAt", " ", "=", " ", 
+  RowBox[{
+   RowBox[{"KroneckerDelta", "[", 
+    RowBox[{"l", ",", "i"}], "]"}], " ", "*", " ", 
+   RowBox[{"Subscript", "[", 
+    RowBox[{"e", ",", " ", "j"}], "]"}], " ", "*", " ", 
+   RowBox[{"Subscript", "[", 
+    RowBox[{"e", ",", " ", "k"}], "]"}]}]}]], "Input",
+ CellChangeTimes->{{3.6000388385081787`*^9, 3.600038847277438*^9}, {
+  3.600038908563425*^9, 3.600038919139539*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"KroneckerDelta", "[", 
+   RowBox[{"i", ",", "k"}], "]"}], " ", 
+  SubscriptBox["e", "j"], " ", 
+  SubscriptBox["e", "l"]}]], "Output",
+ CellChangeTimes->{{3.600038788672841*^9, 3.6000388053995667`*^9}, 
+   3.6000388676485786`*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"Do", "[", 
+  RowBox[{
+   RowBox[{"Print", "[", 
+    RowBox[{
+    "\"\<F_{\>\"", ",", " ", "i", ",", " ", "j", ",", " ", "k", ",", " ", "l",
+      ",", " ", "\"\<}=\>\"", ",", " ", 
+     RowBox[{"TeXForm", "[", 
+      RowBox[{"Simplify", "[", 
+       RowBox[{
+        RowBox[{"FbarAf", "[", 
+         RowBox[{"i", ",", " ", "j", ",", " ", "k", ",", " ", "l"}], "]"}], 
+        " ", "+", " ", 
+        RowBox[{"FbarAf", "[", 
+         RowBox[{"i", ",", " ", "j", ",", " ", "l", ",", " ", "k"}], "]"}]}], 
+       "]"}], "]"}]}], "]"}], ",", " ", 
+   RowBox[{"{", 
+    RowBox[{"i", ",", " ", "1", ",", " ", "2"}], "}"}], ",", " ", 
+   RowBox[{"{", 
+    RowBox[{"j", ",", " ", "1", ",", " ", "2"}], "}"}], ",", " ", 
+   RowBox[{"{", 
+    RowBox[{"k", ",", " ", "1", ",", " ", "2"}], "}"}], ",", " ", 
+   RowBox[{"{", 
+    RowBox[{"l", ",", " ", "1", ",", " ", "2"}], "}"}]}], "]"}]], "Input",
+ CellChangeTimes->{{3.600038595156361*^9, 3.60003863861178*^9}, {
+  3.60003882704965*^9, 3.600038828041144*^9}, {3.60003887771462*^9, 
+  3.6000388872987537`*^9}, {3.600039958070592*^9, 3.600039970311036*^9}, {
+  3.600040017912846*^9, 3.600040018272575*^9}, {3.6000400678597717`*^9, 
+  3.600040136404254*^9}, {3.600040215633363*^9, 3.6000402838556337`*^9}, {
+  3.6000403246977043`*^9, 3.600040478037219*^9}, {3.6000405462408867`*^9, 
+  3.600040549885846*^9}, {3.600040613026733*^9, 3.600040633227113*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"4 e_1^2\"\>",
+    TeXForm[4 Subscript[$CellContext`e, 1]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 1, 1, 1, "}=", 
+   TeXForm[4 Subscript[$CellContext`e, 1]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.6000406349397497`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 1, 1, 2, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634942906*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 1, 2, 1, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634945486*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"0\"\>",
+    TeXForm[0],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 1, 2, 2, "}=", 
+   TeXForm[0]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634948123*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 2, 1, 1, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634950921*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"e_1^2+e_2^2\"\>",
+    TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 2, 1, 2, "}=", 
+   TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634953726*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"e_1^2+e_2^2\"\>",
+    TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 2, 2, 1, "}=", 
+   TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634956709*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 1, 2, 2, 2, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634959599*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 1, 1, 1, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.6000406349626303`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"e_1^2+e_2^2\"\>",
+    TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 1, 1, 2, "}=", 
+   TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.6000406349656057`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"e_1^2+e_2^2\"\>",
+    TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 1, 2, 1, "}=", 
+   TeXForm[Subscript[$CellContext`e, 1]^2 + Subscript[$CellContext`e, 2]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634968672*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 1, 2, 2, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.6000406349717484`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"0\"\>",
+    TeXForm[0],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 2, 1, 1, "}=", 
+   TeXForm[0]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.6000406349760847`*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "1", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 2, 1, 2, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634979567*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "1", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"2 e_1 e_2\"\>",
+    TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 2, 2, 1, "}=", 
+   TeXForm[2 Subscript[$CellContext`e, 1] Subscript[$CellContext`e, 2]]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634982864*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"F_{\"\>", "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "2", "\[InvisibleSpace]", "2", 
+   "\[InvisibleSpace]", "\<\"}=\"\>", "\[InvisibleSpace]", 
+   InterpretationBox["\<\"4 e_2^2\"\>",
+    TeXForm[4 Subscript[$CellContext`e, 2]^2],
+    AutoDelete->True,
+    Editable->True]}],
+  SequenceForm["F_{", 2, 2, 2, 2, "}=", 
+   TeXForm[4 Subscript[$CellContext`e, 2]^2]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.600040478868738*^9, 3.600040550634802*^9, 
+  3.600040634986321*^9}]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"Subscript", "[", 
+  RowBox[{"F", ",", " ", "1", ",", " ", "1", ",", " ", "1", ",", " ", "1"}], 
+  "]"}]], "Input",
+ CellChangeTimes->{{3.600040164579611*^9, 3.600040189915031*^9}}],
+
+Cell[BoxData[
+ RowBox[{"2", " ", 
+  SubsuperscriptBox["e", "1", "2"]}]], "Output",
+ CellChangeTimes->{3.6000401903858128`*^9}]
+}, Open  ]]
+},
+WindowSize->{740, 867},
+WindowMargins->{{Automatic, 152}, {67, Automatic}},
+FrontEndVersion->"9.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (November 20, \
+2012)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[557, 20, 859, 21, 63, InheritFromParent],
+Cell[CellGroupData[{
+Cell[1441, 45, 235, 5, 28, InheritFromParent],
+Cell[1679, 52, 407, 12, 32, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[2123, 69, 435, 10, 28, "Input"],
+Cell[2561, 81, 265, 7, 32, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[2863, 93, 1416, 30, 63, "Input"],
+Cell[CellGroupData[{
+Cell[4304, 127, 568, 13, 22, "Print"],
+Cell[4875, 142, 622, 13, 22, "Print"],
+Cell[5500, 157, 622, 13, 22, "Print"],
+Cell[6125, 172, 498, 13, 22, "Print"],
+Cell[6626, 187, 622, 13, 22, "Print"],
+Cell[7251, 202, 632, 13, 22, "Print"],
+Cell[7886, 217, 632, 13, 22, "Print"],
+Cell[8521, 232, 622, 13, 22, "Print"],
+Cell[9146, 247, 624, 13, 22, "Print"],
+Cell[9773, 262, 634, 13, 22, "Print"],
+Cell[10410, 277, 632, 13, 22, "Print"],
+Cell[11045, 292, 624, 13, 22, "Print"],
+Cell[11672, 307, 500, 13, 22, "Print"],
+Cell[12175, 322, 622, 13, 22, "Print"],
+Cell[12800, 337, 622, 13, 22, "Print"],
+Cell[13425, 352, 566, 13, 22, "Print"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[14040, 371, 204, 4, 28, "Input"],
+Cell[14247, 377, 126, 3, 33, "Output"]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
+
