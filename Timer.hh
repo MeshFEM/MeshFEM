@@ -38,7 +38,13 @@ private:
         // gets elapsed time (even if currently running)
         double elapsed() { return running ? time + (Time() - startTime) : time; }
         void stop()  { assert(running); time += Time() - startTime; running = false; }
-        void start() { assert(!running); running = true; ++invocations; startTime = Time(); }
+        void start() {
+            if (running) {
+                std::cerr << "ERROR: timer already running. Reported timings will be inaccurate." << std::endl;
+                stop();
+            }
+            assert(!running); running = true; ++invocations; startTime = Time();
+        }
     };
 
     typedef std::map<std::string, _Timer> TimerMap;
