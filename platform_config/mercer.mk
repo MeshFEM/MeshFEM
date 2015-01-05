@@ -12,4 +12,4 @@ LIBS= -L$(BOOST_LIB) -lboost_program_options -lboost_filesystem -lboost_system \
 
 CXX=g++
 CC=gcc
-CPPFLAGS=-fopenmp
+# CPPFLAGS=-fopenmp (currently breaks cholmod :()

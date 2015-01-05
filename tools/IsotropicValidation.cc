@@ -51,7 +51,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m", po::value<string>(), "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
-        ("nsamples,n", po::value<int>()->default_value(50), "Number of samples to test")
+        ("nsamples,n", po::value<int>()->default_value(100), "Number of samples to test")
+        ("transformOnly,t", "Only use the tensor transformation rule (much faster)")
         ;
 
     po::options_description cli_opts;
@@ -113,6 +114,35 @@ Eigen::Matrix<Real, 2, 2> randRotation<2>() {
     return Eigen::Rotation2D<Real>(angle(gen)).matrix();
 }
 
+struct ErrorRecord {
+    ErrorRecord(const string &n) : name(n) { }
+
+    void insertError(Real error) {
+        cout << name << ":\t" << error << std::endl;
+        errors.push_back(error);
+    }
+
+    Real average() const {
+        Real avg = 0;
+        for (Real err : errors) avg += err;
+        return avg / errors.size();
+    }
+
+    Real percentile(Real pct) {
+        assert(pct <= 1.0 && pct >= 0.0);
+        std::sort(errors.begin(), errors.end());
+        return errors.at(pct * errors.size());
+    }
+
+    void report() {
+        cout << name << " average:\t" << average() << endl;
+        cout << name << " 98th percentile:\t" << percentile(0.98) << endl;
+    }
+
+    vector<Real> errors;
+    string name;
+};
+
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
@@ -139,47 +169,69 @@ void execute(const po::variables_map &args,
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");
     ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
+    ETensor Sh = Eh.inverse();
     BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
     cout << setprecision(16) << endl;
-    cout << "Homogenized elasticity tensor:" << endl;
-    cout << Eh << endl << endl;
+    cout << "Homogenized compliance tensor:" << endl;
+    cout << Sh << endl << endl;
     cout << "Testing rotations..." << endl;
 
-    Real totalRelError = 0;
-    Real totalTransformRelError = 0;
+    Real Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY;
+    Eh.getOrthotropic3D(Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY);
+    Real E_avg = (Ex + Ey + Ez) / 3.0;
+    Real nu_avg = (nuYX + nuZX + nuZY) / 3.0;
+    Real mu_avg = (muYZ + muZX + muXY) / 3.0;
+    std::cout << "Anisotropy: " << mu_avg / (E_avg / (2 * (1 + nu_avg))) << std::endl;
+    Real Ex_true = Ex;
+
+    ErrorRecord relError("Rel error compliance");
+    ErrorRecord transformRelError("Transformed rel error compliance");
+    ErrorRecord ExRelError("Rel error Ex");
+    ErrorRecord transformExRelError("Transformed rel error Ex");
+    bool runRotatedHomogenization = args.count("transformOnly") == 0;
+
     int nSamples = args["nsamples"].as<int>();
     for (int s = 0; s < nSamples; ++s) {
         auto rot = randRotation<_N>();
-        vector<MeshIO::IOVertex> rotVertices;
-        for (const auto &v : inVertices)
-            rotVertices.emplace_back(PointND<_N>(rot * PointND<_N>(v)));
-        sim.updateMeshNodePositions(rotVertices);
+        ETensor diff;
+        if (runRotatedHomogenization) {
+            vector<MeshIO::IOVertex> rotVertices;
+            for (const auto &v : inVertices)
+                rotVertices.emplace_back(PointND<_N>(rot * PointND<_N>(v)));
+            sim.updateMeshNodePositions(rotVertices);
 
-        w_ij.clear();
-        typedef typename Simulator::SMatrix SMatrix;
-        constexpr size_t numStrains = SMatrix::flatSize();
-        for (size_t i = 0; i < numStrains; ++i) {
-            VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
-            w_ij.push_back(sim.solve(rhs));
+            w_ij.clear();
+            typedef typename Simulator::SMatrix SMatrix;
+            constexpr size_t numStrains = SMatrix::flatSize();
+            for (size_t i = 0; i < numStrains; ++i) {
+                VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
+                w_ij.push_back(sim.solve(rhs));
+            }
+            ETensor EhRot = homogenizedElasticityTensor(w_ij, sim, baseCellVolume);
+            ETensor ShRot = EhRot.inverse();
+            diff = ShRot - Sh;
+            cout << "Compliance tensor:" << endl << ShRot << endl;
+            relError.insertError(sqrt(diff.quadrupleContract(diff) / Sh.quadrupleContract(Sh)));
+            EhRot.getOrthotropic3D(Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY);
+            ExRelError.insertError(std::abs((Ex_true - Ex) / Ex_true));
         }
-        ETensor EhRot = homogenizedElasticityTensor(w_ij, sim, baseCellVolume);
-        ETensor diff = EhRot - Eh;
-        Real relError = sqrt(diff.quadrupleContract(diff) / Eh.quadrupleContract(Eh));
-        cout << "Tensor:" << endl << EhRot << endl;
-        cout << "Rel error:\t" << relError << endl << endl;
-        totalRelError += relError;
 
         ETensor EhTrans = Eh.orthogonalTransform(rot);
-        diff = EhTrans - Eh;
-        relError = sqrt(diff.quadrupleContract(diff) / Eh.quadrupleContract(Eh));
-        cout << "Transformed original tensor:" << endl << EhTrans << endl;
-        cout << "Transformed rel error:\t" << relError << endl << endl;
-        totalTransformRelError += relError;
+        ETensor ShTrans = EhTrans.inverse();
+        diff = ShTrans - Sh;
+        cout << "Transformed original compliance tensor:" << endl << ShTrans << endl;
+        transformRelError.insertError(sqrt(diff.quadrupleContract(diff) / Sh.quadrupleContract(Sh)));
+        EhTrans.getOrthotropic3D(Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY);
+        transformExRelError.insertError(std::abs((Ex_true - Ex) / Ex_true));
     }
 
-    cout << "Average rel error:\t" << totalRelError / nSamples << endl;
-    cout << "Average tranform rel error:\t" << totalTransformRelError / nSamples << endl;
+    if (runRotatedHomogenization) {
+        relError.report();
+        ExRelError.report();
+    }
+    transformRelError.report();
+    transformExRelError.report();
 
     BENCHMARK_REPORT();
 }
