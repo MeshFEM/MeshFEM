@@ -143,6 +143,8 @@ void execute(const po::variables_map &args,
         cout << "v_xy, v_xz, v_yz:\t" << poisson[3] << "\t" << poisson[4] << "\t" << poisson[5] << endl;
     }
 
+    cout << "Anisotropy:\t" << Eh.anisotropy() << endl;
+
     BENCHMARK_REPORT();
 }
 
