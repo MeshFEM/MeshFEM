@@ -152,6 +152,25 @@ public:
         }
     }
 
+    Real anisotropy() const {
+        Real mu_avg, E_avg, nu_avg;
+        if (_Dim == 2) {
+            Real Ex, Ey, nuYX, muXY;
+            getOrthotropic2D(Ex, Ey, nuYX, muXY);
+            E_avg = (Ex + Ey) / 2.0;
+            nu_avg = nuYX;
+            mu_avg = muXY;
+        }
+        else {
+            Real Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY;
+            getOrthotropic3D(Ex, Ey, Ez, nuYX, nuZX, nuZY, muYZ, muZX, muXY);
+            E_avg = (Ex + Ey + Ez) / 3.0;
+            nu_avg = (nuYX + nuZX + nuZY) / 3.0;
+            mu_avg = (muYZ + muZX + muXY) / 3.0;
+        }
+        return mu_avg / (E_avg / (2 * (1 + nu_avg)));
+    }
+
     void clear() {
         m_d =  DType::Zero();
     }
