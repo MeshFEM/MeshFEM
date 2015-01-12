@@ -40,6 +40,11 @@ struct ExpressionEnvironment {
             setValue(name + std::to_string(i), v[i]);
     }
 
+    void setVectorValue(const std::string &name, const std::vector<Real> &v) {
+        for (int i = 0; i < v.size(); ++i)
+            setValue(name + std::to_string(i), v[i]);
+    }
+
     template<class _Vec>
     void setXYZ(_Vec &v) {
         int N = _Vec::RowsAtCompileTime;
