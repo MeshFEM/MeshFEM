@@ -53,11 +53,12 @@ public:
         m_active = cmasks.at(components);
     }
 
+    bool has(size_t c) const { return m_active.test(c); }
     bool hasX()        const { return m_active[0]; }
     bool hasY()        const { return m_active[1]; }
     bool hasZ()        const { return m_active[2]; }
     bool hasAny(size_t dim) const { return count(dim) > 0; }
-    bool has(size_t c) const { return m_active.test(c); }
+    bool hasAll(size_t dim) const { return count(dim) == dim; }
     // Number of active components for dimension (2 or 3)
     size_t count(size_t dim) const {
         if (dim == 3)      return m_active.count();

@@ -64,7 +64,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         Real anisotropyPenaltyWeight, bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
-    writer.addField("Neumann load", m_sim.dofToNodeField(neumannLoad), MSHFieldWriter::PER_NODE);
+    // writer.addField("Neumann load", m_sim.dofToNodeField(neumannLoad), MSHFieldWriter::PER_NODE);
 
     // Get "material graph" adjacences for Laplacian (smoothness) regularization
     vector<set<size_t> > materialAdj;
@@ -74,9 +74,10 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
     SMField e_dirichletTargets_avg;
 
     constexpr size_t _NVar = Material::numVars;
+    constexpr size_t N = _Simulator::N;
     for (size_t iter = 1; iter <= iterations; ++iter) {
         if (((iter - 1) % iterationsPerDirichletSolve) == 0) {
-            m_sim.swapTargetDirichlet();
+            m_sim.addTargetsToDirichlet();
 
             if (noRigidMotionDirichlet) m_sim.applyNoRigidMotionConstraint();
             else                        m_sim.removeNoRigidMotionConstraint();
@@ -84,8 +85,21 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
             u_dirichletTargets = m_sim.solve(neumannLoad);
             e_dirichletTargets_avg = m_sim.averageStrainField(u_dirichletTargets);
 
-            m_sim.swapTargetDirichlet();
-            m_sim.applyRigidMotionConstraint(u_dirichletTargets);
+            m_sim.removeTargetsFromDirichlet();
+
+            // Apply a no rigid motion constraint if the user didn't specify
+            // Dirichlet constraints. If Dirichlet constraints are present, they
+            // must fully pin down the rigid degrees of freedom, since we don't
+            // yet support partial no-rigid-motion constraints in this setting.
+            ComponentMask needsTranslationConstraint, needsRotationConstraint;
+            m_sim.analyzeDirichletPosedness(needsTranslationConstraint, needsRotationConstraint);
+            if (needsTranslationConstraint.hasAny(N) || needsTranslationConstraint.hasAny(N)) {
+                if (needsTranslationConstraint.hasAll(N) && needsTranslationConstraint.hasAll(N))
+                    m_sim.applyRigidMotionConstraint(u_dirichletTargets);
+                else {
+                    throw std::runtime_error("Incomplete Dirichlet constraints are currently unsupported");
+                }
+            }
         }
 
         auto u = m_sim.solve(neumannLoad);

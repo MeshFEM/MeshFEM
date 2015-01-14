@@ -109,6 +109,14 @@ public:
         }
 
         Base::applyBoundaryConditions(filteredConditions);
+
+        // Move the Dirichlet boundary conditions over to the
+        // userDirichlet* fields.
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+            auto bn = m_mesh.boundaryNode(i);
+            bn->userDirichletComponents   = bn->dirichletComponents;
+            bn->userDirichletDisplacement = bn->dirichletDisplacement;
+        }
     }
 
     // Remove all target displacements
@@ -121,11 +129,24 @@ public:
     // become Dirichlet constraints and vice versa. This is useful for the
     // "Local Global" iteration where target positions are used as Dirichlet
     // constraints every other solve.
-    void swapTargetDirichlet() {
+    void addTargetsToDirichlet() {
+        try {
+            for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+                auto bn = m_mesh.boundaryNode(i);
+                bn->setDirichlet(bn->targetComponents, bn->targetDisplacement);
+            }
+        }
+        catch (...) {
+            throw std::runtime_error("Target and dirichlet conditions conflict");
+        }
+        Base::m_system.clear();
+    }
+
+    void removeTargetsFromDirichlet() {
         for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
             auto bn = m_mesh.boundaryNode(i);
-            std::swap(bn->targetComponents,   bn->dirichletComponents);
-            std::swap(bn->targetDisplacement, bn->dirichletDisplacement);
+            bn->dirichletComponents   = bn->userDirichletComponents;
+            bn->dirichletDisplacement = bn->userDirichletDisplacement;
         }
         Base::m_system.clear();
     }
@@ -190,6 +211,12 @@ struct Data : public LinearElasticity::LinearElasticityData<_ETensorGetter>::tem
     struct BoundaryNode : public BaseData::BoundaryNode {
         ComponentMask targetComponents;
         VectorND<_K> targetDisplacement;
+
+        // The Dirichlet constraints that the user is applying (to be used in
+        // both the "neumann" solve and the "target as dirichlet" solve).
+        ComponentMask userDirichletComponents;
+        VectorND<_K>  userDirichletDisplacement;
+
         bool hasTarget() const { return targetComponents.hasAny(_K); }
         void setTarget(ComponentMask mask, const VectorND<_K> &val) {
             for (size_t c = 0; c < _K; ++c) {

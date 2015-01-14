@@ -606,8 +606,9 @@ public:
             }
         }
         needsRotations.clear();
-        if (needsTranslations.hasAny(N) || (totalConstrained < ((N == 2) ? 3 : 6))) {
-            std::cerr << "WARNING: analysis of Dirichlet rotational posedness not yet implemented!"
+        if (totalConstrained == 0) needsRotations.set();
+        else if (needsTranslations.hasAny(N) || (totalConstrained < ((N == 2) ? 3 : 6))) {
+            std::cerr << "WARNING: analysis of partial Dirichlet rotational posedness not yet implemented!"
                 << std::endl;
         }
     }
@@ -888,7 +889,7 @@ private:
                             bn->dirichletComponents);
                 }
                 else {
-                    std::cerr << "Warning: Dirichlet condition on periodic "
+                    std::cerr << "WARNING: Dirichlet condition on periodic "
                         << "boundary applies to all identified nodes."
                         << std::endl;
                     auto diff = bn->dirichletDisplacement -
