@@ -165,8 +165,10 @@ void execute(const po::variables_map &args,
     }
 
     bool noRigidMotion;
-    auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(), noRigidMotion);
+    vector<PeriodicPairDirichletCondition<_N>> pps;
+    auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(), noRigidMotion, pps);
     sim.applyBoundaryConditions(bconds);
+    sim.applyPeriodicPairDirichletConditions(pps);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
 
     if (matrixPath != "") sim.dumpSystem(matrixPath);
@@ -192,6 +194,8 @@ void execute(const po::variables_map &args,
     // writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
     // writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
     // writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
+
+    sim.reportRegionSurfaceForces(u);
 
     BENCHMARK_REPORT();
 }

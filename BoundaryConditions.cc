@@ -196,6 +196,7 @@ void writeBoundaryConditions(ostream &os,
 template<size_t _N>
 vector<CondPtr<_N> > readBoundaryConditions(const string &cpath,
         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion) {
+    std::vector<PeriodicPairDirichletCondition<_N>> pps;
     ifstream inFile(cpath);
     if (!inFile.is_open()) throw runtime_error("Couldn't open BC file");
     return readBoundaryConditions<_N>(inFile, bbox, noRigidMotion);
@@ -204,12 +205,52 @@ vector<CondPtr<_N> > readBoundaryConditions(const string &cpath,
 template<size_t _N>
 vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion) {
+    std::vector<PeriodicPairDirichletCondition<_N>> pps;
+    auto result = readBoundaryConditions<_N>(is, bbox, noRigidMotion, pps);
+
+    if (pps.size()) throw std::runtime_error("Didn't expect PeriodicPairDirichletCondition");
+    return result;
+}
+
+template<size_t _N>
+vector<CondPtr<_N> > readBoundaryConditions(const string &cpath,
+        const BBox<VectorND<_N>> &bbox, bool &noRigidMotion,
+        std::vector<PeriodicPairDirichletCondition<_N>> &pps) {
+    ifstream inFile(cpath);
+    if (!inFile.is_open()) throw runtime_error("Couldn't open BC file");
+    return readBoundaryConditions<_N>(inFile, bbox, noRigidMotion, pps);
+}
+
+template<size_t _N>
+vector<CondPtr<_N> > readBoundaryConditions(istream &is,
+        const BBox<VectorND<_N>> &bbox, bool &noRigidMotion,
+        std::vector<PeriodicPairDirichletCondition<_N>> &pps) {
     ptree pt;
     read_json(is, pt);
 
     vector<CondPtr<_N> > conds;
 
     noRigidMotion = pt.get<bool>("no_rigid_motion", false);
+
+    // Periodic pair condition: fix a single pair of matching nodes on the
+    // + and - faces of each specified axis.
+    // Format: "fix_periodic_pair_<component>": "<orthogonal axis>"
+    for (size_t c = 0; c < _N; ++c) {
+        static const vector<string> componentStrings = {"x", "y", "z"};
+        string pairCondition("fix_periodic_pair_" + componentStrings[c]);
+        if (pt.count(pairCondition)) {
+            string faceSpecifier = pt.get<string>(pairCondition);
+            size_t face = _N;
+            for (size_t c2 = 0; c2 < _N; ++c2) {
+                if (c2 == c) continue;
+                if (faceSpecifier == componentStrings[c2])
+                    face = c2;
+            }
+            if (face == _N) throw std::runtime_error("invalid " + pairCondition);
+            pps.emplace_back(c, face);
+        }
+    }
+    
     ptree regions = pt.get_child("regions");
     for (const ptree::value_type &val : regions) {
         ptree tcond = val.second;
@@ -324,6 +365,8 @@ template void writeBoundaryConditions<3>(const string &cpath,
                            const vector<ConstCondPtr<3> > &conds);
 template void writeBoundaryConditions<3>(ostream &os,
                            const vector<ConstCondPtr<3> > &conds);
+template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &);
+template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &); 
 template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &);
 template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &); 
 
@@ -331,5 +374,7 @@ template void writeBoundaryConditions<2>(const string &cpath,
                            const vector<ConstCondPtr<2> > &conds);
 template void writeBoundaryConditions<2>(ostream &os,
                            const vector<ConstCondPtr<2> > &conds);
-template vector<CondPtr<2> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<2> > &bbox, bool &noRigidMotion);
-template vector<CondPtr<2> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<2> > &bbox, bool &noRigidMotion);
+template vector<CondPtr<2> > readBoundaryConditions(const std::string &, const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &);
+template vector<CondPtr<2> > readBoundaryConditions(std::istream &,      const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &);
+template vector<CondPtr<2> > readBoundaryConditions(const std::string &, const BBox<VectorND<2> > &, bool &);
+template vector<CondPtr<2> > readBoundaryConditions(std::istream &,      const BBox<VectorND<2> > &, bool &);

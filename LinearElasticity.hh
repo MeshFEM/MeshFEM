@@ -132,7 +132,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             }
         }
 
-        // Gets upper triangle of the per-element stiffness matrix.
+        // Gets ***upper triangle*** of the per-element stiffness matrix.
         void perElementStiffness(PerElementStiffness &Ke) const {
             std::vector<Strain> strains = vecPhiStrains();
             std::vector<Stress> stresses(strains.size());
@@ -171,6 +171,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     struct BoundaryNode {
         ComponentMask dirichletComponents;
         Vector dirichletDisplacement;
+        size_t dirichletRegionIdx = 0;
 
         bool hasDirichlet() const { return dirichletComponents.hasAny(N); }
         void setDirichlet(ComponentMask mask, const Vector &val) {
@@ -187,6 +188,14 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                         throw std::runtime_error("Conflicting dirichlet displacements.");
                 }
             }
+        }
+
+        void setDirichletRegion(size_t idx) {
+            if (dirichletRegionIdx != 0) {
+                std::cerr << "WARNING: region traction currently unsupported for vertices "
+                          << "belonging to multiple regions" << std::endl;
+            }
+            dirichletRegionIdx = idx;
         }
     };
 };
@@ -353,6 +362,35 @@ public:
         return load;
     }
 
+    // Compute the load on the nodes due to internal forces under a particular
+    // deformation. (I.e. apply stiffness matrix: K * u)
+    VField internalForceNodalLoad(const VField &u) const {
+        assert(u.domainSize() == m_mesh.numNodes());
+        VField load(m_mesh.numNodes());
+        load.clear();
+        for (size_t ei = 0; ei < m_mesh.numElements(); ++ei) {
+            auto e = m_mesh.element(ei);
+            typename _Mesh::ElementData::PerElementStiffness Ke;
+            e->perElementStiffness(Ke);
+            // Compute the effective traction load on each boundary vetex
+            for (size_t ni = 0; ni < e.numNodes(); ++ni) {
+                size_t globalni = e.node(ni).index();
+                for (size_t nj = 0; nj < e.numNodes(); ++nj) {
+                    size_t globalnj = e.node(nj).index();
+                    for (size_t ci = 0; ci < N; ++ci) {
+                        size_t row = N * ni + ci;
+                        for (size_t cj = 0; cj < N; ++cj) {
+                            size_t col = N * nj + cj;
+                            load(globalni)[ci] += ((row < col) ? Ke(row, col) : Ke(col, row)) * u(globalnj)[cj];
+                        }
+                    }
+                        
+                }
+            }
+        }
+        return load;
+    }
+
     bool   usingReducedDoFs() const { return m_dofForNode.size() == m_mesh.numNodes(); }
     size_t numDoFs()          const { return usingReducedDoFs() ? m_numDoFs : m_mesh.numNodes(); }
 
@@ -395,6 +433,7 @@ public:
         env.setVectorValue("mesh_min_", mbb.minCorner);
         env.setVectorValue("mesh_max_", mbb.maxCorner);
 
+        size_t dirichletRegionIdx = 0;
         if (conds.size() > 0) m_system.clear();
         for (auto cond : conds) {
             env.setVectorValue("region_size_", cond->region.dimensions());
@@ -440,13 +479,16 @@ public:
                 }
             }
             else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<N> >(cond)) {
+                ++dirichletRegionIdx;
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                     auto bn = m_mesh.boundaryNode(i);
                     if (dc->containsPoint(bn.volumeNode()->p)) {
                         env.setXYZ(bn.volumeNode()->p);
                         bn->setDirichlet(dc->componentMask, dc->displacement(env));
+                        bn->setDirichletRegion(dirichletRegionIdx);
                     }
                 }
+
                 continue;
             }
             else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<N> >(cond)) {
@@ -532,6 +574,15 @@ public:
         if (m_useRigidMotionConstraint) {
             m_system.clear();
             m_useRigidMotionConstraint = false;
+        }
+    }
+
+    // Cannot currently be undone!
+    void applyPeriodicPairDirichletConditions(std::vector<PeriodicPairDirichletCondition<N>> &pps) {
+        for (auto &pp : pps) {
+            std::pair<size_t, size_t> p = pp.pair(m_mesh);
+            m_mesh.boundaryNode(p.first)->setDirichlet(pp.component(), VectorND<N>::Zero());
+            m_mesh.boundaryNode(p.second)->setDirichlet(pp.component(), VectorND<N>::Zero());
         }
     }
 
@@ -671,6 +722,28 @@ public:
         BENCHMARK_STOP_TIMER("Assemble System");
     }
 
+    void reportRegionSurfaceForces(const VField &u) const {
+        VField f = internalForceNodalLoad(u);
+        std::vector<VectorND<N>> forces;
+        for (size_t bni = 0; bni < m_mesh.numBoundaryNodes(); ++bni) {
+            auto bn = m_mesh.boundaryNode(bni);
+
+            // Start new region integral if needed
+            size_t ri = bn->dirichletRegionIdx;
+            if (ri + 1 > forces.size())
+                forces.resize(ri + 1, VectorND<N>::Zero());
+            forces[ri] += f(bn.volumeNode().index());
+            
+        }
+
+        for (size_t i = 0; i < forces.size(); ++i) {
+            std::cout << "region " << i << " force:";
+            for (size_t j = 0; j < N; ++j)
+                std::cout << "\t" << forces[i][j];
+            std::cout << std::endl;
+        }
+    }
+
     void dumpSystem(const std::string &path) const {
         if (m_system.economyMode())
             std::cerr << "WARNING: attempting to dump system triplet matrix in "
@@ -678,6 +751,7 @@ public:
         if (!m_system.isSet()) m_buildConstrainedSystem();
         m_system.dump(path);
     }
+
 
     // (re-)embed the mesh elements.
     template<typename Vertices>

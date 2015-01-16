@@ -102,6 +102,64 @@ private:
     std::bitset<3> m_active;
 };
 
+// A bit of a hack--allow fixing a single component of a single periodic
+// boundary node pair's displacement to zero.  This component must be orthogonal
+// to the periodic face normal. E.g. fixing the x component on the y = 0 and y =
+// 1 faces.
+template<size_t _N> 
+class PeriodicPairDirichletCondition {
+public:
+    PeriodicPairDirichletCondition(size_t c, size_t f)
+        : m_faceSpecifier(f) { m_component.set(c); }
+
+    const ComponentMask &component() const { return m_component; }
+    size_t faceSpecifier() const { return m_faceSpecifier; }
+    bool    hasCondition() const { return m_component.hasAny(_N); }
+
+    // Get a single valid, matching node pair that can implement this condition.
+    // Guarantees to always return the same pair (and the pair is cached).
+    // Be careful not to requse the same PeriodicPairDirichletCondition with
+    // different meshes!
+    template<typename Mesh>
+    std::pair<size_t, size_t> pair(const Mesh &mesh, Real epsilon = 1e-5) {
+        if (!hasCondition()) std::runtime_error("Tried to read empty PeriodicPairDirichletCondition");
+        assert(m_faceSpecifier < _N);
+        BBox<VectorND<_N>> bbox = mesh.boundingBox();
+        if (!cached) {
+            VectorND<_N> pointToMatch;
+            size_t i;
+            for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
+                auto vn = mesh.boundaryNode(i).volumeNode();
+                if (std::abs(vn->p[m_faceSpecifier] - bbox.minCorner[m_faceSpecifier]) < epsilon) {
+                    pointToMatch = vn->p;
+                    pointToMatch[m_faceSpecifier] = bbox.maxCorner[m_faceSpecifier];
+                    m_pair.first = i;
+                    break;
+                }
+            }
+            if (i == mesh.numBoundaryNodes())
+                throw std::runtime_error("No vertices on the periodic pair face.");
+            for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
+                auto vn = mesh.boundaryNode(i).volumeNode();
+                if ((vn->p - pointToMatch).norm() < epsilon) {
+                    m_pair.second = i;
+                    break;
+                }
+            }
+            if (i == mesh.numBoundaryNodes())
+                throw std::runtime_error("Couldn't match vertex in periodic pair Dirichlet condition");
+        }
+
+        return m_pair;
+    }
+private:
+    ComponentMask m_component;
+    size_t m_faceSpecifier;
+    bool cached = false;
+    std::pair<size_t, size_t> m_pair;
+};
+
+
 template<size_t _N>
 using CondPtr      = std::shared_ptr<BoundaryCondition<_N> >;
 template<size_t _N>
@@ -290,6 +348,8 @@ template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const
 template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
 template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
 template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation

@@ -343,6 +343,11 @@ struct ScalarValue : public SpecificValue<Real, N, ScalarValue<N>> {
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
         runtime_error illegal("Illegal arguments for binary operation");
         runtime_error mismatch("Size mismatch in binary operation");
+        // Scalar-scalar op
+        if (auto sValue = dynamic_pointer_cast<ScalarValue>(b)) {
+            return make_shared<ScalarValue>("result",
+                    op(this->value, sValue->value));
+        }
         // Scalar-scalar field op
         if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
             auto result = make_shared<SFieldValue<N>>("result", SField(sfValue->value));
