@@ -110,7 +110,7 @@ public:
 
         Base::applyBoundaryConditions(filteredConditions);
 
-        // Move the Dirichlet boundary conditions over to the
+        // Copy the Dirichlet boundary conditions over to the
         // userDirichlet* fields.
         for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
             auto bn = m_mesh.boundaryNode(i);
@@ -125,10 +125,9 @@ public:
             m_mesh.boundaryNode(i)->targetComponents.clear();
     }
 
-    // Swap the target and Dirichlet conditions so that target positions
-    // become Dirichlet constraints and vice versa. This is useful for the
-    // "Local Global" iteration where target positions are used as Dirichlet
-    // constraints every other solve.
+    // Copy the target conditions into the Dirichlet conditions. This is useful
+    // for the "Local Global" iteration where target positions are used as
+    // Dirichlet constraints every other solve.
     void addTargetsToDirichlet() {
         try {
             for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
