@@ -386,21 +386,23 @@ invalidate the derivations.
     \section{Integration By Parts Formulas}
     \label{sec:IBP}
     Here we derive the two integration by parts formulas used in this writeup. The
-    derivations are straightforward once broken down to their components using
-    index notation. First, we derive the one for:
-    $$
-    \vint{\lambda \cdot \left(\div \left[ C:\epsilon(u)\right]\right)} =
-    \vint{\lambda_i \pder{}{x_j}\big[C_{ijkl} \epsilon_{kl}\big]}
-    $$
+    derivations are straightforward in index notation. First, we derive the one
+    for
+    $
+    \vint{\lambda \cdot \left(\div \left[ C:\epsilon(u)\right]\right)}
+    $, i.e. $ \vint{\lambda_i \pder{}{x_j}\big[C_{ijkl} \epsilon_{kl}\big]}. $
     From product rule:
     $$
     \vint{\lambda_i \pder{}{x_j}C_{ijkl} \epsilon_{kl}(u)} =
-    \vint{\pder{}{x_j} \big[\lambda_i C_{ijkl} \epsilon_{kl}(u)\big] - \pder{\lambda_i}{x_j} C_{ijkl} \epsilon_{kl}(u)}
+    \vint{\pder{}{x_j} \big[\lambda_i C_{ijkl} \epsilon_{kl}(u)\big] -
+    \pder{\lambda_i}{x_j} C_{ijkl} \epsilon_{kl}(u)}.
     $$
-    Notice that $\pder{\lambda_i}{x_j} C_{ijkl} = \epsilon_{ij}(\lambda)$ by
-    the symmetry $C_{ijkl} = C_{jikl}$. Applying Gauss' theorem to the term on the left, we get:
+    Notice that $\pder{\lambda_i}{x_j} C_{ijkl} = \epsilon_{ij}(\lambda) C_{ijkl}$ by
+    the symmetry $C_{ijkl} = C_{jikl}$. This plus Gauss' theorem for the first
+    term gives:
     $$
-    \sint{\lambda_i C_{ijkl} \epsilon_{kl}(u)\hat{n}_j} - \vint{\epsilon_{ij}(\lambda)C_{ijkl} \epsilon_{kl}(u)}
+    \sint{\lambda_i C_{ijkl} \epsilon_{kl}(u)\hat{n}_j} -
+    \vint{\epsilon_{ij}(\lambda)C_{ijkl} \epsilon_{kl}(u)}.
     $$
     Reinterpreting these in coordinate-free notation, we arrive at the desired expression,
     \begin{align}
@@ -420,19 +422,15 @@ invalidate the derivations.
     + \sint{\big[C : \gamma(x, u, \lambda) \big] \hat{n} \cdot \phi}
     \label{eqn:IBP_2}
     \end{align}
-    In component notation we have, by symmetry of constant $C_{ijkl} = C_{ijlk}$,
+    In component notation we have, by symmetry $C_{ijkl} = C_{ijlk}$,
     $$
-    \vint{\gamma_{ij} C_{ijkl} \epsilon_{kl}(\phi)} = \vint{\gamma_{ij} C_{ijkl} \pder{\phi_k}{x_l}} = \vint{\gamma_{ij} \pder{C_{ijkl} \phi_k}{x_l}}
+    \vint{\gamma_{ij} C_{ijkl} \epsilon_{kl}(\phi)} = \vint{\gamma_{ij} C_{ijkl} \pder{\phi_k}{x_l}}.
     $$
-    By product rule the expression becomes:
+    By product rule, the expression becomes:
     $$
-    \vint{\pder{}{x_l}\big[\gamma_{ij} C_{ijkl} \phi_k \big] - \pder{\gamma_{ij}}{x_l} C_{ijkl} \phi_k}.
+    \vint{\pder{}{x_l}\big[\gamma_{ij} C_{ijkl} \phi_k \big] - \pder{\gamma_{ij} C_{ijkl}}{x_l} \phi_k}.
     $$
-    Applying Gauss' theorem to the left term, we get:
-    $$
-    \sint{\gamma_{ij} C_{ijkl} \phi_k \hat{n}_l} - \vint{\pder{\gamma_{ij}}{x_l} C_{ijkl} \phi_k}.
-    $$
-    Using the major symmetry $C_{ijkl} = C_{klij}$ and the fact $C_{ijkl}$ is constant, this is:
+    Applying Gauss' theorem to the left term and using major symmetry $C_{ijkl} = C_{klij}$:
     $$
     \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_j} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} \phi_i}.
     $$

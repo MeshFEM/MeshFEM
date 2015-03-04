@@ -79,7 +79,8 @@ public:
         if (_Dim != 3)
             throw std::runtime_error("setOrthotropic3D call on non-3D tensor");
         // Note: this isn't the flattened compliance tensor! Rather, it is the
-        // matrix inverse of the flattened elasticity tensor.
+        // matrix inverse of the flattened elasticity tensor. See the tensor
+        // flattening writeup.
         m_d << 1.0 / Ex, -nuYX / Ey, -nuZX / Ez,        0.0,        0.0,        0.0,
                     0.0,   1.0 / Ey, -nuZY / Ez,        0.0,        0.0,        0.0,
                     0.0,        0.0,   1.0 / Ez,        0.0,        0.0,        0.0,
