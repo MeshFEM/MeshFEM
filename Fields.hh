@@ -420,6 +420,7 @@ std::ostream &operator<<(std::ostream &os, const SymmetricMatrixField<Real, N> &
 // Simple field class that can change dimension but is less efficient/statically
 // checked.
 // Stores in flattened x0 y0 x1 y1 ... format
+template<typename _Real>
 class DynamicField {
 public:
     DynamicField(size_t dimensions, size_t domSize) {
@@ -432,7 +433,7 @@ public:
     }
 
     template<size_t _N>
-    DynamicField(const VectorField<Real, _N> &vf) {
+    DynamicField(const VectorField<_Real, _N> &vf) {
         resize(vf.dim(), vf.domainSize());
         for (size_t i = 0; i < vf.dim(); ++i)
             for (size_t j = 0; j < vf.domainSize(); ++j)
@@ -450,33 +451,33 @@ public:
     size_t dim() const { return m_dim; }
 
     // Flattened access
-    Real &operator[](size_t i)       { return m_storage.at(i); }
-    Real  operator[](size_t i) const { return m_storage.at(i); }
+    _Real &operator[](size_t i)       { return m_storage.at(i); }
+    _Real  operator[](size_t i) const { return m_storage.at(i); }
 
-    Real &operator()(size_t i, size_t j) {
+    _Real &operator()(size_t i, size_t j) {
         if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
         return m_storage.at(j * dim() + i);
     }
 
-    Real  operator()(size_t i, size_t j) const {
+    _Real  operator()(size_t i, size_t j) const {
         if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
         return m_storage.at(j * dim() + i);
     }
 
     // Casts to Field types.
-    operator ScalarField<Real>() const {
+    operator ScalarField<_Real>() const {
         if (m_dim != 1) throw std::runtime_error("Illegal cast of vector field to scalar field.");
-        return ScalarField<Real>(m_storage);
+        return ScalarField<_Real>(m_storage);
     }
     template<size_t _dim>
-    operator VectorField<Real, _dim>() const {
+    operator VectorField<_Real, _dim>() const {
         if (m_dim != _dim) throw std::runtime_error("Vector field cast dimension mismatch.");
-        return VectorField<Real, _dim>(m_storage);
+        return VectorField<_Real, _dim>(m_storage);
     }
     template<size_t _dim>
-    operator SymmetricMatrixField<Real, _dim>() const {
+    operator SymmetricMatrixField<_Real, _dim>() const {
         if (m_dim != _dim) throw std::runtime_error("Vector field cast dimension mismatch.");
-        return SymmetricMatrixField<Real, _dim>(m_storage);
+        return SymmetricMatrixField<_Real, _dim>(m_storage);
     }
 
     friend std::ostream &operator<<(std::ostream &os, const DynamicField &f) {
@@ -490,7 +491,7 @@ public:
     
 private:
     size_t m_dim;
-    std::vector<Real> m_storage;
+    std::vector<_Real> m_storage;
 };
 
 #endif // FIELDS_HH

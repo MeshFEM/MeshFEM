@@ -189,12 +189,10 @@ public:
         S.makeCompressed();
         m_S_tr = S.transpose();
 
-        m_Cs.setFromTMatrix(Cs);
-
         if (timer) timer->stop("Build Cs");
         if (timer) timer->start("Factorize Cs");
         m_Cs_factors =
-            std::shared_ptr<UmfpackFactorizer>(new UmfpackFactorizer(m_Cs));
+            std::shared_ptr<UmfpackFactorizer>(new UmfpackFactorizer(Cs));
         if (timer) timer->stop("Factorize Cs");
 
         if (m_dumpMatrices) Cs.dump("Cs.txt");
@@ -362,9 +360,7 @@ protected:
     // The constraints need to be specified in compressed row format.
     SparseMatrixCSR m_linprog_Aeq;
     DVector m_linprog_beq; // , m_linprog_b;
-    // Note: must be kept around because UmfPackLU's solve accesses the
-    // original matrix for iterative refinement.
-    SuiteSparseMatrix m_Cs;
+
     std::shared_ptr<UmfpackFactorizer> m_Cs_factors;
 
     std::vector<Real> m_dirichletValues;

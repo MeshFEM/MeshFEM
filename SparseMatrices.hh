@@ -23,6 +23,10 @@
 #include <stdexcept>
 #include <cassert>
 
+#ifndef BENCHMARK_START_TIMER
+#include "BenchmarkStub.hh"
+#endif
+
 extern "C" {
 #include <umfpack.h>
 #include <cholmod.h>
@@ -497,6 +501,8 @@ private:
     const SuiteSparse_long *Ai() const { return &m_mat.Ai[0]; }
     const double *Ax()           const { return &m_mat.Ax[0]; }
 
+    // Note: SuiteSparse version of A  must be kept around because UmfPackLU's
+    // solve accesses the original matrix for iterative refinement.
     SuiteSparseMatrix m_mat;
     void *symbolic;
     void *numeric;
@@ -712,7 +718,7 @@ public:
         // The value to which each (reduced) variable will be fixed, or zero if
         // the variable will not be fixed. Needed for efficiently computing RHS
         // contribution of fixedVarValues
-        std::vector<Real> rvNewlyFixedValue(m_AUpper.m, 0.0);
+        std::vector<_Real> rvNewlyFixedValue(m_AUpper.m, 0.0);
         for (size_t i = 0; i < fixedVars.size(); ++i) {
             int rv = m_reducedVarForVar[fixedVars[i]];
             if (rv < 0) continue;
@@ -734,7 +740,7 @@ public:
 
             replacementIndex[curr] = -1;
             m_reducedVarForVar[toFix] = -1 - int(m_fixedVarValues.size());
-            Real val = fixedVarValues[i];
+            _Real val = fixedVarValues[i];
             m_fixedVarValues.push_back(val);
         }
 
@@ -742,7 +748,7 @@ public:
         // (essentially "elimination", but triplets are left in m_AUpper for now)
         for (const auto &t : m_AUpper.nz) {
             // Move over the upper triangle term...
-            Real val = rvNewlyFixedValue[t.j];
+            _Real val = rvNewlyFixedValue[t.j];
             if (val != 0.0) m_fixedVarRHSContribution[t.i] -= t.v * val;
             // and the strict lower triangle term.
             if (t.i < t.j) {
@@ -768,13 +774,13 @@ public:
 
         // Remove entries (rows, cols) of A
         auto newEnd = std::remove_if(m_AUpper.nz.begin(), m_AUpper.nz.end(),
-            [&](const Triplet<Real> &t) -> bool {
+            [&](const Triplet<_Real> &t) -> bool {
                 return (replacementIndex[t.i] < 0) ||
                        (replacementIndex[t.j] < 0); });
         m_AUpper.nz.erase(newEnd, m_AUpper.nz.end());
 
         // Apply replacement to A matrix.
-        for (Triplet<Real> &t : m_AUpper.nz) {
+        for (Triplet<_Real> &t : m_AUpper.nz) {
             t.i = replacementIndex[t.i];
             t.j = replacementIndex[t.j];
         }

@@ -62,18 +62,13 @@ int main(int argc, char *argv[])
 
     Timer timer;
 
-    timer.startSection("Full " + solver + " solve");
-    timer.start("to SuiteSparseMatrix");
-    SuiteSparseMatrix ssA(A);
-    timer.stop("to SuiteSparseMatrix");
-
     vector<double> b(A.m, 1.0), x;
 
     double mem;
 
     if (useCholmod) {
         timer.start("Factorize");
-        CholmodFactorizer factors(ssA);
+        CholmodFactorizer factors(A);
         timer.stop("Factorize");
 
         timer.start("Solve");
@@ -84,7 +79,7 @@ int main(int argc, char *argv[])
     }
     else {
         timer.start("Factorize");
-        UmfpackFactorizer factors(ssA);
+        UmfpackFactorizer factors(A);
         timer.stop("Factorize");
 
         timer.start("Solve");

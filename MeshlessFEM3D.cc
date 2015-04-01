@@ -1293,11 +1293,8 @@ solveCellProblems(std::vector<VField> &w_ij, Timer *timer,
     // C.dump("C.txt");
     // exit(-1);
     
-    if (timer) timer->start("To SuiteSparse");
-    SuiteSparseMatrix ssC(C);
-    if (timer) timer->stop("To SuiteSparse");
     if (timer) timer->start("Factorize");
-    UmfpackFactorizer Cfactors(ssC);
+    UmfpackFactorizer Cfactors(C);
     std::cout << "Factorization peak memory:\t" << Cfactors.peakMemoryMB()
               << "MB" << std::endl;
     if (timer) timer->stop("Factorize");

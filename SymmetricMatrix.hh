@@ -23,10 +23,15 @@
 #include <iostream>
 
 ////////////////////////////////////////////////////////////////////////////////
-// Forward declarations
+// Forward declarations/aliases
 ////////////////////////////////////////////////////////////////////////////////
-template<size_t t_N, typename Storage = Eigen::Matrix<Real, flatLen(t_N), 1> >
+template<size_t t_N, typename Storage>
 class SymmetricMatrix;
+
+// The default storage-backed value type
+template<typename _Real, size_t t_N>
+using SymmetricMatrixValue =
+        SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>>;
 
 template<typename _Real, size_t t_N,
          typename _Storage_t, typename _ConstStorageRef_t>
@@ -74,7 +79,7 @@ public:
     _ConstStorageRef_t flattened() const { return m_data; }
     _Real operator[](size_t i) const { return m_data[i]; }
 
-    // Allow us to masquarade as an eigen vector too.
+    // Allow us to masquarade as an Eigen vector too.
     size_t rows() const { return flatSize(); }
 
     friend std::ostream &operator<<(std::ostream &os, const ConstSymmetricMatrixBase &m) {
@@ -199,18 +204,18 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 template<typename _Real, size_t t_N,
          typename _Storage_t, typename _ConstStorageRef_t>
-SymmetricMatrix<t_N, Eigen::Matrix<Real, flatLen(t_N), 1>> operator*(_Real s, const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat)
+SymmetricMatrixValue<_Real, t_N> operator*(_Real s, const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat)
 {
-    SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> result(mat);
+    SymmetricMatrixValue<_Real, t_N> result(mat);
     result *= s;
     return result;
 }
 
 template<typename _Real, size_t t_N,
          typename _Storage_t, typename _ConstStorageRef_t>
-SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> operator*(const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat, _Real s)
+SymmetricMatrixValue<_Real, t_N> operator*(const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStorageRef_t> &mat, _Real s)
 {
-    SymmetricMatrix<t_N, Eigen::Matrix<_Real, flatLen(t_N), 1>> result(mat);
+    SymmetricMatrixValue<_Real, t_N> result(mat);
     result *= s;
     return result;
 }
