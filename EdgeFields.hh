@@ -47,7 +47,7 @@ public:
     EdgeFields(const std::vector<UnorderedPair> &edges) { m_setEdges(edges); }
     EdgeFields(const std::string &path) { read(path); }
 
-    void addField(const std::string &name, const DynamicField &field) {
+    void addField(const std::string &name, const DynamicField<Real> &field) {
         if (field.domainSize() != numEdges())
             throw std::runtime_error("Attempted to add incompatibly sized field");
         if (m_fields.count(name))
@@ -58,11 +58,11 @@ public:
 
     template<size_t _N>
     void addField(const std::string &name, const VectorField<Real, _N> &vf) {
-        DynamicField field(vf);
+        DynamicField<Real> field(vf);
         addField(name, field);
     }
 
-    const DynamicField &field(const std::string &name) const {
+    const DynamicField<Real> &field(const std::string &name) const {
         return m_fields.at(name);
     }
 
@@ -111,7 +111,7 @@ private:
     }
 
     // name => field
-    std::map<std::string, DynamicField> m_fields;
+    std::map<std::string, DynamicField<Real>> m_fields;
     // vertex pair -> edge index
     std::map<UnorderedPair, size_t> m_edgeIdx;
     std::vector<UnorderedPair> m_edges;

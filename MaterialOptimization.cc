@@ -82,6 +82,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
             if (noRigidMotionDirichlet) m_sim.applyNoRigidMotionConstraint();
             else                        m_sim.removeNoRigidMotionConstraint();
 
+            // std::cout << "solving target dirichlet" << std::endl;
+            // m_sim.dumpDirichlet();
             u_dirichletTargets = m_sim.solve(neumannLoad);
             e_dirichletTargets_avg = m_sim.averageStrainField(u_dirichletTargets);
 
@@ -102,6 +104,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
             }
         }
 
+        // std::cout << "solving user load" << std::endl;
+        // m_sim.dumpDirichlet();
         auto u = m_sim.solve(neumannLoad);
         auto s_neumann_avg = m_sim.averageStressField(u);
 

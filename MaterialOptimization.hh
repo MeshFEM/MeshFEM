@@ -150,6 +150,15 @@ public:
         Base::m_system.clear();
     }
 
+    void dumpDirichlet() {
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+            auto bn = m_mesh.boundaryNode(i);
+            if (bn->dirichletComponents.hasAny(N))
+                std::cout << i << ": " << bn->dirichletComponents.componentString() << "\t";
+        }
+        std::cout << std::endl;
+    }
+
     VField solveAdjoint(const VField &u) const {
         // Compute load on the DoFs caused by the adjoint problem's Neuman
         // traction:

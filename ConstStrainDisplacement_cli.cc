@@ -121,7 +121,7 @@ void execute(const po::variables_map &args,
                  boost::token_compress_on);
     if (strainComponents.size() != flatLen(_N))
         throw runtime_error("Invalid strain tensor");
-    SymmetricMatrix<_N> strain;
+    SymmetricMatrixValue<Real, _N> strain;
     for (size_t i = 0; i < strainComponents.size(); ++i)
         strain[i] = stod(strainComponents[i]);
 

@@ -5,7 +5,7 @@ PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshIO.o Types.o Materials.o GlobalBen
 CSDISP_OBJS=ConstStrainDisplacement_cli.o MeshIO.o Types.o Materials.o GlobalBenchmark.o
 MATOPT_OBJS=MaterialOptimization_cli.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o MaterialOptimization.o Materials.o GlobalBenchmark.o
 SIM_OBJS=Simulate_cli.o MeshIO.o Types.o BoundaryConditions.o MSHFieldParser.o Materials.o GlobalBenchmark.o
-OBJS=$(SIM_OBJS) $(CONVERT_OBJS) $(PERHOMO_OBJS) $(MATOPT_OBJS)
+OBJS=$(SIM_OBJS) $(CONVERT_OBJS) $(PERHOMO_OBJS) $(MATOPT_OBJS) $(CSDISP_OBJS)
 SOURCES=ConstStrainDisplacement_cli.cc PeriodicHomogenization_cli.cc MaterialOptimization_cli.cc Simulate_cli.cc \
 		mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc \
         MaterialOptimization.cc Materials.cc

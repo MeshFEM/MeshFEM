@@ -51,7 +51,7 @@ void EdgeFields::read(istream &is) {
         parseNVector(1, is, ivec);
         size_t ncomps = ivec[0];
         vector<double> rvec;
-        DynamicField field(ncomps, nedges);
+        DynamicField<Real> field(ncomps, nedges);
         for (size_t j = 0; j < nedges; ++j) {
             parseNVector(ncomps, is, rvec);
             for (size_t i = 0; i < ncomps; ++i)
