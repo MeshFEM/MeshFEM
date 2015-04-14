@@ -23,7 +23,7 @@
 #include <stdexcept>
 #include <cassert>
 
-#ifndef BENCHMARK_START_TIMER
+#ifndef GLOBALBENCHMARK_HH
 #include "BenchmarkStub.hh"
 #endif
 
