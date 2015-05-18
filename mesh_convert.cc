@@ -11,6 +11,7 @@
 #include "filters/quad_tri_subdiv.hh"
 #include "filters/quad_subdiv.hh"
 #include "filters/quad_subdiv_high_aspect.hh"
+#include "filters/remove_dangling_vertices.hh"
 
 #include <limits>
 #include <iostream>
@@ -127,28 +128,12 @@ int main(int argc, const char *argv[])
     string outPath;
     if (args.count("outFile")) outPath = args["outFile"].as<string>();
 
-    // Detect and remove dangling vertices
-    std::vector<bool> seen(inVertices.size(), false);
-    for (const auto e : inElements) {
-        for (size_t c = 0; c < e.size(); ++c)
-            seen.at(e[c]) = true;
-    }
-    size_t curr = 0;
-    vector<size_t> vertexRenumber(inVertices.size(), std::numeric_limits<size_t>::max());
-    for (size_t i = 0; i < inVertices.size(); ++i) {
-        if (seen[i]) {
-            inVertices[curr] = inVertices[i];
-            vertexRenumber[i] = curr++;
-        }
-    }
-    if (curr != inVertices.size())
-        cout << "WARNING: " << inVertices.size() - curr
+    size_t origSize = inVertices.size();
+
+    remove_dangling_vertices(inVertices, inElements);
+    if (inVertices.size() != origSize)
+        cout << "WARNING: " << inVertices.size() - origSize
              << " dangling vertice(s) removed" << endl;
-    for (auto &e : inElements) {
-        for (size_t c = 0; c < e.size(); ++c)
-            e[c] = vertexRenumber.at(e[c]);
-    }
-    inVertices.resize(curr);
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 

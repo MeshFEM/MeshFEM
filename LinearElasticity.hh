@@ -20,7 +20,7 @@ struct ETensorStoreGetter {
     ETensorStoreGetter(const ETensor &E) : m_E(E) { }
     ETensorStoreGetter() : m_E(1, 0) { }
     const ETensor &operator()() const { return m_E; }
-          ETensor &operator()() { return m_E; }
+          ETensor &operator()()       { return m_E; }
 private:
     ETensor m_E;
 };
