@@ -28,7 +28,7 @@ using namespace std;
 using namespace PeriodicHomogenization;
 
 void usage(int exitVal, const po::options_description &visible_opts) {
-    cerr << "Usage: ConstStrainDisplacement_cli [options] in.msh 'e_00 e_11 ...' out.msh" << endl;
+    cerr << "Usage: DeformedCells_cli [options] in.msh -j 'u_x,x u_x,y ...' out.msh" << endl;
     cerr << visible_opts << endl;
     exit(exitVal);
 }
