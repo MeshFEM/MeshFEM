@@ -317,10 +317,12 @@ public:
         return result;
     }
 
-    // Applies an orthogonal change of coordinates to this tensor using the
+    // Applies an change of coordinates to this tensor using the
     // tensor transformation rule:
     // E_ijlk' = E_pqrs R_ip R_jq R_kr R_ls
-    ElasticityTensor orthogonalTransform(const Eigen::Matrix<Real, _Dim, _Dim> &R) const {
+    // (When R is a rotation, this is the correct transformation rule for
+    //  cartesian tensors).
+    ElasticityTensor transform(const Eigen::Matrix<Real, _Dim, _Dim> &R) const {
         ElasticityTensor result;
         for (size_t i = 0; i < _Dim; ++i) {
             for (size_t j = 0; j < _Dim; ++j) {
