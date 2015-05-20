@@ -22,6 +22,7 @@
 #define ELASTICITYTENSOR_HH
 
 #include <iostream>
+#include <vector>
 #include <Eigen/Dense>
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
@@ -103,7 +104,28 @@ public:
         m_d = m_d.inverse().eval();
     }
 
-    // Get the orthotropic material paramters (assuming the material is in fact
+    // Get the orthotropic material parameters (assuming the material is
+    // in fact orthotropic).
+    void getOrthotropicParameters(std::vector<Real> &moduli) const
+    {
+        if (_Dim == 2) {
+            moduli.resize(4);
+            // Ex Ey nuYX nuXY
+            getOrthotropic2D(moduli[0], moduli[1], moduli[2], moduli[3]);
+        }
+        else if (_Dim == 3) {
+            moduli.resize(9);
+            // Ex Ey Ez nuYX nuZX nuZY muYZ muZX muXY
+            getOrthotropic3D(moduli[0], moduli[1], moduli[2],
+                             moduli[3], moduli[4], moduli[5],
+                             moduli[6], moduli[7], moduli[8]);
+        }
+        else { 
+            throw std::runtime_error("Invalid instance dimension.");
+        }
+    }
+
+    // Get the orthotropic material parameters (assuming the material is in fact
     // 3D orthotropic)
     void getOrthotropic3D(Real &  Ex, Real &  Ey, Real &  Ez,
                           Real &nuYX, Real &nuZX, Real &nuZY,
@@ -124,7 +146,7 @@ public:
         muXY = 0.25 / Einv.D(5, 5);
     }
 
-    // Get the orthotropic material paramters (assuming the material is in fact
+    // Get the orthotropic material parameters (assuming the material is in fact
     // 2D orthotropic)
     void getOrthotropic2D(Real &Ex, Real &Ey, Real &nuYX, Real &muXY) const {
         if (_Dim != 2)
