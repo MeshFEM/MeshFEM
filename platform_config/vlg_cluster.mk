@@ -6,6 +6,8 @@ LIBS=-L$(HOME)/usr/lib64 -L$(HOME)/usr/lib -L/usr/lib6 -fPIC -lboost_program_opt
 	-static-libstdc++ -lumfpack -lcholmod -lamd -lcamd -lcolamd -lccolamd -lsuitesparseconfig /usr/local/pkg/OpenBLAS/0.2.12_sandybridge/lib/libopenblas.so -lgfortran -lmetis \
 	-lceres -lglog -lgflags -lcholmod -lamd -lcamd -lcolamd -lccolamd -lsuitesparseconfig -lmatheval
 RENDER_LIBS=-lOSMesa -lpng -lftgl
+ARCH=a64
+MATLABDIR=/misc/linux/64/opt/pkg/matlab/R2013b
 
 CXX=g++49
 CC=gcc49
