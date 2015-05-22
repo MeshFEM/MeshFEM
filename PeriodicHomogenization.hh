@@ -39,7 +39,7 @@ namespace PeriodicHomogenization {
 
         // Compute homogenized elasticity tensor (stress-like version):
         // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dV
-        // Where |Y| = Yvol = periodic cell (grid bounding box) volume
+        // Where |Y| = periodic cell (grid bounding box) volume
         //        w  = periodic base cell geometry
         typename _Sim::ETensor Eh;
         typename _Sim::Strain  strain_ij;
@@ -83,6 +83,56 @@ namespace PeriodicHomogenization {
         // EhE /= baseCellVolume;
 
         // return EhE;
+    }
+
+    // Assuming that the base elasticity tensor is constant over the entire base
+    // cell, we can rewrite the homogenized elasticity tensor stress integral
+    // formula in terms of displacements (using Green's theorem):
+    // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dy
+    //         = 1/|Y| int_dw E_ijpq frac{1}{2} (w^{kl}_p n_q + w^{kl}_q n_p) dA(y) + E * volFrac
+    //         = 1/|Y| E_ijpq nw_pq + E * volFrac
+    // Where   |Y|  = periodic cell (grid bounding box) volume
+    //          w   = periodic base cell geometry
+    //        nw_pq = 0.5 * int_dw [w^{kl}]_p n_q + [w^{kl}]_q n_p dA(y)
+    template<class _Sim>
+    typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
+            const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
+            Real baseCellVolume) {
+        const auto &mesh = sim.mesh();
+        typedef typename _Sim::SMatrix SMatrix;
+        constexpr size_t numStrains = SMatrix::flatSize();
+        assert(w_ij.size() == numStrains);
+
+        // Elasticity tensor must be constant over the entire base cell
+        const typename _Sim::ETensor &EBase = mesh.element(0)->E();
+
+        typename _Sim::ETensor Eh;
+        SMatrix nw_pq;
+
+        // Displacement restricted to a boundary element
+        Interpolant<VectorND<_Sim::N>, _Sim::K - 1, _Sim::Degree> w_be;
+        for (size_t bei = 0; bei < mesh.numBoundaryElements(); ++bei) {
+            auto be = mesh.boundaryElement(bei);
+            typename _Sim::ETensor Econtrib;
+            const auto &n = be->normal();
+            for (size_t i = 0; i < w_ij.size(); ++i) {
+                const auto &w = w_ij[i];
+                // Copy the boundary node values into interpolant
+                for (size_t ni = 0; ni < w_be.size(); ++ni)
+                    w_be[ni] = w(be.node(ni).volumeNode().index());
+                auto w_be_int = w_be.integrate(be->volume());
+
+                for (size_t p = 0; p < _Sim::N; ++p)
+                    for (size_t q = p; q < _Sim::N; ++q)
+                        nw_pq(p, q) = 0.5 * (w_be_int[p] * n[q] + w_be_int[q] * n[p]);
+                Eh.DRowAsSymMatrix(i) += EBase.doubleContract(nw_pq);
+            }
+        }
+
+        Eh += EBase * mesh.volume();
+        Eh /= baseCellVolume;
+
+        return Eh;
     }
 
     // Assumes the base cell is the axis-aligned mesh bounding box

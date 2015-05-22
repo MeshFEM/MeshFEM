@@ -46,9 +46,9 @@ public:
             //      4 * grad(phi_j) on vertex i, 4 * grad(phi_i) on vertex j
             //      where (i, j) are the endpoints of the edge node's edge.
             if (i < numVertices) {
-                result[i] = 3 * m_gradBarycentric.col(i);
-                for (size_t j = 1; j < numVertices; ++j)
-                    result[(i + j) % numVertices] = -m_gradBarycentric.col(i);
+                for (size_t j = 0; j < numVertices; ++j)
+                    result[j] = -m_gradBarycentric.col(i);
+                result[i] *= -3;
             }
             else {
                 for (size_t j = 0; j < numVertices; ++j)
