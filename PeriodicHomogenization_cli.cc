@@ -102,7 +102,7 @@ void execute(const po::variables_map &args,
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");
     // ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
-    ETensor Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim, sim.mesh().boundingBox().volume());
+    ETensor Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
     BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
     cout << setprecision(16) << endl;

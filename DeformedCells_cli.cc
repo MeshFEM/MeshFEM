@@ -11,6 +11,7 @@
 #include <boost/algorithm/string.hpp>
 #include <string>
 #include <vector>
+#include "util.h"
 #include "Types.hh"
 #include <SymmetricMatrix.hh>
 #include "FEMMesh.hh"
@@ -48,6 +49,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("transformVersion",              "use transform version of homogenization")
         ("material,m", po::value<string>(), "base material")
         ("jacobian,j", po::value<string>(), "linear deformation jacobian")
+        ("parametrizedTransform,p",         "read a list of parameterized deformations from stdin")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("tile,t",     po::value<string>(), "tilings 'nx ny nz' (default: 1)")
         ("out,o",      po::value<string>(), "output file of deformed geometry (and w_ij fields if homogenization is run)")
@@ -83,8 +85,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         fail = true;
     }
 
-    if (vm.count("jacobian") == 0) {
-        cerr << "Error: must specify deformation jacobian" << endl;
+    if (vm.count("jacobian") + vm.count("parametrizedTransform") != 1) {
+        cerr << "Error: must specify either deformation jacobian or parametrizedTransform" << endl;
         fail = true;
     }
 
@@ -110,7 +112,57 @@ void execute(const po::variables_map &args,
     Simulator sim(inElements, inVertices);
     auto &mesh = sim.mesh();
 
+    cout << setprecision(16);
+
+    if (args.count("parametrizedTransform")) {
+        if (!args.count("homogenize") || args.count("tile"))
+            throw runtime_error("parametrizedTransform only supports homogenization");
+        if (args.count("transformVersion") == 0)
+            cerr << "WARNING: running transformVersion" << endl;
+        if (_N != 2)
+            throw runtime_error("parametrizedTransform only supports 2D");
+        string line;
+        Real theta, lambda;
+
+        auto EBase = mat.getTensor();
+
+        while (getDataLine(cin, line)) {
+            boost::trim(line);
+            vector<string> lineComponents;
+            boost::split(lineComponents, line, boost::is_any_of("\t "),
+                    boost::token_compress_on);
+            if (lineComponents.size() != 2)
+                throw runtime_error("invalid input transformation: " + line);
+            theta = stod(lineComponents[0]);
+            lambda = stod(lineComponents[1]);
+
+            Eigen::Matrix<Real, _N, _N> rot, stretch, jacobian;
+            rot << cos(theta), -sin(theta),
+                   sin(theta),  cos(theta);
+            stretch << lambda, 0,
+                       0,      1;
+            jacobian = rot * stretch * rot.transpose();
+            mat.setTensor(EBase.transform(jacobian.inverse()));
+
+            vector<VField> w_ij;
+            solveCellProblems(w_ij, sim);
+            auto EhDefo = homogenizedElasticityTensor(w_ij, sim).transform(jacobian);
+            auto ShDefo = EhDefo.inverse();
+
+            cout << theta << '\t' << lambda << '\t'
+                 << EhDefo.D(0, 0) << '\t' << EhDefo.D(0, 1) << '\t' << EhDefo.D(0, 2) << '\t'
+                                           << EhDefo.D(1, 1) << '\t' << EhDefo.D(1, 2) << '\t'
+                                                                     << EhDefo.D(2, 2) << '\t'
+                 << ShDefo.D(0, 0) << '\t' << ShDefo.D(0, 1) << '\t' << ShDefo.D(0, 2) << '\t'
+                                           << ShDefo.D(1, 1) << '\t' << ShDefo.D(1, 2) << '\t'
+                                                                     << ShDefo.D(2, 2) << endl;
+        }
+        return;
+    }
+
     // Parse jacobian.
+    Eigen::Matrix<Real, _N, _N> jacobian;
+
     vector<string> jacobianComponents;
     string jacobianString = args["jacobian"].as<string>();
     boost::trim(jacobianString);
@@ -118,7 +170,6 @@ void execute(const po::variables_map &args,
                  boost::token_compress_on);
     if (jacobianComponents.size() != _N * _N)
         throw runtime_error("Invalid deformation jacobian");
-    Eigen::Matrix<Real, _N, _N> jacobian;
     for (size_t i = 0; i < _N; ++i) {
         for (size_t j = 0; j < _N; ++j) {
             jacobian(i, j) = stod(jacobianComponents[_N * i + j]);
@@ -128,7 +179,7 @@ void execute(const po::variables_map &args,
     auto bbox = mesh.boundingBox();
     VectorND<_N> center = 0.5 * (bbox.minCorner + bbox.maxCorner);
     vector<MeshIO::IOVertex> deformedVertices;
-    
+
     for (size_t vi = 0; vi < mesh.numVertices(); ++vi) {
         VectorND<_N> p = mesh.vertex(vi).node()->p;
         deformedVertices.emplace_back((jacobian * (p - center)).eval());
@@ -142,7 +193,6 @@ void execute(const po::variables_map &args,
         mat.setTensor(mat.getTensor().transform(jacobian.inverse()));
         solveCellProblems(w_ij, sim);
         auto EhDefo = homogenizedElasticityTensor(w_ij, sim).transform(jacobian);
-        cout << setprecision(16);
         cout << "Elasticity tensor:" << endl;
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
@@ -166,7 +216,6 @@ void execute(const po::variables_map &args,
                 writer->addField("w_ij" + to_string(i), w_ij.back(), MSHFieldWriter::PER_NODE);
         }
         auto EhDefo = homogenizedElasticityTensor(w_ij, sim, deformedCellVolume);
-        cout << setprecision(16);
         cout << "Elasticity tensor:" << endl;
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
