@@ -146,7 +146,7 @@ void execute(const po::variables_map &args,
 
             vector<VField> w_ij;
             solveCellProblems(w_ij, sim);
-            auto EhDefo = homogenizedElasticityTensor(w_ij, sim).transform(jacobian);
+            auto EhDefo = homogenizedElasticityTensorDisplacementForm(w_ij, sim).transform(jacobian);
             auto ShDefo = EhDefo.inverse();
 
             cout << theta << '\t' << lambda << '\t'
@@ -192,7 +192,7 @@ void execute(const po::variables_map &args,
         // Morteza's transformation formulas
         mat.setTensor(mat.getTensor().transform(jacobian.inverse()));
         solveCellProblems(w_ij, sim);
-        auto EhDefo = homogenizedElasticityTensor(w_ij, sim).transform(jacobian);
+        auto EhDefo = homogenizedElasticityTensorDisplacementForm(w_ij, sim).transform(jacobian);
         cout << "Elasticity tensor:" << endl;
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
@@ -215,7 +215,7 @@ void execute(const po::variables_map &args,
             if (writer)
                 writer->addField("w_ij" + to_string(i), w_ij.back(), MSHFieldWriter::PER_NODE);
         }
-        auto EhDefo = homogenizedElasticityTensor(w_ij, sim, deformedCellVolume);
+        auto EhDefo = homogenizedElasticityTensorDisplacementForm(w_ij, sim, deformedCellVolume);
         cout << "Elasticity tensor:" << endl;
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
