@@ -170,8 +170,8 @@ public:
 
     void print(std::ostream &os, const std::string &componentSeparator = "\t",
                const std::string &elementPrefix = "",
-               const std::string &elementSuffix = "",
-               const std::string &elementSeparator = "\n") const {
+               const std::string &elementSuffix = "\n",
+               const std::string &elementSeparator = "") const {
         for (size_t i = 0; i < domainSize(); ++i) {
             if (i) os << elementSeparator;
             ConstValueType v = (*this)(i);

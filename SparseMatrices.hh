@@ -22,6 +22,7 @@
 #include <string>
 #include <stdexcept>
 #include <cassert>
+#include <memory>
 
 #ifndef GLOBALBENCHMARK_HH
 #include "BenchmarkStub.hh"
@@ -112,6 +113,12 @@ struct TripletMatrix {
         std::vector<size_t> bucketEndIndex(bucketStart);
 
         // Fill the buckets.
+        // NOTE: the order of entries within each bucket is undefined when
+        // multiple processors are used. This means that there will be a
+        // nondeterministic roundoff error in both the matrix and the solution.
+        // The roundoff error can be made deterministic by sorting the buckets
+        // by value as well as row index (in fact, there's probably an order
+        // that minimizes roundoff error).
         typedef std::pair<size_t, Real> CEntry;
         std::vector<CEntry> columnBuckets(nz.size());
 #pragma omp parallel for
@@ -557,8 +564,10 @@ public:
 
     void factorize() {
         clearFactors();
+        BENCHMARK_START_TIMER("Factorize");
         m_L = cholmod_l_analyze(m_A, &m_c);
         int success = cholmod_l_factorize(m_A, m_L, &m_c);
+        BENCHMARK_STOP_TIMER("Factorize");
         if (!success)
             throw std::runtime_error("Factorize failed.");
         BENCHMARK_ADD_MESSAGE("Peak factorization memory (MB):\t" +
@@ -579,7 +588,9 @@ public:
         for (size_t i = 0; i < m; ++i)
             ((double *) chol_b->x)[i] = b[i];
 
+        BENCHMARK_START_TIMER("Backsub");
         cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, chol_b, &m_c);
+        BENCHMARK_STOP_TIMER("Backsub");
 
         x.resize(n);
         for (size_t i = 0; i < n; ++i)
@@ -826,12 +837,15 @@ public:
         std::vector<_Real> uReduced(m_AUpper.m);
 
         // { 
+        //     m_AUpper.dump("A.txt");
         //     static int solve = 0;
         //     std::ofstream rhsOut("rhs_" + std::to_string(solve));
+        //     rhsOut << std::scientific << std::setprecision(16);
         //     for (_Real val : bReduced) {
         //         rhsOut << val << std::endl;
         //     }
         //     ++solve;
+        //     // exit(-1);
         // }
 
         if (m_isSPD) {
