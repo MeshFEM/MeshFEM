@@ -1,3 +1,5 @@
+#include <type_traits>
+
 ////////////////////////////////////////////////////////////////////////////////
 // Vertex Handles
 ////////////////////////////////////////////////////////////////////////////////
@@ -332,10 +334,10 @@ TetMesh(const Tets &tets, size_t nVertices) {
     }
 
     // Allocate data arrays unless the special TMEmptyData type is passed
-    if (typeid(          VertexData) != typeid(TMEmptyData))           m_vertexData.resize(nVertices);
-    if (typeid(        HalfFaceData) != typeid(TMEmptyData))         m_halfFaceData.resize(nHalfFaces);
-    if (typeid(             TetData) != typeid(TMEmptyData))              m_tetData.resize(tets.size());
-    if (typeid(  BoundaryVertexData) != typeid(TMEmptyData))   m_boundaryVertexData.resize(nBoundaryVertices);
-    if (typeid(BoundaryHalfEdgeData) != typeid(TMEmptyData)) m_boundaryHalfEdgeData.resize(nBoundaryHalfEdges);
-    if (typeid(    BoundaryFaceData) != typeid(TMEmptyData))     m_boundaryFaceData.resize(nBoundaryFaces);
+    if (!std::is_same<          VertexData, TMEmptyData>::value)           m_vertexData.resize(nVertices);
+    if (!std::is_same<        HalfFaceData, TMEmptyData>::value)         m_halfFaceData.resize(nHalfFaces);
+    if (!std::is_same<             TetData, TMEmptyData>::value)              m_tetData.resize(tets.size());
+    if (!std::is_same<  BoundaryVertexData, TMEmptyData>::value)   m_boundaryVertexData.resize(nBoundaryVertices);
+    if (!std::is_same<BoundaryHalfEdgeData, TMEmptyData>::value) m_boundaryHalfEdgeData.resize(nBoundaryHalfEdges);
+    if (!std::is_same<    BoundaryFaceData, TMEmptyData>::value)     m_boundaryFaceData.resize(nBoundaryFaces);
 }

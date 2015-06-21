@@ -13,6 +13,7 @@
 #include <vector>
 #include "util.h"
 #include "Types.hh"
+#include "GlobalBenchmark.hh"
 #include <SymmetricMatrix.hh>
 #include "FEMMesh.hh"
 #include "MeshIO.hh"
@@ -157,6 +158,7 @@ void execute(const po::variables_map &args,
                                            << ShDefo.D(1, 1) << '\t' << ShDefo.D(1, 2) << '\t'
                                                                      << ShDefo.D(2, 2) << endl;
         }
+        // BENCHMARK_REPORT();
         return;
     }
 

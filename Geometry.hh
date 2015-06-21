@@ -13,6 +13,8 @@
 
 #include "Types.hh"
 #include <vector>
+#include <array>
+#include <algorithm>
 
 template<typename _Vector>
 struct BBox {
@@ -211,6 +213,30 @@ struct UnorderedPair {
 
 private:
     int vmin, vmax;
+};
+
+struct UnorderedQuadruplet {
+    UnorderedQuadruplet() : m_v{{-1, -1, -1}} { }
+
+    template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    UnorderedQuadruplet(const std::vector<T> &idxs) {
+        assert(idxs.size() == 4);
+        set(idxs[0], idxs[1], idxs[2], idxs[3]);
+    }
+
+    UnorderedQuadruplet(int v0, int v1, int v2, int v3) { set(v0, v1, v2, v3); }
+
+    void set(int v0, int v1, int v2, int v3) {
+        m_v = {{v0, v1, v2, v3}};
+        std::sort(m_v.begin(), m_v.end());
+    }
+
+    // std::array has built-in lexicographic operator overloads
+    bool operator==(const UnorderedQuadruplet &b) const { return m_v == b.m_v; }
+    bool operator< (const UnorderedQuadruplet &b) const { return m_v <  b.m_v; }
+
+private:
+    std::array<int, 4> m_v;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

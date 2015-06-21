@@ -1,3 +1,5 @@
+#include <type_traits>
+
 ////////////////////////////////////////////////////////////////////////////////
 // Vertex Handles
 ////////////////////////////////////////////////////////////////////////////////
@@ -330,9 +332,9 @@ TriMesh(const Tris &tris, size_t nVertices) {
     }
 
     // Allocate data arrays unless the special TMEmptyData type is passed
-    if (typeid(        VertexData) != typeid(TMEmptyData))         m_vertexData.resize(nVertices);
-    if (typeid(      HalfEdgeData) != typeid(TMEmptyData))       m_halfEdgeData.resize(nHalfEdges);
-    if (typeid(           TriData) != typeid(TMEmptyData))            m_triData.resize(tris.size());
-    if (typeid(BoundaryVertexData) != typeid(TMEmptyData)) m_boundaryVertexData.resize(nBoundaryVertices);
-    if (typeid(  BoundaryEdgeData) != typeid(TMEmptyData))   m_boundaryEdgeData.resize(nBoundaryEdges);
+    if (!std::is_same<        VertexData, TMEmptyData>::value)         m_vertexData.resize(nVertices);
+    if (!std::is_same<      HalfEdgeData, TMEmptyData>::value)       m_halfEdgeData.resize(nHalfEdges);
+    if (!std::is_same<           TriData, TMEmptyData>::value)            m_triData.resize(tris.size());
+    if (!std::is_same<BoundaryVertexData, TMEmptyData>::value) m_boundaryVertexData.resize(nBoundaryVertices);
+    if (!std::is_same<  BoundaryEdgeData, TMEmptyData>::value)   m_boundaryEdgeData.resize(nBoundaryEdges);
 }

@@ -33,9 +33,9 @@ public:
             throw std::runtime_error("Couldn't open " + jsPath);
 
         numVertices = mesh.numVertices();
-        numElements = mesh.numElements();
+        numElements = mesh.numSimplices();
         numBoundaryVertices = mesh.numBoundaryVertices();
-        numBoundaryElements = mesh.numBoundaryElements();
+        numBoundaryElements = mesh.numBoundarySimplices();
 
         writeHeader(mesh);
     }
@@ -64,7 +64,7 @@ private:
             m_outStream << mesh.vertex(i)->p.format(pointFormatter);
         }
         m_outStream << "];" << std::endl << "elements = [ ";
-        for (size_t i = 0; i < mesh.numElements(); ++i) {
+        for (size_t i = 0; i < mesh.numSimplices(); ++i) {
             m_outStream << (i ? ", " : "") << "[";
            auto e = mesh.element(i);
             for (size_t j = 0; j < e.numVertices(); ++j) {
@@ -73,7 +73,7 @@ private:
             m_outStream << "]";
         }
         m_outStream << " ];" << std::endl << "boundaryElements = [ ";
-        for (size_t i = 0; i < mesh.numBoundaryElements(); ++i) {
+        for (size_t i = 0; i < mesh.numBoundarySimplices(); ++i) {
             m_outStream << (i ? ", " : "") << "[";
            auto e = mesh.boundaryElement(i);
             for (size_t j = 0; j < e.numVertices(); ++j) {
@@ -82,7 +82,7 @@ private:
             m_outStream << "]";
         }
         m_outStream << " ];" << std::endl << "boundaryNodes = [ ";
-        for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
+        for (size_t i = 0; i < mesh.numBoundaryVertices(); ++i) {
             m_outStream << (i ? ", " : "")
                         << mesh.boundaryVertex(i).volumeVertex().index();
         }

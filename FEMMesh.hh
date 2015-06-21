@@ -223,6 +223,30 @@ public:
         return vol;
     }
 
+    EmbeddingSpace elementBarycenter(size_t ei) const {
+        EmbeddingSpace b(EmbeddingSpace::Zero());
+        ConstElementHandle e = element(ei);
+        assert(e);
+        for (size_t i = 0; i < e.numVertices(); ++i) {
+            // Nodes 0...numVertices - 1 are located on the vertices
+            b += e.vertex(i).node()->p;
+        }
+        b /= e.numVertices();
+        return b;
+    }
+
+    EmbeddingSpace boundaryElementBarycenter(size_t ei) const {
+        EmbeddingSpace b(EmbeddingSpace::Zero());
+        ConstElementHandle e = boundaryElement(ei);
+        assert(e);
+        for (size_t i = 0; i < e.numVertices(); ++i) {
+            // Nodes 0...numVertices - 1 are located on the vertices
+            b += e.vertex(i).node()->p;
+        }
+        b /= e.numVertices();
+        return b;
+    }
+
 private:
     // Table of **non-vertex** node indices for each element. We needn't store
     // vertex node indices because our mesh data structure knows them.

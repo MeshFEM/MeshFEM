@@ -17,6 +17,7 @@
 #define MESH_IO_HH
 
 #include "Types.hh"
+#include "TemplateHacks.hh"
 
 #include <string>
 #include <fstream>
@@ -67,10 +68,13 @@ namespace MeshIO {
         std::vector<size_t> m_idxs;
     public:
         IOElement(size_t n = 0) : m_idxs(n) { }
-        IOElement(size_t v0, size_t v1, size_t v2)
-            : m_idxs(3) { m_idxs[0] = v0; m_idxs[1] = v1; m_idxs[2] = v2; }
-        IOElement(size_t v0, size_t v1, size_t v2, size_t v3)
-            : m_idxs(4) { m_idxs[0] = v0; m_idxs[1] = v1; m_idxs[2] = v2; m_idxs[3] = v3; }
+        // Triangle (3), Tet/Quad (4), and Hex (8) index constructors
+        static constexpr bool is_valid_element_size(size_t size) { return (size == 3) || (size == 4) || (size == 8); }
+        template<typename... Args>
+        IOElement(size_t v1, size_t v2, Args... args) : m_idxs{v1, v2, static_cast<size_t>(args)...} {
+            static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
+            static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Triangles, Quads, Tet, and Hex-sized elements");
+        }
 
         int operator[](size_t i) const {
             assert(i < m_idxs.size());
