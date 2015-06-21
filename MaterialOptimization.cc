@@ -15,7 +15,7 @@ namespace MaterialOptimization {
 
 // Term for imposing a graph laplacian-based regularization.
 // For material parameter smoothness regularization, a term should be generated
-// for each edge (mi, mj) of the material graph. Then mi_x and mi_j in the
+// for each edge (mi, mj) of the material graph. Then mi_x and mj_x in the
 // residual computation correspond to the variables of mi and mj to regularize.
 template<size_t _NVars>
 struct GraphLaplacianTerm {

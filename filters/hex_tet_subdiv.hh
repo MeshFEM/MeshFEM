@@ -13,7 +13,6 @@
 
 #include <stdexcept>
 #include <map>
-#include <iostream>
 #include "../Geometry.hh"
 
 // hexIdx: index of the hex from which each output tetrahedron originated
@@ -36,8 +35,6 @@ void hex_tet_subdiv(const std::vector<Vertex>  &inVertices,
     outVertices = inVertices;
     // 4 tets are created per face--24 total per hex
     outElements.reserve(24 * inElements.size());
-
-    std::cout << inVertices.size() << " " << inElements.size() << std::endl;
     
     // Face centers must be stitched together
     std::map<UnorderedQuadruplet, size_t> faceCenter;
@@ -107,7 +104,6 @@ void hex_tet_subdiv(const std::vector<Vertex>  &inVertices,
             }
         }
     }
-    std::cout << outVertices.size() << " " << outElements.size() << std::endl;
 }
 
 #endif /* end of include guard: HEX_TET_SUBDIV_HH */
