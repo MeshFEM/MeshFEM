@@ -11,8 +11,11 @@ CERES_LIB=/usr/local/lib
 LIBMATHEVAL_INC=/usr/include
 LIBMATHEVAL_LIB=/usr/lib
 VCG_INC=/usr/local/include/vcglib
+CLIPPER_PATH=/usr/local
+DLIB_INC=/usr/local/include/dlib
 
-INCLUDES=-I$(CSGFEM_INC) -I$(EIGEN_INC) -I$(SUITESPARSE_INC) \
+
+INCLUDES=-I$(CSGFEM_INC) -I$(EIGEN_INC) -I$(SUITESPARSE_INC) -I$(CLIPPER_PATH) -I$(TRIANGLE_PATH) \
 # -I$(BOOST_INC) $(CERES_INC) -I$(LIBMATHEVAL_INC)
 
 LIBS=-lboost_program_options -lboost_filesystem -lboost_system \
@@ -28,5 +31,4 @@ LIBS=-lboost_program_options -lboost_filesystem -lboost_system \
 
 CXX=g++
 CC=gcc
-CPPFLAGS= -fopenmp
-
+CPPFLAGS= -fopenmp -fPIC
