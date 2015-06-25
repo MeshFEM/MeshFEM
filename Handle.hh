@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef HANDLE_HH
 #define HANDLE_HH
+#include <type_traits>
 
 // Special data type that causes no per-entity storage for each entity it is
 // assigned to.
@@ -60,7 +61,7 @@ protected:
     Data *m_guardedGetPtr() const {
         const Subtype *self = static_cast<const Subtype *>(this);
         assert(self->valid());
-        if (typeid(Data) == typeid(TMEmptyData))
+        if (std::is_same<Data, TMEmptyData>::value)
             return reinterpret_cast<Data *>(&m_mesh.m_emptyDataDummy);
         return self->dataPtr();
     }
@@ -103,7 +104,7 @@ protected:
     const Data *m_guardedGetPtr() const {
         const ConstSubtype *self = static_cast<const ConstSubtype *>(this);
         assert(self->valid());
-        if (typeid(Data) == typeid(TMEmptyData))
+        if (std::is_same<Data, TMEmptyData>::value)
             return reinterpret_cast<const Data *>(&m_mesh.m_emptyDataDummy);
         return self->dataPtr();
     }

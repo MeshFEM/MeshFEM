@@ -97,9 +97,9 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
     visible_opts.add(parser_operations).add(stack_operations)
            .add(unary_operations).add(binary_operations);
 
-    po::parsed_options *parsedOptions = NULL;
+    shared_ptr<po::parsed_options> parsedOptions;
     try {
-        parsedOptions = new po::parsed_options(po::command_line_parser(argc, argv).
+        parsedOptions = std::make_shared<po::parsed_options>(po::command_line_parser(argc, argv).
                             options(visible_opts).positional(p).run());
     }
     catch (std::exception &e) {

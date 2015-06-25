@@ -80,12 +80,13 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             // In 2D, these vector basis functions look like:
             // (phi0, 0), (0, phi0), (phi1, 0), (0, phi1), ...
             for (size_t i = 0; i < nNodes; ++i) {
+                auto gPhi = gradPhi(i);
                 for (size_t c = 0; c < N; ++c) {
                     // We need the strain value at each interpolation node.
                     for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
                         for (size_t var = 0; var < N; ++var) {
                             strains[i * N + c][inode](c, var) +=
-                                ((var == c) ? 1.0 : 0.5) * gradPhi(i)[inode](var);
+                                ((var == c) ? 1.0 : 0.5) * gPhi[inode](var);
                         }
                     }
                 }
@@ -97,6 +98,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         void strain(_ElemHandle elem, const VField &u, Strain &out) const {
             out.clear();
             for (size_t i = 0; i < nNodes; ++i) {
+                auto gPhi = gradPhi(i);
                 const auto &ui = u(elem.node(i).index());
                 for (size_t c = 0; c < N; ++c) {
                     auto ui_c = ui[c];
@@ -104,7 +106,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                     for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
                         for (size_t var = 0; var < N; ++var) {
                             out[inode](c, var) += ((var == c) ? 1.0 : 0.5) *
-                                ui_c * gradPhi(i)[inode](var);
+                                ui_c * gPhi[inode](var);
                         }
                     }
                 }
@@ -135,9 +137,10 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         // Gets ***upper triangle*** of the per-element stiffness matrix.
         void perElementStiffness(PerElementStiffness &Ke) const {
             std::vector<Strain> strains = vecPhiStrains();
-            std::vector<Stress> stresses(strains.size());
+            std::vector<Stress> stresses;
+            stresses.reserve(strains.size());
             for (size_t i = 0; i < strains.size(); ++i)
-                stresses[i] = strains[i].doubleContract(m_E());
+                stresses.emplace_back(strains[i].doubleContract(m_E()));
             for (size_t i = 0; i < strains.size(); ++i) {
                 for (size_t j = i; j < stresses.size(); ++j) {
                     Ke(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(

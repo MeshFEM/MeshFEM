@@ -54,12 +54,6 @@ public:
     size_t numBoundaryVertices() const { return bV.size(); }
     size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
 
-    // TODO: REPLACE WITH  numSimplices, numBoundarySimplices
-    size_t numElements()         const { return numTris(); }
-    size_t numNodes()            const { return numVertices(); }
-    size_t numBoundaryElements() const { return numBoundaryEdges(); }
-    size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
-
     size_t numSimplices()         const { return numTris(); }
     size_t numBoundarySimplices() const { return numBoundaryEdges(); }
 

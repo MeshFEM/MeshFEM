@@ -218,7 +218,7 @@ void execute(const po::variables_map &args,
             ExRelError.insertError(std::abs((Ex_true - Ex) / Ex_true));
         }
 
-        ETensor EhTrans = Eh.orthogonalTransform(rot);
+        ETensor EhTrans = Eh.transform(rot);
         ETensor ShTrans = EhTrans.inverse();
         diff = ShTrans - Sh;
         cout << "Transformed original compliance tensor:" << endl << ShTrans << endl;

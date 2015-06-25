@@ -29,6 +29,8 @@ void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
                            std::vector<size_t> &quadIdx,
                            bool ignoreNonQuads = true)
 {
+    // There is a center vertex added to triangulate quads.
+    outVertices.reserve(5 * inElements.size());
     outVertices = inVertices;
     outElements.clear(), outElements.reserve(4 * inElements.size());
 

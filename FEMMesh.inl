@@ -47,7 +47,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 // Element Handles
 // TODO: reimplement traversal operations to stay on the derived mesh (e.g.
-// neighbor, vertex, ...)
+// neighbor, ...)
 ////////////////////////////////////////////////////////////////////////////////
 template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
 template<class _Mesh, template<class, class, class, class> class _HType>
@@ -56,6 +56,7 @@ EHandle : public BaseMesh::template SHandle<_Mesh, _HType> {
     typedef typename BaseMesh::template SHandle<_Mesh, _HType> Base;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template NHandle<_Mesh, _HType>  NH;
+    typedef typename _Mesh::template VHandle<_Mesh, _HType>  VH;
 public:
     constexpr size_t numNodes()  const { return Simplex::numNodes(_K, _Deg); }
     NH node(size_t i) const { return NH(m_mesh.m_nodeOfElement(i, m_idx), m_mesh); }
@@ -205,8 +206,8 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
     }
 
     // Allocate data arrays unless the special TMEmptyData type is passed
-    if (typeid(        NodeData) != typeid(TMEmptyData))         m_nodeData.resize(numNodes());
-    if (typeid(BoundaryNodeData) != typeid(TMEmptyData)) m_boundaryNodeData.resize(numBoundaryNodes());
+    if (!std::is_same<NodeData,         TMEmptyData>::value)         m_nodeData.resize(numNodes());
+    if (!std::is_same<BoundaryNodeData, TMEmptyData>::value) m_boundaryNodeData.resize(numBoundaryNodes());
 
     setNodePositions(vertices);
 }

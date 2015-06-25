@@ -95,12 +95,6 @@ public:
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
 
-    // TODO: REPLACE WITH  numSimplices, numBoundarySimplices
-    size_t numElements()         const { return numTets(); }
-    size_t numNodes()            const { return numVertices(); }
-    size_t numBoundaryElements() const { return numBoundaryFaces(); }
-    size_t numBoundaryNodes()    const { return numBoundaryVertices(); }
-
     size_t numSimplices()         const { return numTets(); }
     size_t numBoundarySimplices() const { return numBoundaryFaces(); }
 
