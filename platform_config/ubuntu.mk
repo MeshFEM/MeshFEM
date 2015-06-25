@@ -11,7 +11,6 @@ CERES_LIB=/usr/local/lib
 LIBMATHEVAL_INC=/usr/include
 LIBMATHEVAL_LIB=/usr/lib
 VCG_INC=/usr/local/include/vcglib
-CLIPPER_PATH=/usr/local
 DLIB_INC=/usr/local/include/dlib
 
 
