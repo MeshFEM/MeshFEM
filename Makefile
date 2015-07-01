@@ -32,7 +32,7 @@ ConstStrainDisplacement_cli: $(CSDISP_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 MaterialOptimization_cli: $(MATOPT_OBJS)
-	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@ $(LIBS)
+	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@ $(LIBS) # static link order?
 
 Simulate_cli: $(SIM_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
