@@ -83,16 +83,13 @@ Format guessFormat(const std::string &path) {
     // Make comparisons insensitive;
     for (unsigned int i = 0; i < ext.length(); ++i)
         ext[i] = tolower(ext[i]);
-    if (ext == ".off")
-        return FMT_OFF;
-    if (ext == ".obj")
-        return FMT_OBJ;
-    if (ext == ".msh")
-        return FMT_MSH;
-    if (ext == ".poly")
-        return FMT_POLY;
-    if ((ext == ".node") || (ext == ".ele"))
-        return FMT_NODE_ELE;
+    if (ext == ".off")  return FMT_OFF;
+    if (ext == ".obj")  return FMT_OBJ;
+    if (ext == ".msh")  return FMT_MSH;
+    if (ext == ".poly") return FMT_POLY;
+    if (ext == ".node") return FMT_NODE_ELE;
+    if (ext == ".ele")  return FMT_NODE_ELE;
+    if (ext == ".mesh") return FMT_MEDIT;
 
     return FMT_INVALID;
 }
@@ -103,18 +100,18 @@ Format guessFormat(const std::string &path) {
 //  @return     format parser object
 *///////////////////////////////////////////////////////////////////////////////
 MeshIO *getMeshIO(Format &format) {
-    static MeshIO_OFF  s_offIO;
-    static MeshIO_OBJ  s_objIO;
-    static MeshIO_MSH  s_mshIO;
-    static MeshIO_POLY s_polyIO;
+    static MeshIO_OFF   s_offIO;
+    static MeshIO_OBJ   s_objIO;
+    static MeshIO_MSH   s_mshIO;
+    static MeshIO_POLY  s_polyIO;
+    static MeshIO_Medit s_meditIO;
 
     // Indexed using Format enum (order must match enum)
-    std::vector<MeshIO *> IOs;
-    IOs.push_back(&s_offIO);
-    IOs.push_back(&s_objIO);
-    IOs.push_back(&s_mshIO);
-    IOs.push_back(&s_polyIO);
+    static std::vector<MeshIO *> IOs = { &s_offIO, &s_objIO, &s_mshIO,
+        &s_polyIO, NULL /* NodeEle must be handled specially */, &s_meditIO };
 
+    if (format == FMT_NODE_ELE)
+        throw std::runtime_error("getMeshIO method doesn't support Node/Ele");
     if ((size_t) format < IOs.size() && format >= 0)
         return IOs[format];
     
@@ -642,6 +639,88 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     if (line != "$EndElements") throw badFmt;
 
     return type;
+}
+
+vector<string> tokenize(std::string line) {
+    vector<string> lineComponents;
+    boost::trim(line);
+    boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
+    return lineComponents;
+}
+
+MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &vertices,
+                            vector<Element> &elements, MeshType /* t */) {
+    vertices.clear(), elements.clear();
+    string line;
+
+    runtime_error badFMT("Bad Medit format.");
+    getDataLine(is, line);
+    if (line != "MeshVersionFormatted 1") throw badFMT;
+
+    getDataLine(is, line);
+    auto tokens = tokenize(line);
+    if (tokens.at(0) != "Dimension") throw badFMT;
+    size_t dim = stoi(tokens.at(1));
+    if ((dim != 2) && (dim != 3)) throw runtime_error("Only dimension 2 and 3 supported");
+
+    getDataLine(is, line);
+    if (line != "Vertices") throw badFMT;
+    getDataLine(is, line);
+    size_t numVertices = stoi(line);
+    vertices.reserve(numVertices);
+    for (size_t i = 0; getDataLine(is, line) && i < numVertices; ++i) {
+        tokens = tokenize(line);
+        // Each vertex entry has dim components plus a reference field
+        if (tokens.size() != dim + 1) throw badFMT;
+        IOVertex v;
+        for (size_t c = 0; c < dim; ++c)
+            v[c] = stod(tokens[c]);
+        vertices.push_back(v);
+    }
+    if (vertices.size() != numVertices) throw badFMT;
+
+    if (line != "Triangles") throw badFMT;
+    getDataLine(is, line);
+    size_t numTriangles = stoi(line);
+    vector<Element> triangles;
+    triangles.reserve(numTriangles);
+    for (size_t i = 0; getDataLine(is, line) && i < numTriangles; ++i) {
+        tokens = tokenize(line);
+        // Each triangle entry has 3 indices plus a reference field
+        if (tokens.size() != 4) throw badFMT;
+        triangles.emplace_back(3);
+        for (size_t c = 0; c < 3; ++c)
+            triangles.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
+    }
+    if (triangles.size() != numTriangles) throw badFMT;
+
+    // If only triangles are present, it's a triangle mesh
+    if (line == "End") {
+        elements.swap(triangles);
+        return MESH_TRI;
+    }
+    // The only other thing we support is a tetrahedral mesh
+    if (line != "Tetrahedra") throw badFMT;
+    getDataLine(is, line);
+    size_t numTetrahedra = stoi(line);
+    vector<Element> tetrahedra;
+    tetrahedra.reserve(numTetrahedra);
+    for (size_t i = 0; getDataLine(is, line) && i < numTetrahedra; ++i) {
+        tokens = tokenize(line);
+        // Each triangle entry has 4 indices plus a reference field
+        if (tokens.size() != 5) throw badFMT;
+        tetrahedra.emplace_back(4);
+        for (size_t c = 0; c < 4; ++c)
+            tetrahedra.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
+    }
+    if (tetrahedra.size() != numTetrahedra) throw badFMT;
+
+    if (line == "End") {
+        elements.swap(tetrahedra);
+        return MESH_TET;
+    }
+
+    throw badFMT;
 }
 
 }

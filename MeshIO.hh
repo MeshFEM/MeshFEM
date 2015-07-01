@@ -27,7 +27,7 @@
 
 namespace MeshIO {
     /** Supported file formats */
-    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_POLY = 3, FMT_NODE_ELE = 4,
+    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_POLY = 3, FMT_NODE_ELE = 4, FMT_MEDIT = 5,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
     typedef enum { MESH_TRI, MESH_TET, MESH_QUAD, MESH_TRI_QUAD, MESH_GUESS, MESH_INVALID } MeshType;
 
@@ -45,7 +45,8 @@ namespace MeshIO {
         IOVertex(Real x, Real y, Real z) : point(x, y, z) { }
         IOVertex(const Real *p)          : point(p) { }
         IOVertex(const Point3D &p)       : point(p) { }
-        // Padding constructor
+        // Padding constructors
+        IOVertex(Real x, Real y)         : point(x, y, 0) { }
         IOVertex(const Point2D &p)       : point(p[0], p[1], 0) { }
 
         void set(_Real x, _Real y, _Real z) {
@@ -229,6 +230,21 @@ namespace MeshIO {
         private:
             // Whether parsed input was binary/output will be binary.
             bool m_binary = false;
+    };
+
+    // The format used in CGAL
+    class MeshIO_Medit : public MeshIO {
+    public:
+        typedef IOVertex  Vertex;
+        typedef IOElement Element;
+
+        void save(std::ostream &os, const std::vector<Vertex> &vertices,
+                  const std::vector<Element> &elements, MeshType type) {
+            throw std::runtime_error("Medit saving currently unsupported");
+        }
+
+        MeshType load(std::istream &is, std::vector<Vertex> &vertices,
+                      std::vector<Element> &elements, MeshType type);
     };
 
     ////////////////////////////////////////////////////////////////////////////
