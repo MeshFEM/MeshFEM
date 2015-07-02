@@ -116,7 +116,7 @@ void transferField(const std::vector<size_t> cellIndex,
 *///////////////////////////////////////////////////////////////////////////////
 int main(int argc, const char *argv[])
 {
-    cout << setprecision(16) << endl;
+    cout << setprecision(16);
 
     po::variables_map args = parseCmdLine(argc, argv);
 
@@ -132,7 +132,7 @@ int main(int argc, const char *argv[])
 
     remove_dangling_vertices(inVertices, inElements);
     if (inVertices.size() != origSize)
-        cout << "WARNING: " << inVertices.size() - origSize
+        cout << "WARNING: " << origSize - inVertices.size()
              << " dangling vertice(s) removed" << endl;
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
