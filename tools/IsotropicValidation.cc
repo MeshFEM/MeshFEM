@@ -184,6 +184,7 @@ void execute(const po::variables_map &args,
     Real mu_avg = (muYZ + muZX + muXY) / 3.0;
     std::cout << "Anisotropy: " << mu_avg / (E_avg / (2 * (1 + nu_avg))) << std::endl;
     std::cout << "Anisotropy2: " << (Sh.D(1, 1) - Sh.D(0, 1)) / (2 * Sh.D(5, 5)) << std::endl;
+    std::cout << "Poisson: " << nu_avg << std::endl;
     Real Ex_true = Ex;
 
     ErrorRecord relError("Rel error compliance");
