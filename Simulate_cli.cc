@@ -196,7 +196,7 @@ void execute(const po::variables_map &args,
     // writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
 
     sim.reportRegionSurfaceForces(u);
-    writer.addField("Ku", sim.internalForceNodalLoad(u), MSHFieldWriter::PER_NODE);
+    writer.addField("Ku", sim.applyStiffnessMatrix(u), MSHFieldWriter::PER_NODE);
 
     BENCHMARK_REPORT();
 }

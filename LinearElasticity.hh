@@ -365,9 +365,10 @@ public:
         return load;
     }
 
-    // Compute the load on the nodes due to internal forces under a particular
-    // deformation. (I.e. apply stiffness matrix: K * u)
-    VField internalForceNodalLoad(const VField &u) const {
+    // Compute the load on the nodes due to external forces under a particular
+    // equilibrium deformation. (I.e. apply stiffness matrix: K * u). The
+    // internal forces are -applyStiffnessMatrix(u)
+    VField applyStiffnessMatrix(const VField &u) const {
         assert(u.domainSize() == m_mesh.numNodes());
         VField load(m_mesh.numNodes());
         load.clear();
@@ -730,7 +731,7 @@ public:
     }
 
     void reportRegionSurfaceForces(const VField &u) const {
-        VField f = internalForceNodalLoad(u);
+        VField f = applyStiffnessMatrix(u);
         std::vector<VectorND<N>> forces;
         for (size_t bni = 0; bni < m_mesh.numBoundaryNodes(); ++bni) {
             auto bn = m_mesh.boundaryNode(bni);

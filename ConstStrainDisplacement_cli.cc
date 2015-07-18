@@ -62,6 +62,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("material,m", po::value<string>(), "base material")
         ("strain,s", po::value<string>(), "strain tensor")
         ("degree,d",   po::value<int>()->default_value(1), "degree of finite elements")
+        ("nodalLoad,l",                     "compute the effective force on each node.")
         ("addFluctuation,f",                "add fluctuation strains to the displacement")
         ;
 
@@ -181,6 +182,8 @@ void execute(const po::variables_map &args,
     }
 
     writer.addField("u_cstrain", cstrainDisp, MSHFieldWriter::PER_NODE);
+    if (args.count("nodalLoad"))
+        writer.addField("f_cstrain", sim.applyStiffnessMatrix(cstrainDisp), MSHFieldWriter::PER_NODE);
 
     writer.addField("stress", sim.averageStressField(cstrainDisp), MSHFieldWriter::PER_ELEMENT);
 }

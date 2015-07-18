@@ -121,7 +121,7 @@ int main(int argc, const char *argv[])
         // Current grid is [0, sx], ...
         Point3D scale = maxCorner - minCorner;
         for (size_t i = 0; i < sizes.size(); ++i) scale[i] /= sizes[i];
-        for (auto &v : gridVertices) v.point = (scale.array() * v.point.array()).matrix() - minCorner;
+        for (auto &v : gridVertices) v.point = (scale.array() * v.point.array()).matrix() + minCorner;
     }
 
     string outPath = args["outFile"].as<string>();
