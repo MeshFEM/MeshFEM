@@ -53,6 +53,12 @@ struct BBox {
               (v.array() * (maxCorner - minCorner).array()).matrix();
     }
 
+    Vector center() const { return 0.5 * (minCorner + maxCorner); }
+    // Clamp a point to the coordinate-wise closest point in the box
+    Vector clamp(const Vector &p) {
+        return p.cwiseMax(minCorner).cwiseMin(maxCorner);
+    }
+
     // Get the interpolation coordinates of a point.
     // These are inside [0, 1]^dim if the point is in the box.
     Vector interpolationCoordinates(const Vector &v) const {
@@ -105,8 +111,7 @@ struct BBox {
     bool intersectsCircle(const Vector &c, Real r) const {
         // Transform so box center is at the origin and the circle is in the
         // first quadrant.
-        Vector boxCenter = .5 * (minCorner + maxCorner);
-        Vector c_prime = (c - boxCenter).cwiseAbs();
+        Vector c_prime = (c - center()).cwiseAbs();
 
         Vector boxHalfDims = .5 * dimensions();
         if ((c_prime.array() > (boxHalfDims.array() + r)).any())
