@@ -1,5 +1,17 @@
+# MESHFEM build customization system:
+# In general, library include/lib paths are configured using environment
+# variables. These are of the format:
+# LIBRARYNAME_INC
+# LIBRARYNAME_LIB
+# However, the names and dependencies of the shared libraries themselves vary
+# from platform to platform. Thus, we use the platform-specific configuration
+# files to create the following variables:
+# LIBRARYNAME_LFLAGS
+# These should look something like:
+# LIBRARYNAME_LFLAGS=-L$(LIBRARYNAME_LIB) -lname ...
+# These platform-specific config files are located in platform_config/(host).mk
+
 # Read in definitions based on hostname
-# Adapted from openFTL's build system
 TOP := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # determine the hostname
@@ -31,7 +43,6 @@ endif
 ifneq (,$(findstring Linux,$(HOST)))
     HOST=ubuntu
 endif
-
 
 # directory of local definitions
 LOCALDEFSDIR = $(TOP)/platform_config
