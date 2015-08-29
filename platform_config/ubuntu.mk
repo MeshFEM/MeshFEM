@@ -1,8 +1,9 @@
 CSGFEM_INC=$(HOME)/Project_3DP/CSGFEM
-EIGEN_INC=/usr/local/include/eigen3
+CSGFEM=$(CSGFEM_INC)
+EIGEN_INC=$(EIGEN3_INCLUDE_DIR)
 SUITESPARSE_INC=/usr/include/suitesparse
-BOOST_INC=/usr/local/include
-BOOST_LIB=/usr/local/lib
+BOOST_INC=/usr/include
+BOOST_LIB=/usr/lib
 SUITESPARSE_LIB=/usr/lib
 OPTPP_INC=/opt/local/include
 OPTPP_LIB=/opt/local/lib
@@ -14,13 +15,18 @@ VCG_INC=/usr/local/include/vcglib
 DLIB_INC=/usr/local/include/dlib
 
 
-INCLUDES=-I$(CSGFEM_INC) -I$(EIGEN_INC) -I$(SUITESPARSE_INC) -I$(CLIPPER_PATH) -I$(TRIANGLE_PATH) \
-# -I$(BOOST_INC) $(CERES_INC) -I$(LIBMATHEVAL_INC)
+# INCLUDES=-I$(CSGFEM_INC) -I$(EIGEN_INC) -I$(SUITESPARSE_INC) -I$(CLIPPER_PATH) -I$(TRIANGLE_PATH) \
+#	       -I$(BOOST_INC) $(CERES_INC) -I$(LIBMATHEVAL_INC)
 
-LIBS=-lboost_program_options -lboost_filesystem -lboost_system \
-	 -lumfpack -llapack -lblas -lpthread\
-	 -L$(CERES_LIB) -lceres -lcholmod -lcxsparse -lglog -lgflags \
-	 -L$(LIBMATHEVAL_LIB) -lmatheval
+BOOST_LFLAGS=-L$(BOOST_LIB) -lboost_program_options -lboost_filesystem -lboost_system
+SUITESPARSE_LFLAGS=-lcholmod -lumfpack -llapack -lblas -lpthread
+CERES_LFLAGS=-L$(CERES_LIB) -lceres -lcxsparse -lglog -lgflags
+LIBMATHEVAL_LFLAGS=-L$(LIBMATHEVAL_LIB) -lmatheval
+
+# LIBS=-L$(BOOST_LIB) -lboost_program_options -lboost_filesystem -lboost_system \
+# 	 -lumfpack -llapack -lblas -lpthread\
+# 	 -L$(CERES_LIB) -lceres -lcholmod -lcxsparse -lglog -lgflags \
+# 	 -L$(LIBMATHEVAL_LIB) -lmatheval
 
 #	 -lsuitesparse \
 #	 -L$(OPTPP_LIB) -lopt -lnewmat -framework accelerate \

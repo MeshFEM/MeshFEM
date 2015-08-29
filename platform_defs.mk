@@ -44,6 +44,10 @@ ifneq (,$(findstring Linux,$(HOST)))
     HOST=ubuntu
 endif
 
+ifneq (,$(findstring ubuntu,$(HOST)))
+    HOST=ubuntu
+endif
+
 # directory of local definitions
 LOCALDEFSDIR = $(TOP)/platform_config
 
