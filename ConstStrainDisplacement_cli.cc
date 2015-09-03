@@ -177,7 +177,16 @@ void execute(const po::variables_map &args,
             tmp *= (((i < _N) ? 1.0 : 2.0) * strain[i]);
             cstrainDisp += tmp;
 
-            writer.addField("w_ij" + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
+            writer.addField("w_ij " + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
+            auto strain = sim.averageStrainField(w_ij[i]);
+            writer.addField("strain w_ij " + to_string(i), strain, MSHFieldWriter::PER_ELEMENT);
+
+            ScalarField<Real> comp(strain.domainSize());
+            for (size_t c = 0; c < flatLen(_N); ++c) {
+                for (size_t ei = 0; ei < strain.domainSize(); ++ei)
+                    comp(ei) = strain(ei)[c];
+                writer.addField("strain w_ij " + to_string(i) + " comp " + to_string(c), comp, MSHFieldWriter::PER_ELEMENT);
+            }
         }
     }
 
