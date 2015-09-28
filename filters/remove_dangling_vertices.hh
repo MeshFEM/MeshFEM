@@ -19,7 +19,7 @@ template<class Vertex, class Element>
 void remove_dangling_vertices(std::vector<Vertex>  &vertices,
                               std::vector<Element> &elements) {
     std::vector<bool> seen(vertices.size(), false);
-    for (const auto e : elements) {
+    for (const auto &e : elements) {
         for (size_t c = 0; c < e.size(); ++c)
             seen.at(e[c]) = true;
     }

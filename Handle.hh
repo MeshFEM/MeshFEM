@@ -28,6 +28,7 @@ class ConstHandle;
 template<class Mesh, class Subtype, class ConstSubtype, class Data>
 class Handle {
 public:
+    typedef Mesh  mesh_type;
     typedef Data  value_type;
     typedef Data *value_ptr;
     typedef ConstHandle<Mesh, Subtype, ConstSubtype, Data> _ConstHandle;
@@ -73,6 +74,7 @@ protected:
 template<class Mesh, class Subtype, class ConstSubtype, class Data>
 class ConstHandle {
 public:
+    typedef Mesh  mesh_type;
     typedef Data value_type;
     typedef const Data *value_ptr;
     typedef Handle<Mesh, Subtype, ConstSubtype, Data> _Handle;
@@ -112,5 +114,63 @@ protected:
     int m_idx;
     const Mesh &m_mesh;
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// Handle Ranges: range-based for support
+////////////////////////////////////////////////////////////////////////////////
+
+// Create an iterator wrapper for handles to be used in range-based for.
+// The problem we're solving is that, if mesh.vertices()
+// is a range of handles,
+//      for (auto v : mesh.vertices()) {
+//          ...
+//      }
+// actually iterates over the vertex *data* not the vertices themselves
+// since range-based for loops apply the "*" operator.
+template<class Handle>
+class HandleIteratorWrapper : public Handle {
+public:
+    HandleIteratorWrapper(const Handle &h) : Handle(h) { }
+    // Dereference operator just strips away this wrapper
+    Handle operator*() const { return Handle(this->m_idx, this->m_mesh); }
+};
+
+// Class representing a range of handles [0..entityCount) to be used in a
+// ranage-based for.
+// Template param RangeTraits should be a struct with the following
+// types/memebers:
+//      HType:       typedef of Handle type
+//      CHType:      typedef of ConstHandle type (with same mesh_type as HType)
+//      entityCount: pointer to memember function getting the size of the handle
+//                   collection
+template<typename RangeTraits>
+struct HandleRange {
+    typedef typename RangeTraits::HType::mesh_type mesh_type;
+    static_assert(std::is_same<mesh_type, typename RangeTraits::CHType::mesh_type>::value,
+            "Handles must have same underlying mesh type!");
+
+    HandleRange(mesh_type &mesh) : m_mesh(mesh) { }
+    typedef typename RangeTraits::HType HType;
+    typedef HandleIteratorWrapper<HType> Iterator;
+    Iterator begin() const { return Iterator(HType(0, m_mesh)); }
+    Iterator end()   const { return Iterator(HType((m_mesh .* RangeTraits::entityCount)(), m_mesh)); }
+private:
+    mesh_type &m_mesh;
+};
+template<typename RangeTraits>
+struct ConstHandleRange {
+    typedef typename RangeTraits::HType::mesh_type mesh_type;
+    static_assert(std::is_same<mesh_type, typename RangeTraits::CHType::mesh_type>::value,
+            "Handles must have same underlying mesh type!");
+
+    ConstHandleRange(const mesh_type &mesh) : m_mesh(mesh) { }
+    typedef typename RangeTraits::CHType CHType;
+    typedef HandleIteratorWrapper<CHType> Iterator;
+    Iterator begin() const { return Iterator(CHType(0, m_mesh)); }
+    Iterator end()   const { return Iterator(CHType((m_mesh .* RangeTraits::entityCount)(), m_mesh)); }
+private:
+    const mesh_type &m_mesh;
+};
+
 
 #endif /* end of include guard: HANDLE_HH */

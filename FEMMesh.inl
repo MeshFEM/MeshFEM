@@ -6,6 +6,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 VHandle : public BaseMesh::template VHandle<_Mesh, _HType> {
+protected:
     typedef typename BaseMesh::template VHandle<_Mesh, _HType> Base;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template NHandle<_Mesh, _HType>  NH;
@@ -20,6 +21,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 NHandle : public _HType<_Mesh, NHandle<_Mesh, Handle>, NHandle<_Mesh, ConstHandle>, NodeData> {
+protected:
     typedef _HType<_Mesh, NHandle<_Mesh, Handle>, NHandle<_Mesh, ConstHandle>, NodeData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     typedef typename _Mesh::template  VHandle<_Mesh, _HType>  VH;
@@ -53,6 +55,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 EHandle : public BaseMesh::template SHandle<_Mesh, _HType> {
+protected:
     typedef typename BaseMesh::template SHandle<_Mesh, _HType> Base;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template NHandle<_Mesh, _HType>  NH;
@@ -69,6 +72,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 BNHandle : public _HType<_Mesh, BNHandle<_Mesh, Handle>, BNHandle<_Mesh, ConstHandle>, BoundaryNodeData> {
+protected:
     typedef _HType<_Mesh, BNHandle<_Mesh, Handle>, BNHandle<_Mesh, ConstHandle>, BoundaryNodeData> _H;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     typedef typename _Mesh::template  NHandle<_Mesh, _HType>  NH;
@@ -99,6 +103,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 BVHandle : public BaseMesh::template BVHandle<_Mesh, _HType> {
+protected:
     typedef typename BaseMesh::template BVHandle<_Mesh, _HType> Base;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template BNHandle<_Mesh, _HType> BNH;
@@ -115,6 +120,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<class _Mesh, template<class, class, class, class> class _HType>
 class FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 BEHandle : public BaseMesh::template BSHandle<_Mesh, _HType> {
+protected:
     typedef typename BaseMesh::template BSHandle<_Mesh, _HType> Base;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template BNHandle<_Mesh, _HType> BNH;

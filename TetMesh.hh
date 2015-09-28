@@ -151,33 +151,37 @@ public:
          BoundarySimplexHandle boundarySimplex(size_t i)       { return boundaryFace(i); }
     ConstBoundarySimplexHandle boundarySimplex(size_t i) const { return boundaryFace(i); }
 
-    //////////////////////////////////////////////////////////////////////////
-    // Container iterator access
     ////////////////////////////////////////////////////////////////////////////
-                   VertexHandle             vertex_begin()       { return                VertexHandle(0,                      *this); }
-              ConstVertexHandle             vertex_begin() const { return           ConstVertexHandle(0,                      *this); }
-                   VertexHandle               vertex_end()       { return                VertexHandle(numVertices(),          *this); }
-              ConstVertexHandle               vertex_end() const { return           ConstVertexHandle(numVertices(),          *this); }
-                 HalfFaceHandle               face_begin()       { return              HalfFaceHandle(0,                      *this); }
-            ConstHalfFaceHandle               face_begin() const { return         ConstHalfFaceHandle(0,                      *this); }
-                 HalfFaceHandle                 face_end()       { return              HalfFaceHandle(numTets(),              *this); }
-            ConstHalfFaceHandle                 face_end() const { return         ConstHalfFaceHandle(numTets(),              *this); }
-                      TetHandle                tet_begin()       { return                   TetHandle(0,                      *this); }
-                 ConstTetHandle                tet_begin() const { return              ConstTetHandle(0,                      *this); }
-                      TetHandle                  tet_end()       { return                   TetHandle(numTets(),              *this); }
-                 ConstTetHandle                  tet_end() const { return              ConstTetHandle(numTets(),              *this); }
-           BoundaryVertexHandle    boundary_vertex_begin()       { return        BoundaryVertexHandle(0,                      *this); }
-      ConstBoundaryVertexHandle    boundary_vertex_begin() const { return   ConstBoundaryVertexHandle(0,                      *this); }
-           BoundaryVertexHandle      boundary_vertex_end()       { return        BoundaryVertexHandle(numBoundaryVertices(),  *this); }
-      ConstBoundaryVertexHandle      boundary_vertex_end() const { return   ConstBoundaryVertexHandle(numBoundaryVertices(),  *this); }
-         BoundaryHalfEdgeHandle boundary_half_edge_begin()       { return      BoundaryHalfEdgeHandle(0,                      *this); }
-    ConstBoundaryHalfEdgeHandle boundary_half_edge_begin() const { return ConstBoundaryHalfEdgeHandle(0,                      *this); }
-         BoundaryHalfEdgeHandle   boundary_half_edge_end()       { return      BoundaryHalfEdgeHandle(numBoundaryHalfEdges(), *this); }
-    ConstBoundaryHalfEdgeHandle   boundary_half_edge_end() const { return ConstBoundaryHalfEdgeHandle(numBoundaryHalfEdges(), *this); }
-             BoundaryFaceHandle      boundary_face_begin()       { return          BoundaryFaceHandle(0,                      *this); }
-        ConstBoundaryFaceHandle      boundary_face_begin() const { return     ConstBoundaryFaceHandle(0,                      *this); }
-             BoundaryFaceHandle        boundary_face_end()       { return          BoundaryFaceHandle(numBoundaryFaces(),     *this); }
-        ConstBoundaryFaceHandle        boundary_face_end() const { return     ConstBoundaryFaceHandle(numBoundaryFaces(),     *this); }
+    // Entity ranges (for range-based for).
+    // Note: we can't currently support const auto iterators. For example:
+    //      for (const auto v : nonconst_mesh)
+    // will still get a VertexHandle. However both of the following will get
+    // const VertexHandles:
+    //      for (TetMesh::ConstVertexHandle v : nonconst_mesh)
+    //      for (auto v : const_mesh)
+    ////////////////////////////////////////////////////////////////////////////
+private:
+    // Specialization for nested class templates isn't allowed, so we can't
+    // implement a true traits design pattern...
+    struct   VRangeTraits { typedef           VertexHandle HType; typedef           ConstVertexHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numVertices; };
+    struct  HFRangeTraits { typedef         HalfFaceHandle HType; typedef         ConstHalfFaceHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numHalfFaces; };
+    struct   TRangeTraits { typedef              TetHandle HType; typedef              ConstTetHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numTets; };
+    struct  BVRangeTraits { typedef   BoundaryVertexHandle HType; typedef   ConstBoundaryVertexHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryVertices; };
+    struct BHERangeTraits { typedef BoundaryHalfEdgeHandle HType; typedef ConstBoundaryHalfEdgeHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryHalfEdges; };
+    struct  BFRangeTraits { typedef     BoundaryFaceHandle HType; typedef     ConstBoundaryFaceHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryFaces; };
+public:
+         HandleRange<  VRangeTraits> vertices()                { return      HandleRange<  VRangeTraits>(*this); }
+    ConstHandleRange<  VRangeTraits> vertices() const          { return ConstHandleRange<  VRangeTraits>(*this); }
+         HandleRange< HFRangeTraits> halfFaces()               { return      HandleRange< HFRangeTraits>(*this); }
+    ConstHandleRange< HFRangeTraits> halfFaces() const         { return ConstHandleRange< HFRangeTraits>(*this); }
+         HandleRange<  TRangeTraits> tets()                    { return      HandleRange<  TRangeTraits>(*this); }
+    ConstHandleRange<  TRangeTraits> tets() const              { return ConstHandleRange<  TRangeTraits>(*this); }
+         HandleRange< BVRangeTraits> boundaryVertices()        { return      HandleRange< BVRangeTraits>(*this); }
+    ConstHandleRange< BVRangeTraits> boundaryVertices() const  { return ConstHandleRange< BVRangeTraits>(*this); }
+         HandleRange<BHERangeTraits> boundaryHalfEdges()       { return      HandleRange<BHERangeTraits>(*this); }
+    ConstHandleRange<BHERangeTraits> boundaryHalfEdges() const { return ConstHandleRange<BHERangeTraits>(*this); }
+         HandleRange< BFRangeTraits> boundaryFaces()           { return      HandleRange< BFRangeTraits>(*this); }
+    ConstHandleRange< BFRangeTraits> boundaryFaces() const     { return ConstHandleRange< BFRangeTraits>(*this); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Boundary halfedge wrapper

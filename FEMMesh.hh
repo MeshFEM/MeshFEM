@@ -178,6 +178,32 @@ public:
         BoundaryElementHandle boundaryElement(size_t i)       { return      BoundaryElementHandle(i, *this); }
    ConstBoundaryElementHandle boundaryElement(size_t i) const { return ConstBoundaryElementHandle(i, *this); }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Entity ranges (for range-based for).
+    ////////////////////////////////////////////////////////////////////////////
+private:
+    // Specialization for nested class templates isn't allowed, so we can't
+    // implement a true traits design pattern...
+    struct  VRangeTraits { typedef           VertexHandle HType; typedef           ConstVertexHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numVertices; };
+    struct  NRangeTraits { typedef             NodeHandle HType; typedef             ConstNodeHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numNodes; };
+    struct  ERangeTraits { typedef          ElementHandle HType; typedef          ConstElementHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numElements; };
+    struct BVRangeTraits { typedef   BoundaryVertexHandle HType; typedef   ConstBoundaryVertexHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryVertices; };
+    struct BNRangeTraits { typedef     BoundaryNodeHandle HType; typedef     ConstBoundaryNodeHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryNodes; };
+    struct BERangeTraits { typedef  BoundaryElementHandle HType; typedef  ConstBoundaryElementHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryElements; };
+public:
+         HandleRange< VRangeTraits> vertices()               { return      HandleRange< VRangeTraits>(*this); }
+    ConstHandleRange< VRangeTraits> vertices() const         { return ConstHandleRange< VRangeTraits>(*this); }
+         HandleRange< NRangeTraits> nodes()                  { return      HandleRange< NRangeTraits>(*this); }
+    ConstHandleRange< NRangeTraits> nodes() const            { return ConstHandleRange< NRangeTraits>(*this); }
+         HandleRange< ERangeTraits> elements()               { return      HandleRange< ERangeTraits>(*this); }
+    ConstHandleRange< ERangeTraits> elements() const         { return ConstHandleRange< ERangeTraits>(*this); }
+         HandleRange<BVRangeTraits> boundaryVertices()       { return      HandleRange<BVRangeTraits>(*this); }
+    ConstHandleRange<BVRangeTraits> boundaryVertices() const { return ConstHandleRange<BVRangeTraits>(*this); }
+         HandleRange<BNRangeTraits> boundaryNodes()          { return      HandleRange<BNRangeTraits>(*this); }
+    ConstHandleRange<BNRangeTraits> boundaryNodes() const    { return ConstHandleRange<BNRangeTraits>(*this); }
+         HandleRange<BERangeTraits> boundaryElements()       { return      HandleRange<BERangeTraits>(*this); }
+    ConstHandleRange<BERangeTraits> boundaryElements() const { return ConstHandleRange<BERangeTraits>(*this); }
+
     // (re-)embed the mesh elements.
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
