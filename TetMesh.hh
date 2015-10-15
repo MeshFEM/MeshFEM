@@ -78,9 +78,9 @@
 #include "Geometry.hh"
 #include "Handle.hh"
 
-template<class VertexData, class HalfFaceData, class TetData,
-         class BoundaryVertexData, class BoundaryHalfEdgeData,
-         class BoundaryFaceData>
+template<class VertexData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
+         class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
+         class BoundaryFaceData = TMEmptyData>
 class TetMesh {
 public:
     // Constructor from tetrahedron soup.

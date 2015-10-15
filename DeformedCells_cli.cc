@@ -215,7 +215,7 @@ void execute(const po::variables_map &args,
             VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
             w_ij.push_back(sim.solve(rhs));
             if (writer)
-                writer->addField("w_ij" + to_string(i), w_ij.back(), MSHFieldWriter::PER_NODE);
+                writer->addField("w_ij" + to_string(i), w_ij.back(), DomainType::PER_NODE);
         }
         auto EhDefo = homogenizedElasticityTensorDisplacementForm(w_ij, sim, deformedCellVolume);
         cout << "Elasticity tensor:" << endl;

@@ -92,7 +92,7 @@ void execute(const po::variables_map &args,
         }
         string name("vertices");
         for (size_t vtx : vidxs) name += " " + to_string(vtx);
-        writer.addField(name, indicator, MSHFieldWriter::PER_NODE);
+        writer.addField(name, indicator, DomainType::PER_NODE);
         cout << "wrote field " << name << endl;
     }
     if (args.count("elements")) {
@@ -106,7 +106,7 @@ void execute(const po::variables_map &args,
         }
         string name("elements");
         for (size_t elem : eidxs) name += " " + to_string(elem);
-        writer.addField(name, indicator, MSHFieldWriter::PER_ELEMENT);
+        writer.addField(name, indicator, DomainType::PER_ELEMENT);
         cout << "wrote field " << name << endl;
     }
 }

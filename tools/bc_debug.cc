@@ -80,9 +80,9 @@ void execute(const vector<MeshIO::IOVertex> &inVertices,
     }
 
     MSHFieldWriter writer(outMSH, sim.mesh());
-    writer.addField("dirichletType", dirichletType, MSHFieldWriter::PER_NODE);
-    writer.addField("targetType",    targetType,    MSHFieldWriter::PER_NODE);
-    writer.addField("traction",      traction,      MSHFieldWriter::PER_ELEMENT);
+    writer.addField("dirichletType", dirichletType, DomainType::PER_NODE);
+    writer.addField("targetType",    targetType,    DomainType::PER_NODE);
+    writer.addField("traction",      traction,      DomainType::PER_ELEMENT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

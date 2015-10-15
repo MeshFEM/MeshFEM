@@ -14,8 +14,10 @@
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
 #include "SparseMatrices.hh"
+#include "BoundaryConditions.hh"
 #include <vector>
 #include <array>
+#include <memory>
 
 typedef enum { CONSTRAINT_DIRICHLET, CONSTRAINT_NONE } ConstraintType;
 
@@ -54,34 +56,62 @@ class PoissonMesh : public FEMMesh<_K, _Deg, EmbeddingSpace, PoissonFEMData> {
     typedef FEMMesh<_K, _Deg, EmbeddingSpace, PoissonFEMData> Base;
     using Base::Base;
 public:
+    // Note: the Linear elasticity boundary conditions format/classes are used
+    // here. The Dirichlet scalar values are encoded in the Dirichlet
+    // "displacement's" first component.
+    void applyBoundaryConditions(const std::vector<CondPtr<_K>> &conds) {
+        ExpressionEnvironment env;
+        auto mbb = Base::boundingBox();
+        env.setVectorValue("mesh_size_", mbb.dimensions());
+        env.setVectorValue("mesh_min_", mbb.minCorner);
+        env.setVectorValue("mesh_max_", mbb.maxCorner);
+
+        for (auto cond : conds) {
+            env.setVectorValue("region_size_", cond->region.dimensions());
+            env.setVectorValue("region_min_",  cond->region.minCorner);
+            env.setVectorValue("region_max_",  cond->region.maxCorner);
+            std::runtime_error unimplemented("Unimplemented BC type");
+            size_t numMatched = 0;
+            if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_K> >(cond)) {
+                for (auto bn : Base::boundaryNodes()) {
+                    env.setXYZ(bn.volumeNode()->p);
+                    if (dc->containsPoint(bn.volumeNode()->p)) {
+                        bn->constraintType = CONSTRAINT_DIRICHLET;
+                        bn->constraintData = dc->displacement(env)[0];
+                        ++numMatched;
+                    }
+                }
+            }
+            else throw unimplemented;
+            if (numMatched == 0) std::cerr << "WARNING: condition unmatched" << std::endl;
+        }
+    }
+
     void solve(std::vector<Real> &x) {
-        // Build FEM Laplacian
+        // Build FEM Laplacian (Upper triangle)
         TripletMatrix<Triplet<Real> > L(Base::numNodes(), Base::numNodes());
-        for (size_t ei = 0; ei < Base::numElements(); ++ei) {
-            auto e = Base::element(ei);
+        for (auto e : Base::elements()) {
             for (size_t i = 0; i < e.numNodes(); ++i) {
-                L.addNZ(e.node(i).index(), e.node(i).index(), e->stiffness(i, i));
-                for (size_t j = i + 1; j < e.numNodes(); ++j) {
-                    Real v = e->stiffness(i, j);
-                    L.addNZ(e.node(i).index(), e.node(j).index(), v);
-                    L.addNZ(e.node(j).index(), e.node(i).index(), v);
+                for (size_t j = 0; j < e.numNodes(); ++j) {
+                    if (e.node(i).index() > e.node(j).index()) continue;
+                    L.addNZ(e.node(i).index(),
+                            e.node(j).index(),
+                            e->stiffness(i, j));
                 }
             }
         }
-        // Enforce Dirichlet constraints with Lagrange multipliers
-        std::vector<Real> cRHS;
-        for (size_t ni = 0; ni < Base::numBoundaryNodes(); ++ni) {
-            auto bn = Base::boundaryNode(ni);
+        SPSDSystem<Real> system(L);
+
+        // Fix the Dirichlet values
+        std::vector<size_t> fixedVars;
+        std::vector<Real> fixedVarValues;
+        for (auto bn : Base::boundaryNodes()) {
             if (bn->constraintType == CONSTRAINT_DIRICHLET) {
-                size_t newRow = L.m++; L.n++;
-                int vni = bn.volumeNode().index();
-                L.addNZ(vni, newRow, 1.0);
-                L.addNZ(newRow, vni, 1.0);
-                cRHS.push_back(bn->constraintData);
+                fixedVars.push_back(bn.volumeNode().index());
+                fixedVarValues.push_back(bn->constraintData);
             }
         }
-
-        ConstrainedSystem<Real> system(L, cRHS);
+        system.fixVariables(fixedVars, fixedVarValues);
         system.solve(std::vector<Real>(Base::numNodes(), 0), x);
     }
 
@@ -89,11 +119,10 @@ public:
     std::vector<EmbeddingSpace> gradUAverage(const std::vector<Real> &u) const {
         std::vector<EmbeddingSpace> grads(Base::numElements());
         std::array<Real, Simplex::numNodes(_K, _Deg)> nodeVals;
-        for (size_t ei = 0; ei < Base::numElements(); ++ei) {
-            auto e = Base::element(ei);
-            for (size_t ni = 0; ni < Simplex::numNodes(_K, _Deg); ++ni)
+        for (auto e : Base::elements()) {
+            for (size_t ni = 0; ni < e.numNodes(); ++ni)
                 nodeVals[ni] = u.at(e.node(ni).index());
-            grads[ei] = e->gradient(nodeVals).average();
+            grads[e.index()] = e->gradient(nodeVals).average();
         }
         return grads;
     }

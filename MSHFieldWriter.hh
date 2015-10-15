@@ -27,9 +27,6 @@
 
 class MSHFieldWriter {
 public:
-    // Numbers match MSHFieldParser enum
-    typedef enum { PER_ELEMENT = 0, PER_NODE = 1, PER_GUESS } FieldType;
-
     MSHFieldWriter(const std::string &mshPath,
                    const std::vector<MeshIO::IOVertex>  &vertices,
                    const std::vector<MeshIO::IOElement> &elements,
@@ -83,24 +80,24 @@ public:
     }
 
     template<typename Field>
-    void addField(const std::string &name, const Field &f, FieldType type) {
+    void addField(const std::string &name, const Field &f, DomainType type) {
         std::string sectionHeader;
         std::runtime_error invalidSize("Invalid field domain size.");
         std::runtime_error invalidDim("Invalid field dimension.");
-        if (type == PER_GUESS) {
+        if (type == DomainType::GUESS) {
             if (f.domainSize() == m_numElements)
-                type = PER_ELEMENT;
+                type = DomainType::PER_ELEMENT;
             else if ((f.domainSize() == m_numVertices) || (f.domainSize() == m_numNodes))
-                type = PER_NODE;
+                type = DomainType::PER_NODE;
             else throw invalidSize;
         }
         size_t numEntries = 0; // We might be writing a subset of the domainSize() entries.
-        if (type == PER_ELEMENT) {
+        if (type == DomainType::PER_ELEMENT) {
             if (f.domainSize() != m_numElements) throw invalidSize;
             sectionHeader = "ElementData";
             numEntries = f.domainSize();
         }
-        else if (type == PER_NODE) {
+        else if (type == DomainType::PER_NODE) {
             if ((f.domainSize() != m_numVertices) && (f.domainSize() != m_numNodes)) throw invalidSize;
             sectionHeader = "NodeData";
             numEntries = m_numVertices;

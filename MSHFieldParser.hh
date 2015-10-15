@@ -29,8 +29,6 @@
 template<size_t N>
 class MSHFieldParser {
 public:
-    // Numbers match MSHFieldWriter enum
-    enum class FieldType { PER_ELEMENT = 0, PER_NODE = 1, ANY };
     typedef VectorField<Real, N>          VField;
     typedef ScalarField<Real>             SField;
     typedef SymmetricMatrixField<Real, N> SMField;
@@ -53,31 +51,31 @@ public:
     // Also report back the domain type if it isn't specified.
     ////////////////////////////////////////////////////////////////////////////
     const VField &vectorField(const std::string &name,
-                              FieldType reqType = FieldType::ANY) const {
+                              DomainType reqType = DomainType::ANY) const {
         return m_getField(m_vectorFields, name, reqType);
     }
     const VField &vectorField(const std::string &name,
-                              FieldType reqType, FieldType &actualType) const {
+                              DomainType reqType, DomainType &actualType) const {
         actualType = reqType;
         return m_getField(m_vectorFields, name, actualType);
     }
 
     const SField &scalarField(const std::string &name,
-                              FieldType reqType = FieldType::ANY) const {
+                              DomainType reqType = DomainType::ANY) const {
         return m_getField(m_scalarFields, name, reqType);
     }
     const SField &scalarField(const std::string &name,
-                              FieldType reqType, FieldType &actualType) const {
+                              DomainType reqType, DomainType &actualType) const {
         actualType = reqType;
         return m_getField(m_scalarFields, name, actualType);
     }
 
     const SMField &symmetricMatrixField(const std::string &name,
-                              FieldType reqType = FieldType::ANY) const {
+                              DomainType reqType = DomainType::ANY) const {
         return m_getField(m_symmetricMatrixFields, name, reqType);
     }
     const SMField &symmetricMatrixField(const std::string &name,
-                              FieldType reqType, FieldType &actualType) const {
+                              DomainType reqType, DomainType &actualType) const {
         actualType = reqType;
         return m_getField(m_symmetricMatrixFields, name, actualType);
     }
@@ -85,36 +83,36 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Get names of all the fields of a particular type.
     ////////////////////////////////////////////////////////////////////////////
-    std::vector<std::string> vectorFieldNames(FieldType type = FieldType::ANY) const {
+    std::vector<std::string> vectorFieldNames(DomainType type = DomainType::ANY) const {
         return m_getKeysOfType(m_vectorFields, type);
     }
 
-    std::vector<std::string> scalarFieldNames(FieldType type = FieldType::ANY) const {
+    std::vector<std::string> scalarFieldNames(DomainType type = DomainType::ANY) const {
         return m_getKeysOfType(m_scalarFields, type);
     }
 
-    std::vector<std::string> symmetricMatrixFieldNames(FieldType type = FieldType::ANY) const {
+    std::vector<std::string> symmetricMatrixFieldNames(DomainType type = DomainType::ANY) const {
         return m_getKeysOfType(m_symmetricMatrixFields, type);
     }
 
 private:
     std::vector<MeshIO::IOElement> m_elements;
     std::vector<MeshIO::IOVertex > m_vertices;
-    std::map<std::string, std::pair<FieldType,  VField > >          m_vectorFields;
-    std::map<std::string, std::pair<FieldType,  SField > >          m_scalarFields;
-    std::map<std::string, std::pair<FieldType, SMField > > m_symmetricMatrixFields;
+    std::map<std::string, std::pair<DomainType,  VField > >          m_vectorFields;
+    std::map<std::string, std::pair<DomainType,  SField > >          m_scalarFields;
+    std::map<std::string, std::pair<DomainType, SMField > > m_symmetricMatrixFields;
 
     // Find a particular "type" of field of a particular name.
-    // This "type" comprises both the domain type (i.e. FieldType) and range
+    // This "type" comprises both the domain type (i.e. DomainType) and range
     // type (vector, scalar, symmetric matrix...) 
     // Throws exception if no matching field is found.
     template<class _Field>
-    static const _Field &m_getField(const std::map<std::string, std::pair<FieldType, _Field> > &fields,
-                                    const std::string &name, FieldType &type) {
+    static const _Field &m_getField(const std::map<std::string, std::pair<DomainType, _Field> > &fields,
+                                    const std::string &name, DomainType &type) {
         std::runtime_error notFound("Field query unmatched.");
         auto it = fields.find(name);
         if (it != fields.end()) {
-            if ((type == FieldType::ANY) || it->second.first == type) {
+            if ((type == DomainType::ANY) || it->second.first == type) {
                 type = it->second.first; // Report actual type (for ANY case)
                 return it->second.second;
             }
@@ -124,13 +122,13 @@ private:
     }
 
     // Get the names of all fields of a particular "type."
-    // This "type" comprises both the domain type (i.e. FieldType) and range
+    // This "type" comprises both the domain type (i.e. DomainType) and range
     // type (vector, scalar, symmetric matrix...) 
     template<class CollectionType>
-    static std::vector<std::string> m_getKeysOfType(const CollectionType &fields, FieldType type) {
+    static std::vector<std::string> m_getKeysOfType(const CollectionType &fields, DomainType type) {
         std::vector<std::string> result;
         for (auto entry : fields) {
-            if ((type == FieldType::ANY) || entry.second.first == type)
+            if ((type == DomainType::ANY) || entry.second.first == type)
                 result.push_back(entry.first);
         }
         return result;
@@ -138,7 +136,7 @@ private:
 
     void parseField(std::istream &is, const std::string &header, std::string &name,
                     Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &fieldData,
-                    FieldType &type, bool binary = false);
+                    DomainType &type, bool binary = false);
 };
 
 #endif /* end of include guard: MSHFIELDPARSER_HH */

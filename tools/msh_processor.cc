@@ -15,6 +15,8 @@
 #include <Types.hh>
 
 #include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
+
 #include <iomanip>
 #include <regex>
 #include <vector>
@@ -25,6 +27,7 @@
 #include <cctype>
 #include <memory>
 #include <functional>
+#include <limits>
 
 using namespace MeshIO;
 
@@ -64,18 +67,22 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
         ;
     po::options_description unary_operations("Unary operations");
     unary_operations.add_options()
-        ("applyAll,A",                   "Apply next filter to entire stack instead of top")
-        ("max,M",                        "Max of scalar field (element-wise for vector field)")
-        ("min,m",                        "Min of scalar field (element-wise for vector field)")
-        ("maxMag",                       "Max magnitude of scalar field (element-wise for vector field)")
-        ("minMag",                       "Min magnitude of scalar field (element-wise for vector field)")
-        ("norm,n",                       "L2 norm of scalar field (element-wise for vector field)")
-        ("abs,a",                        "Componentwise abs of scalar field or vector field")
-        ("scale,s", po::value<string>(), "Multiply the top of the stack by a scalar.")
-        ("set",     po::value<string>(), "Set every component of the top value to arg.")
-        ("sum,S",                        "Sum the elements of a (scalar|vector) field or vector")
-        ("mean",                         "Element average of a {scalar,vector} field or vector")
-        ("eigenvalues,l",                "Eigenvalues of sym matrix field (vector field result)")
+        ("applyAll,A",                       "Apply next filter to entire stack instead of top")
+        ("max,M",                            "Max of scalar field (component-wise for vector field)")
+        ("min,m",                            "Min of scalar field (component-wise for vector field)")
+        ("maxMag",                           "Max magnitude of scalar field (component-wise for vector field)")
+        ("minMag",                           "Min magnitude of scalar field (component-wise for vector field)")
+        ("norm,n",                           "L2 norm of scalar field (component-wise for vector field)")
+        ("abs,a",                            "Componentwise abs of scalar field or vector field")
+        ("scale,s", po::value<string>(),     "Multiply the top of the stack by a scalar.")
+        ("set",     po::value<string>(),     "Set every component of the top value to arg.")
+        ("sum,S",                            "Sum the components of a (scalar|vector) field or vector")
+        ("mean",                             "Element average of a {scalar,vector} field or vector")
+        ("eigenvalues,l",                    "Eigenvalues of sym matrix field (vector field result)")
+        ("sample",  po::value<string>(),     "Sample the value of a scalar/vector field at a point, "
+                                             "using as piecewise constant interpolation on Voronoi diagram of points/element barycenters. "
+                                             "The point is specified as a comma-separated vector")
+        ("sampleIndex", po::value<string>(), "Sample the value of a scalar/vector field at a particular vertex/element index.")
         // ("percentile", po::value<double>(), "extract a certain percentile of the msh file")
         ;
     po::options_description binary_operations("Binary operations");
@@ -136,11 +143,6 @@ typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> Vector;
 
 // Forward declarations
 template<size_t _N> struct  Value;
-template<size_t _N> struct  SFieldValue;
-template<size_t _N> struct  VFieldValue;
-template<size_t _N> struct SMFieldValue;
-template<size_t _N> struct ScalarValue;
-template<size_t _N> struct VectorValue;
 
 template<size_t N>
 using VPtr = shared_ptr<Value<N> >; 
@@ -164,13 +166,15 @@ struct Value {
     virtual VPtr<N> clone() const = 0;
     virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const = 0;
     virtual void print(std::ostream &os = std::cout) const = 0;
+    virtual DomainType  domainType() const { throw std::runtime_error("Error: non-field value."); }
+    virtual DomainType &domainType()       { throw std::runtime_error("Error: non-field value."); }
+    virtual VPtr<N> valueAtIndex(size_t i) const { throw std::runtime_error("Attempted to index non-field value"); }
 };
 
 // Various in-place absolute value functions.
 template<class T> T absoluteValue(const T &in) { return in.cwiseAbs(); }
   Real absoluteValue(const Real   &in) { return std::abs(in); }
 
-// Various in-place absolute value functions.
 template<class T>
 void setConstant(T &inout, Real val) { inout.setConstant(val); }
 void setConstant(Real &inout, Real val) { inout = val; }
@@ -190,115 +194,185 @@ struct SpecificValue : public Value<N> {
     }
 };
 
-template<size_t N>
-struct SFieldValue : public SpecificValue<SField, N, SFieldValue<N>> {
-    SFieldValue(const string &n, const SField &v = SField())
-        : SpecificValue<SField, N, SFieldValue>(n, v) { }
-    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
-        runtime_error illegal("Illegal arguments for binary operation");
-        runtime_error mismatch("Size mismatch in binary operation");
-        // Scalar field-scalar field op
-        if (auto sfValue = dynamic_pointer_cast<SFieldValue>(b)) {
-            if (sfValue->numElems() != this->numElems()) throw mismatch;
-            auto result = make_shared<SFieldValue>("result", SField(this->value));
-            for (size_t i = 0; i < this->numElems(); ++i)
-                result->value[i] = op(this->value[i], sfValue->value[i]);
-            return result;
-        }
-        // Scalar field-vector field op
-        else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
-            if (vfValue->numElems() != this->numElems()) throw mismatch;
-            auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value));
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < vfValue->value.dim(); ++c)
-                    result->value(i)(c) = op(this->value[i], vfValue->value(i)(c));
-            return result;
-        }
-        // Scalar field-matrix field op
-        else if (auto smfValue = dynamic_pointer_cast<SMFieldValue<N>>(b)) {
-            if (smfValue->numElems() != this->numElems()) throw mismatch;
-            auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value));
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < smfValue->value.dim(); ++c)
-                    result->value(i)[c] = op(this->value[i], smfValue->value(i)[c]);
-            return result;
-        }
-        // Scalar field-scalar op
-        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
-            auto result = make_shared<SFieldValue>("result", SField(this->value));
-            for (size_t i = 0; i < this->numElems(); ++i)
-                result->value[i] = op(this->value[i], sValue->value);
-            return result;
-        }
-
-        throw illegal;
-    }
-    virtual size_t numElems() const { return this->value.domainSize(); }
+////////////////////////////////////////////////////////////////////////////////
+// Field types (scalar, vector, and symmetric matrix fields)
+////////////////////////////////////////////////////////////////////////////////
+// Implementation of binary operations for field types.
+// (to be specialized for each field type)
+template<class FieldValueType, size_t N>
+struct _binaryOpFieldImpl {
+    static VPtr<N> apply(BinaryOperator &op, const FieldValueType &a, VPtr<N> b);
 };
 
-template<size_t N>
-struct VFieldValue : public SpecificValue<VField<N>, N, VFieldValue<N>> {
-    VFieldValue(const string &n, const VField<N> &v = VField<N>())
-        : SpecificValue<VField<N>, N, VFieldValue>(n, v) { }
-    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
-        runtime_error illegal("Illegal arguments for binary operation");
-        runtime_error mismatch("Size mismatch in binary operation");
-        auto result = make_shared<VFieldValue>("result", VField<N>(this->value));
-        // Vector field-scalar field op
-        if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
-            if (sfValue->numElems() != this->numElems()) throw mismatch;
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < this->value.dim(); ++c)
-                    result->value(i)(c) = op(this->value(i)(c), sfValue->value[i]);
-        }
-        // Vector field-vector field op
-        else if (auto vfValue = dynamic_pointer_cast<VFieldValue>(b)) {
-            if (vfValue->numElems() != this->numElems()) throw mismatch;
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < vfValue->value.dim(); ++c)
-                    result->value(i)(c) = op(this->value(i)(c), vfValue->value(i)(c));
-        }
-        // Vector field-scalar op
-        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < this->value.dim(); ++c)
-                    result->value(i)(c) = op(this->value(i)(c), sValue->value);
-        }
-
-        throw illegal;
-    }
-    virtual size_t numElems() const { return this->value.domainSize(); }
+// Implementation of indexed lookup for field types.
+// (to be specialized for each field type)
+template<class FieldValueType, size_t N>
+struct _valueAtIndexImpl {
+    static VPtr<N> lookup(size_t i, const FieldValueType &a);
 };
 
-template<size_t N>
-struct SMFieldValue : public SpecificValue<SMField<N>, N, SMFieldValue<N>> {
-    SMFieldValue(const string &n, const SMField<N> &v = SMField<N>())
-        : SpecificValue<SMField<N>, N, SMFieldValue>(n, v) { }
+template<class FieldType, size_t N>
+struct FieldValue : public SpecificValue<FieldType, N, FieldValue<FieldType, N>> {
+    typedef SpecificValue<FieldType, N, FieldValue<FieldType, N>> Base;
 
-    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
-        runtime_error illegal("Illegal arguments for binary operation");
-        runtime_error mismatch("Size mismatch in binary operation");
-        auto result = make_shared<SMFieldValue>("result", SMField<N>(this->value));
-        // matrix field-scalar field op
-        if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
-            if (sfValue->numElems() != this->numElems()) throw mismatch;
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < this->value.dim(); ++c)
-                    result->value(i)[c] = op(this->value(i)[c], sfValue->value[i]);
-            return result;
-        }
-        // matrix field-scalar op
-        else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
-            for (size_t i = 0; i < this->numElems(); ++i)
-                for (size_t c = 0; c < this->value.dim(); ++c)
-                    result->value(i)[c] = op(this->value(i)[c], sValue->value);
-            return result;
-        }
-        throw illegal;
-    }
+    FieldValue(const string &n, const FieldType &val, DomainType dt = DomainType::UNKNOWN) : Base(n, val), m_domainType(dt) { }
+    virtual DomainType  domainType() const { return m_domainType; }
+    virtual DomainType &domainType()       { return m_domainType; }
     virtual size_t numElems() const { return this->value.domainSize(); }
+    virtual VPtr<N> binaryOp(BinaryOperator &op, VPtr<N> b) const {
+        return _binaryOpFieldImpl<FieldValue, N>::apply(op, *this, b);
+    }
+    // gets value at the index as a 
+    virtual VPtr<N> valueAtIndex(size_t i) const {
+        if (i >= this->value.domainSize()) throw std::runtime_error("Field value index out of bounds");
+        VPtr<N> result = _valueAtIndexImpl<FieldValue, N>::lookup(i, *this);
+        result->name = this->name + "(" + std::to_string(i) + ")";
+        return result;
+    }
+private:
+    DomainType m_domainType;
 };
 
+// Type aliases and forward declarations needed for binary operations
+template<size_t _N> using  SFieldValue = FieldValue< SField,     _N>;
+template<size_t _N> using  VFieldValue = FieldValue< VField<_N>, _N>;
+template<size_t _N> using SMFieldValue = FieldValue<SMField<_N>, _N>;
+template<size_t _N> struct ScalarValue;
+template<size_t _N> struct VectorValue;
+
+////////////////////////////////////////////////////////////////////////////////
+// Partial specializations of indexed lookup for the different field types
+////////////////////////////////////////////////////////////////////////////////
+template<size_t N>
+struct _valueAtIndexImpl<SFieldValue<N>, N> {
+    static VPtr<N> lookup(size_t i, const SFieldValue<N> &a) { return make_shared<ScalarValue<N>>("", a.value(i)); }
+};
+template<size_t N>
+struct _valueAtIndexImpl<VFieldValue<N>, N> {
+    static VPtr<N> lookup(size_t i, const VFieldValue<N> &a) { return make_shared<VectorValue<N>>("", a.value(i)); }
+};
+template<size_t N>
+struct _valueAtIndexImpl<SMFieldValue<N>, N> {
+    static VPtr<N> lookup(size_t i, const SMFieldValue<N> &a) { throw std::runtime_error("Symmetric matrix type not yet implemented."); }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Partial specializations of binary operation for the different field types
+////////////////////////////////////////////////////////////////////////////////
+// Partial specialization for SFieldValue
+template<size_t N>
+struct _binaryOpFieldImpl<SFieldValue<N>, N> {
+static VPtr<N> apply(BinaryOperator &op, const SFieldValue<N> &a, VPtr<N> b) {
+    runtime_error illegal("Illegal arguments for binary operation");
+    runtime_error domainMismatch("Domain mismatch in binary operation");
+    runtime_error mismatch("Size mismatch in binary operation");
+    // Scalar field-scalar field op
+    if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+        if (sfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (sfValue->numElems()   != a.numElems())   throw mismatch;
+        auto result = make_shared<SFieldValue<N>>("result", SField(a.value), a.domainType());
+        for (size_t i = 0; i < a.numElems(); ++i)
+            result->value[i] = op(a.value[i], sfValue->value[i]);
+        return result;
+    }
+    // Scalar field-vector field op
+    else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
+        if (vfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (vfValue->numElems()   != a.numElems())   throw mismatch;
+        auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value), a.domainType());
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < vfValue->value.dim(); ++c)
+                result->value(i)(c) = op(a.value[i], vfValue->value(i)(c));
+        return result;
+    }
+    // Scalar field-matrix field op
+    else if (auto smfValue = dynamic_pointer_cast<SMFieldValue<N>>(b)) {
+        if (smfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (smfValue->numElems()   != a.numElems())   throw mismatch;
+        auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value), a.domainType());
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < smfValue->value.dim(); ++c)
+                result->value(i)[c] = op(a.value[i], smfValue->value(i)[c]);
+        return result;
+    }
+    // Scalar field-scalar op
+    else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+        auto result = make_shared<SFieldValue<N>>("result", SField(a.value), a.domainType());
+        for (size_t i = 0; i < a.numElems(); ++i)
+            result->value[i] = op(a.value[i], sValue->value);
+        return result;
+    }
+
+    throw illegal;
+}
+};
+
+// Partial specialization for VFieldValue
+template<size_t N>
+struct _binaryOpFieldImpl<VFieldValue<N>, N> {
+static VPtr<N> apply(BinaryOperator &op, const VFieldValue<N> &a, VPtr<N> b) {
+    runtime_error illegal("Illegal arguments for binary operation");
+    runtime_error domainMismatch("Domain mismatch in binary operation");
+    runtime_error mismatch("Size mismatch in binary operation");
+    auto result = make_shared<VFieldValue<N>>("result", VField<N>(a.value), a.domainType());
+    // Vector field-scalar field op
+    if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+        if (sfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (sfValue->numElems()   != a.numElems())   throw mismatch;
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < a.value.dim(); ++c)
+                result->value(i)(c) = op(a.value(i)(c), sfValue->value[i]);
+    }
+    // Vector field-vector field op
+    else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
+        if (vfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (vfValue->numElems()   != a.numElems())   throw mismatch;
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < vfValue->value.dim(); ++c)
+                result->value(i)(c) = op(a.value(i)(c), vfValue->value(i)(c));
+    }
+    // Vector field-scalar op
+    else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < a.value.dim(); ++c)
+                result->value(i)(c) = op(a.value(i)(c), sValue->value);
+    }
+
+    throw illegal;
+}
+};
+
+// Partial specialization for SMFieldValue
+template<size_t N>
+struct _binaryOpFieldImpl<SMFieldValue<N>, N> {
+static VPtr<N> apply(BinaryOperator &op, const SMFieldValue<N> &a, VPtr<N> b) {
+    runtime_error illegal("Illegal arguments for binary operation");
+    runtime_error domainMismatch("Domain mismatch in binary operation");
+    runtime_error mismatch("Size mismatch in binary operation");
+    auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(a.value), a.domainType());
+    // matrix field-scalar field op
+    if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
+        if (sfValue->domainType() != a.domainType()) throw domainMismatch;
+        if (sfValue->numElems()   != a.numElems())   throw mismatch;
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < a.value.dim(); ++c)
+                result->value(i)[c] = op(a.value(i)[c], sfValue->value[i]);
+        return result;
+    }
+    // matrix field-scalar op
+    else if (auto sValue = dynamic_pointer_cast<ScalarValue<N>>(b)) {
+        for (size_t i = 0; i < a.numElems(); ++i)
+            for (size_t c = 0; c < a.value.dim(); ++c)
+                result->value(i)[c] = op(a.value(i)[c], sValue->value);
+        return result;
+    }
+    throw illegal;
+}
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector and Scalar types
+////////////////////////////////////////////////////////////////////////////////
 template<size_t N>
 struct VectorValue : public SpecificValue<Vector, N, VectorValue<N>> {
     VectorValue(const string &n, const Vector &v = Vector())
@@ -309,7 +383,7 @@ struct VectorValue : public SpecificValue<Vector, N, VectorValue<N>> {
         runtime_error mismatch("Size mismatch in binary operation");
         // Vector-vector field op
         if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
-            auto result = make_shared<VFieldValue<N>>("result", Vector(this->value));
+            auto result = make_shared<VFieldValue<N>>("result", Vector(this->value), vfValue->domainType());
             if (this->numElems() != vfValue->value.dim()) throw mismatch;
             for (size_t i = 0; i < vfValue->numElems(); ++i)
                 for (size_t c = 0; c < this->numElems(); ++c)
@@ -350,14 +424,14 @@ struct ScalarValue : public SpecificValue<Real, N, ScalarValue<N>> {
         }
         // Scalar-scalar field op
         if (auto sfValue = dynamic_pointer_cast<SFieldValue<N>>(b)) {
-            auto result = make_shared<SFieldValue<N>>("result", SField(sfValue->value));
+            auto result = make_shared<SFieldValue<N>>("result", SField(sfValue->value), sfValue->domainType());
             for (size_t i = 0; i < sfValue->numElems(); ++i)
                 result->value[i] = op(this->value, sfValue->value[i]);
             return result;
         }
         // Scalar-vector field op
         else if (auto vfValue = dynamic_pointer_cast<VFieldValue<N>>(b)) {
-            auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value));
+            auto result = make_shared<VFieldValue<N>>("result", VField<N>(vfValue->value), vfValue->domainType());
             for (size_t i = 0; i < vfValue->numElems(); ++i)
                 for (size_t c = 0; c < vfValue->value.dim(); ++c)
                     result->value(i)(c) = op(this->value, vfValue->value(i)(c));
@@ -365,7 +439,7 @@ struct ScalarValue : public SpecificValue<Real, N, ScalarValue<N>> {
         }
         // Scalar-matrix field op
         else if (auto smfValue = dynamic_pointer_cast<SMFieldValue<N>>(b)) {
-            auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value));
+            auto result = make_shared<SMFieldValue<N>>("result", SMField<N>(smfValue->value), smfValue->domainType());
             for (size_t i = 0; i < smfValue->numElems(); ++i)
                 for (size_t c = 0; c < smfValue->value.dim(); ++c)
                     result->value(i)[c] = op(this->value, smfValue->value(i)[c]);
@@ -400,22 +474,25 @@ void extract(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
              const string &arg) {
     std::regex pattern(arg);
     size_t numMatched = 0;
+    DomainType dtype;
     for (const string &name : parser.scalarFieldNames()) {
         if (regex_match(name, pattern)) {
-            stack.push_back(VPtr<N>(new SFieldValue<N>(name, parser.scalarField(name))));
+            const auto &sf = parser.scalarField(name, DomainType::ANY, dtype);
+            stack.push_back(VPtr<N>(new SFieldValue<N>(name, sf, dtype)));
             ++numMatched;
         }
     }
     for (const string &name : parser.vectorFieldNames()) {
         if (regex_match(name, pattern)) {
-            stack.push_back(VPtr<N>(new VFieldValue<N>(name, parser.vectorField(name))));
+            const auto &vf = parser.vectorField(name, DomainType::ANY, dtype);
+            stack.push_back(VPtr<N>(new VFieldValue<N>(name, vf, dtype)));
             ++numMatched;
         }
     }
     for (const string &name : parser.symmetricMatrixFieldNames()) {
         if (regex_match(name, pattern)) {
-            stack.push_back(VPtr<N>(new SMFieldValue<N>(name,
-                        parser.symmetricMatrixField(name))));
+            const auto &smf = parser.symmetricMatrixField(name, DomainType::ANY, dtype);
+            stack.push_back(VPtr<N>(new SMFieldValue<N>(name, smf, dtype)));
             ++numMatched;
         }
     }
@@ -425,21 +502,20 @@ void extract(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
 template<size_t N>
 void extractAll(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
              const string &arg) {
+    DomainType dtype;
     for (const string &name : parser.scalarFieldNames()) {
-        stack.push_back(VPtr<N>(new SFieldValue<N>(name, parser.scalarField(name))));
+        const auto &sf = parser.scalarField(name, DomainType::ANY, dtype);
+        stack.push_back(VPtr<N>(new SFieldValue<N>(name, sf, dtype)));
     }
     for (const string &name : parser.vectorFieldNames()) {
-        stack.push_back(VPtr<N>(new VFieldValue<N>(name, parser.vectorField(name))));
+        const auto &vf = parser.vectorField(name, DomainType::ANY, dtype);
+        stack.push_back(VPtr<N>(new VFieldValue<N>(name, vf, dtype)));
     }
     for (const string &name : parser.symmetricMatrixFieldNames()) {
-        stack.push_back(VPtr<N>(new SMFieldValue<N>(name,
-                    parser.symmetricMatrixField(name))));
+        const auto &smf = parser.symmetricMatrixField(name, DomainType::ANY, dtype);
+        stack.push_back(VPtr<N>(new SMFieldValue<N>(name, smf, dtype)));
     }
 }
-
-// Compute a value (e.g. element volume) from the mesh, pushing it on the top of
-// the stack
-// void compute
 
 template<size_t N>
 VPtr<N> getValue(vector<VPtr<N> > &stack, size_t offset = 0) {
@@ -477,6 +553,20 @@ double getDoubleArg(const string &arg) {
     return factor;
 }
 
+// Parse a comma-separated vector from a string
+// Throws exception if the parsed size is not N.
+template<size_t N>
+VectorND<N> getVectorArg(string arg) {
+    vector<string> argComponents;
+    boost::trim(arg);
+    boost::split(argComponents, arg, boost::is_any_of(","), boost::token_compress_on);
+    if (argComponents.size() != N) throw std::runtime_error("Invalid vector argument size");
+    VectorND<N> result;
+    for (size_t i = 0; i < N; ++i)
+        result[i] = std::stod(argComponents[i]);
+    return result;
+}
+
 template<size_t N>
 void dup(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
          const string &arg) { stack.push_back(getValue(stack)->clone()); }
@@ -502,8 +592,6 @@ void pull(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
     }
     throw runtime_error("Couldn't find '" + arg + "' for pull.");
 }
-
-
 
 // Single operand filters
 
@@ -534,7 +622,7 @@ void partialReduction(const string &op, vector<VPtr<N> > &stack,
     }
     else if (auto vfVal = dynamic_pointer_cast<VFieldValue<N>>(top)) {
         auto vOp = vOps.at(op);
-        auto r = new SFieldValue<N>(name, SField(vfVal->value.domainSize()));
+        auto r = new SFieldValue<N>(name, SField(vfVal->value.domainSize()), vfVal->domainType());
         for (size_t i = 0; i < vfVal->value.domainSize(); ++i)
             r->value[i] = vOp(vfVal->value(i));
         stack.push_back(VPtr<N>(r));
@@ -612,7 +700,7 @@ void setComponents(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser,
     top->name = arg.substr(0, end);
 }
 
-// Componenent-wise abs
+// Component-wise abs
 // Data types are unchanged.
 template<size_t N>
 void abs(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
@@ -624,19 +712,76 @@ void abs(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string 
 template<size_t N>
 void eigenvalues(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg) {
     auto top = popTypedValue<SMFieldValue<N> >(stack);
-    auto *result = new VFieldValue<N>("eigenvalues(" + top->name + ")");
     size_t numValues = top->value.domainSize();
-    result->value.resizeDomain(numValues);
+    auto *result = new VFieldValue<N>("eigenvalues(" + top->name + ")", VField<N>(numValues), top->domainType());
     for (size_t i = 0; i < numValues; ++i)
         result->value(i) = top->value(i).eigenvalues();
     stack.push_back(shared_ptr<VFieldValue<N> >(result));
+}
+
+// Sample a field at the vertex/element specified by index encoded in "arg".
+template<size_t N>
+void sampleIndex(vector<VPtr<N>> &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    size_t i = std::stoi(arg);
+    VPtr<N> top = popValue(stack);
+    stack.push_back(top->valueAtIndex(i));
+}
+
+// Sample a field at the point specified by vector encoded in "arg".
+// The field is interpolated as piecewise constant on the Voronoi diagram of
+// vertices (for per-vertex fields) or element barycenters (for per-element fields)
+template<size_t N>
+void sample(vector<VPtr<N>> &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    Point3D p = padTo3D(getVectorArg<N>(arg));
+    VPtr<N> top = popValue(stack);
+    DomainType dt = top->domainType();
+
+    const auto &vertices = parser.vertices();
+    const auto &elements = parser.elements();
+
+    vector<Real> sqDistances;
+    if (dt == DomainType::PER_NODE) {
+        // Distance is to closest vertex
+        sqDistances.reserve(vertices.size());
+        for (size_t i = 0; i < vertices.size(); ++i)
+            sqDistances.push_back((vertices[i].point - p).squaredNorm());
+    }
+    else if (dt == DomainType::PER_ELEMENT) {
+        // Distance is to closest element barycenter
+        sqDistances.reserve(elements.size());
+        for (size_t i = 0; i < elements.size(); ++i) {
+            Point3D barycenter(Point3D::Zero());
+            size_t ncorners = elements[i].size();
+            for (size_t ci = 0; ci < ncorners; ++ci)
+                barycenter += vertices[elements[i][ci]].point;
+            barycenter *= (1.0 / ncorners);
+            sqDistances.push_back((barycenter - p).squaredNorm());
+        }
+    }
+    else throw std::runtime_error("Illegal field domain type.");
+
+    size_t sampleIndex = 0;
+    Real closestSqDist = std::numeric_limits<Real>::max();
+    Real secondClosestSqDist = closestSqDist;
+    for (size_t i = 0; i < sqDistances.size(); ++i) {
+        if (sqDistances[i] < closestSqDist) {
+            sampleIndex = i;
+            secondClosestSqDist = closestSqDist;
+            closestSqDist = sqDistances[i];
+        }
+        else secondClosestSqDist = std::min(secondClosestSqDist, sqDistances[i]);
+    }
+    if (sqrt(closestSqDist) > 0.25 * sqrt(secondClosestSqDist))
+        std::cerr << "WARNING: sampling far away from interpolation point." << std::endl;
+
+    stack.push_back(top->valueAtIndex(sampleIndex));
 }
 
 template<size_t N>
 void percentile(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const string &arg);
 
 // Multiple operand filters
-// elementwise multiply of top two fields on the stack.
+// component-wise multiply of top two fields on the stack.
 // void multiply()
 
 // Report filters
@@ -671,11 +816,11 @@ void outputMSH(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const s
     MSHFieldWriter writer(arg, parser.vertices(), parser.elements());
     for (auto s : stack) {
         if      (auto  sfVal = dynamic_pointer_cast<SFieldValue<N>>(s))
-            writer.addField(s->name,  sfVal->value, MSHFieldWriter::PER_GUESS);
+            writer.addField(s->name,  sfVal->value, DomainType::GUESS);
         else if (auto  vfVal = dynamic_pointer_cast<VFieldValue<N>>(s))
-            writer.addField(s->name,  vfVal->value, MSHFieldWriter::PER_GUESS);
+            writer.addField(s->name,  vfVal->value, DomainType::GUESS);
         else if (auto smfVal = dynamic_pointer_cast<SMFieldValue<N>>(s))
-            writer.addField(s->name, smfVal->value, MSHFieldWriter::PER_GUESS);
+            writer.addField(s->name, smfVal->value, DomainType::GUESS);
         else cout << "WARNING: ignored non-field value on stack" << endl;
     }
 }
@@ -705,6 +850,7 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"extractAll", extractAll<N>}, {"print", print<N>},
         {"printName", printName<N>}, {"rename", rename<N>},
         {"eigenvalues", eigenvalues<N>},
+        {"sample", sample<N>}, {"sampleIndex", sampleIndex<N>},
         {"min",    bind(partialReduction<N>, "min",    _1, _2, _3)},
         {"max",    bind(partialReduction<N>, "max",    _1, _2, _3)},
         {"norm",   bind(partialReduction<N>, "norm",   _1, _2, _3)},

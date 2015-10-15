@@ -95,11 +95,11 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
 
 // Transfer per-element fields to output mesh, using cellIndex to track output
 // elements back to their origin element.
-template<class _Field, class _FT>
+template<class _Field>
 void transferField(const std::vector<size_t> cellIndex,
-        const _Field &inField, const string &name, _FT type,
+        const _Field &inField, const string &name, DomainType type,
         MSHFieldWriter &writer) {
-    if (type == _FT::PER_NODE) {
+    if (type == DomainType::PER_NODE) {
         cout << "per-node field transfer unsupported; skipping "
              << name << endl;
         return;
@@ -107,7 +107,7 @@ void transferField(const std::vector<size_t> cellIndex,
     _Field outField(cellIndex.size());
     for (size_t i = 0; i < cellIndex.size(); ++i)
         outField(i) = inField(cellIndex[i]);
-    writer.addField(name, outField, MSHFieldWriter::PER_ELEMENT);
+    writer.addField(name, outField, DomainType::PER_ELEMENT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -303,24 +303,23 @@ int main(int argc, const char *argv[])
             for (size_t i = 0; i < outElements.size(); ++i)
                 cellIndex[i] = quadIdx[i];
             writer.addField("cell_index", cellIndex,
-                            MSHFieldWriter::PER_ELEMENT);
+                            DomainType::PER_ELEMENT);
             if (args.count("propagateFields")) {
                 MSHFieldParser<2> fields(inPath);
                 std::vector<string> fnames = fields.vectorFieldNames();
-                typedef MSHFieldParser<2>::FieldType FT;
-                FT type;
+                DomainType type;
                 for (const string &name: fnames) {
-                    auto vf = fields.vectorField(name, FT::ANY, type);
+                    auto vf = fields.vectorField(name, DomainType::ANY, type);
                     transferField(quadIdx, vf, name, type, writer);
                 }
                 fnames = fields.scalarFieldNames();
                 for (const string &name: fnames) {
-                    auto sf = fields.scalarField(name, FT::ANY, type);
+                    auto sf = fields.scalarField(name, DomainType::ANY, type);
                     transferField(quadIdx, sf, name, type, writer);
                 }
                 fnames = fields.symmetricMatrixFieldNames();
                 for (const string &name: fnames) {
-                    auto smf = fields.symmetricMatrixField(name, FT::ANY, type);
+                    auto smf = fields.symmetricMatrixField(name, DomainType::ANY, type);
                     transferField(quadIdx, smf, name, type, writer);
                 }
             }
@@ -341,8 +340,7 @@ int main(int argc, const char *argv[])
             remove_dangling_vertices(inVertices, inElements);
         }
         MSHFieldParser<3> fields(inPath);
-        typedef MSHFieldParser<3>::FieldType FT;
-        FT type;
+        DomainType type;
 
         outElements = inElements;
         outVertices = inVertices;
@@ -355,17 +353,17 @@ int main(int argc, const char *argv[])
 
             std::vector<string> fnames = fields.vectorFieldNames();
             for (const string &name: fnames) {
-                auto vf = fields.vectorField(name, FT::ANY, type);
+                auto vf = fields.vectorField(name, DomainType::ANY, type);
                 transferField(hexIdx, vf, name, type, writer);
             }
             fnames = fields.scalarFieldNames();
             for (const string &name: fnames) {
-                auto sf = fields.scalarField(name, FT::ANY, type);
+                auto sf = fields.scalarField(name, DomainType::ANY, type);
                 transferField(hexIdx, sf, name, type, writer);
             }
             fnames = fields.symmetricMatrixFieldNames();
             for (const string &name: fnames) {
-                auto smf = fields.symmetricMatrixField(name, FT::ANY, type);
+                auto smf = fields.symmetricMatrixField(name, DomainType::ANY, type);
                 transferField(hexIdx, smf, name, type, writer);
             }
             exit(0);

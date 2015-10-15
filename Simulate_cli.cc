@@ -108,7 +108,7 @@ void execute(const po::variables_map &args,
         for (string name : isotropicNames) {
             name = matFieldName + name;
             try { paramFields.push_back(fieldParser.scalarField(name,
-                        MSHFieldParser<_N>::FieldType::PER_ELEMENT)); }
+                        DomainType::PER_ELEMENT)); }
             catch (...) { /* Don't complain yet--try orthotropic */ }
         }
         if (paramFields.size() == 2) {
@@ -130,7 +130,7 @@ void execute(const po::variables_map &args,
             for (string name : orthotropicNames.at(_N - 2)) {
                 name = matFieldName + name;
                 try { paramFields.push_back(fieldParser.scalarField(name,
-                            MSHFieldParser<_N>::FieldType::PER_ELEMENT)); }
+                            DomainType::PER_ELEMENT)); }
                 catch (...) { throw notFound; }
             }
             if (!domainSizeChecker(paramFields)) throw sizeErr;
@@ -182,21 +182,21 @@ void execute(const po::variables_map &args,
     BENCHMARK_STOP_TIMER_SECTION("Simulation");
 
     MSHFieldWriter writer(outMSH, sim.mesh());
-    writer.addField("u",      u, MSHFieldWriter::PER_NODE);
-    writer.addField("load",   f, MSHFieldWriter::PER_NODE);
-    writer.addField("strain", e, MSHFieldWriter::PER_ELEMENT);
-    writer.addField("stress", s, MSHFieldWriter::PER_ELEMENT);
+    writer.addField("u",      u, DomainType::PER_NODE);
+    writer.addField("load",   f, DomainType::PER_NODE);
+    writer.addField("strain", e, DomainType::PER_ELEMENT);
+    writer.addField("stress", s, DomainType::PER_ELEMENT);
     // // Write mat parameter fields
     // SField Ex(numElements), Ey(numElements), nuYX(numElements), mu(numElements);
     // for (size_t i = 0; i < sim.mesh().numElements(); ++i)
     //     sim.mesh().element(i)->E().getOrthotropic2D(Ex[i], Ey[i], nuYX[i], mu[i]);
-    // writer.addField("E_x",    Ex,    MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("E_y",    Ey,    MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("nu_yx",  nuYX,  MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("mu",    mu,    MSHFieldWriter::PER_ELEMENT);
+    // writer.addField("E_x",    Ex,    DomainType::PER_ELEMENT);
+    // writer.addField("E_y",    Ey,    DomainType::PER_ELEMENT);
+    // writer.addField("nu_yx",  nuYX,  DomainType::PER_ELEMENT);
+    // writer.addField("mu",     mu,    DomainType::PER_ELEMENT);
 
     sim.reportRegionSurfaceForces(u);
-    writer.addField("Ku", sim.applyStiffnessMatrix(u), MSHFieldWriter::PER_NODE);
+    writer.addField("Ku", sim.applyStiffnessMatrix(u), DomainType::PER_NODE);
 
     BENCHMARK_REPORT();
 }

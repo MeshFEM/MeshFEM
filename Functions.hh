@@ -71,8 +71,9 @@ namespace {
 
     ////////////////////////////////////////////////////////////////////////////
     // Interpolation
-    // Two versions of each interpolation operation are proved: one taking K + 1
-    // (i.e. number of K-simplex vertices) and one taking a single VectorND<K+1>
+    // Two versions of each interpolation operation are provideded: one taking
+    // K + 1 (i.e. number of K-simplex vertices) and one taking a single
+    // VectorND<K+1>
     ////////////////////////////////////////////////////////////////////////////
     // Constant functions don't interpolate...
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>

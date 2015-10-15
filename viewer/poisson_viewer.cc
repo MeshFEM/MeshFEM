@@ -10,10 +10,10 @@
 
 #include <Eigen/Dense>
 
-#include "MeshIO.hh"
-#include "Geometry.hh"
+#include "../MeshIO.hh"
+#include "../Geometry.hh"
 
-#include "Poisson.hh"
+#include "../Poisson.hh"
 #include "colors.hh"
 #include "draw.hh"
 
@@ -27,7 +27,11 @@ vector<double>        soln;
 
 size_t g_selectedNode;
 
-typedef PoissonMesh<2, 2, Point2D> PMesh;
+#ifndef DEGREE
+#define DEGREE 2
+#endif
+
+typedef PoissonMesh<2, DEGREE, Point2D> PMesh;
 PMesh *mesh;
 
 void drawTriangle2D(const TriangleIndex &tri)

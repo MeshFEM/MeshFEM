@@ -37,6 +37,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m", po::value<string>(), "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
+        ("m2mstress,M",po::value<string>(), "Dump macroscopic to microscopic stress tensors to specified file")
         ;
 
     po::options_description cli_opts;
@@ -96,8 +97,8 @@ void execute(const po::variables_map &args,
     // for (size_t i = 0; i < w_ij.size(); ++i) {
     //     VField rhs(sim.constantStrainLoad(-Simulator::SMatrix::CanonicalBasis(i)));
     //     // NOTE: constant strain load on vertex nodes is actually zero in deg 2!
-    //     writer.addField("load " + to_string(i), sim.dofToNodeField(rhs), MSHFieldWriter::PER_NODE);
-    //     writer.addField("w_ij " + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
+    //     writer.addField("load " + to_string(i), sim.dofToNodeField(rhs), DomainType::PER_NODE);
+    //     writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
     // }
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");
@@ -145,6 +146,22 @@ void execute(const po::variables_map &args,
     }
 
     cout << "Anisotropy:\t" << Eh.anisotropy() << endl;
+
+    if (args.count("m2mstress")) {
+        string mpath = args["m2mstress"].as<string>();
+        ofstream mfile(mpath);
+        ofstream gfile("gtensors.txt");
+        mfile << setprecision(16);
+        gfile << setprecision(16);
+        if (!mfile.is_open()) throw runtime_error("Failed to open output file " + mpath);
+        auto G = macroStrainToMicroStrainTensors(w_ij, sim);
+        for (size_t ei = 0; ei < sim.mesh().numElements(); ++ei) {
+            G.at(ei).writeUnflattened(gfile); gfile << endl;
+            auto F = mat.getTensor().doubleContract(G.at(ei).doubleContract(S));
+            F.writeUnflattened(mfile);
+            mfile << endl;
+        }
+    }
 
     BENCHMARK_REPORT();
 }

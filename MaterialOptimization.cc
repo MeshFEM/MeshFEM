@@ -64,7 +64,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         Real anisotropyPenaltyWeight, bool noRigidMotionDirichlet) {
     auto neumannLoad = m_sim.neumannLoad();
     m_sim.projectOutRigidComponent(neumannLoad);
-    // writer.addField("Neumann load", m_sim.dofToNodeField(neumannLoad), MSHFieldWriter::PER_NODE);
+    // writer.addField("Neumann load", m_sim.dofToNodeField(neumannLoad), DomainType::PER_NODE);
 
     // Get "material graph" adjacences for Laplacian (smoothness) regularization
     vector<set<size_t> > materialAdj;
@@ -119,8 +119,8 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
                  << endl;
         }
 
-        writer.addField(to_string(iter) + " u_neumann",          u,                  MSHFieldWriter::PER_NODE);
-        writer.addField(to_string(iter) + " u_dirichletTargets", u_dirichletTargets, MSHFieldWriter::PER_NODE);
+        writer.addField(to_string(iter) + " u_neumann",          u,                  DomainType::PER_NODE);
+        writer.addField(to_string(iter) + " u_dirichletTargets", u_dirichletTargets, DomainType::PER_NODE);
 
         ceres::Problem problem;
 
@@ -184,7 +184,7 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
         m_sim.materialFieldUpdated();
         u = m_sim.solve(neumannLoad);
         vector<Real> g = objectiveGradient(u);
-        writer.addField(to_string(iter) + " u", u, MSHFieldWriter::PER_NODE);
+        writer.addField(to_string(iter) + " u", u, DomainType::PER_NODE);
 
         // Write gradient component fields
         m_matField->writeVariableFields(writer, to_string(iter) + " grad_", g);

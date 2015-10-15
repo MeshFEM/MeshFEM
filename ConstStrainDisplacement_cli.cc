@@ -177,24 +177,24 @@ void execute(const po::variables_map &args,
             tmp *= (((i < _N) ? 1.0 : 2.0) * strain[i]);
             cstrainDisp += tmp;
 
-            writer.addField("w_ij " + to_string(i), w_ij[i], MSHFieldWriter::PER_NODE);
+            writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
             auto strain = sim.averageStrainField(w_ij[i]);
-            writer.addField("strain w_ij " + to_string(i), strain, MSHFieldWriter::PER_ELEMENT);
+            writer.addField("strain w_ij " + to_string(i), strain, DomainType::PER_ELEMENT);
 
             ScalarField<Real> comp(strain.domainSize());
             for (size_t c = 0; c < flatLen(_N); ++c) {
                 for (size_t ei = 0; ei < strain.domainSize(); ++ei)
                     comp(ei) = strain(ei)[c];
-                writer.addField("strain w_ij " + to_string(i) + " comp " + to_string(c), comp, MSHFieldWriter::PER_ELEMENT);
+                writer.addField("strain w_ij " + to_string(i) + " comp " + to_string(c), comp, DomainType::PER_ELEMENT);
             }
         }
     }
 
-    writer.addField("u_cstrain", cstrainDisp, MSHFieldWriter::PER_NODE);
+    writer.addField("u_cstrain", cstrainDisp, DomainType::PER_NODE);
     if (args.count("nodalLoad"))
-        writer.addField("f_cstrain", sim.applyStiffnessMatrix(cstrainDisp), MSHFieldWriter::PER_NODE);
+        writer.addField("f_cstrain", sim.applyStiffnessMatrix(cstrainDisp), DomainType::PER_NODE);
 
-    writer.addField("stress", sim.averageStressField(cstrainDisp), MSHFieldWriter::PER_ELEMENT);
+    writer.addField("stress", sim.averageStressField(cstrainDisp), DomainType::PER_ELEMENT);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -152,6 +152,29 @@ namespace PeriodicHomogenization {
         return homogenizedElasticityTensorDisplacementForm(w_ij, sim, sim.mesh().boundingBox().volume());
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Compute the macroscopic-strain-to-microscopic strain tensors.
+    //  These are rank 4 tensors that have minor but not major symmetries:
+    //      G_ijkl(x) = [e(w^kl)(x) + e^kl]_ij
+    //  @return     A vector of per-element tensors. The tensor at index i is
+    //              the average of G_ijkl(x) over element i.
+    *///////////////////////////////////////////////////////////////////////////
+    template<class _Sim>
+    std::vector<ElasticityTensor<Real, _Sim::N, false>>
+    macroStrainToMicroStrainTensors(const std::vector<typename _Sim::VField> &w, const _Sim &sim) {
+        size_t numElems = sim.mesh().numElements();
+        std::vector<ElasticityTensor<Real, _Sim::N, false>> G(numElems);
+        typename _Sim::Strain  strain_ij;
+        for (size_t e = 0; e < numElems; ++e) {
+            for (size_t ij = 0; ij < w.size(); ++ij) {
+                sim.elementStrain(e, w[ij], strain_ij);
+                G[e].DRowAsSymMatrix(ij) = strain_ij.average();
+                G[e].DRowAsSymMatrix(ij) += _Sim::SMatrix::CanonicalBasis(ij);
+            }
+        }
+        return G;
+    }
+
     // Per-boundary-element interpolant type needed to express the homogenized
     // tensor shape derivative.
     template<class _Sim>

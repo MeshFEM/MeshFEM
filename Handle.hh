@@ -13,6 +13,7 @@
 #ifndef HANDLE_HH
 #define HANDLE_HH
 #include <type_traits>
+#include <cassert>
 
 // Special data type that causes no per-entity storage for each entity it is
 // assigned to.
@@ -168,6 +169,7 @@ struct ConstHandleRange {
     typedef HandleIteratorWrapper<CHType> Iterator;
     Iterator begin() const { return Iterator(CHType(0, m_mesh)); }
     Iterator end()   const { return Iterator(CHType((m_mesh .* RangeTraits::entityCount)(), m_mesh)); }
+    size_t   size()  const { return (m_mesh .* RangeTraits::entityCount)(); }
 private:
     const mesh_type &m_mesh;
 };

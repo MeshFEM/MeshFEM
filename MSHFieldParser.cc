@@ -37,7 +37,7 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath) {
     while (getline(infile, header)) {
         string fieldName;
         Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> fieldData;
-        FieldType ftype;
+        DomainType ftype;
         parseField(infile, header, fieldName, fieldData, ftype, io.binary());
         if (fieldData.rows() == 1) {
             ScalarField<Real> field(fieldData.cols());
@@ -79,15 +79,15 @@ template<size_t N>
 void MSHFieldParser<N>::
 parseField(istream &is, const string &header, string &name,
            Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &fieldData,
-           FieldType &type, bool binary)
+           DomainType &type, bool binary)
 {
     // enable input stream exceptions for parsing safety; we should be able
     // to parse through a field to completion without any trouble
     is.exceptions(istream::failbit | istream::badbit);
     size_t expectedSize;
     string expectedFooter;
-    if   (header == "$ElementData") { type = FieldType::PER_ELEMENT; expectedSize = numElements(); expectedFooter  = "$EndElementData"; }
-    else if (header == "$NodeData") { type = FieldType::PER_NODE   ; expectedSize = numVertices(); expectedFooter  =    "$EndNodeData"; }
+    if   (header == "$ElementData") { type = DomainType::PER_ELEMENT; expectedSize = numElements(); expectedFooter  = "$EndElementData"; }
+    else if (header == "$NodeData") { type = DomainType::PER_NODE   ; expectedSize = numVertices(); expectedFooter  =    "$EndNodeData"; }
     else throw runtime_error("Unrecognized MSH section: " + header);
 
     // 1         (one string tag)

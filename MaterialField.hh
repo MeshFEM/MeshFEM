@@ -151,7 +151,7 @@ public:
                 varField[ei] = values[_Material::numVars * mi + vi];
             }
             writer.addField(prefix + name, varField,
-                            MSHFieldWriter::PER_ELEMENT);
+                            DomainType::PER_ELEMENT);
         }
     }
 

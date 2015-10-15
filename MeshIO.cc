@@ -1,5 +1,6 @@
 #include "MeshIO.hh"
 #include <boost/algorithm/string.hpp>
+#include <iostream>
 #include <deque>
 #include "util.h"
 
@@ -114,8 +115,10 @@ MeshIO *getMeshIO(Format &format) {
         throw std::runtime_error("getMeshIO method doesn't support Node/Ele");
     if ((size_t) format < IOs.size() && format >= 0)
         return IOs[format];
-    
-    throw std::runtime_error("Illegal Mesh Format: " + std::to_string(format));
+
+    std::cerr << "Warning: Illegal Mesh Format: "  << format
+              << ". Defaulting to MSH format." << std::endl;
+    return IOs[FMT_MSH];
 }
 
 ////////////////////////////////////////////////////////////////////////////////

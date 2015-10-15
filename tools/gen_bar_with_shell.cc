@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     }
 
     MSHFieldWriter writer(outMsh, vertices, elements);
-    writer.addField("shell_indicator", shellIndicator, MSHFieldWriter::PER_ELEMENT);
+    writer.addField("shell_indicator", shellIndicator, DomainType::PER_ELEMENT);
 
     return 0;
 }

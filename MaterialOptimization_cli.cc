@@ -156,11 +156,11 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
 
     // Propagate the cell_index field.
     if (cell_index.domainSize() == matOpt.mesh().numElements())
-        writer.addField("cell_index", cell_index, MSHFieldWriter::PER_ELEMENT);
-    // writer.addField("target", targetDisplacements, MSHFieldWriter::PER_NODE);
+        writer.addField("cell_index", cell_index, DomainType::PER_ELEMENT);
+    // writer.addField("target", targetDisplacements, DomainType::PER_NODE);
 
     // auto u = matOpt.currentDisplacement();
-    // writer.addField("Initial u", u, MSHFieldWriter::PER_NODE);
+    // writer.addField("Initial u", u, DomainType::PER_NODE);
 
     // size_t numElements = matOpt.mesh().numElements();
     // SField gradE(numElements), gradNu(numElements);
@@ -177,7 +177,7 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
     // auto u_opt = matOpt.currentDisplacement();
     // g = matOpt.objectiveGradient(u_opt);
 
-    // writer.addField("Final u", u_opt, MSHFieldWriter::PER_NODE);
+    // writer.addField("Final u", u_opt, DomainType::PER_NODE);
     matField->writeVariableFields(writer, "Final ");
     // matField->writeVariableFields(writer, "Final grad", g);
 }

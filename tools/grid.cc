@@ -134,7 +134,7 @@ int main(int argc, const char *argv[])
 
         ScalarField<double> cell_index(cellIdx.size());
         for (size_t i = 0; i < cellIdx.size(); ++i) cell_index[i] = cellIdx[i];
-        writer.addField("cell_index", cell_index, MSHFieldWriter::PER_ELEMENT);
+        writer.addField("cell_index", cell_index, DomainType::PER_ELEMENT);
     }
     else {
         MeshIO::save(outPath, gridVertices, gridElements);
