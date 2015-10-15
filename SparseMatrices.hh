@@ -443,8 +443,10 @@ public:
         clear();
 
         umfpack_dl_defaults(Control);
+        BENCHMARK_START_TIMER("UMFPACK Symbolic Factorize");
         int status = umfpack_dl_symbolic(m_mat.m, m_mat.n, Ap(), Ai(), Ax(),
                                          &symbolic, Control, Info);
+        BENCHMARK_STOP_TIMER("UMFPACK Symbolic Factorize");
         if (status != UMFPACK_OK) {
             // Symbolic object isn't created when there is a failure, so there
             // is nothing to free.
@@ -452,8 +454,10 @@ public:
                     + std::to_string(status));
         }
 
+        BENCHMARK_START_TIMER("UMFPACK Numeric Factorize");
         status = umfpack_dl_numeric(Ap(), Ai(), Ax(), symbolic, &numeric,
                                     Control, Info);
+        BENCHMARK_STOP_TIMER("UMFPACK Numeric Factorize");
         if (status != UMFPACK_OK) {
             umfpack_dl_free_symbolic(&symbolic);
             // A numeric object is allocated if we just got the singular matrix
@@ -564,10 +568,12 @@ public:
 
     void factorize() {
         clearFactors();
-        BENCHMARK_START_TIMER("Factorize");
+        BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
         m_L = cholmod_l_analyze(m_A, &m_c);
+        BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
+        BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
         int success = cholmod_l_factorize(m_A, m_L, &m_c);
-        BENCHMARK_STOP_TIMER("Factorize");
+        BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
         if (!success)
             throw std::runtime_error("Factorize failed.");
         BENCHMARK_ADD_MESSAGE("Peak factorization memory (MB):\t" +
@@ -588,9 +594,9 @@ public:
         for (size_t i = 0; i < m; ++i)
             ((double *) chol_b->x)[i] = b[i];
 
-        BENCHMARK_START_TIMER("Backsub");
+        BENCHMARK_START_TIMER("CHOLMOD Backsub");
         cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, chol_b, &m_c);
-        BENCHMARK_STOP_TIMER("Backsub");
+        BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
 
         x.resize(n);
         for (size_t i = 0; i < n; ++i)

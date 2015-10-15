@@ -8,11 +8,18 @@
 //      See doc/meshless_fem/TensorFlattening.pdf
 //      for details of this transformation.
 //      
-//      Major symmetry is enforced by only storing the upper triangle of D
-//      internally. This means matrix element accesses must be done through
-//      method D(i, j), and matrix operations need to be performed with
-//      Eigen's "selfadjointView<Eigen::Upper>" view. For safety, because of
-//      this complexity, m_d is kept entirely private, with no direct accessor.
+//      When _MajorSymmetry == true, symmetry is enforced by only storing the
+//      upper triangle of D internally. This means matrix element accesses must
+//      be done through method D(i, j), and matrix operations need to be
+//      performed with Eigen's "selfadjointView<Eigen::Upper>" view. For safety,
+//      because of this complexity, m_d is kept entirely private, with no direct
+//      accessor.
+//
+//      When _MajorSymmetry == false, major symmetry is not enforced, and the
+//      datastructure can be used to store non-major-symmetric tensors (though
+//      these shouldn't be used as true elasticity tensors). This can be useful
+//      to store intermediate computation results on rank 4 tensors: e.g. the
+//      double contraction of two elasticity tensors.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -27,8 +34,13 @@
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
-template<typename Real, int _Dim>
+template<typename Real, int _Dim, bool _MajorSymmetry = true>
 class ElasticityTensor {
+    // We need access to other major symmetry types' members (for double
+    // contraction operator), but unfortunately we can't friend a partial
+    // template specialization, so...
+    template<typename _Real2, int _Dim2, bool _MajorSymmetry2>
+    friend class ElasticityTensor;
 public:
     typedef Eigen::Matrix<Real, flatLen(_Dim), flatLen(_Dim)> DType;
     typedef typename DType::RowXpr                            RowXpr;
@@ -207,18 +219,25 @@ public:
 
     Real D(size_t i, size_t j) const {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));
-        return (i <= j) ? m_d(i, j) : m_d(j, i);
+        if (_MajorSymmetry) return (i <= j) ? m_d(i, j) : m_d(j, i);
+        else                return m_d(i, j);
     }
 
     Real &D(size_t i, size_t j) {
         assert((i < (size_t) m_d.rows()) && (j < (size_t) m_d.cols()));
-        return (i <= j) ? m_d(i, j) : m_d(j, i);
+        if (_MajorSymmetry) return (i <= j) ? m_d(i, j) : m_d(j, i);
+        else                return m_d(i, j);
     }
 
     ConstRowXpr DRow(size_t i) const { assert(i < (size_t) m_d.rows()); return m_d.row(i); }
     RowXpr      DRow(size_t i)       { assert(i < (size_t) m_d.rows()); return m_d.row(i); }
     ConstSMRowWrapper DRowAsSymMatrix(size_t i) const { return ConstSMRowWrapper(DRow(i)); }
          SMRowWrapper DRowAsSymMatrix(size_t i)       { return      SMRowWrapper(DRow(i)); }
+
+    ConstRowXpr DCol(size_t i) const { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
+    RowXpr      DCol(size_t i)       { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
+    ConstSMRowWrapper DColAsSymMatrix(size_t i) const { return ConstSMColWrapper(DCol(i)); }
+         SMRowWrapper DColAsSymMatrix(size_t i)       { return      SMColWrapper(DCol(i)); }
 
     // Get the flattened tensor's diagonal
     Eigen::Matrix<Real, flatLen(_Dim), 1> diag() const {
@@ -241,7 +260,8 @@ public:
     // F(E^-1) = S^-1 F(E)^-1 S^-1
     ElasticityTensor inverse() const {
         ElasticityTensor result;
-        result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        if (_MajorSymmetry) result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        else                result.m_d = m_d;
         result.m_d = result.m_d.inverse().eval();
          leftApplyShearDoublerInverse(result.m_d);
         rightApplyShearDoublerInverse(result.m_d);
@@ -292,10 +312,11 @@ public:
     }
 
     // The operation is D * S * strain, where S is the "Shear doubling" matrix
-    // need to implement contraction E_ijkl e_kl
+    // needed to implement contraction E_ijkl e_kl
     // (see doc/meshless_fem/TensorFlattening.pdf)
     FlattenedRank2Tensor doubleContract(const FlattenedRank2Tensor &in) const {
-        return m_d.template selfadjointView<Eigen::Upper>() * shearDoubled(in);
+        if (_MajorSymmetry) return m_d.template selfadjointView<Eigen::Upper>() * shearDoubled(in);
+        else                return m_d * shearDoubled(in);
     }
 
     // Apply matrix D itself to a vector or a matrix. For this to have physical
@@ -303,7 +324,8 @@ public:
     // strains.
     template<typename FlattenedType>
     FlattenedType applyD(const FlattenedType &in) const {
-        return m_d.template selfadjointView<Eigen::Upper>() * in;
+        if (_MajorSymmetry) return m_d.template selfadjointView<Eigen::Upper>() * in;
+        else                return m_d * in;
     }
 
     template<typename Real2, size_t N, class _Storage, class _ConstRef>
@@ -312,18 +334,32 @@ public:
         return SymmetricMatrix<N, FlattenedRank2Tensor>(applyD(shearDoubled(b.flattened())));
     }
 
-    // NOTE: plain tensor double contraction is forbidden because the result
-    // is asymmetric, however we do support the following operation that we
-    // call "double double contract" since it obtains a symmetric result:
+    // The following operation that we call "double double contract" maintains
+    // major symmetry (result is major-symmetric if this is):
     //      A : B : A       (A_ijpq B_pqrs A_rskl)
     // Tensor A is "this", B is passed as an argument.
     // The operation is implemented as:
     // F(A) S F(B) S F(A)
     ElasticityTensor doubleDoubleContract(const ElasticityTensor &B) const {
         ElasticityTensor result;
-        result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        if (_MajorSymmetry) result.m_d = m_d.template selfadjointView<Eigen::Upper>();
+        else                result.m_d = m_d;
         leftApplyShearDoubler(result.m_d);
         result.m_d = B.applyD(result.m_d);
+        leftApplyShearDoubler(result.m_d);
+        result.m_d = applyD(result.m_d);
+        return result;
+    }
+
+    // NOTE: In general, double contraction:
+    //      A : B       (A_ijpq B_pqkl)
+    // gives a tensor without major symmetry. We implement this operation as:
+    // F(A : B) = F(A) S F(B)
+    template<bool _MajorSymmetry2>
+    ElasticityTensor<Real, _Dim, false> doubleContract(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &B) const {
+        ElasticityTensor<Real, _Dim, false> result;
+        if (_MajorSymmetry2) result.m_d = B.m_d.template selfadjointView<Eigen::Upper>();
+        else                 result.m_d = B.m_d;
         leftApplyShearDoubler(result.m_d);
         result.m_d = applyD(result.m_d);
         return result;
@@ -356,8 +392,11 @@ public:
                                 for (size_t r = 0; r < _Dim; ++r)
                                     for (size_t s = 0; s < _Dim; ++s)
                                         comp += (*this)(p, q, r, s) * R(i, p) * R(j, q) * R(k, r) * R(l, s);
-                        Real existing = result(i, j, k, l);
-                        assert((existing == 0) || (std::abs(existing - comp) < 1e-10));
+                        if (_MajorSymmetry) {
+                            // Validate major symmetry (when we should have it).
+                            Real existing = result(i, j, k, l);
+                            assert((existing == 0) || (std::abs(existing - comp) < 1e-10));
+                        }
 
                         size_t ij = flattenIndices(_Dim, i, j);
                         size_t kl = flattenIndices(_Dim, k, l);
@@ -369,19 +408,41 @@ public:
         return result;
     }
 
+    // Write unflattened tensor in Mathematica array syntax.
+    void writeUnflattened(std::ostream &os) const {
+        os << "{";
+        for (size_t i = 0; i < _Dim; ++i) {
+            os << "{";
+            for (size_t j = 0; j < _Dim; ++j) {
+                os << "{";
+                for (size_t k = 0; k < _Dim; ++k) {
+                    os << "{";
+                    for (size_t l = 0; l < _Dim; ++l) {
+                        os << (*this)(i, j, k, l);
+                        if (l < _Dim - 1) os << ", ";
+                    }
+                    os << ((k < _Dim - 1) ? "}, " : "}");
+                }
+                os << ((j < _Dim - 1) ? "}, " : "}");
+            }
+            os << ((i < _Dim - 1) ? "}, " : "}");
+        }
+        os << "}";
+    }
+
 private:
     DType m_d;
 
     friend std::ostream &operator<<(std::ostream &os, const ElasticityTensor &E) {
-        DType d = E.m_d.template selfadjointView<Eigen::Upper>();
-        os << d;
+        if (_MajorSymmetry) os << (DType) E.m_d.template selfadjointView<Eigen::Upper>();
+        else                os << E.m_d;
         return os;
     }
 };
 
-template<typename Real, int _Dim>
-ElasticityTensor<Real, _Dim> operator*(Real a,
-        const ElasticityTensor<Real, _Dim> &E) {
+template<typename Real, int _Dim, bool _MajorSymmetry>
+ElasticityTensor<Real, _Dim, _MajorSymmetry> operator*(Real a,
+        const ElasticityTensor<Real, _Dim, _MajorSymmetry> &E) {
     return E * a;
 }
 
