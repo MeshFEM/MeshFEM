@@ -165,13 +165,17 @@ int main(int argc, const char *argv[])
                  << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
 
             Real minSqNorm = numeric_limits<Real>::max();
+            Real maxSqNorm = 0.0;
             for (size_t hfi = 0; hfi < mesh.numHalfFaces(); ++hfi) {
                 auto hf = mesh.halfFace(hfi);
                 for (size_t i = 0; i < 3; ++i) {
-                    minSqNorm = min(minSqNorm, (hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).squaredNorm());
+                    Real sqNorm = (hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).squaredNorm();
+                    minSqNorm = min(minSqNorm, sqNorm);
+                    maxSqNorm = max(maxSqNorm, sqNorm);
                 }
             }
             cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
+            cout << "Max edge length:\t" << sqrt(maxSqNorm) << endl;
         }
         if (args.count("boundary")) {
             if (args.count("subdivide")) {
@@ -222,11 +226,15 @@ int main(int argc, const char *argv[])
                  << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
 
             Real minSqNorm = numeric_limits<Real>::max();
+            Real maxSqNorm = 0.0;
             for (size_t hei = 0; hei < mesh.numHalfEdges(); ++hei) {
                 auto he = mesh.halfEdge(hei);
-                minSqNorm = min(minSqNorm, (he.tip()->p - he.tail()->p).squaredNorm());
+                Real sqNorm = (he.tip()->p - he.tail()->p).squaredNorm();
+                minSqNorm = min(minSqNorm, sqNorm);
+                maxSqNorm = max(maxSqNorm, sqNorm);
             }
             cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
+            cout << "Max edge length:\t" << sqrt(maxSqNorm) << endl;
         }
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);

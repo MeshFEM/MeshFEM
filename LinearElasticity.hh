@@ -136,16 +136,16 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
 
         // Gets ***upper triangle*** of the per-element stiffness matrix.
         void perElementStiffness(PerElementStiffness &Ke) const {
-            std::vector<Strain> strains = vecPhiStrains();
-            std::vector<Stress> stresses;
-            stresses.reserve(strains.size());
-            for (size_t i = 0; i < strains.size(); ++i)
-                stresses.emplace_back(strains[i].doubleContract(m_E()));
-            for (size_t i = 0; i < strains.size(); ++i) {
-                for (size_t j = i; j < stresses.size(); ++j) {
+            std::vector<Strain> strainPhi = vecPhiStrains();
+            std::vector<Stress> stressPhi;
+            stressPhi.reserve(strainPhi.size());
+            for (size_t i = 0; i < strainPhi.size(); ++i)
+                stressPhi.emplace_back(strainPhi[i].doubleContract(m_E()));
+            for (size_t i = 0; i < stressPhi.size(); ++i) {
+                for (size_t j = i; j < strainPhi.size(); ++j) {
                     Ke(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
-                            return stresses[i](p).doubleContract(strains[j](p));
+                            return stressPhi[i](p).doubleContract(strainPhi[j](p));
                     }, Base::volume());
                 }
             }

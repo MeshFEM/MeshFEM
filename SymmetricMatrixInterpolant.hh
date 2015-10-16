@@ -25,12 +25,12 @@ public:
     // Zero out this symmetric matrix function
     void clear() {
         for (size_t inode = 0; inode < numNodalValues; ++inode)
-            Base::operator[](inode).clear();
+            (*this)[inode].clear();
     }
     SymmetricMatrixInterpolant doubleContract(const ElasticityTensor<Real, SMat::N> &E) const {
         SymmetricMatrixInterpolant result;
         for (size_t inode = 0; inode < numNodalValues; ++inode)
-            result[inode] = E.doubleContract(Base::operator[](inode));
+            result[inode] = E.doubleContract((*this)[inode]);
         return result;
     }
 };

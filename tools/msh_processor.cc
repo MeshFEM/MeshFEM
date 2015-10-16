@@ -68,11 +68,14 @@ po::parsed_options parseCmdLine(int argc, char *argv[]) {
     po::options_description unary_operations("Unary operations");
     unary_operations.add_options()
         ("applyAll,A",                       "Apply next filter to entire stack instead of top")
-        ("max,M",                            "Max of scalar field (component-wise for vector field)")
-        ("min,m",                            "Min of scalar field (component-wise for vector field)")
-        ("maxMag",                           "Max magnitude of scalar field (component-wise for vector field)")
-        ("minMag",                           "Min magnitude of scalar field (component-wise for vector field)")
-        ("norm,n",                           "L2 norm of scalar field (component-wise for vector field)")
+        ("max,M",                            "Max of scalar field (pointwise for vector field)")
+        ("min,m",                            "Min of scalar field (pointwise for vector field)")
+        ("maxMag",                           "Max magnitude of scalar field (pointwise for vector field)")
+        ("minMag",                           "Min magnitude of scalar field (pointwise for vector field)")
+        ("norm,n",                           "L2 norm of scalar field (pointwise for vector field)")
+
+        ("component,c", po::value<string>(), "Extract component of vector (pointwise for vector field)")
+
         ("abs,a",                            "Componentwise abs of scalar field or vector field")
         ("scale,s", po::value<string>(),     "Multiply the top of the stack by a scalar.")
         ("set",     po::value<string>(),     "Set every component of the top value to arg.")
@@ -719,6 +722,24 @@ void eigenvalues(vector<VPtr<N> > &stack, const MSHFieldParser<N> &parser, const
     stack.push_back(shared_ptr<VFieldValue<N> >(result));
 }
 
+template<size_t N>
+void component(vector<VPtr<N>> &stack, const MSHFieldParser<N> &parser, const string &arg) {
+    size_t c = std::stoi(arg);
+    if (c >= N) throw std::runtime_error("Component index out of range");
+
+    VPtr<N> v = popValue(stack);
+    if (auto vf = dynamic_pointer_cast<VFieldValue<N>>(v)) {
+        SField result(vf->numElems());
+        for (size_t i = 0; i < vf->numElems(); ++i)
+            result[i] = vf->value(i)[c];
+        stack.push_back(make_shared<SFieldValue<N>>(v->name + "[" + to_string(c) + "]", result, vf->domainType()));
+    }
+    else if (auto vector = dynamic_pointer_cast<VectorValue<N>>(v)) {
+        stack.push_back(make_shared<ScalarValue<N>>(v->name + "[" + to_string(c) + "]", vector->value[c]));
+    }
+    else throw std::runtime_error("Component extraction only applies to vector and vector fields.");
+}
+
 // Sample a field at the vertex/element specified by index encoded in "arg".
 template<size_t N>
 void sampleIndex(vector<VPtr<N>> &stack, const MSHFieldParser<N> &parser, const string &arg) {
@@ -856,6 +877,7 @@ void execute(const string &mshFile, const vector<FilterInvocation> &filters) {
         {"norm",   bind(partialReduction<N>, "norm",   _1, _2, _3)},
         {"maxMag", bind(partialReduction<N>, "maxMag", _1, _2, _3)},
         {"minMag", bind(partialReduction<N>, "minMag", _1, _2, _3)},
+        {"component", component<N>},
         {"sum", sum<N>}, {"mean", mean<N>}, {"abs", abs<N>},
         {"scale", scale<N>}, {"set", setComponents<N>},
         {"add", bind(binaryOperator<N>, "+", _1, _2, _3)},
