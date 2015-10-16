@@ -1,16 +1,17 @@
 # expected variables to be set:
-#   mesh, bc_name, error_type, exact
+#   mesh, bc_name, poisson, error_type, exact
 # eg: mesh='square'
 #     bc_name='sin'
+#     poisson='poisson_0.25'
 #     error_type=0
 #     exact='-1.5039245804035226e-01'
 error_name = word('u_x u_y norm(u)', error_type + 1)
-linear_data=bc_name . '/linear/0.75,0.75.txt'
-quad_data=bc_name . '/quadratic/0.75,0.75.txt'
+linear_data=bc_name . '/' . poisson . '/deg_1/0.75,0.75.txt'
+  quad_data=bc_name . '/' . poisson . '/deg_2/0.75,0.75.txt'
 error_col=error_type + 3
 print error_col
 set term pngcairo size 1024,768
-set output bc_name . '/error_' . word('ux uy unorm', error_type + 1) . '.png'
+set output bc_name . '/' . poisson . '/error_' . word('ux uy unorm', error_type + 1) . '.png'
 
 # Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
 # space, where it's just a linear fit.
@@ -21,13 +22,16 @@ fQuadLog(logX) = quadLogA + quadExp * logX
 fit fLinearLog(x) '< head -n40 ' . linear_data . ' | tail -n30' using (log($2)):(log(abs(column(error_col) - exact) / abs(exact))) via linLogA, linExp;
 fit fQuadLog(x)   '< head -n40 ' . quad_data   . ' | tail -n30' using (log($2)):(log(abs(column(error_col) - exact) / abs(exact))) via quadLogA, quadExp;
 
-set title 'Linear Elasticity on ' . mesh . ', "' . bc_name . '" Boundary Conditions'
+set macros;
+poisson_val=`echo @poisson | sed 's/.*_//'`
+set title sprintf("Linear Elasticity on %s, Boundary Conditions '%s', Poisson's Ratio %0.2f", mesh, bc_name, poisson_val);
 
 set grid
 set logscale y
 set logscale x 2
 set key bottom right
 set format y "%0.e"
+set yrange [1e-10:1]
 set ylabel error_name . " Relative Error"
 set xlabel "Minimum Edge Length"
 plot quad_data   using 2:(abs(column(error_col) - exact) / abs(exact)) with points lw 2.0 ps 2.0 title 'quadratic elements', \
