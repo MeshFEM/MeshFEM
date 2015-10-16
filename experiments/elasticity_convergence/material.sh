@@ -7,3 +7,4 @@ cat <<END
     "young": 200.0,
     "poisson": $poisson
 }
+END
