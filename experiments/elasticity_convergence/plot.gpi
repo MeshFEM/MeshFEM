@@ -1,0 +1,36 @@
+# expected variables to be set:
+#   mesh, bc_name, error_type, exact
+# eg: mesh='square'
+#     bc_name='sin'
+#     error_type=0
+#     exact='-1.5039245804035226e-01'
+error_name = word('u_x u_y norm(u)', error_type + 1)
+linear_data=bc_name . '/linear/0.75,0.75.txt'
+quad_data=bc_name . '/quadratic/0.75,0.75.txt'
+error_col=error_type + 3
+print error_col
+set term pngcairo size 1024,768
+set output bc_name . '/error_' . word('ux uy unorm', error_type + 1) . '.png'
+
+# Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
+# space, where it's just a linear fit.
+fLinear(x) = exp(linLogA)  * (x**linExp);
+fQuad(x)   = exp(quadLogA) * (x**quadExp);
+fLinearLog(logX) = linLogA + linExp * logX
+fQuadLog(logX) = quadLogA + quadExp * logX
+fit fLinearLog(x) '< head -n40 ' . linear_data . ' | tail -n30' using (log($2)):(log(abs(column(error_col) - exact) / abs(exact))) via linLogA, linExp;
+fit fQuadLog(x)   '< head -n40 ' . quad_data   . ' | tail -n30' using (log($2)):(log(abs(column(error_col) - exact) / abs(exact))) via quadLogA, quadExp;
+
+set title 'Linear Elasticity on ' . mesh . ', "' . bc_name . '" Boundary Conditions'
+
+set grid
+set logscale y
+set logscale x 2
+set key bottom right
+set format y "%0.e"
+set ylabel error_name . " Relative Error"
+set xlabel "Minimum Edge Length"
+plot quad_data   using 2:(abs(column(error_col) - exact) / abs(exact)) with points lw 2.0 ps 2.0 title 'quadratic elements', \
+     linear_data using 2:(abs(column(error_col) - exact) / abs(exact)) with points lw 2.0 ps 2.0 title 'linear elements', \
+       fQuad(x) lc rgb "black" lw 2.0 title sprintf('quadratic convergence order, %0.4f', quadExp), \
+     fLinear(x) lc rgb "black" lw 2.0 title sprintf('linear convergence order, %0.4f', linExp)
