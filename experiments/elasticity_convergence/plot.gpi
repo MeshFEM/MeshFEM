@@ -24,7 +24,7 @@ fit fQuadLog(x)   '< head -n40 ' . quad_data   . ' | tail -n30' using (log($2)):
 
 set macros;
 poisson_val=`echo @poisson | sed 's/.*_//'`
-set title sprintf("Linear Elasticity on %s, Boundary Conditions '%s', Poisson's Ratio %0.2f", mesh, bc_name, poisson_val);
+set title sprintf("Linear Elasticity on %s, Boundary Conditions '%s', Poisson's Ratio %0.2f", mesh, bc_name, poisson_val) noenhanced;
 
 set grid
 set logscale y

@@ -753,13 +753,11 @@ public:
     }
 
     void dumpSystem(const std::string &path) const {
-        if (m_system.economyMode())
-            std::cerr << "WARNING: attempting to dump system triplet matrix in "
-                      << "economy mode--may be empty." << std::endl;
         if (!m_system.isSet()) m_buildConstrainedSystem();
-        m_system.dump(path);
+        // side effect: sums and sorts nonzeros in system--ok since m_system is
+        // mutable.
+        m_system.sumAndDumpUpper(path);
     }
-
 
     // (re-)embed the mesh elements.
     template<typename Vertices>
