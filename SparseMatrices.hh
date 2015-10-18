@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <cassert>
 #include <memory>
+#include <cstdint>
 
 #ifndef GLOBALBENCHMARK_HH
 #include "BenchmarkStub.hh"
@@ -380,6 +381,31 @@ struct TripletMatrix {
                         << nz[i].v << std::endl;
             }  
         }
+    }
+
+
+    // Much more efficient matrix dumping--output in a binary format:
+    // number of nonzeros (uint64)
+    // Row indices...     (each uint64)
+    // Col indices...     (each uint64)
+    // Values...          (each double)
+    // Note, this won't necessarily be portable across architectures...
+    void dumpBinary(const std::string &path) const {
+        std::ofstream os(path);
+        if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        uint64_t N = nnz();
+        os.write((char *) &N, sizeof(uint64_t));
+
+        std::vector<uint64_t> indices(N);
+        for (size_t i = 0; i < N; ++i) indices[i] = nz[i].i;
+        os.write((char *) &indices[0], N * sizeof(uint64_t));
+
+        for (size_t i = 0; i < N; ++i) indices[i] = nz[i].j;
+        os.write((char *) &indices[0], N * sizeof(uint64_t));
+
+        std::vector<double> values(N);
+        for (size_t i = 0; i < N; ++i) values[i] = nz[i].v;
+        os.write((char *) &values[0], N * sizeof(double));
     }
 
     void read(std::ifstream &is) {
@@ -910,7 +936,20 @@ public:
     void setEconomyMode(bool emode) { m_economyMode = emode; }
     bool economyMode() const { return m_economyMode; }
 
-    void dump(const std::string &path) const { m_AUpper.dump(path); }
+    void dumpUpper(const std::string &path) const {
+        if (economyMode())
+            std::cerr << "WARNING: attempting to dump system triplet matrix in "
+                      << "economy mode--may be empty." << std::endl;
+        m_AUpper.dumpBinary(path);
+    }
+
+    void sumAndDumpUpper(const std::string &path) {
+        if (economyMode())
+            std::cerr << "WARNING: attempting to dump system triplet matrix in "
+                      << "economy mode--may be empty." << std::endl;
+        m_AUpper.sumRepeated();
+        m_AUpper.dumpBinary(path);
+    }
 
     ~SPSDSystem() { clear(); }
 private:
