@@ -1,4 +1,4 @@
-function [c, v] = condest_psd(A,t)
+function [c, v] = condest_spd(A,t)
 %CONDEST 1-norm condition number estimate.
 %   C = CONDEST(A) computes a lower bound C for the 1-norm condition
 %   number of a square matrix A.
@@ -47,9 +47,7 @@ end
 if isempty(A), c = 0; v = []; return, end
 if nargin < 2, t = []; end
 
-display('running cholesky factorization');
 [L,~, ~] = chol(A, 'lower', 'vector');
-display('finished cholesky factorization');
 
 % Unfortunately, MATLAB doesn't intelligently compute L' \ b:
 % it creates a transposed copy of L for each solve
@@ -72,9 +70,7 @@ if ~isempty(k)
       v(1:k-1) = -L(1:k-1,1:k-1)\U(k,1:k-1);
    end
 else
-   display('running normest1');
    [Ainv_norm, ~, v] = normest1(@condestf,t);
-   display('finished normest1');
    A_norm = norm(A,1);
    c = Ainv_norm*A_norm;
 end
