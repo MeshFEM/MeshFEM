@@ -384,10 +384,15 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
     std::string line; getDataLine(nodeIs, line);
     std::istringstream iss(line);
     size_t numNodes, dim, dummy;
-    iss >> numNodes >> dim >> dummy >> dummy;
-    std::runtime_error badFmt("Bad TetGen file format");
-    std::runtime_error unsFmt("Unsupported TetGen file format");
-    if (!iss || (dim != 3)) throw badFmt;
+    iss >> numNodes >> dim >> dummy >> dummy; // numNodes dim #attributes #boundaryMarkers
+
+    MeshType type = MESH_INVALID;
+    if (dim == 2) type = MESH_TRI;
+    if (dim == 3) type = MESH_TET;
+
+    std::runtime_error badFmt("Bad Node/Ele file format");
+    std::runtime_error unsFmt("Unsupported Node/Ele file format");
+    if (!iss || (type == MESH_INVALID)) throw badFmt;
 
     vertices.resize(numNodes);
     for (size_t i = 0; i < numNodes; ++i) {
@@ -395,20 +400,21 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
         if (!nodeIs) throw badFmt;
         iss.str(line), iss.clear();
         size_t idx;
-        iss >> idx >> vertices[i][0] >> vertices[i][1] >> vertices[i][2];
+        iss >> idx >> vertices[i][0] >> vertices[i][1];
+        if (dim == 3) iss >> vertices[i][2];
         if (!iss || (idx != i)) throw badFmt;
     }
 
     getDataLine(eleIs, line);
     iss.str(line), iss.clear();
-    size_t numTets, numCorners, numAttributes;
-    iss >> numTets >> numCorners >> numAttributes;
-    if (numCorners < 4)  throw badFmt;
-    if (numCorners != 4) throw unsFmt;
+    size_t numElems, numCorners, numAttributes;
+    iss >> numElems >> numCorners >> numAttributes;
+    if (numCorners <  dim + 1) throw badFmt;
+    if (numCorners != dim + 1) throw unsFmt;
     if (!iss) throw badFmt;
 
-    elements.resize(numTets);
-    for (size_t i = 0; i < numTets; ++i) {
+    elements.resize(numElems);
+    for (size_t i = 0; i < numElems; ++i) {
         getDataLine(eleIs, line);
         if (!eleIs) throw badFmt;
         iss.str(line), iss.clear();
@@ -423,7 +429,7 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
         if (!eleIs) throw badFmt;
     }
 
-    return MESH_TET;
+    return type;
 }
 
 void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
