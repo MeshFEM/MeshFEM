@@ -88,6 +88,12 @@ public:
         return HEH(m_idx, m_mesh); // we're the single volume halfedge, so we're primary!
     }
 
+    bool isPrimary() const {
+        if (m_idx < 0) return false;           // boundary halfedges aren't primary
+        if (opposite().m_idx < 0) return true; // the single interior halfedge on the boundary is primary
+        return m_idx < opposite().m_idx;       // in the interior, the smaller indexed halfedge is primary
+    }
+
     // Note: these are only correct because of the careful boundary-case
     // handling above.
     HEH ccw() const { return opposite().prev(); }

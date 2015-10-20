@@ -151,5 +151,4 @@ int main(int argc, const char *argv[])
     save(args["outMesh"].as<string>(), outVertices, outTriangles);
 
     return 0;
-
 }

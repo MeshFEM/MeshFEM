@@ -12,12 +12,14 @@
 #include "filters/quad_subdiv.hh"
 #include "filters/quad_subdiv_high_aspect.hh"
 #include "filters/remove_dangling_vertices.hh"
+#include "filters/reflect.hh"
 
 #include <limits>
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <queue>
+#include <algorithm>
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
@@ -52,19 +54,20 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("info,i",      "Get mesh information")
-        ("boundary,b",  "Extract boundary surface")
-        ("extrude,e",      po::value<double>(), "Extrude a planar mesh in its (negative) normal direction by a distance.")
-        ("truncateElements",  po::value<int>(), "Truncate to the specified number of elements")
-        ("stripFields",                         "Suppress output of MSH fields")
-        ("Sx", po::value<double>(), "Scale x coordinates")
-        ("Sy", po::value<double>(), "Scale y coordinates")
-        ("Sz", po::value<double>(), "Scale z coordinates")
-        ("subdivide,s", "Subdivide geometry (surface mesh only)")
-        ("quadAspectSubdiv,A", "Split rectangular quads until aspect ratios are below threshold")
+        ("info,i",                                                          "Get mesh information")
+        ("boundary,b",                                                      "Extract boundary surface")
+        ("extrude,e",         po::value<double>(),                          "Extrude a planar mesh in its (negative) normal direction by a distance.")
+        ("truncateElements",  po::value<int>(),                             "Truncate to the specified number of elements")
+        ("stripFields",                                                     "Suppress output of MSH fields")
+        ("Sx",                po::value<double>(),                          "Scale x coordinates")
+        ("Sy",                po::value<double>(),                          "Scale y coordinates")
+        ("Sz",                po::value<double>(),                          "Scale z coordinates")
+        ("subdivide,s",                                                     "Subdivide geometry (surface mesh only)")
+        ("quadAspectSubdiv,A",                                              "Split rectangular quads until aspect ratios are below threshold")
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
-        ("quadSubdivideAndTriangulate,q", po::value<size_t>(), "Run quad subdivision for #iterations and then triangulate symmetrically.")
-        ("propagateFields,f", "propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
+        ("quadSubdivideAndTriangulate,q", po::value<size_t>(),              "Run quad subdivision for #iterations and then triangulate symmetrically.")
+        ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
+        ("reflect,r",                                                       "Reflect a d-dim mesh around the bounding box minimum faces into 2^d copies")
         ;
 
     po::options_description cli_opts;
@@ -91,6 +94,17 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     }
 
     return vm;
+}
+
+// WARNING: REORDERS ARRAY TO GET MEDIAN
+// Also, median is slighly incorrect for arrays of even length: the upper
+// element of the pair at the middle is returned instead of the pair's average.
+void reportArrayStats(const string &name, vector<Real> &array) {
+    cout << "Min " << name << ":\t" << *min_element(array.begin(), array.end()) << std::endl;
+    cout << "Max " << name << ":\t" << *max_element(array.begin(), array.end()) << std::endl;
+    size_t n = array.size() / 2;
+    nth_element(array.begin(), array.begin() + n, array.end());
+    cout << "Median " << name << ":\t" << array[n] << endl;
 }
 
 // Transfer per-element fields to output mesh, using cellIndex to track output
@@ -146,6 +160,12 @@ int main(int argc, const char *argv[])
         if (args.count("Sz")) inVertices[i][2] *= args["Sz"].as<double>();
     }
 
+    // Apply reflection-duplication (in place)
+    if (args.count("reflect")) {
+        size_t dim = ((type == MeshIO::MESH_TET) || (type == MeshIO::MESH_HEX)) ? 3 : 2;
+        reflect(dim, inVertices, inElements, inVertices, inElements);
+    }
+
     if (type == MeshIO::MESH_TET) {
         typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, VertexData,
                         HalfEdgeData, TMEmptyData> Mesh;
@@ -164,18 +184,13 @@ int main(int argc, const char *argv[])
                  << "Boundary Tris:\t" << mesh.numBoundaryFaces() << endl
                  << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
 
-            Real minSqNorm = numeric_limits<Real>::max();
-            Real maxSqNorm = 0.0;
+            vector<Real> edgeLengths;
             for (size_t hfi = 0; hfi < mesh.numHalfFaces(); ++hfi) {
                 auto hf = mesh.halfFace(hfi);
-                for (size_t i = 0; i < 3; ++i) {
-                    Real sqNorm = (hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).squaredNorm();
-                    minSqNorm = min(minSqNorm, sqNorm);
-                    maxSqNorm = max(maxSqNorm, sqNorm);
-                }
+                for (size_t i = 0; i < 3; ++i)
+                    edgeLengths.push_back((hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).norm());
             }
-            cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
-            cout << "Max edge length:\t" << sqrt(maxSqNorm) << endl;
+            reportArrayStats("edge length", edgeLengths);
         }
         if (args.count("boundary")) {
             if (args.count("subdivide")) {
@@ -225,16 +240,13 @@ int main(int argc, const char *argv[])
                  << "Boundary Edges:\t" << mesh.numBoundaryEdges() << endl
                  << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
 
-            Real minSqNorm = numeric_limits<Real>::max();
-            Real maxSqNorm = 0.0;
+            vector<Real> edgeLengths;
             for (size_t hei = 0; hei < mesh.numHalfEdges(); ++hei) {
                 auto he = mesh.halfEdge(hei);
-                Real sqNorm = (he.tip()->p - he.tail()->p).squaredNorm();
-                minSqNorm = min(minSqNorm, sqNorm);
-                maxSqNorm = max(maxSqNorm, sqNorm);
+                if (!he.isPrimary()) continue;
+                edgeLengths.push_back((he.tip()->p - he.tail()->p).norm());
             }
-            cout << "Min edge length:\t" << sqrt(minSqNorm) << endl;
-            cout << "Max edge length:\t" << sqrt(maxSqNorm) << endl;
+            reportArrayStats("edge length", edgeLengths);
         }
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);
