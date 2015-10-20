@@ -101,8 +101,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
 // element of the pair at the middle is returned instead of the pair's average.
 void reportArrayStats(const string &name, vector<Real> &array) {
     cout << "Min " << name << ":\t" << *min_element(array.begin(), array.end()) << std::endl;
-    nth_element(array.begin(), array.begin() + n, array.end());
     size_t n = array.size() / 2;
+    nth_element(array.begin(), array.begin() + n, array.end());
     cout << "Median " << name << ":\t" << array[n] << endl;
     cout << "Max " << name << ":\t" << *max_element(array.begin(), array.end()) << std::endl;
 }
