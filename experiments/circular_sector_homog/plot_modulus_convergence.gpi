@@ -1,0 +1,42 @@
+# expected variables to be set:
+#   run_dir, modulus
+# eg: run_dir='results/skip_0'; modulus=0
+
+moduliNames = "Ex Ey nu_yx mu_xy"
+groundTruthVals=system("./ground_truth_values.sh  " . run_dir);
+print word(groundTruthVals, 1)
+
+quantity = word(moduliNames, modulus + 1)
+quantityCol = modulus + 6
+
+cornerAngle = word(groundTruthVals, 1);
+exact = word(groundTruthVals, modulus + 2)
+
+deg1_data = run_dir . "/deg_1.txt";
+deg2_data = run_dir . "/deg_2.txt";
+
+# Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
+# space, where it's just a linear fit.
+fDeg1(x) = exp(linLogA)  * (x**linExp);
+fDeg2(x)   = exp(quadLogA) * (x**quadExp);
+fDeg1Log(logX) = linLogA + linExp * logX
+fDeg2Log(logX) = quadLogA + quadExp * logX
+fit fDeg1Log(x) '< sort -g ' . deg1_data . ' | head -n40 | tail -n35' using (log($4)):(log(abs(column(quantityCol) - exact) / abs(exact))) via linLogA, linExp;
+fit fDeg2Log(x) '< sort -g ' . deg2_data . ' | head -n40 | tail -n35' using (log($4)):(log(abs(column(quantityCol) - exact) / abs(exact))) via quadLogA, quadExp;
+
+set term pngcairo size 1024,768
+set title "Convergence for " . quantity . ", Corner Angle " . word(groundTruthVals, 1) noenhanced;
+set output run_dir . "/" . quantity . ".png";
+
+set grid
+set logscale y
+set logscale x 2
+set key bottom right
+set format y "%0.e"
+set yrange [1e-10:1]
+set ylabel " Relative Error in " . quantity
+set xlabel " Median edge length"
+plot '< sort -g ' . deg1_data using 4:(abs(column(quantityCol) - exact) / abs(exact)) with points lw 2.0 ps 2.0 title 'linear elements', \
+     '< sort -g ' . deg2_data using 4:(abs(column(quantityCol) - exact) / abs(exact)) with points lw 2.0 ps 2.0 title 'quadratic elements', \
+     fDeg2(x) lc rgb "black" lw 2.0 title sprintf('quadratic convergence order, %0.4f', quadExp), \
+     fDeg1(x) lc rgb "black" lw 2.0 title sprintf('linear convergence order, %0.4f', linExp)
