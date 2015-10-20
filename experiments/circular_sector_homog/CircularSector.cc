@@ -25,8 +25,8 @@ namespace po = boost::program_options;
 
 
 void usage(int exitVal, const po::options_description &visible_opts) {
-    cout << "Usage: CircularSector.cc [options] mesh" << endl;
-    cout << visible_opts << endl;
+    cerr << "Usage: CircularSector.cc [options] mesh" << endl;
+    cerr << visible_opts << endl;
     exit(exitVal);
 }
 
@@ -62,13 +62,13 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         po::notify(vm);
     }
     catch (std::exception &e) {
-        cout << "Error: " << e.what() << endl << endl;
+        cerr << "Error: " << e.what() << endl << endl;
         usage(1, visible_opts);
     }
 
     bool fail = false;
     if (vm.count("outMesh") == 0) {
-        cout << "Error: must specify output mesh" << endl;
+        cerr << "Error: must specify output mesh" << endl;
         fail = true;
     }
 
@@ -140,7 +140,7 @@ int main(int argc, const char *argv[])
         auto p3 = inVertices.back().point;
         VectorND<3> e1(p3 - p1), e2(p2 - p1);
         double angle = acos(e1.dot(e2) / (e1.norm() * e2.norm()));
-        std::cout << "corner angle:\t" << angle * (180.0 / M_PI) << std::endl;
+        std::cerr << "corner angle:\t" << angle * (180.0 / M_PI) << std::endl;
     }
     // // Remove holes ourselves--if we have triangle do it, it won't subdivide the
     // // hole boundary...

@@ -2,7 +2,7 @@ include ../../platform_defs.mk
 
 INCLUDES=-I$(MeshFEM) -I$(CSGFEM) -I$(EIGEN_INC) -isystem $(SUITESPARSE_INC) -isystem $(BOOST_INC) \
 		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC)
-LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS) -lboost_program_options-mt -lboost_system-mt -ltriangle
+LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS) $(TRIANGLE_LFLAGS)
 
 CS_OBJS=CircularSector.o ../../MeshIO.o
 TARGETS=circular_sector

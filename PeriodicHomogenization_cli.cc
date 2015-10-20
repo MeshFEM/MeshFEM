@@ -38,6 +38,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("material,m", po::value<string>(), "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("m2mstress,M",po::value<string>(), "Dump macroscopic to microscopic stress tensors to specified file")
+        ("fieldOutput,o",po::value<string>(), "Dump fluctation stress and strain fields to specified msh file")
         ;
 
     po::options_description cli_opts;
@@ -92,14 +93,6 @@ void execute(const po::variables_map &args,
     std::vector<VField> w_ij;
     solveCellProblems(w_ij, sim);
     BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
-
-    // MSHFieldWriter writer("phomog.msh", sim.mesh());
-    // for (size_t i = 0; i < w_ij.size(); ++i) {
-    //     VField rhs(sim.constantStrainLoad(-Simulator::SMatrix::CanonicalBasis(i)));
-    //     // NOTE: constant strain load on vertex nodes is actually zero in deg 2!
-    //     writer.addField("load " + to_string(i), sim.dofToNodeField(rhs), DomainType::PER_NODE);
-    //     writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
-    // }
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");
     // ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
@@ -160,6 +153,15 @@ void execute(const po::variables_map &args,
             auto F = mat.getTensor().doubleContract(G.at(ei).doubleContract(S));
             F.writeUnflattened(mfile);
             mfile << endl;
+        }
+    }
+
+    if (args.count("fieldOutput")) {
+        MSHFieldWriter writer(args["fieldOutput"].as<string>(), sim.mesh());
+        for (size_t i = 0; i < w_ij.size(); ++i) {
+            writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
+            auto strain = sim.averageStrainField(w_ij[i]);
+            writer.addField("strain w_ij " + to_string(i), strain, DomainType::PER_ELEMENT);
         }
     }
 
