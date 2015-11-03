@@ -351,6 +351,14 @@ public:
         return *this;
     }
 
+	// MHS on Nov 3 3015
+   	SymmetricMatrixField &operator/=(ScalarField<Real> scalars) {
+        assert(scalars.domainSize() == m_values.cols());
+        for (size_t i = 0; i < scalars.domainSize(); ++i)
+            m_values.col(i) /= scalars(i);
+        return *this;
+    }
+
     // Component wise abs.
     SymmetricMatrixField cwiseAbs() const { return SymmetricMatrixField(m_values.cwiseAbs()); }
     // Set all coefficients to a constant
