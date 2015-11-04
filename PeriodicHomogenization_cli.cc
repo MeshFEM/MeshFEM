@@ -35,10 +35,11 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material,m", po::value<string>(), "base material")
+        ("material,m", po::value<string>(),                 "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
-        ("m2mstress,M",po::value<string>(), "Dump macroscopic to microscopic stress tensors to specified file")
-        ("fieldOutput,o",po::value<string>(), "Dump fluctation stress and strain fields to specified msh file")
+        ("m2mstress,M",po::value<string>(),                "Dump macroscopic to microscopic stress tensors to specified file")
+        ("fieldOutput,o",po::value<string>(),              "Dump fluctation stress and strain fields to specified msh file")
+        ("fullDegreeFieldOutput,D",                        "Output full-degree nodal fields (don't do piecewise linear subsample)")
         ;
 
     po::options_description cli_opts;
@@ -157,11 +158,31 @@ void execute(const po::variables_map &args,
     }
 
     if (args.count("fieldOutput")) {
-        MSHFieldWriter writer(args["fieldOutput"].as<string>(), sim.mesh());
+        bool linearSubsampleFields = args.count("fullDegreeFieldOutput") == 0;
+        MSHFieldWriter writer(args["fieldOutput"].as<string>(), sim.mesh(),
+                              linearSubsampleFields);
         for (size_t i = 0; i < w_ij.size(); ++i) {
             writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
-            auto strain = sim.averageStrainField(w_ij[i]);
-            writer.addField("strain w_ij " + to_string(i), strain, DomainType::PER_ELEMENT);
+            if ((Simulator::Strain::Deg == 0) || linearSubsampleFields) {
+                // Output constant (average) strain when we're outputting piecewise
+                // linear solutions.
+                writer.addField("strain w_ij " + to_string(i),
+                        sim.averageStrainField(w_ij[i]), DomainType::PER_ELEMENT);
+            }
+            else {
+                // Output full-degree per-element strain. (Wasteful since
+                // strain fields are of degree - 1, but Gmsh/MSHFieldWriter
+                // only supports full-degree ElementNodeData).
+                auto strainField = sim.strainField(w_ij[i]);
+                typedef SymmetricMatrixInterpolant<typename Simulator::SMatrix,
+                                               _N, _FEMDegree> UpsampledStrain;
+                vector<UpsampledStrain> upsampledStrainField;
+                upsampledStrainField.reserve(strainField.size());
+                for (const auto s: strainField)
+                    upsampledStrainField.emplace_back(s);
+                writer.addField("strain w_ij " + to_string(i),
+                                upsampledStrainField, DomainType::PER_ELEMENT);
+            }
         }
     }
 

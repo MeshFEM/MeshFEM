@@ -50,7 +50,7 @@ std::istream & operator>>(std::istream &is, IOElement &e) {
     size_t idx, size;
     iss >> size;
     while (iss >> idx)
-        temp.m_idxs.push_back(idx);
+        temp.push_back(idx);
     if (temp.size() == size)
         e = temp;
     else
@@ -124,12 +124,12 @@ MeshIO *getMeshIO(Format &format) {
 ////////////////////////////////////////////////////////////////////////////////
 /*! Writes an element soup to an output stream
 //  @param[in]  path      stream to which geometry is written
-//  @param[in]  vertices  vertices to write
+//  @param[in]  nodes     nodes to write
 //  @param[in]  elements  elements to write
 //  @param[in]  format    file format (default: guess from extension)
 //  @param[in]  type      mesh element type (default: guess from first)
 *///////////////////////////////////////////////////////////////////////////////
-void save(std::ostream &os, const std::vector<IOVertex> &vertices,
+void save(std::ostream &os, const std::vector<IOVertex> &nodes,
           const std::vector<IOElement> &elements, Format format, MeshType type)
 {
     MeshIO *io = getMeshIO(format);
@@ -137,9 +137,9 @@ void save(std::ostream &os, const std::vector<IOVertex> &vertices,
     std::vector<IOVertex>  ioVertices;
     std::vector<IOElement> ioElements;
 
-    ioVertices.resize(vertices.size());
-    for (size_t i = 0; i < vertices.size(); ++i)
-        ioVertices[i] = IOVertex(vertices[i].point);
+    ioVertices.resize(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i)
+        ioVertices[i] = IOVertex(nodes[i].point);
 
     ioElements.resize(elements.size());
     for (size_t i = 0; i < elements.size(); ++i)
@@ -152,12 +152,12 @@ void save(std::ostream &os, const std::vector<IOVertex> &vertices,
 ////////////////////////////////////////////////////////////////////////////////
 /*! Writes an element soup to a mesh path
 //  @param[in]  path      the path to which geometry is written
-//  @param[in]  vertices  vertices to write
+//  @param[in]  nodes     nodes to write
 //  @param[in]  elements  elements to write
 //  @param[in]  format    file format (default: guess from extension)
 //  @param[in]  type      mesh element type (default: guess from first)
 *///////////////////////////////////////////////////////////////////////////////
-void save(const std::string &path, const std::vector<IOVertex> &vertices,
+void save(const std::string &path, const std::vector<IOVertex> &nodes,
           const std::vector<IOElement> &elements, Format format, MeshType type)
 {
     if (format == FMT_GUESS)
@@ -166,18 +166,18 @@ void save(const std::string &path, const std::vector<IOVertex> &vertices,
     std::ofstream os(path);
     if (!os.is_open()) throw std::runtime_error("Couldn't open out file");
 
-    save(os, vertices, elements, format, type);
+    save(os, nodes, elements, format, type);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Reads an element soup from an input stream
 //  @param[in]  is        stream from which to read geometry
-//  @param[out] vertices  vertices to read
+//  @param[out] nodes     nodes to read
 //  @param[out] elements  elements to read
 //  @param[in]  format    file format
 //  @param[in]  type      mesh element type (default: guess from first)
 *///////////////////////////////////////////////////////////////////////////////
-MeshType load(std::istream &is, std::vector<IOVertex> &vertices,
+MeshType load(std::istream &is, std::vector<IOVertex> &nodes,
           std::vector<IOElement> &elements, Format format, MeshType type)
 {
     MeshIO *io = getMeshIO(format);
@@ -187,10 +187,10 @@ MeshType load(std::istream &is, std::vector<IOVertex> &vertices,
 
     type = io->load(is, ioVertices, ioElements, type);
 
-    vertices.resize(ioVertices.size());
-    for (unsigned int i = 0; i < vertices.size(); ++i)
+    nodes.resize(ioVertices.size());
+    for (unsigned int i = 0; i < nodes.size(); ++i)
         for (int j = 0; j < 3; ++j)
-            vertices[i].point[j] = ioVertices[i][j];
+            nodes[i].point[j] = ioVertices[i][j];
 
     elements.resize(ioElements.size());
     for (unsigned int i = 0; i < elements.size(); ++i)
@@ -202,13 +202,13 @@ MeshType load(std::istream &is, std::vector<IOVertex> &vertices,
 ////////////////////////////////////////////////////////////////////////////////
 /*! Reads an element soup from a mesh path
 //  @param[in]  path      path from which to read geometry
-//  @param[out] vertices  vertices to read
+//  @param[out] nodes     nodes to read
 //  @param[out] elements  elements to read
 //  @param[in]  format    file format (default: guess from extension)
 //  @param[in]  type      mesh element type (default: guess from first)
 //  @return     actual loaded MeshType
 *///////////////////////////////////////////////////////////////////////////////
-MeshType load(const std::string &path, std::vector<IOVertex> &vertices,
+MeshType load(const std::string &path, std::vector<IOVertex> &nodes,
               std::vector<IOElement> &elements, Format format, MeshType type)
 {
     if (format == FMT_GUESS)
@@ -218,33 +218,33 @@ MeshType load(const std::string &path, std::vector<IOVertex> &vertices,
     if (format == FMT_NODE_ELE) {
         MeshIO_NodeEle reader;
         std::string basePath = path.substr(0, path.find_last_of('.'));
-        return reader.load(basePath + ".node", basePath + ".ele", vertices,
+        return reader.load(basePath + ".node", basePath + ".ele", nodes,
                            elements);
     }
     else {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Couldn't open input file");
-        return load(is, vertices, elements, format, type);
+        return load(is, nodes, elements, format, type);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Format-specific writers and parsers
 ////////////////////////////////////////////////////////////////////////////////
-void MeshIO_OFF::save(ostream &os, const vector<Vertex> &vertices,
+void MeshIO_OFF::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
     os << "OFF" << std::endl
-       << vertices.size() << " " << elements.size() << " "
+       << nodes.size() << " " << elements.size() << " "
        << 0 << std::endl; // Edge count ignored
 
-    for (size_t i = 0; i < vertices.size(); ++i)
-        os << vertices[i];
+    for (size_t i = 0; i < nodes.size(); ++i)
+        os << nodes[i];
 
     for (size_t i = 0; i < elements.size(); ++i)
         os << elements[i];
 }
 
-MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &vertices,
+MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType /* t */) {
     std::string line; getDataLine(is, line);
     if (line != "OFF")
@@ -256,9 +256,9 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &vertices,
     iss >> vSize >> eSize >> edgeSize;
     assert((bool) iss);
 
-    vertices.resize(vSize);
+    nodes.resize(vSize);
     for (size_t i = 0; is && (i < vSize); ++i)
-        is >> vertices[i];
+        is >> nodes[i];
 
     elements.resize(eSize);
     for (size_t i = 0; is && (i < eSize); ++i)
@@ -284,10 +284,10 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &vertices,
 }
 
 
-void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &vertices,
+void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
-    for (size_t i = 0; i < vertices.size(); ++i)
-        os << "v " << vertices[i];
+    for (size_t i = 0; i < nodes.size(); ++i)
+        os << "v " << nodes[i];
 
     for (size_t i = 0; i < elements.size(); ++i) {
         os << 'f';
@@ -298,9 +298,9 @@ void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &vertices,
     }
 }
 
-MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
+MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType /* t */) {
-    vertices.clear(), elements.clear();
+    nodes.clear(), elements.clear();
     string line;
 
     runtime_error badFMT("Bad OBJ face format.");
@@ -318,7 +318,7 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
             for (size_t i = 0; i < ncomps; ++i) {
                 v[i] = stod(lineComponents[i]);
             }
-            vertices.push_back(v);
+            nodes.push_back(v);
         }
         else if (first == "f") {
             size_t ncorners = lineComponents.size();
@@ -326,7 +326,7 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
             IOElement e(ncorners);
             for (size_t i = 0; i < ncorners; ++i) {
                 e[i] = stoi(lineComponents[i]) - 1; // OBJ is 1-indexed
-                if (e[i] >= vertices.size()) throw runtime_error("Bad vertex index.");
+                if (e[i] >= nodes.size()) throw runtime_error("Bad node index.");
             }
             elements.push_back(e);
         }
@@ -351,32 +351,32 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &vertices,
          : ( (polyVertices == 4) ? MESH_QUAD : MESH_INVALID );
 }
 
-void MeshIO_POLY::save(ostream &os, const vector<Vertex> &vertices,
+void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
                        const vector<Element> &elements, MeshType /* t */) {
     auto typeError = std::runtime_error("Only support triangle .poly.");
     if ((elements.size() < 1) || (elements[0].size() != 3))
         throw typeError;
-    size_t numCorners = 3;
+    size_t nodesPerElem = 3;
     // #Vertices, 3D, 0 attr, 0 bdry marks
-    os << vertices.size() << " 3 0 0" << std::endl; 
-    for (size_t i = 0; i < vertices.size(); ++i)
-        os << i << ' ' << vertices[i];
+    os << nodes.size() << " 3 0 0" << std::endl; 
+    for (size_t i = 0; i < nodes.size(); ++i)
+        os << i << ' ' << nodes[i];
     os << elements.size() << " 0" << std::endl; // 0 bdry marks
     for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i].size() != numCorners) throw typeError;
+        if (elements[i].size() != nodesPerElem) throw typeError;
         os << "1" << std::endl;
         os << elements[i];
     }
     os << 0 << std::endl; // no holes
 }
 
-MeshType MeshIO_POLY::load(istream &is, vector<Vertex> &vertices,
-                           vector<Element> &elements, MeshType /* t */) {
+MeshType MeshIO_POLY::load(istream &/* is */, vector<Vertex> &/* nodes */,
+                           vector<Element> &/* elements */, MeshType /* t */) {
     throw std::runtime_error(".poly load unsupported");
 }
 
 MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
-                             vector<Vertex> &vertices, vector<Element>
+                             vector<Vertex> &nodes, vector<Element>
                              &elements) {
     std::ifstream nodeIs(nodePath), eleIs(elePath);
     if (!nodeIs) throw std::runtime_error("Couldn't open " + nodePath);
@@ -394,23 +394,23 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
     std::runtime_error unsFmt("Unsupported Node/Ele file format");
     if (!iss || (type == MESH_INVALID)) throw badFmt;
 
-    vertices.resize(numNodes);
+    nodes.resize(numNodes);
     for (size_t i = 0; i < numNodes; ++i) {
         getDataLine(nodeIs, line);
         if (!nodeIs) throw badFmt;
         iss.str(line), iss.clear();
         size_t idx;
-        iss >> idx >> vertices[i][0] >> vertices[i][1];
-        if (dim == 3) iss >> vertices[i][2];
+        iss >> idx >> nodes[i][0] >> nodes[i][1];
+        if (dim == 3) iss >> nodes[i][2];
         if (!iss || (idx != i)) throw badFmt;
     }
 
     getDataLine(eleIs, line);
     iss.str(line), iss.clear();
-    size_t numElems, numCorners, numAttributes;
-    iss >> numElems >> numCorners >> numAttributes;
-    if (numCorners <  dim + 1) throw badFmt;
-    if (numCorners != dim + 1) throw unsFmt;
+    size_t numElems, nodesPerElem, numAttributes;
+    iss >> numElems >> nodesPerElem >> numAttributes;
+    if (nodesPerElem <  dim + 1) throw badFmt;
+    if (nodesPerElem != dim + 1) throw unsFmt;
     if (!iss) throw badFmt;
 
     elements.resize(numElems);
@@ -421,8 +421,8 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
         size_t idx;
         iss >> idx;
         // if (!iss || (idx != i)) throw badFmt; (don't care)
-        elements[i].resize(numCorners);
-        for (size_t c = 0; c < numCorners; ++c) {
+        elements[i].resize(nodesPerElem);
+        for (size_t c = 0; c < nodesPerElem; ++c) {
             iss >> elements[i][c];
             if (elements[i][c] >= numNodes) throw badFmt;
         }
@@ -432,17 +432,25 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
     return type;
 }
 
-void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
+// Array encoding the mapping between GMSH elementType, our MeshType
+// enum, and the number of nodes per element. Note that the mappings between
+// elementType and MeshType are one-to-one, but the mappings to nodesPerElem
+// are not! For example, both tet and quad meshes have the same number of
+// nodes.
+// When looking up element info by node count, we
+// take the first match from the following array. E.g., we
+// assume an element with 4 nodes is a tet, not a quad.
+const std::vector<MeshIO_MSH::ElementInfo> MeshIO_MSH::elementInfoArray = {
+    {MESH_TRI, 2, 3}, {     MESH_TET, 4, 4}, {    MESH_QUAD,  3,  4},
+    {MESH_HEX, 5, 8}, {MESH_TRI_DEG2, 9, 6}, {MESH_TET_DEG2, 11, 10}
+};
+
+void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType type) {
-    int elementType;
-    size_t numCorners;
     if (elements.size() == 0) throw std::runtime_error("Empty mesh.");
-    if ((type == MESH_GUESS) && (elements.size() > 0)) {
-        if      (elements.back().size() == 4) type = MESH_TET;
-        else if (elements.back().size() == 3) type = MESH_TRI;
-        else if (elements.back().size() == 8) type = MESH_HEX;
-    }
-    getElementInfo(type, elementType, numCorners);
+    ElementInfo ei;
+    if (type == MESH_GUESS) ei = elementInfoForNodeCount(elements.back().size());
+    else                    ei = elementInfoForMeshType(type);
 
     int file_type = m_binary ? 1 : 0;
     int data_size = sizeof(double);
@@ -455,23 +463,23 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
     }
         
     os << "$EndMeshFormat" << std::endl;
-    os << "$Nodes" << std::endl << vertices.size() << std::endl;
+    os << "$Nodes" << std::endl << nodes.size() << std::endl;
 
     // Note: all indices must be positive, so we use 1-indexing
-    // Write vertex indices and coordinates, padding with z = 0 for 2D
+    // Write node indices and coordinates, padding with z = 0 for 2D
     if (m_binary) {
-        for (size_t i = 1; i <= vertices.size(); i++) {
+        for (size_t i = 1; i <= nodes.size(); i++) {
             os.write((char *) &i, sizeof(int));
-            double xyz[3] = { vertices[i - 1][0], vertices[i - 1][1],
-                              vertices[i - 1][2] };
+            double xyz[3] = { nodes[i - 1][0], nodes[i - 1][1],
+                              nodes[i - 1][2] };
             os.write((char *) xyz, 3 * sizeof(double));
         }
         os << std::endl;
     }
     else {
         os << std::setprecision(16);
-        for (size_t i = 0; i < vertices.size(); ++i)
-            os << i + 1 << " " << vertices[i];
+        for (size_t i = 0; i < nodes.size(); ++i)
+            os << i + 1 << " " << nodes[i];
     }
     os << "$EndNodes" << std::endl;
 
@@ -480,14 +488,14 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
     if (m_binary) {
         int numElements = (int) elements.size();
         int numTags = 0;
-        os.write((char *) &elementType, sizeof(int));
+        os.write((char *) &ei.elementType, sizeof(int));
         os.write((char *) &numElements, sizeof(int));
         os.write((char *) &numTags, sizeof(int));
         for (size_t i = 1; i <= elements.size(); ++i) {
             os.write((char *) &i, sizeof(int));
-            if (elements[i - 1].size() != (size_t) numCorners)
+            if (elements[i - 1].size() != (size_t) ei.nodesPerElem)
                 throw std::runtime_error("Illegal sized element");
-            for (size_t c = 0; c < numCorners; ++c) {
+            for (size_t c = 0; c < ei.nodesPerElem; ++c) {
                 int cidx = (int) (elements[i - 1][c] + 1);
                 os.write((char *) &cidx, sizeof(int));
             }
@@ -496,10 +504,10 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
     }
     else {
         for (size_t i = 0; i < elements.size(); ++i) {
-            os << i + 1 << " " << elementType << " " << 0 /* no tags */;
-            if (elements[i].size() != (size_t) numCorners)
+            os << i + 1 << " " << ei.elementType << " " << 0 /* no tags */;
+            if (elements[i].size() != (size_t) ei.nodesPerElem)
                 throw std::runtime_error("Illegal sized element");
-            for (size_t c = 0; c < numCorners; ++c)
+            for (size_t c = 0; c < ei.nodesPerElem; ++c)
                 os << " " << elements[i][c] + 1;
             os << std::endl;
         }
@@ -508,13 +516,19 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &vertices,
     os << "$EndElements" << std::endl;
 }
 
-MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
+// Formerly used is >> ws to skip newline/whitespace, but in binary files,
+// sometimes the data following the single expected newline looks like
+// whitespace and was eaten too.
+void skipNewline(istream &is) {
+    char c;
+    is.read(&c, sizeof(char));
+    if (c != '\n') throw std::runtime_error("Newline expected, got ascii " + std::to_string(int(c)) + " instead");
+}
+
+MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType type) {
-    int elementType;
-    size_t numCorners = 0; // gcc complains about possible uninitialzation here...
-    if (type != MESH_GUESS)
-        getElementInfo(type, elementType, numCorners);
-    else { elementType = -1; }
+    ElementInfo ei;
+    if (type != MESH_GUESS) ei = elementInfoForMeshType(type);
 
     std::runtime_error badFmt("Bad MSH file format");
     std::runtime_error unsFmt("Unsupported MSH file format");
@@ -529,7 +543,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     m_binary = file_type == 1;
 
     if (m_binary) {
-        is >> std::ws;
+        skipNewline(is);
         int one;
         is.read((char *) &one, sizeof(int));
         if (one != 1) throw unsFmt;
@@ -541,34 +555,34 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     getDataLine(is, line);
     if (line != "$Nodes") throw badFmt;
 
-    size_t numVertices;
-    is >> numVertices;
+    size_t numNodes;
+    is >> numNodes;
 
-    vertices.resize(numVertices);
+    nodes.resize(numNodes);
 
-    // We only support the case were vertices are consecutively numbered
+    // We only support the case were nodes are consecutively numbered
     // and 1-indexed (this is the default for gmsh).
     if (m_binary) {
-        is >> std::ws;
+        skipNewline(is);
         int idx = 0;
-        for (size_t i = 0; i < numVertices; ++i) {
+        for (size_t i = 0; i < numNodes; ++i) {
             int newIdx;
             is.read((char *) &newIdx, sizeof(int));
             if (newIdx != ++idx) throw unsFmt;
             double vdata[3];
             is.read((char *) &vdata[0], sizeof(vdata));
             if (is.fail()) throw badFmt;
-            vertices[i].set(vdata[0], vdata[1], vdata[2]);
+            nodes[i].set(vdata[0], vdata[1], vdata[2]);
         }
     }
     else {
         int idx = 0;
-        for (size_t i = 0; i < numVertices; ++i) {
+        for (size_t i = 0; i < numNodes; ++i) {
             getDataLine(is, line);
             std::istringstream iss(line);
             int newIdx; iss >> newIdx;
             if (newIdx != ++idx) throw unsFmt;
-            iss >> vertices[i][0] >> vertices[i][1] >> vertices[i][2];
+            iss >> nodes[i][0] >> nodes[i][1] >> nodes[i][2];
             if (iss.fail()) throw badFmt;
         }
     }
@@ -585,30 +599,25 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     elements.resize(numElements);
 
     if (m_binary) {
-        is >> std::ws;
+        skipNewline(is);
         size_t readElements = 0;
         std::vector<int> data;
         while (readElements < numElements) {
             // [elm_type, num_elm_follow, num_tags]
             int header[3];
             is.read((char *) header, 3 * sizeof(int));
-            if (elementType == -1) {
-                if      (header[0] == 2) type = MESH_TRI;
-                else if (header[0] == 3) type = MESH_QUAD;
-                else if (header[0] == 4) type = MESH_TET;
-                else if (header[0] == 5) type = MESH_HEX;
-                else throw unsFmt;
-                getElementInfo(type, elementType, numCorners);
-            }
-            if (header[0] != elementType) throw badFmt;
+
+            if (ei.elementType == -1) { ei = elementInfoForElementType(header[0]); }
+            if (header[0] != ei.elementType) throw badFmt;
+
             size_t newSize = readElements + header[1];
             if (newSize > numElements) throw badFmt;
-            int intCount = 1 + header[2] + numCorners;
+            int intCount = 1 + header[2] + ei.nodesPerElem;
             data.resize(intCount);
             for (size_t e = readElements; e < newSize; ++e) {
                 is.read((char *) &data[0], intCount * sizeof(int));
-                elements[e].resize(numCorners);
-                for (size_t c = 0; c < numCorners; ++c)
+                elements[e].resize(ei.nodesPerElem);
+                for (size_t c = 0; c < ei.nodesPerElem; ++c)
                     elements[e][c] = data[1 + header[2] + c] - 1;
             }
 
@@ -627,19 +636,11 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
             iss >> etype >> numTags;
             while (numTags-- > 0) { int dummy; iss >> dummy; }
 
-            if (elementType == -1) {
-                if      (etype == 2) type = MESH_TRI;
-                else if (etype == 3) type = MESH_QUAD;
-                else if (etype == 4) type = MESH_TET;
-                else if (etype == 5) type = MESH_HEX;
-                else throw unsFmt;
-                getElementInfo(type, elementType, numCorners);
-            }
+            if (ei.elementType == -1) { ei = elementInfoForElementType(etype); }
+            if (etype != ei.elementType) throw badFmt;
 
-            if (etype != elementType) throw badFmt;
-
-            elements[i].resize(numCorners);
-            for (size_t c = 0; c < numCorners; ++c) {
+            elements[i].resize(ei.nodesPerElem);
+            for (size_t c = 0; c < ei.nodesPerElem; ++c) {
                 iss >> idx;
                 elements[i][c] = idx - 1;
             }
@@ -650,7 +651,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &vertices,
     getDataLine(is, line);
     if (line != "$EndElements") throw badFmt;
 
-    return type;
+    return ei.meshType;
 }
 
 vector<string> tokenize(std::string line) {
@@ -660,9 +661,9 @@ vector<string> tokenize(std::string line) {
     return lineComponents;
 }
 
-MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &vertices,
+MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
                             vector<Element> &elements, MeshType /* t */) {
-    vertices.clear(), elements.clear();
+    nodes.clear(), elements.clear();
     string line;
 
     runtime_error badFMT("Bad Medit format.");
@@ -679,17 +680,17 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &vertices,
     if (line != "Vertices") throw badFMT;
     getDataLine(is, line);
     size_t numVertices = stoi(line);
-    vertices.reserve(numVertices);
+    nodes.reserve(numVertices);
     for (size_t i = 0; getDataLine(is, line) && i < numVertices; ++i) {
         tokens = tokenize(line);
-        // Each vertex entry has dim components plus a reference field
+        // Each node entry has dim components plus a reference field
         if (tokens.size() != dim + 1) throw badFMT;
         IOVertex v;
         for (size_t c = 0; c < dim; ++c)
             v[c] = stod(tokens[c]);
-        vertices.push_back(v);
+        nodes.push_back(v);
     }
-    if (vertices.size() != numVertices) throw badFMT;
+    if (nodes.size() != numVertices) throw badFMT;
 
     if (line != "Triangles") throw badFMT;
     getDataLine(is, line);

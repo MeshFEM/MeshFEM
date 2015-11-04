@@ -385,7 +385,7 @@ struct Constant {
     void setFromPTree(const boost::property_tree::ptree &pt);
 
     // Used for adjoint method gradient-based optimization
-    void getETensorDerivative(size_t p, ETensor &d) const {
+    void getETensorDerivative(size_t /* p */, ETensor &/* d */) const {
         throw std::runtime_error("Constant material can't be optimized\n");
     }
 
