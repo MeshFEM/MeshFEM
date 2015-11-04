@@ -60,6 +60,8 @@ struct ElementSampler {
             }
             throw std::runtime_error("Sample point outside domain.");
         }
+
+        Real volume(size_t i) const { return m_embeddedSimplices.at(i).volume(); }
     private:
         std::vector<AESimplex> m_embeddedSimplices;
         const std::vector<MeshIO::IOVertex>  &m_vertices;

@@ -101,6 +101,10 @@ struct InnerReductionImpl<T, typename std::enable_if<std::is_same<T,  VValue>::v
                                                   || std::is_same<T, ISValue>::value, void>::type>
     : public OneDimensionalReductionImpl<T> { };
 
+// Copy the domain type of collection a to collection b (NOP for non-field types)
+template<class  T1, class  T2> struct CopyDomainType                                   { static void run(const T1 &/* a */, T2 &/* b */) { /* NOP */ }};
+template<class TI1, class TI2> struct CopyDomainType<FieldValue<TI1>, FieldValue<TI2>> { static void run(const FieldValue<TI1> &a, FieldValue<TI2> &b) { b.domainType = a.domainType; }};
+
 // Nonterminal case: a collection of *non-scalar* values.
 // (this is currently just a FieldValue or an InterpolantValue)
 // Create a collection of the inner-reduced inner type.
@@ -109,6 +113,7 @@ struct InnerReductionImpl<TOutter<TInner>, typename std::enable_if<!std::is_same
     using ResultType = TOutter<typename InnerReductionImpl<TInner>::ResultType>;
     static ResultType apply(Reduction &r, const TOutter<TInner> &val) {
         ResultType result(val.size()); // size instead of dim due to InterpolantValue
+        CopyDomainType<TOutter<TInner>, ResultType>::run(val, result);
         for (size_t i = 0; i < val.dim(); ++i)
             result[i] = InnerReductionImpl<TInner>::apply(r, val[i]);
         return result;

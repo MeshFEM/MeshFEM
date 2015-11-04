@@ -31,8 +31,9 @@ struct BinaryOpImpl<FieldValue<_VType1>, FieldValue<_VType2>> {
     using URPtr = std::unique_ptr<ResultType>;
     static URPtr apply(const BinaryOp &op, const FieldValue<_VType1> &a, const FieldValue<_VType2> &b) {
         size_t nElems = a.size();
-        if (nElems != b.size()) throw std::runtime_error("Binary operation field size mismatch.");
-        auto result = std::make_unique<ResultType>(nElems);
+        if ((a.domainType != b.domainType) || (nElems != b.size()))
+            throw std::runtime_error("Binary operation field domain mismatch.");
+        auto result = std::make_unique<ResultType>(a.domainType, nElems);
         for (size_t i = 0; i < nElems; ++i)
             (*result)[i] = *SubImpl::apply(op, a[i], b[i]);
         return result;
@@ -47,7 +48,7 @@ struct BinaryOpImpl<FieldValue<_VType1>, _VType2> {
     using URPtr = std::unique_ptr<ResultType>;
     static URPtr apply(const BinaryOp &op, const FieldValue<_VType1> &a, const _VType2 &b) {
         size_t nElems = a.size();
-        auto result = std::make_unique<ResultType>(nElems);
+        auto result = std::make_unique<ResultType>(a.domainType, nElems);
         for (size_t i = 0; i < nElems; ++i)
             (*result)[i] = *SubImpl::apply(op, a[i], b);
         return result;
@@ -62,7 +63,7 @@ struct BinaryOpImpl<_VType1, FieldValue<_VType2>> {
     using URPtr = std::unique_ptr<ResultType>;
     static URPtr apply(const BinaryOp &op, const _VType1 &a, const FieldValue<_VType2> &b) {
         size_t nElems = b.size();
-        auto result = std::make_unique<ResultType>(nElems);
+        auto result = std::make_unique<ResultType>(b.domainType, nElems);
         for (size_t i = 0; i < nElems; ++i)
             (*result)[i] = *SubImpl::apply(op, a, b[i]);
         return result;
@@ -180,7 +181,8 @@ UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &op, const T1 &a, CVPtr b) {
 }
 template<class T1>
 UVPtr dispatchCWiseBinaryOp(const BinaryOp &op, const T1 &a, CVPtr b) {
-    return dispatchCWiseBinaryOpImpl<T1, SValue, VValue, SMValue, ISValue, ISMValue,
-                                         FSValue, FVValue, FISMValue,
+    return dispatchCWiseBinaryOpImpl<T1,   SValue,   VValue,   SMValue,
+                                          ISValue,  IVValue,  ISMValue,
+                                          FSValue,  FVValue,  FSMValue,
                                          FISValue, FIVValue, FISMValue>(op, a, b);
 }

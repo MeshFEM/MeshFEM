@@ -79,10 +79,9 @@ struct Reduction {
 protected:
     Real m_acc;
 };
-template<class T, bool nested>
-struct PrintImpl;
-template<class T, typename = void>
-struct SampleImpl;
+template<class T, bool nested>     struct PrintImpl;
+template<class T, typename = void> struct SampleImpl;
+template<class T, typename = void> struct ElmAvgImpl;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Value type interface.
@@ -96,6 +95,9 @@ public:
     virtual UVPtr componentwiseUnaryOp (const  UnaryOp &op)                const = 0;
     virtual UVPtr sample(const ESample &s, size_t meshDeg, size_t meshDim) const = 0;
     virtual UVPtr clone()                                                  const = 0;
+
+    virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim)           const = 0;
+
     virtual ~Value() { }
 };
 
@@ -203,10 +205,10 @@ public:
     virtual UVPtr innerReduction(Reduction &r)            const { return applyInnerReduction(r, static_cast<const Derived&>(*this)); }
     virtual UVPtr componentwiseUnaryOp(const UnaryOp &op) const { return applyUnaryOp(op, static_cast<const Derived&>(*this)); };
     // Outer stage of double dispatch for component-wise binary operations
-    virtual UVPtr componentwiseBinaryOp(const BinaryOp &op, CVPtr b) const { return dispatchCWiseBinaryOp(op, static_cast<const Derived&>(*this), b); }
-    virtual UVPtr clone()                                            const { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
-
+    virtual UVPtr componentwiseBinaryOp(const BinaryOp &op, CVPtr b)       const { return dispatchCWiseBinaryOp(op, static_cast<const Derived&>(*this), b); }
+    virtual UVPtr clone()                                                  const { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
     virtual UVPtr sample(const ESample &s, size_t meshDeg, size_t meshDim) const { return SampleImpl<Derived>::run(static_cast<const Derived&>(*this), s, meshDeg, meshDim); }
+    virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) const { return ElmAvgImpl<Derived>::run(static_cast<const Derived&>(*this), elems, meshDeg, meshDim); }
 };
 
 struct SValue : public ValueBase<SValue>, public PointValueTag {
@@ -343,10 +345,17 @@ struct InterpolantValue : public ValueBase<InterpolantValue<PointValueType>>, pu
     PointValueType &operator[](size_t i)       { if (i >= dim()) throw std::runtime_error("Index out of bounds"); return value[i]; }
 
     template<class Derived>
-    PointValueType  sampleBarycentric(const Eigen::DenseBase<Derived> &lambda) const {
+    PointValueType sampleBarycentric(const Eigen::DenseBase<Derived> &lambda) const {
         PointValueType result;
         if      (m_simplexDimension == 2) return PointValueType(triInterpolant(lambda[0], lambda[1], lambda[2]));
         else if (m_simplexDimension == 3) return PointValueType(tetInterpolant(lambda[0], lambda[1], lambda[2], lambda[3]));
+        throw std::logic_error("Invalid simplex dimension");
+    }
+
+    PointValueType average() const {
+        PointValueType result;
+        if      (m_simplexDimension == 2) return PointValueType(triInterpolant.average());
+        else if (m_simplexDimension == 3) return PointValueType(tetInterpolant.average());
         throw std::logic_error("Invalid simplex dimension");
     }
 
@@ -471,6 +480,8 @@ template<class T> typename enable_if_not_point_value<T, Real>::type
 #include "ValueOperations/BinaryOps.inl"
 #include "ValueOperations/UnaryOps.inl"
 #include "ValueOperations/Reductions.inl"
+#include "ValueOperations/NodalInterpolant.inl"
 #include "ValueOperations/Sampling.inl"
+#include "ValueOperations/ElementAverage.inl"
 
 #endif /* end of include guard: VALUES_HH */

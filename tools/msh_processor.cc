@@ -38,14 +38,10 @@
 //      TODO: store element *index* on interpolant: binary operations can only
 //      act on a pair of interpolants with matching element index.
 //
-//      TODO: add special vector fields named "node_positions" and "element_centers"
-//      allowing us to apply functions to them to create new fields.
-//      If a field named "node_positions" exists on the stack at the end, the output
-//      mesh will be modified accordingly.
-//      Warning if the input file has fields with these names.
-//      (This would be useful in combination with an "fieldExpression"
-//      operation that applies a function at each point of a field--can be a
-//      scalar expression or a comma-separated vector expression).
+//      TODO: Add "expression" that can generate scalar/vector fields as
+//      functions of the stack top.
+//      TODO: Add "setNodePositions" operation that repositions the mesh nodes
+//      to the locations specified by the vector field at the top of the stack.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -181,7 +177,7 @@ void pushInterpolantField(Stack &stack, const string &name, const RawType &raw_i
 
 template<size_t N>
 void extract(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
-    auto parser = getParser<N>();
+    const auto &parser = getParser<N>();
     std::regex pattern(arg);
     size_t origSize = stack.size();
     DomainType dtype;
@@ -214,7 +210,7 @@ void extract(const string &/*op*/, const string &arg, Stack &stack, const Modifi
 
 template<size_t N>
 void extractAll(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
-    auto parser = getParser<N>();
+    const auto &parser = getParser<N>();
     DomainType dtype;
     for (const string &name : parser.scalarFieldNames())
         pushScalarField(stack, name, parser.scalarField(name, DomainType::ANY, dtype), dtype);
@@ -222,6 +218,27 @@ void extractAll(const string &/*op*/, const string &arg, Stack &stack, const Mod
         pushVectorField(stack, name, parser.vectorField(name, DomainType::ANY, dtype), dtype);
     for (const string &name : parser.symmetricMatrixFieldNames())
         pushSymmetricMatrixField(stack, name, parser.symmetricMatrixField(name, DomainType::ANY, dtype), dtype);
+}
+
+template<size_t N>
+void generate(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    const auto &parser = getParser<N>();
+    const auto &vertices = parser.vertices();
+    const auto &elements = parser.elements();
+    if (arg == "x") {
+        VectorField<Real, N> x(vertices.size());
+        for (size_t i = 0; i < vertices.size(); ++i)
+            x(i) = truncateFrom3D<VectorND<N>>(vertices[i].point);
+        pushVectorField(stack, "x", x, DomainType::PER_NODE);
+    }
+    else if (arg == "volume") {
+        const auto &sampler = getElementSampler<N>();
+        ScalarField<Real> vol(elements.size());
+        for (size_t i = 0; i < elements.size(); ++i)
+            vol[i] = sampler.volume(i);
+        pushScalarField(stack, "volume", vol, DomainType::PER_ELEMENT);
+    }
+    else throw std::runtime_error("Invalid mesh property name: " + arg);
 }
 
 void  dup(const string &, const string &   , Stack &stack, const Modifiers &) { stack.emplace_back(getValue(stack)); } // Copies: NamedValue has value semantics
@@ -256,6 +273,7 @@ void eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers
     }
     else if (auto  fsm = dynamic_cast<FSMValue *>(VPtr(val))) {
         auto result = make_unique<FVValue>(fsm->size());
+        result->domainType = fsm->domainType;
         for (size_t i = 0; i < result->size(); ++i) {
             auto &sm = (*fsm)[i];
             (*result)[i] = VValue(sm.value.eigenvalues());
@@ -272,8 +290,8 @@ void eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers
 // Nodal fields are interpolated using the mesh's finite element basis functions.
 // Element fields are interpolated piecewise constant
 // Interpolant fields are sampled at barycentric coordinates.
-// Error is thrown for extrapolation (note: could happen on element boundaries
-// if inside/outside check is not robust)
+// Error is thrown for sample points outside the mesh (note: could happen on
+// element boundaries if inside/outside check is not robust)
 template<size_t N>
 void sample(const string &, const string &arg, Stack &stack, const Modifiers &) {
     auto p = parseVectorArg<N>(arg);
@@ -286,11 +304,20 @@ void sample(const string &, const string &arg, Stack &stack, const Modifiers &) 
     stack.emplace_back(name, val->sample(sampler(p), parser.meshDegree(), parser.meshDimension()));
 }
 
+// Average a field over each element.
+template<size_t N>
+void elementAverage(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    auto val = popValue(stack);
+    const auto &parser = getParser<N>();
+    stack.emplace_back("elementAverage(" + val.name + ")",
+                        val->elementAverage(parser.elements(), parser.meshDegree(), parser.meshDimension()));
+}
+
 // Report filters
 // List all fields parsed
 template<size_t N>
 void listNames(const string &, const string &arg, Stack &stack, const Modifiers &) {
-    auto parser = getParser<N>();
+    const auto &parser = getParser<N>();
     for (const string &name : parser.         scalarFieldNames()) { cout << "s\t"  << name << endl; }
     for (const string &name : parser.         vectorFieldNames()) { cout << "v\t"  << name << endl; }
     for (const string &name : parser.symmetricMatrixFieldNames()) { cout << "sm\t" << name << endl; }
@@ -306,7 +333,7 @@ void printName(const string &op, const string &arg, Stack &stack, const Modifier
 
 template<size_t N>
 void outputMSH(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
-    auto parser = getParser<N>();
+    const auto &parser = getParser<N>();
     // Note: there will be downsampling of interpolant fields if the output
     // mesh elements are linear. But in these cases, the original extracted
     // interpolant fields were linear as well.
@@ -387,7 +414,7 @@ void applyBinaryOp(const string &op, const string &arg, Stack &stack, const Modi
     auto b = popValue(stack);
     auto a = popValue(stack);
     if (arg.size() != 0) throw runtime_error("Did not expect binary op argument");
-    stack.emplace_back(a.name + " " + op + " " + b.name,
+    stack.emplace_back(op + "(" + a.name + ", " + b.name + ")",
                        a->componentwiseBinaryOp(BOp(), b));
 }
 
@@ -416,14 +443,16 @@ void execute(vector<FilterInvocation> &filters) {
         {"mul",    Filter::applyBinaryOp<MulOp>},
         {"div",    Filter::applyBinaryOp<DivOp>},
         // Custom value operations
-        {"print",       Filter::print},
-        {"printName",   Filter::printName},
-        {"eigenvalues", Filter::eigenvalue},
-        {"sample",      Filter::sample<N>},
+        {"print",          Filter::print},
+        {"printName",      Filter::printName},
+        {"eigenvalues",    Filter::eigenvalue},
+        {"sample",         Filter::sample<N>},
+        {"elementAverage", Filter::elementAverage<N>},
         // Stack operations
         {"list",        Filter::listNames<N>},
         {"extract",     Filter::extract<N>},
         {"extractAll",  Filter::extractAll<N>},
+        {"generate",    Filter::generate<N>},
         {"dup",         Filter::dup},
         {"pop",         Filter::pop},
         {"push",        Filter::push},

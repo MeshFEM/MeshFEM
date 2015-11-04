@@ -28,6 +28,7 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
         ("list",                           "List all fields in the msh")
         ("extract,e", po::value<string>(), "Extract field(s) matching a given name (or name pattern)")
         ("extractAll",                     "Extract all fields")
+        ("generate,g", po::value<string>(), "Generate a mesh property field (valid arguments: 'x', 'volume')")
         ;
     po::options_description stack_operations("Stack operations");
     stack_operations.add_options()
@@ -70,10 +71,10 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
         ;
     po::options_description field_operations("Field operations: sampling of fields, fields of interpolants, and interpolants");
     field_operations.add_options()
-        ("sample",  po::value<string>(),     "Sample a field/interpolant at a point. For fields, "
-                                             "uses piecewise constant interpolation on Voronoi diagram of points/element barycenters. "
-                                             "The point is specified as a comma-separated vector")
-        ("sampleIndex", po::value<string>(), "Synonym for -ci (componentwise index) applied to field. Does not apply to interpolants.")
+        ("sample",  po::value<string>(),   "Sample a field/interpolant at a point. For fields, "
+                                           "uses piecewise constant interpolation on Voronoi diagram of points/element barycenters. "
+                                           "The point is specified as a comma-separated vector")
+        ("elementAverage",                 "Averages the field over each element. Makes sense for nodal fields and interpolant fields.")
         // ("percentile", po::value<double>(), "extract a certain percentile of the field")
         ;
     po::options_description binary_operations("Component-wise binary operations: lower-dimensional types are implicitly promoted to higher dimension when it makes sense. "
