@@ -132,7 +132,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         // This can be seen as applying the stiffness matrix to the linear
         // displacement field "cstrain x".
         // Finally, since elasticity tensor C = m_E() is constant over the
-        // element, so we can pull out the 
+        // element, we can pull C : cstrain outside the integral
         void perElementConstantStrainLoad(const SMatrix &cstrain, ElementLoad &l) const {
             std::vector<Strain> phiStrains = vecPhiStrains();
             SMatrix s(m_E().doubleContract(cstrain));

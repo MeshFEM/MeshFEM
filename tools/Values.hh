@@ -13,7 +13,7 @@
 //         CollectionValueTag
 //             InterpolantValue<PointValue> (InterpolantValueTag)
 //             FieldValue<ValueType>        (FieldValueTag)
-//  Point values are generally classified as "point values" (representing a
+//  Values are generally classified as "point values" (representing a
 //  quantity that is defined at a single point) and "collection value"
 //  (representing a value for each point).
 //
