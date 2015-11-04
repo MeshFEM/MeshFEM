@@ -150,7 +150,7 @@ public:
     // Assignment from DynamicSymmetricMatrix is special.
     template<typename _R>
     SymmetricMatrixBase &operator=(const DynamicSymmetricMatrix<_R> &b) {
-        if (b.size() != t_N) throw std::runtime_error("Dynamic, static size mismatch");
+        if (b.size() != t_N) throw std::runtime_error("Dynamic-static size mismatch");
         for (size_t i = 0; i < t_N; ++i) {
             for (size_t j = 0; j <= i; ++j)
                 (*this)(i, j) = b(i, j);
@@ -175,7 +175,7 @@ public:
     // Addition with DynamicSymmetricMatrix is special.
     template<typename _R>
     SymmetricMatrixBase &operator+=(const DynamicSymmetricMatrix<_R> &b) {
-        if (b.size() != t_N) throw std::runtime_error("Dynamic, static size mismatch");
+        if (b.size() != t_N) throw std::runtime_error("Dynamic-static size mismatch");
         for (size_t i = 0; i < t_N; ++i) {
             for (size_t j = 0; j <= i; ++j)
                 (*this)(i, j) += b(i, j);
@@ -183,6 +183,24 @@ public:
         return *this;
     }
 
+    template<typename FType>
+    SymmetricMatrixBase &operator-=(const FType &b) {
+        assert(b.rows() == Base::flatSize());
+        for (size_t i = 0; i < Base::flatSize(); ++i)
+            operator[](i) -= b[i];
+        return *this;
+    }
+
+    // Addition with DynamicSymmetricMatrix is special.
+    template<typename _R>
+    SymmetricMatrixBase &operator-=(const DynamicSymmetricMatrix<_R> &b) {
+        if (b.size() != t_N) throw std::runtime_error("Dynamic-static size mismatch");
+        for (size_t i = 0; i < t_N; ++i) {
+            for (size_t j = 0; j <= i; ++j)
+                (*this)(i, j) -= b(i, j);
+        }
+        return *this;
+    }
 
     void clear() {
         for (size_t i = 0; i < Base::flatSize(); ++i)
@@ -311,7 +329,17 @@ public:
         }
     }
 
-    // Base::operator*= scalar is safe, but operator+= must enforce matching
+    size_t     size() const { return m_dynamicSize; }
+    size_t flatSize() const { return flatLen(m_dynamicSize); }
+    ////////////////////////////////////////////////////////////////////////////
+    // Assignment/compount assignment operator overloads.
+    // These call the base operator after copying/checking dynamic size, but
+    // need a static cast to avoid calling Base's opeartor with
+    // DynamicSymmetricMatrix RHS (it would falsely throw a size mismatch).
+    ////////////////////////////////////////////////////////////////////////////
+    DynamicSymmetricMatrix &operator=(const DynamicSymmetricMatrix  &b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(    static_cast<const Base &>(b) ); return *this; }
+    DynamicSymmetricMatrix &operator=(      DynamicSymmetricMatrix &&b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(std::move(static_cast<Base &>(b))); return *this; }
+    // Base::operator*= scalar is safe, but operator[+/-]= must enforce matching
     // dynamic size
     DynamicSymmetricMatrix &operator+=(const DynamicSymmetricMatrix &b) {
         if (b.m_dynamicSize != m_dynamicSize) throw std::runtime_error("DynamicSymmetricMatrix size mismatch in operator+=");
@@ -321,13 +349,14 @@ public:
         return *this;
     }
 
-    size_t     size() const { return m_dynamicSize; }
-    size_t flatSize() const { return flatLen(m_dynamicSize); }
+    DynamicSymmetricMatrix &operator-=(const DynamicSymmetricMatrix &b) {
+        if (b.m_dynamicSize != m_dynamicSize) throw std::runtime_error("DynamicSymmetricMatrix size mismatch in operator-=");
+        // Static cast to avoid calling Base's DynamicSymmetricMatrix RHS
+        // version of operator= (it will complain about size mismatch).
+        Base::operator-=(static_cast<const Base &>(b));
+        return *this;
+    }
 
-    // Static cast is to avoid calling Base's DynamicSymmetricMatrix RHS
-    // version of operator= (it will complain about size mismatch).
-    DynamicSymmetricMatrix &operator=(const DynamicSymmetricMatrix  &b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(    static_cast<const Base &>(b) ); return *this; }
-    DynamicSymmetricMatrix &operator=(      DynamicSymmetricMatrix &&b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(std::move(static_cast<Base &>(b))); return *this; }
 private:
     size_t m_dynamicSize;
 };
