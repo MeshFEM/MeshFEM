@@ -1,0 +1,41 @@
+# To be called after compute_errors.py has created a deg_1.txt and deg_2.txt
+# file with columns:
+#   mesh_num min_edge_length rel_error_ux rel_error_uy rel_error_u
+# expected variables to be set:
+#   mesh, bc_name, poisson, error_type
+# eg: mesh='square'
+#     bc_name='sin'
+#     poisson='poisson_0.25'
+#     error_type=0
+error_name = word('u_x u_y norm(u)', error_type + 1)
+linear_data=bc_name . '/' . poisson . '/deg_1.txt'
+  quad_data=bc_name . '/' . poisson . '/deg_2.txt'
+error_col=error_type + 3
+set term pngcairo size 1024,768
+
+# Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
+# space, where it's just a linear fit.
+fLinear(x) = exp(linLogA)  * (x**linExp);
+fQuad(x)   = exp(quadLogA) * (x**quadExp);
+fLinearLog(logX) = linLogA + linExp * logX
+fQuadLog(logX) = quadLogA + quadExp * logX
+fit fLinearLog(x) '< head -n40 ' . linear_data . ' | tail -n30' using (log($2)):(log(column(error_col))) via linLogA, linExp;
+fit fQuadLog(x)   '< head -n40 ' . quad_data   . ' | tail -n30' using (log($2)):(log(column(error_col))) via quadLogA, quadExp;
+
+set macros;
+poisson_val=`echo @poisson | sed 's/.*_//'`
+set title sprintf("Linear Elasticity on %s, Boundary Conditions '%s', Poisson's Ratio %0.2f", mesh, bc_name, poisson_val) noenhanced;
+
+set grid
+set logscale y
+set logscale x 2
+set key bottom right
+set format y "%0.e"
+set yrange [1e-10:1]
+set ylabel error_name . " Relative Error"
+set xlabel "Minimum Edge Length"
+set output bc_name . '/' . poisson . '/error_' . word('ux uy unorm', error_type + 1) . '.png'
+plot quad_data   using 2:(column(error_col)) with points lw 2.0 ps 2.0 title 'quadratic elements', \
+     linear_data using 2:(column(error_col)) with points lw 2.0 ps 2.0 title 'linear elements', \
+       fQuad(x) lc rgb "black" lw 2.0 title sprintf('quadratic convergence order, %0.4f', quadExp), \
+     fLinear(x) lc rgb "black" lw 2.0 title sprintf('linear convergence order, %0.4f', linExp)
