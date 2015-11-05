@@ -3,11 +3,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Implements I/O for meshes in multiple formats
-//      Currently stripped-down to only work with OFF
 //
 //      Read/write a plain polygon/polyhedron element soup using the functions:
-//          load(path, vertices, elements[, format])
-//          save(path, vertices, elements[, format])
+//          load(path, nodes, elements[, format])
+//          save(path, nodes, elements[, format])
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -29,7 +28,9 @@ namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_POLY = 3, FMT_NODE_ELE = 4, FMT_MEDIT = 5,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
-    typedef enum { MESH_TRI, MESH_TET, MESH_QUAD, MESH_TRI_QUAD, MESH_HEX, MESH_GUESS, MESH_INVALID } MeshType;
+
+    typedef enum { MESH_TRI = 0, MESH_TET = 1, MESH_QUAD = 2, MESH_TRI_QUAD = 3, MESH_HEX = 4,
+                   MESH_TRI_DEG2 = 5, MESH_TET_DEG2 = 6, MESH_GUESS = -1, MESH_INVALID = -1 } MeshType;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex
@@ -64,47 +65,37 @@ namespace MeshIO {
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
     //  Minimal polygon/polyhedron class for unattributed mesh i/o 
+    //  Note: inheriting from STL is dangerous because STL containers do not
+    //  have virtual destructors. However, since we don't intend to use this
+    //  class polymorphically, we should be fine using this hack...
     *///////////////////////////////////////////////////////////////////////////
-    class IOElement {
-        std::vector<size_t> m_idxs;
+    class IOElement : public std::vector<size_t> {
+        typedef std::vector<size_t> Base;
     public:
-        IOElement(size_t n = 0) : m_idxs(n) { }
-        // Triangle (3), Tet/Quad (4), and Hex (8) index constructors
-        static constexpr bool is_valid_element_size(size_t size) { return (size == 3) || (size == 4) || (size == 8); }
+        IOElement(size_t n = 0) : Base(n) { }
+        // Triangle (3), Tet/Quad (4), and Hex (8)
+        // Quadratic Triangle (6), Quadratic Tet (10)
+        static constexpr bool is_valid_element_size(size_t size) {
+            return (size == 3) || (size ==  4) || (size == 8)
+                || (size == 6) || (size == 10);
+        }
         template<typename... Args>
-        IOElement(size_t v1, size_t v2, Args... args) : m_idxs{v1, v2, static_cast<size_t>(args)...} {
+        IOElement(size_t v1, size_t v2, Args... args) : Base{v1, v2, static_cast<size_t>(args)...} {
             static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
             static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Triangles, Quads, Tet, and Hex-sized elements");
         }
 
-        int operator[](size_t i) const {
-            assert(i < m_idxs.size());
-            return m_idxs[i];
-        }
-
-        size_t &operator[](size_t i)  {
-            assert(i < m_idxs.size());
-            return m_idxs[i];
-        }
-
-        size_t size() const { return m_idxs.size(); }
-        void resize(size_t n) { m_idxs.resize(n); }
-        void clear() { m_idxs.clear(); }
-
         template<typename PType>
         IOElement &operator=(const PType &rhs) {
-            m_idxs.resize(rhs.size());
+            Base::resize(rhs.size());
             for (size_t i = 0; i < rhs.size(); ++i)
-                m_idxs[i] = rhs[i];
+                (*this)[i] = rhs[i];
             return *this;
         }
 
-        void push_back(int idx) { m_idxs.push_back(idx); }
-        operator std::vector<size_t>&()             { return m_idxs; }
-        operator const std::vector<size_t>&() const { return m_idxs; }
-
-        friend std::istream & operator>>(std::istream &, IOElement &);
     };
+    // Ascii element input
+    std::istream  &operator>>(std::istream &, IOElement &);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! IOVertex ASCII input  (for implementing OFF I/O)
@@ -149,9 +140,9 @@ namespace MeshIO {
             typedef IOElement Element;
 
             virtual void save(std::ostream &os,
-                              const std::vector<Vertex> &vertices,
+                              const std::vector<Vertex> &nodes,
                               const std::vector<Element> &elements, MeshType t) = 0;
-            virtual MeshType load(std::istream &is, std::vector<Vertex> &vertices,
+            virtual MeshType load(std::istream &is, std::vector<Vertex> &nodes,
                                   std::vector<Element> &elements, MeshType t) = 0;
     };
 
@@ -188,7 +179,7 @@ namespace MeshIO {
             typedef IOElement Element;
 
             MeshType load(const std::string &nodePath, const std::string &elePath,
-                          std::vector<Vertex> &vertices, std::vector<Element>
+                          std::vector<Vertex> &nodes, std::vector<Element>
                           &elements);
     };
 
@@ -197,36 +188,45 @@ namespace MeshIO {
             typedef IOVertex  Vertex;
             typedef IOElement Element;
 
+            struct ElementInfo {
+                // We can't have default member initializtion and use
+                // aggregate initialization (until C++14...), so we provide a
+                // constructor that can be used with an initializer list:
+                ElementInfo(MeshType mt = MESH_INVALID, int et = -1, size_t npe = 0)
+                    : meshType(mt), elementType(et), nodesPerElem(npe) { }
+                MeshType meshType;
+                int elementType;
+                size_t nodesPerElem;
+            };
+
+            // Table initialized in MeshIO.cc
+            static const std::vector<ElementInfo> elementInfoArray;
+
             MeshIO_MSH() : m_binary(true) { }
 
-            void getElementInfo(MeshType meshType, int &elementType,
-                                size_t &numCorners) {
-                switch (meshType) {
-                    case MESH_TRI:
-                        elementType = 2;
-                        numCorners = 3;
-                        break;
-                    case MESH_TET:
-                        elementType = 4;
-                        numCorners = 4;
-                        break;
-                    case MESH_QUAD:
-                        elementType = 3;
-                        numCorners = 4;
-                        break;
-                    case MESH_HEX:
-                        elementType = 5;
-                        numCorners = 8;
-                        break;
-                    default:
-                        throw std::runtime_error("MSH io only supports tri, quad, hex, and tet");
-                }
+            static const ElementInfo &elementInfoForMeshType(MeshType meshType) {
+                for (const auto &ei : elementInfoArray)
+                    if (ei.meshType == meshType) return ei;
+                throw std::runtime_error("Unsupported MeshType for MSH I/O");
             }
 
-            void save(std::ostream &os, const std::vector<Vertex> &vertices,
+            static const ElementInfo &elementInfoForElementType(int elementType) {
+                for (const auto &ei : elementInfoArray)
+                    if (ei.elementType == elementType) return ei;
+                throw std::runtime_error("Unsupported element type for MSH I/O: "
+                                    + std::to_string(elementType));
+            }
+
+            static const ElementInfo &elementInfoForNodeCount(size_t nodesPerElem) {
+                for (const auto &ei : elementInfoArray)
+                    if (ei.nodesPerElem == nodesPerElem) return ei;
+                throw std::runtime_error("Unsupported node count for MSH I/O");
+            }
+
+            void save(std::ostream &os, const std::vector<Vertex> &nodes,
                       const std::vector<Element> &elements, MeshType type);
 
-            MeshType load(std::istream &is, std::vector<Vertex> &vertices,
+            MeshType load(std::istream &is, std::vector<Vertex> &nodes,
                           std::vector<Element> &elements, MeshType type);
 
             bool binary() const { return m_binary; }
@@ -242,14 +242,47 @@ namespace MeshIO {
         typedef IOVertex  Vertex;
         typedef IOElement Element;
 
-        void save(std::ostream &os, const std::vector<Vertex> &vertices,
-                  const std::vector<Element> &elements, MeshType type) {
+        void save(std::ostream &/* os */, const std::vector<Vertex> &/* nodes */,
+                  const std::vector<Element> &/* elements */, MeshType /* type */) {
             throw std::runtime_error("Medit saving currently unsupported");
         }
 
-        MeshType load(std::istream &is, std::vector<Vertex> &vertices,
+        MeshType load(std::istream &is, std::vector<Vertex> &nodes,
                       std::vector<Element> &elements, MeshType type);
     };
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Functions to query attributes of the different mesh types.
+    ////////////////////////////////////////////////////////////////////////////
+    // What dimension are the elements? (e.g. triangle meshes are 2D even if
+    // embedded in 3D).
+    inline constexpr size_t meshDimension(const MeshType &mtype) {
+        return  ((mtype == MESH_TRI) || (mtype == MESH_TRI_DEG2) || (mtype == MESH_QUAD) || (mtype == MESH_TRI_QUAD)) ? 2
+            : ( ((mtype == MESH_TET) || (mtype == MESH_TET_DEG2) || (mtype == MESH_HEX)) ? 3 : 0 );
+    }
+
+    inline constexpr bool isUnknownMesh(const MeshType &mtype) { return mtype == MESH_INVALID; }
+    inline constexpr bool isMixedMesh(const MeshType &mtype)   { return mtype == MESH_TRI_QUAD; }
+
+    // Are the elements of the mesh simplices?
+    inline constexpr bool isSimplicialComplex(const MeshType &mtype) {
+        return ((mtype == MESH_TRI) || (mtype == MESH_TRI_DEG2) ||
+                (mtype == MESH_TET) || (mtype == MESH_TET_DEG2));
+    }
+
+    // Implied order of basis functions on elements in the mesh.
+    inline constexpr size_t meshDegree(const MeshType &mtype) {
+        return  ((mtype == MESH_TRI     ) || (mtype == MESH_TET     )) ? 1
+            : ( ((mtype == MESH_TRI_DEG2) || (mtype == MESH_TET_DEG2)) ? 2 : 0 );
+    }
+
+    // Number of nodes on the elements of a particular mesh
+    // Throws exception for mixed mesh types.
+    inline size_t nodesPerElement(const MeshType &mtype) {
+        const auto &ei = MeshIO_MSH::elementInfoForMeshType(mtype);
+        return ei.nodesPerElem;
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Guesses the file format of a mesh from its file extension
@@ -268,24 +301,24 @@ namespace MeshIO {
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes an element soup to an output stream
     //  @param[in]  path      stream to which geometry is written
-    //  @param[in]  vertices  vertices to write
+    //  @param[in]  nodes     nodes to write
     //  @param[in]  elements  elements to write
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    void save(std::ostream &os, const std::vector<IOVertex> &vertices,
+    void save(std::ostream &os, const std::vector<IOVertex> &nodes,
               const std::vector<IOElement> &elements, Format format,
               MeshType type = MESH_GUESS);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes an element soup to a mesh path
     //  @param[in]  path      the path to which geometry is written
-    //  @param[in]  vertices  vertices to write
+    //  @param[in]  nodes     nodes to write
     //  @param[in]  elements  elements to write
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    void save(const std::string &path, const std::vector<IOVertex> &vertices,
+    void save(const std::string &path, const std::vector<IOVertex> &nodes,
               const std::vector<IOElement> &elements, Format format = FMT_GUESS,
               MeshType type = MESH_GUESS);
 
@@ -316,28 +349,30 @@ namespace MeshIO {
         save(path, outVertices, outElements, format, type);
     }
 
+    // TODO: higher order mesh output.
+
     ////////////////////////////////////////////////////////////////////////////
     /*! Reads an element soup from an input stream
     //  @param[in]  is        stream from which to read geometry
-    //  @param[out] vertices  vertices to read
+    //  @param[out] nodes     nodes to read
     //  @param[out] elements  elements to read
     //  @param[in]  format    file format
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    MeshType load(std::istream &is, std::vector<IOVertex> &vertices,
+    MeshType load(std::istream &is, std::vector<IOVertex> &nodes,
               std::vector<IOElement> &elements, Format format,
               MeshType type = MESH_GUESS);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Reads an element soup from a mesh path
     //  @param[in]  path      path from which to read geometry
-    //  @param[out] vertices  vertices to read
+    //  @param[out] nodes     nodes to read
     //  @param[out] elements  elements to read
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     //  @return     actual loaded MeshType
     *///////////////////////////////////////////////////////////////////////////
-    MeshType load(const std::string &path, std::vector<IOVertex> &vertices,
+    MeshType load(const std::string &path, std::vector<IOVertex> &nodes,
                   std::vector<IOElement> &elements, Format format = FMT_GUESS,
                   MeshType type = MESH_GUESS);
 }

@@ -50,6 +50,7 @@
 #include <array>
 #include <functional>
 #include <iostream>
+#include <type_traits>
 
 namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; }
 
@@ -77,7 +78,7 @@ namespace {
     ////////////////////////////////////////////////////////////////////////////
     // Constant functions don't interpolate...
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
-    _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... args) { return f[0]; }
+    _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... /* args */) { return f[0]; }
 
     // Barycentric coordinates are the linear shape functions for all simplices.
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
@@ -286,25 +287,33 @@ private:
     std::array<_T, numNodalValues> m_nodeVal;
 };
 
+// Compile-time mechanism for identifying interpolant types.
+class InterpolantBase { };
+template<class T>
+struct is_interpolant : public std::is_base_of<InterpolantBase, T> { };
+
 template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy>
-class Interpolant : public NodalStoragePolicy<_T, _K, _Deg> {
+class Interpolant : public NodalStoragePolicy<_T, _K, _Deg>, public InterpolantBase {
     typedef NodalStoragePolicy<_T, _K, _Deg> SP;
 public:
+    typedef _T value_type;
     static constexpr size_t K = _K;
     static constexpr size_t Deg = _Deg;
     using SP::numNodalValues;
     using SP::SP;
-    Interpolant() : SP() { }
+    Interpolant() : SP() { } // Can't seem to inherit the default constructor...
     Interpolant(const Interpolant &b) { *this = b; }
     Interpolant(Interpolant &&b) : SP(std::move(b)) { }
 
-    // Allow a promoting copy constructor from interpolants of the
+    // Allow a promoting conversion constructor from interpolants of the
     // same degree or lower via the assignment operator.
+    // Also allow copy from same degree interpolant with a different
+    // NodalStoragePolicy.
     // Only works for NodalStoragePolicies that support default construction
     // (i.e. non-reference types).
     template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
-             typename std::enable_if<_Deg2 < _Deg, int>::type = 0>
+             typename std::enable_if<_Deg2 <= _Deg, int>::type = 0>
     Interpolant(const Interpolant<_T, _K, _Deg2, _NSP2> &b) : SP() { *this = b; }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -328,13 +337,18 @@ public:
     // Allow assignment between interpolants of the same class.
     Interpolant &operator=(const Interpolant &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[i]; return *this; }
 
+    // Allow assignment between interpolants with different nodal storage
+    // policies
+    template<template<typename, size_t, size_t> class _NSP2>
+    Interpolant &operator=(const Interpolant<_T, _K, _Deg, _NSP2> &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[i]; return *this; }
+
     // Allow a promoting assignment from interpolants of a lower degree over the
     // same simplex type.
     template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
     typename std::enable_if<_Deg2 < _Deg, int>::type = 0>
     Interpolant &operator=(const Interpolant<_T, _K, _Deg2, _NSP2> &b) {
         static_assert((_Deg2 == 0) || (_Deg2 == 1), "Only quadratic"
-                "interpolants are implmented, so promotion must be from a "
+                "interpolants are implemented, so promotion must be from a "
                 "constant or linear function");
         if (_Deg2 == 0) for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[0];
         else if (_Deg2 == 1) {
@@ -342,8 +356,9 @@ public:
             for (size_t i = 0; i < Simplex::numVertices(_K); ++i) (*this)[i] = b[i];
             // Evaluate linear function at the edge nodes by averaging endpoints
             for (size_t i = 0; i < Simplex::numEdges(_K); ++i) {
-                (*this)[Simplex::numVertices(_K) + i] = 
-                        0.5 * (b[Simplex::edgeStartNode(i)] + b[Simplex::edgeEndNode(i)]);
+                (*this)[Simplex::numVertices(_K) + i]  = b[Simplex::edgeStartNode(i)];
+                (*this)[Simplex::numVertices(_K) + i] += b[Simplex::edgeEndNode(i)];
+                (*this)[Simplex::numVertices(_K) + i] *= 0.5;
             }
         }
         return *this;

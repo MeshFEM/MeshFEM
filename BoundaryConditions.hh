@@ -194,7 +194,7 @@ struct NeumannCondition : public BoundaryCondition<_N> {
         else          return m_vecValue;
     }
 
-    Real pressure(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+    Real pressure(const ExpressionEnvironment &/* env */ = ExpressionEnvironment()) const {
         assert(type == NeumannType::Pressure);
         if (m_isExpr)
             throw std::runtime_error("Unimplemented");

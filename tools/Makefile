@@ -4,12 +4,12 @@ INCLUDES=-I$(CSGFEM) -I$(EIGEN_INC) -isystem $(SUITESPARSE_INC) -isystem $(BOOST
 		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC)
 LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS)
 
-CPPFLAGS+=-Wall -pedantic -std=c++11 $(INCLUDES) -I..
+CPPFLAGS+=-Wall -pedantic -std=c++1y $(INCLUDES) -I..
 CPPFLAGS+=-O2
 # CPPFLAGS+=-O0 -g
 TARGETS=msh_processor selector gen_bar_with_shell bc_debug IsotropicValidation grid
 
-MSH_PROC_OBJS=msh_processor.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
+MSH_PROC_OBJS=msh_processor.o ../MeshIO.o ../MSHFieldParser.o ../Types.o argparse.o
 ISOTVAL_OBJS=IsotropicValidation.o ../MeshIO.o ../MSHFieldParser.o ../Types.o ../Materials.o ../GlobalBenchmark.o
 SELECTOR_OBJS=selector.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
 GEN_BAR_WSHELL_OBJS=gen_bar_with_shell.o ../MeshIO.o ../MSHFieldParser.o ../Types.o

@@ -55,8 +55,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     typedef EmbeddingSpace Vector;
     typedef EmbeddingSpace Point;
     typedef DefaultFEMData<_K, _Deg, Vector>   BaseData;
-    typedef Eigen::Matrix<Real, flatLen(N), 1> FlattenedSymmetricMatrix;
-    typedef SymmetricMatrix<N, FlattenedSymmetricMatrix> SMatrix;
+    typedef SymmetricMatrixValue<Real, N> SMatrix;
     typedef SymmetricMatrixInterpolant<SMatrix, _K, _Deg - 1> Strain;
     typedef Strain Stress;
     typedef VectorField<Real, N> VField;
@@ -71,8 +70,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         typedef Eigen::Matrix<Real, N,  nNodes> ElementLoad;
         typedef Eigen::Matrix<Real, nVecPhi, nVecPhi> PerElementStiffness;
 
-        void configure(const _ETensorGetter<N> &EGetter) { m_E = EGetter; }
-        decltype(((const _ETensorGetter<N> *) 0)->operator()()) E() const { return m_E(); }
+        void configure(const ETensorGetter &EGetter) { m_E = EGetter; }
+        decltype(((const ETensorGetter *) 0)->operator()()) E() const { return m_E(); }
 
         std::vector<Strain> vecPhiStrains() const {
             std::vector<Strain> strains(N * nNodes);
@@ -120,17 +119,26 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             out = eps.doubleContract(m_E());
         }
 
-        // Constant strain load
-        void load(const SMatrix &strain, ElementLoad &l) const {
+        // Contribution to the "constant strain load"--RHS for cell problem:
+        //      -div C : [strain(u) + cstrain] = 0 in omega
+        //       n . C : [strain(u) + cstrain] = 0 on domega
+        // Integrating the volume equation against a shape function p, we get:
+        //      int_omega -p . div C : [strain(u) + cstrain] dV = 0 
+        //      = int_omega strain(p) : C : [strain(u) + cstrain] dV + 
+        //        int_domega p . (n . C : [strain(u) + cstrain]) dA,
+        // and the boundary term disappears due to the Neumann condition.
+        // Thus, we only accumulate this element's contribution to the volume
+        // integral.
+        // This can be seen as applying the stiffness matrix to the linear
+        // displacement field "cstrain x".
+        // Finally, since elasticity tensor C = m_E() is constant over the
+        // element, we can pull C : cstrain outside the integral
+        void perElementConstantStrainLoad(const SMatrix &cstrain, ElementLoad &l) const {
             std::vector<Strain> phiStrains = vecPhiStrains();
-            SMatrix s(m_E().doubleContract(strain));
+            SMatrix s(m_E().doubleContract(cstrain));
             for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
-                for (size_t c = 0; c < N; ++c) {
-                    l(c, i) = Quadrature<_K, _Deg - 1>::integrate(
-                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
-                            return phiStrains[i * N + c](p).doubleContract(s);
-                        }, Base::volume());
-                }
+                for (size_t c = 0; c < N; ++c)
+                    l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(s);
             }
         }
 
@@ -151,7 +159,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             }
         }
     private:
-        _ETensorGetter<N> m_E;
+        ETensorGetter m_E;
     };
 
     struct BoundaryElement : public BaseData::BoundaryElement {
@@ -225,8 +233,7 @@ public:
     typedef ScalarField<Real>             SField;
     typedef VectorField<Real, N>          VField;
     typedef ElasticityTensor<Real, N>     ETensor;
-    typedef Eigen::Matrix<Real, flatLen(N), 1> FlattenedSymmetricMatrix;
-    typedef SymmetricMatrix<N, FlattenedSymmetricMatrix> SMatrix;
+    typedef SymmetricMatrixValue<Real, N> SMatrix;
     typedef SymmetricMatrixField<Real, N> SMField;
     typedef typename LEData::Strain Strain;
     typedef typename LEData::Strain Stress;
@@ -267,8 +274,24 @@ public:
     }
 
     // Element strain/stress by return value.
-    Strain elementStrain(size_t i, const VField &u) const { Strain result; elementStrain(result); return result; }
-    Stress elementStress(size_t i, const VField &u) const { Stress result; elementStress(result); return result; }
+    Strain elementStrain(size_t i, const VField &u) const { Strain result; elementStrain(i, u, result); return result; }
+    Stress elementStress(size_t i, const VField &u) const { Stress result; elementStress(i, u, result); return result; }
+
+    // Strain field as a per-element interpolant
+    std::vector<Strain> strainField(const VField &u) const {
+        std::vector<Strain> sfield(m_mesh.numElements());
+        for (size_t i = 0; i < m_mesh.numElements(); ++i)
+            elementStrain(i, u, sfield[i]);
+        return sfield;
+    }
+
+    // Stress field as a per-element interpolant
+    std::vector<Stress> stressField(const VField &u) const {
+        std::vector<Stress> sfield(m_mesh.numElements());
+        for (size_t i = 0; i < m_mesh.numElements(); ++i)
+            elementStress(i, u, sfield[i]);
+        return sfield;
+    }
 
     // Strain averaged over each element.
     SMField averageStrainField(const VField &u) const {
@@ -301,7 +324,7 @@ public:
         typename _Mesh::ElementData::ElementLoad eLoad;
         for (size_t ei = 0; ei < m_mesh.numElements(); ++ei) {
             auto elem = m_mesh.element(ei);
-            elem->load(strain, eLoad);
+            elem->perElementConstantStrainLoad(strain, eLoad);
             for (size_t n = 0; n < elem.numNodes(); ++n)
                 load(DoF(elem.node(n).index())) += eLoad.col(n);
         }

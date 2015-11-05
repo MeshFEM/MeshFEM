@@ -5,6 +5,14 @@
 //  Representations for elements that have been embedded in N dimensions.
 //  These representations provide support for computing integrals and gradients
 //  of interpolated expressions.
+//
+//  There currently two types of embedding:
+//      Linear: supports computation of volume and shape function gradients
+//      Affine: supports the above, plus computation of barycentric coordinates.
+//              (requires storing an additional point per element).
+//
+//  m_gradBarycentric holds the gradients of each barycentric coordinate
+//  function as column vectors.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -15,18 +23,22 @@
 #include "Simplex.hh"
 #include "Functions.hh"
 
-// The LinearlyEmbeddedSimplex class stores the degree-independent information
+// The *EmbeddedSimplex classes store the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the
 // jacobian from the reference simplex is constant:
 //      1) simplex volume
 //      2) barycentric coordinate gradients
 //      3) [optional] normal (only for K-simplices embedded in K + 1 space)
+// AffineEmbeddedSimplex stores the additional information needed to compute
+// barycentric coordinates (only implemented for K-simplices in K space)
 template<size_t _K, class EmbeddingSpace>
-class LinearlyEmbeddedSimplex {};
+class LinearlyEmbeddedSimplex;
+template<size_t _K, class EmbeddingSpace>
+class AffineEmbeddedSimplex;
 
-template<size_t _K, size_t _Deg, class EmbeddingSpace>
-class LinearlyEmbeddedElement : public LinearlyEmbeddedSimplex<_K, EmbeddingSpace> {
-    typedef LinearlyEmbeddedSimplex<_K, EmbeddingSpace> Base;
+template<template<size_t, class> class _SimplexEmbedding, size_t _K, size_t _Deg, class EmbeddingSpace>
+class EmbeddedElement : public _SimplexEmbedding<_K, EmbeddingSpace> {
+    typedef _SimplexEmbedding<_K, EmbeddingSpace> Base;
     using Base::m_gradBarycentric;
     using Base::m_volume;
 public:
@@ -34,7 +46,6 @@ public:
     constexpr static size_t numVertices = _K + 1;
 
     const decltype(m_gradBarycentric) &gradBarycentric() const { return m_gradBarycentric; }
-    Real volume() const { return m_volume; }
 
     SFGradient gradPhi(size_t i) const {
         SFGradient result;
@@ -64,6 +75,11 @@ public:
     }
 };
 
+template<size_t _K, size_t _Deg, class EmbeddingSpace>
+using LinearlyEmbeddedElement = EmbeddedElement<LinearlyEmbeddedSimplex, _K, _Deg, EmbeddingSpace>;
+template<size_t _K, size_t _Deg, class EmbeddingSpace>
+using   AffineEmbeddedElement = EmbeddedElement<  AffineEmbeddedSimplex, _K, _Deg, EmbeddingSpace>;
+
 // Edges in 3D do not store normals, since the normal is ambiguous.
 // In the future, the normal could be defined to be in the plane of the 
 // incident triangle (if there is one).
@@ -86,6 +102,8 @@ public:
         m_gradBarycentric.col(0) = e;
         m_gradBarycentric.col(1) = -e;
     }
+
+    Real volume() const { return m_volume; }
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -121,6 +139,8 @@ public:
         m_gradBarycentric.col(0) = e;
         m_gradBarycentric.col(1) = -e;
     }
+
+    Real volume() const { return m_volume; }
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -158,6 +178,8 @@ public:
         m_gradBarycentric.col(1) = m_normal.cross(e1) / doubleA;
         m_gradBarycentric.col(2) = m_normal.cross(e2) / doubleA;
     }
+
+    Real volume() const { return m_volume; }
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -192,6 +214,8 @@ public:
         m_gradBarycentric.col(1) = Vector2D(-e1[1], e1[0]) / doubleA;
         m_gradBarycentric.col(2) = Vector2D(-e2[1], e2[0]) / doubleA;
     }
+
+    Real volume() const { return m_volume; }
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -224,9 +248,85 @@ public:
         m_gradBarycentric.col(2) = (p3 - p0).cross(p1 - p0) / vol_6;
         m_gradBarycentric.col(3) = (p1 - p0).cross(p2 - p0) / vol_6;
     }
+
+    Real volume() const { return m_volume; }
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// AffineEmbeddedSimplex
+// Embedded simplices supporting the computation of barycentric coordinates.
+// This requires the storage of an additional point: one of the vertices.
+// This is only supported for full-dimension simplices.
+////////////////////////////////////////////////////////////////////////////////
+template<>
+class AffineEmbeddedSimplex<Simplex::Triangle, Point2D> : public LinearlyEmbeddedSimplex<Simplex::Triangle, Point2D> {
+    using Base = LinearlyEmbeddedSimplex<Simplex::Triangle, Point2D>;
+    using Base::m_gradBarycentric;
+public:
+    using BaryCoords = VectorND<3>;
+
+    void embed(const Point2D &p0, const Point2D &p1, const Point2D &p2) {
+        Base::embed(p0, p1, p2);
+        m_p0 = p0;
+    }
+
+    BaryCoords barycentricCoords(const Point2D &p) const {
+        // Integrate barycentric coordinate function gradients from p0
+        BaryCoords lambda = m_gradBarycentric.transpose() * (p - m_p0);
+        lambda[0] = 1.0 - lambda[1] - lambda[2]; // equivalent to lambda[0] += 1.0, but more robust?
+        return lambda;
+    }
+
+    // Query if a point is inside and get its barycentric coordinates
+    bool contains(const Point2D &p, BaryCoords &l) const {
+        l = barycentricCoords(p);
+        return ((l[0] >= 0) && (l[1] >= 0) && (l[2] >= 0));
+    }
+
+    bool contains(const Point2D &p) const {
+        BaryCoords l;
+        return contains(p, l);
+    }
+
+protected:
+    Point2D m_p0;
+};
+
+template<>
+class AffineEmbeddedSimplex<Simplex::Tetrahedron, Point3D> : public LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Point3D> {
+    using Base = LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Point3D>;
+    using Base::m_gradBarycentric;
+public:
+    using BaryCoords = VectorND<4>;
+    void embed(const Point3D &p0, const Point3D &p1,
+               const Point3D &p2, const Point3D &p3) {
+        Base::embed(p0, p1, p2, p3);
+        m_p0 = p0;
+    }
+
+    BaryCoords barycentricCoords(const Point3D &p) const {
+        // Integrate barycentric coordinate function gradients from p0
+        BaryCoords lambda = m_gradBarycentric.transpose() * (p - m_p0);
+        lambda[0] = 1.0 - lambda[1] - lambda[2] - lambda[3]; // equivalent to lambda[0] += 1.0, but more robust?
+        return lambda;
+    }
+
+    // Query if a point is inside and get its barycentric coordinates
+    bool contains(const Point3D &p, BaryCoords &l) const {
+        l = barycentricCoords(p);
+        return ((l[0] >= 0) && (l[1] >= 0) && (l[2] >= 0) && (l[3] >= 0));
+    }
+
+    bool contains(const Point3D &p) const {
+        BaryCoords l;
+        return contains(p, l);
+    }
+
+protected:
+    Point3D m_p0;
 };
 
 #endif /* end of include guard: EMBEDDEDELEMENT_HH */

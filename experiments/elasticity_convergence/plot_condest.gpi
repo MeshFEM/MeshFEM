@@ -1,0 +1,29 @@
+# expected variables to be set:
+#   mesh, bc_name, poisson
+# eg: mesh='square'
+#     bc_name='sin'
+#     poisson='poisson_0.25'
+set term pngcairo size 1024,768
+deg1_data=bc_name . '/' . poisson . '/deg_1.txt'
+deg2_data=bc_name . '/' . poisson . '/deg_2.txt'
+deg1_condest=bc_name . '/' . poisson . '/deg_1/condest.clean.txt'
+deg2_condest=bc_name . '/' . poisson . '/deg_2/condest.clean.txt'
+
+# Look up edge lengths via mesh number (equality join)
+# condest files are sorted, original data files are not
+deg1_minedgelength_condest = '< zsh -c "join <(sort -g ' . deg1_data . ' | cut -f1-2) ' . deg1_condest . '"'
+deg2_minedgelength_condest = '< zsh -c "join <(sort -g ' . deg2_data . ' | cut -f1-2) ' . deg1_condest . '"'
+
+set output bc_name . '/' . poisson . '/condest.png';
+
+set title "System Matrix condest Growth for " . poisson noenhanced
+set grid
+set logscale y
+set logscale x 2
+set yrange [1:1e6]
+set key bottom right
+set format y "%0.e"
+set ylabel "System Matrix condest"
+set xlabel "Minimum Edge Length"
+plot deg2_minedgelength_condest using 2:3 with lp lw 2.0 ps 2.0 title 'quadratic elements', \
+     deg1_minedgelength_condest using 2:3 with lp lw 2.0 ps 2.0 title 'linear elements'

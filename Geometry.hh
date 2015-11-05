@@ -263,7 +263,6 @@ inline DataType BarycentricInterpolate(const BaryCoords &coords
 /*! Computes a 2D triangle's circumscribed circle
 //  http://en.wikipedia.org/wiki/Circumscribed_circle
 //  @param[in]  p0, p1, p2      triangle vertex positions
-//  @param[in]  tri             triangle to process
 //  @param[out] center          incircle center
 *///////////////////////////////////////////////////////////////////////////////
 inline void Circumcircle(const Point2D &p0, const Point2D &p1,
