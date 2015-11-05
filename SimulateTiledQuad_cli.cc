@@ -82,7 +82,9 @@ template<size_t _N, size_t _Deg>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements,
-             const vector<int> &ids) {
+             const vector<int> &ids,
+             const ScalarField<Real> initialCost,
+             const ScalarField<Real> finalCost) {
     size_t numElements = inElements.size();
     typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
     typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
@@ -248,6 +250,8 @@ void execute(const po::variables_map &args,
 			TFPerQuad(i) = avgTFieldPerQuad(ids[i]);
 
     	writer.addField("tensorFieldPerQuad", TFPerQuad, DomainType::PER_ELEMENT);
+    	writer.addField("initialCost", initialCost, DomainType::PER_ELEMENT);
+    	writer.addField("finalCost",   finalCost,   DomainType::PER_ELEMENT);
 
 
 	}
@@ -281,6 +285,9 @@ int main(int argc, const char *argv[])
 
     // parse the 'id' field of the input mesh
 	vector<int> intIDs; // this will hold the 'id' for each element
+	SField initialCost;
+	SField finalCost;
+
     if (args["quadAvg"].as<bool>())
 	{
 		SField ids;
@@ -297,7 +304,19 @@ int main(int argc, const char *argv[])
 			else
 				ids = idParser.scalarField("id");
 			
-			// convert to int
+			it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "initCost");
+			if (it == scalarFieldNames.end())
+				throw("the input mesh is missing the 'initCost' field!");
+			else
+				initialCost = idParser.scalarField("initCost");
+			
+			it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "finaCost");
+			if (it == scalarFieldNames.end())
+				throw("the input mesh is missing the 'finaCost' field!");
+			else
+				finalCost = idParser.scalarField("finaCost");
+
+			// convert ids to int
 			for (size_t i = 0; i < ids.domainSize(); ++i)
 				intIDs.push_back((int) ids[i]);
 
@@ -326,7 +345,7 @@ int main(int argc, const char *argv[])
     auto exec = (dim == 3) ? ((deg == 2) ? execute<3, 2> : execute<3, 1>)
                            : ((deg == 2) ? execute<2, 2> : execute<2, 1>);
 
-    exec(args, inVertices, inElements, intIDs);
+    exec(args, inVertices, inElements, intIDs, initialCost, finalCost);
 
     return 0;
 }
