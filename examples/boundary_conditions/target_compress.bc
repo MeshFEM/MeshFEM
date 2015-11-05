@@ -1,0 +1,9 @@
+{
+  "no_rigid_motion": true,
+  "regions": [
+         { "type": "traction", "value": [0, 0.3, 0],    "box": { "minCorner": [-1.05, -1.05, 0], "maxCorner": [1.05, -0.95, 0] } },
+         { "type": "traction", "value": [0, -0.3, 0],   "box": { "minCorner": [-1.05, 0.95, 0], "maxCorner": [1.05,  1.05, 0] } },
+         { "type":   "target", "value": [0, 0.15, 0],    "box": { "minCorner": [-1.05, -1.05, 0], "maxCorner": [1.05, -0.95, 0] } },
+         { "type":   "target", "value": [0, -0.15, 0],   "box": { "minCorner": [-1.05, 0.95, 0], "maxCorner": [1.05,  1.05, 0] } }
+  ]
+}
