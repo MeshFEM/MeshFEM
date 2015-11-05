@@ -523,7 +523,6 @@ View[0].Format = "%.3g";
 View[0].GeneralizedRaiseX = "v0";
 View[0].GeneralizedRaiseY = "v1";
 View[0].GeneralizedRaiseZ = "v2";
-View[0].Name = "max(eigenvalues(strain w_ij 0))";
 View[0].Stipple0 = "1*0x1F1F";
 View[0].Stipple1 = "1*0x3333";
 View[0].Stipple2 = "1*0x087F";

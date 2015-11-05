@@ -1,5 +1,5 @@
 # expected variables to be set:
-#   run_dir, modulus
+#   run_dir, fluctuation
 # eg: run_dir='results/skip_0'; fluctuation=0
 fluctuationNames = "w_00 w_11 w_01"
 fname = word(fluctuationNames, fluctuation + 1);
