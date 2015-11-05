@@ -7,7 +7,7 @@ for msh in results/skip_*/deg_*/homog_20.msh; do
 
     $MeshFEM/tools/msh_processor $msh -e "strain w_ij 1" --elementAverage --eigenvalues --max -o tmp.msh
     gmsh -n tmp.msh render_scalarfield.opt
-    convert -trim render.png ${msh%.msh}.maxstains.w_11.png
+    convert -trim render.png ${msh%.msh}.maxstrain.w_11.png
 
     rm tmp.msh
 done

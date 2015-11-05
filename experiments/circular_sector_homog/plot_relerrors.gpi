@@ -32,6 +32,7 @@ set logscale x 2
 set key bottom right
 set format y "%0.e"
 set yrange [1e-10:1]
+set xrange [:0.25]
 set ylabel " Relative Error in " . name
 set xlabel " Median edge length"
 plot data_source using 2:3 with points lw 2.0 ps 2.0 title 'linear elements', \

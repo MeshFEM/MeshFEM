@@ -40,6 +40,7 @@ if (len(deg1Table) != len(deg2Table)):
 groundTruth = np.array(map(float, deg2Table[-1]))
 
 for (d1, d2) in zip(deg1Table, deg2Table):
+    msh_num, medianEdgeLength = [d1[0], d1[3]];
     relErrors = []
     if stat in columnNames:
         cidx = columnNames.index(stat)
@@ -56,4 +57,4 @@ for (d1, d2) in zip(deg1Table, deg2Table):
     else: raise Exception("Unknown stat %s" % stat)
         
     # mesh_num medianEdgeLength deg1Error deg2Error
-    print "\t".join([d1[0], d1[2]] + map(str, relErrors))
+    print "\t".join([msh_num, medianEdgeLength] + map(str, relErrors))

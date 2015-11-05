@@ -14,8 +14,9 @@ set ylabel 'Maximum max-strain (unitless)';
 
 set logscale x 2
 set yrange [0:10]
+set xrange [:0.25]
 
 set term pngcairo size 1024,768
-set output run_dir . '/max_stress_' . fname . ".png";
+set output run_dir . '/max_strain_' . fname . ".png";
 plot '< sort -g ' . deg1_data using 4:(column(strain_col)) with lp lw 2.0 ps 2.0 title 'linear elements', \
      '< sort -g ' . deg2_data using 4:(column(strain_col)) with lp lw 2.0 ps 2.0 title 'quadratic elements';
