@@ -39,8 +39,9 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("matFieldName,f",       po::value<string>()->default_value(""), "name of material field to load from .msh passed as --material")
         ("boundaryConditions,b", po::value<string>(),                    "boundary conditions")
         ("outputMSH,o",          po::value<string>(),                    "output mesh")
-        ("dumpMatrix,D",         po::value<string>()->default_value(""), "dump system matrix in triplet format")
+        ("dumpMatrix",           po::value<string>()->default_value(""), "dump system matrix in triplet format")
         ("degree,d",             po::value<int>()->default_value(2),     "FEM degree (1 or 2)")
+        ("fullDegreeFieldOutput,D",                                      "Output full-degree nodal fields (don't do piecewise linear subsample)")
         ;
 
     po::options_description cli_opts;
@@ -83,7 +84,8 @@ void execute(const po::variables_map &args,
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
     typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
-    typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
+    using Simulator = LinearElasticity::Simulator<Mesh>;
+    Simulator sim(inElements, inVertices);
     typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
                  &matFieldName = args[      "matFieldName"].as<string>(),
@@ -181,11 +183,33 @@ void execute(const po::variables_map &args,
     auto f = sim.dofToNodeField(sim.neumannLoad());
     BENCHMARK_STOP_TIMER_SECTION("Simulation");
 
-    MSHFieldWriter writer(outMSH, sim.mesh());
+    bool linearSubsampleFields = args.count("fullDegreeFieldOutput") == 0;
+
+    MSHFieldWriter writer(outMSH, sim.mesh(), linearSubsampleFields);
     writer.addField("u",      u, DomainType::PER_NODE);
     writer.addField("load",   f, DomainType::PER_NODE);
-    writer.addField("strain", e, DomainType::PER_ELEMENT);
-    writer.addField("stress", s, DomainType::PER_ELEMENT);
+    if ((Simulator::Strain::Deg == 0) || linearSubsampleFields) {
+        // Output constant (average) strain/stress for piecewise linear u
+        writer.addField("strain", e, DomainType::PER_ELEMENT);
+        writer.addField("strain", s, DomainType::PER_ELEMENT);
+    }
+    else {
+        // Output full-degree per-element strain. (Wasteful since
+        // strain fields are of degree - 1, but Gmsh/MSHFieldWriter
+        // only supports full-degree ElementNodeData).
+        auto linearField = sim.strainField(u);
+        using Upsampled = SymmetricMatrixInterpolant<typename Simulator::SMatrix, _N, _Deg>;
+        vector<Upsampled> upsampledField;
+        upsampledField.reserve(linearField.size());
+        for (const auto s: linearField) upsampledField.emplace_back(s);
+        writer.addField("strain", upsampledField, DomainType::PER_ELEMENT);
+
+        linearField = sim.stressField(u);
+        upsampledField.clear();
+        for (const auto s: linearField) upsampledField.emplace_back(s);
+        writer.addField("stress", upsampledField, DomainType::PER_ELEMENT);
+    }
+
     // // Write mat parameter fields
     // SField Ex(numElements), Ey(numElements), nuYX(numElements), mu(numElements);
     // for (size_t i = 0; i < sim.mesh().numElements(); ++i)
