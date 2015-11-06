@@ -20,7 +20,7 @@ for i in range(nsamples):
     f.write(out); # write corner angle
     # subprocess.call([os.environ['MeshFEM'] + "/mesh_convert", '-r', 'mesh.msh', 'mesh.msh']);
 
-    out = subprocess.check_output(map(str, ['bash', experimentDir + '/sim.sh', deg, poisson]))
+    out = subprocess.check_output(map(str, ['bash', experimentDir + '/sim.sh', poisson, deg]))
     os.rename('sim.msh', 'sim_%02i.msh' % i);
     f.write(out);
     f.close();
