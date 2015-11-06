@@ -15,9 +15,14 @@ experimentDir = os.environ['MeshFEM'] + "/experiments/circular_sector_homog/cant
 for i in range(nsamples):
     areaScale = math.pow(0.5, i * 10.0 / (nsamples - 1))
     f = open('sim_%02i.txt' % i, 'w');
-    out = subprocess.check_output([experimentDir + '/../circular_sector',
-        "mesh.msh", "-n25", "-S%i" % skip, "--area=%f" % (baseArea * areaScale)], stderr=subprocess.STDOUT);
-    f.write(out); # write corner angle
+    if (skip == -1): # special skip value used to request no hole.
+        out = subprocess.check_output([experimentDir + '/../circular_sector',
+            "mesh.msh", "-n25", "-s0", "--area=%f" % (baseArea * areaScale)], stderr=subprocess.STDOUT);
+        f.write("corner angle:	0\n");
+    else:
+        out = subprocess.check_output([experimentDir + '/../circular_sector',
+            "mesh.msh", "-n25", "-S%i" % skip, "--area=%f" % (baseArea * areaScale)], stderr=subprocess.STDOUT);
+        f.write(out); # write corner angle
     # subprocess.call([os.environ['MeshFEM'] + "/mesh_convert", '-r', 'mesh.msh', 'mesh.msh']);
 
     out = subprocess.check_output(map(str, ['bash', experimentDir + '/sim.sh', poisson, deg]))

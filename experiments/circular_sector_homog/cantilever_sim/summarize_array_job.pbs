@@ -1,0 +1,14 @@
+###-----PBS Directives Start-----###
+
+#PBS -V
+#PBS -S /bin/bash
+#PBS -N summarize
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=1:00:00
+#PBS -l mem=4GB
+#PBS -M fjp234@nyu.edu
+#PBS -m a
+#PBS -t 0-11
+
+###-----PBS Directives End-----###
+python $MeshFEM/experiments/circular_sector_homog/cantilever_sim/summarize.py $SCRATCH/circ_sector_cantilever ${PBS_ARRAYID}

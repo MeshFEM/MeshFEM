@@ -49,7 +49,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <MSHFieldParser.hh>
 #include <MSHFieldWriter.hh>
-#include <Types.hh>
 
 #include <iomanip>
 #include <regex>
@@ -63,8 +62,9 @@
 #include <functional>
 #include <limits>
 
-#include "Sampler.hh"
+#include <Types.hh>
 #include "argparse.hh"
+#include "Sampler.hh"
 #include "Values.hh"
 
 using namespace MeshIO;

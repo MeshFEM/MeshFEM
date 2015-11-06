@@ -21,6 +21,6 @@ for i in range(nsamples):
     out = subprocess.check_output([os.environ['MeshFEM'] + "/PeriodicHomogenization_cli",
         'mesh.msh',
         '-m', os.environ['MICRO_DIR'] + '/materials/B9Creator.material', '-d%i' % deg,
-        '-o', 'homog_%02i.msh' % i]);
+        '-Do', 'homog_%02i.msh' % i]);
     f.write(out);
     f.close();

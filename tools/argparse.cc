@@ -152,7 +152,7 @@ double parseRealArg(const string &arg) {
 // Parse a comma-separated vector from a string
 // Throws exception if the parsed size is not N.
 template<size_t N>
-VectorND<N> parseVectorArg(const string &argImmutable)
+VecHPCFix<N> parseVectorArg(const std::string &argImmutable)
 {
     string arg(argImmutable);
     vector<string> argComponents;
@@ -166,5 +166,5 @@ VectorND<N> parseVectorArg(const string &argImmutable)
 }
 
 // Explicit instantiation
-template VectorND<2> parseVectorArg<2>(const string &arg);
-template VectorND<3> parseVectorArg<3>(const string &arg);
+template VecHPCFix<2> parseVectorArg<2>(const std::string &arg);
+template VecHPCFix<3> parseVectorArg<3>(const std::string &arg);

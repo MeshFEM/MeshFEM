@@ -2,7 +2,7 @@
 # generate the jobs to run on hpc
 dir=$SCRATCH/FEM_convergence/elasticity
 mkdir -p $dir $dir/bc_jobs
-for bc in {linear_top,sin_top,sin_2top,sin_3top,sin_4top,sin_5top}; do
+for bc in {linear_top,sin_top,sin_2top,sin_3top,sin_4top,sin_5top,sin_full}; do
 for deg in {1,2}; do
 for poisson in {-49..49..1}; do
     poisson=$(printf "%0.2f" $(($poisson / 100.0)))
