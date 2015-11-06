@@ -175,12 +175,12 @@ struct NeumannCondition : public BoundaryCondition<_N> {
           m_isExpr(false) { m_vecValue[0] = p; }
 
     NeumannCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &t,
-                     NeumannType _type = NeumannType::Force)
+                     NeumannType _type)
         : BoundaryCondition<_N>(region), type(_type), m_vecValue(t),
           m_isExpr(false) { }
 
     NeumannCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
-                     NeumannType _type = NeumannType::Force)
+                     NeumannType _type)
         : BoundaryCondition<_N>(region), type(_type), m_isExpr(true),
           m_exprVecValue(ev) {
         if (m_exprVecValue.size() != _N)

@@ -333,7 +333,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         BoundaryCondition<_N> *c;
         if (exprVec.size() > 0) {
             // Expression vector
-            if      (type == "traction")  c = new   NeumannCondition<_N>(region, exprVec);
+            if      (type == "traction")  c = new   NeumannCondition<_N>(region, exprVec, NeumannType::Traction);
             else if (type == "dirichlet") c = new DirichletCondition<_N>(region, exprVec, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, exprVec, cmask);
             else throw runtime_error("Only traction, dirichlet, and target support expression vectors");
@@ -341,7 +341,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         else {
             // Plain vector/scalar
             if      (type == "pressure")  c = new   NeumannCondition<_N>(region, value[0]);
-            else if (type == "traction")  c = new   NeumannCondition<_N>(region, value);
+            else if (type == "traction")  c = new   NeumannCondition<_N>(region, value, NeumannType::Traction);
             else if (type == "force")     c = new   NeumannCondition<_N>(region, value, NeumannType::Force);
             else if (type == "dirichlet") c = new DirichletCondition<_N>(region, value, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
