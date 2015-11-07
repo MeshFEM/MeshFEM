@@ -379,8 +379,7 @@ public:
     VField neumannLoad() const {
         VField load(numDoFs());
         load.clear();
-        for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
-            auto be = m_mesh.boundaryElement(i);
+        for (auto be : m_mesh.boundaryElements()) {
             for (size_t n = 0; n < be.numNodes(); ++n)
                 load(DoF(be.node(n).volumeNode().index()))
                     += be->nodalNeumannLoad(n);
