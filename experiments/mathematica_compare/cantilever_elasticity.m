@@ -10,7 +10,8 @@ linearElasticity[Y_,nu_] := {Inactive[Div][({{0,-((Y nu)/(1-nu^2))},{-((Y (1-nu)
 dirichletBC = DirichletCondition[{u[x,y]==0,v[x,y]==0.},x==-1];
 traction = NeumannValue[-10, x==1];
 {qu,qv} = NDSolveValue[{linearElasticity[Young, poisson]=={0,traction}, dirichletBC},{u,v},{x,y} \[Element]em];
-eval[x_,y_] := Map[NumberForm[#1[x, y], 16] &, {qu, qv}];
+(* eval[x_,y_] := Map[NumberForm[#1[x, y], 16] &, {qu, qv}]; *)
+eval[x_,y_] := Map[CForm[#1[x, y]] &, {qu, qv}];
 printSample[x_,y_] := Print[StringJoin[Insert[ToString /@ eval[x, y], " ", 2]]]
 printSample[1,1]
 printSample[0.5,0.5]

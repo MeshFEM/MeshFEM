@@ -286,6 +286,7 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
 
 void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
+    os << std::setprecision(16);
     for (size_t i = 0; i < nodes.size(); ++i)
         os << "v " << nodes[i];
 

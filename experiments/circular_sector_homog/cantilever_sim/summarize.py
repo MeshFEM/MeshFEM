@@ -1,8 +1,8 @@
 import os,sys,re,subprocess
 from glob import glob;
 
-dir, skipnum = sys.argv[1:];
-for result_dir in glob(dir + ('/skip_%i/poisson*' % int(skipnum))):
+dir, skipnum, poisson = sys.argv[1:];
+for result_dir in glob(dir + ('/skip_%i/poisson_%s' % (int(skipnum), poisson))):
     extractRunNum = lambda f: re.sub('.*sim_(.+)\.(txt|msh)$','\\1', f)
     # Get the mesh stats from the deg1 mesh (mesh_convert doesn't currently support deg 2 meshes).
     meshStats = {}
@@ -16,9 +16,12 @@ for result_dir in glob(dir + ('/skip_%i/poisson*' % int(skipnum))):
         for sout in simOutputs:
             runNum = extractRunNum(sout)
             cornerAngle = None;
+            mathematicaDisplacements = []
             for line in open(sout, 'r'):
                 m = re.search('corner angle:\s(\S+)', line)
-                if (m): cornerAngle = float(m.group(1))
+                if (m): cornerAngle = m.group(1)
+                m = re.match('(\S+)\s(\S+)$', line)
+                if (m): mathematicaDisplacements += m.groups()
 
             # sample the max max stresses for the fluctuation fields
             # also sample the fluctuation displacements at (0.5, 0.5), (0.38, 0.38)
@@ -30,8 +33,9 @@ for result_dir in glob(dir + ('/skip_%i/poisson*' % int(skipnum))):
             cmd += ['--reverse', '--applyAll', '--print']
             sampledStats = subprocess.check_output(cmd) 
 
-            # mesh_num corner_angle medianEdgeLength max_max_strain u[0]_x, u[0]_y u[1]_x u[1]_y ...
-            outTable.write("%s\t%f\t%s\t" % (runNum, cornerAngle, meshStats[runNum][1]))
-            outTable.write("\t".join(sampledStats.strip().split("\n")) + "\n");
+            # mesh_num corner_angle medianEdgeLength max_max_strain u[0]_x, u[0]_y u[1]_x u[1]_y ... mathematica u[0]_x ...
+            outTable.write("\t".join([runNum, cornerAngle, meshStats[runNum][1]] +
+                                      sampledStats.strip().split("\n") +
+                                      mathematicaDisplacements) + "\n")
         outTable.close()
         print outTablePath

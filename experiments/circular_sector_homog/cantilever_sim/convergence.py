@@ -28,4 +28,5 @@ for i in range(nsamples):
     out = subprocess.check_output(map(str, ['bash', experimentDir + '/sim.sh', poisson, deg]))
     os.rename('sim.msh', 'sim_%02i.msh' % i);
     f.write(out);
+
     f.close();
