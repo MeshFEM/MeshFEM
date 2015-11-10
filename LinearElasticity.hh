@@ -795,6 +795,17 @@ private:
         std::vector<size_t> fixedVars;
         std::vector<Real>   fixedVarValues;
         assembleConstrainedSystem(K, C, constraintRHS, fixedVars, fixedVarValues);
+#ifdef USE_LAGRANGE_MULTIPLIERS
+            C.m += fixedVars.size();
+            for (size_t i = 0; i < fixedVars.size(); ++i) {
+                size_t vi = fixedVars[i];
+                C.addNZ(vi, vi, 1.0);
+                constraintRHS.push_back(fixedVarValues[i]);
+            }
+            fixedVars.clear();
+            fixedVarValues.clear();
+        }
+#endif // USE_LAGRANGE_MULTIPLIERS
         BENCHMARK_START_TIMER_SECTION("Set System");
         m_system.setConstrained(K, C, constraintRHS);
         BENCHMARK_STOP_TIMER_SECTION("Set System");
