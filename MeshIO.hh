@@ -30,7 +30,8 @@ namespace MeshIO {
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
 
     typedef enum { MESH_TRI = 0, MESH_TET = 1, MESH_QUAD = 2, MESH_TRI_QUAD = 3, MESH_HEX = 4,
-                   MESH_TRI_DEG2 = 5, MESH_TET_DEG2 = 6, MESH_GUESS = -1, MESH_INVALID = -1 } MeshType;
+                   MESH_TRI_DEG2 = 5, MESH_TET_DEG2 = 6, MESH_LINE = 7, MESH_LINE_DEG2 = 8,
+                   MESH_GUESS = -1, MESH_INVALID = -1 } MeshType;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex
@@ -73,16 +74,16 @@ namespace MeshIO {
         typedef std::vector<size_t> Base;
     public:
         IOElement(size_t n = 0) : Base(n) { }
-        // Triangle (3), Tet/Quad (4), and Hex (8)
+        // Line (2), Triangle (3), Tet/Quad (4), and Hex (8)
         // Quadratic Triangle (6), Quadratic Tet (10)
         static constexpr bool is_valid_element_size(size_t size) {
-            return (size == 3) || (size ==  4) || (size == 8)
-                || (size == 6) || (size == 10);
+            return (size == 2) || (size == 3) || (size ==  4)
+                || (size == 8) || (size == 6) || (size == 10);
         }
         template<typename... Args>
         IOElement(size_t v1, size_t v2, Args... args) : Base{v1, v2, static_cast<size_t>(args)...} {
             static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
-            static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Triangles, Quads, Tet, and Hex-sized elements");
+            static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Lines, Triangles, Quads, Tet, and Hex-sized elements");
         }
 
         template<typename PType>
@@ -259,7 +260,8 @@ namespace MeshIO {
     // embedded in 3D).
     inline constexpr size_t meshDimension(const MeshType &mtype) {
         return  ((mtype == MESH_TRI) || (mtype == MESH_TRI_DEG2) || (mtype == MESH_QUAD) || (mtype == MESH_TRI_QUAD)) ? 2
-            : ( ((mtype == MESH_TET) || (mtype == MESH_TET_DEG2) || (mtype == MESH_HEX)) ? 3 : 0 );
+            : ( ((mtype == MESH_TET) || (mtype == MESH_TET_DEG2) || (mtype == MESH_HEX)) ? 3
+                : ( ((mtype == MESH_LINE) || (mtype == MESH_LINE_DEG2)) ? 1 : 0 ) );
     }
 
     inline constexpr bool isUnknownMesh(const MeshType &mtype) { return mtype == MESH_INVALID; }
@@ -267,14 +269,15 @@ namespace MeshIO {
 
     // Are the elements of the mesh simplices?
     inline constexpr bool isSimplicialComplex(const MeshType &mtype) {
-        return ((mtype == MESH_TRI) || (mtype == MESH_TRI_DEG2) ||
-                (mtype == MESH_TET) || (mtype == MESH_TET_DEG2));
+        return ((mtype == MESH_TRI)  || (mtype == MESH_TRI_DEG2) ||
+                (mtype == MESH_TET)  || (mtype == MESH_TET_DEG2) ||
+                (mtype == MESH_LINE) || (mtype == MESH_LINE_DEG2));
     }
 
     // Implied order of basis functions on elements in the mesh.
     inline constexpr size_t meshDegree(const MeshType &mtype) {
-        return  ((mtype == MESH_TRI     ) || (mtype == MESH_TET     )) ? 1
-            : ( ((mtype == MESH_TRI_DEG2) || (mtype == MESH_TET_DEG2)) ? 2 : 0 );
+        return  ((mtype == MESH_TRI     ) || (mtype == MESH_TET     ) || (mtype == MESH_LINE     )) ? 1
+            : ( ((mtype == MESH_TRI_DEG2) || (mtype == MESH_TET_DEG2) || (mtype == MESH_LINE_DEG2)) ? 2 : 0 );
     }
 
     // Number of nodes on the elements of a particular mesh

@@ -2,6 +2,7 @@
 #include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <deque>
+#include <limits>
 #include "util.h"
 
 using namespace std;
@@ -86,6 +87,7 @@ Format guessFormat(const std::string &path) {
         ext[i] = tolower(ext[i]);
     if (ext == ".off")  return FMT_OFF;
     if (ext == ".obj")  return FMT_OBJ;
+    if (ext == ".wire") return FMT_OBJ;
     if (ext == ".msh")  return FMT_MSH;
     if (ext == ".poly") return FMT_POLY;
     if (ext == ".node") return FMT_NODE_ELE;
@@ -287,13 +289,14 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
 void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
     os << std::setprecision(16);
-    for (size_t i = 0; i < nodes.size(); ++i)
-        os << "v " << nodes[i];
+    for (const auto &n : nodes)
+        os << "v " << n;
 
-    for (size_t i = 0; i < elements.size(); ++i) {
-        os << 'f';
-        for (size_t j = 0; j < elements[i].size(); ++j) {
-            os << ' ' << elements[i][j] + 1; // OBJ is 1-indexed
+    for (const auto &e : elements) {
+        size_t polySize = e.size();
+        os << ((polySize == 2) ? 'l' : 'f');
+        for (size_t j = 0; j < polySize; ++j) {
+            os << ' ' << e[j] + 1; // OBJ is 1-indexed
         }
         os << endl;
     }
@@ -331,25 +334,38 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
             }
             elements.push_back(e);
         }
+        else if (first == "l") {
+            size_t ncorners = lineComponents.size();
+            if (ncorners != 2) throw badFMT;
+            IOElement e(ncorners);
+            for (size_t i = 0; i < ncorners; ++i) {
+                e[i] = stoi(lineComponents[i]) - 1; // OBJ is 1-indexed
+                if (e[i] >= nodes.size()) throw runtime_error("Bad node index.");
+            }
+            elements.push_back(e);
+        }
         else { /* Ignore everything else... */ }
     }
 
-    // Validate polygon sizes--detect mixed tri/quad
-    size_t polyVertices = elements.at(0).size();
-    std::runtime_error uns("Unsupported element size");
-    if (polyVertices < 3 || polyVertices > 4) throw uns;
-    bool mixed = false;
-    for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i].size() != polyVertices) {
-            if (elements[i].size() < 3 || elements[i].size() > 4) throw uns;
-            mixed = true;
-        }
+    // Validate polygon sizes
+    auto sizeSupported = [](size_t size) -> bool { return (size >= 2) && (size <= 4); };
+    size_t minSize = std::numeric_limits<size_t>::max(), maxSize = 0;
+    for (const auto &e : elements) {
+        size_t size = e.size();
+        if (!sizeSupported(size)) throw std::runtime_error("Unsupported element size");
+        minSize = std::min(minSize, size);
+        maxSize = std::max(maxSize, size);
     }
-    if (mixed) return MESH_TRI_QUAD;
+    // Allow mixed tri/quad meshes but no other mixed type.
+    if ((minSize == 3) && (maxSize == 4)) return MESH_TRI_QUAD;
+    if (minSize != maxSize) return MESH_INVALID;
+    size_t polySize = minSize;
 
-    // Only surface meshes are supported by OFF
-    return (polyVertices == 3) ? MESH_TRI
-         : ( (polyVertices == 4) ? MESH_QUAD : MESH_INVALID );
+    // Only surface meshes and line meshes are supported by OBJ
+    if (polySize == 2) return MESH_LINE;
+    if (polySize == 3) return MESH_TRI;
+    if (polySize == 4) return MESH_QUAD;
+    return MESH_INVALID;
 }
 
 void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
@@ -433,17 +449,19 @@ MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,
     return type;
 }
 
-// Array encoding the mapping between GMSH elementType, our MeshType
+// Array encoding the mapping between Gmsh elementType, our MeshType
 // enum, and the number of nodes per element. Note that the mappings between
 // elementType and MeshType are one-to-one, but the mappings to nodesPerElem
 // are not! For example, both tet and quad meshes have the same number of
 // nodes.
 // When looking up element info by node count, we
-// take the first match from the following array. E.g., we
-// assume an element with 4 nodes is a tet, not a quad.
+// take the first match from the following array.
+// E.g., we assume an element with 4 nodes is a tet, not a quad.
+// Format: {enum, Gmsh elm-type, num nodes}
 const std::vector<MeshIO_MSH::ElementInfo> MeshIO_MSH::elementInfoArray = {
-    {MESH_TRI, 2, 3}, {     MESH_TET, 4, 4}, {    MESH_QUAD,  3,  4},
-    {MESH_HEX, 5, 8}, {MESH_TRI_DEG2, 9, 6}, {MESH_TET_DEG2, 11, 10}
+    { MESH_TRI, 2, 3}, {      MESH_TET, 4, 4}, {    MESH_QUAD,  3,  4},
+    { MESH_HEX, 5, 8}, { MESH_TRI_DEG2, 9, 6}, {MESH_TET_DEG2, 11, 10},
+    {MESH_LINE, 1, 2}, {MESH_LINE_DEG2, 8, 3}
 };
 
 void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
