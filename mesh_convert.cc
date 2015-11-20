@@ -12,6 +12,7 @@
 #include "filters/quad_subdiv.hh"
 #include "filters/quad_subdiv_high_aspect.hh"
 #include "filters/remove_dangling_vertices.hh"
+#include "filters/highlight_dangling_vertices.hh"
 #include "filters/reflect.hh"
 
 #include <limits>
@@ -68,6 +69,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("quadSubdivideAndTriangulate,q", po::value<size_t>(),              "Run quad subdivision for #iterations and then triangulate symmetrically.")
         ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
         ("reflect,r",                                                       "Reflect a d-dim mesh around the bounding box minimum faces into 2^d copies")
+        ("danglingVertexHighlightPath,d", po::value<string>(),              "Write line mesh geometry highlighting the mesh's dangling vertices.")
         ;
 
     po::options_description cli_opts;
@@ -145,6 +147,11 @@ int main(int argc, const char *argv[])
     if (args.count("outFile")) outPath = args["outFile"].as<string>();
 
     size_t origSize = inVertices.size();
+
+    if (args.count("danglingVertexHighlightPath")) {
+        highlight_dangling_vertices(inVertices, inElements, args["danglingVertexHighlightPath"].as<string>());
+    }
+
 
     remove_dangling_vertices(inVertices, inElements);
     if (inVertices.size() != origSize)

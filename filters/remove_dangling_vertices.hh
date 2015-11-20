@@ -30,6 +30,11 @@ void remove_dangling_vertices(std::vector<Vertex>  &vertices,
             vertices[curr] = vertices[i];
             vertexRenumber[i] = curr++;
         }
+#if VERBOSE_DANGLING_VERTEX
+        else {
+            std::cerr << "Vertex " << i << " is dangling: " << vertices[i] << std::endl;
+        }
+#endif // VERBOSE_DANGLING_VERTEX
     }
     for (auto &e : elements) {
         for (size_t c = 0; c < e.size(); ++c)
