@@ -11,7 +11,7 @@ MEXFLAGS+=SDKVER=10.9 ISYSROOT=/Applications/Xcode.app/Contents/Developer/Platfo
 
 # Flags used for linking paritcular libraries
 SUITESPARSE_LFLAGS=-L$(SUITESPARSE_LIB) -lsuitesparse -lumfpack -lcholmod
-BOOST_LFLAGS=-L$(BOOST_LIB) -lboost_program_options-mt -lboost_filesystem-mt -lboost_system-mt
+BOOST_LFLAGS=-L$(BOOST_LIB) -lboost_program_options-mt -lboost_filesystem-mt -lboost_system-mt -lboost_thread-mt
 CERES_LFLAGS=-L$(CERES_LIB) -lceres  -lcxsparse -framework accelerate -lglog -lgflags 
 LIBMATHEVAL_LFLAGS=-L$(LIBMATHEVAL_LIB) -lmatheval
 CLIPPER_LFLAGS=-L$(CLIPPER_PATH)/lib -lpolyclipping
