@@ -1,0 +1,31 @@
+# expected variables to be set:
+#   bc_name, exact
+# e.g. gnuplot -e "bc_name='twisted', exact='3.9501525836045381e-01'"
+# bc_name='twisted'
+# exact='3.9501525836045381e-01'
+linear_data=bc_name . '/linear/0.75,0.75.txt'
+quad_data=bc_name . '/quadratic/0.75,0.75.txt'
+set term pngcairo size 1024,768
+set output bc_name . '/error.png'
+# Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
+# space, where it's just a linear fit.
+fLinear(x) = exp(linLogA)  * (x**linExp);
+fQuad(x)   = exp(quadLogA) * (x**quadExp);
+fLinearLog(logX) = linLogA + linExp * logX
+fQuadLog(logX) = quadLogA + quadExp * logX
+fit fLinearLog(x) '< head -n40 ' . linear_data . ' | tail -n30'  using (log($2)):(log(abs($3 - exact) / exact)) via linLogA, linExp;
+fit fQuadLog(x)   '< head -n40 ' . quad_data   . ' | tail -n30'  using (log($2)):(log(abs($3 - exact) / exact)) via quadLogA, quadExp;
+
+set title 'Laplace on Square, "' . bc_name . '" Boundary Conditions'
+
+set grid
+set logscale y
+set logscale x 2
+set key center right
+set format y "%0.e"
+set ylabel "u Relative Error"
+set xlabel "Minimum Edge Length"
+plot quad_data   using 2:(abs($3 - exact) / exact) with points lw 2.0 ps 2.0 title 'quadratic elements', \
+     linear_data using 2:(abs($3 - exact) / exact) with points lw 2.0 ps 2.0 title 'linear elements', \
+       fQuad(x) lc rgb "black" lw 2.0 title sprintf('quadratic convergence order, %0.4f', quadExp), \
+     fLinear(x) lc rgb "black" lw 2.0 title sprintf('linear convergence order, %0.4f', linExp)
