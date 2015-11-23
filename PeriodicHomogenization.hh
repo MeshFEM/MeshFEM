@@ -168,8 +168,8 @@ namespace PeriodicHomogenization {
         for (size_t e = 0; e < numElems; ++e) {
             for (size_t ij = 0; ij < w.size(); ++ij) {
                 sim.elementStrain(e, w[ij], strain_ij);
-                G[e].DRowAsSymMatrix(ij) = strain_ij.average();
-                G[e].DRowAsSymMatrix(ij) += _Sim::SMatrix::CanonicalBasis(ij);
+                G[e].DColAsSymMatrix(ij) = strain_ij.average();
+                G[e].DColAsSymMatrix(ij) += _Sim::SMatrix::CanonicalBasis(ij);
             }
         }
         return G;
