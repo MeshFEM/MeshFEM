@@ -31,6 +31,7 @@
 #include <iostream>
 #include <vector>
 #include <Eigen/Dense>
+#include <tuple>
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
@@ -45,13 +46,19 @@ public:
     typedef Eigen::Matrix<Real, flatLen(_Dim), flatLen(_Dim)> DType;
     typedef typename DType::RowXpr                            RowXpr;
     typedef typename DType::ConstRowXpr                       ConstRowXpr;
+    typedef typename DType::ColXpr                            ColXpr;
+    typedef typename DType::ConstColXpr                       ConstColXpr;
     // Wraps a row of the flattened elasticity tensor with a symmetric matrix
     // interface--useful for periodic homogenization formulas where rows of the
     // flattened homogenized elasticity tensor are modulated by flattened
     // fluctuation stresses.
     typedef SymmetricMatrixRef<_Dim, RowXpr, ConstRowXpr>     SMRowWrapper;
     typedef ConstSymmetricMatrixRef<_Dim, ConstRowXpr>        ConstSMRowWrapper;
-    typedef Eigen::Matrix<Real, flatLen(_Dim), 1> FlattenedRank2Tensor;
+    typedef SymmetricMatrixRef<_Dim, ColXpr, ConstColXpr>     SMColWrapper;
+    typedef ConstSymmetricMatrixRef<_Dim, ConstColXpr>        ConstSMColWrapper;
+
+    typedef Eigen::Matrix<Real, flatLen(_Dim), 1>             FlattenedRank2Tensor;
+    typedef SymmetricMatrix<_Dim, FlattenedRank2Tensor>       SMatrix;
 
     ElasticityTensor() : m_d(DType::Zero()) { }
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
@@ -243,10 +250,10 @@ public:
     ConstSMRowWrapper DRowAsSymMatrix(size_t i) const { return ConstSMRowWrapper(DRow(i)); }
          SMRowWrapper DRowAsSymMatrix(size_t i)       { return      SMRowWrapper(DRow(i)); }
 
-    ConstRowXpr DCol(size_t i) const { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
-    RowXpr      DCol(size_t i)       { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
-    ConstSMRowWrapper DColAsSymMatrix(size_t i) const { return ConstSMColWrapper(DCol(i)); }
-         SMRowWrapper DColAsSymMatrix(size_t i)       { return      SMColWrapper(DCol(i)); }
+    ConstColXpr DCol(size_t i) const { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
+    ColXpr      DCol(size_t i)       { assert(i < (size_t) m_d.cols()); return m_d.col(i); }
+    ConstSMColWrapper DColAsSymMatrix(size_t i) const { return ConstSMColWrapper(DCol(i)); }
+         SMColWrapper DColAsSymMatrix(size_t i)       { return      SMColWrapper(DCol(i)); }
 
     // Get the flattened tensor's diagonal
     Eigen::Matrix<Real, flatLen(_Dim), 1> diag() const {
@@ -277,6 +284,19 @@ public:
         return result;
     }
 
+    // Get the ***major*** transposed tensor E^T:
+    // E^T_ijkl = E_klij
+    // For major-symmetric tensors, this is an identity operation--returns copy.
+    ElasticityTensor transpose() const {
+        if (_MajorSymmetry) return *this;
+        ElasticityTensor result;
+        result.m_d = m_d.transpose();
+        return result;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // In place application of shear doubling matrices (both left and right)
+    ////////////////////////////////////////////////////////////////////////////
     template<class T>
     void leftApplyShearDoubler(T &val) const {
         // Applying on right doubles "shear rows" of a matrix or vector
@@ -311,6 +331,45 @@ public:
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
             for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= 0.5;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // In place application of *square root* of shear doubling matrices
+    ////////////////////////////////////////////////////////////////////////////
+    template<class T>
+    void leftApplySqrtShearDoubler(T &val) const {
+        // Applying on right doubles "shear rows" of a matrix or vector
+        assert(val.rows() == flatLen(_Dim));
+        for (size_t i = _Dim; i < flatLen(_Dim); ++i)
+            for (size_t j = 0; j < (size_t) val.cols(); ++j)
+                val(i, j) *= sqrt(2.0);
+    }
+
+    template<class T>
+    void rightApplySqrtShearDoubler(T &val) const {
+        // Applying on left doubles "shear columns" of a matrix or row vector
+        assert(val.cols() == flatLen(_Dim));
+        for (size_t j = _Dim; j < flatLen(_Dim); ++j)
+            for (size_t i = 0; i < (size_t) val.rows(); ++i)
+                val(i, j) *= sqrt(2.0);
+    }
+
+    template<class T>
+    void leftApplySqrtShearDoublerInverse(T &val) const {
+        // Applying on right halves "shear rows" of a matrix or vector
+        assert(val.rows() == flatLen(_Dim));
+        for (size_t i = _Dim; i < flatLen(_Dim); ++i)
+            for (size_t j = 0; j < (size_t) val.cols(); ++j)
+                val(i, j) *= sqrt(0.5);
+    }
+
+    template<class T>
+    void rightApplySqrtShearDoublerInverse(T &val) const {
+        // Applying on left halves "shear columns" of a matrix or row vector
+        assert(val.cols() == flatLen(_Dim));
+        for (size_t j = _Dim; j < flatLen(_Dim); ++j)
+            for (size_t i = 0; i < (size_t) val.rows(); ++i)
+                val(i, j) *= sqrt(0.5);
     }
 
     // Doubles the off-diagonal entries of a flattened symmetric rank 2 tensor.
@@ -415,6 +474,42 @@ public:
             }
         }
         return result;
+    }
+
+    // Computes the eigenstrains with maximum eigenvalue (and this eigenvalue).
+    // In otherwords, we find the (s, lambda) satisfying:
+    //     E : s = lambda s
+    // for greatest lambda.
+    // Should only be used on major-symmetric tensors.
+    std::tuple<SMatrix, Real>  maxEigenstrain() {
+        if (!_MajorSymmetry) {
+            // Validate major symmetry if it hasn't been enforced.
+            assert((m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10);
+        }
+
+        // We are solving the problem:
+        //    lambda = max_||s||^2_F=1   s : E : s
+        // In flattened form, this is:
+        //    lambda = max_(F(s)^T D F(s) = 1) F(s)^T D F(E) D F(s)
+        // Where D is the shear-doubling matrix. We could solve this as a
+        // generalized eigenvalue problem, but instead we transform:
+        //    e = D^(1/2) F(s) ==>
+        //    lambda = max_(||e||^2 = 1) e^T D^(1/2) F(E) D^(1/2) e
+        // i.e. an ordinary eigenvalue problem for D^(1/2) F(E) D^(1/2).
+        // We then retrieve eigenstrain F(s) = D^(-1/2) e.
+        DType mat(m_d.template selfadjointView<Eigen::Upper>());
+        leftApplySqrtShearDoubler(mat);
+        rightApplySqrtShearDoubler(mat);
+        Eigen::SelfAdjointEigenSolver<DType> solver;
+        solver.compute(mat);
+
+        // Eigenvalues/eigenvectors are sorted in increasing eigenvalue order
+        constexpr size_t largestIdx = flatLen(_Dim) - 1;
+        Real lambda = solver.eigenvalues()[largestIdx];
+        FlattenedRank2Tensor e = solver.eigenvectors().col(largestIdx);
+
+        leftApplySqrtShearDoublerInverse(e);
+        return std::make_tuple(SMatrix(e), lambda);
     }
 
     // Write unflattened tensor in Mathematica array syntax.

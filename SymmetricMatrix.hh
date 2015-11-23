@@ -22,6 +22,7 @@
 #include <Eigen/Dense>
 #include <iostream>
 #include <type_traits>
+#include "utils.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward declarations/aliases
@@ -68,6 +69,30 @@ public:
             for (size_t i = 0; i <= j; ++i)
                 mat(i, j) = operator()(i, j);
         return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
+    }
+
+    // Gets the symmetric matrix's eigenvectors, but scaled so their norms are
+    // their eigenvalue.
+    // Returns a matrix with each scaled eigenvector as a column. The
+    // eigenvectors are sorted in decreasing eigenvalue **magnitude** order.
+    Eigen::Matrix<_Real, N, N> eigenvalueScaledEigenvectors() const {
+        Eigen::Matrix<_Real, N, N> mat;
+        for (size_t i = 0; i < N; ++i)
+            for (size_t j = 0; j < N; ++j)
+                mat(i, j) = operator()(i, j);
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<_Real, N, N>> solver;
+        solver.compute(mat);
+
+        std::vector<size_t> perm;
+        std::vector<Real> evMags(N);
+        for (size_t i = 0; i < N; ++i) evMags[i] = std::abs(solver.eigenvalues()[i]);
+        sortPermutation(evMags, perm, true);
+
+        Eigen::Matrix<_Real, N, N> result;
+        for (size_t i = 0; i < N; ++i)
+            result.col(i) = solver.eigenvectors().col(perm[i]) * evMags[perm[i]];
+        
+        return result;
     }
 
     _Real maxEigenvalue() const { return eigenvalues().maxCoeff(); }
