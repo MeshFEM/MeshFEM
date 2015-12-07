@@ -365,15 +365,18 @@ public:
     // This is useful for direct shape differentiation of an solution.
     // Since t is only needed on the boundary, we expect a per-boundary-element
     // interpolant.
+    // If ignorePeriodic is true, no contribution from periodic boundaries is
+    // accumulated.
     template<class NSVInterpolant, class BdryTensorInterpolant>
     VField changeInDivTensorLoad(const std::vector<NSVInterpolant>       &vn,
-                                 const std::vector<BdryTensorInterpolant> &t) {
+                                 const std::vector<BdryTensorInterpolant> &t,
+                                 bool ignorePeriodicBdry = false) const {
         static_assert(BdryTensorInterpolant::K == K - 1,
                       "Invalid boundary tensor interpolant simplex type");
         static_assert((NSVInterpolant::K == K - 1) && (NSVInterpolant::Deg <= 1),
                       "Invalid normal shape velocity interpolant.");
-        assert(vn.size() == m_mesh.numElements());
-        assert (t.size() == m_mesh.numElements());
+        assert(vn.size() == m_mesh.numBoundaryElements());
+        assert (t.size() == m_mesh.numBoundaryElements());
 
         VField loadChange(numDoFs());
         loadChange.clear();
@@ -389,7 +392,11 @@ public:
                     for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
                         auto f = m_mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                         if (!f) continue;
+                        if (ignorePeriodicBdry && f->isPeriodic) continue;
                         restrictInterpolant(e, f, volPhiStrain, bdryPhiStrain);
+
+                        auto  t_f =  t.at(fi);
+                        auto vn_f = vn.at(fi);
 
                         constexpr size_t IntegrandDeg = NSVInterpolant::Deg +
                                     Strain::Deg + BdryTensorInterpolant::Deg;
@@ -397,7 +404,7 @@ public:
                         loadChange(DoF(e.node(n).index()))[c] -=
                             Quadrature<K - 1, IntegrandDeg>::integrate(
                                 [&] (const VectorND<Simplex::numVertices(K - 1)> &p) {
-                                    return vn(p) * bdryPhiStrain(p).doubleContract(t(p));
+                                    return vn_f(p) * bdryPhiStrain(p).doubleContract(t_f(p));
                         }, f->volume());
                     }
                 }
