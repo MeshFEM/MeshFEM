@@ -294,7 +294,7 @@ namespace PeriodicHomogenization {
                     auto &bdry_stress_kl = bdry_stresses.at(f.index());
                     if (f->isPeriodic) bdry_stress_kl *= 0;
                     else               restrictInterpolant(e, f, strain_kl, bdry_stress_kl);
-                    for (size_t n = 0; n < strain_kl.size(); ++n)
+                    for (size_t n = 0; n < bdry_stress_kl.size(); ++n)
                         bdry_stress_kl[n] = C.doubleContract(bdry_stress_kl[n]);
                 }
             }
