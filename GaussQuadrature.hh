@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Gaussian quadrature rules for edges, triangles, and tetrahedra for
-//      degrees up to 2.
+//      degrees up to 4.
 //
 //      These routines work both on functions with K + 1 Real parameters (where
 //      K + 1 is the number of nodes of the K simplex) and functions with a

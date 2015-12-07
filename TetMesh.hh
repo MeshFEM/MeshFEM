@@ -25,7 +25,7 @@
 //  The following operations are trivial (direct lookups):
 //      0) Tet-vertex adjacency
 //      1) Tet-tet adjacency
-//      2) Boundary mesh adjacencies (vertex->vertex, triangle->triagnle)
+//      2) Boundary mesh adjacencies (vertex->vertex, triangle->triangle)
 //      3) isBoundary queries (tets, faces, vertices),
 //  and the following are possible in constant time with a bfs/dfs:
 //      1) Vertex-vertex adjacency

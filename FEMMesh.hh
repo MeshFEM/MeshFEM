@@ -396,7 +396,6 @@ private:
         Embedder<_K>::embed(*this);
     }
 
-
     // (re-)compute the bounding box (when vertex positions change)
     void  m_computeBBox() {
         if (BaseMesh::numVertices() == 0) {

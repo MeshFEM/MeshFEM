@@ -34,13 +34,16 @@ public:
     bool isVertexNode() const { return m_mesh.m_vertexForNode(m_idx) >= 0; }
 
     // Get the vertex this node is sitting on (if any)
-    VH vertex() const { return VH(m_mesh.m_vertexForNode(m_idx), m_mesh); }
+    VH vertex()     const { return VH(m_mesh.m_vertexForNode(m_idx), m_mesh); }
 
     // Get the boundary node collocated with this volume node.
     BNH boundaryNode() const {
         if (isVertexNode()) return vertex().boundaryVertex().node();
         else return BNH(m_mesh.m_bdryEdgeNodeForVolEdgeNode(m_idx), m_mesh);
     }
+    // Identity operation--avoids explicitly handling some special use cases.
+    const NHandle &volumeNode() const { return *this; }
+          NHandle &volumeNode()       { return *this; }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_nodeData[m_idx]; }

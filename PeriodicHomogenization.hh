@@ -1,9 +1,11 @@
 #ifndef PERIODICHOMOGENIZATION_HH
 #define PERIODICHOMOGENIZATION_HH
 
-#include "GaussQuadrature.hh"
 #include <vector>
 #include <string>
+
+#include "GaussQuadrature.hh"
+#include "InterpolantRestriction.hh"
 
 namespace PeriodicHomogenization {
     template<class _Sim>
@@ -246,33 +248,61 @@ namespace PeriodicHomogenization {
                 if (!f) continue;
                 auto &beGrad = gradient.at(f.index());
                 // gradient is zero on the periodic boundary.
-                if (f->isPeriodic)
-                    beGrad *= 0;
-                else {
-                    if (GDeg == 0) beGrad[0] = G_elem[0];
-                    else {
-                        // Pick out nodal values from volume interpolant.
-                        // TODO: optimize this to use traversal operations instead
-                        // of a brute force search.
-                        for (size_t bnc = 0; bnc < Simplex::numNodes(K - 1, GDeg); ++bnc) {
-                            assert(bnc < f.numNodes());
-                            size_t vni = f.node(bnc).volumeNode().index();
-                            bool set = false;
-                            for (size_t nc = 0; nc < e.numNodes(); ++nc) {
-                                if (size_t(e.node(nc).index()) == vni) {
-                                    beGrad[bnc] = G_elem[nc];
-                                    set = true;
-                                    break;
-                                }
-                            }
-                            assert(set);
-                        }
-                    }
-                }
+                if (f->isPeriodic) beGrad *= 0;
+                else               restrictInterpolant(e, f, G_elem, beGrad);
             }
         }
 
         return gradient;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Shape derivative of fluctuation displacements evaluated on a particular
+    // velocity field. This is the "direct" approach not using the adjoint
+    // method:
+    // Solve cell problems with load
+    //      - int_bdry (v dot n) (strain(phi) : C : [strain(w^kl) + e^kl]) dA
+    ////////////////////////////////////////////////////////////////////////////
+    template<class _Sim, class NormalShapeVelocity>
+    void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
+            const std::vector<typename _Sim::VField> &w,
+            const NormalShapeVelocity &vn,
+            std::vector<typename _Sim::VField> &dot_w) {
+        BENCHMARK_START_TIMER("Fluctuation Shape Derivatives");
+
+        constexpr size_t Deg = _Sim::Degree;
+        constexpr size_t   K = _Sim::K;
+        typename _Sim::Strain  strain_kl;
+
+        const auto &mesh = sim.mesh();
+
+        using SMatrix = typename _Sim::SMatrix;
+        std::vector<Interpolant<SMatrix, K - 1, Deg - 1>> bdry_stresses;
+        bdry_stresses.resize(mesh.numBoundaryElements());
+
+        dot_w.clear(), dot_w.reserve(w.size());
+        for (size_t kl = 0; kl < w.size(); ++kl) {
+            for (auto e : mesh.elements()) {
+                if (!e.isBoundary()) continue;
+                const auto &C = e->E();
+                sim.elementStrain(e.index(), w[kl], strain_kl);
+                strain_kl += SMatrix::CanonicalBasis(kl);
+
+                for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
+                    auto f = mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
+                    if (!f) continue;
+                    auto &bdry_stress_kl = bdry_stresses.at(f.index());
+                    if (f->isPeriodic) bdry_stress_kl *= 0;
+                    else               restrictInterpolant(e, f, strain_kl, bdry_stress_kl);
+                    for (size_t n = 0; n < strain_kl.size(); ++n)
+                        bdry_stress_kl[n] = C.doubleContract(bdry_stress_kl[n]);
+                }
+            }
+
+            dot_w.push_back(sim.solve(changeInDivTensorLoad(vn, bdry_stresses)));
+        }
+
+        BENCHMARK_STOP_TIMER("Fluctuation Shape Derivatives");
     }
 }
 

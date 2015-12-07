@@ -127,8 +127,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         //      = int_omega strain(p) : C : [strain(u) + cstrain] dV + 
         //        int_domega p . (n . C : [strain(u) + cstrain]) dA,
         // and the boundary term disappears due to the Neumann condition.
-        // Thus, we only accumulate this element's contribution to the volume
-        // integral.
+        // Thus, we only accumulate contribution to the volume integral.
         // This can be seen as applying the stiffness matrix to the linear
         // displacement field "cstrain x".
         // Finally, since elasticity tensor C = m_E() is constant over the
@@ -139,6 +138,18 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
                 for (size_t c = 0; c < N; ++c)
                     l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(s);
+            }
+        }
+
+        // Contribution to the "per-element stress load"--RHS for cell problem:
+        //      -div [(C : strain(u)) + cstress] = 0 in omega
+        //       n . [(C : strain(u)) + cstress] = 0 on domega
+        // where cstress is constant per-element.
+        void perElementConstantStressLoad(const SMatrix &cstress, ElementLoad &l) const {
+            std::vector<Strain> phiStrains = vecPhiStrains();
+            for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
+                for (size_t c = 0; c < N; ++c)
+                    l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(cstress);
             }
         }
 
@@ -322,13 +333,78 @@ public:
         VField load(numDoFs());
         load.clear();
         typename _Mesh::ElementData::ElementLoad eLoad;
-        for (size_t ei = 0; ei < m_mesh.numElements(); ++ei) {
-            auto elem = m_mesh.element(ei);
-            elem->perElementConstantStrainLoad(strain, eLoad);
-            for (size_t n = 0; n < elem.numNodes(); ++n)
-                load(DoF(elem.node(n).index())) += eLoad.col(n);
+        for (auto e : m_mesh.elements()) {
+            e->perElementConstantStrainLoad(strain, eLoad);
+            for (size_t n = 0; n < e.numNodes(); ++n)
+                load(DoF(e.node(n).index())) += eLoad.col(n);
         }
         return load;
+    }
+
+    template<class _StressField>
+    VField perElementStressFieldLoad(const _StressField &stress) const {
+        VField load(numDoFs());
+        load.clear();
+        typename _Mesh::ElementData::ElementLoad eLoad;
+        for (auto e : m_mesh.elements()) {
+            e->perElementConstantStressLoad(stress(e.index()), eLoad);
+            for (size_t n = 0; n < e.numNodes(); ++n)
+                load(DoF(e.node(n).index())) += eLoad.col(n);
+        }
+        return load;
+    }
+
+    // Computes change of nodal load of the forces and tractions:
+    //     div t  in volume
+    //      -t n  on boundary
+    // due to perturbation of the boundary with linear normal velocity vn
+    // (assuming tensor field is constant wrt shape):
+    //      d[vn] int_vol phi . div t dV - int_bdry phi . t n dA =
+    //    - d[vn] int_vol strain(phi) : t dV =
+    //    - int_bdry (strain(phi) : t) vn dA
+    // This is useful for direct shape differentiation of an solution.
+    // Since t is only needed on the boundary, we expect a per-boundary-element
+    // interpolant.
+    template<class NSVInterpolant, class BdryTensorInterpolant>
+    VField changeInDivTensorLoad(const std::vector<NSVInterpolant>       &vn,
+                                 const std::vector<BdryTensorInterpolant> &t) {
+        static_assert(BdryTensorInterpolant::K == K - 1,
+                      "Invalid boundary tensor interpolant simplex type");
+        static_assert((NSVInterpolant::K == K - 1) && (NSVInterpolant::Deg <= 1),
+                      "Invalid normal shape velocity interpolant.");
+        assert(vn.size() == m_mesh.numElements());
+        assert (t.size() == m_mesh.numElements());
+
+        VField loadChange(numDoFs());
+        loadChange.clear();
+
+        for (auto e : m_mesh.elements()) {
+            if (!e.isBoundary()) continue;
+
+            std::vector<Strain> phiStrains = e->vecPhiStrains();
+            SymmetricMatrixInterpolant<SMatrix, K - 1, Strain::Deg> bdryPhiStrain;
+            for (size_t n = 0; n < e.numNodes(); ++n) {
+                for (size_t c = 0; c < N; ++c) {
+                    const auto &volPhiStrain = phiStrains[n * N + c];
+                    for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
+                        auto f = m_mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
+                        if (!f) continue;
+                        restrictInterpolant(e, f, volPhiStrain, bdryPhiStrain);
+
+                        constexpr size_t IntegrandDeg = NSVInterpolant::Deg +
+                                    Strain::Deg + BdryTensorInterpolant::Deg;
+                        // Subtract (strain(phi) : t vn) bdry elem contribution 
+                        loadChange(DoF(e.node(n).index()))[c] -=
+                            Quadrature<K - 1, IntegrandDeg>::integrate(
+                                [&] (const VectorND<Simplex::numVertices(K - 1)> &p) {
+                                    return vn(p) * bdryPhiStrain(p).doubleContract(t(p));
+                        }, f->volume());
+                    }
+                }
+            }
+        }
+
+        return loadChange;
     }
 
     VField solve() const { return solve(neumannLoad()); }
