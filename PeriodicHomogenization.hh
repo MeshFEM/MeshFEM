@@ -299,7 +299,7 @@ namespace PeriodicHomogenization {
                 }
             }
 
-            dot_w.push_back(sim.solve(changeInDivTensorLoad(vn, bdry_stresses)));
+            dot_w.push_back(sim.solve(sim.changeInDivTensorLoad(vn, bdry_stresses)));
         }
 
         BENCHMARK_STOP_TIMER("Fluctuation Shape Derivatives");
