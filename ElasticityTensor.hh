@@ -35,12 +35,12 @@
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
-template<typename Real, int _Dim, bool _MajorSymmetry = true>
+template<typename Real, size_t _Dim, bool _MajorSymmetry = true>
 class ElasticityTensor {
     // We need access to other major symmetry types' members (for double
     // contraction operator), but unfortunately we can't friend a partial
     // template specialization, so...
-    template<typename _Real2, int _Dim2, bool _MajorSymmetry2>
+    template<typename _Real2, size_t _Dim2, bool _MajorSymmetry2>
     friend class ElasticityTensor;
 public:
     typedef Eigen::Matrix<Real, flatLen(_Dim), flatLen(_Dim)> DType;
@@ -544,7 +544,7 @@ private:
     }
 };
 
-template<typename Real, int _Dim, bool _MajorSymmetry>
+template<typename Real, size_t _Dim, bool _MajorSymmetry>
 ElasticityTensor<Real, _Dim, _MajorSymmetry> operator*(Real a,
         const ElasticityTensor<Real, _Dim, _MajorSymmetry> &E) {
     return E * a;

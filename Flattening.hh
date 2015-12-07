@@ -15,7 +15,7 @@
 
 // Length of a flattened rank 2 tensor in "dim" dimensions.
 // This is also the row and column size of the flattened rank 4 tensor.
-constexpr int flatLen(int dim) { return (dim == 3) ? 6 : 3; }
+constexpr size_t flatLen(size_t dim) { return (dim == 3) ? 6 : 3; }
 
 // Implements flattening of symmetric 2D indices into 1D indices
 constexpr size_t flattenIndices(size_t dim, size_t i, size_t j) {
