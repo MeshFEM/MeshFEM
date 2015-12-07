@@ -31,8 +31,16 @@ void restrictInterpolant(DomainHandle dh, SubdomainHandle sdh,
                                Interpolant<DataType, SubdomainK, Deg> &fsdomain)
 {
     // We don't support restricting interpolants of higher degree than the mesh.
-    assert( fdomain.size() <  dh.numNodes());
-    assert(fsdomain.size() < sdh.numNodes());
+    using Domain    = typename    DomainHandle::value_type;
+    using Subdomain = typename SubdomainHandle::value_type;
+    static_assert(Deg <= Domain::Deg,
+                  "Restriction only supports interpolants of mesh degree or lower");
+    static_assert(Deg <= Subdomain::Deg,
+                  "Restriction only supports interpolants of mesh degree or lower");
+    static_assert(Domain::K == DomainK,
+                  "Domain simplex dimensions must match");
+    static_assert(Subdomain::K == SubdomainK,
+                  "Domain simplex dimensions must match");
 
     // Deg 0 interpolants are not nodal.
     if (Deg == 0) {

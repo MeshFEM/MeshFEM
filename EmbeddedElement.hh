@@ -44,6 +44,8 @@ class EmbeddedElement : public _SimplexEmbedding<_K, EmbeddingSpace> {
 public:
     typedef Interpolant<EmbeddingSpace, _K, _Deg - 1> SFGradient;
     constexpr static size_t numVertices = _K + 1;
+    constexpr static size_t Deg = _Deg;
+    constexpr static size_t   K = _K;
 
     const decltype(m_gradBarycentric) &gradBarycentric() const { return m_gradBarycentric; }
 
