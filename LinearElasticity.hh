@@ -381,6 +381,7 @@ public:
         VField loadChange(numDoFs());
         loadChange.clear();
 
+        // Real totalContrib = 0, totalVN = 0, totalBdryPhiStrain = 0, totalT = 0;
         for (auto e : m_mesh.elements()) {
             if (!e.isBoundary()) continue;
 
@@ -388,28 +389,45 @@ public:
             SymmetricMatrixInterpolant<SMatrix, K - 1, Strain::Deg> bdryPhiStrain;
             for (size_t n = 0; n < e.numNodes(); ++n) {
                 for (size_t c = 0; c < N; ++c) {
-                    const auto &volPhiStrain = phiStrains[n * N + c];
+                    const auto &volPhiStrain = phiStrains.at(n * N + c);
                     for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
                         auto f = m_mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                         if (!f) continue;
                         if (ignorePeriodicBdry && f->isPeriodic) continue;
                         restrictInterpolant(e, f, volPhiStrain, bdryPhiStrain);
 
-                        auto  t_f =  t.at(fi);
-                        auto vn_f = vn.at(fi);
+                        auto  t_f =  t.at(f.index());
+                        auto vn_f = vn.at(f.index());
 
                         constexpr size_t IntegrandDeg = NSVInterpolant::Deg +
                                     Strain::Deg + BdryTensorInterpolant::Deg;
                         // Subtract (strain(phi) : t vn) bdry elem contribution 
-                        loadChange(DoF(e.node(n).index()))[c] -=
-                            Quadrature<K - 1, IntegrandDeg>::integrate(
+                        Real contrib = Quadrature<K - 1, IntegrandDeg>::integrate(
                                 [&] (const VectorND<Simplex::numVertices(K - 1)> &p) {
                                     return vn_f(p) * bdryPhiStrain(p).doubleContract(t_f(p));
                         }, f->volume());
+                        loadChange(DoF(e.node(n).index()))[c] -= contrib;
+                        // totalContrib += std::abs(contrib);
+                        // totalVN += std::abs(vn_f.integrate(f->volume()));
+                        // auto bphiI = bdryPhiStrain.integrate(f->volume());
+                        // totalBdryPhiStrain += bphiI.doubleContract(bphiI);
+                        // auto tI = t_f.integrate(f->volume());
+                        // totalT += tI.doubleContract(tI);
                     }
                 }
             }
         }
+
+        // Real totalVNManual = 0;
+        // for (auto be : m_mesh.boundaryElements()) {
+        //     if (ignorePeriodicBdry && be->isPeriodic) continue;
+        //     totalVNManual += std::abs(vn[be.index()].integrate(be->volume()));
+        // }
+
+        // std::cout << "loadChange stats: " << loadChange.minMag() << ", " << loadChange.maxMag() << std::endl;
+        // std::cout << "total contrib: " << totalContrib << std::endl;
+        // std::cout << "total VN, bphi, T: " << totalVN << ", " << totalBdryPhiStrain << ", " << totalT << std::endl;
+        // std::cout << "total VN manual: " << totalVNManual;
 
         return loadChange;
     }

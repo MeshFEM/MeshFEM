@@ -6,6 +6,7 @@
 
 #include "GaussQuadrature.hh"
 #include "InterpolantRestriction.hh"
+// #include "MSHFieldWriter.hh"
 
 namespace PeriodicHomogenization {
     template<class _Sim>
@@ -280,6 +281,10 @@ namespace PeriodicHomogenization {
         std::vector<Interpolant<SMatrix, K - 1, Deg - 1>> bdry_stresses;
         bdry_stresses.resize(mesh.numBoundaryElements());
 
+        // static size_t it = 0; 
+        // MSHFieldWriter writer("debug_fd_sd_" + std::to_string(it) + ".msh", sim.mesh());
+        // ++it;
+
         dot_w.clear(), dot_w.reserve(w.size());
         for (size_t kl = 0; kl < w.size(); ++kl) {
             for (auto e : mesh.elements()) {
@@ -299,7 +304,18 @@ namespace PeriodicHomogenization {
                 }
             }
 
-            dot_w.push_back(sim.solve(sim.changeInDivTensorLoad(vn, bdry_stresses, true)));
+            auto loadChange = sim.changeInDivTensorLoad(vn, bdry_stresses, true);
+            dot_w.push_back(sim.solve(loadChange));
+
+            // typename _Sim::VField outField;
+            // // Subtract off average displacements so that fields are comparable
+            // // across meshes.
+            // outField = w[kl];
+            // outField -= outField.mean();
+            // writer.addField("w " + std::to_string(kl), outField);
+            // outField = dot_w[kl];
+            // outField -= outField.mean();
+            // writer.addField("dot w " + std::to_string(kl), outField);
         }
 
         BENCHMARK_STOP_TIMER("Fluctuation Shape Derivatives");
