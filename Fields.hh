@@ -106,7 +106,21 @@ public:
         return *this;
     }
 
+    VectorField &operator+=(const Eigen::Matrix<Real, t_dim, 1> &v) {
+        for (size_t i = 0; i < domainSize(); ++i)
+            m_values.col(i) += v;
+        return *this;
+    }
+
+
+    VectorField &operator-=(const Eigen::Matrix<Real, t_dim, 1> &v) {
+        for (size_t i = 0; i < domainSize(); ++i)
+            m_values.col(i) -= v;
+        return *this;
+    }
+
     VectorField operator*(Real s)               const { VectorField result(*this); result *= s; return result; }
+
     VectorField operator+(const VectorField &b) const { VectorField result(*this); result += b; return result; }
     VectorField operator-(const VectorField &b) const { VectorField result(*this); result -= b; return result; }
 
@@ -141,6 +155,15 @@ public:
         for (size_t i = 0; i < domainSize(); ++i)
             normSq += m_values.col(i).squaredNorm();
         return normSq;
+    }
+
+    // Unweighted mean vector.
+    Eigen::Matrix<Real, t_dim, 1> mean() const {
+        Eigen::Matrix<Real, t_dim, 1> result;
+        for (size_t i = 0; i < domainSize(); ++i)
+            result += m_values.col(i);
+        result *= (1.0 / domainSize());
+        return result;
     }
 
     const ArrayType &data() const { return m_values; }
