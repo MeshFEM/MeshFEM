@@ -248,9 +248,10 @@ namespace PeriodicHomogenization {
                 auto f = mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                 if (!f) continue;
                 auto &beGrad = gradient.at(f.index());
-                // gradient is zero on the periodic boundary.
-                if (f->isPeriodic) beGrad *= 0;
-                else               restrictInterpolant(e, f, G_elem, beGrad);
+                // Zero gradient on the periodic boundary. ETensor default
+                // constructor zero-inits, so beGrad should currently be zero.
+                if (f->isPeriodic) continue;
+                restrictInterpolant(e, f, G_elem, beGrad);
             }
         }
 
@@ -297,7 +298,7 @@ namespace PeriodicHomogenization {
                     auto f = mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                     if (!f) continue;
                     auto &bdry_stress_kl = bdry_stresses.at(f.index());
-                    if (f->isPeriodic) bdry_stress_kl *= 0;
+                    if (f->isPeriodic) bdry_stress_kl = 0;
                     else               restrictInterpolant(e, f, strain_kl, bdry_stress_kl);
                     for (size_t n = 0; n < bdry_stress_kl.size(); ++n)
                         bdry_stress_kl[n] = C.doubleContract(bdry_stress_kl[n]);
