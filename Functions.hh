@@ -269,7 +269,7 @@ public:
     DefaultNodalStoragePolicy(DefaultNodalStoragePolicy<_T, _K, _Deg> &&b)
         : m_nodeVal(std::move(b.m_nodeVal)) { }
 
-    constexpr size_t size() const { return numNodalValues; }
+    static constexpr size_t size() { return numNodalValues; }
     const _T &operator[](size_t i) const { assert(i < numNodalValues); return m_nodeVal[i]; }
           _T &operator[](size_t i)       { assert(i < numNodalValues); return m_nodeVal[i]; }
 private:

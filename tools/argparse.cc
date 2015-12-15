@@ -165,6 +165,34 @@ VecHPCFix<N> parseVectorArg(const std::string &argImmutable)
     return result;
 }
 
+// Parse a semicolon-separated list of comma-separated vectors from a string
+// Throws exception if any of the parsed vectors are not of size N.
+template<size_t N>
+std::vector<VecHPCFix<N>> parseVectorListArg(const std::string &argImmutable)
+{
+    std::vector<VecHPCFix<N>> result;
+    string arg(argImmutable);
+    vector<string> argComponents;
+    boost::trim(arg);
+    boost::split(argComponents, arg, boost::is_any_of(";"), boost::token_compress_on);
+    if (argComponents.size() == 0) throw std::runtime_error("Vector list argument must contain at least one vector.");
+    for (auto &vecArg : argComponents) {
+        vector<string> vecComponents;
+        boost::trim(vecArg);
+        boost::split(vecComponents, vecArg, boost::is_any_of(","), boost::token_compress_on);
+        if (vecComponents.size() != N) throw std::runtime_error("Invalid vector argument size");
+        VectorND<N> vec;
+        for (size_t i = 0; i < N; ++i)
+            vec[i] = std::stod(vecComponents[i]);
+        result.emplace_back(std::move(vec));
+    }
+
+    return result;
+}
+
 // Explicit instantiation
 template VecHPCFix<2> parseVectorArg<2>(const std::string &arg);
 template VecHPCFix<3> parseVectorArg<3>(const std::string &arg);
+
+template std::vector<VecHPCFix<2>> parseVectorListArg<2>(const std::string &arg);
+template std::vector<VecHPCFix<3>> parseVectorListArg<3>(const std::string &arg);

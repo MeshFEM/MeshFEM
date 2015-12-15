@@ -10,7 +10,7 @@
 //  Company:  New York University
 //  Created:  10/19/2015 13:59:08
 ////////////////////////////////////////////////////////////////////////////////
-#include "triangulate.h"
+#include <Triangulate.h>
 #include <MeshIO.hh>
 #include <iostream>
 

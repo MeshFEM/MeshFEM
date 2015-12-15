@@ -61,6 +61,7 @@
 #include <memory>
 #include <functional>
 #include <limits>
+#include <sstream>
 
 #include <Types.hh>
 #include "argparse.hh"
@@ -135,7 +136,14 @@ TypedNamedValue<T> popTypedValue(Stack &stack) {
 // Filters - operate on the stack.
 // These are all template functions with the signature:
 // template<size_t N>
-// void f(const string &op, const string &arg, Stack &stack, const Modifiers &m)
+// size_t f(const string &op, const string &arg, Stack &stack, const Modifiers &m)
+//
+// Filters return the number of results they pushed onto the stack. Filters are
+// considered to first pop all of their arguments then push "results" onto the
+// stack. For example, the print operation that acts on the stack top but
+// does not modify the stack is considered to have one result (it pops and
+// pushes back the argument). The reverse operation, which acts on the whole
+// stack, returns the stack size.
 //
 // Placed in their own namespace because their names overload those defined
 // elsewhere, causing problems with the lookup table definition
@@ -144,39 +152,43 @@ namespace Filter {
 // Data source filters
 // Extract field(s) matching the pattern in "arg", pushing them on the top of
 // the stack.
-void pushScalarField(Stack &stack, const string &name, const ScalarField<Real> &sf, const DomainType &dtype) {
+size_t pushScalarField(Stack &stack, const string &name, const ScalarField<Real> &sf, const DomainType &dtype) {
     TypedNamedValue<FSValue> sfv(name, dtype, sf.domainSize());
     for (size_t i = 0; i < sf.domainSize(); ++i)
         sfv->value[i] = SValue(sf[i]);
     stack.push_back(std::move(sfv));
+    return 1;
 }
 
 template<size_t N>
-void pushVectorField(Stack &stack, const string &name, const VectorField<Real, N> &vf, const DomainType &dtype) {
+size_t pushVectorField(Stack &stack, const string &name, const VectorField<Real, N> &vf, const DomainType &dtype) {
     TypedNamedValue<FVValue> vfv(name, dtype, vf.domainSize());
     for (size_t i = 0; i < vf.domainSize(); ++i)
         vfv->value[i] = VValue(vf(i).eval());
     stack.push_back(std::move(vfv));
+    return 1;
 }
 
 template<size_t N>
-void pushSymmetricMatrixField(Stack &stack, const string &name, const SymmetricMatrixField<Real, N> &smf, const DomainType &dtype) {
+size_t pushSymmetricMatrixField(Stack &stack, const string &name, const SymmetricMatrixField<Real, N> &smf, const DomainType &dtype) {
     TypedNamedValue<FSMValue> smfv(name, dtype, smf.domainSize());
     for (size_t i = 0; i < smf.domainSize(); ++i)
         smfv->value[i] = SMValue(smf(i));
     stack.push_back(std::move(smfv));
+    return 1;
 }
 
 template<class IFType, class RawType>
-void pushInterpolantField(Stack &stack, const string &name, const RawType &raw_if, const DomainType &dtype) {
+size_t pushInterpolantField(Stack &stack, const string &name, const RawType &raw_if, const DomainType &dtype) {
     TypedNamedValue<IFType> ifv(name, dtype, raw_if.size());
     for (size_t i = 0; i < raw_if.size(); ++i)
         ifv->value[i] = raw_if[i];
     stack.push_back(std::move(ifv));
+    return 1;
 }
 
 template<size_t N>
-void extract(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
+size_t extract(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
     const auto &parser = getParser<N>();
     std::regex pattern(arg);
     size_t origSize = stack.size();
@@ -205,11 +217,15 @@ void extract(const string &/*op*/, const string &arg, Stack &stack, const Modifi
         if (regex_match(name, pattern))
             pushInterpolantField<FISMValue>(stack, name, parser.symmetricMatrixInterpolantField(name, DomainType::ANY, dtype), dtype);
     }
+
+    assert(stack.size() >= origSize);
     if (stack.size() == origSize) throw runtime_error("No fields matched '" + arg + "'");
+    return stack.size() - origSize;
 }
 
 template<size_t N>
-void extractAll(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
+size_t extractAll(const string &/*op*/, const string &arg, Stack &stack, const Modifiers &m) {
+    size_t origSize = stack.size();
     const auto &parser = getParser<N>();
     DomainType dtype;
     for (const string &name : parser.scalarFieldNames())
@@ -218,10 +234,13 @@ void extractAll(const string &/*op*/, const string &arg, Stack &stack, const Mod
         pushVectorField(stack, name, parser.vectorField(name, DomainType::ANY, dtype), dtype);
     for (const string &name : parser.symmetricMatrixFieldNames())
         pushSymmetricMatrixField(stack, name, parser.symmetricMatrixField(name, DomainType::ANY, dtype), dtype);
+
+    assert(stack.size() >= origSize);
+    return stack.size() - origSize;
 }
 
 template<size_t N>
-void generate(const string &, const string &arg, Stack &stack, const Modifiers &) {
+size_t generate(const string &, const string &arg, Stack &stack, const Modifiers &) {
     const auto &parser = getParser<N>();
     const auto &vertices = parser.vertices();
     const auto &elements = parser.elements();
@@ -239,19 +258,21 @@ void generate(const string &, const string &arg, Stack &stack, const Modifiers &
         pushScalarField(stack, "volume", vol, DomainType::PER_ELEMENT);
     }
     else throw std::runtime_error("Invalid mesh property name: " + arg);
+
+    return 1;
 }
 
-void     dup(const string &, const string &   , Stack &stack, const Modifiers &) { stack.emplace_back(getValue(stack)); } // Copies: NamedValue has value semantics
-void     pop(const string &, const string &   , Stack &stack, const Modifiers &) { popValue(stack); }
-void    push(const string &, const string &arg, Stack &stack, const Modifiers &) { double d = parseRealArg(arg); stack.push_back(TypedNamedValue<SValue>(to_string(d), d)); }
-void reverse(const string &, const string &arg, Stack &stack, const Modifiers &) { std::reverse(stack.begin(), stack.end()); }
-void pull(const string &, const string &arg, Stack &stack, const Modifiers &) {
+size_t     dup(const string &, const string &   , Stack &stack, const Modifiers &) { stack.emplace_back(getValue(stack)); return 2; } // Copies: NamedValue has value semantics
+size_t     pop(const string &, const string &   , Stack &stack, const Modifiers &) { popValue(stack); return 0; }
+size_t    push(const string &, const string &arg, Stack &stack, const Modifiers &) { double d = parseRealArg(arg); stack.push_back(TypedNamedValue<SValue>(to_string(d), d)); return 1; }
+size_t reverse(const string &, const string &arg, Stack &stack, const Modifiers &) { std::reverse(stack.begin(), stack.end()); return stack.size(); }
+size_t pull(const string &, const string &arg, Stack &stack, const Modifiers &) {
     for (auto it = stack.begin(); it != stack.end(); ++it) {
         if ((*it).name == arg) {
             NamedValue val(std::move(*it));
             stack.erase(it);
             stack.emplace_back(std::move(val));
-            return;
+            return 1;
         }
     }
     throw runtime_error("Couldn't find '" + arg + "' for pull.");
@@ -259,7 +280,7 @@ void pull(const string &, const string &arg, Stack &stack, const Modifiers &) {
 
 // This matrix->vector operator unfortunately must be implemented manually in
 // the current framework...
-void eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers &) {
+size_t eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers &) {
     auto val = popValue(stack);
     string name = "eigenvalues(" + val.name + ")";
     if (auto sm = dynamic_cast<SMValue *>(VPtr(val)))
@@ -285,39 +306,50 @@ void eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers
         throw std::runtime_error("Not yet implemented.");
     }
     else throw runtime_error("called on non-matrix type argument");
+
+    return 1;
 }
 
-// Sample a field at the point specified by vector encoded in "arg".
+// Sample a field at the point(s) specified by vector list encoded in "arg".
 // Nodal fields are interpolated using the mesh's finite element basis functions.
 // Element fields are interpolated piecewise constant
 // Interpolant fields are sampled at barycentric coordinates.
 // Error is thrown for sample points outside the mesh (note: could happen on
 // element boundaries if inside/outside check is not robust)
 template<size_t N>
-void sample(const string &, const string &arg, Stack &stack, const Modifiers &) {
-    auto p = parseVectorArg<N>(arg);
+size_t sample(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    auto pts = parseVectorListArg<N>(arg);
     auto val = popValue(stack);
-    string name = "sample(" + val.name + ", " + arg + ")";
     // Determine element index, barycentric coordinates, and element node
     // indices of the containing element.
     const auto &sampler = getElementSampler<N>();
     const auto &parser = getParser<N>();
-    stack.emplace_back(name, val->sample(sampler(p), parser.meshDegree(), parser.meshDimension()));
+
+    for (const auto &p : pts) {
+        stringstream ss;
+        ss << p.format(Eigen::IOFormat(Eigen::FullPrecision, Eigen::DontAlignCols, "", ", ", "", "", "[", "]"));
+        string name = "sample(" + val.name + ", " + ss.str() + ")";
+        stack.emplace_back(name, val->sample(sampler(p), parser.meshDegree(),
+                           parser.meshDimension()));
+    }
+
+    return pts.size();
 }
 
 // Average a field over each element.
 template<size_t N>
-void elementAverage(const string &, const string &arg, Stack &stack, const Modifiers &) {
+size_t elementAverage(const string &, const string &arg, Stack &stack, const Modifiers &) {
     auto val = popValue(stack);
     const auto &parser = getParser<N>();
     stack.emplace_back("elementAverage(" + val.name + ")",
                         val->elementAverage(parser.elements(), parser.meshDegree(), parser.meshDimension()));
+    return 1;
 }
 
 // Report filters
 // List all fields parsed
 template<size_t N>
-void listNames(const string &, const string &arg, Stack &stack, const Modifiers &) {
+size_t listNames(const string &, const string &arg, Stack &stack, const Modifiers &) {
     const auto &parser = getParser<N>();
     for (const string &name : parser.         scalarFieldNames()) { cout << "s\t"  << name << endl; }
     for (const string &name : parser.         vectorFieldNames()) { cout << "v\t"  << name << endl; }
@@ -326,14 +358,15 @@ void listNames(const string &, const string &arg, Stack &stack, const Modifiers 
     for (const string &name : parser.         scalarInterpolantFieldNames()) { cout << "si\t"  << name << endl; }
     for (const string &name : parser.         vectorInterpolantFieldNames()) { cout << "vi\t"  << name << endl; }
     for (const string &name : parser.symmetricMatrixInterpolantFieldNames()) { cout << "smi\t" << name << endl; }
+    return 0;
 }
 
 // Print the top of the stack.
-void print    (const string &op, const string &arg, Stack &stack, const Modifiers &m) { getValue(stack)->print(); cout << endl; }
-void printName(const string &op, const string &arg, Stack &stack, const Modifiers &m) { cout << getValue(stack).name << endl; }
+size_t print    (const string &op, const string &arg, Stack &stack, const Modifiers &m) { getValue(stack)->print(); cout << endl; return 1; }
+size_t printName(const string &op, const string &arg, Stack &stack, const Modifiers &m) { cout << getValue(stack).name << endl; return 1; }
 
 template<size_t N>
-void outputMSH(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+size_t outputMSH(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     const auto &parser = getParser<N>();
     // Note: there will be downsampling of interpolant fields if the output
     // mesh elements are linear. But in these cases, the original extracted
@@ -379,9 +412,10 @@ void outputMSH(const string &op, const string &arg, Stack &stack, const Modifier
         }
         else cout << "WARNING: ignored non-field value on stack: " << val.name << endl;
     }
+    return stack.size();
 }
 
-void rename(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+size_t rename(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     vector<string> names;
     boost::split(names, arg, boost::is_any_of(","));
     if (names.size() > stack.size()) {
@@ -390,40 +424,44 @@ void rename(const string &op, const string &arg, Stack &stack, const Modifiers &
     size_t pos = stack.size();
     for(auto &name : names)
         stack[--pos].name = std::move(name);
+    return names.size();
 }
 
 template<class R>
-void applyReduction(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+size_t applyReduction(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     auto top = popValue(stack);
     string name = op + arg + "(" + top.name + ")";
     if (m.outerReduction) name = "outer_" + name;
     R r(arg);
     if (m.outerReduction) stack.emplace_back(name, top->outerReduction(r));
     else                  stack.emplace_back(name, top->innerReduction(r));
+    return 1;
 }
 
 template<class UOp>
-void applyUnaryOp(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+size_t applyUnaryOp(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     auto top = popValue(stack);
     stack.emplace_back(op + arg + "(" + top.name + ")",
                        top->componentwiseUnaryOp(UOp(arg)));
+    return 1;
 }
 
 template<class BOp>
-void applyBinaryOp(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+size_t applyBinaryOp(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     // Top of stack is the second operand, next in stack is the first
     auto b = popValue(stack);
     auto a = popValue(stack);
     if (arg.size() != 0) throw runtime_error("Did not expect binary op argument");
     stack.emplace_back(op + "(" + a.name + ", " + b.name + ")",
                        a->componentwiseBinaryOp(BOp(), b));
+    return 1;
 }
 
 } // end namespace Filter
 
 template<size_t N>
 void execute(vector<FilterInvocation> &filters) {
-    map<string, function<void(const string &, const string &, Stack &, const Modifiers &)>>
+    map<string, function<size_t(const string &, const string &, Stack &, const Modifiers &)>>
     filterImplementations = {
         // Reductions
         {"min",    Filter::applyReduction<ReductionMin   >},
@@ -505,8 +543,10 @@ void execute(vector<FilterInvocation> &filters) {
             if (m.applyAll) {
                 Stack newStack;
                 while (stack.size()) {
-                    filterImplementations.at(f.first)(f.first, f.second, stack, m);
-                    newStack.emplace_back(popValue(stack));
+                    size_t n = filterImplementations.at(f.first)(f.first, f.second, stack, m);
+                    // Move each result over to the new stack
+                    for (size_t r = 0; r < n; ++r)
+                        newStack.emplace_back(popValue(stack));
                 }
                 std::reverse(newStack.begin(), newStack.end());
                 stack = std::move(newStack);

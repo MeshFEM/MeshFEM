@@ -265,10 +265,10 @@ namespace PeriodicHomogenization {
     // Solve cell problems with load
     //      - int_bdry (v dot n) (strain(phi) : C : [strain(w^kl) + e^kl]) dA
     ////////////////////////////////////////////////////////////////////////////
-    template<class _Sim, class NormalShapeVelocity>
+    template<class _Sim, class _NormalShapeVelocity>
     void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
             const std::vector<typename _Sim::VField> &w,
-            const NormalShapeVelocity &vn,
+            const _NormalShapeVelocity &vn,
             std::vector<typename _Sim::VField> &dot_w) {
         BENCHMARK_START_TIMER("Fluctuation Shape Derivatives");
 

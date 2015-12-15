@@ -21,4 +21,7 @@ using VecHPCFix = Eigen::Matrix<Real, N, 1, 0>;
 template<size_t N>
 VecHPCFix<N> parseVectorArg(const std::string &arg);
 
+template<size_t N>
+std::vector<VecHPCFix<N>> parseVectorListArg(const std::string &arg);
+
 #endif /* end of include guard: ARGPARSE_HH */
