@@ -64,7 +64,7 @@ struct Triplet
     }
 };
 
-template<typename _Triplet>
+template<typename _Triplet = Triplet<Real>>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
                   APPEND_LEFT , APPEND_RIGHT} AppendPos;

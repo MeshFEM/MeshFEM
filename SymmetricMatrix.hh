@@ -104,14 +104,15 @@ public:
         return (maxEig > std::abs(minEig)) ? maxEig : minEig;
     }
 
-    _Real doubleContract(const ConstSymmetricMatrixBase &b) const {
+    template<typename _R2, typename _S2, typename _CSR2>
+    _Real doubleContract(const ConstSymmetricMatrixBase<_R2, t_N, _S2, _CSR2> &b) const {
         // Diagonals
-        _Real result(m_data[0] * b.m_data[0]);
+        _Real result(m_data[0] * b[0]);
         for (size_t i = 1; i < t_N; ++i)
-            result += m_data[i] * b.m_data[i];
+            result += m_data[i] * b[i];
         // Off diagonals
         for (size_t i = t_N; i < flatSize(); ++i)
-            result += 2 * m_data[i] * b.m_data[i];
+            result += 2 * m_data[i] * b[i];
         return result;
     }
 

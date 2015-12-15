@@ -71,7 +71,7 @@ public:
 
 
     // Uninitialized allocation constructor
-    VectorField(size_t domainSize = 0)
+    explicit VectorField(size_t domainSize = 0)
         : m_values(t_dim, domainSize) { }
 
     ConstValueType operator()(size_t i) const {
@@ -160,6 +160,7 @@ public:
     // Unweighted mean vector.
     Eigen::Matrix<Real, t_dim, 1> mean() const {
         Eigen::Matrix<Real, t_dim, 1> result;
+        result.setZero();
         for (size_t i = 0; i < domainSize(); ++i)
             result += m_values.col(i);
         result *= (1.0 / domainSize());
@@ -251,10 +252,14 @@ public:
 
     ScalarField(const FlattenedType &values)
         : VectorField<Real, 1>(values) { }
-    ScalarField(size_t domainSize = 0)
+    explicit ScalarField(size_t domainSize = 0)
         : VectorField<Real, 1>(domainSize) { }
     template<typename Real2>
     ScalarField(const std::vector<Real2> &values)
+        : VectorField<Real, 1>(values) { }
+    // Allow construction from 1-dim vector.
+    template<typename Real2>
+    ScalarField(const VectorField<Real2, 1> &values)
         : VectorField<Real, 1>(values) { }
 
     FieldType fieldType() const { return FIELD_SCALAR; }

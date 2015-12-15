@@ -408,7 +408,8 @@ public:
     // Tensor A is "this", B is passed as an argument.
     // The operation is implemented as:
     // F(A) S F(B) S F(A)
-    ElasticityTensor doubleDoubleContract(const ElasticityTensor &B) const {
+    template<bool _MajorSymmetry2>
+    ElasticityTensor doubleDoubleContract(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &B) const {
         ElasticityTensor result;
         if (_MajorSymmetry) result.m_d = m_d.template selfadjointView<Eigen::Upper>();
         else                result.m_d = m_d;
