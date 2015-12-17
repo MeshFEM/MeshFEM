@@ -11,12 +11,17 @@
 #ifndef TRIANGULATE_H
 #define TRIANGULATE_H
 
+// triangle doesn't guard against multiple inclusion... do our best to avoid
+// this
+#ifndef ANSI_DECLARATORS
 extern "C" {
 #define ANSI_DECLARATORS
 #define REAL double
 #define VOID int
 #include <triangle.h>
 }
+#endif
+
 #include <string.h> 
 
 #include <string> 

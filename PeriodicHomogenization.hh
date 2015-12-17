@@ -75,7 +75,7 @@ namespace PeriodicHomogenization {
         //             sim.elementStrain(ei, w_ij[kl], strain_kl);
         //             strain_kl += SMatrix::CanonicalBasis(kl);
         //             EhE.D(ij, kl) +=
-        //                 _Sim::template VolInt<2 * (_Sim::Degree - 1)>::integrate(
+        //                 Quadrature<_Sim::K, 2 * (_Sim::Degree - 1)>::integrate(
         //                     [&] (const VectorND<_Sim::numElemVertices> &p) {
         //                         return e->E().doubleContract(strain_ij(p))
         //                                      .doubleContract(strain_kl(p));
