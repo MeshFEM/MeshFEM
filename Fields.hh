@@ -183,8 +183,8 @@ public:
     // Flattened access
     size_t size() const { return dim() * domainSize(); }
     void resize(size_t i) { assert(i % dim() == 0); resizeDomain(i / 3); }
-    Real &operator[](size_t i)       { assert(i < size()); return m_values.data()[i]; }
-    Real  operator[](size_t i) const { assert(i < size()); return m_values.data()[i]; }
+          Real &operator[](size_t i)       { assert(i < size()); return m_values.data()[i]; }
+    const Real &operator[](size_t i) const { assert(i < size()); return m_values.data()[i]; }
 
     template<typename Real2>
     void getFlattened(std::vector<Real2> &v) const {
@@ -233,8 +233,8 @@ public:
     class ValueType {
     public:
         ValueType(Real &val) : m_val(val) { }
-        Real &operator[](size_t i)       { assert(i == 0); return m_val; }
-        Real  operator[](size_t i) const { assert(i == 0); return m_val; }
+              Real &operator[](size_t i)       { assert(i == 0); return m_val; }
+        const Real &operator[](size_t i) const { assert(i == 0); return m_val; }
         operator Real&()      { return m_val; }
         operator Real() const { return m_val; }
         ValueType &operator=(Real val) { m_val = val; return *this; }
@@ -488,8 +488,8 @@ public:
     size_t dim() const { return m_dim; }
 
     // Flattened access
-    _Real &operator[](size_t i)       { return m_storage.at(i); }
-    _Real  operator[](size_t i) const { return m_storage.at(i); }
+          _Real &operator[](size_t i)       { return m_storage.at(i); }
+    const _Real &operator[](size_t i) const { return m_storage.at(i); }
 
     _Real &operator()(size_t i, size_t j) {
         if (i >= dim() || j >= domainSize()) throw std::runtime_error("out of bounds access");
