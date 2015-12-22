@@ -14,48 +14,70 @@
 
 #include <algorithm> 
 #include <vector>
+#include <set>
+#include <stdexcept>
+#include <iostream>
 
 #include "SparseMatrices.hh"
 
 namespace UniformLaplacian {
 
-template<class _Mesh>
 // Assemble the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
-SPSDSystem<Real> assemble(_Mesh &mesh, SPSDSystem<Real> &system) {
+// If varForVertex is passed, vertices can share variables (e.g. to implement
+// periodic constraints).
+template<class _Mesh>
+void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
+              const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+    size_t numVertices = mesh.numVertices();
+    bool hasVarForVertex = (varForVertex.size() != 0);
+    if (hasVarForVertex && (varForVertex.size() != numVertices))
+        throw std::runtime_error("Invalid varForVertex size.");
+    size_t numVars = numVertices;
+    if (hasVarForVertex) {
+        size_t m = *std::max_element(varForVertex.begin(), varForVertex.end());
+        numVars = m + 1;
+    }
+    if (numVars > numVertices) { std::cerr << "WARNING: more variables than vertices." << std::endl; }
+    
     // We currently don't have vetex-vertex connectivity. It can be accessed
     // with circulators for TriMesh, but it would require a bit more code for
     // TetMesh--instead use elements to determine the connectivity
     // (inefficient).
-    size_t nv = mesh.numVertices();
-    std::vector<std::vector<size_t>> adj(nv);
+    std::vector<std::set<size_t>> adj(numVars);
     size_t numEdges = 0;
     for (auto e : mesh.elements()) {
         for (size_t i = 0; i < e.numVertices(); ++i) {
             size_t vi = e.vertex(i).index();
+            if (hasVarForVertex) vi = varForVertex.at(vi);
             auto &adj_i = adj.at(vi);
             for (size_t j = i; j < e.numVertices(); ++j) {
                 size_t vj = e.vertex(j).index();
-                // Check if undirected (i, j) has been inserted.
-                auto ij = std::find(adj_i.begin(), adj_i.end(), vj);
-                if (ij == adj_i.end()) {
-                    adj_i.push_back(vj);
+                if (hasVarForVertex) vj = varForVertex.at(vj);
+                // Insert undirected (i, j) if it hasn't already been
+                if (adj_i.count(vj) == 0) {
+                    adj_i.insert(vj);
+                    adj.at(vj).insert(vi);
                     ++numEdges;
-                    adj.at(vj).push_back(vi);
                 }
             }
         }
     }
 
-    TripletMatrix<> L(nv, nv);
-    L.reserve(numEdges + nv);
-    for (size_t vi = 0; vi < nv; ++vi) {
+    TripletMatrix<> L(numVars, numVars);
+    L.reserve(2 * numEdges + numVars);
+    for (size_t vi = 0; vi < numVars; ++vi) {
         const auto &adj_i = adj.at(vi);
-        L.addNZ(vi, vi, (Real) adj_i.size());
-        for (vj : adj_i)
+        size_t numNeighbors = adj_i.size();
+        // if (numNeighbors == 0)
+        //     std::cerr << "WARNING: variable " << vi << " unreferenced" << std::endl;
+        L.addNZ(vi, vi, (Real) numNeighbors);
+        for (size_t vj : adj_i)
             L.addNZ(vi, vj, -1.0);
     }
 
-    return SPSDSystem<Real>(L);
+    system.set(L);
+}
+
 }
 
 #endif /* end of include guard: UNIFORMLAPLACIAN_HH */

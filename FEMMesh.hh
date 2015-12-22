@@ -39,12 +39,12 @@ struct MeshDatastructure { };
 template<> struct MeshDatastructure<2> {
     // 2D Simplices -> Triangle Mesh
     template <class VData, class TData, class BVData, class BEData>
-    using Mesh = TriMesh<VData, TMEmptyData, TData, BVData, BEData>;
+    using type = TriMesh<VData, TMEmptyData, TData, BVData, BEData>;
 };
 template<> struct MeshDatastructure<3> {
     // 3D Simplices -> Tet Mesh
     template <class VData, class TData, class BVData, class BFData>
-    using Mesh = TetMesh<VData, TMEmptyData, TData,
+    using type = TetMesh<VData, TMEmptyData, TData,
                         BVData, TMEmptyData, BFData>;
 };
 
@@ -104,7 +104,7 @@ struct DefaultFEMData {
 
 template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
-class FEMMesh : public MeshDatastructure<_K>::template Mesh<
+class FEMMesh : public MeshDatastructure<_K>::template type<
     // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
     // underlying mesh data structure. The node data is managed by this data
     // structure.
@@ -123,7 +123,7 @@ public:
     typedef typename FEMData::BoundaryNode    BoundaryNodeData;
     typedef typename FEMData::BoundaryElement BoundaryElementData;
 
-    typedef typename MeshDatastructure<_K>::template Mesh<VertexData,
+    typedef typename MeshDatastructure<_K>::template type<VertexData,
         ElementData, BoundaryVertexData, BoundaryElementData>   BaseMesh;
 
     template<typename Elements, typename Vertices>
@@ -205,6 +205,8 @@ public:
     ConstHandleRange<BERangeTraits> boundaryElements() const { return ConstHandleRange<BERangeTraits>(*this); }
 
     // (re-)embed the mesh elements.
+    // Mesh vertex nodes are read from the passed vertex position array and edge
+    // nodes are positioned at the edge midpoint.
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
         for (size_t i = 0; i < numNodes(); ++i) {
