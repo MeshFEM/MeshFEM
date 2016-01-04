@@ -332,4 +332,42 @@ inline double cond(const TriangleIndex &tri, const std::vector<Point2D> &verts)
     return .5 * R / r;
 }
 
+// Compute the centroid of a polygon in 2D:
+// c = 1/A int_P \vec{x}  dx
+// The formula used below follows from Green's theorem.
+// Assumes that the polygon is non-self-intersecting.
+template<class Point>
+Point centroid(const std::vector<Point> &p) {
+    Point c(Point::Zero());
+    Real doubleA = 0;
+    for (size_t i = 0; i < p.size(); ++i) {
+        const Point &p_i   = p[i];
+        const Point &p_ip1 = (i + 1 < p.size()) ? p[i + 1] : p[0];
+        Real doubleAContrib = p_i[0] * p_ip1[1] - p_ip1[0] * p_i[1];
+        c += (p_i + p_ip1) * doubleAContrib;
+        doubleA += doubleAContrib;
+    }
+
+    return c / (3 * doubleA);
+}
+
+// Compute the centroid of a point cloud, assuming each point as "mass" 1.
+// I.e. compute mean position.
+template<class Point>
+Point pointCloudCentroid(const std::vector<Point> &points) {
+    Point c(Point::Zero());
+    for (const Point &p : points) c += p;
+    return c / points.size();
+}
+
+// Unsigned angle between a and b (in [0, pi])
+inline Real angle(const Vector2D &a, const Vector2D &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
+inline Real angle(const Vector3D &a, const Vector3D &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
+
+// Signed angle between a and b. The 3D version requires a normal to define
+// sign, while the 2D uses the standard sign convention.
+// (in [-pi, pi])
+inline Real signedAngle(const Vector2D &a, const Vector2D &b)                    { return atan2(a[0] * b[1] - a[1] * b[0], a.dot(b)); }
+inline Real signedAngle(const Vector3D &a, const Vector3D &b, const Vector3D &n) { return atan2(a.cross(b).dot(n),         a.dot(b)); }
+
 #endif // GEOMETRY_HH

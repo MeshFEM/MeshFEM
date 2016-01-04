@@ -13,6 +13,17 @@
 
 #include <vector>
 
+template<size_t N>
+struct SubdivVertexData {
+    SubdivVertexData() { }
+    VectorND<N> p;
+};
+
+struct SubdivHalfedgeData {
+    SubdivHalfedgeData() : newVertexIndex(-1) { }
+    int newVertexIndex;
+};
+
 template<class _HalfEdge, class Vertex, class Polygon>
 void subdivide(_HalfEdge &mesh, std::vector<Vertex> &subVertices,
                std::vector<Polygon> &subTriangles) {
@@ -20,11 +31,8 @@ void subdivide(_HalfEdge &mesh, std::vector<Vertex> &subVertices,
     // and will get exactly 4 triangles for every old triangle
     subVertices.clear(), subTriangles.clear();
     subVertices.reserve(mesh.numVertices() + mesh.numHalfEdges() / 2);
-    subVertices.resize(mesh.numVertices());
-    for (size_t i = 0; i < mesh.numVertices(); ++i) {
-        const auto &pt = mesh.vertex(i)->p;
-        subVertices[i].set(pt[0], pt[1], pt[2]);
-    }
+    for (size_t i = 0; i < mesh.numVertices(); ++i)
+        subVertices.emplace_back(mesh.vertex(i)->p);
     subTriangles.reserve(4 * mesh.numFaces());
 
     /*         v2                   v2

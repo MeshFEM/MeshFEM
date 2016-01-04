@@ -38,8 +38,8 @@
 
 #include "Handle.hh"
 
-template<class VertexData, class HalfEdgeData, class TriData,
-         class BoundaryVertexData, class BoundaryEdgeData>
+template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
+         class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
 class TriMesh {
 public:
     // Constructor from triangle soup

@@ -28,6 +28,7 @@
 #include <bitset>
 #include <cassert>
 #include <limits>
+#include <bitset>
 
 template<size_t _N>
 struct BoundaryCondition {
@@ -383,13 +384,12 @@ public:
         // (just checking if all nodes are on a periodic boundary will
         //  incorrectly mark some faces near the period cell edges)
         // This map from boundary nodes to the set of periodic boundary it lies
-        // on is encoded as an array of integers taking the following values:
-        //      0: non-periodic node
-        //      1, 2,   4: node is on min x, y, z faces
-        //      8, 16, 32: node is on max x, y, z faces
-        // (membership in multiple boundaries is implemented by bitwise or,
-        //  set intersection is implemented by bitwise and).
-        m_periodicBoundariesForNode.assign(mesh.numBoundaryNodes(), 0);
+        // on is encoded as a bitset with the following bits
+        //      0, _N + 0: on min, max x face
+        //      1, _N + 1: on min, max y face
+        //    [ 2, _N + 2: on min, max z face ]
+        m_periodicBoundariesForNode.clear();
+        m_periodicBoundariesForNode.resize(mesh.numBoundaryNodes());
 
         for (size_t d = 0; d < _N; ++d) {
             cgrid.reset();
@@ -398,11 +398,11 @@ public:
                 auto vn = mesh.boundaryNode(i).volumeNode();
                 if (std::abs(vn->p[d] - cell.minCorner[d]) < epsilon) {
                     cgrid.addPoint(vn->p, vn.index());
-                    m_periodicBoundariesForNode[i] |= 1 << d;
+                    m_periodicBoundariesForNode[i].set(d);
                 }
                 if (std::abs(vn->p[d] - cell.maxCorner[d]) < epsilon) {
                     maxfaceNodes.push_back(vn.index());
-                    m_periodicBoundariesForNode[i] |= 1 << (_N + d);
+                    m_periodicBoundariesForNode[i].set(_N + d);
                 }
             }
             for (size_t i = 0; i < maxfaceNodes.size(); ++i) {
@@ -450,13 +450,14 @@ public:
         for (size_t i = 0; i < mesh.numBoundaryElements(); ++i) {
             auto be = mesh.boundaryElement(i);
             // Determine what periodic boundary this element lies on.
-            unsigned char pboundaries = m_periodicBoundariesForNode.at(be.node(0).index());
+            auto pboundaries = m_periodicBoundariesForNode.at(be.node(0).index());
             for (size_t j = 1; j < be.numNodes(); ++j)
                 pboundaries &= m_periodicBoundariesForNode.at(be.node(j).index());
             // It can't be on more than one boundary...
             // (i.e. power or 2 or zero--use bit hack)
-            assert((pboundaries & (pboundaries - 1)) == 0);
-            m_isPeriodicBoundaryElement[i] = (pboundaries != 0);
+            size_t numBoundaries = pboundaries.count();
+            assert(numBoundaries < 2);
+            m_isPeriodicBoundaryElement[i] = numBoundaries > 0;
         }
 
         // Determine the "DoF index" for every node in the mesh. For internal
@@ -515,17 +516,30 @@ public:
     // Return  1 if it's on the min face
     int bdryVertexOnMinOrMaxPeriodCellFace(size_t bvi, size_t d) const {
         assert(d < _N);
-        unsigned char bdry = m_periodicBoundariesForNode.at(bvi);
-        if (bdry & (1 << d)) return -1;
-        if (bdry & (1 << (_N + d))) return 1;
+        const auto &bdry = m_periodicBoundariesForNode.at(bvi);
+        if (bdry.test(     d)) return -1;
+        if (bdry.test(_N + d)) return  1;
         return 0;
+    }
+
+    // Determines whether the set of periodic cell faces on which vertex "a"
+    // lies is contained in the set of periodic cell faces on which vertex "b"
+    // lies.
+    // This is a partial order: e.g. a pair of vertices each lying on a single,
+    // distinct periodic cell face cannot be compared.
+    // Returns true if "a <= b"   (either a < b or a ==  b)
+    //         false otherwise    (either b < a or a and b cannot be compared)
+    bool bdryVertexPeriodCellFacesPartialOrderLessEq(size_t a, size_t b) const {
+        const auto &aFaces = m_periodicBoundariesForNode.at(a);
+        const auto &bFaces = m_periodicBoundariesForNode.at(b);
+        return ((aFaces & bFaces) == aFaces);
     }
 
     size_t numPeriodicDoFs() const { return m_numDoFs; }
 
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;
-    std::vector<unsigned char> m_periodicBoundariesForNode;
+    std::vector<std::bitset<2 * _N>> m_periodicBoundariesForNode;
     size_t m_numDoFs;
     std::vector<int> m_dofForNode;
     // Sparse collection of periodically-paired nodes for each node.

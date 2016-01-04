@@ -26,15 +26,8 @@ namespace po = boost::program_options;
 
 using namespace std;
 
-struct VertexData {
-    VertexData() { }
-    Point3D p;
-};
-
-struct HalfEdgeData {
-    HalfEdgeData() : newVertexIndex(-1) { }
-    int newVertexIndex;
-};
+struct VertexData : public SubdivVertexData<3> { };
+struct HalfEdgeData : public SubdivHalfedgeData { };
 
 void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: mesh_convert inFile (-i | [-bs] outFile)" << endl;

@@ -102,18 +102,19 @@ struct DefaultFEMData {
     typedef LinearlyEmbeddedElement<_K - 1, _Deg, EmbeddingSpace> BoundaryElement;
 };
 
-template<size_t _K, size_t _Deg, class EmbeddingSpace,
+template<size_t _K, size_t _Deg, class _EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
 class FEMMesh : public MeshDatastructure<_K>::template type<
     // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
     // underlying mesh data structure. The node data is managed by this data
     // structure.
-    typename _FEMData<_K, _Deg, EmbeddingSpace>::Vertex,
-    typename _FEMData<_K, _Deg, EmbeddingSpace>::Element,
-    typename _FEMData<_K, _Deg, EmbeddingSpace>::BoundaryVertex,
-    typename _FEMData<_K, _Deg, EmbeddingSpace>::BoundaryElement>
+    typename _FEMData<_K, _Deg, _EmbeddingSpace>::Vertex,
+    typename _FEMData<_K, _Deg, _EmbeddingSpace>::Element,
+    typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryVertex,
+    typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement>
 {
 public:
+    using EmbeddingSpace = _EmbeddingSpace;
     // Unpack data types.
     typedef _FEMData<_K, _Deg, EmbeddingSpace> FEMData;
     typedef typename FEMData::Vertex          VertexData;
