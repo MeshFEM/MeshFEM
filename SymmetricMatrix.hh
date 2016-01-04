@@ -84,7 +84,7 @@ public:
         solver.compute(mat);
 
         std::vector<size_t> perm;
-        std::vector<Real> evMags(N);
+        std::vector<_Real> evMags(N);
         for (size_t i = 0; i < N; ++i) evMags[i] = std::abs(solver.eigenvalues()[i]);
         sortPermutation(evMags, perm, true);
 
