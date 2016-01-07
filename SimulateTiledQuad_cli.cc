@@ -19,7 +19,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 void usage(int exitVal, const po::options_description &visible_opts) {
-    cout << "Usage: Simulate_cli [options] mesh" << endl;
+    cout << "Usage: SimulateTiledQuad_cli [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
 }
@@ -36,7 +36,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m",           po::value<string>()->default_value(""), "simulation material material")
-        ("quadAvg,q",  	         po::value<bool>()->default_value(true), "compute per quad averages (the input mesh must have an 'id' field)")
+        ("quadAvg,q",  	         po::value<bool>()->default_value(true), "compute per quad averages (the input mesh must have the 'id' and 'vol' fields)") // 'id' holds quad position in the quad mesh and 'vol' holds the area of the quad  
         ("matFieldName,f",       po::value<string>()->default_value(""), "name of material field to load from .msh passed as --material")
         ("boundaryConditions,b", po::value<string>(),                    "boundary conditions")
         ("outputMSH,o",          po::value<string>(),                    "output mesh")
@@ -82,9 +82,10 @@ template<size_t _N, size_t _Deg>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices, 
              const vector<MeshIO::IOElement> &inElements,
-             const vector<int> &ids,
-             const ScalarField<Real> initialCost,
-             const ScalarField<Real> finalCost) {
+             const vector<int>  &ids,
+             const vector<Real> &vols){
+             /* const ScalarField<Real> initialCost, */
+             /* const ScalarField<Real> finalCost) { */
     size_t numElements = inElements.size();
     typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
     typename LinearElasticity::Simulator<Mesh> sim(inElements, inVertices);
@@ -172,6 +173,9 @@ void execute(const po::variables_map &args,
     bool noRigidMotion;
     vector<PeriodicPairDirichletCondition<_N>> pps;
     auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(), noRigidMotion, pps);
+
+	std::cout << "read boundary conditions!" << std::endl;
+
     sim.applyBoundaryConditions(bconds);
     sim.applyPeriodicPairDirichletConditions(pps);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
@@ -209,6 +213,9 @@ void execute(const po::variables_map &args,
     writer.addField("Ku", sim.applyStiffnessMatrix(u), DomainType::PER_NODE);
 
 
+
+	std::cout << ids.size() << "\t" << inElements.size() << std::endl;
+
 	if (ids.size() == inElements.size()){
 		// compute the filed averages per quad (note the ids is holding the quadID)	
 		// find max (id)
@@ -229,7 +236,7 @@ void execute(const po::variables_map &args,
 			Real 	currentElementArea 	= elementAreas(i); 
 			auto 	currentElementStrain	= s(i);
 
-			totAreaPerQuad(currentElementId) += currentElementArea;
+			totAreaPerQuad(currentElementId) = vols[i];
 			avgTFieldPerQuad(currentElementId) += currentElementArea * currentElementStrain;
 		}
 
@@ -250,8 +257,8 @@ void execute(const po::variables_map &args,
 			TFPerQuad(i) = avgTFieldPerQuad(ids[i]);
 
     	writer.addField("tensorFieldPerQuad", TFPerQuad, DomainType::PER_ELEMENT);
-    	writer.addField("initialCost", initialCost, DomainType::PER_ELEMENT);
-    	writer.addField("finalCost",   finalCost,   DomainType::PER_ELEMENT);
+    	/* writer.addField("initialCost", initialCost, DomainType::PER_ELEMENT); */
+    	/* writer.addField("finalCost",   finalCost,   DomainType::PER_ELEMENT); */
 
 
 	}
@@ -284,41 +291,49 @@ int main(int argc, const char *argv[])
     else    throw std::runtime_error("Mesh must be pure triangle or tet.");
 
     // parse the 'id' field of the input mesh
-	vector<int> intIDs; // this will hold the 'id' for each element
+	vector<int>  intIDs; // this will hold the 'id' for each element
+	vector<Real> VOLs;  // this will hold the 'id' for each element
+
 	SField initialCost;
 	SField finalCost;
 
     if (args["quadAvg"].as<bool>())
 	{
 		SField ids;
+		SField vols;
 		/* if 		(dim == 2) auto MSHFP = MSHFieldParser<2>; */
 		/* else if (dim == 3) auto MSHFP = MSHFieldParser<3>; */
 
 		if (dim == 2){
 			MSHFieldParser<2> idParser(args["mesh"].as<string>());
 			vector<string> scalarFieldNames = idParser.scalarFieldNames();
-			vector<string>::iterator it;
-			it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "id");
-			if (it == scalarFieldNames.end())
-				throw("the input mesh is missing the 'id' field!");
-			else
-				ids = idParser.scalarField("id");
+			vector<string>::iterator it1, it2;
+			it1 = find(scalarFieldNames.begin(), scalarFieldNames.end(), "id");
+			it2 = find(scalarFieldNames.begin(), scalarFieldNames.end(), "vol");
+			if (it1 == scalarFieldNames.end() || it2 == scalarFieldNames.end())
+				throw("the input mesh is missing either the 'id' field or the 'vol' field!");
+			else{
+				ids  = idParser.scalarField("id");
+				vols = idParser.scalarField("vol");
+			}
 			
-			it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "initCost");
-			if (it == scalarFieldNames.end())
-				throw("the input mesh is missing the 'initCost' field!");
-			else
-				initialCost = idParser.scalarField("initCost");
+			/* it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "initCost"); */
+			/* if (it == scalarFieldNames.end()) */
+			/* 	throw("the input mesh is missing the 'initCost' field!"); */
+			/* else */
+			/* 	initialCost = idParser.scalarField("initCost"); */
 			
-			it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "finaCost");
-			if (it == scalarFieldNames.end())
-				throw("the input mesh is missing the 'finaCost' field!");
-			else
-				finalCost = idParser.scalarField("finaCost");
+			/* it = find(scalarFieldNames.begin(), scalarFieldNames.end(), "finaCost"); */
+			/* if (it == scalarFieldNames.end()) */
+			/* 	throw("the input mesh is missing the 'finaCost' field!"); */
+			/* else */
+			/* 	finalCost = idParser.scalarField("finaCost"); */
 
 			// convert ids to int
-			for (size_t i = 0; i < ids.domainSize(); ++i)
+			for (size_t i = 0; i < ids.domainSize(); ++i){
 				intIDs.push_back((int) ids[i]);
+				VOLs.push_back(vols[i]);
+			}
 
 		}
 		else if (dim == 3){
@@ -345,7 +360,8 @@ int main(int argc, const char *argv[])
     auto exec = (dim == 3) ? ((deg == 2) ? execute<3, 2> : execute<3, 1>)
                            : ((deg == 2) ? execute<2, 2> : execute<2, 1>);
 
-    exec(args, inVertices, inElements, intIDs, initialCost, finalCost);
+    //exec(args, inVertices, inElements, intIDs, initialCost, finalCost);
+    exec(args, inVertices, inElements, intIDs, VOLs);
 
     return 0;
 }
