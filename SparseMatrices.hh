@@ -68,6 +68,12 @@ template<typename _Triplet = Triplet<Real>>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
                   APPEND_LEFT , APPEND_RIGHT} AppendPos;
+
+    // Rudimentary support for tagging symmetric/nonsymmetric matrices. This
+    // effects, e.g., the interpretation of matrix multiplication.
+    enum class SymmetryMode { NONE, UPPER_TRIANGLE };
+    SymmetryMode symmetry_mode = SymmetryMode::NONE;
+
     TripletMatrix(size_t m = 0, size_t n = 0) : m(m), n(n) { }
     typedef TripletMatrix<_Triplet>         TMatrix;
     typedef _Triplet                        Triplet;
@@ -195,7 +201,8 @@ struct TripletMatrix {
         BENCHMARK_STOP_TIMER("Compress Matrix");
     }
 
-    // Copy only the upper triangle (including diagonal) of B
+    // Clear the current matrix and copy over only the upper triangle (including
+    // diagonal) of B.
     void setUpperTriangle(const TMatrix &B) {
         clear();
         m = B.m;
@@ -428,6 +435,31 @@ struct TripletMatrix {
 
         // Deduce matrix size from the triplets.
         m = maxi + 1; n = maxj + 1;
+    }
+
+    // Matrix-vector multiply (not so efficient).
+    template<typename _Vector>
+    _Vector apply(const _Vector &x) const {
+        _Vector result(x.size());
+        // Some _Vector types don't zero-initialize.
+        for (size_t i = 0; i < result.size(); ++i) result[i] = 0.0;
+        if (symmetry_mode == SymmetryMode::NONE) {
+            for (const Triplet &t: nz)
+                result[t.i] += t.v * x[t.j];
+        }
+        else if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
+            for (const Triplet &t: nz) {
+                if (t.i < t.j) {
+                    result[t.i] += t.v * x[t.j];
+                    result[t.j] += t.v * x[t.i];
+                }
+                else if (t.i == t.j)
+                    result[t.i] += t.v * x[t.j];
+                else throw std::runtime_error("Symmetry mode violated.");
+            }
+        }
+        else throw std::runtime_error("Unsupported matrix symmetry mode");
+        return result;
     }
 };
 
