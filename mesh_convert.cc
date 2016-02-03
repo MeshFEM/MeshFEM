@@ -53,9 +53,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("extrude,e",         po::value<double>(),                          "Extrude a planar mesh in its (negative) normal direction by a distance.")
         ("truncateElements",  po::value<int>(),                             "Truncate to the specified number of elements")
         ("stripFields",                                                     "Suppress output of MSH fields")
-        ("Sx",                po::value<double>(),                          "Scale x coordinates")
-        ("Sy",                po::value<double>(),                          "Scale y coordinates")
-        ("Sz",                po::value<double>(),                          "Scale z coordinates")
+        ("Sx",                po::value<double>(),                          "Scale x coordinates (performed after translation)")
+        ("Sy",                po::value<double>(),                          "Scale y coordinates (performed after translation)")
+        ("Sz",                po::value<double>(),                          "Scale z coordinates (performed after translation)")
+        ("Tx",                po::value<double>(),                          "Translate x coordinates (performed before scale)")
+        ("Ty",                po::value<double>(),                          "Translate y coordinates (performed before scale)")
+        ("Tz",                po::value<double>(),                          "Translate z coordinates (performed before scale)")
         ("subdivide,s",                                                     "Subdivide geometry (surface mesh only)")
         ("quadAspectSubdiv,A",                                              "Split rectangular quads until aspect ratios are below threshold")
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
@@ -153,8 +156,12 @@ int main(int argc, const char *argv[])
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 
-    // Apply coordinate scalings
+    // Apply coordinate translations/scalings
     for (size_t i = 0; i < inVertices.size(); ++i) {
+        if (args.count("Tx")) inVertices[i][0] += args["Tx"].as<double>();
+        if (args.count("Ty")) inVertices[i][1] += args["Ty"].as<double>();
+        if (args.count("Tz")) inVertices[i][2] += args["Tz"].as<double>();
+
         if (args.count("Sx")) inVertices[i][0] *= args["Sx"].as<double>();
         if (args.count("Sy")) inVertices[i][1] *= args["Sy"].as<double>();
         if (args.count("Sz")) inVertices[i][2] *= args["Sz"].as<double>();
@@ -388,6 +395,11 @@ int main(int argc, const char *argv[])
             }
             exit(0);
         }
+    }
+    else if (type == MeshIO::MESH_LINE) {
+        cout << "WARNING: Line mesh transformations are mostly unimplemented." << endl;
+        outVertices = inVertices;
+        outElements = inElements;
     }
     else {
         throw runtime_error("Unrecognized mesh type.");
