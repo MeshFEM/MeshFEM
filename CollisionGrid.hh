@@ -58,7 +58,7 @@ public:
         }
         int closestTag = -1;
         Real closestDist = eps;
-        Point closestPoint;
+        Point closestPoint(Point::Zero()); // Zero-init to avoid warnings
         for (int i = idxMin[0]; i <= idxMax[0]; ++i) {
             for (int j = idxMin[1]; j <= idxMax[1]; ++j) {
                 for (int k = idxMin[2]; k <= idxMax[2]; ++k) {

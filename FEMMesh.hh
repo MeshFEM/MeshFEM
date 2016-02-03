@@ -55,31 +55,19 @@ struct Embedder;
 template<> struct Embedder<2> {
     template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
     static void embed(FEMMesh<2, _Deg, EmbeddingSpace, _FEMData> &mesh) {
-        for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
-            auto e = mesh.element(ei);
+        for (auto e : mesh.elements())
             e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p);
-        }
-        for (size_t bei = 0; bei < mesh.numBoundaryElements(); ++bei) {
-            auto be = mesh.boundaryElement(bei);
+        for (auto be : mesh.boundaryElements())
             be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p);
-        }
     }
 };
 template<> struct Embedder<3> {
     template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
     static void embed(FEMMesh<3, _Deg, EmbeddingSpace, _FEMData> &mesh) {
-        for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
-            auto e = mesh.element(ei);
-            assert(e.node(0).valid());
-            assert(e.node(1).valid());
-            assert(e.node(2).valid());
-            assert(e.node(3).valid());
+        for (auto e : mesh.elements())
             e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p, e.node(3)->p);
-        }
-        for (size_t bei = 0; bei < mesh.numBoundaryElements(); ++bei) {
-            auto be = mesh.boundaryElement(bei);
+        for (auto be : mesh.boundaryElements())
             be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p, be.node(2).volumeNode()->p);
-        }
     }
 };
 
@@ -105,13 +93,14 @@ struct DefaultFEMData {
 template<size_t _K, size_t _Deg, class _EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
 class FEMMesh : public MeshDatastructure<_K>::template type<
-    // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
-    // underlying mesh data structure. The node data is managed by this data
-    // structure.
-    typename _FEMData<_K, _Deg, _EmbeddingSpace>::Vertex,
-    typename _FEMData<_K, _Deg, _EmbeddingSpace>::Element,
-    typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryVertex,
-    typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement>
+        // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
+        // underlying mesh data structure. The node data is managed by this data
+        // structure.
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::Vertex,
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::Element,
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryVertex,
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement
+    >
 {
 public:
     using EmbeddingSpace = _EmbeddingSpace;
@@ -123,6 +112,9 @@ public:
     typedef typename FEMData::BoundaryVertex  BoundaryVertexData;
     typedef typename FEMData::BoundaryNode    BoundaryNodeData;
     typedef typename FEMData::BoundaryElement BoundaryElementData;
+
+    static constexpr size_t K   = _K;
+    static constexpr size_t Deg = _Deg;
 
     typedef typename MeshDatastructure<_K>::template type<VertexData,
         ElementData, BoundaryVertexData, BoundaryElementData>   BaseMesh;
@@ -313,7 +305,7 @@ private:
     template<class Mesh, class Subtype, class ConstSubtype, class Data>
     friend class ConstHandle;
 
-    // Nodes 0..#Vertices are located on the corresponding vertex.
+    // Nodes 0..#Vertices-1 are located on the corresponding vertex.
     // The remaining nodes do not have vertices.
     int m_vertexForNode(int n) const {
         if (size_t(n) < BaseMesh::numVertices()) return n;
@@ -324,8 +316,8 @@ private:
         else return -1;
     }
 
-    // Boundary Nodes 0..#BdryVertices are located on the corresponding boundary
-    // vertex. The remaining nodes do not have vertices.
+    // Boundary Nodes 0..#BdryVertices-1 are located on the corresponding
+    // boundary vertex. The remaining nodes do not have vertices.
     int m_boundaryVertexForBoundaryNode(int bn) const {
         if (size_t(bn) < BaseMesh::numBoundaryVertices()) return bn;
         else return -1;

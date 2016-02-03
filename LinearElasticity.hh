@@ -1147,7 +1147,7 @@ private:
     // Note: a "DoF" here is actually vector-valued--there are actualy
     // N * m_numDoFs variables in the elastostatic equation.
     size_t m_numDoFs = 0;
-    std::vector<int> m_dofForNode;
+    std::vector<size_t> m_dofForNode;
 
     bool m_useRigidMotionConstraint;
     std::vector<Real> m_rigidMotionConstraintRHS;
