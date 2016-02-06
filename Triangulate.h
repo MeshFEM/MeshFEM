@@ -28,7 +28,7 @@ extern "C" {
 #include <vector>
 #include <utility>
 
-#include <MeshIO.hh>
+#include "MeshIO.hh"
 
 // Largely taken from Luigi/Nico's tessellator2d.h
 template<class Point>

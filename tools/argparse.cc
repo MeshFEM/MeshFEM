@@ -37,6 +37,8 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
         ("pull",      po::value<string>(), "Pull a named value to the top of the stack")
         ("push",      po::value<string>(), "Push a scalar literal to the top of the stack")
         ("reverse",                        "Reverse the entire stack.")
+        ("import_sfield", po::value<string>(), "Import a scalar field from an ascii file")
+        ("noprint",                        "Suppress printing on exit")
         ("print,p",                        "Print top of stack")
         ("printName",                      "Print name of value at the top of the stack")
         ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")

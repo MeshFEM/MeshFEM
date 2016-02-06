@@ -14,6 +14,7 @@
 #include "filters/remove_dangling_vertices.hh"
 #include "filters/highlight_dangling_vertices.hh"
 #include "filters/reflect.hh"
+#include "Triangulate.h"
 
 #include <limits>
 #include <iostream>
@@ -66,6 +67,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
         ("reflect,r",                                                       "Reflect a d-dim mesh around the bounding box minimum faces into 2^d copies")
         ("danglingVertexHighlightPath,d", po::value<string>(),              "Write line mesh geometry highlighting the mesh's dangling vertices.")
+        ("triangulate,t",                 po::value<double>(),              "triangulate line mesh with maximal triangle area given as argument")
         ;
 
     po::options_description cli_opts;
@@ -398,8 +400,18 @@ int main(int argc, const char *argv[])
     }
     else if (type == MeshIO::MESH_LINE) {
         cout << "WARNING: Line mesh transformations are mostly unimplemented." << endl;
-        outVertices = inVertices;
-        outElements = inElements;
+        if (args.count("triangulate")) {
+            vector<Point3D> pts;
+            vector<pair<size_t, size_t>> edges;
+            for (auto &v : inVertices) { pts.push_back(v); }
+            for (auto &e : inElements) { edges.push_back({e[0], e[1]}); }
+            triangulatePSLC(pts, edges, std::vector<Point3D>(), outVertices, outElements,
+                            args["triangulate"].as<double>());
+        }
+        else {
+            outVertices = inVertices;
+            outElements = inElements;
+        }
     }
     else {
         throw runtime_error("Unrecognized mesh type.");

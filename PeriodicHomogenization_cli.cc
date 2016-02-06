@@ -162,6 +162,7 @@ void execute(const po::variables_map &args,
         MSHFieldWriter writer(args["fieldOutput"].as<string>(), sim.mesh(),
                               linearSubsampleFields);
         for (size_t i = 0; i < w_ij.size(); ++i) {
+            writer.addField("load_ij " + to_string(i), sim.dofToNodeField(sim.constantStrainLoad(-Simulator::SMatrix::CanonicalBasis(i))), DomainType::PER_NODE);
             writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
             if ((Simulator::Strain::Deg == 0) || linearSubsampleFields) {
                 // Output constant (average) strain when we're outputting piecewise

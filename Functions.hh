@@ -146,7 +146,7 @@ namespace {
     }
     
     // Quadratic Edge
-    // (vol / 6) * (f_0 + f_1 _ 4 * f_2)
+    // (vol / 6) * (f_0 + f_1 + 4 * f_2)
     template<typename _T, template<typename, size_t, size_t> class NS>
     _T _integrate(const Interpolant<_T, Edge, Degree::Quadratic, NS> &f, Real volume) {
         _T result(f[2]);

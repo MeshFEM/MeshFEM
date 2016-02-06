@@ -364,6 +364,27 @@ size_t listNames(const string &, const string &arg, Stack &stack, const Modifier
 // Print the top of the stack.
 size_t print    (const string &op, const string &arg, Stack &stack, const Modifiers &m) { getValue(stack)->print(); cout << endl; return 1; }
 size_t printName(const string &op, const string &arg, Stack &stack, const Modifiers &m) { cout << getValue(stack).name << endl; return 1; }
+size_t noprint  (const string &op, const string &arg, Stack &stack, const Modifiers &m) { return 1; }
+
+template<size_t N>
+size_t importScalarField(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+    const auto &parser = getParser<N>();
+    const auto &vertices = parser.vertices();
+    const auto &elements = parser.elements();
+    ifstream inFile(arg);
+    if (!inFile.is_open()) throw std::runtime_error("Couldn't open scalar field import file: " + arg);
+    Real val;
+    std::vector<Real> values;
+    while (inFile >> val)
+        values.push_back(val);
+    if (values.size() == vertices.size())
+        pushScalarField(stack, arg, values, DomainType::PER_NODE);
+    else if (values.size() == elements.size())
+        pushScalarField(stack, arg, values, DomainType::PER_ELEMENT);
+    else throw std::runtime_error("Didn't recognize imported field size.");
+
+    return 1;
+}
 
 template<size_t N>
 size_t outputMSH(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
@@ -483,21 +504,24 @@ void execute(vector<FilterInvocation> &filters) {
         {"div",    Filter::applyBinaryOp<DivOp>},
         // Custom value operations
         {"print",          Filter::print},
+        {"noprint",        Filter::noprint},
         {"printName",      Filter::printName},
         {"eigenvalues",    Filter::eigenvalue},
         {"sample",         Filter::sample<N>},
         {"elementAverage", Filter::elementAverage<N>},
         // Stack operations
-        {"list",        Filter::listNames<N>},
-        {"extract",     Filter::extract<N>},
-        {"extractAll",  Filter::extractAll<N>},
-        {"generate",    Filter::generate<N>},
-        {"dup",         Filter::dup},
-        {"pop",         Filter::pop},
-        {"push",        Filter::push},
-        {"pull",        Filter::pull},
-        {"reverse",     Filter::reverse},
-        {"outMSH",      Filter::outputMSH<N>}
+        {"list",          Filter::listNames<N>},
+        {"extract",       Filter::extract<N>},
+        {"extractAll",    Filter::extractAll<N>},
+        {"generate",      Filter::generate<N>},
+        {"dup",           Filter::dup},
+        {"pop",           Filter::pop},
+        {"push",          Filter::push},
+        {"pull",          Filter::pull},
+        {"rename",        Filter::rename},
+        {"import_sfield", Filter::importScalarField<N>},
+        {"reverse",       Filter::reverse},
+        {"outMSH",        Filter::outputMSH<N>}
     };
 
     // Classify the operations.

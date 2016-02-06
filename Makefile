@@ -1,8 +1,9 @@
 include platform_defs.mk
 
 INCLUDES=-I$(CSGFEM) -isystem $(EIGEN_INC) -isystem $(SUITESPARSE_INC) -isystem $(BOOST_INC) \
-		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC)
+		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC) -isystem $(TRIANGLE_INC)
 LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS)
+LIBS+=$(TRIANGLE_LFLAGS)
 
 CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o MSHFieldParser.o
 PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshIO.o Types.o Materials.o GlobalBenchmark.o
