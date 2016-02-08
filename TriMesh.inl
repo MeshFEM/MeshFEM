@@ -120,8 +120,8 @@ protected:
 public:
     bool      valid() const { return size_t(m_idx) < m_mesh.numTris(); }
     bool isBoundary() const { return halfEdge(0).isBoundary()
-                                || halfEdge(1).isBoundary()
-                                || halfEdge(2).isBoundary(); }
+                                  || halfEdge(1).isBoundary()
+                                  || halfEdge(2).isBoundary(); }
 
     // Note: true neighbor count can be less than 3; must check if neighbor(i)
     // is valid.

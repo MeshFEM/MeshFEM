@@ -10,6 +10,9 @@
 //  Company:  New York University
 //  Created:  06/16/2014 07:22:33
 ////////////////////////////////////////////////////////////////////////////////
+#ifndef COLLISIONGRID_HH
+#define COLLISIONGRID_HH
+
 #include <map>
 #include <vector>
 #include <cassert>
@@ -108,3 +111,5 @@ private:
     typedef std::vector<std::pair<Point, size_t> > Bin;
     std::map<CellIdx, Bin> m_cells;
 };
+
+#endif /* end of include guard: COLLISIONGRID_HH */

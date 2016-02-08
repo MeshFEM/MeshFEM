@@ -144,6 +144,9 @@ public:
     size_t numNodes()        const { return numVertexNodes() +  numEdgeNodes() + numElementNodes(); }
     size_t numElements()     const { return BaseMesh::numSimplices(); }
 
+    // Number of strictly interior nodes (excluding nodes on the boundary).
+    size_t numInternalNodes() const { return numNodes() - numBoundaryNodes(); }
+
     const UnorderedPair &edgeForEdgeNode(size_t eni) const {
         return m_edgeForEdgeNode.at(eni);
     }
@@ -374,10 +377,14 @@ private:
     }
 
     // Must be called on the global index of an edge node!
+    // Returns -1 for interior edge nodes
     int m_bdryEdgeNodeForVolEdgeNode(size_t n) const {
         size_t eidx = m_edgeNodeIndex(n);
         assert(eidx < m_bdryEdgeForVolEdge.size());
-        return m_bdryEdgeForVolEdge[eidx] + numBoundaryVertexNodes();
+        int beidx = m_bdryEdgeForVolEdge[eidx];
+        if (beidx == -1) return -1; // internal edge node
+        assert(size_t(beidx) < numBoundaryEdgeNodes());
+        return beidx + numBoundaryVertexNodes();
     }
     // Must be called on the global index of a boundary edge node!
     int m_volEdgeNodeForBdryEdgeNode(size_t n) const {

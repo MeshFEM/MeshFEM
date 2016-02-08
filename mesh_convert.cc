@@ -14,6 +14,7 @@
 #include "filters/remove_dangling_vertices.hh"
 #include "filters/highlight_dangling_vertices.hh"
 #include "filters/reflect.hh"
+#include "filters/CurveCleanup.hh"
 #include "Triangulate.h"
 
 #include <limits>
@@ -67,7 +68,9 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
         ("reflect,r",                                                       "Reflect a d-dim mesh around the bounding box minimum faces into 2^d copies")
         ("danglingVertexHighlightPath,d", po::value<string>(),              "Write line mesh geometry highlighting the mesh's dangling vertices.")
-        ("triangulate,t",                 po::value<double>(),              "triangulate line mesh with maximal triangle area given as argument")
+        ("triangulate,t",                 po::value<double>(),              "Triangulate line mesh with maximal triangle area given as argument")
+        ("clean,c",                                                         "Clean line mesh")
+        ("periodic",                                                        "Perform the cleaning operation periodically")
         ;
 
     po::options_description cli_opts;
@@ -271,6 +274,15 @@ int main(int argc, const char *argv[])
             }
             quad_tri_subdiv(inVertices, inElements, outVertices, outElements, dummy);
         }
+        else if (args.count("boundary"))  {
+            outVertices.clear(), outElements.clear();
+            for (size_t i = 0; i < mesh.numBoundaryVertices(); ++i)
+                outVertices.emplace_back(mesh.boundaryVertex(i)->p);
+            for (size_t i = 0; i < mesh.numBoundaryEdges(); ++i) {
+                outElements.emplace_back(mesh.boundaryEdge(i).vertex(0).index(),
+                                         mesh.boundaryEdge(i).vertex(1).index());
+            }
+        }
         else {
             // Output is the unmodified triangle mesh
             outVertices = inVertices;
@@ -400,17 +412,32 @@ int main(int argc, const char *argv[])
     }
     else if (type == MeshIO::MESH_LINE) {
         cout << "WARNING: Line mesh transformations are mostly unimplemented." << endl;
+        outVertices = inVertices;
+        outElements = inElements;
+        if (args.count("clean")) {
+            curveCleanup(inVertices, inElements, outVertices, outElements, 0.005, 0.05, M_PI / 4, args.count("periodic"));
+
+            cout << "post-cleanup stats: " << endl;
+            cout << "Edges:\t" << inElements.size() << endl
+                 << "Vertices:\t" << inVertices.size() << endl;
+
+            vector<Real> edgeLengths;
+            for (const auto &e : outElements) {
+                edgeLengths.push_back(
+                        (outVertices[e[1]].point - outVertices[e[0]].point).norm());
+            }
+
+            reportArrayStats("edge length", edgeLengths);
+        }
         if (args.count("triangulate")) {
             vector<Point3D> pts;
             vector<pair<size_t, size_t>> edges;
-            for (auto &v : inVertices) { pts.push_back(v); }
-            for (auto &e : inElements) { edges.push_back({e[0], e[1]}); }
+            // operate on outVertices/outElements, so we use the result of
+            // previous filters.
+            for (auto &v : outVertices) { pts.push_back(v); }
+            for (auto &e : outElements) { edges.push_back({e[0], e[1]}); }
             triangulatePSLC(pts, edges, std::vector<Point3D>(), outVertices, outElements,
                             args["triangulate"].as<double>());
-        }
-        else {
-            outVertices = inVertices;
-            outElements = inElements;
         }
     }
     else {

@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef BOUNDARYCONDITIONS_HH
 #define BOUNDARYCONDITIONS_HH
-#include "CollisionGrid.hh"
+#include "PeriodicBoundaryMatcher.hh"
 #include "Geometry.hh"
 #include "Types.hh"
 #include "ExpressionVector.hh"
@@ -372,92 +372,30 @@ public:
     template<typename Mesh>
     PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-5) {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
-        // Choose a cell size on the order of epsilon. This should be safe since
-        // the max node coordinate shouldn't anyhere near large enough that
-        // dividing by epsilon causes an overflow. We don't want any larger than
-        // epsilon because then we'd have to check for many (empty) boxes.
-        CollisionGrid<Real, VectorND<_N>> cgrid(epsilon);
 
-        // Sparse collection of periodically-paired nodes for each node.
-        // (VOLUME NODE INDICES!)
-        // Unpaired nodes have no entry in this map, while paired nodes
-        // map to an _N-dim array with at least one entry that isn't NO_PAIR.
-        std::map<size_t, std::array<size_t, _N>> pair;
+        std::vector<VectorND<_N>> bdryPts;
+        bdryPts.reserve(mesh.numBoundaryNodes());
+        for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
 
-        // To determine if a boundary face is on the periodic boundary, we
-        // check if all its nodes are on *the same* periodic boundary
-        // (just checking if all nodes are on a periodic boundary will
-        //  incorrectly mark some faces near the period cell edges)
-        // This map from boundary nodes to the set of periodic boundary it lies
-        // on is encoded as a bitset with the following bits
-        //      0, _N + 0: on min, max x face
-        //      1, _N + 1: on min, max y face
-        //    [ 2, _N + 2: on min, max z face ]
-        m_periodicBoundariesForBoundaryNode.clear();
-        m_periodicBoundariesForBoundaryNode.resize(mesh.numBoundaryNodes());
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
+                cell, m_periodicBoundariesForBoundaryNode);
 
-        for (size_t d = 0; d < _N; ++d) {
-            cgrid.reset();
-            std::vector<size_t> maxfaceNodes;
-            for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
-                auto vn = mesh.boundaryNode(i).volumeNode();
-                if (std::abs(vn->p[d] - cell.minCorner[d]) < epsilon) {
-                    cgrid.addPoint(vn->p, vn.index());
-                    m_periodicBoundariesForBoundaryNode[i].set(d);
-                }
-                if (std::abs(vn->p[d] - cell.maxCorner[d]) < epsilon) {
-                    maxfaceNodes.push_back(vn.index());
-                    m_periodicBoundariesForBoundaryNode[i].set(_N + d);
-                }
-            }
-            for (size_t ni : maxfaceNodes) {
-                VectorND<_N> query(mesh.node(ni)->p);
-                query[d] = cell.minCorner[d];
-                auto result = cgrid.getClosestPoint(query, epsilon);
-                if (result.first == -1) {
-                    std::stringstream ss;
-                    auto n = mesh.node(ni);
-                    ss << "Couldn't match periodic boundary node " << ni << " "
-                       << n->p << "; looking for: " << query << std::endl
-                       << "This is a " << ((n.isEdgeNode()) ? "edge" : "vertex")
-                       << " node." << std::endl;
-                    if (n.isEdgeNode()) {
-                        auto edge = mesh.edgeForEdgeNode(n.edgeNodeIndex());
-                        ss << "Edge endpoints: "
-                           << edge[0] << ", " << edge[1] << std::endl
-                           << "(at " << mesh.node(edge[0])->p << " and "
-                           << mesh.node(edge[1])->p << ")" << std::endl;
-                    }
-                    throw std::runtime_error(ss.str());
-                }
-                assert(result.first >= 0);
-                size_t pi = size_t(result.first);
-                // Fill out (symmetric) pair adjacency information
-                if (pair.count(ni) == 0) {
-                    assert(pair.count(pi) == 0);
-                    // Cast needed; can't  pass storage-less constexpr to fill
-                    pair[ni].fill(size_t(NO_PAIR));
-                    pair[pi].fill(size_t(NO_PAIR));
-                }
-                assert(pair.count(pi) + pair.count(ni) == 2);
-                auto &np = pair[ni];
-                auto &pp = pair[pi];
-                if ((np[d] != NO_PAIR) || (pp[d] != NO_PAIR))
-                    throw std::runtime_error("Non-bijective boundary matching");
-                np[d] = pi;
-                pp[d] = ni;
-            }
-        }
+        // Determine identified boundary nodes.
+        std::vector<std::vector<size_t> > bdryNodeSets;
+        std::vector<size_t              > bdryNodeSetForBdryNode;
+        PeriodicBoundaryMatcher::match(bdryPts, cell,
+                m_periodicBoundariesForBoundaryNode,
+                bdryNodeSets, bdryNodeSetForBdryNode, epsilon);
 
-        // Mark the periodic boundary elements.
+        // Mark periodic boundary elements: those with all corners on the same
+        // periodic boundary.
         m_isPeriodicBoundaryElement.resize(mesh.numBoundaryElements());
         for (auto be : mesh.boundaryElements()) {
             // Determine what periodic boundary this element lies on.
             auto pboundaries = m_periodicBoundariesForBoundaryNode.at(be.node(0).index());
             for (size_t j = 1; j < be.numNodes(); ++j)
                 pboundaries &= m_periodicBoundariesForBoundaryNode.at(be.node(j).index());
-            // It can't be on more than one boundary...
-            // (i.e. power or 2 or zero--use bit hack)
+            // An element can't be on more than one boundary...
             size_t numBoundaries = pboundaries.count();
             assert(numBoundaries < 2);
             m_isPeriodicBoundaryElement[be.index()] = numBoundaries > 0;
@@ -470,35 +408,25 @@ public:
         // DOFs per node i, with indices
         //   [ 3 * m_dofForNode[i] + 0, 3 * m_dofForNode[i] + 1,
         //     3 * m_dofForNode[i] + 2 ]
-
-        // BFS connected components
-        // Assign each node in a connected component of identified nodes
-        // the same DoF
         m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
-        m_nodesForDoF.clear();
-        m_nodesForDoF.reserve(mesh.numNodes()); // very conservative--prevent realloc
-        for (size_t i = 0; i < mesh.numNodes(); ++i) {
-            if (m_dofForNode[i] != NO_DOF) continue;
-            size_t dof = m_nodesForDoF.size();
-            m_dofForNode[i] = dof;
-            m_nodesForDoF.emplace_back(1, i);
-            std::queue<size_t> bfsQueue;
-            bfsQueue.push(i);
-            while (!bfsQueue.empty()) {
-                int u = bfsQueue.front(); bfsQueue.pop();
-                assert(size_t(m_dofForNode[u]) == dof);
-                auto it = pair.find(u);
-                if (it == pair.end()) continue;
-                for (size_t v: it->second) {
-                    if (v == NO_PAIR) continue;
-                    if (m_dofForNode[v] == NO_DOF) {
-                        m_dofForNode[v] = dof;
-                        m_nodesForDoF.at(dof).push_back(v);
-                        bfsQueue.push(v);
-                    }
-                    else assert(size_t(m_dofForNode[v]) == dof);
-                }
+        m_nodesForDoF.clear(), m_nodesForDoF.reserve(mesh.numInternalNodes() +
+                                                     bdryNodeSets.size());
+        // Create a DoF with a single associated node for each internal node.
+        for (auto n : mesh.nodes()) {
+            if (n.boundaryNode()) continue;
+            assert(m_dofForNode.at(n.index()) == NO_DOF);
+            m_dofForNode.at(n.index()) = m_nodesForDoF.size();
+            m_nodesForDoF.emplace_back(1, n.index());
+        }
+        // Add DoFs for the boundary node sets, translating to volume indices
+        // Note: invalidates bdryNodeSets!!!
+        for (auto &ns : bdryNodeSets) {
+            for (size_t &n : ns) {
+                n = mesh.boundaryNode(n).volumeNode().index();
+                assert(m_dofForNode.at(n) == NO_DOF);
+                m_dofForNode.at(n) = m_nodesForDoF.size();
             }
+            m_nodesForDoF.emplace_back(std::move(ns));
         }
 
         // All nodes should have been assigned valid DOFs
@@ -530,12 +458,12 @@ public:
 
     // Return 0 if boundary node bni is not on the d^th min or max cell face
     // Return -1 if it's on the min face
-    // Return  1 if it's on the min face
+    // Return  1 if it's on the max face
     int bdryNodeOnMinOrMaxPeriodCellFace(size_t bni, size_t d) const {
         assert(d < _N);
         const auto &bdry = m_periodicBoundariesForBoundaryNode.at(bni);
-        if (bdry.test(     d)) return -1;
-        if (bdry.test(_N + d)) return  1;
+        if (bdry.onMinFace(d)) return -1;
+        if (bdry.onMaxFace(d)) return  1;
         return 0;
     }
 
@@ -547,9 +475,8 @@ public:
     // Returns true if "a <= b"   (either a < b or a ==  b)
     //         false otherwise    (either b < a or a and b cannot be compared)
     bool bdryNodePeriodCellFacesPartialOrderLessEq(size_t a, size_t b) const {
-        const auto &aFaces = m_periodicBoundariesForBoundaryNode.at(a);
-        const auto &bFaces = m_periodicBoundariesForBoundaryNode.at(b);
-        return ((aFaces & bFaces) == aFaces);
+        return m_periodicBoundariesForBoundaryNode.at(a)
+            <= m_periodicBoundariesForBoundaryNode.at(b);
     }
 
     size_t numPeriodicDoFs() const { return m_nodesForDoF.size(); }
@@ -557,7 +484,7 @@ public:
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;
     // Which periodic boundaries is a boundary node on?
-    std::vector<std::bitset<2 * _N>> m_periodicBoundariesForBoundaryNode;
+    std::vector<PeriodicBoundaryMatcher::FaceMembership<_N>> m_periodicBoundariesForBoundaryNode;
     std::vector<size_t> m_dofForNode;
     std::vector<std::vector<size_t>> m_nodesForDoF;
 };

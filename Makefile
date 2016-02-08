@@ -20,9 +20,9 @@ SOURCES=ConstStrainDisplacement_cli.cc DeformedCells_cli.cc PeriodicHomogenizati
 TARGETS=mesh_convert PeriodicHomogenization_cli MaterialOptimization_cli Simulate_cli ConstStrainDisplacement_cli DeformedCells_cli SimulateTiledQuad_cli
 
 CPPFLAGS+=-Wall -Wunused-parameter -Wsign-compare -Wpedantic -std=c++11 $(INCLUDES)
-CPPFLAGS+=-O2 -DBENCHMARK # -DTOO_LARGE_FOR_METIS
+# CPPFLAGS+=-O2 -DBENCHMARK # -DTOO_LARGE_FOR_METIS
 # CPPFLAGS+=-DVERBOSE_DANGLING_VERTEX
-# CPPFLAGS+=-O0 -g
+CPPFLAGS+=-O0 -g
 # CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 
 all: $(TARGETS)

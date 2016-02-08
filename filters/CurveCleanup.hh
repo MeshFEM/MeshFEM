@@ -1,0 +1,350 @@
+////////////////////////////////////////////////////////////////////////////////
+// CurveCleanup.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Clean a single connected, closed, simple curve:
+//           1) Collapsing short edges
+//           2) Splitting   long edges
+//      Operations are performed in this order, so if splitting creates short
+//      edges, the new edges will not be collapsed.
+//
+//      The operations preserve the topology of a periodically or reflectively
+//      tiled mesh by constraining vertices on the bbox min/max faces from
+//      moving off those faces.
+//      If "periodic = true" is passed, the axis-aligned periodicity of the
+//      discrete curve mesh itself is also preserved by ensuring paired vertices
+//      are collapsed/split simultaneously.
+//
+//      "Sharp features" are preserved by ensuring no feature vertex (vertex
+//      with angle differing significantly from pi) is merged into a non-feature
+//      vertex. However, we never let this criterion prevent a merge: two
+//      adjacent sharp features are merged to avoid robustness issues with
+//      jagged boundaries. Also, we allow feature vertices adjacent to the
+//      periodic boundary to merge into the boundary.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  02/03/2016 15:29:15
+////////////////////////////////////////////////////////////////////////////////
+#ifndef CURVECLEANUP_HH
+#define CURVECLEANUP_HH
+
+#include <stdexcept>
+#include <list>
+#include <vector>
+#include <random>
+
+#include "extract_polygons.hh"
+#include "../PeriodicBoundaryMatcher.hh"
+#include "../MeshIO.hh"
+#include "../Utilities/IteratorMap.hh"
+
+// Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
+// and we clean it in-place.
+// We take advantage of this representation to identify edge v0->v1 with vertex v0.
+template<size_t N>
+void curveCleanup(std::list<VectorND<int(N)>> &curve,
+                  BBox<VectorND<int(N)>> &cell,
+                  Real minLen, Real maxLen, Real featureAngleThreshold,
+                  bool periodic = false) {
+    using Point = VectorND<N>;
+    using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
+    static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
+
+    // Vertices are linked with their outgoing edge.
+    using  Curve = std::list<Point>;
+    using  VtxIt = typename Curve::iterator;
+    using EdgeIt = typename Curve::iterator;
+
+    // Determine periodically-identified edge pairs if periodicity preservation
+    // is requested. We only handle the 2D case for now, where a boundary edge
+    // has exactly one pair.
+    // We ensure that paired edges are always collapsed (erased from curve)
+    // simultaneously, so both keys and values of "pair" are valid iterators.
+    IteratorMap<EdgeIt, EdgeIt> pair;
+    if (periodic) {
+        if (N != 2) throw std::runtime_error("Periodic curve cleanup only implemented for 2D");
+
+        std::vector<FMembership> fm;
+        std::vector<std::vector<size_t>> nodeSets;
+        std::vector<size_t>              nodeSetForNode;
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(curve, cell, fm);
+        PeriodicBoundaryMatcher::match(curve, cell, fm, nodeSets, nodeSetForNode);
+
+        // (Temporary) constant-time random access to list iterators
+        std::vector<EdgeIt> edges;
+        edges.reserve(curve.size());
+        for (auto ei = curve.begin(); ei != curve.end(); ++ei)
+            edges.push_back(ei);
+        for (size_t ei = 0; ei < curve.size(); ++ei) {
+            size_t v0i = ei;
+            size_t v1i = (ei + 1) % curve.size();
+            // Determine which periodic face the edge is on, if any. Since we're only
+            // implementing the 2D case, there should be only one.
+            auto eFM = fm[v0i] & fm[v1i];
+            if (eFM.count() > 1) throw std::runtime_error("ERROR: edge on more than one periodic cell face.");
+            if (eFM.count() == 0) continue;
+
+            // The periodic pair edge should be in the opposite orientation
+            // (v1i_pair -> v0i_pair)
+            // If v0i or v1i are on a corner, there are multiple pair candidates to check.
+            size_t ei_pair = NO_PAIR;
+            for (size_t v1i_pair : nodeSets[nodeSetForNode[v1i]]) {
+                for (size_t v0i_pair : nodeSets[nodeSetForNode[v0i]]) {
+                    if (v0i_pair == (v1i_pair + 1) % curve.size()) {
+                        assert(ei_pair == NO_PAIR);
+                        ei_pair = v1i_pair;
+                    }
+                }
+            }
+            if (ei_pair == NO_PAIR) throw std::runtime_error("Couldn't find periodic-matching edge.");
+            pair[edges.at(ei)] = edges.at(ei_pair);
+        }
+
+        // Verify all periodic edges are paired and the pairing is symmetric.
+        for (size_t ei = 0; ei < edges.size(); ++ei) {
+            bool isPeriodicEdge = (fm[ei] & fm[(ei + 1) % curve.size()]).count();
+            if (!isPeriodicEdge) continue;
+            auto e = edges.at(ei);
+            if (pair.count(e) == 0) throw std::runtime_error("Unpaired edge found.");
+            if (pair.at(pair.at(e)) != e) throw std::runtime_error("Inconsistent edge pairing");
+        }
+    }
+
+    // Circular access
+    auto next = [&](VtxIt i) { ++i; if (i == curve.end()) return curve.begin(); return i; };
+    auto prev = [&](VtxIt i) { if (i == curve.begin()) i = curve.end(); return --i; };
+
+    auto edgeLen = [&](EdgeIt ei) -> Real { return (*next(ei) - *ei).norm(); };
+
+    // Vertices are features if they have an incident angle significantly
+    // different from pi.
+    // We also consider vertices with greater face membership than either of
+    // their neighbors to be features to discourage changing the shape of the
+    // "connector" geometry.
+    auto isFeature = [&](VtxIt v) -> bool {
+        const Point &p = *v, &pn = *(next(v)), &pp = *(prev(v));
+        Real theta = angle((pn - p).eval(), (pp - p).eval());
+        if (std::abs(theta - M_PI) > featureAngleThreshold) return true;
+        FMembership fmp(p, cell), fmpn(pn, cell), fmpp(pp, cell);
+        if (!(fmp <= fmpn) || !(fmp <= fmpp)) return true;
+        return false;
+    };
+
+    // Set of (valid) edge iterators pointing to short edges.
+    IteratorSet<EdgeIt> shortEdges;
+    Real longestEdgeLen = 0;
+    for (auto ei = curve.begin(); ei != curve.end(); ++ei) {
+        if (edgeLen(ei) < minLen) shortEdges.insert(ei);
+        longestEdgeLen = std::max(edgeLen(ei), longestEdgeLen);
+    }
+
+    // Collapse operation: collapse the edge associated with "tail" into
+    // collapsePt by moving tip to collapsePt and deleting tail.
+    auto collapse = [&](VtxIt tail, Point &collapsePt) {
+        VtxIt tip = next(tail);
+        *tip = collapsePt;
+        curve.erase(tail);
+
+        // The lengths of neighboring edges have changed--add any newly created
+        // short edges to the short edge queue.
+        EdgeIt eprev = prev(tip);
+        if (edgeLen(  tip) < minLen) shortEdges.insert(tip);
+        if (edgeLen(eprev) < minLen) shortEdges.insert(eprev);
+    };
+
+    std::default_random_engine generator;
+    while (!shortEdges.empty()) {
+        auto seEntry = shortEdges.begin();
+
+        // Choose a random short edge to improve quality in case of many merges.
+        // If edges are merged in order, the merge point will "walk" around the
+        // curve, causing much more extreme merging than desired.
+        // O(#short edges)--could probably be optimized.
+        if (shortEdges.size() > 0) {
+            std::uniform_int_distribution<int> distribution(0, shortEdges.size() - 1);
+            int r = distribution(generator);
+            while (r-- > 0) { ++seEntry; }
+        }
+
+        EdgeIt se = *seEntry;
+        shortEdges.erase(seEntry);
+
+        // Previous collapses could have lengthened se above the collapse
+        // threshold--skip it in this case.
+        if (edgeLen(se) >= minLen) continue;
+
+        VtxIt v0 = se;
+        VtxIt v1 = next(se);
+
+        ////////////////////////////////////////////////////////////////////////
+        // Determine the collapse point location based on mergeability criteria.
+        ////////////////////////////////////////////////////////////////////////
+        // Can we merge 0 into 1 or 1 into 0 without changing tiled topology?
+        // v0 can be merged into v1 if v0 is on a subset of the faces v1 is on.
+        // This is a hard constraint; never perform merges that change topology.
+        FMembership fm0(*v0, cell), fm1(*v1, cell);
+        bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
+
+        // We try to avoid merging a feature vertex into another vertex.
+        // However, we never let the existence of features prevent a merge:
+        // 1) If the topology preservation constraint forces only one direction
+        //    of merging, we always take it (feature vertices near a periodic
+        //    boundary merge into the periodic boundary)
+        // 2) We merge adjacent feature vertices to their midpoint.
+        if (merge01 && merge10) {
+            // Allow features to block merges
+            merge01 = !isFeature(v0);
+            merge10 = !isFeature(v1);
+            // If both vertices are features (or both are not) allow the merge
+            if (merge01 == merge10)
+                merge01  = merge10 = true;
+        }
+
+        // Merge into midpoint, vertex 0, or vertex 1 location
+        Point collapsePt;
+        if (merge01 && merge10) collapsePt = (0.5 * (*v0 + *v1)).eval();
+        else if (merge01)       collapsePt = *v1;
+        else if (merge10)       collapsePt = *v0;
+        else                    continue; // no merge possible
+
+        ////////////////////////////////////////////////////////////////////////
+        // Perform the collapse (but first the periodically-corresponding
+        // collapse if periodicity preservation is requested)
+        ////////////////////////////////////////////////////////////////////////
+        // Determine what cell boundaries the edge lies on
+        auto seFM = fm0 & fm1;
+        if (periodic && seFM.count()) {
+            // Since we only support the 2D case, the edge should be on only a
+            // single period cell face.
+            if (seFM.count() > 1) throw std::runtime_error("ERROR: edge on more than one periodic cell face.");
+
+            // By periodicity, if this is a periodic edge, its pair should also
+            // need collapsing. Do it now to ensure periodicity is maintained.
+            auto pse_map_iter = pair.find(se);
+            if (pse_map_iter == pair.end()) throw std::runtime_error("Couldn't find periodic edge pair!");
+            EdgeIt pse = pse_map_iter->second;
+            auto pseEntry = shortEdges.find(pse);
+            if (pseEntry == shortEdges.end()) throw std::runtime_error("ERROR: periodic pair of a short edge isn't short!");
+
+            // The collapse to the periodic pair of collapsePt:
+            Point pairCollapsePt = collapsePt;
+            bool flip = false;
+            for (size_t d = 0; d < N; ++d) {
+                if (seFM.onMinFace(d)) { pairCollapsePt[d] = cell.maxCorner[d]; flip = true; break; }
+                if (seFM.onMaxFace(d)) { pairCollapsePt[d] = cell.minCorner[d]; flip = true; break; }
+            }
+            assert(flip);
+
+            // Remove from our iterator collections the iterators that are about
+            // to be erased (invalidated).
+            shortEdges.erase(pseEntry);
+            pair.erase(pse_map_iter);
+            auto paired_pse_map_iter = pair.find(pse);
+            if (paired_pse_map_iter == pair.end()) throw std::runtime_error("Couldn't find paired edge's periodic pair!");
+            pair.erase(paired_pse_map_iter);
+
+            collapse(pse, pairCollapsePt);
+        }
+
+        collapse(se, collapsePt);
+
+#if 0
+        {
+            static size_t iter = 0;
+            std::vector<MeshIO::IOVertex> collapsedVertices;
+            std::vector<MeshIO::IOElement> collapsedEdges;
+            for (const auto &p : curve) {
+                collapsedEdges.emplace_back(collapsedVertices.size(), collapsedVertices.size() + 1);
+                collapsedVertices.emplace_back(p);
+            }
+            collapsedEdges.back()[1] = 0;
+            MeshIO::save("collapsed_" + std::to_string(++iter) + ".msh", collapsedVertices, collapsedEdges);
+        }
+#endif
+    }
+
+    // Splitting is much easier--periodicity is automatically maintained, and
+    // iterators are not invalidated.
+    IteratorSet<EdgeIt> longEdges;
+    for (auto ei = curve.begin(); ei != curve.end(); ++ei)
+        if (edgeLen(ei) > maxLen) longEdges.insert(ei);
+    while (!shortEdges.empty()) {
+        auto leEntry = longEdges.begin();
+        EdgeIt le = *leEntry;
+        longEdges.erase(leEntry);
+
+        const auto &p0 = *le;
+        const auto &p1 = *next(le);
+        // Insert midpoint of p0 and p1 between le and next(le)
+        auto enew = curve.insert(next(le), 0.5 * (p0 + p1));
+        // le is the newly shortened edge, and enew is the newly created edge.
+        // They should both have equal sizes...
+        Real newLen = edgeLen(enew);
+        assert(std::abs(newLen - edgeLen(le)) < 1e-8);
+        if (newLen > maxLen) {
+            longEdges.insert(le);
+            longEdges.insert(enew);
+        }
+    }
+}
+
+// Convenience version--operate on vector instead of list.
+template<size_t N>
+void curveCleanup(std::vector<VectorND<int(N)>> &curve,
+                  BBox<VectorND<int(N)>> &cell,
+                  Real minLen, Real maxLen,
+                  Real featureAngleThreshold, bool periodic = false) {
+    using Point = VectorND<int(N)>;
+    std::list<Point> curveList;
+    for (const Point &p : curve) curveList.push_back(p);
+    curveCleanup(curveList, cell, minLen, maxLen, featureAngleThreshold, periodic);
+
+    curve.clear();
+    curve.reserve(curveList.size());
+    for (const Point &p : curveList)
+        curve.emplace_back(p);
+}
+
+// Convenience version--operate on line soup, preserving bbox "cell"
+template<size_t N>
+void curveCleanup(const std::vector<MeshIO::IOVertex> &inVertices,
+                  const std::vector<MeshIO::IOElement> &inElements,
+                  std::vector<MeshIO::IOVertex> &outVertices,
+                  std::vector<MeshIO::IOElement> &outElements,
+                  BBox<VectorND<int(N)>> &cell,
+                  Real minLen, Real maxLen,
+                  Real featureAngleThreshold, bool periodic = false) {
+    outVertices.clear(), outElements.clear();
+    std::list<std::list<VectorND<N>>> polygons;
+    extract_polygons<N>(inVertices, inElements, polygons);
+    for (auto &poly : polygons) {
+        curveCleanup<N>(poly, cell, minLen, maxLen, featureAngleThreshold, periodic);
+        size_t offset = outVertices.size();
+        for (const auto &p : poly) {
+            outElements.emplace_back(outVertices.size(), outVertices.size() + 1);
+            outVertices.emplace_back(p);
+        }
+        outElements.back()[1] = offset;
+    }
+}
+
+// Convenience version--operate on line soup, inferring dimension.
+void curveCleanup(const std::vector<MeshIO::IOVertex> &inVertices,
+                  const std::vector<MeshIO::IOElement> &inElements,
+                  std::vector<MeshIO::IOVertex> &outVertices,
+                  std::vector<MeshIO::IOElement> &outElements,
+                  Real minLen, Real maxLen,
+                  Real featureAngleThreshold, bool periodic = false) {
+    // Infer dimension from bounding box.
+    BBox<Point3D> bbox(inVertices);
+    if (bbox.dimensions()[2] < 1e-8) {
+        BBox<Point2D> bbox2D(inVertices);
+        curveCleanup<2>(inVertices, inElements, outVertices, outElements, bbox2D, minLen, maxLen, featureAngleThreshold, periodic);
+    }
+    else {
+        curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, minLen, maxLen, featureAngleThreshold, periodic);
+    }
+}
+
+#endif /* end of include guard: CURVECLEANUP_HH */

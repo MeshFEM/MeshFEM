@@ -36,9 +36,11 @@ public:
     // Get the vertex this node is sitting on (if any)
     VH vertex()     const { return VH(m_mesh.m_vertexForNode(m_idx), m_mesh); }
 
-    // Get the boundary node collocated with this volume node.
+    // Get the boundary node collocated with this volume node
+    // Returns invalid if internal
     BNH boundaryNode() const {
-        if (isVertexNode()) return vertex().boundaryVertex().node();
+        // Both traversals guaranteed to obtain invalid node (-1) if this node is internal
+        if (isVertexNode()) return vertex().boundaryVertex().node(); 
         else return BNH(m_mesh.m_bdryEdgeNodeForVolEdgeNode(m_idx), m_mesh);
     }
     // Identity operation--avoids explicitly handling some special use cases.
