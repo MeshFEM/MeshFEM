@@ -66,7 +66,7 @@ class Interpolant;
 // Hidden implementations of interpolated functions
 // (Not easily implemented in the interpolant class because member function
 //  specialization is disallowed)
-namespace {
+namespace detail {
     using namespace Degree;
     using namespace Simplex;
 
@@ -245,9 +245,9 @@ namespace {
 // Interpolation<Simplex::{Edge,Triangle,Tetrahedron}, Degree>::interpolate(f);
 template<size_t _K, size_t _Deg>
 class Interpolation { };
-template<size_t _Deg> class Interpolation<Simplex::Edge,        _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_edge<_Deg>(f)) { return _interpolant_edge<_Deg>(f); } };
-template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tri< _Deg>(f)) { return _interpolant_tri< _Deg>(f); } };
-template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(_interpolant_tet< _Deg>(f)) { return _interpolant_tet< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Edge,        _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_edge<_Deg>(f)) { return detail::_interpolant_edge<_Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_tri< _Deg>(f)) { return detail::_interpolant_tri< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_tet< _Deg>(f)) { return detail::_interpolant_tet< _Deg>(f); } };
 
 template<typename _T, size_t _K, size_t _Deg>
 class DefaultNodalStoragePolicy {
@@ -321,7 +321,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Pass in a column vector of barycentric coordinates...
     _T operator()(const VectorND<Simplex::numVertices(_K)> &baryCoords) const {
-        return _interpolate(*this, baryCoords);
+        return detail::_interpolate(*this, baryCoords);
     }
     // ... or a list of them, which is converted into a column vector
     // This list must be either of length 0 or 2+, so we use enable_if to ensure
@@ -331,7 +331,7 @@ public:
         static_assert(((_Deg == 0) && (sizeof...(baryCoords) == 0))
                 || (Simplex::numVertices(_K) == sizeof...(baryCoords)),
                 "Invalid number of barycentric coordinates passed.");
-        return _interpolate(*this, baryCoords...);
+        return detail::_interpolate(*this, baryCoords...);
     }
 
     // Allow assignment between interpolants of the same class.
@@ -394,15 +394,15 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Integration over a (linearly deformed) simplex with volume vol
     ////////////////////////////////////////////////////////////////////////////
-    _T integrate(Real vol) const { return _integrate(*this, vol); }
-    _T average()           const { return _integrate(*this, 1.0); }
+    _T integrate(Real vol) const { return detail::_integrate(*this, vol); }
+    _T average()           const { return detail::_integrate(*this, 1.0); }
 };
 
 template<typename _T, size_t _K, size_t _Deg, 
          template<typename, size_t, size_t> class _NS>
 std::ostream & operator<<(std::ostream &os, const Interpolant<_T, _K, _Deg, _NS> &f) {
     os << "Deg " << _Deg << " over " << _K << "-simplex:";
-    for (size_t i = 0; i < numNodes(_K, _Deg); ++i)
+    for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i)
         os << '\t' << f[i];
     os << std::endl;
     return os;

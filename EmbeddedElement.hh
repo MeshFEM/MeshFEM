@@ -67,8 +67,8 @@ public:
                 for (size_t j = 0; j < numVertices; ++j)
                     result[j] = EmbeddingSpace::Zero();
                 i -= numVertices;
-                result[Simplex::edgeStartNode(i)] = 4 * m_gradBarycentric.col(edgeEndNode(i));
-                result[Simplex::edgeEndNode(i)]   = 4 * m_gradBarycentric.col(edgeStartNode(i));
+                result[Simplex::edgeStartNode(i)] = 4 * m_gradBarycentric.col(Simplex::edgeEndNode(i));
+                result[Simplex::edgeEndNode(i)]   = 4 * m_gradBarycentric.col(Simplex::edgeStartNode(i));
                 // if (_K > 1) result[Simplex::oppositeNode(i)] = EmbeddingSpace::Zero();
                 // if (_K > 2) result[Simplex::otherOppositeNode(i)] = EmbeddingSpace::Zero();
             }

@@ -18,8 +18,7 @@
 #include "Geometry.hh"
 #include "EmbeddedElement.hh"
 
-#include "TriMesh.hh"
-#include "TetMesh.hh"
+#include "SimplicialMesh.hh"
 #include <map>
 #include <cassert>
 
@@ -30,23 +29,6 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace> struct DefaultFEMData;
 template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData = DefaultFEMData>
 class FEMMesh;
-
-////////////////////////////////////////////////////////////////////////////////
-// Adaptor for use by the generic FEMMesh template.
-////////////////////////////////////////////////////////////////////////////////
-template<size_t _K>
-struct MeshDatastructure { };
-template<> struct MeshDatastructure<2> {
-    // 2D Simplices -> Triangle Mesh
-    template <class VData, class TData, class BVData, class BEData>
-    using type = TriMesh<VData, TMEmptyData, TData, BVData, BEData>;
-};
-template<> struct MeshDatastructure<3> {
-    // 3D Simplices -> Tet Mesh
-    template <class VData, class TData, class BVData, class BFData>
-    using type = TetMesh<VData, TMEmptyData, TData,
-                        BVData, TMEmptyData, BFData>;
-};
 
 // The EmbeddedElement interface depends on which simplex type we were
 // embedding--we use this class to wrap it.
@@ -92,7 +74,7 @@ struct DefaultFEMData {
 
 template<size_t _K, size_t _Deg, class _EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
-class FEMMesh : public MeshDatastructure<_K>::template type<
+class FEMMesh : public SimplicialMesh<_K,
         // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
         // underlying mesh data structure. The node data is managed by this data
         // structure.
@@ -116,8 +98,7 @@ public:
     static constexpr size_t K   = _K;
     static constexpr size_t Deg = _Deg;
 
-    typedef typename MeshDatastructure<_K>::template type<VertexData,
-        ElementData, BoundaryVertexData, BoundaryElementData>   BaseMesh;
+    using BaseMesh = SimplicialMesh<_K, VertexData, ElementData, BoundaryVertexData, BoundaryElementData>;
 
     template<typename Elements, typename Vertices>
     FEMMesh(const Elements &elems, const Vertices &vertices);

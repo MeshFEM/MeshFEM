@@ -6,7 +6,8 @@
 //      enable implementations based on whether a template parameter models a
 //      concept.
 //
-//      These tags are applied by having the model derive from it.
+//      These tags are applied by making the model class derive from the tag
+//      class.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -28,6 +29,7 @@ using enable_if_not_models_concept_t = typename std::enable_if<!models_concept<C
 
 namespace Concepts {
 
+// Concept tags
 struct Mesh { };
 struct EdgeSoup { };
 

@@ -37,10 +37,11 @@
 #define TRIMESH_HH
 
 #include "Handle.hh"
+#include "Concepts.hh"
 
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
-class TriMesh {
+class TriMesh : public Concepts::Mesh {
 public:
     // Constructor from triangle soup
     template<typename Tris>

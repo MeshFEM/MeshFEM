@@ -2,7 +2,8 @@
 // triangulate.h
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Extremely minimal wrapper around triangle to triangulate a PSLG
+//      Extremely minimal wrapper around triangle to triangulate a PSLG given as
+//      an edge soup.
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

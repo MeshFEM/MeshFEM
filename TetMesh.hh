@@ -77,11 +77,12 @@
 #include <cassert>
 #include "Geometry.hh"
 #include "Handle.hh"
+#include "Concepts.hh"
 
 template<class VertexData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
          class BoundaryFaceData = TMEmptyData>
-class TetMesh {
+class TetMesh : public Concepts::Mesh {
 public:
     // Constructor from tetrahedron soup.
     template<typename Tets>
