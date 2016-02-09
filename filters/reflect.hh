@@ -70,7 +70,7 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
             size_t tmp = re[0];
             re[0] = globalVertexIndex.at(re[1]);
             re[1] = globalVertexIndex.at(tmp);
-            for (size_t d = 2; d < Dim + 1; ++d) re[d] = globalVertexIndex.at(re[d]);
+            for (size_t d = 2; d < re.size(); ++d) re[d] = globalVertexIndex.at(re[d]);
             outElements.push_back(re);
         }
     }
