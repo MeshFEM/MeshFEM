@@ -104,10 +104,14 @@ struct TripletMatrix {
         // First compute the start/end of each bucket.
         // (bucketStart[j] is the start of bucket j and end of bucket j - 1)
         std::vector<size_t> bucketStart(n + 1, 0);
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
         for (size_t ti = 0; ti < nz.size(); ++ti) {
             size_t &bucketEnd = bucketStart[nz[ti].j + 1];
+#ifdef _OPENMP
 #pragma omp atomic
+#endif
             ++bucketEnd;
         }
 
@@ -128,12 +132,16 @@ struct TripletMatrix {
         // that minimizes roundoff error).
         typedef std::pair<size_t, Real> CEntry;
         std::vector<CEntry> columnBuckets(nz.size());
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
         for (size_t ti = 0; ti < nz.size(); ++ti) {
             auto &t = nz[ti];
             size_t &end = bucketEndIndex[t.j];
             size_t newEntry;
+#ifdef _OPENMP
  #pragma omp atomic capture
+#endif
             newEntry = end++;
             auto &entry = columnBuckets[newEntry];
             entry.first = t.i;
@@ -145,7 +153,9 @@ struct TripletMatrix {
         int backIndex = -1;
 
         // Sort each bucket in parallel. 
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
         for (size_t j = 0; j < n; ++j) {
             std::sort(columnBuckets.begin() + bucketStart[j],
                       columnBuckets.begin() + bucketStart[j + 1],
