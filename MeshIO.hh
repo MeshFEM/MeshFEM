@@ -17,6 +17,7 @@
 
 #include "Types.hh"
 #include "TemplateHacks.hh"
+#include "Concepts.hh"
 
 #include <string>
 #include <fstream>
@@ -332,9 +333,11 @@ namespace MeshIO {
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
+    // Template vodoo to distinguish from EdgeSoup case. Ideally we would add a
+    // "MeshConcept" class for better granularity.
     template<class _Mesh>
-    void save(const std::string &path, const _Mesh &mesh,
-            Format format = FMT_GUESS, MeshType type = MESH_GUESS) {
+    enable_if_not_models_concept_t<Concepts::EdgeSoup, _Mesh, void>
+    save(const std::string &path, const _Mesh &mesh, Format format = FMT_GUESS, MeshType type = MESH_GUESS) {
         std::vector<IOVertex>  outVertices;
         std::vector<IOElement> outElements;
         outElements.resize(mesh.numElements());
@@ -351,6 +354,24 @@ namespace MeshIO {
 
         save(path, outVertices, outElements, format, type);
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Writes an edge soup to an output stream.
+    //  @param[in]  path      stream to which geometry is written
+    //  @param[in]  edgeSoup  edge soup (point and edge ranges)
+    //  @param[in]  format    file format (default: guess from extension)
+    //  @param[in]  type      mesh element type (default: guess from first)
+    *///////////////////////////////////////////////////////////////////////////
+    template<class _EdgeSoup>
+    enable_if_models_concept_t<Concepts::EdgeSoup, _EdgeSoup, void>
+    save(const std::string &path, const _EdgeSoup &edgeSoup, Format format = FMT_GUESS, MeshType type = MESH_GUESS) {
+        std::vector<IOVertex>  vertices;
+        std::vector<IOElement> elements;
+        for (const auto &p : edgeSoup.points()) vertices.emplace_back(p);
+        for (const auto &e : edgeSoup. edges()) elements.emplace_back(e);
+        save(path, vertices, elements, format, type);
+    }
+
 
     // TODO: higher order mesh output.
 

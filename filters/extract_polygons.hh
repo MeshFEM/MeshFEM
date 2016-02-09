@@ -14,23 +14,25 @@
 #include <list>
 #include <queue>
 #include "../MeshIO.hh"
+#include "../Utilities/EdgeAccessAdaptor.hh"
 
-template<size_t N>
-void extract_polygons(const std::vector<MeshIO::IOVertex>  &inVertices,
-                      const std::vector<MeshIO::IOElement> &inElements,
-                      std::list<std::list<PointND<N>>> &polygons)
+template<size_t N, class PointType, class EdgeType>
+void extract_polygons(const std::vector<PointType> &inVertices,
+                      const std::vector< EdgeType> &inEdges,
+                      std::list<std::list<PointND<int(N)>>> &polygons)
 {
     using Point = PointND<N>;
     using Polygon = std::list<Point>;
+    using EA = EdgeAccessAdaptor<EdgeType>;
 
     constexpr size_t NONE = std::numeric_limits<size_t>::max();
     size_t numVertices = inVertices.size();
     std::vector<size_t> next(numVertices, NONE);
 
-    for (const auto &e : inElements) {
-        if (e.size() != 2) throw std::runtime_error("Extract polygons only works on line soup");
-        if (next.at(e[0]) != NONE) throw std::runtime_error("Non-manifold line soup");
-        next.at(e[0]) = e[1];
+    for (const auto &e : inEdges) {
+        if (EA::size(e) != 2) throw std::runtime_error("Extract polygons only works on line soup");
+        if (next.at(EA::first(e)) != NONE) throw std::runtime_error("Non-manifold line soup");
+        next.at(EA::first(e)) = EA::second(e);
     }
 
     for (size_t n : next)
@@ -50,6 +52,5 @@ void extract_polygons(const std::vector<MeshIO::IOVertex>  &inVertices,
         }
     }
 }
-
 
 #endif /* end of include guard: EXTRACT_POLYGONS_HH */

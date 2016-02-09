@@ -26,18 +26,21 @@ extern "C" {
 
 #include <string> 
 #include <vector>
+#include <list>
 #include <utility>
+#include <type_traits>
 
 #include "MeshIO.hh"
+#include "Utilities/EdgeAccessAdaptor.hh"
+#include "Utilities/EdgeSoupAdaptor.hh"
 
 // Largely taken from Luigi/Nico's tessellator2d.h
-template<class Point>
-void triangulatePSLC(const std::vector<Point> &inPoints,
-        const std::vector<std::pair<size_t, size_t>> &inEdges,
-        const std::vector<Point> &holes,
+template<class _EdgeSoup, class HolePoint>
+void triangulatePSLC(const _EdgeSoup &edgeSoup,
+        const std::vector<HolePoint> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
-        float area = 0.01,
+        double area = 0.01,
         const std::string additionalFlags = "")
 {
     // create in and out structs for triangle
@@ -46,8 +49,8 @@ void triangulatePSLC(const std::vector<Point> &inPoints,
     memset(&out, 0, sizeof(triangulateio));
 
     // initialize lists
-    in.numberofpoints   = inPoints.size();
-    in.numberofsegments = inEdges.size();
+    in.numberofpoints   = edgeSoup.points().size();
+    in.numberofsegments = edgeSoup.edges().size();
     in.numberofholes = holes.size();
 
     in.pointlist         = (REAL *) malloc(in.numberofpoints   * 2 * sizeof(REAL));
@@ -57,16 +60,19 @@ void triangulatePSLC(const std::vector<Point> &inPoints,
 
     // fill triangle input structure with points
     size_t i = 0;
-    for (const auto &p : inPoints) {
+    for (const auto &p : edgeSoup.points()) {
         in.pointlist[i++] = p[0];
         in.pointlist[i++] = p[1];
     }
 
     // fill triangle input structure with boundary segments
-    for (size_t i = 0; i < inEdges.size(); ++i) {
-        in.segmentlist[2 * i    ] = inEdges[i].first;
-        in.segmentlist[2 * i + 1] = inEdges[i].second;
+    i = 0;
+    for (const auto &e : edgeSoup.edges()) {
+        using EdgeType = typename std::decay<decltype(e)>::type;
+        in.segmentlist[2 * i    ] = EdgeAccessAdaptor<EdgeType>:: first(e);
+        in.segmentlist[2 * i + 1] = EdgeAccessAdaptor<EdgeType>::second(e);
         in.segmentmarkerlist[i] = 1; // mark each segment as boundary
+        ++i;
     }
 
     // fill triangle input structure with holes
@@ -129,6 +135,32 @@ void triangulatePSLC(const std::vector<Point> &inPoints,
     if (out.trianglearealist      && (out.trianglearealist      != in.trianglearealist)     ) trifree((VOID *)out.trianglearealist);
     if (out.triangleattributelist && (out.triangleattributelist != in.triangleattributelist)) trifree((VOID *)out.triangleattributelist);
     if (out.trianglelist          && (out.trianglelist          != in.trianglelist)         ) trifree((VOID *)out.trianglelist);
+}
+
+// Convenience function for point/edge collections representation
+template<class Point, class HolePoint, class Edge>
+void triangulatePSLC(const std::vector<Point> &inPoints,
+        const std::vector<Edge> &inEdges,
+        const std::vector<HolePoint> &holes,
+        std::vector<MeshIO::IOVertex> &outVertices,
+        std::vector<MeshIO::IOElement> &outTriangles,
+        double area = 0.01,
+        const std::string additionalFlags = "") {
+    triangulatePSLC(
+            EdgeSoup<std::vector<Point>, std::vector<Edge>>(inPoints, inEdges),
+            holes, outVertices, outTriangles, area, additionalFlags);
+}
+
+// Convenience function for list of closed polygons representation
+template<class Point, class HolePoint>
+void triangulatePSLC(const std::list<std::list<Point>> &polygons,
+        const std::vector<HolePoint> &holes,
+        std::vector<MeshIO::IOVertex> &outVertices,
+        std::vector<MeshIO::IOElement> &outTriangles,
+        double area = 0.01,
+        const std::string additionalFlags = "") {
+    triangulatePSLC(EdgeSoupFromClosedPolygonList<Point>(polygons),
+            holes, outVertices, outTriangles, area, additionalFlags);
 }
 
 #endif /* end of include guard: TRIANGULATE_H */

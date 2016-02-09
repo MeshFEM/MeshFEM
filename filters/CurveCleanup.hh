@@ -44,7 +44,7 @@
 // We take advantage of this representation to identify edge v0->v1 with vertex v0.
 template<size_t N>
 void curveCleanup(std::list<VectorND<int(N)>> &curve,
-                  BBox<VectorND<int(N)>> &cell,
+                  const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen, Real featureAngleThreshold,
                   bool periodic = false) {
     using Point = VectorND<N>;
@@ -203,7 +203,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 
         // Merge into midpoint, vertex 0, or vertex 1 location
         Point collapsePt;
-        if (merge01 && merge10) collapsePt = (0.5 * (*v0 + *v1)).eval();
+        if (merge01 && merge10) collapsePt = 0.5 * (*v0 + *v1);
         else if (merge01)       collapsePt = *v1;
         else if (merge10)       collapsePt = *v0;
         else                    continue; // no merge possible
@@ -307,17 +307,18 @@ void curveCleanup(std::vector<VectorND<int(N)>> &curve,
 }
 
 // Convenience version--operate on line soup, preserving bbox "cell"
-template<size_t N>
-void curveCleanup(const std::vector<MeshIO::IOVertex> &inVertices,
-                  const std::vector<MeshIO::IOElement> &inElements,
+template<size_t N, class PointType, class EdgeType>
+void curveCleanup(const std::vector<PointType> &inVertices,
+                  const std::vector<EdgeType> &inElements,
                   std::vector<MeshIO::IOVertex> &outVertices,
                   std::vector<MeshIO::IOElement> &outElements,
-                  BBox<VectorND<int(N)>> &cell,
+                  const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
                   Real featureAngleThreshold, bool periodic = false) {
-    outVertices.clear(), outElements.clear();
     std::list<std::list<VectorND<N>>> polygons;
     extract_polygons<N>(inVertices, inElements, polygons);
+
+    outVertices.clear(), outElements.clear();
     for (auto &poly : polygons) {
         curveCleanup<N>(poly, cell, minLen, maxLen, featureAngleThreshold, periodic);
         size_t offset = outVertices.size();
@@ -330,8 +331,9 @@ void curveCleanup(const std::vector<MeshIO::IOVertex> &inVertices,
 }
 
 // Convenience version--operate on line soup, inferring dimension.
-void curveCleanup(const std::vector<MeshIO::IOVertex> &inVertices,
-                  const std::vector<MeshIO::IOElement> &inElements,
+template<class PointType, class EdgeType>
+void curveCleanup(const std::vector<PointType> &inVertices,
+                  const std::vector<EdgeType> &inElements,
                   std::vector<MeshIO::IOVertex> &outVertices,
                   std::vector<MeshIO::IOElement> &outElements,
                   Real minLen, Real maxLen,
