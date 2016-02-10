@@ -26,6 +26,8 @@ extern "C" {
 #include <string.h> 
 
 #include <string> 
+#include <sstream>
+#include <iomanip>
 #include <vector>
 #include <list>
 #include <utility>
@@ -83,10 +85,12 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         in.holelist[i++] = h[1];
     }
 
-    std::string flags = "zqp";
-    flags += additionalFlags;
-    flags += "a" + std::to_string(area);
+    std::stringstream flags_stream;
+    flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
+    std::string flags = flags_stream.str();
+    // std::cout << "Running triangulate with flags " << flags << std::endl;
     triangulate(const_cast<char *>(flags.c_str()), &in, &out, NULL);
+    // std::cout << "Triangulate finished." << std::endl;
 
     // convert to MeshIO format
     outVertices.assign(out.numberofpoints, MeshIO::IOVertex());
