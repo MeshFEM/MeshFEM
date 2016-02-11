@@ -122,6 +122,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     // We also consider vertices with greater face membership than either of
     // their neighbors to be features to discourage changing the shape of the
     // "connector" geometry.
+    // TODO: avoid merging two boundary vertices with different face membership;
+    // e.g., we don't want to collapse connectors into a single point.
     auto isFeature = [&](VtxIt v) -> bool {
         const Point &p = *v, &pn = *(next(v)), &pp = *(prev(v));
         Real theta = angle((pn - p).eval(), (pp - p).eval());
@@ -155,6 +157,10 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 
     std::default_random_engine generator;
     while (!shortEdges.empty()) {
+        if (curve.size() <= 4) {
+            std::cerr << "WARNING: curve has become extremely short. Bailing out of collapse." << std::endl;
+            break;
+        }
         auto seEntry = shortEdges.begin();
 
         // Choose a random short edge to improve quality in case of many merges.
@@ -269,7 +275,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     IteratorSet<EdgeIt> longEdges;
     for (auto ei = curve.begin(); ei != curve.end(); ++ei)
         if (edgeLen(ei) > maxLen) longEdges.insert(ei);
-    while (!shortEdges.empty()) {
+    while (!longEdges.empty()) {
         auto leEntry = longEdges.begin();
         EdgeIt le = *leEntry;
         longEdges.erase(leEntry);
