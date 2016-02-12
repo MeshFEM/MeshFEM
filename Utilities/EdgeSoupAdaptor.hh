@@ -101,7 +101,7 @@ struct ClosedPolygonListPointIterator : public ClosedPolygonListEntityIterator<P
 template<class _EdgeType>
 struct EdgeMaker;
 
-template<> struct EdgeMaker<std::pair<size_t, size_t>> { static constexpr std::pair<size_t, size_t> make_edge(size_t u, size_t v) { return    std::make_pair(u, v); } };
+template<> struct EdgeMaker<std::pair<size_t, size_t>> { static           std::pair<size_t, size_t> make_edge(size_t u, size_t v) { return    std::make_pair(u, v); } };
 template<> struct EdgeMaker<MeshIO::IOElement        > { static           MeshIO::IOElement         make_edge(size_t u, size_t v) { return MeshIO::IOElement(u, v); } };
 
 template<class Point, class _EdgeType>
