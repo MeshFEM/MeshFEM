@@ -51,20 +51,28 @@ SimulateTiledQuad_cli: $(SIMQUAD_OBJS)
 Poisson_cli: $(POISSON_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
-%.o: %.cc Makefile
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+# DEPENDENCY STUFF
+DEPDIR:=.d
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 
-%.o: %.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
+# Delete built-in rule, forcing ours to run
+%.o: %.cc
+%.o: %.cc $(DEPDIR)/%.d Makefile
+	$(CXX) $(DEPFLAGS) $(CPPFLAGS) -c $< -o $@
+	mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
-depend:
-	@touch Makefile.depend;
-	makedepend -Y -f Makefile.depend --  -- $(SOURCES) &> /dev/null
+%.o: %.c
+%.o: %.c  $(DEPDIR)/%.d Makefile
+	$(CC) $(DEPFLAGS) -c $(CFLAGS) $< -o $@
+	mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 clean:
 	rm -f $(TARGETS) $(OBJS) *.bak
 
-.PHONY: clean depend
+.PHONY: clean
 
-# Read in the dependency file, if it exists
-sinclude Makefile.depend
+# Read dependencies
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
+-include $(DEPDIR)/*.d

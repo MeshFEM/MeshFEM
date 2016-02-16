@@ -9,18 +9,27 @@
 // #include "MSHFieldWriter.hh"
 
 namespace PeriodicHomogenization {
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Solve the linear elasticity periodic homogenization cell problems for
+    //  each constant strain e^ij:
+    //       -div E : [ strain(w^ij) + e^ij ] = 0 in omega
+    //        n . E : [ strain(w^ij) + e^ij ] = 0 on omega's boundary 
+    //        w^ij periodic
+    //        w^ij = 0 on arbitrary internal node ("pin" no rigid translation constraint)
+    //  @param[out]   w_ij   Fluctuation displacements (cell problem solutions)
+    //  @param[inout] sim    Linear elasticity simulator for omega.
+    //  Warning: this function mutates sim by applying periodic and pin
+    //           constraints.
+    *///////////////////////////////////////////////////////////////////////////
     template<class _Sim>
-    void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim)
-    {
+    void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim) {
         typedef typename _Sim::VField  VField;
         typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
 
-        BENCHMARK_START_TIMER("Apply Cell Conditions");
         sim.applyPeriodicConditions();
         sim.applyNoRigidMotionConstraint();
         sim.setUsePinNoRigidTranslationConstraint(true);
-        BENCHMARK_STOP_TIMER("Apply Cell Conditions");
 
         w_ij.reserve(numStrains), w_ij.clear();
         for (size_t i = 0; i < numStrains; ++i) {
@@ -31,6 +40,15 @@ namespace PeriodicHomogenization {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Compute homogenized elasticity tensor (stress-like version):
+    //     Eh_ijkl = 1/|Y| int_omega [E : strain(w_ij)]_kl + E_ijkl dV
+    //  where |Y| = periodic cell (grid bounding box) volume
+    //  @param[in] w_ij           Fluctuation displacements
+    //  @param[in] sim            Linear elasticity simulator for omega.
+    //  @param[in] baseCellVolume |Y| (could differ from sim.boundingBox().volume())
+    //  @return    Homogenized elasticity tensor
+    *///////////////////////////////////////////////////////////////////////////
     template<class _Sim>
     typename _Sim::ETensor homogenizedElasticityTensor(
             const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
@@ -46,67 +64,75 @@ namespace PeriodicHomogenization {
         //        w  = periodic base cell geometry
         typename _Sim::ETensor Eh;
         typename _Sim::Strain  strain_ij;
-        for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
+        for (auto e : mesh.elements()) {
             typename _Sim::ETensor Econtrib;
             for (size_t i = 0; i < w_ij.size(); ++i) {
-                sim.elementStrain(ei, w_ij[i], strain_ij);
+                sim.elementStrain(e.index(), w_ij[i], strain_ij);
                 Econtrib.DRowAsSymMatrix(i) =
-                    mesh.element(ei)->E().doubleContract(strain_ij.average());
+                    e->E().doubleContract(strain_ij.average());
             }
             // Elasticity tensor is always constant on each element.
-            Econtrib += mesh.element(ei)->E();
-            Econtrib *= mesh.element(ei)->volume();
+            Econtrib += e->E();
+            Econtrib *= e->volume();
             Eh += Econtrib;
         }
         Eh /= baseCellVolume;
         return Eh;
+#if 0
+        // The following "energy-like" version is equivalent to the more efficient
+        // "stress-like" version above:
+        // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
+        typename _Sim::ETensor EhE;
+        typename _Sim::Strain  strain_ij, strain_kl;
+        for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
+            auto e = mesh.element(ei);
+            for (size_t ij = 0; ij < numStrains; ++ij) {
+                sim.elementStrain(ei, w_ij[ij], strain_ij);
+                strain_ij += SMatrix::CanonicalBasis(ij);
+                for (size_t kl = ij; kl < numStrains; ++kl) {
+                    sim.elementStrain(ei, w_ij[kl], strain_kl);
+                    strain_kl += SMatrix::CanonicalBasis(kl);
+                    EhE.D(ij, kl) +=
+                        Quadrature<_Sim::K, 2 * (_Sim::Degree - 1)>::integrate(
+                            [&] (const VectorND<_Sim::numElemVertices> &p) {
+                                return e->E().doubleContract(strain_ij(p))
+                                             .doubleContract(strain_kl(p));
+                            }, e->volume());
+                }
+            }
+        }
+        EhE /= baseCellVolume;
 
-        // // The following "energy-like" version is equivalent to the more efficient
-        // // "stress-like" version above:
-        // // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
-        // typename _Sim::ETensor EhE;
-        // typename _Sim::Strain  strain_ij, strain_kl;
-        // for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
-        //     auto e = mesh.element(ei);
-        //     for (size_t ij = 0; ij < numStrains; ++ij) {
-        //         sim.elementStrain(ei, w_ij[ij], strain_ij);
-        //         strain_ij += SMatrix::CanonicalBasis(ij);
-        //         for (size_t kl = ij; kl < numStrains; ++kl) {
-        //             sim.elementStrain(ei, w_ij[kl], strain_kl);
-        //             strain_kl += SMatrix::CanonicalBasis(kl);
-        //             EhE.D(ij, kl) +=
-        //                 Quadrature<_Sim::K, 2 * (_Sim::Degree - 1)>::integrate(
-        //                     [&] (const VectorND<_Sim::numElemVertices> &p) {
-        //                         return e->E().doubleContract(strain_ij(p))
-        //                                      .doubleContract(strain_kl(p));
-        //                     }, e->volume());
-        //         }
-        //     }
-        // }
-        // EhE /= baseCellVolume;
-
-        // return EhE;
+        return EhE;
+#endif
     }
 
-    // Assuming that the base elasticity tensor is constant over the entire base
-    // cell, we can rewrite the homogenized elasticity tensor stress integral
-    // formula in terms of displacements (using Green's theorem):
-    // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dy
-    //         = 1/|Y| int_dw E_ijpq frac{1}{2} (w^{kl}_p n_q + w^{kl}_q n_p) dA(y) + E * volFrac
-    //         = 1/|Y| E_ijpq nw_pq + E * volFrac
-    // Where   |Y|  = periodic cell (grid bounding box) volume
-    //          w   = periodic base cell geometry
-    //        nw_pq = 0.5 * int_dw [w^{kl}]_p n_q + [w^{kl}]_q n_p dA(y)
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Displacement form of homognized tensor:
+    //  Assuming that the base elasticity tensor is constant over omega, we can
+    //  rewrite the homogenized elasticity tensor stress integral formula in
+    //  terms of displacements (using Green's theorem):
+    //  Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dy
+    //          = 1/|Y| int_dw E_ijpq frac{1}{2} (w^{kl}_p n_q + w^{kl}_q n_p) dA(y) + E * volFrac
+    //          = 1/|Y| E_ijpq nw_pq + E * volFrac
+    //  Where   |Y|  = periodic cell (grid bounding box) volume
+    //           w   = periodic base cell geometry
+    //         nw_pq = 0.5 * int_dw [w^{kl}]_p n_q + [w^{kl}]_q n_p dA(y)
+    //  @param[in] w_ij           Fluctuation displacements
+    //  @param[in] sim            Linear elasticity simulator for omega.
+    //  @param[in] baseCellVolume |Y| (could differ from sim.boundingBox().volume())
+    //  @return    Homogenized elasticity tensor
+    *///////////////////////////////////////////////////////////////////////////
     template<class _Sim>
     typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
             const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
             Real baseCellVolume) {
         const auto &mesh = sim.mesh();
-        typedef typename _Sim::SMatrix SMatrix;
+        using SMatrix = typename _Sim::SMatrix ;
         constexpr size_t numStrains = SMatrix::flatSize();
         assert(w_ij.size() == numStrains);
 
-        // Elasticity tensor must be constant over the entire base cell
+        // Assume elasticity tensor is constant over the entire base cell
         const typename _Sim::ETensor &EBase = mesh.element(0)->E();
 
         typename _Sim::ETensor Eh;
@@ -114,13 +140,12 @@ namespace PeriodicHomogenization {
 
         // Displacement restricted to a boundary element
         Interpolant<VectorND<_Sim::N>, _Sim::K - 1, _Sim::Degree> w_be;
-        for (size_t bei = 0; bei < mesh.numBoundaryElements(); ++bei) {
-            auto be = mesh.boundaryElement(bei);
+        for (auto be : mesh.boundaryElements()) {
             typename _Sim::ETensor Econtrib;
             const auto &n = be->normal();
             for (size_t i = 0; i < w_ij.size(); ++i) {
                 const auto &w = w_ij[i];
-                // Copy the boundary node values into interpolant
+                // Copy the boundary node displacements into interpolant
                 for (size_t ni = 0; ni < w_be.size(); ++ni)
                     w_be[ni] = w(be.node(ni).volumeNode().index());
                 auto w_be_int = w_be.integrate(be->volume());
@@ -221,14 +246,13 @@ namespace PeriodicHomogenization {
         typename _Sim::Strain  we_ij, we_kl;
         // Compute volume quantity
         Interpolant<ETensor, K, GDeg> G_elem;
-        for (size_t elemIdx = 0; elemIdx < mesh.numElements(); ++elemIdx) { 
-            auto e = mesh.element(elemIdx);
+        for (auto e : mesh.elements()) {
             if (!e.isBoundary()) continue;
             for (size_t ij = 0; ij < numStrains; ++ij) {
-                sim.elementStrain(elemIdx, w[ij], we_ij);
+                sim.elementStrain(e.index(), w[ij], we_ij);
                 we_ij += SMatrix::CanonicalBasis(ij);
                 for (size_t kl = ij; kl < numStrains; ++kl) {
-                    sim.elementStrain(elemIdx, w[kl], we_kl);
+                    sim.elementStrain(e.index(), w[kl], we_kl);
                     we_kl += SMatrix::CanonicalBasis(kl);
                     auto G_ijkl = Interpolation<K, GDeg>::interpolant(
                         [&] (const VectorND<_Sim::numElemVertices> &p) {
