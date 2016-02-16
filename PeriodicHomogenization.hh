@@ -58,10 +58,6 @@ namespace PeriodicHomogenization {
         constexpr size_t numStrains = SMatrix::flatSize();
         assert(w_ij.size() == numStrains);
 
-        // Compute homogenized elasticity tensor (stress-like version):
-        // Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dV
-        // Where |Y| = periodic cell (grid bounding box) volume
-        //        w  = periodic base cell geometry
         typename _Sim::ETensor Eh;
         typename _Sim::Strain  strain_ij;
         for (auto e : mesh.elements()) {
