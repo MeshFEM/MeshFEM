@@ -310,6 +310,47 @@ size_t eigenvalue(const string &, const string &arg, Stack &stack, const Modifie
     return 1;
 }
 
+template<size_t N>
+size_t elementBarycenterFieldTransfer(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    std::cout << "Reading target mesh" << std::endl;
+    MSHFieldParser<N> targetMesh(arg);
+
+    std::cout << "Constructing element sampler" << std::endl;
+    std::vector<ElementSampler::Sample> samplePts;
+    const auto &sampler = getElementSampler<N>();
+
+    std::cout << "Locating " << targetMesh.elements().size() << " Centers" << std::endl;
+    PointND<N> center;
+    samplePts.reserve(targetMesh.elements().size());
+    for (const auto &e : targetMesh.elements()) {
+        center = truncateFrom3D<VectorND<N>>(targetMesh.vertices().at(e[0]));
+        for (size_t i = 1; i < e.size(); ++i)
+            center += truncateFrom3D<VectorND<N>>(targetMesh.vertices().at(e[i]));
+        center *= 1.0 / e.size();
+        samplePts.emplace_back(sampler(center));
+    }
+    std::cout << "Done" << std::endl;
+
+    auto &currentMesh = getMutableParser<N>();
+    Stack xferStack;
+
+    for (const auto &val : stack) {
+        string name = "transfer(" + val.name + ")";
+        xferStack.emplace_back(name, val->sample(samplePts,
+                    currentMesh.meshDegree(), currentMesh.meshDimension(),
+                    DomainType::PER_ELEMENT));
+    }
+
+    // Replace mesh/value stack with the new mesh, stack of transferred values.
+    // Sampler is also invalidated
+    stack = std::move(xferStack);
+    currentMesh = std::move(targetMesh);
+    g_sampler2D.reset();
+    g_sampler3D.reset();
+
+    return stack.size();
+}
+
 // Sample a field at the point(s) specified by vector list encoded in "arg".
 // Nodal fields are interpolated using the mesh's finite element basis functions.
 // Element fields are interpolated piecewise constant
@@ -521,7 +562,9 @@ void execute(vector<FilterInvocation> &filters) {
         {"rename",        Filter::rename},
         {"import_sfield", Filter::importScalarField<N>},
         {"reverse",       Filter::reverse},
-        {"outMSH",        Filter::outputMSH<N>}
+        {"outMSH",        Filter::outputMSH<N>},
+
+        {"transferFieldsToPerElem", Filter::elementBarycenterFieldTransfer<N>}
     };
 
     // Classify the operations.
@@ -587,12 +630,6 @@ void execute(vector<FilterInvocation> &filters) {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/*! Program entry point
-//  @param[in]  argc    Number of arguments
-//  @param[in]  argv    Argument strings
-//  @return     status  (0 on success)
-*///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[])
 {
     cout << std::scientific << std::setprecision(16);

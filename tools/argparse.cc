@@ -29,6 +29,7 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
         ("extract,e", po::value<string>(), "Extract field(s) matching a given name (or name pattern)")
         ("extractAll",                     "Extract all fields")
         ("generate,g", po::value<string>(), "Generate a mesh property field (valid arguments: 'x', 'volume')")
+        ("transferFieldsToPerElem,t", po::value<string>(), "Transfer fields on the stack to per-element fields on the passed target.msh (target.msh becomes current mesh/data source)")
         ;
     po::options_description stack_operations("Stack operations");
     stack_operations.add_options()

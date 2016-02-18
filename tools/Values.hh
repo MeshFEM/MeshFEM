@@ -81,6 +81,7 @@ protected:
 };
 template<class T, bool nested>     struct PrintImpl;
 template<class T, typename = void> struct SampleImpl;
+template<class T>                  struct MultipointSampleImpl;
 template<class T, typename = void> struct ElmAvgImpl;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +97,10 @@ public:
     virtual UVPtr sample(const ESample &s, size_t meshDeg, size_t meshDim) const = 0;
     virtual UVPtr clone()                                                  const = 0;
 
-    virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim)           const = 0;
+    // Sample at a list of points, creating a per-sample-point field value.
+    virtual UVPtr sample(const std::vector<ESample> &ss, size_t meshDeg, size_t meshDim, DomainType dt) const = 0;
+
+    virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) const = 0;
 
     virtual ~Value() { }
 };
@@ -114,6 +118,7 @@ struct NamedValue {
     CVPtr operator->() const { return m_valptr.get(); }
      VPtr operator->()       { return m_valptr.get(); }
 
+    NamedValue &operator=(const NamedValue &b) = delete;
     NamedValue &operator=(NamedValue &&b) { m_valptr = std::move(b.m_valptr); name = std::move(b.name); return *this; }
 
     // Implicit casts to pointer type
@@ -209,6 +214,9 @@ public:
     virtual UVPtr clone()                                                  const { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
     virtual UVPtr sample(const ESample &s, size_t meshDeg, size_t meshDim) const { return SampleImpl<Derived>::run(static_cast<const Derived&>(*this), s, meshDeg, meshDim); }
     virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) const { return ElmAvgImpl<Derived>::run(static_cast<const Derived&>(*this), elems, meshDeg, meshDim); }
+
+    // Sample at a list of points, creating a per-sample-point field value.
+    virtual UVPtr sample(const std::vector<ESample> &ss, size_t meshDeg, size_t meshDim, DomainType dt) const { return MultipointSampleImpl<Derived>::run(static_cast<const Derived&>(*this), ss, meshDeg, meshDim, dt); }
 };
 
 struct SValue : public ValueBase<SValue>, public PointValueTag {

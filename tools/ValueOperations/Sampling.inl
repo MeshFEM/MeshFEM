@@ -1,7 +1,9 @@
 // Types not supporting sampling.
 template<class T, typename>
 struct SampleImpl {
-    static UVPtr run(const T &val, const ESample &s, size_t meshDeg, size_t meshDim) { throw std::runtime_error("Invalid operand for sample"); }
+    using ResultType = SValue; // Dummy needed for MultipointSampleImpl below
+    using URPtr = std::unique_ptr<ResultType>;
+    static URPtr run(const T &val, const ESample &s, size_t meshDeg, size_t meshDim) { throw std::runtime_error("Invalid operand for sample"); }
 };
 
 // Plain interpolant types
@@ -12,7 +14,7 @@ struct SampleImpl<InterpolantValue<_PointValue>> {
     static URPtr run(const InterpolantValue<_PointValue> &val, const ESample &s, size_t meshDeg, size_t meshDim) { throw std::runtime_error("Single interpolant sampling not yet implemented."); }
 };
 
-// Nodal Fields (not InterpolantValue fields)
+// Nodal and per-element fields (not InterpolantValue fields)
 template<class _PointValue>
 struct SampleImpl<FieldValue<_PointValue>, typename enable_if_point_value<_PointValue>::type> {
     using ResultType = _PointValue;
@@ -29,7 +31,7 @@ struct SampleImpl<FieldValue<_PointValue>, typename enable_if_point_value<_Point
     }
 };
 
-// Interpolant Fields
+// Interpolant fields (per-element interpolant)
 template<class _PointValue>
 struct SampleImpl<FieldValue<InterpolantValue<_PointValue>>, typename enable_if_point_value<_PointValue>::type> {
     using ResultType = _PointValue;
@@ -40,5 +42,16 @@ struct SampleImpl<FieldValue<InterpolantValue<_PointValue>>, typename enable_if_
             return std::make_unique<ResultType>(val.value[s.eidx].sampleBarycentric(s.baryCoords));
         }
         else { throw std::runtime_error("Invalid domain type for interpolant field sampling: " + std::to_string((int) val.domainType)); };
+    }
+};
+
+template<class T>
+struct MultipointSampleImpl {
+    using ResultType = FieldValue<typename SampleImpl<T>::ResultType>;
+    static UVPtr run(const T &val, const std::vector<ESample> &ss, size_t meshDeg, size_t meshDim, DomainType dt) {
+        auto result = std::make_unique<ResultType>(dt, ss.size());
+        for (size_t i = 0; i < ss.size(); ++i)
+            (*result)[i] = std::move(*SampleImpl<T>::run(val, ss[i], meshDim, meshDim));
+        return std::move(result);
     }
 };
