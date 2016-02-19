@@ -54,18 +54,18 @@ Poisson_cli: $(POISSON_OBJS)
 # DEPENDENCY STUFF
 DEPDIR:=.d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
-DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
+DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$(subst /,__,$*).Td
 
 # Delete built-in rule, forcing ours to run
 %.o: %.cc
-%.o: %.cc $(DEPDIR)/%.d Makefile
+%.o: %.cc Makefile
 	$(CXX) $(DEPFLAGS) $(CPPFLAGS) -c $< -o $@
-	mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
+	mv -f $(DEPDIR)/$(subst /,__,$*).Td $(DEPDIR)/$(subst /,__,$*).d
 
 %.o: %.c
-%.o: %.c  $(DEPDIR)/%.d Makefile
+%.o: %.c Makefile
 	$(CC) $(DEPFLAGS) -c $(CFLAGS) $< -o $@
-	mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
+	mv -f $(DEPDIR)/$(subst /,__,$*).Td $(DEPDIR)/$(subst /,__,$*).d
 
 clean:
 	rm -f $(TARGETS) $(OBJS) *.bak
@@ -73,6 +73,4 @@ clean:
 .PHONY: clean
 
 # Read dependencies
-$(DEPDIR)/%.d: ;
-.PRECIOUS: $(DEPDIR)/%.d
 -include $(DEPDIR)/*.d
