@@ -312,24 +312,19 @@ size_t eigenvalue(const string &, const string &arg, Stack &stack, const Modifie
 
 template<size_t N>
 size_t elementBarycenterFieldTransfer(const string &, const string &arg, Stack &stack, const Modifiers &) {
-    std::cout << "Reading target mesh" << std::endl;
+    auto &sampler = getElementSampler<N>();
+    sampler.accelerate();
+
     MSHFieldParser<N> targetMesh(arg);
 
-    std::cout << "Constructing element sampler" << std::endl;
-    std::vector<ElementSampler::Sample> samplePts;
-    const auto &sampler = getElementSampler<N>();
-
-    std::cout << "Locating " << targetMesh.elements().size() << " Centers" << std::endl;
     PointND<N> center;
-    samplePts.reserve(targetMesh.elements().size());
+    std::vector<ElementSampler::Sample> samplePts; samplePts.reserve(targetMesh.elements().size());
     for (const auto &e : targetMesh.elements()) {
-        center = truncateFrom3D<VectorND<N>>(targetMesh.vertices().at(e[0]));
-        for (size_t i = 1; i < e.size(); ++i)
-            center += truncateFrom3D<VectorND<N>>(targetMesh.vertices().at(e[i]));
+        center.setZero();
+        for (size_t vi : e) center += truncateFrom3D<VectorND<N>>(targetMesh.vertices().at(vi));
         center *= 1.0 / e.size();
         samplePts.emplace_back(sampler(center));
     }
-    std::cout << "Done" << std::endl;
 
     auto &currentMesh = getMutableParser<N>();
     Stack xferStack;
@@ -349,6 +344,15 @@ size_t elementBarycenterFieldTransfer(const string &, const string &arg, Stack &
     g_sampler3D.reset();
 
     return stack.size();
+}
+
+template<size_t N>
+size_t loadNewMSH(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    auto &currentMesh = getMutableParser<N>();
+    currentMesh = MSHFieldParser<N>(arg);
+    g_sampler2D.reset();
+    g_sampler3D.reset();
+    return 0;
 }
 
 // Sample a field at the point(s) specified by vector list encoded in "arg".
@@ -564,7 +568,8 @@ void execute(vector<FilterInvocation> &filters) {
         {"reverse",       Filter::reverse},
         {"outMSH",        Filter::outputMSH<N>},
 
-        {"transferFieldsToPerElem", Filter::elementBarycenterFieldTransfer<N>}
+        {"transferFieldsToPerElem", Filter::elementBarycenterFieldTransfer<N>},
+        {"loadNewMSH", Filter::loadNewMSH<N>}
     };
 
     // Classify the operations.

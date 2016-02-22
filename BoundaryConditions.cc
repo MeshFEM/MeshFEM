@@ -267,7 +267,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         vector<VectorND<_N>>     element_values;
 
         BBox<VectorND<_N>> region;
-        VectorND<_N> value;
+        VectorND<_N> value(VectorND<_N>::Zero());
         ExpressionVector exprVec; // filled out if expression vector is provided
         // Regex doesn't work on g++4.8... :(
         // regex xyzFinder("(dirichlet|target)([xyz]{1,3})(.*)");

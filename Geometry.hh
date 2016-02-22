@@ -15,20 +15,53 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <type_traits>
 
+// Warning: uninitialized/default bboxes are always a dimension-zero bbox around
+// the origin. This may lead to unintended behavior if unions are performed
+// without care.
 template<typename _Vector>
 struct BBox {
+    // Make sure min/max corner vectors are aligned during dynamic allocation...
+    // (Needed for aligned vector types)
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
     BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
     BBox(const Vector &minCorner, const Vector &maxCorner)
         : minCorner(minCorner), maxCorner(maxCorner) { }
+
+    // Construct dimension-zero bbox around pt
+    BBox(const Vector &pt) : minCorner(pt), maxCorner(pt) { }
+
+    // Construct bbox of a collection of points
     template<class _VectorCollection>
     BBox(const _VectorCollection &vectors) {
-        minCorner = maxCorner = Vector::Zero();
-        for (const auto &v : vectors)
-            unionPoint(v);
+        if (vectors.size() == 0) { minCorner = maxCorner = Vector::Zero(); }
+        else {
+            size_t i = 0;
+            for (const auto &v : vectors) {
+                if (i++ == 0) minCorner = maxCorner = v;
+                else          unionPoint(v);
+            }
+        }
+    }
+
+    // Construct bbox of a subset of points. E.g.
+    //  _PointCollection = std::vector<MeshIO::IOVertex>
+    //  _IndexCollection = std::vector<MeshIO::IOElement>
+    template<class _PointCollection, class _IndexCollection>
+    BBox(const _PointCollection &pts, const _IndexCollection &subset) {
+        if (subset.size() == 0) { minCorner = maxCorner = Vector::Zero(); }
+        else {
+            size_t i = 0;
+            for (size_t v : subset) {
+                if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(pts[v]);
+                else          unionPoint(truncateFrom3D<Vector>(pts[v]));
+            }
+        }
     }
 
     Vector minCorner, maxCorner;
