@@ -67,11 +67,10 @@
 #include "argparse.hh"
 #include "Sampler.hh"
 #include "Values.hh"
+#include "MeshConnectivity.hh"
 
 using namespace MeshIO;
 using namespace std;
-
-using Stack = vector<NamedValue>;
 
 // Global parsers used for 2 and 3D cases.
 unique_ptr<MSHFieldParser<2>> g_parser2D;
@@ -102,6 +101,21 @@ template<size_t N>
 const ElementSampler::Sampler<N> &getElementSampler();
 template<> const ElementSampler::Sampler<2> &getElementSampler<2>() { if (g_sampler2D) return *g_sampler2D; g_sampler2D = make_unique<ElementSampler::Sampler<2>>(g_parser2D->vertices(), g_parser2D->elements()); return *g_sampler2D; }
 template<> const ElementSampler::Sampler<3> &getElementSampler<3>() { if (g_sampler3D) return *g_sampler3D; g_sampler3D = make_unique<ElementSampler::Sampler<3>>(g_parser3D->vertices(), g_parser3D->elements()); return *g_sampler3D; }
+
+// Global lazily-constructed mesh data structures for 2 and 3D cases.
+#include "../SimplicialMesh.hh"
+unique_ptr<SimplicialMesh<2>> g_triMesh;
+unique_ptr<SimplicialMesh<3>> g_tetMesh;
+
+template<size_t N>
+const SimplicialMesh<N> &getMeshDS();
+template<> const SimplicialMesh<2> &getMeshDS() { if (g_triMesh) return *g_triMesh; else g_triMesh = make_unique<SimplicialMesh<2>>(g_parser2D->elements(), g_parser2D->vertices().size()); return *g_triMesh; }
+template<> const SimplicialMesh<3> &getMeshDS() { if (g_tetMesh) return *g_tetMesh; else g_tetMesh = make_unique<SimplicialMesh<3>>(g_parser3D->elements(), g_parser3D->vertices().size()); return *g_tetMesh; }
+
+////////////////////////////////////////////////////////////////////////////////
+// Stack operations
+////////////////////////////////////////////////////////////////////////////////
+using Stack = vector<NamedValue>;
 
 struct Modifiers {
     bool outerReduction = false;
@@ -391,6 +405,26 @@ size_t elementAverage(const string &, const string &arg, Stack &stack, const Mod
     return 1;
 }
 
+// Create a per-element field by a volume-weighted averaging over each element's
+// neighbors.
+template<size_t N>
+size_t smoothedElementField(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    auto val = popValue(stack);
+    const auto &parser = getParser<N>();
+
+    // Compute element volumes
+    const auto &sampler = getElementSampler<N>();
+    size_t nelems = parser.elements().size();
+    std::vector<Real> volumes(nelems);
+    for (size_t i = 0; i < nelems; ++i)
+        volumes[i] = sampler.volume(i);
+
+    stack.emplace_back("smoothedElementField(" + val.name + ")",
+                        val->smoothedElementField(parser.elements(), parser.meshDegree(), parser.meshDimension(),
+                                                  volumes, MeshConnectivityImpl<SimplicialMesh<N>>(getMeshDS<N>())));
+    return 1;
+}
+
 // Report filters
 // List all fields parsed
 template<size_t N>
@@ -554,6 +588,7 @@ void execute(vector<FilterInvocation> &filters) {
         {"eigenvalues",    Filter::eigenvalue},
         {"sample",         Filter::sample<N>},
         {"elementAverage", Filter::elementAverage<N>},
+        {"smoothedElementField", Filter::smoothedElementField<N>},
         // Stack operations
         {"list",          Filter::listNames<N>},
         {"extract",       Filter::extract<N>},

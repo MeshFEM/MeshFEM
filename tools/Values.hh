@@ -43,6 +43,7 @@
 #include <Functions.hh>
 
 #include "Sampler.hh"
+#include "MeshConnectivity.hh"
 
 class Value;
 using UVPtr  = std::unique_ptr<      Value>;
@@ -83,6 +84,7 @@ template<class T, bool nested>     struct PrintImpl;
 template<class T, typename = void> struct SampleImpl;
 template<class T>                  struct MultipointSampleImpl;
 template<class T, typename = void> struct ElmAvgImpl;
+template<class T>                  struct SmoothedElmFldImpl;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Value type interface.
@@ -101,6 +103,8 @@ public:
     virtual UVPtr sample(const std::vector<ESample> &ss, size_t meshDeg, size_t meshDim, DomainType dt) const = 0;
 
     virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) const = 0;
+    virtual UVPtr smoothedElementField(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim,
+                                       const std::vector<Real> &volumes, const MeshConnectivity &connectivity) const = 0;
 
     virtual ~Value() { }
 };
@@ -214,6 +218,7 @@ public:
     virtual UVPtr clone()                                                  const { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
     virtual UVPtr sample(const ESample &s, size_t meshDeg, size_t meshDim) const { return SampleImpl<Derived>::run(static_cast<const Derived&>(*this), s, meshDeg, meshDim); }
     virtual UVPtr elementAverage(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) const { return ElmAvgImpl<Derived>::run(static_cast<const Derived&>(*this), elems, meshDeg, meshDim); }
+    virtual UVPtr smoothedElementField(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim, const std::vector<Real> &volumes, const MeshConnectivity &conn) const { return SmoothedElmFldImpl<Derived>::run(static_cast<const Derived&>(*this), elems, meshDeg, meshDim, volumes, conn); }
 
     // Sample at a list of points, creating a per-sample-point field value.
     virtual UVPtr sample(const std::vector<ESample> &ss, size_t meshDeg, size_t meshDim, DomainType dt) const { return MultipointSampleImpl<Derived>::run(static_cast<const Derived&>(*this), ss, meshDeg, meshDim, dt); }
@@ -229,6 +234,11 @@ struct SValue : public ValueBase<SValue>, public PointValueTag {
 
     Real  operator[](size_t i) const { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value; }
     Real &operator[](size_t i)       { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value; }
+
+    // Convenience operations for compound op implementation
+    SValue &operator*=(Real   v) { value *= v;       return *this; }
+    SValue &operator+=(SValue b) { value += b.value; return *this; }
+
     raw_type value;
 };
 
@@ -253,6 +263,10 @@ struct VValue : public ValueBase<VValue>, public PointValueTag {
 
     Real  operator[](size_t i) const { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value[i]; }
     Real &operator[](size_t i)       { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value[i]; }
+
+    // Convenience operations for compound op implementation
+    VValue &operator*=(Real          v) { value *= v;       return *this; }
+    VValue &operator+=(const VValue &b) { value += b.value; return *this; }
 
     raw_type value;
 };
@@ -286,6 +300,10 @@ struct SMValue : public ValueBase<SMValue>, public PointValueTag {
 
     Real  operator[](size_t i) const { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value[i]; }
     Real &operator[](size_t i)       { if (i >= dim()) throw std::runtime_error("Out of bounds access"); return value[i]; }
+
+    // Convenience operations for compound op implementation
+    SMValue &operator*=(Real           v) { value *= v;       return *this; }
+    SMValue &operator+=(const SMValue &b) { value += b.value; return *this; }
 
     raw_type value;
 };
@@ -491,5 +509,6 @@ template<class T> typename enable_if_not_point_value<T, Real>::type
 #include "ValueOperations/NodalInterpolant.inl"
 #include "ValueOperations/Sampling.inl"
 #include "ValueOperations/ElementAverage.inl"
+#include "ValueOperations/Smoothing.inl"
 
 #endif /* end of include guard: VALUES_HH */
