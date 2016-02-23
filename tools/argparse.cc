@@ -80,6 +80,7 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
                                            "uses piecewise constant interpolation on Voronoi diagram of points/element barycenters. "
                                            "The point is specified as a comma-separated vector")
         ("elementAverage",                 "Averages the field over each element. Makes sense for nodal fields and interpolant fields.")
+        ("smoothedElementField",           "Create a smoothed, piecewise constant field by averaging over each element's neighborhood.")
         // ("percentile", po::value<double>(), "extract a certain percentile of the field")
         ;
     po::options_description binary_operations("Component-wise binary operations: lower-dimensional types are implicitly promoted to higher dimension when it makes sense. "

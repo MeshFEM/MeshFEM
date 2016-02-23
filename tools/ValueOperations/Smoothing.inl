@@ -1,3 +1,4 @@
+#include <limits>
 template<class _Val>
 struct SmoothedElmFldImpl {
     using ResultType = _Val; // Dummy
@@ -24,6 +25,7 @@ struct SmoothedElmFldImpl<FieldValue<_PointValue>> {
             (*result)[i] *= totVol;
             for (size_t j = 0; j < conn.numElemNeighbors(i); ++j) {
                 size_t n = conn.elemNeighbor(i, j);
+                if (n == std::numeric_limits<size_t>::max()) continue; // no neighbor
                 auto nval = (*orig)[n];
                 Real nvol = volumes.at(n);
                 nval *= nvol;
