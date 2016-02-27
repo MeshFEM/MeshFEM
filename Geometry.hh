@@ -39,13 +39,11 @@ struct BBox {
     // Construct bbox of a collection of points
     template<class _VectorCollection>
     BBox(const _VectorCollection &vectors) {
-        if (vectors.size() == 0) { minCorner = maxCorner = Vector::Zero(); }
-        else {
-            size_t i = 0;
-            for (const auto &v : vectors) {
-                if (i++ == 0) minCorner = maxCorner = v;
-                else          unionPoint(v);
-            }
+        minCorner.setZero(), maxCorner.setZero();
+        size_t i = 0;
+        for (const auto &v : vectors) {
+            if (i++ == 0) minCorner = maxCorner = v;
+            else          unionPoint(v);
         }
     }
 
@@ -54,13 +52,11 @@ struct BBox {
     //  _IndexCollection = std::vector<MeshIO::IOElement>
     template<class _PointCollection, class _IndexCollection>
     BBox(const _PointCollection &pts, const _IndexCollection &subset) {
-        if (subset.size() == 0) { minCorner = maxCorner = Vector::Zero(); }
-        else {
-            size_t i = 0;
-            for (size_t v : subset) {
-                if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(pts[v]);
-                else          unionPoint(truncateFrom3D<Vector>(pts[v]));
-            }
+        minCorner.setZero(), maxCorner.setZero();
+        size_t i = 0;
+        for (size_t v : subset) {
+            if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(pts[v]);
+            else          unionPoint(truncateFrom3D<Vector>(pts[v]));
         }
     }
 
