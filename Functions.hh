@@ -1,0 +1,455 @@
+////////////////////////////////////////////////////////////////////////////////
+// Functions.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Represents constant, linear, and quadratic functions over K-simplices:
+//      edges (K = 1), triangles (K = 2) and tetrahedra (K = 3).
+//
+//      The node numbers for 2-node linear and 3-node quadratic edges:
+//      0*-------* 1      0*---2---* 1
+//
+//      The node numbers for 3-node linear and 10-node quadratic triangles:
+//           2                 2
+//           *                 *
+//          / \               / \
+//         /   \             5   4
+//        /     \           /     \
+//      0*-------* 1      0*---3---* 1
+//
+//      The node numbers for 4-node linear and 10-node quadratic tetrahedra:
+//           3                 3
+//           *                 *            z
+//          / \`.             / \`8         ^
+//         /   \ `* 2        7   9 `* 2     | ^ y
+//        / __--\ /         / _6--\ /5      |/
+//      0*-------* 1      0*---4---* 1      +----->x
+//
+//      Notice that the list of linear nodes is a prefix of the full node list.
+//
+//      The function call operator evaluates the function at the passed
+//      BARYCENTRIC COORDINATES (not coordinates in the embedding space).
+//
+//      Interpolation:
+//          For linear interpolation, the shape functions are the barycentric
+//          coordinates in all cases.
+//          For quadratic interpolation, the shape functions are:
+//              Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
+//              Edge   node i: 4 * lambda_j * lambda_k
+//                             where j, k are the edge endpoint (vertex) nodes
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  10/06/2014 17:51:57
+////////////////////////////////////////////////////////////////////////////////
+#ifndef FUNCTIONS_HH
+#define FUNCTIONS_HH
+#include "Types.hh"
+#include "Simplex.hh"
+#include "function_traits.hh"
+#include <vector>
+#include <array>
+#include <functional>
+#include <iostream>
+#include <type_traits>
+
+namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2 }; }
+
+////////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+////////////////////////////////////////////////////////////////////////////////
+template<typename _T, size_t _K, size_t _Deg>
+class DefaultNodalStoragePolicy;
+template<typename _T, size_t _K, size_t _Deg,
+    template<typename, size_t, size_t> class NodalStoragePolicy = DefaultNodalStoragePolicy>
+class Interpolant;
+
+// Hidden implementations of interpolated functions
+// (Not easily implemented in the interpolant class because member function
+//  specialization is disallowed)
+namespace detail {
+    using namespace Degree;
+    using namespace Simplex;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Interpolation
+    // Two versions of each interpolation operation are provideded: one taking
+    // K + 1 (i.e. number of K-simplex vertices) and one taking a single
+    // VectorND<K+1>
+    ////////////////////////////////////////////////////////////////////////////
+    // Constant functions don't interpolate...
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+    _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... /* args */) { return f[0]; }
+
+    // Barycentric coordinates are the linear shape functions for all simplices.
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
+        _T result = c[0] * f[0];
+        for (size_t i = 1; i < numNodes(_K, 1); ++i)
+            result += c[i] * f[i];
+        return result;
+    }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Edge,        1, _NS> &f, Real c0, Real c1                  ) { _T result = c0 * f[0]; result += c1 * f[1];                                           return result; }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Triangle,    1, _NS> &f, Real c0, Real c1, Real c2         ) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2];                    ; return result; }
+    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Tetrahedron, 1, _NS> &f, Real c0, Real c1, Real c2, Real c3) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2]; result += c3 * f[3]; return result; }
+
+    // Quadratic shape functions are simple functions of the barycentric coords:
+    //    Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
+    //    Edge   node  : 4 * lambda_j * lambda_k
+    //                   where j, k are the edge endpoint (vertex) nodes
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
+        _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
+        for (size_t i = 1; i < numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
+        for (size_t i = 0; i <    numEdges(_K); ++i) result += (4 * c[edgeStartNode(i)] * c[edgeEndNode(i)]) * f[i + numVertices(_K)];
+        return result;
+    }
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Edge, 2, _NS> &f, Real c0, Real c1) {
+        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]);
+        result += (4 * c0 * c1) * f[2];
+        return result;
+    }
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Triangle, 2, _NS> &f, Real c0, Real c1, Real c2) {
+        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]);
+        result += (4 * c0 * c1) * f[3]; result += (4 * c1 * c2) * f[4]; result += (4 * c2 * c0) * f[5];
+        return result;
+    }
+    template<typename _T, template<typename, size_t, size_t> class _NS>
+    _T _interpolate(const Interpolant<_T, Simplex::Tetrahedron, 2, _NS> &f, Real c0, Real c1, Real c2, Real c3) {
+        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]); result += ((2 * c3 * (c3 - 0.5)) * f[3]);
+        result += (4 * c0 * c1) * f[4]; result += (4 * c1 * c2) * f[5]; result += (4 * c2 * c0) * f[6]; result += (4 * c0 * c3) * f[7]; result += (4 * c2 * c3) * f[8]; result += (4 * c1 * c3) * f[9];
+        return result;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Exact integrals for constant, linear, and quadratic interpolants over a
+    // (linearly) deformed simplex with specified volume.
+    // Notice, these weights often differ from the Gauss quadrature weights, so
+    // the integration routines in GaussQuadrature.hh are needed for expressions
+    ////////////////////////////////////////////////////////////////////////////
+    // Constant Simplex
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class NS>
+    _T _integrate(const Interpolant<_T, _K, Degree::Constant, NS> &f, Real volume) {
+        _T result(f[0]);
+        result *= volume;
+        return result;
+    }
+
+    // Linear Simplex
+    template<typename _T, size_t _K, template<typename, size_t, size_t> class NS>
+    _T _integrate(const Interpolant<_T, _K, Degree::Linear, NS> &f, Real volume) {
+        _T result(f[0]);
+        for (size_t i = 1; i < numNodes(_K, 1); ++i) result += f[i];
+        result *= volume / numNodes(_K, 1);
+        return result;
+    }
+    
+    // Quadratic Edge
+    // (vol / 6) * (f_0 + f_1 + 4 * f_2)
+    template<typename _T, template<typename, size_t, size_t> class NS>
+    _T _integrate(const Interpolant<_T, Edge, Degree::Quadratic, NS> &f, Real volume) {
+        _T result(f[2]);
+        result *= 4;
+        result += f[0]; result += f[1];
+        result *= (volume / 6.0);
+        return result;
+    }
+
+    // Quadratic Triangle
+    // (vol / 3) (f_3 + f_4 + f_5)
+    template<typename _T, template<typename, size_t, size_t> class NS>
+    _T _integrate(const Interpolant<_T, Triangle, Degree::Quadratic, NS> &f, Real volume) {
+        _T result(f[3]);
+        result += f[4]; result += f[5];
+        result *= volume / 3.0;
+        return result;
+    }
+
+    // Quadratic Tetrahedron
+    // (vol / 20) (4 * (f_4 + f_5 + f_6 + f_7 + f_8 + f_9) - f_0 - f_1 - f_2 - f_3)
+    template<typename _T, template<typename, size_t, size_t> class NS>
+    _T _integrate(const Interpolant<_T, Tetrahedron, Degree::Quadratic, NS> &f, Real volume) {
+        _T result(f[4]);
+        for (size_t i = 5; i < 10; ++i) result += f[i];
+        result *= 4.0;
+        for (size_t i = 0; i < 4; ++i)  result -= f[i];
+        result *= volume / 20.0;
+        return result;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Interpolation of expressions
+    ////////////////////////////////////////////////////////////////////////////
+    // --0--   0---1   0-2-1
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_edge(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(0.5, 0.5); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0); result[1] = f(0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0); result[1] = f(0.0, 1.0);  result[2] = f(0.5, 0.5); }
+        return result;
+    }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_edge(const F &f) {
+        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(VectorND<2>(p0, p1)); });
+    }
+
+    //   +       2       2
+    //  /0\     / \     5 4
+    // +---+   0---1   0 3 1
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 3) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tri(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(1 / 3.0, 1 / 3.0, 1 / 3.0); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0); result[2] = f(0.0, 0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0); result[2] = f(0.0, 0.0, 1.0);
+                         result[3] = f(0.5, 0.5, 0.0); result[4] = f(0.0, 0.5, 0.5); result[5] = f(0.5, 0.0, 0.5); }
+        return result;
+    }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tri(const F &f) {
+        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(VectorND<3>(p0, p1, p2)); });
+    }
+
+    //                       3                 3
+    //      +                *                 *
+    //     / \`.            / \`.             / \`8
+    //    / 0 \ `+         /   \ `* 2        7   9 `* 2
+    //   / __--\ /        / __--\ /         / _6--\ /5
+    //  +-------+       0*-------* 1      0*---4---* 1
+    template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 4) && (_Deg <= 2), int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tet(const F &f) {
+        Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy> result;
+        if (_Deg == 0) { result[0] = f(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0); }
+        if (_Deg == 1) { result[0] = f(1.0, 0.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0, 0.0); result[2] = f(0.0, 0.0, 1.0, 0.0); result[3] = f(0.0, 0.0, 0.0, 1.0); }
+        if (_Deg == 2) { result[0] = f(1.0, 0.0, 0.0, 0.0); result[1] = f(0.0, 1.0, 0.0, 0.0); result[2] = f(0.0, 0.0, 1.0, 0.0); result[3] = f(0.0, 0.0, 0.0, 1.0);
+                         result[4] = f(0.5, 0.5, 0.0, 0.0); result[5] = f(0.0, 0.5, 0.5, 0.0); result[6] = f(0.5, 0.0, 0.5, 0.0);
+                         result[7] = f(0.5, 0.0, 0.0, 0.5); result[8] = f(0.0, 0.0, 0.5, 0.5); result[9] = f(0.0, 0.5, 0.0, 0.5); }
+        return result;
+    }
+    template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
+    Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
+    _interpolant_tet(const F &f) {
+        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(VectorND<4>(p0, p1, p2, p3)); });
+    }
+}
+
+// Interpolation on a _K simplex (runs the implementations above).
+// Usage:
+// Interpolation<Simplex::{Edge,Triangle,Tetrahedron}, Degree>::interpolate(f);
+template<size_t _K, size_t _Deg>
+class Interpolation { };
+template<size_t _Deg> class Interpolation<Simplex::Edge,        _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_edge<_Deg>(f)) { return detail::_interpolant_edge<_Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Triangle,    _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_tri< _Deg>(f)) { return detail::_interpolant_tri< _Deg>(f); } };
+template<size_t _Deg> class Interpolation<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto interpolant(const F &f) -> decltype(detail::_interpolant_tet< _Deg>(f)) { return detail::_interpolant_tet< _Deg>(f); } };
+
+template<typename _T, size_t _K, size_t _Deg>
+class DefaultNodalStoragePolicy {
+public:
+    static constexpr size_t numNodalValues = Simplex::numNodes(_K, _Deg);
+    // Default constructor leaves values uninitialized
+    DefaultNodalStoragePolicy() { }
+
+    DefaultNodalStoragePolicy(const std::array<_T, numNodalValues> &values) {
+        m_nodeVal = values;
+    }
+
+    template<typename... Args>
+    DefaultNodalStoragePolicy(const _T &val, Args&&... args) {
+        m_set<0>(val, args...);
+    }
+
+    // Move constructor.
+    DefaultNodalStoragePolicy(DefaultNodalStoragePolicy<_T, _K, _Deg> &&b)
+        : m_nodeVal(std::move(b.m_nodeVal)) { }
+
+    static constexpr size_t size() { return numNodalValues; }
+    const _T &operator[](size_t i) const { assert(i < numNodalValues); return m_nodeVal[i]; }
+          _T &operator[](size_t i)       { assert(i < numNodalValues); return m_nodeVal[i]; }
+private:
+    // Recursive value setter to support variadic argument constructor.
+    template<size_t index, typename... Args>
+    void m_set(const _T &val, Args&&... args) {
+        m_nodeVal[index] = val;
+        m_set<index + 1>(args...);
+    }
+    template<size_t numArgs>
+    void m_set() { static_assert(numArgs == numNodalValues,
+           "DefaultNodalStoragePolicy constructor got illegal number of arguments");
+    }
+
+    std::array<_T, numNodalValues> m_nodeVal;
+};
+
+// Compile-time mechanism for identifying interpolant types.
+class InterpolantBase { };
+template<class T>
+struct is_interpolant : public std::is_base_of<InterpolantBase, T> { };
+
+template<typename _T, size_t _K, size_t _Deg,
+    template<typename, size_t, size_t> class NodalStoragePolicy>
+class Interpolant : public NodalStoragePolicy<_T, _K, _Deg>, public InterpolantBase {
+    typedef NodalStoragePolicy<_T, _K, _Deg> SP;
+public:
+    typedef _T value_type;
+    static constexpr size_t K = _K;
+    static constexpr size_t Deg = _Deg;
+    using SP::numNodalValues;
+    using SP::SP;
+    Interpolant() : SP() { } // Can't seem to inherit the default constructor...
+    Interpolant(const Interpolant &b) { *this = b; }
+    Interpolant(Interpolant &&b) : SP(std::move(b)) { }
+
+    // Allow a promoting conversion constructor from interpolants of the
+    // same degree or lower via the assignment operator.
+    // Also allow copy from same degree interpolant with a different
+    // NodalStoragePolicy.
+    // Only works for NodalStoragePolicies that support default construction
+    // (i.e. non-reference types).
+    template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
+             typename std::enable_if<_Deg2 <= _Deg, int>::type = 0>
+    Interpolant(const Interpolant<_T, _K, _Deg2, _NSP2> &b) : SP() { *this = b; }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Evaluation (function call operator)
+    ////////////////////////////////////////////////////////////////////////////
+    // Pass in a column vector of barycentric coordinates...
+    _T operator()(const VectorND<Simplex::numVertices(_K)> &baryCoords) const {
+        return detail::_interpolate(*this, baryCoords);
+    }
+    // ... or a list of them, which is converted into a column vector
+    // This list must be either of length 0 or 2+, so we use enable_if to ensure
+    // the operator()(VectorND) isn't hidden in the 1-argument case.
+    template<typename... Args, typename std::enable_if<sizeof...(Args) != 1, int>::type = 0>
+    _T operator()(Args&&... baryCoords) const {
+        static_assert(((_Deg == 0) && (sizeof...(baryCoords) == 0))
+                || (Simplex::numVertices(_K) == sizeof...(baryCoords)),
+                "Invalid number of barycentric coordinates passed.");
+        return detail::_interpolate(*this, baryCoords...);
+    }
+
+    // Allow assignment between interpolants of the same class.
+    Interpolant &operator=(const Interpolant &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[i]; return *this; }
+
+    // Allow assignment between interpolants with different nodal storage
+    // policies
+    template<template<typename, size_t, size_t> class _NSP2>
+    Interpolant &operator=(const Interpolant<_T, _K, _Deg, _NSP2> &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[i]; return *this; }
+
+    // Allow a promoting assignment from interpolants of a lower degree over the
+    // same simplex type.
+    template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
+    typename std::enable_if<_Deg2 < _Deg, int>::type = 0>
+    Interpolant &operator=(const Interpolant<_T, _K, _Deg2, _NSP2> &b) {
+        static_assert((_Deg2 == 0) || (_Deg2 == 1), "Only quadratic"
+                "interpolants are implemented, so promotion must be from a "
+                "constant or linear function");
+        if (_Deg2 == 0) for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = b[0];
+        else if (_Deg2 == 1) {
+            // Copy the linear function's values at the vertices
+            for (size_t i = 0; i < Simplex::numVertices(_K); ++i) (*this)[i] = b[i];
+            // Evaluate linear function at the edge nodes by averaging endpoints
+            for (size_t i = 0; i < Simplex::numEdges(_K); ++i) {
+                (*this)[Simplex::numVertices(_K) + i]  = b[Simplex::edgeStartNode(i)];
+                (*this)[Simplex::numVertices(_K) + i] += b[Simplex::edgeEndNode(i)];
+                (*this)[Simplex::numVertices(_K) + i] *= 0.5;
+            }
+        }
+        return *this;
+    }
+
+    // Allow assignment from constant value
+    Interpolant &operator=(const _T &val) {
+        for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] = val;
+        return *this;
+    }
+
+    // We assume interpolated value type can be multiplied/divided by scalars
+    // and added together (these are needed for interpolation anyway...)
+    Interpolant &operator*=(     Real b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] *= b; return *this; }
+    Interpolant &operator/=(     Real b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] /= b; return *this; }
+    Interpolant &operator+=(const _T &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] += b; return *this; }
+    Interpolant &operator-=(const _T &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] -= b; return *this; }
+
+    // Under the above assumptions, interpolants of the same type can be added.
+    template<template<typename, size_t, size_t> class _NSP2>
+    Interpolant &operator+=(const Interpolant<_T, _K, _Deg, _NSP2> &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] += b[i]; return *this; }
+    template<template<typename, size_t, size_t> class _NSP2>
+    Interpolant &operator-=(const Interpolant<_T, _K, _Deg, _NSP2> &b) { for (size_t i = 0; i < numNodalValues; ++i) (*this)[i] -= b[i]; return *this; }
+
+    // Allow promoting compound assignment. Note: this could be optimized.
+    template<size_t _Deg2, template<typename, size_t, size_t> class _NSP2,
+    typename std::enable_if<_Deg2 < _Deg, int>::type = 0>
+    Interpolant &operator+=(const Interpolant<_T, _K, _Deg2, _NSP2> &b) {
+        Interpolant promoted(b);
+        return (*this) += promoted;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Integration over a (linearly deformed) simplex with volume vol
+    ////////////////////////////////////////////////////////////////////////////
+    _T integrate(Real vol) const { return detail::_integrate(*this, vol); }
+    _T average()           const { return detail::_integrate(*this, 1.0); }
+};
+
+template<typename _T, size_t _K, size_t _Deg, 
+         template<typename, size_t, size_t> class _NS>
+std::ostream & operator<<(std::ostream &os, const Interpolant<_T, _K, _Deg, _NS> &f) {
+    os << "Deg " << _Deg << " over " << _K << "-simplex:";
+    for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i)
+        os << '\t' << f[i];
+    os << std::endl;
+    return os;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Binary arithmetic operations.
+// These all use the DefaultNodalStoragePolicy for the return type because the
+// operands could use a reference storage policy (which wouldn't make sense for
+// a result).
+////////////////////////////////////////////////////////////////////////////////
+// Scalar multiplication/division of (non reference type) interpolants
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator*(Real s, const Interpolant<_T, _K, _Deg, _NSP> &f) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result *= s; return result; }
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator*(const Interpolant<_T, _K, _Deg, _NSP> &f, Real s) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result *= s; return result; }
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator/(const Interpolant<_T, _K, _Deg, _NSP> &f, Real s) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result /= s; return result; }
+
+// Addition/subtraction of a constant value. Any constant value that is
+// "assignable" to the interpolant is allowed (so, e.g. an int can be added to a
+// double interpolant).
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP, typename _T2, typename std::enable_if<std::is_assignable<_T&, _T2>::value, int>::type = 0> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator+(const Interpolant<_T, _K, _Deg, _NSP> &f, const _T2 &v) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result += v; return result; }
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP, typename _T2, typename std::enable_if<std::is_assignable<_T&, _T2>::value, int>::type = 0> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator+(const _T2 &v, const Interpolant<_T, _K, _Deg, _NSP> &f) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result += v; return result; }
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP, typename _T2, typename std::enable_if<std::is_assignable<_T&, _T2>::value, int>::type = 0> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator-(const Interpolant<_T, _K, _Deg, _NSP> &f, const _T2 &v) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result -= v; return result; }
+template<typename _T, size_t _K, size_t _Deg, template<typename, size_t, size_t> class _NSP, typename _T2, typename std::enable_if<std::is_assignable<_T&, _T2>::value, int>::type = 0> Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> operator-(const _T2 &v, const Interpolant<_T, _K, _Deg, _NSP> &f) { Interpolant<_T, _K, _Deg, DefaultNodalStoragePolicy> result(f); result -= v; return result; }
+
+// Add/subtract interpolants of possibly differing degrees over same simplex
+// type. The degree of the resulting interpolant is the maximum of the operands'
+// degrees.
+template<typename T>
+constexpr const T &constmax(const T &a, const T &b) { return (a > b) ? a : b; }
+
+template<typename _T, size_t _K, size_t _Deg1, size_t _Deg2, template<typename, size_t, size_t> class _NSP1, template<typename, size_t, size_t> class _NSP2>
+Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> operator+(
+        const Interpolant<_T, _K, _Deg1, _NSP1> &f1,
+        const Interpolant<_T, _K, _Deg2, _NSP2> &f2)
+{
+    Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> result(f1);
+    result += f2;
+    return result;
+}
+template<typename _T, size_t _K, size_t _Deg1, size_t _Deg2, template<typename, size_t, size_t> class _NSP1, template<typename, size_t, size_t> class _NSP2>
+Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> operator-(
+        const Interpolant<_T, _K, _Deg1, _NSP1> &f1,
+        const Interpolant<_T, _K, _Deg2, _NSP2> &f2)
+{
+    Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> result(f1);
+    result -= f2;
+    return result;
+}
+
+#endif /* end of include guard: FUNCTIONS_HH */

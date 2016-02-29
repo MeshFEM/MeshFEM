@@ -1,0 +1,41 @@
+# Plot relative errors of quantity computed by deg1 and deg2 FEM, computing
+# the convergence rate. The data source is specified by 'data_source', and is
+# expected to have the following columns:
+#   mesh_number median_edge_length deg_1_error deg_2_error
+# Required variables to be set:
+#   data_source, name, png_path;
+# Optional variables to be set:
+#   title_suffix
+if (!exists("title_suffix")) \
+    title_suffix = ''
+
+# data_source = '< ./errorData.py results/skip_0 "w0_norm[0]"'
+# name='w0 (norm)'
+# png_path='w0_norm_0.png'
+
+# Gnuplot has trouble doing the nonlinear fit directly, so we fit in log/log
+# space, where it's just a linear fit.
+fDeg1(x) = exp(linLogA)  * (x**linExp);
+fDeg2(x)   = exp(quadLogA) * (x**quadExp);
+fDeg1Log(logX) = linLogA + linExp * logX
+fDeg2Log(logX) = quadLogA + quadExp * logX
+fit fDeg1Log(x) data_source using (log($2)):(log($3)) via linLogA, linExp;
+fit fDeg2Log(x) data_source using (log($2)):(log($4)) via quadLogA, quadExp;
+
+set term pngcairo size 1024,768
+set title "Convergence for " . name . title_suffix noenhanced;
+set output png_path;
+
+set grid
+set logscale y
+set logscale x 2
+set key bottom right
+set format y "%0.e"
+set yrange [1e-10:1]
+set xrange [:0.25]
+set ylabel " Relative Error in " . name
+set xlabel " Median edge length"
+plot data_source using 2:3 with points lw 2.0 ps 2.0 title 'linear elements', \
+     ''          using 2:4 with points lw 2.0 ps 2.0 title 'quadratic elements', \
+     fDeg2(x) lc rgb "black" lw 2.0 title sprintf('quadratic convergence order, %0.4f', quadExp), \
+     fDeg1(x) lc rgb "black" lw 2.0 title sprintf('linear convergence order, %0.4f', linExp)

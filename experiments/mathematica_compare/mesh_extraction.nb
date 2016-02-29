@@ -1,0 +1,218 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.2' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[      6854,        208]
+NotebookOptionsPosition[      6198,        179]
+NotebookOutlinePosition[      6556,        195]
+CellTagsIndexPosition[      6513,        192]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"region", " ", "=", 
+   RowBox[{"ImplicitRegion", "[", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"0", "\[LessEqual]", "x", "\[LessEqual]", "5"}], "&&", 
+      RowBox[{"0", "\[LessEqual]", "y", "\[LessEqual]", "1"}]}], ",", 
+     RowBox[{"{", 
+      RowBox[{"x", ",", "y"}], "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{"mesh", " ", "=", " ", 
+  RowBox[{"ToElementMesh", "[", 
+   RowBox[{"region", ",", " ", 
+    RowBox[{"\"\<MeshOrder\>\"", "\[Rule]", "2"}], ",", " ", 
+    RowBox[{"\"\<MaxCellMeasure\>\"", "\[Rule]", "0.5"}]}], "]"}]}]}], "Input",\
+
+ CellChangeTimes->{{3.6557744069698133`*^9, 3.655774439031014*^9}, {
+  3.655774644569785*^9, 3.655774644718492*^9}, {3.6557774305608664`*^9, 
+  3.655777431000133*^9}}],
+
+Cell[BoxData[
+ TagBox[
+  RowBox[{"ElementMesh", "[", 
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"0.`", ",", "5.000000000000071`"}], "}"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"0.`", ",", "1.0000000000000142`"}], "}"}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{"TriangleElement", "[", 
+      RowBox[{
+       StyleBox["\<\"<\"\>",
+        ShowStringCharacters->False], "\[InvisibleSpace]", "18", 
+       "\[InvisibleSpace]", 
+       StyleBox["\<\">\"\>",
+        ShowStringCharacters->False]}], "]"}], "}"}]}], "]"}],
+  False,
+  Editable->False,
+  SelectWithContents->True]], "Output",
+ CellChangeTimes->{{3.655774401013772*^9, 3.6557744394295187`*^9}, {
+   3.6557746279281282`*^9, 3.6557746450921707`*^9}, 3.655777431542943*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"elms", " ", "=", " ", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"mesh", "[", "\"\<MeshElements\>\"", "]"}], "[", 
+    RowBox[{"[", "1", "]"}], "]"}], "[", 
+   RowBox[{"[", "1", "]"}], "]"}]}]], "Input",
+ CellChangeTimes->{{3.655774466895212*^9, 3.655774475993084*^9}, {
+  3.655775557270667*^9, 3.655775582483097*^9}, {3.6557756430829773`*^9, 
+  3.655775655120286*^9}}],
+
+Cell[BoxData[
+ RowBox[{"{", 
+  RowBox[{
+   RowBox[{"{", 
+    RowBox[{"1", ",", "5", ",", "13", ",", "17", ",", "18", ",", "19"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"6", ",", "10", ",", "14", ",", "20", ",", "21", ",", "22"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"5", ",", "9", ",", "13", ",", "23", ",", "24", ",", "18"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"13", ",", "2", ",", "1", ",", "25", ",", "26", ",", "19"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"14", ",", "5", ",", "6", ",", "27", ",", "28", ",", "22"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"10", ",", "9", ",", "14", ",", "29", ",", "30", ",", "21"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"6", ",", "7", ",", "10", ",", "31", ",", "32", ",", "20"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"9", ",", "2", ",", "13", ",", "33", ",", "25", ",", "24"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"7", ",", "8", ",", "15", ",", "34", ",", "35", ",", "36"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"12", ",", "8", ",", "16", ",", "37", ",", "38", ",", "39"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"3", ",", "4", ",", "16", ",", "40", ",", "41", ",", "42"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"8", ",", "12", ",", "15", ",", "37", ",", "43", ",", "35"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"11", ",", "7", ",", "15", ",", "44", ",", "36", ",", "45"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"16", ",", "8", ",", "3", ",", "38", ",", "46", ",", "42"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"11", ",", "15", ",", "12", ",", "45", ",", "43", ",", "47"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"4", ",", "12", ",", "16", ",", "48", ",", "39", ",", "41"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"7", ",", "11", ",", "10", ",", "44", ",", "49", ",", "32"}], 
+    "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"9", ",", "5", ",", "14", ",", "23", ",", "27", ",", "30"}], 
+    "}"}]}], "}"}]], "Output",
+ CellChangeTimes->{{3.655774470217263*^9, 3.655774476269636*^9}, {
+  3.655774630536924*^9, 3.6557746492100677`*^9}, {3.6557755581053753`*^9, 
+  3.65577558321164*^9}, {3.6557756448327093`*^9, 3.65577565541959*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mesh", "[", "\"\<Wireframe\>\"", "]"}]], "Input",
+ CellChangeTimes->{{3.6557746131729097`*^9, 3.655774617218173*^9}}],
+
+Cell[BoxData[
+ GraphicsBox[
+  {EdgeForm[GrayLevel[0]], FaceForm[None], GraphicsComplexBox[CompressedData["
+
+1:eJxTTMoPSmViYGAwBGIQjR98sIfQIg4wEX4o3wEq//ZVktbfizB1DAwb1smJ
+dxUxwNUHBD58UdrLDud3dZ3LYpzOD+fD9MPMg+mH8WH6YXyYflT7H0Dtf2Cv
+phKwpuP2Dzj/7dvrK60ncTv8+Q8C9+0XLdocdeCpoAMjTB5FPwNDSsKU/b+t
+XkL5F6DyF+B8VP89sD98wC3X78EfqPwLNP4FtPB5YI9q/gs081/A3QFT39Ue
++frQtS9w81D9x8AA48PDB0U9zDwWBwYUAOMj/G8HC09oeMFU2tgEd82bwgsN
+v/P28+bHnLzRzwnno8bnA/svxbwdC24IQMP3ApwPc08AmBaBqw+8GKn74JMQ
+XB7Gh+mH2Q+27v9ze9T09ADuHpg8LH5h7of5BxY+MHmYf2HhAZMHABJy9i8=
+
+    "], PolygonBox[{{1, 5, 13}, {6, 10, 14}, {5, 9, 13}, {13, 2, 1}, {14, 5, 
+     6}, {10, 9, 14}, {6, 7, 10}, {9, 2, 13}, {7, 8, 15}, {12, 8, 16}, {3, 4, 
+     16}, {8, 12, 15}, {11, 7, 15}, {16, 8, 3}, {11, 15, 12}, {4, 12, 16}, {7,
+      11, 10}, {9, 5, 14}}]]}]], "Output",
+ CellChangeTimes->{{3.655774617564227*^9, 3.6557746533637123`*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"Export", "[", 
+  RowBox[{"\"\<coords.txt\>\"", ",", " ", 
+   RowBox[{"mesh", "[", "\"\<Coordinates\>\"", "]"}]}], "]"}]], "Input",
+ CellChangeTimes->{{3.655775468868135*^9, 3.655775488094397*^9}}],
+
+Cell[BoxData["\<\"coords.txt\"\>"], "Output",
+ CellChangeTimes->{3.655775488484372*^9}]
+}, Open  ]]
+},
+WindowSize->{840, 1022},
+WindowMargins->{{-1533, Automatic}, {Automatic, -14}},
+FrontEndVersion->"10.2 for Mac OS X x86 (32-bit, 64-bit Kernel) (July 6, \
+2015)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 767, 18, 46, "Input"],
+Cell[1350, 42, 774, 22, 28, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[2161, 69, 386, 9, 28, "Input"],
+Cell[2550, 80, 2220, 59, 97, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[4807, 144, 141, 2, 28, "Input"],
+Cell[4951, 148, 884, 16, 99, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[5872, 169, 220, 4, 28, "Input"],
+Cell[6095, 175, 87, 1, 28, "Output"]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
+
