@@ -116,6 +116,20 @@ public:
         return result;
     }
 
+
+    // Single contraction with vector (apply this matrix to vector on left)
+    template<typename _R2>
+    Eigen::Matrix<_R2, t_N, 1> contract(const Eigen::Matrix<_R2, t_N, 1> &v) const {
+        Eigen::Matrix<_R2, t_N, 1> result;
+        result.setZero();
+        for (size_t i = 0; i < t_N; ++i) {
+            for (size_t j = 0; j < t_N; ++j) {
+                result[i] += (*this)(i, j) * v[j];
+            }
+        }
+        return result;
+    }
+
     // Flattened accessors
     _ConstStorageRef_t flattened() const { return m_data; }
     _Real operator[](size_t i) const { return m_data[i]; }
@@ -282,6 +296,30 @@ public:
         SymmetricMatrix e_ij(Storage::Zero());
         e_ij[i] = (i < t_N) ? 1.0 : 0.5;
         return e_ij;
+    }
+
+    // Construct 0.5 * (a b^T + b a^T)
+    template<class Vector>
+    static SymmetricMatrix SymmetrizedOuterProduct(const Vector &a, const Vector &b) {
+        static_assert(size_t(Vector::RowsAtCompileTime) == t_N,
+                      "Axis vector dimensions must match matrix dimension.");
+        SymmetricMatrix ab;
+        for (size_t i = 0; i < t_N; ++i)
+            for (size_t j = i; j < t_N; ++j)
+                ab(i, j) = 0.5 * (a[i] * b[j] + b[i] * a[j]);
+        return ab;
+    }
+    
+    // Construct the symmetric matrix n n^T, which projects onto unit vector n.
+    template<class Vector>
+    static SymmetricMatrix ProjectionMatrix(const Vector &n) {
+        static_assert(size_t(Vector::RowsAtCompileTime) == t_N,
+                      "Axis vector dimension must match matrix dimension.");
+        SymmetricMatrix nnt;
+        for (size_t i = 0; i < t_N; ++i)
+            for (size_t j = i; j < t_N; ++j)
+                nnt(i, j) = n[i] * n[j];
+        return nnt;
     }
 
     using Base::operator=;
