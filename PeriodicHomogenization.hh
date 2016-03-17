@@ -6,7 +6,11 @@
 
 #include "GaussQuadrature.hh"
 #include "InterpolantRestriction.hh"
-// #include "MSHFieldWriter.hh"
+
+// #define FD_SD_DEBUG
+#ifdef FD_SD_DEBUG
+#include "MSHFieldWriter.hh"
+#endif
 
 namespace PeriodicHomogenization {
     ////////////////////////////////////////////////////////////////////////////
@@ -289,7 +293,8 @@ namespace PeriodicHomogenization {
     void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
             const std::vector<typename _Sim::VField> &w,
             const _NormalShapeVelocity &vn,
-            std::vector<typename _Sim::VField> &dot_w) {
+            std::vector<typename _Sim::VField> &dot_w,
+            bool projectOutNormalStress = false) {
         BENCHMARK_START_TIMER("Fluctuation Shape Derivatives");
 
         constexpr size_t Deg = _Sim::Degree;
@@ -302,9 +307,11 @@ namespace PeriodicHomogenization {
         std::vector<Interpolant<SMatrix, K - 1, Deg - 1>> bdry_stresses;
         bdry_stresses.resize(mesh.numBoundaryElements());
 
-        // static size_t it = 0; 
-        // MSHFieldWriter writer("debug_fd_sd_" + std::to_string(it) + ".msh", sim.mesh());
-        // ++it;
+#ifdef FD_SD_DEBUG
+        static size_t it = 0; 
+        MSHFieldWriter writer("debug_fd_sd_" + std::to_string(it) + ".msh", sim.mesh());
+        ++it;
+#endif // FD_SD_DEBUG
 
         dot_w.clear(), dot_w.reserve(w.size());
         for (size_t kl = 0; kl < w.size(); ++kl) {
@@ -322,21 +329,38 @@ namespace PeriodicHomogenization {
                     else               restrictInterpolant(e, f, strain_kl, bdry_stress_kl);
                     for (size_t n = 0; n < bdry_stress_kl.size(); ++n)
                         bdry_stress_kl[n] = C.doubleContract(bdry_stress_kl[n]);
+
+                    if (projectOutNormalStress) {
+                        // Projection:  s - (sn) n^T - n (sn)^T + (n^T s n)(n n^T)
+                        auto nnt = SMatrix::ProjectionMatrix(f->normal());
+                        for (size_t n = 0; n < bdry_stress_kl.size(); ++n) {
+                            auto &s = bdry_stress_kl[n];
+                            // Subtract tangent-normal components (double subtracting normal-normal components)
+                            auto s_half_tn = SMatrix::SymmetrizedOuterProduct(s.contract(f->normal()), f->normal());
+                            s -= s_half_tn, s -= s_half_tn;
+                            // Clear out normal-normal component
+                            s -= s.doubleContract(nnt) * nnt;
+                            // assert(bdry_stress_kl[n].contract(f->normal()).norm() < 1e-13);
+                        }
+                    }
                 }
             }
 
             auto loadChange = sim.changeInDivTensorLoad(vn, bdry_stresses, true);
             dot_w.push_back(sim.solve(loadChange));
 
-            // typename _Sim::VField outField;
-            // // Subtract off average displacements so that fields are comparable
-            // // across meshes.
-            // outField = w[kl];
-            // outField -= outField.mean();
-            // writer.addField("w " + std::to_string(kl), outField);
-            // outField = dot_w[kl];
-            // outField -= outField.mean();
-            // writer.addField("dot w " + std::to_string(kl), outField);
+#ifdef FD_SD_DEBUG
+            typename _Sim::VField outField;
+            // Subtract off average displacements so that fields are comparable
+            // across meshes.
+            outField = w[kl];
+            outField -= outField.mean();
+            writer.addField("w " + std::to_string(kl), outField);
+            outField = dot_w[kl];
+            outField -= outField.mean();
+            writer.addField("dot w " + std::to_string(kl), outField);
+            writer.addField("rhs " + std::to_string(kl), sim.dofToNodeField(loadChange));
+#endif // FD_SD_DEBUG
         }
 
         BENCHMARK_STOP_TIMER("Fluctuation Shape Derivatives");

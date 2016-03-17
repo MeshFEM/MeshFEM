@@ -63,7 +63,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
     // All of these routines can be heavily optimized...
     struct Element : public BaseData::Element {
         typedef typename BaseData::Element Base;
-        using Base::gradPhi;
+        using Base::gradPhi; using Base::deltaGradPhi;
 
         static constexpr size_t nNodes = Simplex::numNodes(_K, _Deg);
         static constexpr size_t nVecPhi = N * nNodes;
@@ -119,38 +119,33 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             out = eps.doubleContract(m_E());
         }
 
-        // Contribution to the "constant strain load"--RHS for cell problem:
-        //      -div C : [strain(u) + cstrain] = 0 in omega
-        //       n . C : [strain(u) + cstrain] = 0 on domega
-        // Integrating the volume equation against a shape function p, we get:
-        //      int_omega -p . div C : [strain(u) + cstrain] dV = 0 
-        //      = int_omega strain(p) : C : [strain(u) + cstrain] dV + 
-        //        int_domega p . (n . C : [strain(u) + cstrain]) dA,
-        // and the boundary term disappears due to the Neumann condition.
-        // Thus, we only accumulate contribution to the volume integral.
-        // This can be seen as applying the stiffness matrix to the linear
-        // displacement field "cstrain x".
-        // Finally, since elasticity tensor C = m_E() is constant over the
-        // element, we can pull C : cstrain outside the integral
-        void perElementConstantStrainLoad(const SMatrix &cstrain, ElementLoad &l) const {
-            std::vector<Strain> phiStrains = vecPhiStrains();
-            SMatrix s(m_E().doubleContract(cstrain));
-            for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
-                for (size_t c = 0; c < N; ++c)
-                    l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(s);
-            }
-        }
-
-        // Contribution to the "per-element stress load"--RHS for cell problem:
-        //      -div [(C : strain(u)) + cstress] = 0 in omega
-        //       n . [(C : strain(u)) + cstress] = 0 on domega
-        // where cstress is constant per-element.
+        // Contribution to the "per-element constant stress load"
+        //      -div C : strain(u) = -div cstress in omega
+        //       n . C : strain(u) =  n . cstress on domega
+        // Integrating the volume equation against shape function phi:
+        //      int_omega   -phi . div (C : strain(u)) dV = int_omega    -phi . div c_stress dV
+        // ==>  int_omega strain(phi) : C : strain(u)  dV = int_omega strain(phi) : c_stress dV
+        //(The boundary terms disappear due to the Neumann condition). The RHS
+        // vector can be interpreted as applying the stiffness matrix to the linear
+        // displacement field "(C^-1 : cstress) x".
+        // Since c_stress is constant, we can pull it out of the integral for efficiency.
         void perElementConstantStressLoad(const SMatrix &cstress, ElementLoad &l) const {
             std::vector<Strain> phiStrains = vecPhiStrains();
             for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
                 for (size_t c = 0; c < N; ++c)
                     l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(cstress);
             }
+        }
+
+        // Contribution to the "constant strain load"
+        //      -div C : strain(u) = -div C : cstrain in omega
+        //       n . C : strain(u) =  n . C : cstrain on domega
+        // Since material properties C are constant over the element, this is a
+        // "constant stress load."
+        // NOTE: this is actually the **negated** RHS for the periodic
+        // homogenization cell problem corresponding to cstrain.
+        void perElementConstantStrainLoad(const SMatrix &cstrain, ElementLoad &l) const {
+            perElementConstantStressLoad(m_E().doubleContract(cstrain), l);
         }
 
         // Gets ***upper triangle*** of the per-element stiffness matrix.
@@ -169,6 +164,108 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                 }
             }
         }
+
+        ////////////////////////////////////////////////////////////////////////
+        // Discrete shape derivative functions
+        ////////////////////////////////////////////////////////////////////////
+        // Change in basis functions' strains due to element corner perturbation
+        template<class CornerPerturbations>
+        std::vector<Strain> deltaVecPhiStrains(const CornerPerturbations &delta_p) const {
+            std::vector<Strain> deltaStrains(N * nNodes);
+            for (size_t i = 0; i < nNodes; ++i) {
+                auto dgPhi = deltaGradPhi(i, delta_p);
+                for (size_t c = 0; c < N; ++c) {
+                    for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
+                        for (size_t var = 0; var < N; ++var) {
+                            deltaStrains[i * N + c][inode](c, var) +=
+                                ((var == c) ? 1.0 : 0.5) * dgPhi[inode](var);
+                        }
+                    }
+                }
+            }
+            return deltaStrains;
+        }
+
+        // Change in strain due to element corner perturbation of a **fixed**
+        // nodal vector field u. In other words, this is only one of the two
+        // terms giving the change in a linear elasticity solution's strain.
+        template<class _ElemHandle, class CornerPerturbations>
+        void deltaStrain(const CornerPerturbations &delta_p, _ElemHandle elem,
+                         const VField &u, Strain &deps) const {
+            deps.clear();
+            for (size_t i = 0; i < nNodes; ++i) {
+                auto dgPhi = deltaGradPhi(i, delta_p);
+                const auto &ui = u(elem.node(i).index());
+                for (size_t c = 0; c < N; ++c) {
+                    auto ui_c = ui[c];
+                    // We need the strain value at each interpolation node.
+                    for (size_t inode = 0; inode < Strain::numNodalValues; ++inode) {
+                        for (size_t var = 0; var < N; ++var) {
+                            deps[inode](c, var) += ((var == c) ? 1.0 : 0.5) *
+                                ui_c * dgPhi[inode](var);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Change in stress due to element corner perturbation of a **fixed**
+        // nodal vector field u.
+        template<class _ElemHandle, class CornerPerturbations>
+        void deltaStress(const CornerPerturbations &delta_p, _ElemHandle elem,
+                         const VField &u, Stress &dsigma) const {
+            Strain deps;
+            deltaStrain(elem, u, deps);
+            dsigma = deps.doubleContract(m_E());
+        }
+
+        // Change in constant strain load due to element corner perturbation.
+        template<class CornerPerturbations>
+        void deltaPerElementConstantStrainLoad(const CornerPerturbations &delta_p,
+                const SMatrix &cstrain, ElementLoad &l) const {
+            std::vector<Strain> phiStrains = vecPhiStrains(),
+                               dphiStrains = deltaVecPhiStrains(delta_p);
+            SMatrix s(m_E().doubleContract(cstrain));
+            Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
+            for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
+                for (size_t c = 0; c < N; ++c) {
+                    l(c, i) = dphiStrains[i * N + c].integrate(Base::volume()).doubleContract(s);
+                    l(c, i) += phiStrains[i * N + c].integrate(dvol).doubleContract(s);
+                }
+            }
+        }
+
+        // Change in per-element stiffness matrix due to element corner perturbation.
+        // Computes ***upper triangle*** only.
+        template<class CornerPerturbations>
+        void deltaPerElementStiffness(const CornerPerturbations &delta_p, PerElementStiffness &dKe) const {
+            std::vector<Strain> strainPhi = vecPhiStrains(),
+                               dstrainPhi = deltaVecPhiStrains(delta_p);
+            Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
+
+            std::vector<Stress>  stressPhi;
+            stressPhi.reserve(strainPhi.size());
+            for (size_t i = 0; i < strainPhi.size(); ++i)
+                stressPhi.emplace_back(strainPhi[i].doubleContract(m_E()));
+
+            for (size_t i = 0; i < stressPhi.size(); ++i) {
+                for (size_t j = i; j < strainPhi.size(); ++j) {
+                    dKe(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
+                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                            return stressPhi[i](p).doubleContract(dstrainPhi[j](p));
+                    }, Base::volume());
+                    dKe(i, j) += Quadrature<_K, 2 * (_Deg - 1)>::integrate(
+                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                            return stressPhi[j](p).doubleContract(dstrainPhi[i](p));
+                    }, Base::volume());
+                    dKe(i, j) += Quadrature<_K, 2 * (_Deg - 1)>::integrate(
+                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                            return stressPhi[i](p).doubleContract(strainPhi[j](p));
+                    }, dvol);
+                }
+            }
+        }
+
     private:
         ETensorGetter m_E;
     };
@@ -495,11 +592,9 @@ public:
         assert(u.domainSize() == m_mesh.numNodes());
         VField load(m_mesh.numNodes());
         load.clear();
-        for (size_t ei = 0; ei < m_mesh.numElements(); ++ei) {
-            auto e = m_mesh.element(ei);
-            typename _Mesh::ElementData::PerElementStiffness Ke;
+        typename _Mesh::ElementData::PerElementStiffness Ke;
+        for (auto e : m_mesh.elements()) {
             e->perElementStiffness(Ke);
-            // Compute the effective traction load on each boundary vetex
             for (size_t ni = 0; ni < e.numNodes(); ++ni) {
                 size_t globalni = e.node(ni).index();
                 for (size_t nj = 0; nj < e.numNodes(); ++nj) {
@@ -887,6 +982,97 @@ public:
     void updateMeshNodePositions(const Vertices &vertices) {
         m_mesh.setNodePositions(vertices);
         m_system.clear();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Discrete shape derivative functions
+    ////////////////////////////////////////////////////////////////////////////
+    template<class ElementHandle, typename PerVertexField, typename T>
+    void extractElementCornerValues(const ElementHandle &e, const PerVertexField &f,
+                                   std::vector<T> &cornerValues) const {
+        cornerValues.clear();
+        for (size_t i = 0; i < e.numVertices(); ++i)
+            cornerValues.push_back(f(e.vertex(i).index()));
+    }
+
+    // Change in the force for fixed nodal displacement field u due to mesh
+    // vertex perturbation deltaP: (delta K) * u
+    // WARNING: u is a per-node field, but we return a per-dof load field (this
+    // distinction only matters under periodic conditions)
+    VField applyDeltaStiffnessMatrix(const VField &u, const VField &deltaP) const {
+        assert(u.domainSize() == m_mesh.numNodes());
+        assert(deltaP.domainSize() == m_mesh.numVertices());
+
+        VField load(numDoFs());
+        load.clear();
+        typename _Mesh::ElementData::PerElementStiffness dKe;
+        std::vector<VectorND<N>> elem_deltaP;
+        for (auto e : m_mesh.elements()) {
+            extractElementCornerValues(e, deltaP, elem_deltaP);
+            e->deltaPerElementStiffness(elem_deltaP, dKe);
+            // Compute the effective traction load on each boundary vetex
+            for (size_t ni = 0; ni < e.numNodes(); ++ni) {
+                size_t globaldi = DoF(e.node(ni).index()); // DoF not Node index!
+                for (size_t nj = 0; nj < e.numNodes(); ++nj) {
+                    size_t globalnj = e.node(nj).index();  // Node not DoF index!
+                    for (size_t ci = 0; ci < N; ++ci) {
+                        size_t row = N * ni + ci;
+                        for (size_t cj = 0; cj < N; ++cj) {
+                            size_t col = N * nj + cj;
+                            load(globaldi)[ci] += ((row < col) ? dKe(row, col) : dKe(col, row)) * u(globalnj)[cj];
+                        }
+                    }
+                        
+                }
+            }
+        }
+        return load;
+    }
+
+    // Change in the constant strain load due to mesh vertex perturbation deltaP.
+    template<class _SymMat>
+    VField deltaConstantStrainLoad(const _SymMat &cstrain, const VField &deltaP) const {
+        assert(deltaP.domainSize() == m_mesh.numVertices());
+        
+        VField dload(numDoFs());
+        dload.clear();
+
+        typename _Mesh::ElementData::ElementLoad deLoad;
+        std::vector<VectorND<N>> elem_deltaP;
+        for (auto e : m_mesh.elements()) {
+            extractElementCornerValues(e, deltaP, elem_deltaP);
+            e->deltaPerElementConstantStrainLoad(elem_deltaP, cstrain, deLoad);
+            for (size_t n = 0; n < e.numNodes(); ++n)
+                dload(DoF(e.node(n).index())) += deLoad.col(n);
+        }
+        return dload;
+    }
+
+    // Change in per-element strain field: (delta strain)(u) + strain(delta u)
+    std::vector<Strain> deltaStrainField(const VField &u, const VField &deltaU, const VField &deltaP) const {
+        std::vector<Strain> dsfield(m_mesh.numElements());
+        Strain strainDelta;
+        std::vector<VectorND<N>> elem_deltaP;
+        for (auto e : m_mesh.elements()) {
+            extractElementCornerValues(e, deltaP, elem_deltaP);
+            e->deltaStrain(elem_deltaP, e,      u, dsfield[e.index()]);
+            e->     strain(             e, deltaU,        strainDelta);
+            dsfield[e.index()] += strainDelta;
+        }
+        return dsfield;
+    }
+
+    // Change in strain averaged over each element: (delta strain)(u) + strain(delta u)
+    SMField deltaAverageStrainField(const VField &u, const VField &deltaU, const VField &deltaP) const {
+        SMField dsfield(m_mesh.numElements());
+        Strain s;
+        std::vector<VectorND<N>> elem_deltaP;
+        for (auto e : m_mesh.elements()) {
+            extractElementCornerValues(e, deltaP, elem_deltaP);
+            e->deltaStrain(elem_deltaP, e,      u, s), dsfield(e.index())  = s.average();
+            e->     strain(             e, deltaU, s), dsfield(e.index()) += s.average();
+        }
+        return dsfield;
     }
 
 private:
