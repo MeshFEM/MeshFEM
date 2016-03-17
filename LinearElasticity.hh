@@ -215,7 +215,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         void deltaStress(const CornerPerturbations &delta_p, _ElemHandle elem,
                          const VField &u, Stress &dsigma) const {
             Strain deps;
-            deltaStrain(elem, u, deps);
+            deltaStrain(delta_p, elem, u, deps);
             dsigma = deps.doubleContract(m_E());
         }
 
