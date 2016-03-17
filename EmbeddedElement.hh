@@ -42,12 +42,28 @@ class EmbeddedElement : public _SimplexEmbedding<_K, EmbeddingSpace> {
     using Base::m_gradBarycentric;
     using Base::m_volume;
 public:
-    typedef Interpolant<EmbeddingSpace, _K, _Deg - 1> SFGradient;
+    using SFGradient      = Interpolant<EmbeddingSpace, _K, _Deg - 1>;
+    using GradBarycentric = typename Base::GradBarycentric;
     constexpr static size_t numVertices = _K + 1;
     constexpr static size_t Deg = _Deg;
     constexpr static size_t   K = _K;
 
-    const decltype(m_gradBarycentric) &gradBarycentric() const { return m_gradBarycentric; }
+    const GradBarycentric &gradBarycentric() const { return m_gradBarycentric; }
+
+    // Compute the change in barycentric coordinate gradient due to element
+    // corner perturbations delta_p
+    // This could be given by, e.g., a std::vector of perturbation vectors.
+    template<class CornerPerturbations>
+    EmbeddingSpace deltaGradBarycentric(size_t i, const CornerPerturbations &delta_p) const {
+        EmbeddingSpace result;
+        result.setZero();
+
+        // Sum contribution from corner k's pertubation:
+        //    delta grad lambda_i = - grad lambda_k (grad lambda_i . delta_p[k])
+        for (size_t k = 0; k < numVertices; ++k)
+            result -= m_gradBarycentric.col(k) * m_gradBarycentric.col(i).dot(delta_p[k]);
+        return result;
+    }
 
     SFGradient gradPhi(size_t i) const {
         SFGradient result;
@@ -74,6 +90,46 @@ public:
             }
         }
         return result;
+    }
+
+    // Compute the change in shape function gradient due to element corner
+    // perturbations delta_p
+    // This could be given by, e.g., a std::vector of perturbation vectors.
+    template<class CornerPerturbations>
+    SFGradient deltaGradPhi(size_t i, const CornerPerturbations &delta_p) const {
+        SFGradient result;
+
+        if (_Deg == 1)  result[0] = deltaGradBarycentric(i, delta_p);
+        if (_Deg == 2) {
+            // For vertex shape functions, all vertex values are nonzero:
+            //      3 grad(phi_i) on vertex i, -grad(phi_i) on others
+            // For edge shape functions, only the incident vertices are nonzero:
+            //      4 * grad(phi_j) on vertex i, 4 * grad(phi_i) on vertex j
+            //      where (i, j) are the endpoints of the edge node's edge.
+            if (i < numVertices) {
+                EmbeddingSpace delta_gradBarycentric_i = deltaGradBarycentric(i, delta_p);
+                for (size_t j = 0; j < numVertices; ++j)
+                    result[j] = -delta_gradBarycentric_i;
+                result[i] *= -3;
+            }
+            else {
+                for (size_t j = 0; j < numVertices; ++j)
+                    result[j] = EmbeddingSpace::Zero();
+                i -= numVertices;
+                result[Simplex::edgeStartNode(i)] = 4 * deltaGradBarycentric(Simplex::edgeEndNode(i),   delta_p);
+                result[Simplex::edgeEndNode(i)]   = 4 * deltaGradBarycentric(Simplex::edgeStartNode(i), delta_p);
+            }
+        }
+        return result;
+    }
+
+    template<class CornerPerturbations>
+    Real relativeDeltaVolume(const CornerPerturbations &delta_p) const {
+        assert(delta_p.size() == numVertices);
+        Real delta = 0;
+        for (size_t k = 0; k < numVertices; ++k)
+            delta += m_gradBarycentric.col(k).dot(delta_p[k]);
+        return delta;
     }
 };
 
