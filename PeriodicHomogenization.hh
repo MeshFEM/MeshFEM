@@ -282,6 +282,10 @@ namespace PeriodicHomogenization {
         return gradient;
     }
 
+////////////////////////////////////////////////////////////////////////////////
+// Continuous Shape Derivatives (Eulerian)
+////////////////////////////////////////////////////////////////////////////////
+
     ////////////////////////////////////////////////////////////////////////////
     // Shape derivative of fluctuation displacements evaluated on a particular
     // velocity field. This is the "direct" approach not using the adjoint
@@ -364,6 +368,92 @@ namespace PeriodicHomogenization {
         }
 
         BENCHMARK_STOP_TIMER("Fluctuation Shape Derivatives");
+    }
+
+////////////////////////////////////////////////////////////////////////////////
+// Discrete Shape Derivatives (Lagrangian)
+////////////////////////////////////////////////////////////////////////////////
+    // Change in the homogenized elasticity tensor due to mesh vertex
+    // perturbations delta_p.
+    // Currently just uses homogenizedElasticityTensorGradient; could be
+    // optimized by directly computing the integrals one boundary element at a
+    // time. We could also use the simpler (no interpolant restriction) but
+    // more expensive volume integral version:
+    // dCh_ijkl = 1/|Y| int_omega (mutual_energy) delta vol/vol dV
+    //                + int_omega [(delta strain(phi^m)) w^ij_m] : C : [strain(w^kl) + e^kl] dV
+    //                + int_omega [strain(w^ij) + e^ij] : C : [(delta strain(phi^m)) w^kl_m] dV
+    // where delta terms are lagrangian derivatives.
+    template<class _Sim>
+    typename _Sim::ETensor
+    deltaHomogenizedElasticityTensor(const _Sim &sim,
+            const std::vector<typename _Sim::VField> &w,
+            const typename _Sim::VField &delta_p) {
+        auto sd = homogenizedElasticityTensorGradient(w, sim);
+        constexpr size_t N = _Sim::N;
+        using NSVI = Interpolant<Real, N - 1, 1>;
+        NSVI nsv;
+        typename _Sim::ETensor deltaCh;
+        for (auto be : sim.mesh().boundaryElements()) {
+            // Compute boundary element's linear normal velocity under delta_p
+            for (size_t i = 0; i < be.numVertices(); ++i)
+                nsv[i] = be->normal().dot(delta_p(be.vertex(i).volumeVertex().index()));
+            // Integrate it against the shape derivative
+            const auto &dCh = sd.at(be.index());
+            deltaCh += Quadrature<N - 1, NSVI::Deg + std::decay<decltype(dCh)>::type::Deg>::
+                integrate([&](const VectorND<be.numVertices()> &pt) { return
+                        nsv(pt) * dCh(pt);
+                    }, be->volume());
+        }
+        return deltaCh;
+    }
+
+    template<class _Sim>
+    typename _Sim::ETensor
+    deltaHomogenizedComplianceTensor(const _Sim &sim,
+            const std::vector<typename _Sim::VField> &w,
+            const typename _Sim::VField &delta_p) {
+        auto Ch  = homogenizedElasticityTensor(w, sim);
+        auto deltaCh = deltaHomogenizedElasticityTensor(sim, w, delta_p);
+        return -Ch.inverse().doubleDoubleContract(deltaCh);
+    }
+
+    // Change in the fluctuation displacements due to mesh vertex perturbations
+    // delta_p
+    template<class _Sim>
+    std::vector<typename _Sim::VField>
+    deltaFluctuationDisplacements(const _Sim &sim,
+            const std::vector<typename _Sim::VField> &w,
+            const typename _Sim::VField &delta_p)
+    {
+        typedef typename _Sim::VField  VField;
+        using SMatrix = typename _Sim::SMatrix;
+
+        std::vector<VField> delta_w;
+        delta_w.reserve(w.size());
+        for (size_t ij = 0; ij < w.size(); ++ij) {
+            auto rhs = sim.deltaConstantStrainLoad(-SMatrix::CanonicalBasis(ij), delta_p);
+            rhs     -= sim.applyDeltaStiffnessMatrix(w[ij], delta_p);
+            delta_w.push_back(sim.solve(rhs));
+        }
+        return delta_w;
+    }
+
+    // Change in macro-to-micro strain tensors due to mesh vertex perturbations delta_p:
+    //    delta G_ijkl(x) = delta [e(w^kl)(x) + e^kl]_ij = delta e(w^kl)(x)_ij
+    template<class _Sim>
+    std::vector<ElasticityTensor<Real, _Sim::N, false>>
+    deltaMacroStrainToMicroStrainTensors(const _Sim &sim,
+            const std::vector<typename _Sim::VField> &w,
+            const std::vector<typename _Sim::VField> &delta_w,
+            const typename _Sim::VField &delta_p) {
+        size_t numElems = sim.mesh().numElements();
+        std::vector<ElasticityTensor<Real, _Sim::N, false>> deltaG(numElems);
+        for (size_t kl = 0; kl < w.size(); ++kl) {
+            auto delta_we = sim.deltaAverageStrainField(w[kl], delta_w[kl], delta_p);
+            for (size_t e = 0; e < numElems; ++e)
+                deltaG[e].DColAsSymMatrix(kl) = delta_we(e);
+        }
+        return deltaG;
     }
 }
 
