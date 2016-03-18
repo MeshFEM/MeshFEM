@@ -444,6 +444,8 @@ public:
         return result;
     }
 
+    Real frobeniusNormSq() const { return this->quadrupleContract(*this); }
+
     // Applies an change of coordinates to this tensor using the
     // tensor transformation rule:
     // E_ijlk' = E_pqrs R_ip R_jq R_kr R_ls

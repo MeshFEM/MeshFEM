@@ -382,6 +382,18 @@ public:
         return *this;
     }
 
+    SymmetricMatrixField &operator+=(const SymmetricMatrixField &b) {
+        assert(domainSize() == b.domainSize());
+        m_values += b.m_values;
+        return *this;
+    }
+
+    SymmetricMatrixField &operator-=(const SymmetricMatrixField &b) {
+        assert(domainSize() == b.domainSize());
+        m_values -= b.m_values;
+        return *this;
+    }
+
     // Component wise abs.
     SymmetricMatrixField cwiseAbs() const { return SymmetricMatrixField(m_values.cwiseAbs()); }
     // Set all coefficients to a constant
