@@ -540,7 +540,7 @@ public:
     VField dofToNodeField(const _Vec &x) const {
         // This also trims off lagrange multipliers, but they should be gone
         // by this point anyway.
-        assert(x.size() >= numDoFs());
+        assert(x.size() >= N * numDoFs());
 
         VField f(m_mesh.numNodes());
         for (size_t i = 0; i < m_mesh.numNodes(); ++i) {
@@ -560,7 +560,7 @@ public:
     VField nodeToVertexField(const _Vec &x) const {
         // This also trims off lagrange multipliers, but they should be gone
         // by this point anyway.
-        assert(x.size() >= numDoFs());
+        assert(x.size() >= N * m_mesh.numNodes());
 
         VField f(m_mesh.numVertices());
         for (size_t i = 0; i < m_mesh.numVertices(); ++i) {
@@ -617,8 +617,8 @@ public:
     size_t numDoFs()          const { return usingReducedDoFs() ? m_numDoFs : m_mesh.numNodes(); }
 
     // Degree of freedom tag associated with a node.
-    // Note: this is only a variable index for scalar fields--for vector
-    // fields, dof i comprises variables Dim() * i...Dim() * (i + 1) - 1
+    // Note: this is only a variable index for scalar fields--for (flattened)
+    // vector fields, dof i comprises variables Dim() * i...Dim() * (i + 1) - 1
     size_t DoF(int node) const {
         assert(size_t(node) < m_mesh.numNodes());
         if (usingReducedDoFs())

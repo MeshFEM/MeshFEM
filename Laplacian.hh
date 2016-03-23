@@ -87,6 +87,7 @@ template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh>
 TripletMatrix<> construct(const _FEMMesh &mesh) {
     TripletMatrix<> L;
     Impl<Deg>::construct(mesh, L);
+    L.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
     return L;
 }
 
