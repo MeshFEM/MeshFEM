@@ -298,6 +298,57 @@ struct TripletMatrix {
         return result;
     }
 
+    // Re-index the variables in this symmetric matrix, A, by applying a
+    // permutation-like matrix, S:
+    //      x = S new_x
+    //      newA = S^T A S ==> new_x^T newA new_x = new_x^T S^T A S new_x
+    //           = x^T A x
+    // where newA is a newNumVars x newNumVars matrix.
+    // S is encoded in newVarIndexForVar (analogous to compressed row format)
+    //      S_ij = 1 if j == newVarIndexForVar[i]
+    //             0 otherwise
+    // S could be a true permutation matrix, in which case the number of
+    // variables is unchanged (newNumVars == A.m == A.n) and newVarIndexForVar
+    // is a permutation of 0..(A.m - 1).
+    //
+    // Instead, S could represent a projection into a subspace whose basis
+    // vectors (columns of S^T) have ones in at least one variable location
+    // (and all other entries zero).
+    // In this case, (newNumVars < A.m == A.n) and newVarIndexForVar will have
+    // repeated values covering 0..(newNumVars - 1).
+    void reindexVariables(size_t newNumVars,
+                          const std::vector<size_t> &newVarIndexForVar) {
+        if (m != n) throw std::runtime_error("reindexVariables on non-square (nonsymmetric) matrix.");
+        if (newVarIndexForVar.size() != m) throw std::runtime_error("Invalid newVarIndexForVar size.");
+        if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
+            for (auto &t : nz) {
+                // Validate that the matrix is upper-triangle-only
+                if (t.i > t.j) throw std::runtime_error("Symmetry mode violated.");
+                t.i = newVarIndexForVar.at(t.i);
+                t.j = newVarIndexForVar.at(t.j);
+                // We must maintain the upper-triangle storage in the
+                // reduce/permuted variables: if a value was permuted into the
+                // lower triangle, switch to storing its upper-triangle pair.
+                if (t.i > t.j) std::swap(t.i, t.j);
+
+                if ((t.i >= newNumVars) || (t.j >= newNumVars))
+                    throw std::runtime_error("New variable index out of bounds.");
+            }
+        }
+        else {
+            // Symmetry properties are more expensive to validate--let's just
+            // trust the user.
+            for (auto &t : nz) {
+                t.i = newVarIndexForVar.at(t.i);
+                t.j = newVarIndexForVar.at(t.j);
+                if ((t.i >= newNumVars) || (t.j >= newNumVars))
+                    throw std::runtime_error("New variable index out of bounds.");
+            }
+        }
+
+        m = n = newNumVars;
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     /*! Append another matrix above, below, to the left, or to the right of this
     //  one.
