@@ -403,14 +403,15 @@ public:
     }
 
     // The following operation that we call "double double contract" maintains
-    // major symmetry (result is major-symmetric if this is):
+    // major symmetry (result is major-symmetric if **both** A and B are):
     //      A : B : A       (A_ijpq B_pqrs A_rskl)
     // Tensor A is "this", B is passed as an argument.
     // The operation is implemented as:
     // F(A) S F(B) S F(A)
     template<bool _MajorSymmetry2>
-    ElasticityTensor doubleDoubleContract(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &B) const {
-        ElasticityTensor result;
+    ElasticityTensor<Real, _Dim, _MajorSymmetry && _MajorSymmetry2>
+    doubleDoubleContract(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &B) const {
+        ElasticityTensor<Real, _Dim, _MajorSymmetry && _MajorSymmetry2> result;
         if (_MajorSymmetry) result.m_d = m_d.template selfadjointView<Eigen::Upper>();
         else                result.m_d = m_d;
         leftApplyShearDoubler(result.m_d);
@@ -434,7 +435,8 @@ public:
         return result;
     }
 
-    Real quadrupleContract(const ElasticityTensor &b) const {
+    template<bool _MajorSymmetry2>
+    Real quadrupleContract(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &b) const {
         Real result = 0;
         for (size_t i = 0; i < _Dim; ++i)
             for (size_t j = 0; j < _Dim; ++j)
