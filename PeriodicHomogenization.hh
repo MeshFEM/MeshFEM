@@ -268,14 +268,14 @@ namespace PeriodicHomogenization {
             }
 
             // Distribute G_elem to all of this element's boundary faces/edges
-            for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
-                auto f = mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
-                if (!f) continue;
-                auto &beGrad = gradient.at(f.index());
+            for (auto f : e.interfaces()) {
+                auto be = mesh.boundaryElement(f.boundaryEntity().index());
+                if (!be) continue;
+                auto &beGrad = gradient.at(be.index());
                 // Zero gradient on the periodic boundary. ETensor default
                 // constructor zero-inits, so beGrad should currently be zero.
-                if (f->isPeriodic) continue;
-                restrictInterpolant(e, f, G_elem, beGrad);
+                if (be->isPeriodic) continue;
+                restrictInterpolant(e, be, G_elem, beGrad);
             }
         }
 
@@ -395,8 +395,8 @@ namespace PeriodicHomogenization {
         typename _Sim::ETensor deltaCh;
         for (auto be : sim.mesh().boundaryElements()) {
             // Compute boundary element's linear normal velocity under delta_p
-            for (size_t i = 0; i < be.numVertices(); ++i)
-                nsv[i] = be->normal().dot(delta_p(be.vertex(i).volumeVertex().index()));
+            for (auto bv : be.vertices())
+                nsv[bv.localIndex()] = be->normal().dot(delta_p(bv.volumeVertex().index()));
             // Integrate it against the shape derivative
             const auto &dCh = sd.at(be.index());
             deltaCh += Quadrature<N - 1, NSVI::Deg + std::decay<decltype(dCh)>::type::Deg>::

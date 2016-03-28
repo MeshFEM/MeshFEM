@@ -252,11 +252,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                 for (size_t j = i; j < strainPhi.size(); ++j) {
                     dKe(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
-                            return stressPhi[i](p).doubleContract(dstrainPhi[j](p));
-                    }, Base::volume());
-                    dKe(i, j) += Quadrature<_K, 2 * (_Deg - 1)>::integrate(
-                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
-                            return stressPhi[j](p).doubleContract(dstrainPhi[i](p));
+                            return stressPhi[i](p).doubleContract(dstrainPhi[j](p)) +
+                                   stressPhi[j](p).doubleContract(dstrainPhi[i](p));
                     }, Base::volume());
                     dKe(i, j) += Quadrature<_K, 2 * (_Deg - 1)>::integrate(
                         [&] (const VectorND<Simplex::numVertices(_K)> &p) {
@@ -991,8 +988,8 @@ public:
     void extractElementCornerValues(const ElementHandle &e, const PerVertexField &f,
                                    std::vector<T> &cornerValues) const {
         cornerValues.clear();
-        for (size_t i = 0; i < e.numVertices(); ++i)
-            cornerValues.push_back(f(e.vertex(i).index()));
+        for (auto v : e.vertices())
+            cornerValues.push_back(f(v.index()));
     }
 
     // Change in the force for fixed nodal displacement field u due to mesh
@@ -1010,19 +1007,18 @@ public:
         for (auto e : m_mesh.elements()) {
             extractElementCornerValues(e, deltaP, elem_deltaP);
             e->deltaPerElementStiffness(elem_deltaP, dKe);
-            // Compute the effective traction load on each boundary vetex
-            for (size_t ni = 0; ni < e.numNodes(); ++ni) {
-                size_t globaldi = DoF(e.node(ni).index()); // DoF not Node index!
-                for (size_t nj = 0; nj < e.numNodes(); ++nj) {
-                    size_t globalnj = e.node(nj).index();  // Node not DoF index!
+            // Compute the effective traction load on each boundary vertex
+            for (auto ni : e.nodes()) {
+                size_t globaldi = DoF(ni.index()); // DoF not Node index!
+                for (auto nj : e.nodes()) {
+                    size_t globalnj = nj.index();  // Node not DoF index!
                     for (size_t ci = 0; ci < N; ++ci) {
-                        size_t row = N * ni + ci;
+                        size_t row = N * ni.localIndex() + ci;
                         for (size_t cj = 0; cj < N; ++cj) {
-                            size_t col = N * nj + cj;
+                            size_t col = N * nj.localIndex() + cj;
                             load(globaldi)[ci] += ((row < col) ? dKe(row, col) : dKe(col, row)) * u(globalnj)[cj];
                         }
                     }
-                        
                 }
             }
         }

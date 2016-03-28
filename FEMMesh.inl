@@ -66,8 +66,12 @@ protected:
     typedef typename _Mesh::template NHandle<_Mesh, _HType>  NH;
     typedef typename _Mesh::template VHandle<_Mesh, _HType>  VH;
 public:
-    constexpr size_t numNodes()  const { return Simplex::numNodes(_K, _Deg); }
+    static constexpr size_t numNodes() { return Simplex::numNodes(_K, _Deg); }
     NH node(size_t i) const { return NH(m_mesh.m_nodeOfElement(i, m_idx), m_mesh); }
+
+    // Support range-based for over nodes
+    struct NRangeTraits { using SEHType = NH; using EHType = EHandle; static constexpr size_t count = numNodes(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::node; };
+    SubEntityHandleRange<NRangeTraits> nodes() const { return SubEntityHandleRange<NRangeTraits>(*this); }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -130,8 +134,12 @@ protected:
     using Base::m_mesh; using Base::m_idx; using Base::Base;
     typedef typename _Mesh::template BNHandle<_Mesh, _HType> BNH;
 public:
-    constexpr size_t numNodes()  const { return Simplex::numNodes(_K - 1, _Deg); }
+    static constexpr size_t numNodes() { return Simplex::numNodes(_K - 1, _Deg); }
     BNH node(size_t i) const { return BNH(m_mesh.m_nodeOfBdryElement(i, m_idx), m_mesh); }
+
+    // Support range-based for over boundary nodes
+    struct BNRangeTraits { using SEHType = BNH; using EHType = BEHandle; static constexpr size_t count = numNodes(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::node; };
+    SubEntityHandleRange<BNRangeTraits> nodes() const { return SubEntityHandleRange<BNRangeTraits>(*this); }
 };
 
 ////////////////////////////////////////////////////////////////////////////

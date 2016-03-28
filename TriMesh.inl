@@ -137,6 +137,15 @@ public:
     //  interface of a tri is a half-edge
     HEH interface(size_t i) const { return halfEdge(i); }
 
+    // Support range-based for over vertices, neighboring triangles, and halfedges (interfaces)
+    struct  VRangeTraits { using SEHType =  VH; using EHType = THandle; static constexpr size_t count = numVertices (); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
+    struct NTRangeTraits { using SEHType =  TH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
+    struct HERangeTraits { using SEHType = HEH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::halfEdge; };
+    SubEntityHandleRange< VRangeTraits>   vertices() const { return SubEntityHandleRange< VRangeTraits>(*this); }
+    SubEntityHandleRange<NTRangeTraits>  neighbors() const { return SubEntityHandleRange<NTRangeTraits>(*this); }
+    SubEntityHandleRange<HERangeTraits>  halfEdges() const { return SubEntityHandleRange<HERangeTraits>(*this); }
+    SubEntityHandleRange<HERangeTraits> interfaces() const { return SubEntityHandleRange<HERangeTraits>(*this); }
+
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_triData[m_idx]; }
 };
 
@@ -220,6 +229,12 @@ public:
     static constexpr size_t numNeighbors() { return 2; }
     BVH   vertex(size_t i) const { return (i == 0) ? tail() : tip(); }
     BEH neighbor(size_t i) const { return (i == 0) ? prev() : next(); }
+
+    // Support range-based for over vertices, neighboring edges
+    struct  VRangeTraits { using SEHType = BVH; using EHType = BEHandle; static constexpr size_t count = numVertices (); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
+    struct NERangeTraits { using SEHType = BEH; using EHType = BEHandle; static constexpr size_t count = numNeighbors(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
+    SubEntityHandleRange< VRangeTraits>  vertices() const { return SubEntityHandleRange< VRangeTraits>(*this); }
+    SubEntityHandleRange<NERangeTraits> neighbors() const { return SubEntityHandleRange<NERangeTraits>(*this); }
 
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryEdgeData[m_idx]; }
 

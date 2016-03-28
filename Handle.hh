@@ -35,7 +35,7 @@ public:
     typedef ConstHandle<Mesh, Subtype, ConstSubtype, Data> _ConstHandle;
 
     Handle(int idx, Mesh &mesh) : m_idx(idx), m_mesh(mesh) { }
-    operator bool() const { return static_cast<const Subtype *>(this)->valid(); }
+    explicit operator bool() const { return static_cast<const Subtype *>(this)->valid(); }
     bool sameMesh(const Handle &h)         const { return &m_mesh == &(h.mesh()); }
     bool sameMesh(const _ConstHandle &h)   const { return &m_mesh == &(h.mesh()); }
     bool operator==(const Handle &h)       const { return sameMesh(h) && index() == h.index(); }
@@ -81,7 +81,7 @@ public:
     typedef Handle<Mesh, Subtype, ConstSubtype, Data> _Handle;
 
     ConstHandle(int idx, const Mesh &mesh) : m_idx(idx), m_mesh(mesh) { }
-    operator bool() const { return static_cast<const ConstSubtype *>(this)->valid(); }
+    explicit operator bool() const { return static_cast<const ConstSubtype *>(this)->valid(); }
     bool sameMesh(const _Handle &h)       const { return &m_mesh == &(h.mesh()); }
     bool sameMesh(const ConstHandle &h)   const { return &m_mesh == &(h.mesh()); }
     bool operator==(const _Handle &h)     const { return sameMesh(h) && index() == h.index(); }
@@ -126,7 +126,7 @@ protected:
 //      for (auto v : mesh.vertices()) {
 //          ...
 //      }
-// actually iterates over the vertex *data* not the vertices themselves
+// actually iterates over the vertex *data* not the vertex handles themselves
 // since range-based for loops apply the "*" operator.
 template<class Handle>
 class HandleIteratorWrapper : public Handle {
@@ -137,7 +137,7 @@ public:
 };
 
 // Class representing a range of handles [0..entityCount) to be used in a
-// ranage-based for.
+// range-based for.
 // Template param RangeTraits should be a struct with the following
 // types/memebers:
 //      HType:       typedef of Handle type
@@ -155,6 +155,7 @@ struct HandleRange {
     typedef HandleIteratorWrapper<HType> Iterator;
     Iterator begin() const { return Iterator(HType(0, m_mesh)); }
     Iterator end()   const { return Iterator(HType((m_mesh .* RangeTraits::entityCount)(), m_mesh)); }
+    size_t   size()  const { return (m_mesh .* RangeTraits::entityCount)(); }
 private:
     mesh_type &m_mesh;
 };
@@ -172,6 +173,73 @@ struct ConstHandleRange {
     size_t   size()  const { return (m_mesh .* RangeTraits::entityCount)(); }
 private:
     const mesh_type &m_mesh;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Sub-Entity Handle Ranges: support range-based for over, e.g. nodes within
+// elements
+// The sub-entity handle is augmented with a "localIndex", which is the
+// sub-entity's index within the collection over which we are iterating.
+////////////////////////////////////////////////////////////////////////////////
+template<class SEHType>
+class SubEntityHandle : public SEHType {
+public:
+    SubEntityHandle(const SEHType &h, size_t localIndex)
+        : SEHType(h), m_localIndex(localIndex) { }
+
+    size_t localIndex() const { return m_localIndex; }
+private:
+    size_t m_localIndex;
+};
+
+template<class _RangeTraits>
+class SubEntityHandleIterator {
+public:
+    using SEH = SubEntityHandle<typename _RangeTraits::SEHType>;
+    using EH  = typename _RangeTraits::EHType;
+    SubEntityHandleIterator(const EH &h, size_t i) : m_h(h), m_i(i) { }
+    SubEntityHandleIterator(const SubEntityHandleIterator &sh) : m_h(sh.m_h), m_i(sh.m_i) { }
+
+    bool operator==(const SubEntityHandleIterator &hi) const { return (m_h == hi.m_h) && (m_i == hi.m_i); }
+    bool operator!=(const SubEntityHandleIterator &hi) const { return !(*this == hi); }
+
+    SubEntityHandleIterator &operator++() { ++m_i; return *this; }
+    SubEntityHandleIterator &operator--() { ++m_i; return *this; }
+    SubEntityHandleIterator &operator++(int) { SubEntityHandleIterator old(*this); ++(*this); return old; }
+    SubEntityHandleIterator &operator--(int) { SubEntityHandleIterator old(*this); --(*this); return old; }
+
+    SEH operator*() const { return SEH((m_h .* _RangeTraits::get)(m_i), m_i); }
+private:
+    EH m_h;
+    size_t m_i;
+};
+
+// Class representing a range of sub-entity handles [0..count) to be used in a
+// range-based for.
+// Template param RangeTraits should be a struct with the following
+// types/memebers:
+//      EHType:      type of entity Handle
+//      SEHType:     type of Sub-entity Handle
+//      count:       sub-handle collection size (static const! we only support
+//                   fixed-sized sub-entity collections for now)
+//      getter:      pointer to handle's member function getting the ith sub-entity handle.
+template<class _RangeTraits>
+struct SubEntityHandleRange {
+    using        EH = typename _RangeTraits::EHType;
+    using       SEH = typename _RangeTraits::SEHType;
+    static_assert(std::is_same<typename  EH::mesh_type,
+                               typename SEH::mesh_type>::value,
+        "Entity and sub-entity handles must have same underlying mesh type!");
+
+    SubEntityHandleRange(const EH &h) : m_h(h) { }
+
+    using Iterator = SubEntityHandleIterator<_RangeTraits>;
+
+    Iterator begin() const { return Iterator(m_h, 0); }
+    Iterator end()   const { return Iterator(m_h, size()); }
+    static constexpr size_t size() { return _RangeTraits::count; }
+private:
+    EH m_h;
 };
 
 

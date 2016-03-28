@@ -51,7 +51,12 @@ public:
     // Dimension-independent terminology:
     BFH boundaryEntity() const { return boundaryFace(); }
 
+    size_t numVertices() const { return 3; }
      VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
+
+    // Support range-based for over vertices
+    struct  VRangeTraits { using SEHType = VH; using EHType = HFHandle; static constexpr size_t count = numVertices(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex; };
+    SubEntityHandleRange<VRangeTraits> vertices() const { return SubEntityHandleRange<VRangeTraits>(*this); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_halfFaceData[m_idx]; }
@@ -87,6 +92,15 @@ public:
      VH   vertex(size_t i) const { return  VH(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
      TH neighbor(size_t i) const { return  TH(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
     HFH halfFace(size_t i) const { return HFH(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
+
+    // Support range-based for over vertices, neighboring tets, and half-faces (interfaces)
+    struct  VRangeTraits { using SEHType =  VH; using EHType = THandle; static constexpr size_t count = numVertices() ; static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
+    struct NTRangeTraits { using SEHType =  TH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
+    struct HFRangeTraits { using SEHType = HFH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::halfFace; };
+    SubEntityHandleRange< VRangeTraits>   vertices() const { return SubEntityHandleRange< VRangeTraits>(*this); }
+    SubEntityHandleRange<NTRangeTraits>  neighbors() const { return SubEntityHandleRange<NTRangeTraits>(*this); }
+    SubEntityHandleRange<HFRangeTraits>  halfFaces() const { return SubEntityHandleRange<HFRangeTraits>(*this); }
+    SubEntityHandleRange<HFRangeTraits> interfaces() const { return SubEntityHandleRange<HFRangeTraits>(*this); }
 
     // Dimension-independent terminology:
     //  interface of a tet is a half-face
@@ -192,6 +206,14 @@ public:
      BVH   vertex(size_t i) const { BVH bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }
      BFH neighbor(size_t i) const { return  BFH(m_mesh.m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
     BHEH halfEdge(size_t i) const { return BHEH(m_mesh.m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
+
+    // Support range-based for over boundary vertices, neighboring boundary triangles, and half-edges
+    struct  BVRangeTraits { using SEHType =  BVH; using EHType = BFHandle; static constexpr size_t count = numVertices() ;  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
+    struct NBTRangeTraits { using SEHType =  BFH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
+    struct BHERangeTraits { using SEHType = BHEH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::halfEdge; };
+    SubEntityHandleRange< BVRangeTraits>  vertices() const { return SubEntityHandleRange< BVRangeTraits>(*this); }
+    SubEntityHandleRange<NBTRangeTraits> neighbors() const { return SubEntityHandleRange<NBTRangeTraits>(*this); }
+    SubEntityHandleRange<BHERangeTraits> halfFaces() const { return SubEntityHandleRange<BHERangeTraits>(*this); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryFaceData[m_idx]; }
