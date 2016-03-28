@@ -118,9 +118,12 @@ public:
 
 
     // Single contraction with vector (apply this matrix to vector on left)
-    template<typename _R2>
-    Eigen::Matrix<_R2, t_N, 1> contract(const Eigen::Matrix<_R2, t_N, 1> &v) const {
-        Eigen::Matrix<_R2, t_N, 1> result;
+    template<class Derived>
+    Eigen::Matrix<typename Derived::Scalar, t_N, 1>
+    contract(const Eigen::MatrixBase<Derived> &v) const {
+        static_assert((Derived::RowsAtCompileTime == t_N) && (Derived::ColsAtCompileTime == 1), 
+                      "Invalid vector dimension for single contraction operatio.n");
+        Eigen::Matrix<typename Derived::Scalar, t_N, 1> result;
         result.setZero();
         for (size_t i = 0; i < t_N; ++i) {
             for (size_t j = 0; j < t_N; ++j) {
