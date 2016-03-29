@@ -227,8 +227,8 @@ public:
     // Dimension-independent access
     static constexpr size_t  numVertices() { return 2; }
     static constexpr size_t numNeighbors() { return 2; }
-    BVH   vertex(size_t i) const { return (i == 0) ? tail() : tip(); }
-    BEH neighbor(size_t i) const { return (i == 0) ? prev() : next(); }
+    BVH   vertex(size_t i) const { assert(i < 2); return (i == 0) ? tail() : tip(); }
+    BEH neighbor(size_t i) const { assert(i < 2); return (i == 0) ? prev() : next(); }
 
     // Support range-based for over vertices, neighboring edges
     struct  VRangeTraits { using SEHType = BVH; using EHType = BEHandle; static constexpr size_t count = numVertices (); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
