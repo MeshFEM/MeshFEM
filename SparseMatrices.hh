@@ -1012,7 +1012,7 @@ public:
 
     template<class _Vec>
     std::vector<_Real> solve(const _Vec &f) {
-        std::vector<_Real> &u;
+        std::vector<_Real> u;
         solve(f, u);
         return u;
     }
