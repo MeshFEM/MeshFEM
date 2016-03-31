@@ -51,7 +51,7 @@ public:
     // Dimension-independent terminology:
     BFH boundaryEntity() const { return boundaryFace(); }
 
-    size_t numVertices() const { return 3; }
+    static constexpr size_t numVertices() { return 3; }
      VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
 
     // Support range-based for over vertices

@@ -87,7 +87,7 @@ struct Impl<std::numeric_limits<size_t>::max()> {
     static void construct(const _FEMMesh &mesh,
                           const std::vector<bool> &skipElem,
                           TripletMatrix<> &M) {
-        Impl<_FEMMesh::Deg>::construct(mesh, M);
+        Impl<_FEMMesh::Deg>::construct(mesh, skipElem, M);
     }
 };
 
