@@ -138,8 +138,8 @@ public:
     BNH node(size_t i) const { return BNH(m_mesh.m_nodeOfBdryElement(i, m_idx), m_mesh); }
 
     // Support range-based for over boundary nodes
-    struct BNRangeTraits { using SEHType = BNH; using EHType = BEHandle; static constexpr size_t count = numNodes(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::node; };
-    SubEntityHandleRange<BNRangeTraits> nodes() const { return SubEntityHandleRange<BNRangeTraits>(*this); }
+    struct NRangeTraits { using SEHType = BNH; using EHType = BEHandle; static constexpr size_t count = numNodes(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::node; };
+    SubEntityHandleRange<NRangeTraits> nodes() const { return SubEntityHandleRange<NRangeTraits>(*this); }
 };
 
 ////////////////////////////////////////////////////////////////////////////

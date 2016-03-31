@@ -26,7 +26,7 @@ namespace MassMatrix {
 template<size_t Deg, class _FEMMesh>
 struct NodeGetter {
     static_assert(Deg == _FEMMesh::Deg, "Only full-degree and degree 1 mass matrices are supported.");
-    using EHandle = typename _FEMMesh::ElementHandle;
+    using EHandle = typename _FEMMesh::ConstElementHandle;
     using NRT     = typename EHandle::NRangeTraits;
     static SubEntityHandleRange<NRT> nodes   (const  EHandle    &h) { return h.nodes(); }
     static size_t                    numNodes(const _FEMMesh &mesh) { return mesh.numNodes(); }
@@ -36,7 +36,7 @@ struct NodeGetter {
 // Degree-1 specialization: nodes always coincide with the vertices
 template<class _FEMMesh>
 struct NodeGetter<1, _FEMMesh> {
-    using EHandle = typename _FEMMesh::ElementHandle;
+    using EHandle = typename _FEMMesh::ConstElementHandle;
     using VRT     = typename EHandle::VRangeTraits;
     static SubEntityHandleRange<VRT> nodes   (const  EHandle    &h) { return h.vertices(); }
     static size_t                    numNodes(const _FEMMesh &mesh) { return mesh.numVertices(); }
@@ -53,13 +53,13 @@ struct Impl {
         if (!skipping && skipElem.size()) throw std::runtime_error("Invalid skipElem array size.");
 
         using NG = NodeGetter<Deg, _FEMMesh>;
-        constexpr size_t N = _FEMMesh::K;
+        constexpr size_t K = _FEMMesh::K;
 
         size_t nn = NG::numNodes(mesh);
         size_t nen = NG::numElementNodes();
         M.init(nn, nn);
         M.reserve(mesh.numElements() * (nen * (nen + 1)) / 2);
-        Interpolant<Real, N, Deg> phi_i, phi_j;
+        Interpolant<Real, K, Deg> phi_i, phi_j;
         for (auto e : mesh.elements()) {
             if (skipping && skipElem[e.index()]) continue;
             for (auto ni : NG::nodes(e)) {
@@ -68,7 +68,7 @@ struct Impl {
                 for (auto nj : NG::nodes(e)) {
                     phi_j = 0;
                     phi_j[nj.localIndex()] = 1;
-                    Real val = Quadrature<N, 2 * Deg>::integrate(
+                    Real val = Quadrature<K, 2 * Deg>::integrate(
                             [&](const VectorND<e.numVertices()> &pt) {
                                 return phi_i(pt) * phi_j(pt);
                             }, e->volume());
@@ -104,7 +104,7 @@ template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh>
 TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
                           const std::vector<bool> &skipElem = std::vector<bool>()) {
     TripletMatrix<> M;
-    Impl<Deg>::construct(mesh, M, skipElem);
+    Impl<Deg>::construct(mesh, skipElem, M);
 
     if (lumped) {
         // Sum rows and place on the diagonal

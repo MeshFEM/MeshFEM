@@ -78,29 +78,58 @@ struct DefaultFEMData {
 // Const boundary meshes (BoundaryMesh<const FEMMesh>) can be constructed from
 // any FEMMesh, but non-const boundary meshes can only be constructed from
 // non-const meshes.
-template<bool isConst, class Derived>
-struct _BoundaryMeshMutableAccess { };
+template<bool isConst, class MeshType, class Derived>
+struct _BoundaryMeshAccess { };
 
-template<class Derived>
-struct _BoundaryMeshMutableAccess<false, Derived> {
-    using MeshType = typename Derived::MeshType;
+// Mutable
+template<class MeshType, class Derived>
+struct _BoundaryMeshAccess<false, MeshType, Derived> {
+    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle (i, static_cast<const Derived *>(this)->volumeMesh()); }
+    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle   (i, static_cast<const Derived *>(this)->volumeMesh()); }
+    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, static_cast<const Derived *>(this)->volumeMesh()); }
 
-    typename MeshType::BoundaryVertexHandle   vertex(size_t i) { return typename MeshType::BoundaryVertexHandle(i,  static_cast<Derived *>(this)->m_mesh); }
-    typename MeshType::BoundaryNodeHandle       node(size_t i) { return typename MeshType::BoundaryNodeHandle(i,    static_cast<Derived *>(this)->m_mesh); }
-    typename MeshType::BoundaryElementHandle element(size_t i) { return typename MeshType::BoundaryElementHandle(i, static_cast<Derived *>(this)->m_mesh); }
+    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
+    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
+    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
 
-    HandleRange<typename MeshType::BVRangeTraits> vertices() { return HandleRange<typename MeshType::BVRangeTraits>(static_cast<Derived *>(this)->_mesh); }
-    HandleRange<typename MeshType::BNRangeTraits>    nodes() { return HandleRange<typename MeshType::BNRangeTraits>(static_cast<Derived *>(this)->_mesh); }
-    HandleRange<typename MeshType::BERangeTraits> elements() { return HandleRange<typename MeshType::BERangeTraits>(static_cast<Derived *>(this)->_mesh); }
+    typename MeshType::BoundaryVertexHandle   vertex(size_t i) { return typename MeshType::BoundaryVertexHandle (i, static_cast<Derived *>(this)->volumeMesh()); }
+    typename MeshType::BoundaryNodeHandle       node(size_t i) { return typename MeshType::BoundaryNodeHandle   (i, static_cast<Derived *>(this)->volumeMesh()); }
+    typename MeshType::BoundaryElementHandle element(size_t i) { return typename MeshType::BoundaryElementHandle(i, static_cast<Derived *>(this)->volumeMesh()); }
+
+    HandleRange<typename MeshType::BVRangeTraits> vertices() { return HandleRange<typename MeshType::BVRangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
+    HandleRange<typename MeshType::BNRangeTraits>    nodes() { return HandleRange<typename MeshType::BNRangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
+    HandleRange<typename MeshType::BERangeTraits> elements() { return HandleRange<typename MeshType::BERangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
+};
+
+// Immutable
+template<class MeshType, class Derived>
+struct _BoundaryMeshAccess<true, MeshType, Derived> {
+    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle (i, static_cast<const Derived *>(this)->volumeMesh()); }
+    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle   (i, static_cast<const Derived *>(this)->volumeMesh()); }
+    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, static_cast<const Derived *>(this)->volumeMesh()); }
+
+    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
+    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
+    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
 };
 
 template<class CVMeshType>
-class BoundaryMesh : public _BoundaryMeshMutableAccess<std::is_const<CVMeshType>::value,
-                                                       BoundaryMesh<CVMeshType>>
+class BoundaryMesh : public _BoundaryMeshAccess<std::is_const<CVMeshType>::value,
+                                                typename std::remove_const<CVMeshType>::type,
+                                                BoundaryMesh<CVMeshType>>
 {
-    using MeshType = typename std::remove_const<CVMeshType>::type;
+    using _Access = _BoundaryMeshAccess<std::is_const<CVMeshType>::value, typename std::remove_const<CVMeshType>::type, BoundaryMesh>;
 public:
+    using MeshType           = typename std::remove_const<CVMeshType>::type;
+    using ConstElementHandle = typename MeshType::ConstBoundaryElementHandle;
+
+    // Boundary mesh's simplex dimension is one lower than volume mesh's
+    static constexpr size_t K = MeshType::K - 1;
+
     BoundaryMesh(CVMeshType &m) : m_mesh(m) { }
+
+    using _Access::vertex;   using _Access::node;  using _Access::element;
+    using _Access::vertices; using _Access::nodes; using _Access::elements;
 
     size_t numVertices()     const { return m_mesh.numBoundaryVertices(); }
 
@@ -110,13 +139,8 @@ public:
     size_t numNodes()        const { return m_mesh.numBoundaryNodes();        }
     size_t numElements()     const { return m_mesh.numBoundaryElements();     }
 
-    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle(i, m_mesh); }
-    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle(i, m_mesh); }
-    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, m_mesh); }
+    typename std::add_const<CVMeshType>::type &volumeMesh() const { return m_mesh; }
 
-    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(m_mesh); }
-    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(m_mesh); }
-    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(m_mesh); }
 private:
     CVMeshType &m_mesh;
 };
@@ -207,7 +231,6 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
     ////////////////////////////////////////////////////////////////////////////
-private:
     // Specialization for nested class templates isn't allowed, so we can't
     // implement a true traits design pattern...
     struct  VRangeTraits { typedef           VertexHandle HType; typedef           ConstVertexHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numVertices; };

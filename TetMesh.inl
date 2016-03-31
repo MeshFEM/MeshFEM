@@ -208,12 +208,12 @@ public:
     BHEH halfEdge(size_t i) const { return BHEH(m_mesh.m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
 
     // Support range-based for over boundary vertices, neighboring boundary triangles, and half-edges
-    struct  BVRangeTraits { using SEHType =  BVH; using EHType = BFHandle; static constexpr size_t count = numVertices() ;  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
-    struct NBTRangeTraits { using SEHType =  BFH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
-    struct BHERangeTraits { using SEHType = BHEH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::halfEdge; };
-    SubEntityHandleRange< BVRangeTraits>  vertices() const { return SubEntityHandleRange< BVRangeTraits>(*this); }
-    SubEntityHandleRange<NBTRangeTraits> neighbors() const { return SubEntityHandleRange<NBTRangeTraits>(*this); }
-    SubEntityHandleRange<BHERangeTraits> halfFaces() const { return SubEntityHandleRange<BHERangeTraits>(*this); }
+    struct   VRangeTraits { using SEHType =  BVH; using EHType = BFHandle; static constexpr size_t count = numVertices() ;  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex  ; };
+    struct  NTRangeTraits { using SEHType =  BFH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::neighbor; };
+    struct  HERangeTraits { using SEHType = BHEH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr SEHType (EHType::*get)(size_t) const = &EHType::halfEdge; };
+    SubEntityHandleRange< VRangeTraits>  vertices() const { return SubEntityHandleRange< VRangeTraits>(*this); }
+    SubEntityHandleRange<NTRangeTraits> neighbors() const { return SubEntityHandleRange<NTRangeTraits>(*this); }
+    SubEntityHandleRange<HERangeTraits> halfEdges() const { return SubEntityHandleRange<HERangeTraits>(*this); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return &m_mesh.m_boundaryFaceData[m_idx]; }
