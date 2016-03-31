@@ -66,14 +66,14 @@ struct Impl {
                 phi_i = 0;
                 phi_i[ni.localIndex()] = 1;
                 for (auto nj : NG::nodes(e)) {
+                    if (nj.index() < ni.index()) continue; // upper tri only
                     phi_j = 0;
                     phi_j[nj.localIndex()] = 1;
                     Real val = Quadrature<K, 2 * Deg>::integrate(
                             [&](const VectorND<e.numVertices()> &pt) {
                                 return phi_i(pt) * phi_j(pt);
                             }, e->volume());
-                    if (ni.index() < nj.index()) M.addNZ(ni.index(), nj.index(), val);
-                    else                         M.addNZ(nj.index(), ni.index(), val);
+                    M.addNZ(ni.index(), nj.index(), val);
                 }
             }
         }
