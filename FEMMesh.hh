@@ -21,6 +21,7 @@
 #include "SimplicialMesh.hh"
 #include <map>
 #include <cassert>
+#include <type_traits>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -70,6 +71,54 @@ struct DefaultFEMData {
     typedef TMEmptyData                                           BoundaryVertex;
     typedef TMEmptyData                                           BoundaryNode;
     typedef LinearlyEmbeddedElement<_K - 1, _Deg, EmbeddingSpace> BoundaryElement;
+};
+
+// Boundary mesh wrapper: provide access to the boundary mesh using the same
+// interface as the volume mesh (except the boundary mesh has no boundary).
+// Const boundary meshes (BoundaryMesh<const FEMMesh>) can be constructed from
+// any FEMMesh, but non-const boundary meshes can only be constructed from
+// non-const meshes.
+template<bool isConst, class Derived>
+struct _BoundaryMeshMutableAccess { };
+
+template<class Derived>
+struct _BoundaryMeshMutableAccess<false, Derived> {
+    using MeshType = typename Derived::MeshType;
+
+    typename MeshType::BoundaryVertexHandle   vertex(size_t i) { return typename MeshType::BoundaryVertexHandle(i,  static_cast<Derived *>(this)->m_mesh); }
+    typename MeshType::BoundaryNodeHandle       node(size_t i) { return typename MeshType::BoundaryNodeHandle(i,    static_cast<Derived *>(this)->m_mesh); }
+    typename MeshType::BoundaryElementHandle element(size_t i) { return typename MeshType::BoundaryElementHandle(i, static_cast<Derived *>(this)->m_mesh); }
+
+    HandleRange<typename MeshType::BVRangeTraits> vertices() { return HandleRange<typename MeshType::BVRangeTraits>(static_cast<Derived *>(this)->_mesh); }
+    HandleRange<typename MeshType::BNRangeTraits>    nodes() { return HandleRange<typename MeshType::BNRangeTraits>(static_cast<Derived *>(this)->_mesh); }
+    HandleRange<typename MeshType::BERangeTraits> elements() { return HandleRange<typename MeshType::BERangeTraits>(static_cast<Derived *>(this)->_mesh); }
+};
+
+template<class CVMeshType>
+class BoundaryMesh : public _BoundaryMeshMutableAccess<std::is_const<CVMeshType>::value,
+                                                       BoundaryMesh<CVMeshType>>
+{
+    using MeshType = typename std::remove_const<CVMeshType>::type;
+public:
+    BoundaryMesh(CVMeshType &m) : m_mesh(m) { }
+
+    size_t numVertices()     const { return m_mesh.numBoundaryVertices(); }
+
+    size_t numElementNodes() const { return m_mesh.numBoundaryElementNodes(); }
+    size_t numVertexNodes()  const { return m_mesh.numBoundaryVertexNodes();  }
+    size_t numEdgeNodes()    const { return m_mesh.numBoundaryEdgeNodes();    }
+    size_t numNodes()        const { return m_mesh.numBoundaryNodes();        }
+    size_t numElements()     const { return m_mesh.numBoundaryElements();     }
+
+    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle(i, m_mesh); }
+    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle(i, m_mesh); }
+    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, m_mesh); }
+
+    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(m_mesh); }
+    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(m_mesh); }
+    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(m_mesh); }
+private:
+    CVMeshType &m_mesh;
 };
 
 template<size_t _K, size_t _Deg, class _EmbeddingSpace,
@@ -251,6 +300,9 @@ public:
         b /= e.numVertices();
         return b;
     }
+
+    BoundaryMesh<      FEMMesh> boundary()       { return BoundaryMesh<      FEMMesh>(*this); }
+    BoundaryMesh<const FEMMesh> boundary() const { return BoundaryMesh<const FEMMesh>(*this); }
 
 private:
     // Table of **non-vertex** node indices for each element. We needn't store
