@@ -357,10 +357,10 @@ public:
     VField solve(const VField &f) const {
         if (!m_system.isSet()) m_buildConstrainedSystem();
 
-        BENCHMARK_START_TIMER("Solve");
+        BENCHMARK_START_TIMER_SECTION("Elasticity Solve");
         std::vector<Real> x;
         m_system.solve(f, x);
-        BENCHMARK_STOP_TIMER("Solve");
+        BENCHMARK_STOP_TIMER_SECTION("Elasticity Solve");
         return dofToNodeField(x);
     }
 
@@ -437,6 +437,7 @@ public:
 
     template<class _StressField>
     VField perElementStressFieldLoad(const _StressField &stress) const {
+        BENCHMARK_START_TIMER("perElementStressFieldLoad");
         VField load(numDoFs());
         load.clear();
         typename _Mesh::ElementData::ElementLoad eLoad;
@@ -445,6 +446,7 @@ public:
             for (size_t n = 0; n < e.numNodes(); ++n)
                 load(DoF(e.node(n).index())) += eLoad.col(n);
         }
+        BENCHMARK_STOP_TIMER("perElementStressFieldLoad");
         return load;
     }
 

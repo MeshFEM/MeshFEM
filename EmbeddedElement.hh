@@ -81,7 +81,7 @@ public:
             }
             else {
                 for (size_t j = 0; j < numVertices; ++j)
-                    result[j] = EmbeddingSpace::Zero();
+                    result[j].setZero();
                 i -= numVertices;
                 result[Simplex::edgeStartNode(i)] = 4 * m_gradBarycentric.col(Simplex::edgeEndNode(i));
                 result[Simplex::edgeEndNode(i)]   = 4 * m_gradBarycentric.col(Simplex::edgeStartNode(i));
@@ -114,7 +114,7 @@ public:
             }
             else {
                 for (size_t j = 0; j < numVertices; ++j)
-                    result[j] = EmbeddingSpace::Zero();
+                    result[j].setZero();
                 i -= numVertices;
                 result[Simplex::edgeStartNode(i)] = 4 * deltaGradBarycentric(Simplex::edgeEndNode(i),   delta_p);
                 result[Simplex::edgeEndNode(i)]   = 4 * deltaGradBarycentric(Simplex::edgeStartNode(i), delta_p);
