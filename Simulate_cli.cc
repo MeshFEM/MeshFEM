@@ -191,7 +191,7 @@ void execute(const po::variables_map &args,
     if ((Simulator::Strain::Deg == 0) || linearSubsampleFields) {
         // Output constant (average) strain/stress for piecewise linear u
         writer.addField("strain", e, DomainType::PER_ELEMENT);
-        writer.addField("strain", s, DomainType::PER_ELEMENT);
+        writer.addField("stress", s, DomainType::PER_ELEMENT);
     }
     else {
         // Output full-degree per-element strain. (Wasteful since
