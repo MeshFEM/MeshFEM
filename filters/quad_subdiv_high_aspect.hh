@@ -31,16 +31,43 @@
 #include "Geometry.hh"
 #include <map>
 #include <vector>
+#include <array>
 #include <queue>
 #include <limits>
 
 struct QSEdgeData {
     // Edge is only created when an element wants to split it, so init count = 1
-    QSEdgeData(size_t elem) : wantSplitCount(1), splittingElementIdx(elem),
-                            midpointIndex(std::numeric_limits<size_t>::max()) { }
-    int wantSplitCount;         // How many elements want to split this edge
-    size_t splittingElementIdx; // Some element wanting to split this edge
-    size_t midpointIndex;       // Index of the vertex created for this edge
+    QSEdgeData(size_t elem) : midpointIndex(std::numeric_limits<size_t>::max()) {
+        addSplittingElement(elem);
+    }
+
+    void addSplittingElement(size_t elem) {
+        assert(wantSplitCount() < 2);
+        m_splittingElements[wantSplitCount()] = elem;
+        ++m_wantSplitCount;
+    }
+
+    // elem must be one of the current splittingElements
+    void removeSplittingElement(size_t elem) {
+        size_t idx = 3;
+        if      (m_splittingElements[0] == elem) idx = 0;
+        else if (m_splittingElements[1] == elem) idx = 1;
+        assert(idx < wantSplitCount());
+        if (idx == 0) m_splittingElements[0] = m_splittingElements[1];
+        --m_wantSplitCount;
+    }
+
+    size_t splittingElement(size_t i) const {
+        assert(i < m_wantSplitCount);
+        return m_splittingElements[i];
+    }
+
+    size_t wantSplitCount() const { return m_wantSplitCount; }
+
+    size_t midpointIndex; // Index of the vertex created for this edge
+private:
+    size_t m_wantSplitCount = 0; // How many elements want to split this edge (0, 1, or 2)
+    std::array<size_t, 2> m_splittingElements; // which elements want to split the edge
 };
 
 struct QSElementData {
@@ -49,6 +76,7 @@ struct QSElementData {
                     //     -1: no split
                     //      0: edges 0->1, 2->3
                     //      1: edges 1->2, 3->0
+    int blockSplitPair; // TODO: 3 states: wants split, neutral, blocks split
     bool wantsSplit() const { return splitPair == 0 || splitPair == 1; }
     // Get the edges this element wants to split 
     template<class Element>
@@ -108,32 +136,32 @@ bool quad_subdiv_high_aspect(
             auto it = edgeData.find(edges[ei]);
             if (it == edgeData.end())
                 edgeData.insert(std::make_pair(edges[ei], QSEdgeData(i)));
-            else ++(it->second.wantSplitCount);
+            else it->second.addSplittingElement(i);
         }
     }
 
     // 2) BFS-style conflict resolution
     std::queue<QSEdgeData *> edgeQueue;
     for (auto &entry :  edgeData) {
-        if (entry.second.wantSplitCount == 1)
+        if (entry.second.wantSplitCount() == 1)
             edgeQueue.push(&(entry.second));
     }
     while (!edgeQueue.empty()) {
         QSEdgeData *ed = edgeQueue.front();
         edgeQueue.pop();
-        if (ed->wantSplitCount != 1) continue; // already resolved
-        size_t e = ed->splittingElementIdx;
+        if (ed->wantSplitCount() != 1) continue; // already resolved
+        size_t e = ed->splittingElement(0);
         QSElementData &preventedElemData = elemData.at(e);
+        assert(preventedElemData.wantsSplit());
         UnorderedPair edges[2];
-        if (!preventedElemData.wantsSplit()) continue; // already resolved
+        // if (!preventedElemData.wantsSplit()) continue; // already resolved
         preventedElemData.getSplitEdges(inElements.at(e), edges[0], edges[1]);
         preventedElemData.splitPair = -1; // Can't split :(
         // Decrement edges' wantSplitCount, adding to the queue if they hit 1
         for (size_t i = 0; i < 2; ++i) {
             auto &edgeDat = edgeData.at(edges[i]);
-            assert(edgeDat.wantSplitCount > 0);
-            --(edgeDat.wantSplitCount);
-            if (edgeDat.wantSplitCount == 1)
+            edgeDat.removeSplittingElement(e);
+            if (edgeDat.wantSplitCount() == 1)
                 edgeQueue.push(&edgeDat);
         }
     }
