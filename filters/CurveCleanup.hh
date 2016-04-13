@@ -38,6 +38,8 @@
 #include "../PeriodicBoundaryMatcher.hh"
 #include "../MeshIO.hh"
 #include "../Utilities/IteratorMap.hh"
+#include "../Utilities/RandomAccessIndexSet.hh"
+#include "../Geometry.hh"
 
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.
@@ -45,8 +47,9 @@
 template<size_t N>
 void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
-                  Real minLen, Real maxLen, Real featureAngleThreshold,
-                  bool periodic = false) {
+                  Real minLen, Real maxLen,
+                  Real featureAngleThreshold, bool periodic = false,
+                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
     using Point = VectorND<N>;
     using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
     static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
@@ -133,12 +136,25 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         return false;
     };
 
-    // Set of (valid) edge iterators pointing to short edges.
-    IteratorSet<EdgeIt> shortEdges;
-    Real longestEdgeLen = 0;
+    // Consider variable (per-edge) minLength when available
+    bool hasVariableMinLen = (variableMinLen.size() == curve.size());
+    auto getMinLen = [&](size_t idx) {
+        if (!hasVariableMinLen) return minLen;
+        return variableMinLen.at(idx);
+    };
+
+    // allEdges[i]: the iterator for edge with index i (warning: contains invalidated edges)
+    // edgeIndex[ei]: the index for edge iterator ei
+    // shortEdges:    set of indices for short edges
+    std::vector<EdgeIt> allEdges; allEdges.reserve(curve.size());
+    IteratorMap<EdgeIt, size_t> edgeIndex;
+    RandomAccessIndexSet shortEdges(curve.size());
+
     for (auto ei = curve.begin(); ei != curve.end(); ++ei) {
-        if (edgeLen(ei) < minLen) shortEdges.insert(ei);
-        longestEdgeLen = std::max(edgeLen(ei), longestEdgeLen);
+        size_t idx = allEdges.size();
+        edgeIndex.emplace(ei, idx);
+        if (edgeLen(ei) < getMinLen(idx)) shortEdges.insert(idx);
+        allEdges.push_back(ei);
     }
 
     // Collapse operation: collapse the edge associated with "tail" into
@@ -147,12 +163,15 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         VtxIt tip = next(tail);
         *tip = collapsePt;
         curve.erase(tail);
+        edgeIndex.erase(tail);
 
         // The lengths of neighboring edges have changed--add any newly created
         // short edges to the short edge queue.
         EdgeIt eprev = prev(tip);
-        if (edgeLen(  tip) < minLen) shortEdges.insert(tip);
-        if (edgeLen(eprev) < minLen) shortEdges.insert(eprev);
+        size_t  tipIdx = edgeIndex[tip],
+               prevIdx = edgeIndex[eprev];
+        if (edgeLen(  tip) < getMinLen(tipIdx))   shortEdges.insert(tipIdx);
+        if (edgeLen(eprev) < getMinLen(prevIdx)) shortEdges.insert(prevIdx);
     };
 
     std::default_random_engine generator;
@@ -161,24 +180,23 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
             std::cerr << "WARNING: curve has become extremely short. Bailing out of collapse." << std::endl;
             break;
         }
-        auto seEntry = shortEdges.begin();
 
         // Choose a random short edge to improve quality in case of many merges.
         // If edges are merged in order, the merge point will "walk" around the
         // curve, causing much more extreme merging than desired.
-        // O(#short edges)--could probably be optimized.
-        if (shortEdges.size() > 0) {
+        size_t loc = 0;
+        if (shortEdges.size() > 1) {
             std::uniform_int_distribution<int> distribution(0, shortEdges.size() - 1);
-            int r = distribution(generator);
-            while (r-- > 0) { ++seEntry; }
+            loc = distribution(generator);
         }
 
-        EdgeIt se = *seEntry;
-        shortEdges.erase(seEntry);
+        size_t seIdx = shortEdges.indexAtLocation(loc);
+        EdgeIt se = allEdges.at(seIdx);
+        shortEdges.removeIndexAtLocation(loc);
 
         // Previous collapses could have lengthened se above the collapse
         // threshold--skip it in this case.
-        if (edgeLen(se) >= minLen) continue;
+        if (edgeLen(se) >= getMinLen(seIdx)) continue;
 
         VtxIt v0 = se;
         VtxIt v1 = next(se);
@@ -230,10 +248,10 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
             auto pse_map_iter = pair.find(se);
             if (pse_map_iter == pair.end()) throw std::runtime_error("Couldn't find periodic edge pair!");
             EdgeIt pse = pse_map_iter->second;
-            auto pseEntry = shortEdges.find(pse);
-            if (pseEntry == shortEdges.end()) throw std::runtime_error("ERROR: periodic pair of a short edge isn't short!");
+            size_t pseIdx = edgeIndex.at(pse);
+            if (!shortEdges.contains(pseIdx)) throw std::runtime_error("ERROR: periodic pair of a short edge isn't short!");
 
-            // The collapse to the periodic pair of collapsePt:
+            // Then collapse to the periodic pair of collapsePt:
             Point pairCollapsePt = collapsePt;
             bool flip = false;
             for (size_t d = 0; d < N; ++d) {
@@ -242,9 +260,11 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
             }
             assert(flip);
 
+            // Remove the short edge record (linear time!)
+            shortEdges.removeIndexAtLocation(shortEdges.findIndex(pseIdx));
+
             // Remove from our iterator collections the iterators that are about
-            // to be erased (invalidated).
-            shortEdges.erase(pseEntry);
+            // to be erased (invalidated)
             pair.erase(pse_map_iter);
             auto paired_pse_map_iter = pair.find(pse);
             if (paired_pse_map_iter == pair.end()) throw std::runtime_error("Couldn't find paired edge's periodic pair!");
@@ -300,11 +320,12 @@ template<size_t N>
 void curveCleanup(std::vector<VectorND<int(N)>> &curve,
                   BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false) {
+                  Real featureAngleThreshold, bool periodic = false,
+                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
     using Point = VectorND<int(N)>;
     std::list<Point> curveList;
     for (const Point &p : curve) curveList.push_back(p);
-    curveCleanup(curveList, cell, minLen, maxLen, featureAngleThreshold, periodic);
+    curveCleanup(curveList, cell, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
 
     curve.clear();
     curve.reserve(curveList.size());
@@ -320,13 +341,14 @@ void curveCleanup(const std::vector<PointType> &inVertices,
                   std::vector<MeshIO::IOElement> &outElements,
                   const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false) {
+                  Real featureAngleThreshold, bool periodic = false,
+                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
     std::list<std::list<VectorND<N>>> polygons;
     extract_polygons<N>(inVertices, inElements, polygons);
 
     outVertices.clear(), outElements.clear();
     for (auto &poly : polygons) {
-        curveCleanup<N>(poly, cell, minLen, maxLen, featureAngleThreshold, periodic);
+        curveCleanup<N>(poly, cell, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
         size_t offset = outVertices.size();
         for (const auto &p : poly) {
             outElements.emplace_back(outVertices.size(), outVertices.size() + 1);
@@ -343,15 +365,16 @@ void curveCleanup(const std::vector<PointType> &inVertices,
                   std::vector<MeshIO::IOVertex> &outVertices,
                   std::vector<MeshIO::IOElement> &outElements,
                   Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false) {
+                  Real featureAngleThreshold, bool periodic = false,
+                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
     // Infer dimension from bounding box.
     BBox<Point3D> bbox(inVertices);
     if (bbox.dimensions()[2] < 1e-8) {
         BBox<Point2D> bbox2D(inVertices);
-        curveCleanup<2>(inVertices, inElements, outVertices, outElements, bbox2D, minLen, maxLen, featureAngleThreshold, periodic);
+        curveCleanup<2>(inVertices, inElements, outVertices, outElements, bbox2D, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
     }
     else {
-        curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, minLen, maxLen, featureAngleThreshold, periodic);
+        curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
     }
 }
 

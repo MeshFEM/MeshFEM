@@ -393,10 +393,40 @@ Point pointCloudCentroid(const std::vector<Point> &points) {
 inline Real angle(const Vector2D &a, const Vector2D &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
 inline Real angle(const Vector3D &a, const Vector3D &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
 
-// Signed angle between a and b. The 3D version requires a normal to define
-// sign, while the 2D uses the standard sign convention.
+// Signed angle from a to b. The 3D version requires a normal to define sign,
+// while the 2D uses the standard sign convention.
 // (in [-pi, pi])
 inline Real signedAngle(const Vector2D &a, const Vector2D &b)                    { return atan2(a[0] * b[1] - a[1] * b[0], a.dot(b)); }
 inline Real signedAngle(const Vector3D &a, const Vector3D &b, const Vector3D &n) { return atan2(a.cross(b).dot(n),         a.dot(b)); }
+
+// Compute the discrete curvature of a **closed** curve represented, e.g., by a
+// list<Point> (neighboring vertices of c[0] are c[i + 1] and c[len - 1].
+// The following discrete curvature measure is computed:
+//      kappa[i] = (turning angle[i]) / (voronoi length[i])
+// Must be called on planar polygons (Point2D) so that signed curvature can be
+// computed.
+// The standard sign convention is used: left turns (ccw) are positive and right
+// turns (cw) are negative
+template<class Curve>
+std::vector<Real> signedCurvature(const Curve &c) {
+    assert(c.size() > 2);
+    std::vector<Real> kappa;
+    kappa.reserve(c.size());
+    auto i = c.end(); --i;
+    auto j = c.begin();
+    auto k = j; ++k;
+    while (j != c.end()) {
+        auto ep  = (*k - *j).eval(),
+             em  = (*j - *i).eval();
+        Real epl = ep.norm(), eml = em.norm();
+        Real voronoiLen = 0.5 * (epl + eml);
+        kappa.push_back(signedAngle(em, ep) / voronoiLen);
+
+        i = j; ++j; ++k;
+        if (k == c.end()) k = c.begin();
+    }
+
+    return kappa;
+}
 
 #endif // GEOMETRY_HH
