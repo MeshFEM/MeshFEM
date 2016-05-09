@@ -3,6 +3,7 @@
 #include <ratio>
 #include <vector>
 #include "../Geometry.hh"
+#include "../ComponentMask.hh"
 
 inline bool isEq(Real a, Real b, Real tol = 0) {
     return std::abs(a - b) < tol;
@@ -29,7 +30,8 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
              const std::vector<Vertex> &inVertices,
              const std::vector<Element> &inElements,
              std::vector<Vertex>  &outVertices,
-             std::vector<Element> &outElements)
+             std::vector<Element> &outElements,
+             const ComponentMask &mask = ComponentMask("xyz"))
 {
     static constexpr double tolerance = double(TOL::num) / double(TOL::den);
     BBox<decltype(inVertices[0].point)> bbox((inVertices));
@@ -39,6 +41,7 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
 
     // Reflect geometry in the dth dimension
     for (size_t d = 0; d < Dim; ++d) {
+        if (!mask.has(d)) continue;
         // We need a mapping from vertex indices of the new reflected geometry
         // we're about to create to global vertex indices.
         // All vertices except those on the reflection pane are copied.

@@ -16,6 +16,7 @@
 #include "filters/reflect.hh"
 #include "filters/CurveCleanup.hh"
 #include "Triangulate.h"
+#include "ComponentMask.hh"
 
 #include <limits>
 #include <iostream>
@@ -66,7 +67,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
         ("quadSubdivideAndTriangulate,q", po::value<size_t>(),              "Run quad subdivision for #iterations and then triangulate symmetrically.")
         ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
-        ("reflect,r",                                                       "Reflect a d-dim mesh around the bounding box minimum faces into 2^d copies")
+        ("reflect,r",                     po::value<string>(),              "Reflect a d-dim mesh around the bounding box's specified minimum faces into 2^d copies (e.g. -r xy)")
         ("danglingVertexHighlightPath,d", po::value<string>(),              "Write line mesh geometry highlighting the mesh's dangling vertices.")
         ("triangulate,t",                 po::value<double>(),              "Triangulate line mesh with maximal triangle area given as argument")
         ("clean,c",                                                         "Clean line mesh")
@@ -175,7 +176,8 @@ int main(int argc, const char *argv[])
     // Apply reflection-duplication (in place)
     if (args.count("reflect")) {
         size_t dim = ((type == MeshIO::MESH_TET) || (type == MeshIO::MESH_HEX)) ? 3 : 2;
-        reflect(dim, inVertices, inElements, inVertices, inElements);
+        reflect(dim, inVertices, inElements, inVertices, inElements,
+                ComponentMask(args["reflect"].as<string>()));
     }
 
     if (type == MeshIO::MESH_TET) {
