@@ -486,7 +486,7 @@ public:
     //     E : s = lambda s
     // for greatest lambda.
     // Should only be used on major-symmetric tensors.
-    std::tuple<SMatrix, Real>  maxEigenstrain() {
+    std::tuple<SMatrix, Real>  maxEigenstrain() const {
         if (!_MajorSymmetry) {
             // Validate major symmetry if it hasn't been enforced.
             assert((m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10);
@@ -515,6 +515,38 @@ public:
 
         leftApplySqrtShearDoublerInverse(e);
         return std::make_tuple(SMatrix(e), lambda);
+    }
+
+    // Same as above, but also approximate the algebraic multiplicity of the
+    // maximum eigenvalue (within the specified tolerance) and also return the
+    // second largest eigenvalue.
+    std::tuple<SMatrix, Real, int, Real>  maxEigenstrainMultiplicity(Real tol = 1e-3) const {
+        if (!_MajorSymmetry) {
+            // Validate major symmetry if it hasn't been enforced.
+            assert((m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10);
+        }
+
+        DType mat(m_d.template selfadjointView<Eigen::Upper>());
+        leftApplySqrtShearDoubler(mat);
+        rightApplySqrtShearDoubler(mat);
+        Eigen::SelfAdjointEigenSolver<DType> solver;
+        solver.compute(mat);
+
+        // Eigenvalues/eigenvectors are sorted in increasing eigenvalue order
+        constexpr size_t largestIdx = flatLen(_Dim) - 1;
+        Real lambda = solver.eigenvalues()[largestIdx];
+
+        // Approximate multiplicity
+        int multiplicity = 1;
+        for (size_t i = largestIdx; i > 0; --i) {
+            if ((lambda - solver.eigenvalues()[i - 1]) < lambda * tol) ++multiplicity;
+            else break;
+        }
+
+        FlattenedRank2Tensor e = solver.eigenvectors().col(largestIdx);
+
+        leftApplySqrtShearDoublerInverse(e);
+        return std::make_tuple(SMatrix(e), lambda, multiplicity, solver.eigenvalues()[largestIdx - 1]);
     }
 
     // Write unflattened tensor in Mathematica array syntax.

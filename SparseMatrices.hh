@@ -695,6 +695,8 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
         if (!success)
             throw std::runtime_error("Factorize failed.");
+        if (m_c.status == CHOLMOD_NOT_POSDEF)
+            throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
         BENCHMARK_ADD_MESSAGE("Peak factorization memory (MB):\t" +
                               std::to_string(peakMemoryMB()));
     }

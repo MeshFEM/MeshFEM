@@ -375,7 +375,7 @@ public:
     }
 
     // MHS on Nov 3 3015
-    SymmetricMatrixField &operator/=(ScalarField<Real> scalars) {
+    SymmetricMatrixField &operator/=(const ScalarField<Real> &scalars) {
         assert(scalars.domainSize() == size_t(m_values.cols()));
         for (size_t i = 0; i < scalars.domainSize(); ++i)
             m_values.col(i) /= scalars(i);

@@ -95,6 +95,14 @@ void sortPermutation(const Container &values, std::vector<size_t> &p,
             return (descend != (values[a] < values[b])); });
 }
 
+template<typename Container>
+std::vector<size_t> sortPermutation(const Container &values,
+                                    bool descend = false) {
+    std::vector<size_t> result;
+    sortPermutation(values, result, descend);
+    return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a name with the pattern "suggestion (#)" that is distinct from all
 //  names in the collection "names"
