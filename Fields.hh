@@ -157,6 +157,16 @@ public:
         return normSq;
     }
 
+    // Scalar-valued inner product between vector field: apply dot product
+    // pointwise and sum.
+    Real innerProduct(const VectorField &b) const {
+        assert(domainSize() == b.domainSize());
+        Real result = 0;
+        for (size_t i = 0; i < domainSize(); ++i)
+            result += m_values.col(i).dot(b.m_values.col(i));
+        return result;
+    }
+
     // Unweighted mean vector.
     Eigen::Matrix<Real, t_dim, 1> mean() const {
         Eigen::Matrix<Real, t_dim, 1> result;
@@ -292,6 +302,9 @@ public:
     VectorField<Real, dim> unflatten() const {
         return VectorField<Real, dim>(m_values);
     }
+
+    const typename VectorField<Real, 1>::ArrayType &values() const { return m_values; }
+
 
     void minRelax(const ScalarField<Real> &b) { m_values = m_values.cwiseMin(b.m_values); }
     void maxRelax(const ScalarField<Real> &b) { m_values = m_values.cwiseMax(b.m_values); }
