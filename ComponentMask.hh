@@ -1,5 +1,6 @@
 #ifndef COMPONENTMASK_HH
 #define COMPONENTMASK_HH
+#include <bitset>
 
 class ComponentMask {
 public:
