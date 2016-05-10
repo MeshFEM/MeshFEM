@@ -54,7 +54,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
     visible_opts.add_options()("help", "Produce this help message")
         ("info,i",                                                          "Get mesh information")
         ("boundary,b",                                                      "Extract boundary surface")
-        ("extrude,e",         po::value<double>(),                          "Extrude a planar mesh in its (negative) normal direction by a distance.")
+        ("extrude,e",         po::value<double>(),                          "Extrude a planar mesh in its (negative) normal direction by a distance, creating a triangulated surface.")
+        ("extrudeTriQuad,E",  po::value<double>(),                          "Extrude a planar mesh in its (negative) normal direction by a distance, creating a mixed triangle and quad mesh.")
         ("truncateElements",  po::value<int>(),                             "Truncate to the specified number of elements")
         ("stripFields",                                                     "Suppress output of MSH fields")
         ("Sx",                po::value<double>(),                          "Scale x coordinates (performed after translation)")
@@ -290,6 +291,11 @@ int main(int argc, const char *argv[])
                 inElements.swap(outElements);
             }
             quad_tri_subdiv(inVertices, inElements, outVertices, outElements, dummy);
+        }
+        else if (args.count("extrudeTriQuad")) {
+            extrude(mesh, args["extrudeTriQuad"].as<double>(), inVertices, inElements);
+            outVertices = inVertices;
+            outElements = inElements;
         }
         else if (args.count("boundary"))  {
             outVertices.clear(), outElements.clear();

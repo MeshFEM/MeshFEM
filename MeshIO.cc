@@ -370,17 +370,16 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
 
 void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
                        const vector<Element> &elements, MeshType /* t */) {
-    auto typeError = std::runtime_error("Only support triangle .poly.");
-    if ((elements.size() < 1) || (elements[0].size() != 3))
-        throw typeError;
-    size_t nodesPerElem = 3;
+    // Actually, .poly format should work with any polygonal elements!
+    // auto typeError = std::runtime_error("Only support triangle .poly.");
+    // if ((elements.size() < 1) || (elements[0].size() != 3))
+    //     throw typeError;
     // #Vertices, 3D, 0 attr, 0 bdry marks
     os << nodes.size() << " 3 0 0" << std::endl; 
     for (size_t i = 0; i < nodes.size(); ++i)
         os << i << ' ' << nodes[i];
     os << elements.size() << " 0" << std::endl; // 0 bdry marks
     for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i].size() != nodesPerElem) throw typeError;
         os << "1" << std::endl;
         os << elements[i];
     }
