@@ -25,6 +25,7 @@
 #include <queue>
 #include <algorithm>
 #include <boost/program_options.hpp>
+#include <utils.hh>
 namespace po = boost::program_options;
 
 using namespace std;
@@ -109,6 +110,7 @@ void reportArrayStats(const string &name, vector<Real> &array) {
     nth_element(array.begin(), array.begin() + n, array.end());
     cout << "Median " << name << ":\t" << array[n] << endl;
     cout << "Max " << name << ":\t" << *max_element(array.begin(), array.end()) << std::endl;
+    cout << "Second Min " << name << ":\t" << *min_element(array.begin(), array.end()) << std::endl;
 }
 
 // Transfer per-element fields to output mesh, using cellIndex to track output
@@ -255,12 +257,25 @@ int main(int argc, const char *argv[])
                  << "Boundary Vertices:\t" << mesh.numBoundaryVertices() << endl;
 
             vector<Real> edgeLengths;
+            vector<Real> halfedgeIndices;
             for (size_t hei = 0; hei < mesh.numHalfEdges(); ++hei) {
                 auto he = mesh.halfEdge(hei);
                 if (!he.isPrimary()) continue;
-                edgeLengths.push_back((he.tip()->p - he.tail()->p).norm());
+                Real len = (he.tip()->p - he.tail()->p).norm();
+                edgeLengths.push_back(len);
+                halfedgeIndices.push_back(hei);
             }
+            cout << "Edges:\t" << edgeLengths.size() << endl;
+
             reportArrayStats("edge length", edgeLengths);
+            auto perm = sortPermutation(edgeLengths);
+
+            // for (size_t i = 0; i < std::min(size_t(20), perm.size()); ++i) {
+            //     size_t hei = halfedgeIndices.at(perm.at(i));
+            //     cout << "Halfedge " << hei << " ("
+            //          << (mesh.halfEdge(hei).isBoundary() ? "boundary" : "internal")
+            //          << ") length: " << edgeLengths.at(perm.at(i))  << endl;
+            // }
         }
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);

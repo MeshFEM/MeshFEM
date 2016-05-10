@@ -175,6 +175,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     };
 
     std::default_random_engine generator;
+    // std::cout << "initial curve size: " << curve.size() << std::endl;
+    // std::cout << "numshort edges: " << shortEdges.size() << std::endl;
     while (!shortEdges.empty()) {
         if (curve.size() <= 4) {
             std::cerr << "WARNING: curve has become extremely short. Bailing out of collapse." << std::endl;

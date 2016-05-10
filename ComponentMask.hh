@@ -8,14 +8,12 @@ public:
     }
 
     void setComponentString(const std::string &components) {
-        static const std::map<std::string, std::bitset<3>> cmasks = {
-            {   "x", std::bitset<3>("001") }, {  "y", std::bitset<3>("010") },
-            {   "z", std::bitset<3>("100") }, { "xy", std::bitset<3>("011") },
-            {  "yz", std::bitset<3>("110") }, { "xz", std::bitset<3>("101") },
-            { "xyz", std::bitset<3>("111") }, {   "", std::bitset<3>("000") } };
-        if (cmasks.count(components) == 0)
-            throw std::runtime_error("invalid component specifier: " + components);
-        m_active = cmasks.at(components);
+        m_active.reset();
+        if (components.find("x") != std::string::npos) m_active.set(0);
+        if (components.find("y") != std::string::npos) m_active.set(1);
+        if (components.find("z") != std::string::npos) m_active.set(2);
+        if (m_active.count() != components.size())
+            throw std::runtime_error("invalid component specifier: '" + components + "'");
     }
 
     bool has(size_t c) const { return m_active.test(c); }
