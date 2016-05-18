@@ -26,12 +26,13 @@ namespace PeriodicHomogenization {
     //           constraints.
     *///////////////////////////////////////////////////////////////////////////
     template<class _Sim>
-    void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim) {
+    void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
+                           Real cellEpsilon = 1e-5) {
         typedef typename _Sim::VField  VField;
         typedef typename _Sim::SMatrix SMatrix;
         constexpr size_t numStrains = SMatrix::flatSize();
 
-        sim.applyPeriodicConditions();
+        sim.applyPeriodicConditions(cellEpsilon);
         sim.applyNoRigidMotionConstraint();
         sim.setUsePinNoRigidTranslationConstraint(true);
 

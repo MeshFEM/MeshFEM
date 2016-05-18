@@ -5,6 +5,8 @@
 //      Accelerates nearby point queries by binning objects into a (sparse) grid
 //      of cells and pruning cells not overlapping the query sphere. This is a
 //      quick hack to get around needing a true AABB or similar datastructure.
+//
+//      (This is a grid centered around the origin with lattice width cellSize)
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

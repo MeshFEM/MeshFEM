@@ -632,9 +632,9 @@ public:
     //  identified nodes.
     //  Updates m_dofForNode.
     *///////////////////////////////////////////////////////////////////////
-    void applyPeriodicConditions() {
+    void applyPeriodicConditions(Real epsilon = 1e-5) {
         m_system.clear();
-        PeriodicCondition<N> pc(m_mesh);
+        PeriodicCondition<N> pc(m_mesh, epsilon);
         m_dofForNode = pc.periodicDoFsForNodes();
         m_numDoFs = pc.numPeriodicDoFs();
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)

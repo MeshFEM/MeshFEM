@@ -314,7 +314,7 @@ public:
         for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
 
         PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
-                cell, m_periodicBoundariesForBoundaryNode);
+                cell, m_periodicBoundariesForBoundaryNode, epsilon);
 
         // Determine identified boundary nodes.
         std::vector<std::vector<size_t> > bdryNodeSets;

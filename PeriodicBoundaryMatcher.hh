@@ -97,11 +97,10 @@ void match(const PointCollection &bdryPoints,
         std::vector<size_t>                  &nodeSetForNode,
         Real epsilon = 1e-5)
 {
-    // Choose a cell size on the order of epsilon. This should be safe since
-    // the max node coordinate shouldn't anyhere near large enough that
-    // dividing by epsilon causes an overflow. We don't want any larger than
-    // epsilon because then we'd have to check for many (empty) boxes.
-    CollisionGrid<Real, VectorND<N>> cgrid(epsilon);
+    // Choose a cell size on the order of epsilon, but prevent cell sizes so
+    // small as to cause index overflows for objects of size up to 100x100
+    // centered at the origin: max int ~10^9 ==> cellSize > 10^-7
+    CollisionGrid<Real, VectorND<N>> cgrid(std::max(epsilon, 1.0e-7));
 
     // New simpler approach:
     //   Add all non-minimal bbox points to the cgrid at once, instead of

@@ -33,6 +33,7 @@
 #include <list>
 #include <vector>
 #include <random>
+#include <utility>
 
 #include "extract_polygons.hh"
 #include "../PeriodicBoundaryMatcher.hh"
@@ -49,7 +50,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
                   Real featureAngleThreshold, bool periodic = false,
-                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
+                  const std::vector<Real> &variableMinLen = std::vector<Real>(),
+                  Real cellEpsilon = 1e-5) {
     using Point = VectorND<N>;
     using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
     static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
@@ -71,8 +73,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         std::vector<FMembership> fm;
         std::vector<std::vector<size_t>> nodeSets;
         std::vector<size_t>              nodeSetForNode;
-        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(curve, cell, fm);
-        PeriodicBoundaryMatcher::match(curve, cell, fm, nodeSets, nodeSetForNode);
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(curve, cell, fm, cellEpsilon);
+        PeriodicBoundaryMatcher::match(curve, cell, fm, nodeSets, nodeSetForNode, cellEpsilon);
 
         // (Temporary) constant-time random access to list iterators
         std::vector<EdgeIt> edges;
@@ -131,7 +133,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         const Point &p = *v, &pn = *(next(v)), &pp = *(prev(v));
         Real theta = angle((pn - p).eval(), (pp - p).eval());
         if (std::abs(theta - M_PI) > featureAngleThreshold) return true;
-        FMembership fmp(p, cell), fmpn(pn, cell), fmpp(pp, cell);
+        FMembership fmp(p, cell, cellEpsilon), fmpn(pn, cell, cellEpsilon), fmpp(pp, cell, cellEpsilon);
         if (!(fmp <= fmpn) || !(fmp <= fmpp)) return true;
         return false;
     };
@@ -209,7 +211,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // Can we merge 0 into 1 or 1 into 0 without changing tiled topology?
         // v0 can be merged into v1 if v0 is on a subset of the faces v1 is on.
         // This is a hard constraint; never perform merges that change topology.
-        FMembership fm0(*v0, cell), fm1(*v1, cell);
+        FMembership fm0(*v0, cell, cellEpsilon), fm1(*v1, cell, cellEpsilon);
         bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
 
         // We try to avoid merging a feature vertex into another vertex.
@@ -318,16 +320,15 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 }
 
 // Convenience version--operate on vector instead of list.
-template<size_t N>
+template<size_t N, typename... Args>
 void curveCleanup(std::vector<VectorND<int(N)>> &curve,
                   BBox<VectorND<int(N)>> &cell,
-                  Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false,
-                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
+                  Args&&... args)
+{
     using Point = VectorND<int(N)>;
     std::list<Point> curveList;
     for (const Point &p : curve) curveList.push_back(p);
-    curveCleanup(curveList, cell, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
+    curveCleanup(curveList, cell, std::forward<Args>(args)...);
 
     curve.clear();
     curve.reserve(curveList.size());
@@ -336,21 +337,20 @@ void curveCleanup(std::vector<VectorND<int(N)>> &curve,
 }
 
 // Convenience version--operate on line soup, preserving bbox "cell"
-template<size_t N, class PointType, class EdgeType>
+template<size_t N, class PointType, class EdgeType, typename... Args>
 void curveCleanup(const std::vector<PointType> &inVertices,
                   const std::vector<EdgeType> &inElements,
                   std::vector<MeshIO::IOVertex> &outVertices,
                   std::vector<MeshIO::IOElement> &outElements,
                   const BBox<VectorND<int(N)>> &cell,
-                  Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false,
-                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
+                  Args&&... args)
+{
     std::list<std::list<VectorND<N>>> polygons;
     extract_polygons<N>(inVertices, inElements, polygons);
 
     outVertices.clear(), outElements.clear();
     for (auto &poly : polygons) {
-        curveCleanup<N>(poly, cell, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
+        curveCleanup<N>(poly, cell, std::forward<Args>(args)...);
         size_t offset = outVertices.size();
         for (const auto &p : poly) {
             outElements.emplace_back(outVertices.size(), outVertices.size() + 1);
@@ -361,22 +361,21 @@ void curveCleanup(const std::vector<PointType> &inVertices,
 }
 
 // Convenience version--operate on line soup, inferring dimension.
-template<class PointType, class EdgeType>
+template<class PointType, class EdgeType, typename... Args>
 void curveCleanup(const std::vector<PointType> &inVertices,
                   const std::vector<EdgeType> &inElements,
                   std::vector<MeshIO::IOVertex> &outVertices,
                   std::vector<MeshIO::IOElement> &outElements,
-                  Real minLen, Real maxLen,
-                  Real featureAngleThreshold, bool periodic = false,
-                  const std::vector<Real> &variableMinLen = std::vector<Real>()) {
+                  Args&&... args)
+{
     // Infer dimension from bounding box.
     BBox<Point3D> bbox(inVertices);
     if (bbox.dimensions()[2] < 1e-8) {
         BBox<Point2D> bbox2D(inVertices);
-        curveCleanup<2>(inVertices, inElements, outVertices, outElements, bbox2D, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
+        curveCleanup<2>(inVertices, inElements, outVertices, outElements, bbox2D, std::forward<Args>(args)...);
     }
     else {
-        curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, minLen, maxLen, featureAngleThreshold, periodic, variableMinLen);
+        curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, std::forward<Args>(args)...);
     }
 }
 
