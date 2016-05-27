@@ -260,6 +260,7 @@ public:
         return m_d.diagonal();
     }
 
+    ElasticityTensor &operator =(Real s) { m_d.setConstant(s); return *this; }
     ElasticityTensor &operator*=(Real s) { m_d *= s; return *this; }
     ElasticityTensor &operator/=(Real s) { m_d /= s; return *this; }
     ElasticityTensor  operator*(Real s) const { ElasticityTensor E(*this); E *= s; return E; }
