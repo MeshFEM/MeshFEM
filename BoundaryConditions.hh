@@ -69,7 +69,7 @@ public:
             size_t i;
             for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
                 auto vn = mesh.boundaryNode(i).volumeNode();
-                if (std::abs(vn->p[m_faceSpecifier] - bbox.minCorner[m_faceSpecifier]) < epsilon) {
+                if (std::abs(vn->p[m_faceSpecifier] - bbox.minCorner[m_faceSpecifier]) <= epsilon) {
                     pointToMatch = vn->p;
                     pointToMatch[m_faceSpecifier] = bbox.maxCorner[m_faceSpecifier];
                     m_pair.first = i;
@@ -80,7 +80,7 @@ public:
                 throw std::runtime_error("No vertices on the periodic pair face.");
             for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
                 auto vn = mesh.boundaryNode(i).volumeNode();
-                if ((vn->p - pointToMatch).norm() < epsilon) {
+                if ((vn->p - pointToMatch).norm() <= epsilon) {
                     m_pair.second = i;
                     break;
                 }

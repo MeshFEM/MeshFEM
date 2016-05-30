@@ -16,6 +16,7 @@
 #include <bitset>
 #include <limits>
 #include <stdexcept>
+#include <iostream>
 #include <sstream>
 
 #include "CollisionGrid.hh"
@@ -40,14 +41,14 @@ struct FaceMembership {
     FaceMembership(const Point &p, const BBox<VectorND<N>> &cell,
                    Real epsilon = 1e-5) {
         for (size_t d = 0; d < N; ++d) {
-            membership[d]     = std::abs(p[d] - cell.minCorner[d]) < epsilon;
-            membership[N + d] = std::abs(p[d] - cell.maxCorner[d]) < epsilon;
+            membership[d]     = std::abs(p[d] - cell.minCorner[d]) <= epsilon;
+            membership[N + d] = std::abs(p[d] - cell.maxCorner[d]) <= epsilon;
         }
     }
 
     bool      onMinFace(size_t d) const { assert(d < N); return membership[    d]; }
     bool      onMaxFace(size_t d) const { assert(d < N); return membership[N + d]; }
-    bool onMinOrMaxFace(size_t d) const { return onMinFace(d) || onMinOrMaxFace(d); }
+    bool onMinOrMaxFace(size_t d) const { return onMinFace(d) || onMaxFace(d); }
     bool      onAnyFace()         const { return membership.any(); }
     size_t        count() const { return membership.count(); }
     // Verify that the node is not on both the min and max face.
@@ -59,6 +60,17 @@ struct FaceMembership {
     bool  isMinimalNode() const { return !onAnyMaxFace(); }
 
     FaceMembership &operator&=(const FaceMembership<N> &b) { membership &= b.membership; return *this; }
+};
+
+// Face membership ASCII output.
+template<size_t N>
+std::ostream &operator<<(std::ostream &os, const FaceMembership<N> &m) {
+    if (N > 0 && m.onMinOrMaxFace(0)) os << (m.onMinFace(0) ? "x" : "X");
+    if (N > 1 && m.onMinOrMaxFace(1)) os << (m.onMinFace(1) ? "y" : "Y");
+    if (N > 2 && m.onMinOrMaxFace(2)) os << (m.onMinFace(2) ? "z" : "Z");
+
+    if (m.count() == 0) os << "(none)";
+    return os;
 };
 
 // *Partial* order on boundary membership:

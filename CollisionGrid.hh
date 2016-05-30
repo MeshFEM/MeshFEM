@@ -51,7 +51,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     /*! Find the closest point to p, only allowing points within distance eps
     //  @param[in]  p   query point
-    //  @param[in]  eps distance p must be closer than to consider it matched
+    //  @param[in]  eps distance p must be within to consider it matched
     //  @return     tag, point closest point and its tag if found.
     //                          "tag" is -1 if not found.
     *///////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ public:
                         const Bin &b = it->second;
                         for (size_t l = 0; l < b.size(); ++l) {
                             Real dist = (p - b[l].first).norm();
-                            if (dist < closestDist) {
+                            if (dist <= closestDist) {
                                 closestDist = dist;
                                 closestPoint = b[l].first;
                                 closestTag = b[l].second;

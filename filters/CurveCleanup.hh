@@ -179,6 +179,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     std::default_random_engine generator;
     // std::cout << "initial curve size: " << curve.size() << std::endl;
     // std::cout << "numshort edges: " << shortEdges.size() << std::endl;
+    // bool verbose = false;
     while (!shortEdges.empty()) {
         if (curve.size() <= 4) {
             std::cerr << "WARNING: curve has become extremely short. Bailing out of collapse." << std::endl;
@@ -213,6 +214,12 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // This is a hard constraint; never perform merges that change topology.
         FMembership fm0(*v0, cell, cellEpsilon), fm1(*v1, cell, cellEpsilon);
         bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
+
+        // verbose = (((*v0)[1] > 0.99951171875) || ((*v1)[1] > 0.99951171875));
+        // if (verbose) {
+        //     std::cout << "v0 [" << (*v0)[0] << ", " << (*v0)[1] << "], fm: " << fm0 << std::endl;
+        //     std::cout << "v1 [" << (*v1)[0] << ", " << (*v1)[1] << "], fm: " << fm1 << std::endl;
+        // }
 
         // We try to avoid merging a feature vertex into another vertex.
         // However, we never let the existence of features prevent a merge:
@@ -293,6 +300,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         }
 #endif
     }
+
+    return;
 
     // Splitting is much easier--periodicity is automatically maintained, and
     // iterators are not invalidated.

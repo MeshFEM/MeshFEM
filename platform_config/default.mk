@@ -18,6 +18,8 @@ CLIPPER_LFLAGS=-L$(CLIPPER_PATH)/lib -lpolyclipping
 LEVMAR_LFLAGS=$(LEVMAR_LIB)/liblevmar.a
 TRIANGLE_LFLAGS=-L$(TRIANGLE_LIB) -ltriangle
 
+NLOPT_LFLAGS=-L/usr/local/lib -lnlopt_cxx
+
 CXX=clang++
 CC=clang
 CPPFLAGS=
