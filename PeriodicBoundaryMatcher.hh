@@ -71,7 +71,7 @@ std::ostream &operator<<(std::ostream &os, const FaceMembership<N> &m) {
 
     if (m.count() == 0) os << "(none)";
     return os;
-};
+}
 
 // *Partial* order on boundary membership:
 // a <= b if a's membership set is contained in b's.

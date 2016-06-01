@@ -375,6 +375,8 @@ void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
 ////////////////////////////////////////////////////////////////////////////////
 // Discrete Shape Derivatives (Lagrangian)
 ////////////////////////////////////////////////////////////////////////////////
+// typename homogenizedElasticityTensorDiscreteDifferential()
+
 // Change in the homogenized elasticity tensor due to mesh vertex
 // perturbations delta_p.
 // Currently just uses homogenizedElasticityTensorGradient; could be

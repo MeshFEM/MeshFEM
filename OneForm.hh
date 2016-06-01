@@ -18,20 +18,22 @@
 #include <Fields.hh>
 #include <stdexcept>
 
+#include <Algebra.hh>
+
 #include "function_traits.hh"
 
 template<typename T, size_t N>
-struct OneForm {
+struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
     // Depending on T, possibly leaves value uninitialized!
-    OneForm(size_t dsize) : m_data(dsize) { }
+    OneForm(size_t dsize = 0) : m_data(dsize) { }
 
     // Apply one-form to vector field v.
     T operator[](const VectorField<Real, N> &v) const {
         T result;
         result = 0;
-        if (v.domainSize() != m_data.size()) throw std::runtime_error("One-form paired with vector field of unmatched size");
+        if (v.domainSize() != domainSize()) throw std::runtime_error("One-form paired with vector field of unmatched size");
         
-        for (size_t pt = 0; pt < m_data.size(); ++pt) {
+        for (size_t pt = 0; pt < domainSize(); ++pt) {
             for (size_t c = 0; c < N; ++c) {
                 T contrib = m_data[pt][c];
                 contrib *= v(pt)[c];
@@ -46,7 +48,28 @@ struct OneForm {
           std::array<T, N> &operator()(size_t i)       { return m_data.at(i); }
 
     size_t domainSize() const { return m_data.size(); }
-    size_t       size() const { return m_data.size(); }
+
+    void clear() {
+        for (size_t pt = 0; pt < domainSize(); ++pt)
+            for (size_t c = 0; c < N; ++c)
+                m_data[pt][c] = 0;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // VectorSpace requirements
+    ////////////////////////////////////////////////////////////////////////////
+    // Extend T's + and * operators point/componentwise.
+    void Add(const OneForm &b) {
+        for (size_t pt = 0; pt < domainSize(); ++pt)
+            for (size_t c = 0; c < N; ++c)
+                m_data[pt][c] += b[pt][c];
+    }
+
+    void Scale(Real scalar) {
+        for (size_t pt = 0; pt < domainSize(); ++pt)
+            for (size_t c = 0; c < N; ++c)
+                m_data[pt][c] *= scalar;
+    }
 
 private:
     // Generic differential one-form representation
@@ -81,20 +104,39 @@ compose(const F &f, const OneForm<T, N> &phi) {
 // Specialization for scalar-valued differential forms:
 // These are isomorphic to vector fields, so store them as such.
 template<size_t N>
-struct OneForm<Real, N> {
+struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     using VF = VectorField<Real, N>;
-    OneForm(size_t dsize) : m_diff(dsize) { m_diff.clear(); }
+    OneForm(size_t dsize = 0) : m_diff(dsize) { }
 
     typename VF::ValueType      operator()(size_t i)       { return m_diff(i); }
     typename VF::ConstValueType operator()(size_t i) const { return m_diff(i); }
 
+    size_t domainSize() const { return m_diff.domainSize(); }
+
+    void clear() { m_diff.clear(); }
+
     // Apply one-form to vector field v.
-    Real operator[](const VectorField<Real, N> &v) const {
+    Real operator[](const VF &v) const {
         return m_diff.innerProduct(v);
     }
+
+    // "cast" to vector field. This would be the Reisz representative under an
+    // identity metric.
+          VF &asVectorField()       { return m_diff; }
+    const VF &asVectorField() const { return m_diff; }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // VectorSpace requirements
+    ////////////////////////////////////////////////////////////////////////////
+    void Add(const OneForm &b) { m_diff += b.m_diff; }
+    void Scale(Real scalar) { m_diff *= scalar; }
     
 private:
     VF m_diff;
 };
+
+// Scalar-valued one form
+template<size_t N>
+using ScalarOneForm = OneForm<Real, N>;
 
 #endif /* end of include guard: ONEFORM_HH */

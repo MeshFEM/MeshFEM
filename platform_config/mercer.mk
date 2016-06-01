@@ -13,6 +13,8 @@ CLIPPER_LFLAGS=-L$(CLIPPER_PATH)/lib -lpolyclipping
 LEVMAR_LFLAGS=$(LEVMAR_LIB)/liblevmar.a
 TRIANGLE_LFLAGS=-L$(TRIANGLE_LIB) -ltriangle
 
+NLOPT_LFLAGS=-L$(NLOPT_LIB) -lnlopt_cxx
+
 CXX=g++
 CC=gcc
 # workaround: link -lsuitesparse-mklstatic, which is available with module
