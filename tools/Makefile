@@ -7,7 +7,7 @@ LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS)
 CPPFLAGS+=-Wall -pedantic -std=c++1y $(INCLUDES) -I..
 CPPFLAGS+=-O2
 # CPPFLAGS+=-O0 -g
-TARGETS=msh_processor selector gen_bar_with_shell bc_debug IsotropicValidation grid
+TARGETS=msh_processor cursor selector gen_bar_with_shell bc_debug IsotropicValidation grid
 
 MSH_PROC_OBJS=msh_processor.o ../MeshIO.o ../MSHFieldParser.o ../Types.o argparse.o
 ISOTVAL_OBJS=IsotropicValidation.o ../MeshIO.o ../MSHFieldParser.o ../Types.o ../Materials.o ../GlobalBenchmark.o
@@ -15,10 +15,14 @@ SELECTOR_OBJS=selector.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
 GEN_BAR_WSHELL_OBJS=gen_bar_with_shell.o ../MeshIO.o ../MSHFieldParser.o ../Types.o
 BC_DEBUG_OBS=bc_debug.o ../MeshIO.o ../MSHFieldParser.o ../Types.o ../BoundaryConditions.o
 GRID_OBJS=grid.o ../MeshIO.o ../Types.o
+CURSOR_OBJS=cursor.o ../MeshIO.o ../Types.o
 
-OBJS=$(MSH_PROC_OBJS) $(ISOTVAL_OBJS) $(SELECTOR_OBJS) $(GEN_BAR_WSHELL_OBJS) $(BC_DEBUG_OBS) $(GRID_OBJS)
+OBJS=$(MSH_PROC_OBJS) $(ISOTVAL_OBJS) $(SELECTOR_OBJS) $(GEN_BAR_WSHELL_OBJS) $(BC_DEBUG_OBS) $(GRID_OBJS) $(CURSOR_OBJS)
 
 all: $(TARGETS)
+
+cursor: $(CURSOR_OBJS)
+	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@
 
 selector: $(SELECTOR_OBJS)
 	$(CXX) $(CPPFLAGS) $^ $(LIBS) -o $@

@@ -106,11 +106,14 @@ MeshIO *getMeshIO(Format &format) {
     static MeshIO_OFF   s_offIO;
     static MeshIO_OBJ   s_objIO;
     static MeshIO_MSH   s_mshIO;
+    static MeshIO_MSH   s_mshASCIIIO;
     static MeshIO_POLY  s_polyIO;
     static MeshIO_Medit s_meditIO;
 
+    s_mshASCIIIO.setBinary(false);
+
     // Indexed using Format enum (order must match enum)
-    static std::vector<MeshIO *> IOs = { &s_offIO, &s_objIO, &s_mshIO,
+    static std::vector<MeshIO *> IOs = { &s_offIO, &s_objIO, &s_mshIO, &s_mshASCIIIO,
         &s_polyIO, NULL /* NodeEle must be handled specially */, &s_meditIO };
 
     if (format == FMT_NODE_ELE)
@@ -465,7 +468,9 @@ const std::vector<MeshIO_MSH::ElementInfo> MeshIO_MSH::elementInfoArray = {
 
 void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType type) {
-    if (elements.size() == 0) throw std::runtime_error("Empty mesh.");
+    if (elements.size() == 0) std::cerr << "WARNING: saving mesh with no elements." << std::endl;
+    if (nodes.size() == 0) throw std::runtime_error("Empty mesh.");
+
     ElementInfo ei;
     if (type == MESH_GUESS) ei = elementInfoForNodeCount(elements.back().size());
     else                    ei = elementInfoForMeshType(type);

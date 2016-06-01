@@ -27,7 +27,7 @@
 
 namespace MeshIO {
     /** Supported file formats */
-    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_POLY = 3, FMT_NODE_ELE = 4, FMT_MEDIT = 5,
+    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_MSH_ASCII = 3, FMT_POLY = 4, FMT_NODE_ELE = 5, FMT_MEDIT = 6,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
 
     typedef enum { MESH_TRI = 0, MESH_TET = 1, MESH_QUAD = 2, MESH_TRI_QUAD = 3, MESH_HEX = 4,
