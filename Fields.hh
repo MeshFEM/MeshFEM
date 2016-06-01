@@ -37,11 +37,13 @@
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
+#include "Algebra.hh"
+
 typedef enum { FIELD_SCALAR, FIELD_VECTOR, FIELD_MATRIX} FieldType;
 enum class DomainType  { PER_ELEMENT = 0, PER_NODE = 1, ANY = 3, GUESS = 3, UNKNOWN = -1};
 
 template<typename Real, size_t t_dim>
-class VectorField {
+class VectorField : public VectorSpace<Real, VectorField<Real, t_dim>> {
 public:
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
     typedef Eigen::Matrix<Real, t_dim, Eigen::Dynamic> ArrayType;
@@ -69,7 +71,6 @@ public:
             (&values[0], t_dim, domainSize);
     }
 
-
     // Uninitialized allocation constructor
     explicit VectorField(size_t domainSize = 0)
         : m_values(t_dim, domainSize) { }
@@ -84,51 +85,20 @@ public:
         return m_values.col(i);
     }
 
-    // Arithmetic operations
-    VectorField &operator*=(Real scalar) {
-        m_values *= scalar;
-        return *this;
-    }
-
-    VectorField &operator+=(const VectorField &b) {
-        assert(domainSize() == b.domainSize());
-        for (size_t i = 0; i < domainSize(); ++i) {
-            m_values.col(i) += b.m_values.col(i);
-        }
-        return *this;
-    }
-
-    VectorField &operator-=(const VectorField &b) {
-        assert(domainSize() == b.domainSize());
-        for (size_t i = 0; i < domainSize(); ++i) {
-            m_values.col(i) -= b.m_values.col(i);
-        }
-        return *this;
-    }
-
-    VectorField &operator+=(const Eigen::Matrix<Real, t_dim, 1> &v) {
-        for (size_t i = 0; i < domainSize(); ++i)
-            m_values.col(i) += v;
-        return *this;
-    }
-
-
-    VectorField &operator-=(const Eigen::Matrix<Real, t_dim, 1> &v) {
-        for (size_t i = 0; i < domainSize(); ++i)
-            m_values.col(i) -= v;
-        return *this;
-    }
-
-    VectorField operator*(Real s)               const { VectorField result(*this); result *= s; return result; }
-
-    VectorField operator+(const VectorField &b) const { VectorField result(*this); result += b; return result; }
-    VectorField operator-(const VectorField &b) const { VectorField result(*this); result -= b; return result; }
-
     void clear() { m_values = ArrayType::Zero(dim(), domainSize()); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // VectorSpace requirements
+    ////////////////////////////////////////////////////////////////////////////
+    void Add(const VectorField &b) { m_values += b.m_values; }
+    void Scale(Real scalar)        { m_values *= scalar; }
 
     // Normalize data so that the maximum column magnitude is 1.
     void maxColumnNormalize() { m_values /= maxMag(); }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Non-VectorSpace operations.
+    ////////////////////////////////////////////////////////////////////////////
     Real maxMag() const {
         Real maxNorm = 0;
         for (size_t i = 0; i < domainSize(); ++i)
@@ -341,7 +311,7 @@ std::ostream &operator<<(std::ostream &os, const VectorField<Real, N> &vf) {
 // The total number of entries is sum_{i=1}^N i = (N * (N + 1)) / 2
 // (because there are i entries in the ith column).
 template<typename Real, size_t t_N>
-class SymmetricMatrixField {
+class SymmetricMatrixField : public VectorSpace<Real, SymmetricMatrixField<Real, t_N>> {
 public:
     typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> FlattenedType;
     typedef Eigen::Matrix<Real, flatLen(t_N), Eigen::Dynamic> ArrayType;
@@ -382,28 +352,20 @@ public:
         return ValueType(m_values.col(i));
     }
 
-    SymmetricMatrixField &operator*=(Real scalar) {
-        m_values *= scalar;
-        return *this;
-    }
+    ////////////////////////////////////////////////////////////////////////////
+    // VectorSpace requirements
+    ////////////////////////////////////////////////////////////////////////////
+    void Add(const SymmetricMatrixField &b) { m_values += b.m_values; }
+    void Scale(Real scalar)                 { m_values *= scalar; }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Non-VectorSpace operations.
+    ////////////////////////////////////////////////////////////////////////////
     // MHS on Nov 3 3015
     SymmetricMatrixField &operator/=(const ScalarField<Real> &scalars) {
         assert(scalars.domainSize() == size_t(m_values.cols()));
         for (size_t i = 0; i < scalars.domainSize(); ++i)
             m_values.col(i) /= scalars(i);
-        return *this;
-    }
-
-    SymmetricMatrixField &operator+=(const SymmetricMatrixField &b) {
-        assert(domainSize() == b.domainSize());
-        m_values += b.m_values;
-        return *this;
-    }
-
-    SymmetricMatrixField &operator-=(const SymmetricMatrixField &b) {
-        assert(domainSize() == b.domainSize());
-        m_values -= b.m_values;
         return *this;
     }
 

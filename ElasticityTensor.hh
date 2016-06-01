@@ -35,8 +35,10 @@
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
 
+#include "Algebra.hh"
+
 template<typename Real, size_t _Dim, bool _MajorSymmetry = true>
-class ElasticityTensor {
+class ElasticityTensor : public VectorSpace<Real, ElasticityTensor<Real, _Dim, _MajorSymmetry>> {
     // We need access to other major symmetry types' members (for double
     // contraction operator), but unfortunately we can't friend a partial
     // template specialization, so...
@@ -260,17 +262,11 @@ public:
         return m_d.diagonal();
     }
 
-    ElasticityTensor &operator =(Real s) { m_d.setConstant(s); return *this; }
-    ElasticityTensor &operator*=(Real s) { m_d *= s; return *this; }
-    ElasticityTensor &operator/=(Real s) { m_d /= s; return *this; }
-    ElasticityTensor  operator*(Real s) const { ElasticityTensor E(*this); E *= s; return E; }
-    ElasticityTensor  operator/(Real s) const { ElasticityTensor E(*this); E /= s; return E; }
-
-    ElasticityTensor &operator+=(const ElasticityTensor &b) { m_d += b.m_d; return *this; }
-    ElasticityTensor &operator-=(const ElasticityTensor &b) { m_d -= b.m_d; return *this; }
-    ElasticityTensor  operator+ (const ElasticityTensor &b) const { ElasticityTensor E(*this); E += b; return E; }
-    ElasticityTensor  operator- (const ElasticityTensor &b) const { ElasticityTensor E(*this); E -= b; return E; }
-    ElasticityTensor  operator- () const { ElasticityTensor E(*this); E.m_d = -E.m_d; return E; }
+    ////////////////////////////////////////////////////////////////////////////
+    // VectorSpace requirements
+    ////////////////////////////////////////////////////////////////////////////
+    void Add(const ElasticityTensor &b) { m_d += b.m_d; }
+    void Scale(Real s)                  { m_d *= s; }
 
     // Get the tensor Einv such that E : Einv = Identity
     // Note this is different from just inverting the flattened representation:
@@ -581,11 +577,5 @@ private:
         return os;
     }
 };
-
-template<typename Real, size_t _Dim, bool _MajorSymmetry>
-ElasticityTensor<Real, _Dim, _MajorSymmetry> operator*(Real a,
-        const ElasticityTensor<Real, _Dim, _MajorSymmetry> &E) {
-    return E * a;
-}
 
 #endif /* end of include guard: ELASTICITYTENSOR_HH */
