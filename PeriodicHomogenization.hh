@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "OneForm.hh"
 
 #include "GaussQuadrature.hh"
 #include "InterpolantRestriction.hh"
@@ -375,7 +376,86 @@ void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
 ////////////////////////////////////////////////////////////////////////////////
 // Discrete Shape Derivatives (Lagrangian)
 ////////////////////////////////////////////////////////////////////////////////
-// typename homogenizedElasticityTensorDiscreteDifferential()
+// Compute the exact derivative of the homogenized elasticity tensor with
+// respect to each mesh vertex position.
+template<class _Sim>
+OneForm<typename _Sim::ETensor, _Sim::N>
+homogenizedElasticityTensorDiscreteDifferential(const _Sim &sim,
+        const std::vector<typename _Sim::VField> &w) {
+    constexpr size_t N = _Sim::N;
+    constexpr size_t Deg = _Sim::Deg;
+    using ETensor = typename _Sim::ETensor;
+    using SMatrix = typename _Sim::SMatrix;
+    using SFGradient = Interpolant<VectorND<N>, N, Deg - 1>; // Shape fn grad
+
+    OneForm<ETensor, N> dCh(sim.numVertices());
+
+    // True deformation strains/stresses under each cell problem load
+    // (constant + fluctuation)
+    using Strain = typename _Sim::Strain;
+    std::vector<Strain>     strain(flatLen(N));
+    std::vector<Strain>     stress(flatLen(N));
+    std::vector<SFGradient> gradPhi_n;
+
+    for (auto e : sim.mesh().elements()) {
+        // Precompute stresses/strains
+        for (size_t ij = 0; ij < flatLen(N); ++ij) {
+            e->strain(e, w[ij], strain[ij]);
+            strain[ij] += SMatrix::CanonicalBasis(ij);
+            stress[ij] = e->E().doubleContract(strain[ij]);
+        }
+
+        // Precompute shape function gradients.
+        gradPhi_n.resize(e.numNodes());
+        for (auto n : e.nodes())
+            gradPhi_n[n.localIndex()] = e->gradPhi(n.localIndex());
+
+        // (Only need to fill out upper tri of flattened elasticity tensor).
+        for (size_t ij = 0; ij < flatLen(N); ++ij) {
+            for (size_t kl = ij; kl < flatLen(N); ++kl) {
+                // Initialize with energy dilation term
+                Real mutualEnergy = Quadrature<Strain::K, 2 * Strain::Deg>::integrate([&](const VectorND<N> &pt) { return
+                        strain[ij](pt).doubleContract(stress[kl](pt)); }, e->volume());
+                for (auto v : e.vertices())
+                    for (size_t c = 0; c < N; ++c)
+                        dCh(v.index())[c](ij, kl) = mutualEnergy * e->gradBarycentric()(c, v.localIndex());
+
+                // Compute the delta strain phi contribution
+                for (auto n : e.nodes()) {
+                    const SFGradient &gphi = gradPhi_n[n.localIndex()];
+
+                    // only compute ij-kl version if it's actually distinct (ij != kl)
+                    Interpolant<VectorND<N>, N, Deg - 1> stresskl_contract_wij, stressij_contract_wkl;
+                    for (size_t inode = 0; inode < stresskl_contract_wij.size(); ++inode) {
+                        stresskl_contract_wij[inode]               = stress[kl][inode].contract(w[ij](n.index()));
+                        if (ij != kl) stressij_contract_wkl[inode] = stress[ij][inode].contract(w[kl](n.index()));
+                    }
+
+                    for (auto v : e.vertices()) {
+                        VectorND<N> gbary = e->gradBarycentric().col(v.localIndex());
+                        // delta-strain term of effect of perturbing component c of vertex v
+                        VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const VectorND<N> &pt) { return
+                                gphi(pt) * stresskl_contract_wij(pt).dot(gbary); }, e->volume());
+
+                        for (size_t c = 0; c < N; ++c)
+                            dCh(v.index())[c](ij, kl) -= dstrainTerm[c];
+                        // only compute ij-kl version if it's actually distinct (ij != kl), otherwise reuse kl-ij
+                        if (ij != kl) {
+                            dstrainTerm = Quadrature<N, Deg>::integrate([&](const VectorND<N> &pt) { return
+                                gphi(pt) * stressij_contract_wkl(pt).dot(gbary); }, e->volume());
+                        }
+                        for (size_t c = 0; c < N; ++c)
+                            dCh(v.index())[c](ij, kl) -= dstrainTerm[c];
+                    }
+                }
+            }
+        }
+    }
+
+    dCh /= sim.mesh().boundingBox().volume();
+
+    return dCh;
+}
 
 // Change in the homogenized elasticity tensor due to mesh vertex
 // perturbations delta_p.
