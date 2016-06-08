@@ -388,29 +388,32 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
     using SMatrix = typename _Sim::SMatrix;
     using SFGradient = Interpolant<VectorND<N>, N, Deg - 1>; // Shape fn grad
 
+    // Zero-initializes due to ETensor's default constructor.
     OneForm<ETensor, N> dCh(sim.mesh().numVertices());
 
     // True deformation strains/stresses under each cell problem load
     // (constant + fluctuation)
     using Strain = typename _Sim::Strain;
-    std::vector<Strain>     strain(flatLen(N));
-    std::vector<Strain>     stress(flatLen(N));
+    std::vector<Strain> strain(flatLen(N));
+    std::vector<Strain> stress(flatLen(N));
     std::vector<SFGradient> gradPhi_n;
+
+    assert(w.size() == flatLen(N));
 
     for (auto e : sim.mesh().elements()) {
         // Precompute stresses/strains
         for (size_t ij = 0; ij < flatLen(N); ++ij) {
             e->strain(e, w[ij], strain[ij]);
             strain[ij] += SMatrix::CanonicalBasis(ij);
-            stress[ij] = strain[ij].doubleContract(e->E());
+            stress[ij]  = strain[ij].doubleContract(e->E());
         }
 
-        // Precompute shape function gradients.
+        // Precompute (scalar) shape function gradients.
         gradPhi_n.resize(e.numNodes());
-        for (auto n : e.nodes())
-            gradPhi_n[n.localIndex()] = e->gradPhi(n.localIndex());
+        for (size_t ni = 0; ni < e.numNodes(); ++ni)
+            gradPhi_n[ni] = e->gradPhi(ni);
 
-        // (Only need to fill out upper tri of flattened elasticity tensor).
+        // (Only need to compute upper tri of flattened elasticity tensor).
         for (size_t ij = 0; ij < flatLen(N); ++ij) {
             for (size_t kl = ij; kl < flatLen(N); ++kl) {
                 // Initialize with energy dilation term
@@ -418,14 +421,14 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                         strain[ij](pt).doubleContract(stress[kl](pt)); }, e->volume());
                 for (auto v : e.vertices())
                     for (size_t c = 0; c < N; ++c)
-                        dCh(v.index())[c].D(ij, kl) = mutualEnergy * e->gradBarycentric()(c, v.localIndex());
+                        dCh(v.index())[c].D(ij, kl) += mutualEnergy * e->gradBarycentric()(c, v.localIndex());
 
                 // Compute the delta strain phi contribution
                 for (auto n : e.nodes()) {
                     const SFGradient &gphi = gradPhi_n[n.localIndex()];
 
                     // Avoid recomputing ij-kl term with ij == kl
-                    Interpolant<VectorND<N>, N, Deg - 1> stress_contract_w;
+                    Interpolant<VectorND<N>, Strain::K, Strain::Deg> stress_contract_w;
                     for (size_t inode = 0; inode < stress_contract_w.size(); ++inode) {
                         stress_contract_w[inode]                = stress[kl][inode].contract(w[ij](n.index()));
                         if (ij != kl) stress_contract_w[inode] += stress[ij][inode].contract(w[kl](n.index()));
@@ -436,7 +439,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                         VectorND<N> gbary = e->gradBarycentric().col(v.localIndex());
                         // delta-strain term of effect of perturbing component c of vertex v
                         VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const VectorND<e.numVertices()> &pt) { return
-                                (gphi(pt) * stress_contract_w(pt).dot(gbary)).eval(); }, e->volume());
+                                (gbary.dot(stress_contract_w(pt)) * gphi(pt)).eval(); }, e->volume());
                         for (size_t c = 0; c < N; ++c)
                             dCh(v.index())[c].D(ij, kl) -= dstrainTerm[c];
                     }

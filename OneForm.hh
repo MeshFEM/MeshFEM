@@ -30,7 +30,7 @@ struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
     // Apply one-form to vector field v.
     T operator[](const VectorField<Real, N> &v) const {
         T result;
-        result = 0;
+        result.clear();
         if (v.domainSize() != domainSize()) throw std::runtime_error("One-form paired with vector field of unmatched size");
         
         for (size_t pt = 0; pt < domainSize(); ++pt) {
@@ -52,7 +52,7 @@ struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
     void clear() {
         for (size_t pt = 0; pt < domainSize(); ++pt)
             for (size_t c = 0; c < N; ++c)
-                m_data[pt][c] = 0;
+                m_data[pt][c].clear();
     }
 
     ////////////////////////////////////////////////////////////////////////////
