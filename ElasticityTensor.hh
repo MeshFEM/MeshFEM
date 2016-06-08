@@ -31,6 +31,8 @@
 #include <iostream>
 #include <vector>
 #include <Eigen/Dense>
+#include <stdexcept>
+
 #include <tuple>
 #include "Flattening.hh"
 #include "SymmetricMatrix.hh"
@@ -575,6 +577,36 @@ private:
         if (_MajorSymmetry) os << (DType) E.m_d.template selfadjointView<Eigen::Upper>();
         else                os << E.m_d;
         return os;
+    }
+};
+
+#include "LinearIndexer.hh"
+
+// Index the distinct components (after accounting for symmetries).
+// Only major symmetric tensors are currently supported
+template<typename Real, size_t N>
+struct LinearIndexer<ElasticityTensor<Real, N, true>> : public LinearIndexerCRTP<LinearIndexer<ElasticityTensor<Real, N, true>>> {
+    using Base = LinearIndexerCRTP<LinearIndexer<ElasticityTensor<Real, N, true>>>;
+    using Base::Base;
+    using tensor_type = typename Base::tensor_type;
+
+    static Real &index(      tensor_type &val, size_t i) { size_t ij, kl; linearIndexTo2D(i, ij, kl); return val.D(ij, kl); }
+    static Real  index(const tensor_type &val, size_t i) { size_t ij, kl; linearIndexTo2D(i, ij, kl); return val.D(ij, kl); }
+    static constexpr size_t size() { return (flatLen(N) * (flatLen(N) + 1)) / 2; }
+
+    // Compute the flattened tensor row and column index corresponding to a
+    // 1D index. This is the inverse of the following map:
+    //    r(ij, kl) = kl + flatlen * ij - (ij * (ij + 1)) / 2
+    // Not a closed form inverse, but likely faster than sqrt version anyway
+    static void linearIndexTo2D(size_t idx, size_t &ij, size_t &kl) {
+        assert(idx < size());
+        kl = flatLen(N) + 1; // invalid
+        for (ij = 0; ij < flatLen(N); ++ij) {
+            size_t rowSize = flatLen(N) - ij;
+            if (idx < rowSize) { kl = ij + idx; break;}
+            idx -= rowSize;
+        }
+        assert((ij < flatLen(N)) && (kl < flatLen(N)));
     }
 };
 
