@@ -381,6 +381,7 @@ struct Constant {
     Constant() { m_E.setIsotropic(1.0, 0.3); }
     Constant(const std::string &materialFile) { setFromFile(materialFile); }
 
+
     void setFromFile(const std::string &materialFile);
     void setFromPTree(const boost::property_tree::ptree &pt);
 
@@ -392,6 +393,8 @@ struct Constant {
     const ETensor &getTensor()      const { return m_E; }
     void getTensor(ETensor &tensor) const { tensor = m_E; }
     void setTensor(const ETensor &tensor) { m_E = tensor; }
+
+    void setIsotropic(Real E, Real nu) { m_E.setIsotropic(E, nu); }
 
     // "type": "anisotropic",
     // "dim": 3,

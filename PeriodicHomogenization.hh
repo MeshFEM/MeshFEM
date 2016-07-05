@@ -439,7 +439,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                         VectorND<N> gbary = e->gradBarycentric().col(v.localIndex());
                         // delta-strain term of effect of perturbing component c of vertex v
                         VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const VectorND<e.numVertices()> &pt) { return
-                                (gbary.dot(stress_contract_w(pt)) * gphi(pt)).eval(); }, e->volume());
+                                VectorND<N>(gbary.dot(stress_contract_w(pt)) * gphi(pt)); }, e->volume());
                         for (size_t c = 0; c < N; ++c)
                             dCh(v.index())[c].D(ij, kl) -= dstrainTerm[c];
                     }
