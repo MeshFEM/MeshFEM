@@ -127,8 +127,6 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     // We also consider vertices with greater face membership than either of
     // their neighbors to be features to discourage changing the shape of the
     // "connector" geometry.
-    // TODO: avoid merging two boundary vertices with different face membership;
-    // e.g., we don't want to collapse connectors into a single point.
     auto isFeature = [&](VtxIt v) -> bool {
         const Point &p = *v, &pn = *(next(v)), &pp = *(prev(v));
         Real theta = angle((pn - p).eval(), (pp - p).eval());
@@ -140,6 +138,9 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 
     // Consider variable (per-edge) minLength when available
     bool hasVariableMinLen = (variableMinLen.size() == curve.size());
+    // std::cout << "hasVariableMinLen: " << hasVariableMinLen << std::endl;
+    // std::cout << "variableMinLen.size(): " << variableMinLen.size() << std::endl;
+    // std::cout << "curve.size(): " << variableMinLen.size() << std::endl;
     auto getMinLen = [&](size_t idx) {
         if (!hasVariableMinLen) return minLen;
         return variableMinLen.at(idx);
@@ -158,6 +159,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         if (edgeLen(ei) < getMinLen(idx)) shortEdges.insert(idx);
         allEdges.push_back(ei);
     }
+
+    // std::cout << shortEdges.size() << " of " << allEdges.size() << " edges are short" << std::endl;
 
     // Collapse operation: collapse the edge associated with "tail" into
     // collapsePt by moving tip to collapsePt and deleting tail.
@@ -209,11 +212,23 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         ////////////////////////////////////////////////////////////////////////
         // Determine the collapse point location based on mergeability criteria.
         ////////////////////////////////////////////////////////////////////////
-        // Can we merge 0 into 1 or 1 into 0 without changing tiled topology?
-        // v0 can be merged into v1 if v0 is on a subset of the faces v1 is on.
-        // This is a hard constraint; never perform merges that change topology.
+        // Can we merge 0 -> 1 or 1 -> 0 without changing the tiled topology?
+        // v0 can be merged into v1 if v0 is on a subset of the cell faces v1
+        // is on. The exception is when this merge would create a non-manifold
+        // vertex in the tiled mesh.
+        // This exceptional case happens when the current edge lies on a cell
+        // face, but neither of the two adjacent edges does.
+        // These are hard constraints; never perform merges that violate them.
         FMembership fm0(*v0, cell, cellEpsilon), fm1(*v1, cell, cellEpsilon);
         bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
+
+        // Prevent a non-manifold vertex from forming
+        VtxIt v2 = next(v1), v_m1 = prev(v0);
+        FMembership fm2(*v2, cell, cellEpsilon), fm_m1(*v_m1, cell, cellEpsilon);
+        bool nextEdgeOnCellFace = (fm1 & fm2).onAnyFace();
+        bool prevEdgeOnCellFace = (fm_m1 & fm0).onAnyFace();
+        if (!(nextEdgeOnCellFace || prevEdgeOnCellFace))
+            merge01 = merge10 = false;
 
         // verbose = (((*v0)[1] > 0.99951171875) || ((*v1)[1] > 0.99951171875));
         // if (verbose) {

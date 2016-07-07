@@ -380,6 +380,30 @@ Point centroid(const std::vector<Point> &p) {
     return c / (3 * doubleA);
 }
 
+// Compute the signed area of a polygon in 2D (ccw = positive)
+//     A = int 1 dV
+// Assumes that the polygon is non-self-intersecting.
+// The formula used below follows from Green's theorem.
+//     A = int div [x, 0] dV = int [x, 0] . n dA
+//       = sum_{e in edges} int_e [x, 0] dA . n_e
+//       = sum_{e in edges} 1/2 * [x0 + x1, 0] * |e| . n_e
+//       = sum_{e in edges} 1/2 * [x0 + x1, 0] . [y1 - y0, x0 - x1]
+//       = sum_{e in edges} 1/2 * (x0 + x1) * (y1 - y0)
+template<class Polygon>
+Real area(const Polygon &poly) {
+    assert(poly.size() >= 3);
+    Real area = 0;
+    for (auto it = poly.begin(); it != poly.end(); ++it) {
+        auto next = it;
+        ++next;
+        if (next == poly.end()) next = poly.begin();
+        const auto &p0 = *it;
+        const auto &p1 = *next;
+        area += 0.5 * (p0[0] + p1[0]) * (p1[1] - p0[1]);
+    }
+    return area;
+}
+
 // Compute the centroid of a point cloud, assuming each point as "mass" 1.
 // I.e. compute mean position.
 template<class Point>
