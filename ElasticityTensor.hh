@@ -585,10 +585,9 @@ private:
 // Index the distinct components (after accounting for symmetries).
 // Only major symmetric tensors are currently supported
 template<typename Real, size_t N>
-struct LinearIndexer<ElasticityTensor<Real, N, true>> : public LinearIndexerCRTP<LinearIndexer<ElasticityTensor<Real, N, true>>> {
-    using Base = LinearIndexerCRTP<LinearIndexer<ElasticityTensor<Real, N, true>>>;
-    using Base::Base;
-    using tensor_type = typename Base::tensor_type;
+struct LinearIndexerImpl<ElasticityTensor<Real, N, true>> {
+    using tensor_type = ElasticityTensor<Real, N, true>;
+    using scalar_type = Real;
 
     static Real &index(      tensor_type &val, size_t i) { size_t ij, kl; linearIndexTo2D(i, ij, kl); return val.D(ij, kl); }
     static Real  index(const tensor_type &val, size_t i) { size_t ij, kl; linearIndexTo2D(i, ij, kl); return val.D(ij, kl); }

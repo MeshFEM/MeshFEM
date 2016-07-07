@@ -13,39 +13,31 @@
 #define LINEARINDEXER_HH
 
 template<typename T>
-struct LinearIndexer;
-
-template<typename T>
-struct LITraits;
-
-template<typename T>
-struct LITraits<LinearIndexer<T>> {
-    using tensor_type = T;
-};
+struct LinearIndexerImpl;
 
 // Wrap an existing tensor and masquerade as an STL container.
-template<class LI>
-struct LinearIndexerCRTP {
-    using value_type = Real;
-    using tensor_type = typename LITraits<LI>::tensor_type;
+template<class T>
+struct LinearIndexer : public LinearIndexerImpl<T> {
+    using Impl = LinearIndexerImpl<T>;
+    using tensor_type = typename Impl::tensor_type;
+    using scalar_type = typename Impl::scalar_type;
 
-    LinearIndexerCRTP(tensor_type &val) : m_val(val) { }
+    LinearIndexer(tensor_type &val) : m_val(val) { }
 
-    Real  operator[](size_t i) const { return LI::index(m_val, i); }
-    Real &operator[](size_t i)       { return LI::index(m_val, i); }
+    scalar_type  operator[](size_t i) const { return Impl::index(m_val, i); }
+    scalar_type &operator[](size_t i)       { return Impl::index(m_val, i); }
 
-    Real  at(size_t i) const { if (i >= LI::size()) throw std::runtime_error("Linear index out of bounds"); return (*this)[i]; }
-    Real &at(size_t i)       { if (i >= LI::size()) throw std::runtime_error("Linear index out of bounds"); return (*this)[i]; }
+    scalar_type  at(size_t i) const { if (i >= Impl::size()) throw std::runtime_error("Linear index out of bounds"); return (*this)[i]; }
+    scalar_type &at(size_t i)       { if (i >= Impl::size()) throw std::runtime_error("Linear index out of bounds"); return (*this)[i]; }
 private:
-    typename LITraits<LI>::tensor_type &m_val;
+    tensor_type &m_val;
 };
 
-// Trivial indexer for scalars.
-template<>
-struct LinearIndexer<Real> : public LinearIndexerCRTP<LinearIndexer<Real>> {
-    using Base = LinearIndexerCRTP<LinearIndexer<Real>>;
-    using Base::Base;
-    using tensor_type = typename Base::tensor_type;
+// Trivial indexer implementation for scalars.
+template<typename Real>
+struct LinearIndexerImpl {
+    using tensor_type = Real;
+    using scalar_type = Real;
 
     static       Real &index(      Real &val, size_t /*i*/) { return val; }
     static const Real &index(const Real &val, size_t /*i*/) { return val; }
