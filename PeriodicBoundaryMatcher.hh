@@ -81,6 +81,16 @@ bool operator<=(const FaceMembership<N> &a, const FaceMembership<N> &b) {
 }
 
 template<size_t N>
+bool operator==(const FaceMembership<N> &a, const FaceMembership<N> &b) {
+    return a.membership == b.membership;
+}
+
+template<size_t N>
+bool operator!=(const FaceMembership<N> &a, const FaceMembership<N> &b) {
+    return a.membership != b.membership;
+}
+
+template<size_t N>
 FaceMembership<N> operator&(FaceMembership<N> a, const FaceMembership<N> &b) {
     a &= b;
     return a;

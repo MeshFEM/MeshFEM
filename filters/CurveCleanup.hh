@@ -216,8 +216,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // v0 can be merged into v1 if v0 is on a subset of the cell faces v1
         // is on. The exception is when this merge would create a non-manifold
         // vertex in the tiled mesh.
-        // This exceptional case happens when the current edge lies on a cell
-        // face, but neither of the two adjacent edges does.
+        // This exceptional case happens when neither of the two adjacent edges
+        // lines on the same cell face.
         // These are hard constraints; never perform merges that violate them.
         FMembership fm0(*v0, cell, cellEpsilon), fm1(*v1, cell, cellEpsilon);
         bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
@@ -225,9 +225,12 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // Prevent a non-manifold vertex from forming
         VtxIt v2 = next(v1), v_m1 = prev(v0);
         FMembership fm2(*v2, cell, cellEpsilon), fm_m1(*v_m1, cell, cellEpsilon);
-        bool nextEdgeOnCellFace = (fm1 & fm2).onAnyFace();
-        bool prevEdgeOnCellFace = (fm_m1 & fm0).onAnyFace();
-        if (!(nextEdgeOnCellFace || prevEdgeOnCellFace))
+        // Determine what cell boundaries this edge and its neighbors lie on
+        FMembership       seFM = fm0 & fm1,
+                    nextEdgeFM = fm1 & fm2,
+                    prevEdgeFM = fm0 & fm_m1;
+        // If neither neighbor is on the same cell face, block collapse
+        if ((seFM != nextEdgeFM) && (seFM != prevEdgeFM))
             merge01 = merge10 = false;
 
         // verbose = (((*v0)[1] > 0.99951171875) || ((*v1)[1] > 0.99951171875));
@@ -262,8 +265,6 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // Perform the collapse (but first the periodically-corresponding
         // collapse if periodicity preservation is requested)
         ////////////////////////////////////////////////////////////////////////
-        // Determine what cell boundaries the edge lies on
-        auto seFM = fm0 & fm1;
         if (periodic && seFM.count()) {
             // Since we only support the 2D case, the edge should be on only a
             // single period cell face.
