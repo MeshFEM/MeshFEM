@@ -31,6 +31,8 @@ namespace Concepts {
 
 // Concept tags
 struct Mesh { };
+struct TetMesh { };
+struct TriMesh { };
 struct EdgeSoup { };
 
 }

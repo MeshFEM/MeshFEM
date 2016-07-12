@@ -82,7 +82,7 @@
 template<class VertexData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
          class BoundaryFaceData = TMEmptyData>
-class TetMesh : public Concepts::Mesh {
+class TetMesh : public Concepts::Mesh, public Concepts::TetMesh {
 public:
     // Constructor from tetrahedron soup.
     template<typename Tets>

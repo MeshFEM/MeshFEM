@@ -41,7 +41,7 @@
 
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
-class TriMesh : public Concepts::Mesh {
+class TriMesh : public Concepts::Mesh, public Concepts::TriMesh {
 public:
     // Constructor from triangle soup
     template<typename Tris>
