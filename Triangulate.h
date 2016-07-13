@@ -4,7 +4,7 @@
 /*! @file
 //      Extremely minimal wrapper around triangle to triangulate a PSLG given as
 //      an edge soup.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/19/2015 14:28:43
@@ -23,9 +23,9 @@ extern "C" {
 }
 #endif
 
-#include <string.h> 
+#include <string.h>
 
-#include <string> 
+#include <string>
 #include <sstream>
 #include <iomanip>
 #include <vector>

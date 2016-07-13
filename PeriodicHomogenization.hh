@@ -19,7 +19,7 @@ namespace PeriodicHomogenization {
 /*! Solve the linear elasticity periodic homogenization cell problems for
 //  each constant strain e^ij:
 //       -div E : [ strain(w^ij) + e^ij ] = 0 in omega
-//        n . E : [ strain(w^ij) + e^ij ] = 0 on omega's boundary 
+//        n . E : [ strain(w^ij) + e^ij ] = 0 on omega's boundary
 //        w^ij periodic
 //        w^ij = 0 on arbitrary internal node ("pin" no rigid translation constraint)
 //  @param[out]   w_ij   Fluctuation displacements (cell problem solutions)
@@ -45,6 +45,13 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
         BENCHMARK_STOP_TIMER("Constant Strain Load");
         w_ij.push_back(sim.solve(rhs));
     }
+}
+
+template<class _Sim>
+std::vector<typename _Sim::VField> solveCellProblems(_Sim &sim, Real cellEpsilon = 1e-5) {
+    std::vector<typename _Sim::VField> w_ij;
+    solveCellProblems(w_ij, sim, cellEpsilon);
+    return w_ij;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -87,7 +94,7 @@ typename _Sim::ETensor homogenizedElasticityTensor(
         // Eh_ijkl = 1/|Y| int_w <E (e(w_ij) + e_ij), e(w_kl) + e_kl> dV,
         typename _Sim::ETensor EhE;
         typename _Sim::Strain  strain_ij, strain_kl;
-        for (size_t ei = 0; ei < mesh.numElements(); ++ei) { 
+        for (size_t ei = 0; ei < mesh.numElements(); ++ei) {
             auto e = mesh.element(ei);
             for (size_t ij = 0; ij < numStrains; ++ij) {
                 sim.elementStrain(ei, w_ij[ij], strain_ij);
@@ -315,7 +322,7 @@ void fluctuationDisplacementShapeDerivatives(const _Sim &sim,
     bdry_stresses.resize(mesh.numBoundaryElements());
 
 #ifdef FD_SD_DEBUG
-        static size_t it = 0; 
+        static size_t it = 0;
         MSHFieldWriter writer("debug_fd_sd_" + std::to_string(it) + ".msh", sim.mesh());
         ++it;
 #endif // FD_SD_DEBUG

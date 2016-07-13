@@ -21,7 +21,7 @@
 //      adjacent sharp features are merged to avoid robustness issues with
 //      jagged boundaries. Also, we allow feature vertices adjacent to the
 //      periodic boundary to merge into the boundary.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  02/03/2016 15:29:15

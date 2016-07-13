@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Useful geometry-related features and data structures.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  05/04/2012 05:51:46
@@ -110,7 +110,7 @@ struct BBox {
         minCorner -= delta;
         maxCorner += delta;
     }
-    
+
     void translate(const Vector &t) {
         minCorner += t;
         maxCorner += t;

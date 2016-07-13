@@ -60,10 +60,12 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m", po::value<string>(), "base material")
-        ("strain,s", po::value<string>(), "strain tensor")
+        ("strain,s", po::value<string>(), "macroscopic strain tensor")
+        ("stress,S", po::value<string>(), "macroscopic stress tensor")
         ("degree,d",   po::value<int>()->default_value(1), "degree of finite elements")
         ("nodalLoad,l",                     "compute the effective force on each node.")
         ("addFluctuation,f",                "add fluctuation strains to the displacement")
+        ("macroOut,O", po::value<string>(), "also output the unit cell deformation")
         ;
 
     po::options_description cli_opts;
@@ -86,8 +88,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         fail = true;
     }
 
-    if (vm.count("strain") == 0) {
-        cout << "Error: must specify strain tensor" << endl;
+    if (vm.count("strain") + vm.count("stress") != 1) {
+        cout << "Error: must specify macro strain or stress tensor" << endl;
         fail = true;
     }
 
@@ -114,20 +116,66 @@ void execute(const po::variables_map &args,
     const auto &mesh = sim.mesh();
     MSHFieldWriter writer(args["outMesh"].as<string>(), mesh);
 
-    // Parse strain tensor.
-    vector<string> strainComponents;
-    string strainString = args["strain"].as<string>();
-    boost::trim(strainString);
-    boost::split(strainComponents, strainString, boost::is_any_of("\t "),
+
+    // Parse strain/stress tensor.
+    vector<string> probeComponents;
+    string probeString = args.count("string") ? args["strain"].as<string>() : args["stress"].as<string>();
+    boost::trim(probeString);
+    boost::split(probeComponents, probeString, boost::is_any_of("\t "),
                  boost::token_compress_on);
-    if (strainComponents.size() != flatLen(_N))
+    if (probeComponents.size() != flatLen(_N))
         throw runtime_error("Invalid strain tensor");
+
     SymmetricMatrixValue<Real, _N> strain;
-    for (size_t i = 0; i < strainComponents.size(); ++i)
-        strain[i] = stod(strainComponents[i]);
+    // Actually a stress for the macro stress case!
+    for (size_t i = 0; i < probeComponents.size(); ++i)
+        strain[i] = stod(probeComponents[i]);
+    
+    // Convert stress probe to corresponding strain probe.
+    std::vector<VField> w_ij;
+    if (args.count("stress")) {
+        solveCellProblems(w_ij, sim);
+        auto Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        auto Sh = Eh.inverse();
+        strain = Sh.doubleContract(strain);
+    }
 
     auto bbox = mesh.boundingBox();
-    VectorND<_N> center = 0.5 * (bbox.minCorner + bbox.maxCorner);
+    VectorND<_N> center = bbox.center();
+
+    if (args.count("macroOut")) {
+        if (_N != 2) throw std::runtime_error("macro displacement output currently only supported in 2D");
+
+        std::vector<MeshIO::IOVertex> squareVertices;
+        std::vector<MeshIO::IOElement> squareElems;
+
+        VField uMacro(4);
+        SymmetricMatrixField<Real, _N> stressMacro(2);
+
+        if (w_ij.size() == 0) solveCellProblems(w_ij, sim);
+        auto Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        stressMacro(0) = stressMacro(1) = Eh.doubleContract(strain);
+
+        // 2   3
+        // 0   1
+        size_t i = 0;
+        for (Real y : {bbox.minCorner[1], bbox.maxCorner[1]}) {
+            for (Real x : {bbox.minCorner[0], bbox.maxCorner[0]}) {
+                VectorND<_N> p;
+                p.setZero(), p[0] = x, p[1] = y;
+                squareVertices.emplace_back(p);
+                uMacro(i++) = strain.contract(p - center);
+            }
+        }
+
+        squareElems.emplace_back(0, 1, 3);
+        squareElems.emplace_back(0, 3, 2);
+
+        MSHFieldWriter writer(args["macroOut"].as<string>(), squareVertices, squareElems);
+        writer.addField("u_cstrain", uMacro, DomainType::PER_NODE);
+        writer.addField("stress", stressMacro, DomainType::PER_ELEMENT);
+    }
+
     VField cstrainDisp(mesh.numNodes());
     cstrainDisp.clear();
     for (size_t vi = 0; vi < mesh.numNodes(); ++vi) {
@@ -139,9 +187,7 @@ void execute(const po::variables_map &args,
 
 
     if (args.count("addFluctuation")) {
-        std::vector<VField> w_ij;
-        solveCellProblems(w_ij, sim);
-
+        if (w_ij.size() == 0) solveCellProblems(w_ij, sim);
         // Remove rigid translation of fluctuation displacements relative to the
         // base cell (i.e. try to keep the fluctuation-displaced microstructure
         // "within" the base cell):

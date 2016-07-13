@@ -2,7 +2,7 @@
 // MSHFieldWriter.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Write scalar/vector/matrix fields in MSH format for viewing with Gmsh. 
+//      Write scalar/vector/matrix fields in MSH format for viewing with Gmsh.
 //      For higher order FEM, two modes are allowed:
 //          1) (m_linearSubsample = true) A piecewise linear mesh is output,
 //             with higher degree per-node fields subsampled at the vertices.
@@ -18,7 +18,7 @@
 //
 //      Also, to subsample the higher degree fields (case 1), we require the
 //      vertex nodes to be a prefix of the full node list.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  02/26/2013 17:30:04
@@ -208,7 +208,7 @@ public:
     //    - component(value, i): function for indexing into (double) value.
     //    - paddedDim:           number of components to output; this could
     //                           differ from the underlying value's dimension
-    //                           because of padding 
+    //                           because of padding
     template<typename T, typename = void>
     struct InterpolantTypeWrapper;
 
@@ -314,7 +314,7 @@ public:
     ~MSHFieldWriter() {
         m_outStream.close();
     }
-        
+
 private:
     ////////////////////////////////////////////////////////////////////////////
     /*! Validate/guess domain's type based on its size.

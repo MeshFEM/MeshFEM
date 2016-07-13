@@ -17,7 +17,7 @@
 //
 //        0
 //       / \
-//      2   1  
+//      2   1
 //     /     \
 //    1---0---2
 //
@@ -320,7 +320,7 @@ protected:
     //  encoded boundary edge index (-2 - bei) */
     int m_halfedgeIndex(size_t s, size_t e) const {
         assert((s < numVertices()) && (e < numVertices()));
-        
+
         ConstVertexHandle v = vertex(e);
         ConstHalfEdgeHandle h = v.halfEdge();
         ConstHalfEdgeHandle hit = h;
