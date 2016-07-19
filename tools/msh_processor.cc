@@ -68,6 +68,7 @@
 #include "Sampler.hh"
 #include "Values.hh"
 #include "MeshConnectivity.hh"
+#include "../ExpressionVector.hh"
 
 using namespace MeshIO;
 using namespace std;
@@ -283,6 +284,44 @@ size_t generate(const string &, const string &arg, Stack &stack, const Modifiers
         pushVectorField(stack, "barycenter", c, DomainType::PER_ELEMENT);
     }
     else throw std::runtime_error("Invalid mesh property name: " + arg);
+
+    return 1;
+}
+
+template<size_t N>
+size_t expression(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    const auto &parser = getParser<N>();
+    const auto &vertices = parser.vertices();
+
+    vector<string> components;
+    boost::split(components, arg, boost::is_any_of(","));
+    string name = "expr(" + arg + ")";
+
+    ExpressionEnvironment env;
+    BBox<VectorND<N>> bb(vertices);
+    env.setVectorValue("mesh_size_", bb.dimensions());
+    env.setVectorValue("mesh_min_",  bb.minCorner);
+    env.setVectorValue("mesh_max_",  bb.maxCorner);
+
+    if (components.size() == 1) {
+        Expression expr(components[0]);
+        ScalarField<Real> sf(vertices.size());
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            env.setXYZ(vertices[i].point);
+            sf[i] = expr.eval(env);
+        }
+        pushScalarField(stack, name, sf, DomainType::PER_NODE);
+    }
+    else if (components.size() == N) {
+        ExpressionVector expr(components);
+        VectorField<Real, N> vf(vertices.size());
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            env.setXYZ(vertices[i].point);
+            vf(i) = expr.eval<N>(env);
+        }
+        pushVectorField(stack, name, vf, DomainType::PER_NODE);
+    }
+    else throw std::runtime_error("Invalid number of components in vector-valued expression " + arg);
 
     return 1;
 }
@@ -638,6 +677,7 @@ void execute(vector<FilterInvocation> &filters) {
         {"extract",       Filter::extract<N>},
         {"extractAll",    Filter::extractAll<N>},
         {"generate",      Filter::generate<N>},
+        {"expression",    Filter::expression<N>},
         {"dup",           Filter::dup},
         {"pop",           Filter::pop},
         {"push",          Filter::push},
