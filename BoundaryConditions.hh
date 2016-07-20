@@ -1,0 +1,428 @@
+////////////////////////////////////////////////////////////////////////////////
+// BoundaryConditions.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//      Represents various boundary conditions and the regions over which they
+//      are applied.
+*/ 
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Company:  New York University
+//  Created:  06/16/2014 04:10:48
+////////////////////////////////////////////////////////////////////////////////
+#ifndef BOUNDARYCONDITIONS_HH
+#define BOUNDARYCONDITIONS_HH
+#include "PeriodicBoundaryMatcher.hh"
+#include "Geometry.hh"
+#include "Types.hh"
+#include "ExpressionVector.hh"
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <array>
+#include <map>
+#include <list>
+#include <utility>
+#include <queue>
+#include <memory>
+#include <iostream>
+#include <bitset>
+#include <cassert>
+#include <limits>
+#include <bitset>
+#include "ComponentMask.hh"
+
+template<size_t _N>
+struct BoundaryCondition {
+    BoundaryCondition() { }
+    BoundaryCondition(const BBox<VectorND<_N>> &r) : region(r) { }
+    BBox<VectorND<_N>> region;
+    bool containsPoint(const VectorND<_N> &p) const { return region.containsPoint(p); }
+    virtual ~BoundaryCondition() { }
+};
+
+
+// A bit of a hack--allow fixing a single component of a single periodic
+// boundary node pair's displacement to zero.  This component must be orthogonal
+// to the periodic face normal. E.g. fixing the x component on the y = 0 and y =
+// 1 faces.
+template<size_t _N> 
+class PeriodicPairDirichletCondition {
+public:
+    PeriodicPairDirichletCondition(size_t c, size_t f)
+        : m_faceSpecifier(f) { m_component.set(c); }
+
+    const ComponentMask &component() const { return m_component; }
+    size_t faceSpecifier() const { return m_faceSpecifier; }
+    bool    hasCondition() const { return m_component.hasAny(_N); }
+
+    // Get a single valid, matching node pair that can implement this condition.
+    // Guarantees to always return the same pair (and the pair is cached).
+    // Be careful not to requse the same PeriodicPairDirichletCondition with
+    // different meshes!
+    template<typename Mesh>
+    std::pair<size_t, size_t> pair(const Mesh &mesh, Real epsilon = 1e-5) {
+        if (!hasCondition()) std::runtime_error("Tried to read empty PeriodicPairDirichletCondition");
+        assert(m_faceSpecifier < _N);
+        BBox<VectorND<_N>> bbox = mesh.boundingBox();
+        if (!cached) {
+            VectorND<_N> pointToMatch;
+            size_t i;
+            for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
+                auto vn = mesh.boundaryNode(i).volumeNode();
+                if (std::abs(vn->p[m_faceSpecifier] - bbox.minCorner[m_faceSpecifier]) <= epsilon) {
+                    pointToMatch = vn->p;
+                    pointToMatch[m_faceSpecifier] = bbox.maxCorner[m_faceSpecifier];
+                    m_pair.first = i;
+                    break;
+                }
+            }
+            if (i == mesh.numBoundaryNodes())
+                throw std::runtime_error("No vertices on the periodic pair face.");
+            for (i = 0; i < mesh.numBoundaryNodes(); ++i) {
+                auto vn = mesh.boundaryNode(i).volumeNode();
+                if ((vn->p - pointToMatch).norm() <= epsilon) {
+                    m_pair.second = i;
+                    break;
+                }
+            }
+            if (i == mesh.numBoundaryNodes())
+                throw std::runtime_error("Couldn't match vertex in periodic pair Dirichlet condition");
+        }
+
+        return m_pair;
+    }
+private:
+    ComponentMask m_component;
+    size_t m_faceSpecifier;
+    bool cached = false;
+    std::pair<size_t, size_t> m_pair;
+};
+
+
+template<size_t _N>
+using CondPtr      = std::shared_ptr<BoundaryCondition<_N> >;
+template<size_t _N>
+using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_N> >;
+
+enum class NeumannType { Pressure, Traction, Force };
+// For the NeumannType::Force case, the force vector is stored in the "traction"
+// field, and it is divided by the region's boundary area at application time.
+template<size_t _N>
+struct NeumannCondition : public BoundaryCondition<_N> {
+    NeumannCondition(const BBox<VectorND<_N>> &region, Real p)
+        : BoundaryCondition<_N>(region), type(NeumannType::Pressure),
+          m_isExpr(false) { m_vecValue[0] = p; }
+
+    NeumannCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &t,
+                     NeumannType _type)
+        : BoundaryCondition<_N>(region), type(_type), m_vecValue(t),
+          m_isExpr(false) { }
+
+    NeumannCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+                     NeumannType _type)
+        : BoundaryCondition<_N>(region), type(_type), m_isExpr(true),
+          m_exprVecValue(ev) {
+        if (m_exprVecValue.size() != _N)
+            throw std::runtime_error("Bad expression vector length");
+    }
+
+    VectorND<_N> traction(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        assert((type == NeumannType::Traction) ||
+               (type == NeumannType::Force && !m_isExpr));
+        if (m_isExpr) return m_exprVecValue.eval<_N>(env);
+        else          return m_vecValue;
+    }
+
+    Real pressure(const ExpressionEnvironment &/* env */ = ExpressionEnvironment()) const {
+        assert(type == NeumannType::Pressure);
+        if (m_isExpr)
+            throw std::runtime_error("Unimplemented");
+        return m_vecValue[0];
+    }
+
+    NeumannType type;
+private:
+    VectorND<_N> m_vecValue;
+    VectorND<_N> m_traction;
+    bool m_isExpr;
+    ExpressionVector m_exprVecValue;
+    virtual ~NeumannCondition() { }
+};
+
+template<size_t _N>
+struct DirichletCondition : public BoundaryCondition<_N> {
+    DirichletCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
+        : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(false), m_displacement(d) { }
+
+    DirichletCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+                       const ComponentMask &m)
+        : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(true),
+          m_displacementExpr(ev) {
+        if (m_displacementExpr.size() != _N)
+            throw std::runtime_error("Bad expression vector length");
+    }
+
+    VectorND<_N> displacement(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        if (m_isExpr) return m_displacementExpr.eval<_N>(env);
+        else          return m_displacement;
+    }
+
+    virtual ~DirichletCondition() { }
+
+    ComponentMask componentMask; // 1 if condition affects component
+private:
+    bool m_isExpr;
+    VectorND<_N> m_displacement;
+    ExpressionVector m_displacementExpr;
+};
+
+// Behaves just like Dirichlet
+// WARNING: will dynamically cast to DirichletCondition, so care must be taken
+// not to interpret target conditions as Dirichlet.
+template<size_t _N>
+struct TargetCondition : public DirichletCondition<_N> {
+    TargetCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
+        : DirichletCondition<_N>(region, d, m) { }
+    TargetCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev, const ComponentMask &m)
+        : DirichletCondition<_N>(region, ev, m) { }
+    virtual ~TargetCondition() { }
+};
+
+template<size_t _N>
+struct NeumannElementsCondition : public BoundaryCondition<_N> {
+    NeumannElementsCondition(NeumannType t,
+                             const std::vector<UnorderedTriplet> &element_corners,
+                             const std::vector<VectorND<_N>> &values) {
+        assert(element_corners.size() == values.size());
+        for (size_t i = 0; i < element_corners.size(); ++i) {
+            if      (t == NeumannType::Traction) m_vals[element_corners[i]] = Value(values[i]);
+            else if (t == NeumannType::Pressure) m_vals[element_corners[i]] = Value(values[i][0]);
+        }
+    }
+
+    struct Value {
+        Value(Real p = 0.0) : type(NeumannType::Pressure) { m_val[0] = p; }
+        Value(const VectorND<_N> &t) : type(NeumannType::Traction), m_val(t) { }
+        NeumannType type;
+        
+        Real pressure() const {
+            if (type != NeumannType::Pressure)
+                throw std::runtime_error("Neumann condition isn't pressure.");
+            return m_val[0];
+        }
+
+        const VectorND<_N> &traction() const {
+            if (type != NeumannType::Traction)
+                throw std::runtime_error("Neumann condition isn't traction.");
+            return m_val;
+        }
+
+    private:
+        VectorND<_N> m_val;
+    };
+
+    void setValue(Real pressure, size_t v0, size_t v1, size_t v2 = 0) {
+        UnorderedTriplet elem(v0, v1, v2);
+        m_vals[elem] = Value(pressure);
+    }
+
+    void setValue(const VectorND<_N> &traction, size_t v0, size_t v1, size_t v2 = 0) {
+        UnorderedTriplet elem(v0, v1, v2);
+        m_vals[elem] = Value(traction);
+    }
+
+    const Value &getValue(const UnorderedTriplet &elem) const {
+        return m_vals.at(elem);
+    }
+
+    const Value &getValue(size_t v0, size_t v1, size_t v2 = 0) const {
+        UnorderedTriplet elem(v0, v1, v2);
+        return getValue(elem);
+    }
+
+    bool hasValueForElement(const UnorderedTriplet &elem) const {
+        return m_vals.count(elem) == 1;
+    }
+
+    bool hasValueForElement(size_t v0, size_t v1, size_t v2 = 0) const {
+        UnorderedTriplet elem(v0, v1, v2);
+        return hasValueForElement(elem);
+    }
+
+    /*! Number of elements this condition affects. */
+    size_t numElements() const { return m_vals.size(); }
+
+    virtual ~NeumannElementsCondition() { }
+private:
+    std::map<UnorderedTriplet, Value> m_vals;
+};
+
+template<size_t _N>
+struct DirichletNodesCondition : public BoundaryCondition<_N> {
+    DirichletNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> ndisps, const ComponentMask &m)
+        : componentMask(m), indices(nidxs), displacements(ndisps) { }
+
+    // All nodes in the condition get the same mask
+    ComponentMask componentMask;
+    std::vector<size_t> indices;
+    std::vector<VectorND<_N>> displacements;
+    virtual ~DirichletNodesCondition() { }
+};
+
+// Behaves just like Dirichlet
+// WARNING: will dynamically cast to DirichletCondition, so care must be taken
+// not to interpret target conditions as Dirichlet.
+template<size_t _N>
+struct TargetNodesCondition : public BoundaryCondition<_N> {
+    TargetNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> ndisps, const ComponentMask &m)
+        : componentMask(m), indices(nidxs), displacements(ndisps) { }
+
+    // All nodes in the condition get the same mask
+    ComponentMask componentMask;
+    std::vector<size_t> indices;
+    std::vector<VectorND<_N>> displacements;
+    virtual ~TargetNodesCondition() { }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Boundary Condition I/O
+////////////////////////////////////////////////////////////////////////////////
+template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
+
+////////////////////////////////////////////////////////////////////////////////
+// Periodic boundary condition implementation
+// (Nothing to read from input files--just specified either in code or command
+//  line switch.)
+////////////////////////////////////////////////////////////////////////////////
+template<size_t _N>
+class PeriodicCondition {
+public:
+    static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
+    static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
+
+    template<typename Mesh>
+    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-5) {
+        BBox<VectorND<_N>> cell = mesh.boundingBox();
+
+        std::vector<VectorND<_N>> bdryPts;
+        bdryPts.reserve(mesh.numBoundaryNodes());
+        for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
+
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
+                cell, m_periodicBoundariesForBoundaryNode, epsilon);
+
+        // Determine identified boundary nodes.
+        std::vector<std::vector<size_t> > bdryNodeSets;
+        std::vector<size_t              > bdryNodeSetForBdryNode;
+        PeriodicBoundaryMatcher::match(bdryPts, cell,
+                m_periodicBoundariesForBoundaryNode,
+                bdryNodeSets, bdryNodeSetForBdryNode, epsilon);
+
+        // Mark periodic boundary elements: those with all corners on the same
+        // periodic boundary.
+        m_isPeriodicBoundaryElement.resize(mesh.numBoundaryElements());
+        for (auto be : mesh.boundaryElements()) {
+            // Determine what periodic boundary this element lies on.
+            auto pboundaries = m_periodicBoundariesForBoundaryNode.at(be.node(0).index());
+            for (size_t j = 1; j < be.numNodes(); ++j)
+                pboundaries &= m_periodicBoundariesForBoundaryNode.at(be.node(j).index());
+            // An element can't be on more than one boundary...
+            size_t numBoundaries = pboundaries.count();
+            assert(numBoundaries < 2);
+            m_isPeriodicBoundaryElement[be.index()] = numBoundaries > 0;
+        }
+
+        // Determine the "DoF index" for every node in the mesh. For internal
+        // nodes, these are all unique. On the periodic boundary, these will be
+        // shared by identified nodes. These indices are created assuming one
+        // variable per node. For 3D elasticity, there will actually be three
+        // DOFs per node i, with indices
+        //   [ 3 * m_dofForNode[i] + 0, 3 * m_dofForNode[i] + 1,
+        //     3 * m_dofForNode[i] + 2 ]
+        m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
+        m_nodesForDoF.clear(), m_nodesForDoF.reserve(mesh.numInternalNodes() +
+                                                     bdryNodeSets.size());
+        // Create a DoF with a single associated node for each internal node.
+        for (auto n : mesh.nodes()) {
+            if (n.boundaryNode()) continue;
+            assert(m_dofForNode.at(n.index()) == NO_DOF);
+            m_dofForNode.at(n.index()) = m_nodesForDoF.size();
+            m_nodesForDoF.emplace_back(1, n.index());
+        }
+        // Add DoFs for the boundary node sets, translating to volume indices
+        // Note: invalidates bdryNodeSets!!!
+        for (auto &ns : bdryNodeSets) {
+            for (size_t &n : ns) {
+                n = mesh.boundaryNode(n).volumeNode().index();
+                assert(m_dofForNode.at(n) == NO_DOF);
+                m_dofForNode.at(n) = m_nodesForDoF.size();
+            }
+            m_nodesForDoF.emplace_back(std::move(ns));
+        }
+
+        // All nodes should have been assigned valid DOFs
+        for (size_t i = 0; i < mesh.numNodes(); ++i) {
+            assert(m_dofForNode[i] != NO_DOF);
+            assert(m_dofForNode[i] < numPeriodicDoFs());
+        }
+    }
+
+    const std::vector<size_t> &periodicDoFsForNodes() const {
+        return m_dofForNode;
+    }
+
+    // Check if a given boundary element is periodic
+    bool isPeriodicBE(size_t be) const {
+        return m_isPeriodicBoundaryElement.at(be);
+    }
+
+    // Check if a *volume* node is periodic
+    bool isPeriodicNode(int vni) const {
+        return identifiedNodes(vni).size() > 1;
+    }
+
+    // The *volume* nodes identified with the vi^th *volume* node
+    // (including vni itself).
+    const std::vector<size_t> &identifiedNodes(int vni) const {
+        return m_nodesForDoF.at(m_dofForNode.at(vni));
+    }
+
+    // Return 0 if boundary node bni is not on the d^th min or max cell face
+    // Return -1 if it's on the min face
+    // Return  1 if it's on the max face
+    int bdryNodeOnMinOrMaxPeriodCellFace(size_t bni, size_t d) const {
+        assert(d < _N);
+        const auto &bdry = m_periodicBoundariesForBoundaryNode.at(bni);
+        if (bdry.onMinFace(d)) return -1;
+        if (bdry.onMaxFace(d)) return  1;
+        return 0;
+    }
+
+    // Determines whether the set of periodic cell faces on which node "a"
+    // lies is contained in the set of periodic cell faces on which node "b"
+    // lies.
+    // This is a partial order: e.g. a pair of nodes each lying on a single,
+    // distinct periodic cell face cannot be compared.
+    // Returns true if "a <= b"   (either a < b or a ==  b)
+    //         false otherwise    (either b < a or a and b cannot be compared)
+    bool bdryNodePeriodCellFacesPartialOrderLessEq(size_t a, size_t b) const {
+        return m_periodicBoundariesForBoundaryNode.at(a)
+            <= m_periodicBoundariesForBoundaryNode.at(b);
+    }
+
+    size_t numPeriodicDoFs() const { return m_nodesForDoF.size(); }
+
+private:
+    std::vector<bool> m_isPeriodicBoundaryElement;
+    // Which periodic boundaries is a boundary node on?
+    std::vector<PeriodicBoundaryMatcher::FaceMembership<_N>> m_periodicBoundariesForBoundaryNode;
+    std::vector<size_t> m_dofForNode;
+    std::vector<std::vector<size_t>> m_nodesForDoF;
+};
+
+#endif /* end of include guard: BOUNDARYCONDITIONS_HH */
