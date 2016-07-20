@@ -79,6 +79,17 @@ public:
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
 
+        // For 2D (plane strain), lambda is actually different...
+        // This can be found by inverting 2D orthotropic tensor with equal
+        // Young's moduli
+        if (_Dim == 2)
+            lambda = (nu * E) / (1.0 - nu * nu);
+
+        setIsotropicLame(lambda, mu);
+    }
+
+    // Configure the elasticity tensor with Lame parameters
+    void setIsotropicLame(Real lambda, Real mu) {
         m_d =  DType::Zero();
         if (_Dim == 3) {
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;          m_d(0, 2) = lambda;
@@ -87,10 +98,7 @@ public:
             m_d(3, 3) = m_d(4, 4) = m_d(5, 5) = mu;
         }
         else {
-            // For 2D (plane strain), lambda is actually different...
-            // This can be found by inverting 2D orthotropic tensor with equal
-            // Young's moduli
-            Real lambda = (nu * E) / (1.0 - nu * nu);
+            assert(_Dim == 2);
             m_d(0, 0) = lambda + 2 * mu; m_d(0, 1) = lambda;
                                          m_d(1, 1) = lambda + 2 * mu;
             m_d(2, 2) = mu;

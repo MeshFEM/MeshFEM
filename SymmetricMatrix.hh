@@ -10,7 +10,7 @@
 //  the operations needed. These classes work with both reference types
 //  (aliases SymmetricMatrixRef and ConstSymmetricMatrixRef) and value types
 //  (subclass SymmetricMatrix)
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  06/18/2014 17:59:39
@@ -91,7 +91,7 @@ public:
         Eigen::Matrix<_Real, N, N> result;
         for (size_t i = 0; i < N; ++i)
             result.col(i) = solver.eigenvectors().col(perm[i]) * evMags[perm[i]];
-        
+
         return result;
     }
 
@@ -103,6 +103,8 @@ public:
         _Real minEig = eigs.minCoeff();
         return (maxEig > std::abs(minEig)) ? maxEig : minEig;
     }
+
+    _Real frobeniusNormSq() const { return this->doubleContract(*this); }
 
     template<typename _R2, typename _S2, typename _CSR2>
     _Real doubleContract(const ConstSymmetricMatrixBase<_R2, t_N, _S2, _CSR2> &b) const {
@@ -116,13 +118,12 @@ public:
         return result;
     }
 
-
     // Single contraction with vector (apply this matrix to vector on left)
     template<class Derived>
     Eigen::Matrix<typename Derived::Scalar, t_N, 1>
     contract(const Eigen::MatrixBase<Derived> &v) const {
-        static_assert((Derived::RowsAtCompileTime == t_N) && (Derived::ColsAtCompileTime == 1), 
-                      "Invalid vector dimension for single contraction operatio.n");
+        static_assert((Derived::RowsAtCompileTime == t_N) && (Derived::ColsAtCompileTime == 1),
+                      "Invalid vector dimension for single contraction operation.");
         Eigen::Matrix<typename Derived::Scalar, t_N, 1> result;
         result.setZero();
         for (size_t i = 0; i < t_N; ++i) {
@@ -312,7 +313,7 @@ public:
                 ab(i, j) = 0.5 * (a[i] * b[j] + b[i] * a[j]);
         return ab;
     }
-    
+
     // Construct the symmetric matrix n n^T, which projects onto unit vector n.
     template<class Vector>
     static SymmetricMatrix ProjectionMatrix(const Vector &n) {
