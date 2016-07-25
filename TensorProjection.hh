@@ -24,7 +24,7 @@ ElasticityTensor<Real, N> closestIsotropicTensor(const ElasticityTensor<Real, N>
     // basis: we choose the "Hydrostatic Extractor" and "Deviatoric Extractor"
     //      J = 1/n delta_ij delta_kl,       K = I - J,
     // where I is the rank 4 symmetric identity.
-    // These two basis tensors are closely related to the bulk and shear moduli:
+    // Now any isotropic tensor can be written in this basis:
     //      Ciso = lambda delta_ij delta_kl + 2 mu I
     //           =  n * lambda J + 2 mu (J + K)
     //           = (n * lambda + 2 mu) J + 2 mu K
@@ -33,8 +33,9 @@ ElasticityTensor<Real, N> closestIsotropicTensor(const ElasticityTensor<Real, N>
     // where kappa is the bulk modulus and mu is the shear modulus.
     // This particular basis is nice because one can show it's orthogonal.
     // <J, K> = 0
-    // Thus the closest tensor to C can be found directly by taking inner
-    // products (here the inner product is quadruple contraction)
+    // Thus coefficients [alpha, beta] of the closest isotropic tensor to C can
+    // be found directly by taking inner products (here the inner product is
+    // quadruple contraction):
     // [<J, J>  <J, K>][alpha] = [<C, J>] = [<J, J>       0][alpha]
     // [<J, K>  <K, K>][beta ]   [<C, K>]   [     0  <K, K>][beta ]
     // ==> alpha = <C, J> / <J, J>
@@ -44,7 +45,7 @@ ElasticityTensor<Real, N> closestIsotropicTensor(const ElasticityTensor<Real, N>
     // <C, J> = 1/n C_iijj
     // <C, K> = <C, I> - <C, J>
     // <J, J> = 1
-    // <K, K> = 1/2(n^2 + n) - 1
+    // <K, K> = <I, K> = <I, I> - <I, J> = 1/2 (n^2 + n) - 1
     Real C_ijij = 0.0, C_iijj = 0.0;
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = 0; j < N; ++j) {
