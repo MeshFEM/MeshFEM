@@ -306,7 +306,7 @@ public:
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
 
     template<typename Mesh>
-    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-5) {
+    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false) {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
 
         std::vector<VectorND<_N>> bdryPts;
@@ -319,9 +319,16 @@ public:
         // Determine identified boundary nodes.
         std::vector<std::vector<size_t> > bdryNodeSets;
         std::vector<size_t              > bdryNodeSetForBdryNode;
-        PeriodicBoundaryMatcher::match(bdryPts, cell,
-                m_periodicBoundariesForBoundaryNode,
-                bdryNodeSets, bdryNodeSetForBdryNode, epsilon);
+        if (ignoreMismatch) {
+            PeriodicBoundaryMatcher::matchPermittingMismatch(bdryPts, cell,
+                    m_periodicBoundariesForBoundaryNode,
+                    bdryNodeSets, bdryNodeSetForBdryNode, epsilon);
+        }
+        else {
+            PeriodicBoundaryMatcher::match(bdryPts, cell,
+                    m_periodicBoundariesForBoundaryNode,
+                    bdryNodeSets, bdryNodeSetForBdryNode, epsilon);
+        }
 
         // Mark periodic boundary elements: those with all corners on the same
         // periodic boundary.

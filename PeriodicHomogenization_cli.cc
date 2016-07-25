@@ -44,6 +44,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("fullDegreeFieldOutput,D",                        "Output full-degree nodal fields (don't do piecewise linear subsample)")
         ("distanceToIsotropy",                             "Output the distance to the closest isotropic tensor")
         ("distanceToMaterial", po::value<string>(),        "Output the distance to a particular material")
+        ("ignorePeriodicMismatch",                         "Ignore mismatched nodes on the periodic faces (useful for voxel grids")
         ;
 
     po::options_description cli_opts;
@@ -96,7 +97,7 @@ void execute(const po::variables_map &args,
 
     BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
-    solveCellProblems(w_ij, sim);
+    solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"));
     BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");

@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <queue>
 
 #include "CollisionGrid.hh"
 #include "Geometry.hh"
@@ -117,7 +118,7 @@ void match(const PointCollection &bdryPoints,
         const std::vector<FaceMembership<N>> &faceMembership,
         std::vector<std::vector<size_t>>     &nodeSets,
         std::vector<size_t>                  &nodeSetForNode,
-        Real epsilon = 1e-5)
+        Real epsilon = 1e-7)
 {
     // Choose a cell size on the order of epsilon, but prevent cell sizes so
     // small as to cause index overflows for objects of size up to 100x100
@@ -208,123 +209,121 @@ void match(const PointCollection &bdryPoints,
     }
 }
 
-#if 0
-// old BFS-based version
-        // Sparse collection of periodically-paired nodes for each node.
-        // (VOLUME NODE INDICES!)
-        // Unpaired nodes have no entry in this map, while paired nodes
-        // map to an _N-dim array with at least one entry that isn't NO_PAIR.
-        std::map<size_t, std::array<size_t, _N>> pair;
+// Determine the periodic cell nodes that are identified with each other. This
+// version permits mismatches, which can make sense for regular voxel grid
+// meshes.
+// Matching is slightly more complicated when permitting mismatches: for
+// example, we cannot assume that if a node is present on any cell corner it
+// will be present on the minimum corner. In other words, we cannot simply loop
+// over minimal face nodes and identify them with every matched node as this
+// will miss possible pairings not involving the minimal face nodes.
+template<size_t N, class PointCollection>
+void matchPermittingMismatch(const PointCollection &bdryPoints,
+        const BBox<VectorND<int(N)>> &cell,
+        const std::vector<FaceMembership<N>> &faceMembership,
+        std::vector<std::vector<size_t>>     &nodeSets,
+        std::vector<size_t>                  &nodeSetForNode,
+        Real epsilon = 1e-7)
+{
+    static constexpr size_t NONE = std::numeric_limits<size_t>::max();
+    assert(bdryPoints.size() == faceMembership.size());
+    const size_t numBdryPts = bdryPoints.size();
 
-        // To determine if a boundary face is on the periodic boundary, we
-        // check if all its nodes are on *the same* periodic boundary
-        // (just checking if all nodes are on a periodic boundary will
-        //  incorrectly mark some faces near the period cell edges)
-        // This map from boundary nodes to the set of periodic boundary it lies
-        // on is encoded as a bitset with the following bits
-        //      0, _N + 0: on min, max x face
-        //      1, _N + 1: on min, max y face
-        //    [ 2, _N + 2: on min, max z face ]
-        m_periodicBoundariesForBoundaryNode.clear();
-        m_periodicBoundariesForBoundaryNode.resize(mesh.numBoundaryNodes());
+    // Choose a cell size on the order of epsilon, but prevent cell sizes so
+    // small as to cause index overflows for objects of size up to 100x100
+    // centered at the origin: max int ~10^9 ==> cellSize > 10^-7
+    CollisionGrid<Real, VectorND<N>> cgrid(std::max(epsilon, 1.0e-7));
 
-        for (size_t d = 0; d < _N; ++d) {
-            cgrid.reset();
-            std::vector<size_t> maxfaceNodes;
-            for (size_t i = 0; i < mesh.numBoundaryNodes(); ++i) {
-                auto vn = mesh.boundaryNode(i).volumeNode();
-                if (std::abs(vn->p[d] - cell.minCorner[d]) < epsilon) {
-                    cgrid.addPoint(vn->p, vn.index());
-                    m_periodicBoundariesForBoundaryNode[i].set(d);
-                }
-                if (std::abs(vn->p[d] - cell.maxCorner[d]) < epsilon) {
-                    maxfaceNodes.push_back(vn.index());
-                    m_periodicBoundariesForBoundaryNode[i].set(_N + d);
-                }
-            }
-            for (size_t ni : maxfaceNodes) {
-                VectorND<_N> query(mesh.node(ni)->p);
-                query[d] = cell.minCorner[d];
-                auto result = cgrid.getClosestPoint(query, epsilon);
-                if (result.first == -1) {
-                    std::stringstream ss;
-                    auto n = mesh.node(ni);
-                    ss << "Couldn't match periodic boundary node " << ni << " "
-                       << n->p << "; looking for: " << query << std::endl
-                       << "This is a " << ((n.isEdgeNode()) ? "edge" : "vertex")
-                       << " node." << std::endl;
-                    if (n.isEdgeNode()) {
-                        auto edge = mesh.edgeForEdgeNode(n.edgeNodeIndex());
-                        ss << "Edge endpoints: "
-                           << edge[0] << ", " << edge[1] << std::endl
-                           << "(at " << mesh.node(edge[0])->p << " and "
-                           << mesh.node(edge[1])->p << ")" << std::endl;
+    // Sparse collection of periodically-paired nodes for each node.
+    // (VOLUME NODE INDICES!)
+    // Unpaired nodes have no entry in this map, while paired nodes
+    // map to an N-dim array with at least one entry that isn't NONE.
+    std::map<size_t, std::array<size_t, N>> pair;
+
+    for (size_t d = 0; d < N; ++d) {
+        cgrid.reset();
+        for (size_t i = 0; i < numBdryPts; ++i) {
+            if (faceMembership[i].onMinFace(d))
+                cgrid.addPoint(bdryPoints[i], i);
+        }
+        for (size_t i = 0; i < numBdryPts; ++i) {
+            if (!faceMembership[i].onMaxFace(d)) continue;
+            VectorND<N> query(bdryPoints[i]);
+            query[d] = cell.minCorner[d];
+            auto result = cgrid.getClosestPoint(query, epsilon);
+            if (result.first == -1) continue; // mismatch!
+
+            // Fill out (symmetric) pair adjacency information
+            size_t pi = result.first;
+            // Note: when mismatches occur, it's possible for an entry in "pair"
+            // to already exist (from a previous d loop) for one of the nodes 
+            // but not the other.
+            // Initialize new entries where necessary.
+            if (pair.count( i) == 0) pair[ i].fill(NONE);
+            if (pair.count(pi) == 0) pair[pi].fill(NONE);
+
+            size_t &ip = pair[ i][d],
+                   &pp = pair[pi][d];
+            if ((ip != NONE) || (pp != NONE))
+                throw std::runtime_error("Non-bijective boundary matching");
+            ip = pi;
+            pp =  i;
+        }
+    }
+
+    // Group each connected component of the paired node graph into a node set.
+    std::queue<size_t> bfsQueue;
+    nodeSetForNode.assign(numBdryPts, NONE);
+    nodeSets.clear();
+    size_t numMismatches = 0;
+    for (size_t i = 0; i < numBdryPts; ++i) {
+        if (nodeSetForNode[i] != NONE) continue; // visited?
+        const size_t nsi = nodeSets.size();
+        nodeSetForNode[i] = nsi;
+        nodeSets.emplace_back(1, i);
+        auto &ns = nodeSets.back();
+
+        bfsQueue.push(i);
+        while (!bfsQueue.empty()) {
+            size_t u = bfsQueue.front();
+            bfsQueue.pop();
+
+            // Loop over adjacencies
+            for (size_t d = 0; d < N; ++d) {
+                if (!faceMembership[u].onMinOrMaxFace(d)) continue;
+                size_t v = NONE;
+                if (pair.count(u) == 1) v = pair[u][d];
+
+                if (v == NONE) { ++numMismatches; continue; }
+                size_t &nsv = nodeSetForNode[v];
+                if (nsv != NONE) {
+                    if (nsv != nsi) {
+                        std::cerr << "node set conflict. " << nsv << " vs " << nsi << std::endl;
+                        std::cerr << "u, v, i, d:\t"
+                            << u << ", "
+                            << v << ", "
+                            << i << ", "
+                            << d << std::endl;
                     }
-                    throw std::runtime_error(ss.str());
+                    assert(nsv == nsi);
+                    continue;
                 }
-                assert(result.first >= 0);
-                size_t pi = size_t(result.first);
-                // Fill out (symmetric) pair adjacency information
-                if (pair.count(ni) == 0) {
-                    assert(pair.count(pi) == 0);
-                    // Cast needed; can't  pass storage-less constexpr to fill
-                    pair[ni].fill(size_t(NO_PAIR));
-                    pair[pi].fill(size_t(NO_PAIR));
-                }
-                assert(pair.count(pi) + pair.count(ni) == 2);
-                auto &np = pair[ni];
-                auto &pp = pair[pi];
-                if ((np[d] != NO_PAIR) || (pp[d] != NO_PAIR))
-                    throw std::runtime_error("Non-bijective boundary matching");
-                np[d] = pi;
-                pp[d] = ni;
+                nsv = nsi;
+                ns.push_back(v);
+                bfsQueue.push(v);
             }
         }
+    }
 
-        // Determine the "DoF index" for every node in the mesh. For internal
-        // nodes, these are all unique. On the periodic boundary, these will be
-        // shared by identified nodes. These indices are created assuming one
-        // variable per node. For 3D elasticity, there will actually be three
-        // DOFs per node i, with indices
-        //   [ 3 * m_dofForNode[i] + 0, 3 * m_dofForNode[i] + 1,
-        //     3 * m_dofForNode[i] + 2 ]
+    // All boundary points should have been assigned to node sets
+    for (size_t i = 0; i < numBdryPts; ++i) {
+        assert(nodeSetForNode[i] != NONE);
+        assert(nodeSetForNode[i] < nodeSets.size());
+    }
 
-        // BFS connected components
-        // Assign each node in a connected component of identified nodes
-        // the same DoF
-        m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
-        m_nodesForDoF.clear();
-        m_nodesForDoF.reserve(mesh.numNodes()); // very conservative--prevent realloc
-        for (size_t i = 0; i < mesh.numNodes(); ++i) {
-            if (m_dofForNode[i] != NO_DOF) continue;
-            size_t dof = m_nodesForDoF.size();
-            m_dofForNode[i] = dof;
-            m_nodesForDoF.emplace_back(1, i);
-            std::queue<size_t> bfsQueue;
-            bfsQueue.push(i);
-            while (!bfsQueue.empty()) {
-                int u = bfsQueue.front(); bfsQueue.pop();
-                assert(size_t(m_dofForNode[u]) == dof);
-                auto it = pair.find(u);
-                if (it == pair.end()) continue;
-                for (size_t v: it->second) {
-                    if (v == NO_PAIR) continue;
-                    if (m_dofForNode[v] == NO_DOF) {
-                        m_dofForNode[v] = dof;
-                        m_nodesForDoF.at(dof).push_back(v);
-                        bfsQueue.push(v);
-                    }
-                    else assert(size_t(m_dofForNode[v]) == dof);
-                }
-            }
-        }
-
-        // All nodes should have been assigned valid DOFs
-        for (size_t i = 0; i < mesh.numNodes(); ++i) {
-            assert(m_dofForNode[i] != NO_DOF);
-            assert(m_dofForNode[i] < numPeriodicDoFs());
-        }
-#endif
+    if (numMismatches > 0)
+        std::cerr << "WARNING: detected " << numMismatches << " mismatches in periodic node identification" << std::endl;
+}
 
 }
 
