@@ -158,8 +158,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
                 stressPhi.emplace_back(strainPhi[i].doubleContract(m_E()));
             for (size_t i = 0; i < stressPhi.size(); ++i) {
                 for (size_t j = i; j < strainPhi.size(); ++j) {
-                    Ke(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
-                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                    Ke(i, j) = Quadrature<_K, 2 * Strain::Deg>::integrate(
+                        [&] (const EvalPt<_K> &p) {
                             return stressPhi[i](p).doubleContract(strainPhi[j](p));
                     }, Base::volume());
                 }
@@ -252,12 +252,12 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             for (size_t i = 0; i < stressPhi.size(); ++i) {
                 for (size_t j = i; j < strainPhi.size(); ++j) {
                     dKe(i, j) = Quadrature<_K, 2 * (_Deg - 1)>::integrate(
-                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                        [&] (const EvalPt<_K> &p) {
                             return stressPhi[i](p).doubleContract(dstrainPhi[j](p)) +
                                    stressPhi[j](p).doubleContract(dstrainPhi[i](p));
                     }, Base::volume());
                     dKe(i, j) += Quadrature<_K, 2 * (_Deg - 1)>::integrate(
-                        [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                        [&] (const EvalPt<_K> &p) {
                             return stressPhi[i](p).doubleContract(strainPhi[j](p));
                     }, dvol);
                 }
@@ -509,7 +509,7 @@ public:
                                     Strain::Deg + BdryTensorInterpolant::Deg;
                         // Subtract (strain(phi) : t vn) bdry elem contribution 
                         Real contrib = Quadrature<K - 1, IntegrandDeg>::integrate(
-                                [&] (const VectorND<Simplex::numVertices(K - 1)> &p) {
+                                [&] (const EvalPt<K - 1> &p) {
                                     return vn_f(p) * bdryPhiStrain(p).doubleContract(t_f(p));
                         }, f->volume());
                         loadChange(DoF(e.node(n).index()))[c] -= contrib;
@@ -1157,10 +1157,10 @@ private:
                     // xx, xy, xz, yx, yy, yz, zx, zy, zz
                     for (size_t ci = 0; ci < N; ++ci) {
                         for (size_t cj = 0; cj < N; ++cj) {
+                            if (N * di + ci > N * dj + cj) continue;
                             int row = N * i + ci, col = N * j + cj;
                             // Only read upper triangle of symmetric Ke.
                             Real val = (row <= col) ? Ke(row, col) : Ke(col, row);
-                            if (N * di + ci > N * dj + cj) continue;
                             K.addNZ(N * di + ci, N * dj + cj, val);
                         }
                     }

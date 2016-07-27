@@ -7,7 +7,7 @@
 //
 //      These routines work both on functions with K + 1 Real parameters (where
 //      K + 1 is the number of nodes of the K simplex) and functions with a
-//      single VectorND<K + 1> parameter.
+//      single EvalPt parameter.
 //
 //      SFINAE is used to "overload" the integration routines to work in both of
 //      these cases.
@@ -50,7 +50,7 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
 
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
-    return integrate_edge<_Deg>([&](Real p0, Real p1) { return f(VectorND<2>(p0, p1)); }, vol); }
+    return integrate_edge<_Deg>([&](Real p0, Real p1) { return f(std::make_tuple(p0, p1)); }, vol); }
 
 // Triangle function (2D)
 // 1 point quadrature for const and linear, 3 for quadratic, 4 for cubic, and 6
@@ -113,7 +113,7 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 }
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.0) {
-    return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(VectorND<3>(p0, p1, p2)); }, vol);
+    return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); }, vol);
 }
 
 // Tet function (3D)
@@ -184,7 +184,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
 }
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.0) {
-    return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(VectorND<4>(p0, p1, p2, p3)); }, vol);
+    return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); }, vol);
 }
 
 // Integration on a _K simplex (runs the implementations above).

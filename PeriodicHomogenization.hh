@@ -108,7 +108,7 @@ typename _Sim::ETensor homogenizedElasticityTensor(
                     strain_kl += SMatrix::CanonicalBasis(kl);
                     EhE.D(ij, kl) +=
                         Quadrature<_Sim::K, 2 * (_Sim::Degree - 1)>::integrate(
-                            [&] (const VectorND<_Sim::numElemVertices> &p) {
+                            [&] (const EvalPt<_Sim::K> &p) {
                                 return e->E().doubleContract(strain_ij(p))
                                              .doubleContract(strain_kl(p));
                             }, e->volume());
@@ -269,7 +269,7 @@ homogenizedElasticityTensorGradient(
                 sim.elementStrain(e.index(), w[kl], we_kl);
                 we_kl += SMatrix::CanonicalBasis(kl);
                 auto G_ijkl = Interpolation<K, GDeg>::interpolant(
-                    [&] (const VectorND<_Sim::numElemVertices> &p) {
+                    [&] (const EvalPt<K> &p) {
                         return e->E().doubleContract(we_ij(p))
                                      .doubleContract(we_kl(p));
                     });
@@ -428,7 +428,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
         for (size_t ij = 0; ij < flatLen(N); ++ij) {
             for (size_t kl = ij; kl < flatLen(N); ++kl) {
                 // Initialize with energy dilation term
-                Real mutualEnergy = Quadrature<Strain::K, 2 * Strain::Deg>::integrate([&](const VectorND<e.numVertices()> &pt) { return
+                Real mutualEnergy = Quadrature<Strain::K, 2 * Strain::Deg>::integrate([&](const EvalPt<N> &pt) { return
                         strain[ij](pt).doubleContract(stress[kl](pt)); }, e->volume());
                 for (auto v : e.vertices())
                     for (size_t c = 0; c < N; ++c)
@@ -449,7 +449,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                     for (auto v : e.vertices()) {
                         VectorND<N> gbary = e->gradBarycentric().col(v.localIndex());
                         // delta-strain term of effect of perturbing component c of vertex v
-                        VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const VectorND<e.numVertices()> &pt) { return
+                        VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const EvalPt<N> &pt) { return
                                 VectorND<N>(gbary.dot(stress_contract_w(pt)) * gphi(pt)); }, e->volume());
                         for (size_t c = 0; c < N; ++c)
                             dCh(v.index())[c].D(ij, kl) -= dstrainTerm[c];
@@ -491,7 +491,7 @@ deltaHomogenizedElasticityTensor(const _Sim &sim,
         // Integrate it against the shape derivative
         const auto &dCh = sd.at(be.index());
         deltaCh += Quadrature<N - 1, NSVI::Deg + std::decay<decltype(dCh)>::type::Deg>::
-            integrate([&](const VectorND<be.numVertices()> &pt) { return
+            integrate([&](const EvalPt<N - 1> &pt) { return
                     nsv(pt) * dCh(pt);
                 }, be->volume());
     }

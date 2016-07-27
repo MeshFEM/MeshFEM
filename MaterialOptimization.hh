@@ -187,7 +187,7 @@ public:
                 // of eigen weirdness (even calling eval() doesn't work)...
                 dofLoad(Base::DoF(be.node(j).volumeNode().index())) +=
                     Quadrature<K - 1, Degree * Degree>::integrate(
-                        [&](const VectorND<Simplex::numVertices(K - 1)> &p) -> VectorND<K>
+                        [&](const EvalPt<K - 1> &p) -> VectorND<K>
                             { return traction(p) * phi(p); }, be->volume());
                 phi[j] = 0.0;
             }
@@ -302,7 +302,7 @@ public:
                             - bn->targetDisplacement).eval());
             }
             obj += Quadrature<K - 1, Degree * Degree>::integrate(
-                    [&](const VectorND<Simplex::numVertices(K - 1)> &p)
+                    [&](const EvalPt<K - 1> &p)
                         { return dist(p).dot(dist(p)); }, be->volume());
         }
 
@@ -327,7 +327,7 @@ public:
                 m_sim.elementStrain(ei,      u,      e_u);
                 m_sim.elementStrain(ei, lambda, e_lambda);
                 g[var] += Quadrature<K, (Degree - 1) * (Degree - 1)>::integrate(
-                    [&](const VectorND<Simplex::numVertices(K)> &p)
+                    [&](const EvalPt<K> &p)
                         { return dE.doubleContract(e_u(p))
                                    .doubleContract(e_lambda(p)); },
                     e->volume());

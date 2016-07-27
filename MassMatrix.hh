@@ -70,7 +70,7 @@ struct Impl {
                     phi_j = 0;
                     phi_j[nj.localIndex()] = 1;
                     Real val = Quadrature<K, 2 * Deg>::integrate(
-                            [&](const VectorND<e.numVertices()> &pt) {
+                            [&](const EvalPt<K> &pt) {
                                 return phi_i(pt) * phi_j(pt);
                             }, e->volume());
                     M.addNZ(ni.index(), nj.index(), val);

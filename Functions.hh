@@ -46,6 +46,8 @@
 #include "Types.hh"
 #include "Simplex.hh"
 #include "function_traits.hh"
+#include "Future.hh"
+#include "NTuple.hh"
 #include <vector>
 #include <array>
 #include <functional>
@@ -63,6 +65,10 @@ template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy = DefaultNodalStoragePolicy>
 class Interpolant;
 
+// Function evaluation point type (barycentric coordinate tuple)
+template<size_t _K>
+using EvalPt = typename NTuple<Real, Simplex::numVertices(_K)>::type;
+
 // Hidden implementations of interpolated functions
 // (Not easily implemented in the interpolant class because member function
 //  specialization is disallowed)
@@ -74,20 +80,20 @@ namespace detail {
     // Interpolation
     // Two versions of each interpolation operation are provideded: one taking
     // K + 1 (i.e. number of K-simplex vertices) and one taking a single
-    // VectorND<K+1>
+    // EvalPt
     ////////////////////////////////////////////////////////////////////////////
     // Constant functions don't interpolate...
     template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
     _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... /* args */) { return f[0]; }
 
     // Barycentric coordinates are the linear shape functions for all simplices.
-    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
-    _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
-        _T result = c[0] * f[0];
-        for (size_t i = 1; i < numNodes(_K, 1); ++i)
-            result += c[i] * f[i];
-        return result;
-    }
+    // template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    // _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
+    //     _T result = c[0] * f[0];
+    //     for (size_t i = 1; i < numNodes(_K, 1); ++i)
+    //         result += c[i] * f[i];
+    //     return result;
+    // }
     template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Edge,        1, _NS> &f, Real c0, Real c1                  ) { _T result = c0 * f[0]; result += c1 * f[1];                                           return result; }
     template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Triangle,    1, _NS> &f, Real c0, Real c1, Real c2         ) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2];                    ; return result; }
     template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Tetrahedron, 1, _NS> &f, Real c0, Real c1, Real c2, Real c3) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2]; result += c3 * f[3]; return result; }
@@ -96,13 +102,13 @@ namespace detail {
     //    Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
     //    Edge   node  : 4 * lambda_j * lambda_k
     //                   where j, k are the edge endpoint (vertex) nodes
-    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
-    _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
-        _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
-        for (size_t i = 1; i < numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
-        for (size_t i = 0; i <    numEdges(_K); ++i) result += (4 * c[edgeStartNode(i)] * c[edgeEndNode(i)]) * f[i + numVertices(_K)];
-        return result;
-    }
+    // template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
+    // _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
+    //     _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
+    //     for (size_t i = 1; i < numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
+    //     for (size_t i = 0; i <    numEdges(_K); ++i) result += (4 * c[edgeStartNode(i)] * c[edgeEndNode(i)]) * f[i + numVertices(_K)];
+    //     return result;
+    // }
     template<typename _T, template<typename, size_t, size_t> class _NS>
     _T _interpolate(const Interpolant<_T, Simplex::Edge, 2, _NS> &f, Real c0, Real c1) {
         _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]);
@@ -194,7 +200,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
     _interpolant_edge(const F &f) {
-        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(VectorND<2>(p0, p1)); });
+        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(std::make_tuple(p0, p1)); });
     }
 
     //   +       2       2
@@ -213,7 +219,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
     _interpolant_tri(const F &f) {
-        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(VectorND<3>(p0, p1, p2)); });
+        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); });
     }
 
     //                       3                 3
@@ -236,7 +242,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
     _interpolant_tet(const F &f) {
-        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(VectorND<4>(p0, p1, p2, p3)); });
+        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); });
     }
 }
 
@@ -319,13 +325,13 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Evaluation (function call operator)
     ////////////////////////////////////////////////////////////////////////////
-    // Pass in a column vector of barycentric coordinates...
-    _T operator()(const VectorND<Simplex::numVertices(_K)> &baryCoords) const {
-        return detail::_interpolate(*this, baryCoords);
+    // Pass in a tuple of barycentric coordinates...
+    _T operator()(const EvalPt<_K> &baryCoords) const {
+        return Future::apply(*this, baryCoords); // call operator() on expanded tuple
     }
-    // ... or a list of them, which is converted into a column vector
+    // ... or an argument list of them.
     // This list must be either of length 0 or 2+, so we use enable_if to ensure
-    // the operator()(VectorND) isn't hidden in the 1-argument case.
+    // the operator()(EvalPt) isn't hidden in the 1-argument case.
     template<typename... Args, typename std::enable_if<sizeof...(Args) != 1, int>::type = 0>
     _T operator()(Args&&... baryCoords) const {
         static_assert(((_Deg == 0) && (sizeof...(baryCoords) == 0))
