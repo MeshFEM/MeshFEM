@@ -60,7 +60,7 @@ public:
 
     _Real operator()(size_t i, size_t j) const {
         assert((i < N) && (j < N));
-        return operator[](flattenIndices(N, i, j));
+        return operator[](flattenIndices<N>(i, j));
     }
 
     Eigen::Matrix<_Real, N, 1> eigenvalues() const {
@@ -171,7 +171,7 @@ public:
     using Base::operator(); // prevent hiding
     _Real &operator()(size_t i, size_t j) {
         assert((i < t_N) && (j < t_N));
-        return operator[](flattenIndices(t_N, i, j));
+        return operator[](flattenIndices<t_N>(i, j));
     }
 
     template<typename FType>

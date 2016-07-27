@@ -240,9 +240,7 @@ public:
 
     Real operator()(size_t i, size_t j, size_t k, size_t l) const {
         assert((i < _Dim) && (j < _Dim) && (k < _Dim) && (l < _Dim));
-        size_t ij = flattenIndices(_Dim, i, j);
-        size_t kl = flattenIndices(_Dim, k, l);
-        return D(ij, kl);
+        return D(flattenIndices<_Dim>(i, j), flattenIndices<_Dim>(k, l));
     }
 
     Real D(size_t i, size_t j) const {
@@ -478,8 +476,8 @@ public:
                             assert((existing == 0) || (std::abs(existing - comp) < 1e-10));
                         }
 
-                        size_t ij = flattenIndices(_Dim, i, j);
-                        size_t kl = flattenIndices(_Dim, k, l);
+                        size_t ij = flattenIndices<_Dim>(i, j);
+                        size_t kl = flattenIndices<_Dim>(k, l);
                         result.m_d(ij, kl) = comp;
                     }
                 }

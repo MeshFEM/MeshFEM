@@ -24,4 +24,25 @@ constexpr size_t flattenIndices(size_t dim, size_t i, size_t j) {
                     : (dim * (dim + 1) - i * (i - 1)) / 2 - (j + 1));
 }
 
+// Optimized version...
+template<size_t _Dim>
+inline constexpr size_t flattenIndices(size_t i, size_t j);
+
+// 02
+//  1
+template<>
+inline constexpr size_t flattenIndices<2>(size_t i, size_t j) {
+    return (i == j) ? i : 2;
+}
+
+// 054
+// 513
+// 432
+template<>
+inline constexpr size_t flattenIndices<3>(size_t i, size_t j) {
+    return (i == j) ? i :
+            ((i < j) ? ((j == 2) ? 4 - i : 5)
+                     : ((i == 2) ? 4 - j : 5));
+}
+
 #endif /* end of include guard: FLATTENING_HH */
