@@ -131,10 +131,20 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         // displacement field "(C^-1 : cstress) x".
         // Since c_stress is constant, we can pull it out of the integral for efficiency.
         void perElementConstantStressLoad(const SMatrix &cstress, ElementLoad &l) const {
-            std::vector<Strain> phiStrains = vecPhiStrains();
-            for (size_t i = 0; i < Simplex::numNodes(_K, _Deg); ++i) {
-                for (size_t c = 0; c < N; ++c)
-                    l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(cstress);
+            // Original version:
+            // std::vector<Strain> phiStrains = vecPhiStrains();
+            // for (size_t i = 0; i < nNodes; ++i) {
+            //     for (size_t c = 0; c < N; ++c)
+            //         l(c, i) = phiStrains[i * N + c].integrate(Base::volume()).doubleContract(cstress);
+            // }
+
+            // Optimized version (take advantage of cstress' symmetries)
+            // strain(phi^(i * N + c))_ab : cstress_ab
+            //     = [gphi^i]_a delta_bc cstress_ab
+            //     = [gphi^i]_a cstress_ac = [cstress . gphi^i]_c
+            for (size_t i = 0; i < nNodes; ++i) {
+                const VectorND<N> &gpi_int = gradPhi(i).integrate(Base::volume());
+                l.col(i) = cstress.contract(gpi_int);
             }
         }
 
@@ -151,17 +161,70 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
 
         // Gets ***upper triangle*** of the per-element stiffness matrix.
         void perElementStiffness(PerElementStiffness &Ke) const {
-            std::vector<Strain> strainPhi = vecPhiStrains();
-            std::vector<Stress> stressPhi;
-            stressPhi.reserve(strainPhi.size());
-            for (size_t i = 0; i < strainPhi.size(); ++i)
-                stressPhi.emplace_back(strainPhi[i].doubleContract(m_E()));
-            for (size_t i = 0; i < stressPhi.size(); ++i) {
-                for (size_t j = i; j < strainPhi.size(); ++j) {
-                    Ke(i, j) = Quadrature<_K, 2 * Strain::Deg>::integrate(
-                        [&] (const EvalPt<_K> &p) {
-                            return stressPhi[i](p).doubleContract(strainPhi[j](p));
-                    }, Base::volume());
+            // Unoptimized version:
+            // std::vector<Strain> strainPhi = vecPhiStrains();
+            // std::vector<Stress> stressPhi;
+            // stressPhi.reserve(strainPhi.size());
+            // for (size_t i = 0; i < strainPhi.size(); ++i)
+            //     stressPhi.emplace_back(strainPhi[i].doubleContract(m_E()));
+            // for (size_t i = 0; i < stressPhi.size(); ++i) {
+            //     for (size_t j = i; j < strainPhi.size(); ++j) {
+            //         Ke(i, j) = Quadrature<_K, 2 * Strain::Deg>::integrate(
+            //             [&] (const EvalPt<_K> &p) {
+            //                 return stressPhi[i](p).doubleContract(strainPhi[j](p));
+            //         }, Base::volume());
+            //     }
+            // }
+
+            // Optimized version (~2x faster):
+            // We take advantage of C's major/minor symmetries to simplify:
+            // strain(phi^(i * N + c)) : C : strain(phi^(j * N + d))
+            // = grad(phi^i)_a delta_pc C_parb grad(phi^j)_b delta_rd   (de-symmetrize)
+            // = grad(phi^i)_a C_cadb grad(phi^j)_b
+            // = grad(phi^i)_a C_acdb grad(phi^j)_b
+            // = gpi . M(c, d) gpj
+            // where [M(c, d)]_ab := C_acdb
+            // Notice by C's symmetries M(d, c) = C_adcb = C_bcda = M(c, d)^T.
+            // We can exploit this symmetry to further eliminate duplicate computations
+            // Ke(j * N + d, i * N + c) = gpj . M(d, c) gpi = gpj . M(c, d)^T gpi
+            //                          = gpi . M(c, d) gpj = Ke(i * N + c, j * N + d)
+            // We loop over only (c, d) with (c <= d) but compute the d > c
+            // entries by "swapping" i and j
+            std::vector<typename Base::SFGradient> grad_phis(nNodes);
+            for (size_t n = 0; n < nNodes; ++n)
+                grad_phis[n] = gradPhi(n);
+
+            const auto &C = m_E();
+            Eigen::Matrix<Real, N, N> M;
+            for (size_t c = 0; c < N; ++c) {
+                for (size_t d = c; d < N; ++d) {
+                    for (size_t a = 0; a < N; ++a)
+                        for (size_t b = 0; b < N; ++b)
+                            M(a, b) = C(a, c, d, b);
+
+                    // All pairs ((c, i), (d, j)) with (i N + c <= j N + d)
+                    // Since we only consider c <= d we must consider all (i, j)
+                    for (size_t j = 0; j < nNodes; ++j) {
+                        size_t vj = j * N + d;
+                        typename Base::SFGradient Mgpj;
+                        for (size_t inode = 0; inode < Mgpj.size(); ++inode)
+                            Mgpj[inode] = M * grad_phis[j][inode];
+                        for (size_t i = 0; i < nNodes; ++i) {
+                            size_t vi = i * N + c;
+                            // Note: if c != d, then either (c, d) or (d, c)
+                            // entry will lie in the upper triangle. Only if
+                            // c == d can this loop contribute to lower tri only
+                            if ((c == d) && (vi > vj)) continue; // don't compute lower tri-only values
+
+                            Real val = Quadrature<_K, 2 * Strain::Deg>::integrate([&] (const EvalPt<_K> &p) {
+                                return grad_phis[i](p).dot(Mgpj(p));
+                            }, Base::volume());
+                            // (c, d) entry, if in upper tri
+                            if (vi <= vj) Ke(vi, vj) = val;
+                            // (d, c) entry, if in upper tri
+                            else          Ke(vj, vi) = val;
+                        }
+                    }
                 }
             }
         }
@@ -327,7 +390,7 @@ using Mesh = FEMMesh<_K, _Deg, VectorND<_K>,
 // WARNING: This material is actually shared by all meshes of the same dimension!
 template<size_t _K, size_t _Deg,
          template<size_t> class _ETensorGetter = HomogenousMaterialGetter<Materials::Constant>::template Getter>
-using HomogenousMesh = 
+using HomogenousMesh =
         FEMMesh<_K, _Deg, VectorND<_K>,
                  LinearElasticityData<_ETensorGetter>::template Data>;
 
@@ -439,8 +502,8 @@ public:
         typename _Mesh::ElementData::ElementLoad eLoad;
         for (auto e : m_mesh.elements()) {
             e->perElementConstantStrainLoad(strain, eLoad);
-            for (size_t n = 0; n < e.numNodes(); ++n)
-                load(DoF(e.node(n).index())) += eLoad.col(n);
+            for (auto n : e.nodes())
+                load(DoF(n.index())) += eLoad.col(n.localIndex());
         }
         return load;
     }
@@ -507,7 +570,7 @@ public:
 
                         constexpr size_t IntegrandDeg = NSVInterpolant::Deg +
                                     Strain::Deg + BdryTensorInterpolant::Deg;
-                        // Subtract (strain(phi) : t vn) bdry elem contribution 
+                        // Subtract (strain(phi) : t vn) bdry elem contribution
                         Real contrib = Quadrature<K - 1, IntegrandDeg>::integrate(
                                 [&] (const EvalPt<K - 1> &p) {
                                     return vn_f(p) * bdryPhiStrain(p).doubleContract(t_f(p));
@@ -615,7 +678,6 @@ public:
                             load(globalni)[ci] += ((row < col) ? Ke(row, col) : Ke(col, row)) * u(globalnj)[cj];
                         }
                     }
-                        
                 }
             }
         }
@@ -969,7 +1031,6 @@ public:
             if (ri + 1 > forces.size())
                 forces.resize(ri + 1, VectorND<N>::Zero());
             forces[ri] += f(bn.volumeNode().index());
-            
         }
 
         for (size_t i = 0; i < forces.size(); ++i) {
@@ -1042,7 +1103,7 @@ public:
     template<class _SymMat>
     VField deltaConstantStrainLoad(const _SymMat &cstrain, const VField &deltaP) const {
         assert(deltaP.domainSize() == m_mesh.numVertices());
-        
+
         VField dload(numDoFs());
         dload.clear();
 
