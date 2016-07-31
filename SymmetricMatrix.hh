@@ -133,6 +133,25 @@ public:
         }
         return result;
     }
+    
+    // Applies an change of coordinates using the transformation rule:
+    // s_ij' = s_pq R_ip R_jq
+    // (When R is a rotation or reflection, this is the correct transformation
+    // rule for cartesian tensors).
+    // Storage-backed result
+    SymmetricMatrixValue<_Real, t_N> transform(const Eigen::Matrix<Real, t_N, t_N> &R) {
+        SymmetricMatrixValue<_Real, t_N> result;
+        for (size_t i = 0; i < t_N; ++i) {
+            for (size_t j = i; j < t_N; ++j) {
+                Real comp = 0.0;
+                for (size_t p = 0; p < t_N; ++p)
+                    for (size_t q = 0; q < t_N; ++q)
+                        comp += (*this)(p, q) * R(i, p) * R(j, q);
+                result(i, j) = comp;
+            }
+        }
+        return result;
+    }
 
     // Flattened accessors
     _ConstStorageRef_t flattened() const { return m_data; }
