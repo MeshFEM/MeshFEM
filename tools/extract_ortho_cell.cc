@@ -37,13 +37,6 @@ int main(int argc, const char *argv[])
 
     remove_dangling_vertices(vertices, elements);
 
-    size_t minsize = 40, maxsize = 0;
-    for (size_t i = 0; i < elements.size(); ++i) {
-        const auto &e = elements[i];
-        minsize = min(minsize, e.size());
-        maxsize = max(maxsize, e.size());
-    }
-
     MeshIO::save(argv[2], vertices, elements);
 
     return 0;
