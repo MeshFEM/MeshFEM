@@ -345,7 +345,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         }
 
         Vector neumannTraction;
-        bool isPeriodic;
+        bool isPeriodic = false;
     };
 
     struct BoundaryNode {
@@ -974,7 +974,8 @@ public:
     void assembleConstrainedSystem(TMatrix &K, TMatrix &constraintRows,
             std::vector<Real> &constraintRHS,
             std::vector<size_t> &fixedVars,
-            std::vector<Real>   &fixedVarValues) const {
+            std::vector<Real>   &fixedVarValues,
+            bool allowIllPosed = false) const {
         BENCHMARK_START_TIMER("Assemble System");
         m_assembleStiffnessMatrix(K);
 
@@ -997,7 +998,7 @@ public:
             if (constraintRHS.size() != R.m)
                 throw std::runtime_error("Invalid rigid motion RHS");
         }
-        else {
+        else if (!allowIllPosed) {
             ComponentMask needsTranslations, needsRotations;
             analyzeDirichletPosedness(needsTranslations, needsRotations);
             if (needsTranslations.hasAny(N)) {

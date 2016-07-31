@@ -3,6 +3,7 @@
 #include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "PeriodicHomogenization.hh"
+#include "OrthotropicHomogenization.hh"
 #include "GlobalBenchmark.hh"
 #include <vector>
 #include <queue>
@@ -40,11 +41,13 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("material,m", po::value<string>(),                 "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("m2mstress,M",po::value<string>(),                "Dump macroscopic to microscopic stress tensors to specified file")
-        ("fieldOutput,o",po::value<string>(),              "Dump fluctation stress and strain fields to specified msh file")
+        ("fieldOutput,o",po::value<string>(),              "Dump fluctuation stress and strain fields to specified msh file")
+        ("centerFluctuationDisplacements,c",               "Shift each fluctuation displacement so that it averages to zero")
         ("fullDegreeFieldOutput,D",                        "Output full-degree nodal fields (don't do piecewise linear subsample)")
         ("distanceToIsotropy",                             "Output the distance to the closest isotropic tensor")
         ("distanceToMaterial", po::value<string>(),        "Output the distance to a particular material")
-        ("ignorePeriodicMismatch",                         "Ignore mismatched nodes on the periodic faces (useful for voxel grids")
+        ("ignorePeriodicMismatch",                         "Ignore mismatched nodes on the periodic faces (useful for voxel grids)")
+        ("orthotropicCell,O",                              "Analyze the orthotropic symmetry base cell only")
         ;
 
     po::options_description cli_opts;
@@ -97,12 +100,16 @@ void execute(const po::variables_map &args,
 
     BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
-    solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"));
+    if (args.count("orthotropicCell") == 0)      solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"));
+    else    PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
+
     BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
 
     BENCHMARK_START_TIMER_SECTION("Compute Tensor");
     // ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
-    ETensor Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+    ETensor Eh;
+    if (args.count("orthotropicCell") == 0)   Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+    else Eh = PeriodicHomogenization::Orthotropic::homogenizedElasticityTensorDisplacementForm(w_ij, sim);
     BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
     cout << setprecision(16) << endl;
@@ -166,6 +173,15 @@ void execute(const po::variables_map &args,
         bool linearSubsampleFields = args.count("fullDegreeFieldOutput") == 0;
         MSHFieldWriter writer(args["fieldOutput"].as<string>(), sim.mesh(),
                               linearSubsampleFields);
+        if (args.count("centerFluctuationDisplacements")) {
+            for (size_t i = 0; i < w_ij.size(); ++i) {
+                auto &w = w_ij[i];
+                VectorND<_N> total(VectorND<_N>::Zero());
+                for (size_t i = 0; i < w.domainSize(); ++i) total += w(i);
+                total *= 1.0 / w.domainSize();
+                for (size_t i = 0; i < w.domainSize(); ++i) w(i) -= total;
+            }
+        }
         for (size_t i = 0; i < w_ij.size(); ++i) {
             writer.addField("load_ij " + to_string(i), sim.dofToNodeField(sim.constantStrainLoad(-Simulator::SMatrix::CanonicalBasis(i))), DomainType::PER_NODE);
             writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);

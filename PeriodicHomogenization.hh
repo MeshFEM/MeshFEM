@@ -140,8 +140,9 @@ typename _Sim::ETensor homogenizedElasticityTensor(
 template<class _Sim>
 typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
         const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
-        Real baseCellVolume) {
+        Real baseCellVolume = 0.0) {
     const auto &mesh = sim.mesh();
+    if (baseCellVolume == 0.0) baseCellVolume = mesh.boundingBox().volume();
     using SMatrix = typename _Sim::SMatrix ;
     constexpr size_t numStrains = SMatrix::flatSize();
     assert(w_ij.size() == numStrains);
@@ -183,15 +184,6 @@ template<class _Sim>
 typename _Sim::ETensor homogenizedElasticityTensor(
         const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
     return homogenizedElasticityTensor(w_ij, sim, sim.mesh().boundingBox().volume());
-}
-
-// Displacement form...
-// Assumes the base cell is the axis-aligned mesh bounding box
-// (not true, e.g., for rotated base cells).
-template<class _Sim>
-typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
-        const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
-    return homogenizedElasticityTensorDisplacementForm(w_ij, sim, sim.mesh().boundingBox().volume());
 }
 
 ////////////////////////////////////////////////////////////////////////////

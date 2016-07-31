@@ -47,6 +47,12 @@ struct FaceMembership {
         }
     }
 
+    static FaceMembership AllFaces() {
+        FaceMembership result;
+        result.membership.set();
+        return result;
+    }
+
     bool      onMinFace(size_t d) const { assert(d < N); return membership[    d]; }
     bool      onMaxFace(size_t d) const { assert(d < N); return membership[N + d]; }
     bool onMinOrMaxFace(size_t d) const { return onMinFace(d) || onMaxFace(d); }
@@ -61,6 +67,8 @@ struct FaceMembership {
     bool  isMinimalNode() const { return !onAnyMaxFace(); }
 
     FaceMembership &operator&=(const FaceMembership<N> &b) { membership &= b.membership; return *this; }
+private:
+    FaceMembership() { }
 };
 
 // Face membership ASCII output.
