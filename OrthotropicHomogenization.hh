@@ -56,17 +56,6 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     for (auto bn : mesh.boundaryNodes())
         nodeFaceMemberships.emplace_back(bn.volumeNode()->p, cell, cellEpsilon);
 
-    // TODO: figure out where to put this! We're not really marking periodic
-    // boundary elements, but rather reflection plane boundary elements
-    for (auto be : sim.mesh().boundaryElements()) {
-        auto beFM = FM::AllFaces();
-        for (auto bn : be.nodes())
-            beFM &= nodeFaceMemberships.at(bn.index());
-        size_t numBoundaries = beFM.count();
-        assert(numBoundaries < 2); // element shouldn't be on more than one boundary
-        be->isPeriodic = numBoundaries > 0;
-    }
-
     // Stretching probe:
     // w^ii(x)_c = 0 on reflection plane c (plane with normal e_c)
     fixedVars.clear();
@@ -172,9 +161,6 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
         else        w_ij.push_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
     }
 }
-
-// int (e(w^ij) + e^ij) : C : (e(w^kl) + e^kl) dV
-//
 
 template<class _Sim>
 typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
