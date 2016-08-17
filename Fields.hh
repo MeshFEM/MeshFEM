@@ -66,7 +66,8 @@ public:
     template<typename Real2>
     VectorField(const std::vector<Real2> &values) {
         size_t domainSize = values.size() / t_dim;
-        assert(t_dim * domainSize == values.size());
+        if (t_dim * domainSize != values.size())
+            throw std::runtime_error("Invalid flattened field size (not an " + std::to_string(t_dim) + "D field)");
         m_values = Eigen::Map<const Eigen::Matrix<Real2, t_dim, Eigen::Dynamic> >
             (&values[0], t_dim, domainSize);
     }

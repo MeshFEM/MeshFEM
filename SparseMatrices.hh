@@ -24,6 +24,7 @@
 #include <cassert>
 #include <memory>
 #include <cstdint>
+#include <cmath>
 
 #ifndef GLOBALBENCHMARK_HH
 #include "BenchmarkStub.hh"
@@ -47,6 +48,9 @@ struct Triplet
 
     Triplet(size_t ii, size_t jj, Real vv)
         : i(ii), j(jj), v(vv) { }
+
+    // Needed for triplet matrix binary read...
+    Triplet() : i(0), j(0), v(0) { }
 
     size_t &row() { return i; }
     size_t &col() { return j; }
@@ -207,6 +211,13 @@ struct TripletMatrix {
         //         [](const Triplet &t) -> bool { return std::abs(t.v) < 1e-14; });
         // nz.erase(back, nz.end());
         // std::cout << "removed " << oldSize - nz.size() << " small entries" << std::endl;
+
+        // remove identically zero entries (should probably use the toleranced
+        // version above)
+        auto back = std::remove_if(nz.begin(), nz.end(),
+                [](const Triplet &t) -> bool { return t.v == 0.0; });
+        // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
+        nz.erase(back, nz.end());
 
         BENCHMARK_STOP_TIMER("Compress Matrix");
     }
@@ -474,6 +485,32 @@ struct TripletMatrix {
         std::vector<double> values(N);
         for (size_t i = 0; i < N; ++i) values[i] = nz[i].v;
         os.write((char *) &values[0], N * sizeof(double));
+    }
+
+    void readBinary(const std::string &path) {
+        std::ifstream is(path);
+        if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        uint64_t N;
+        is.read((char *) &N, sizeof(uint64_t));
+        nz.resize(N);
+
+        std::vector<uint64_t> indices(N);
+        std::vector<double>   values(N);
+
+        is.read((char *) &indices[0], N * sizeof(uint64_t));
+        for (size_t i = 0; i < N; ++i) nz[i].i = indices[i];
+
+        // Infer number of rows
+        m = *max_element(indices.begin(), indices.end()) + 1;
+
+        is.read((char *) &indices[0], N * sizeof(uint64_t));
+        for (size_t i = 0; i < N; ++i) nz[i].j = indices[i];
+
+        // Infer number of cols
+        n = *max_element(indices.begin(), indices.end()) + 1;
+
+        is.read((char *) &values[0], N * sizeof(double));
+        for (size_t i = 0; i < N; ++i) nz[i].v = values[i];
     }
 
     void read(std::ifstream &is) {
