@@ -547,6 +547,29 @@ size_t importScalarField(const string &op, const string &arg, Stack &stack, cons
     return 1;
 }
 
+// Import a flattened vector field (x0 y0 z0 x1 ...)
+template<size_t N>
+size_t importVectorField(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
+    const auto &parser = getParser<N>();
+    const auto &vertices = parser.vertices();
+    const auto &elements = parser.elements();
+    ifstream inFile(arg);
+    if (!inFile.is_open()) throw std::runtime_error("Couldn't open vector field import file: " + arg);
+    Real val;
+    std::vector<Real> values;
+    while (inFile >> val)
+        values.push_back(val);
+    VectorField<Real, N> vfield(values);
+
+    if (vfield.domainSize() == vertices.size())
+        pushVectorField(stack, arg, vfield, DomainType::PER_NODE);
+    else if (vfield.domainSize() == elements.size())
+        pushVectorField(stack, arg, vfield, DomainType::PER_ELEMENT);
+    else throw std::runtime_error("Didn't recognize imported field size.");
+
+    return 1;
+}
+
 template<size_t N>
 size_t outputMSH(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     const auto &parser = getParser<N>();
@@ -684,6 +707,7 @@ void execute(vector<FilterInvocation> &filters) {
         {"pull",          Filter::pull},
         {"rename",        Filter::rename},
         {"import_sfield", Filter::importScalarField<N>},
+        {"import_vfield", Filter::importVectorField<N>},
         {"reverse",       Filter::reverse},
         {"outMSH",        Filter::outputMSH<N>},
 
@@ -763,15 +787,23 @@ int main(int argc, char *argv[])
 
     string mshFile;
     vector<FilterInvocation> filters;
-    tie(mshFile, filters) = parseCmdLine(argc, argv);
+    boost::optional<size_t> forcedDim;
+    tie(mshFile, filters, forcedDim) = parseCmdLine(argc, argv);
 
     ifstream infile(mshFile);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshFile);
     MeshType type = io.load(infile, v, e, MESH_GUESS);
-    size_t dim = ::MeshIO::meshDimension(type);
+    size_t meshDim = ::MeshIO::meshDimension(type);
 
-    if (dim == 3) parseMSH<3>(infile, type, std::move(e), std::move(v), io.binary());
-    else          parseMSH<2>(infile, type, std::move(e), std::move(v), io.binary());
+    size_t dim = meshDim;
+    if (forcedDim) dim = *forcedDim;
+    if (dim < 2 || dim > 3) throw std::runtime_error("Unsupported dimension: " + std::to_string(dim));
+
+    if (meshDim != dim)
+        cerr << "Warning: some operations won't work properly on non-full-dimension meshes" << endl;
+
+    if (dim == 3) parseMSH<3>(infile, type, std::move(e), std::move(v), io.binary(), meshDim != dim);
+    else          parseMSH<2>(infile, type, std::move(e), std::move(v), io.binary(), meshDim != dim);
 
     if (dim == 3) execute<3>(filters);
     else          execute<2>(filters);

@@ -5,11 +5,12 @@
 #include <tuple>
 #include <vector>
 #include <Types.hh>
+#include <boost/optional.hpp>
 
 // Filter invocation: (name, argument string)
 using FilterInvocation = std::pair<std::string, std::string>;
 // Parse command line arguments to get a .msh file path and a sequence of filters.
-std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, char *argv[]);
+std::tuple<std::string, std::vector<FilterInvocation>, boost::optional<size_t>> parseCmdLine(int argc, char *argv[]);
 
 // Parse a filter invocation's argument.
 int parseIntArg(const std::string &arg);

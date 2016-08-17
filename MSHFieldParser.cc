@@ -22,13 +22,13 @@ double readDoubleLine(istream &is) {
 }
 
 template<size_t N>
-MSHFieldParser<N>::MSHFieldParser(const string &mshPath) {
+MSHFieldParser<N>::MSHFieldParser(const string &mshPath, bool permitDimMismatch) {
     ifstream infile(mshPath);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshPath);
 
     MeshIO_MSH io;
     m_type = io.load(infile, m_vertices, m_elements, MESH_GUESS);
-    if (meshDimension() != N)
+    if (!permitDimMismatch && (meshDimension() != N))
         throw runtime_error("Illegal mesh type for " + to_string(N) + "D MSHFieldParser");
     m_parseFields(infile, io.binary());
 }
@@ -38,10 +38,10 @@ template<size_t N>
 MSHFieldParser<N>::MSHFieldParser(istream &is, const ::MeshIO::MeshType type,
                                   std::vector<::MeshIO::IOElement> &&elements,
                                   std::vector<::MeshIO::IOVertex>  &&vertices,
-                                  const bool binary)
+                                  const bool binary, bool permitDimMismatch)
     : m_elements(std::move(elements)), m_vertices(std::move(vertices)), m_type(type)
 {
-    if (meshDimension() != N)
+    if (!permitDimMismatch && (meshDimension() != N))
         throw runtime_error("Illegal mesh type for " + to_string(N) + "D MSHFieldParser");
     m_parseFields(is, binary);
 }

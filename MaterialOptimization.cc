@@ -73,6 +73,9 @@ void Optimizer<_Simulator>::run(MSHFieldWriter &writer, size_t iterations,
     VField u_dirichletTargets;
     SMField e_dirichletTargets_avg;
 
+    // Write initial material variable fields
+    m_matField->writeVariableFields(writer, "0 ");
+
     constexpr size_t _NVar = Material::numVars;
     constexpr size_t N = _Simulator::N;
     for (size_t iter = 1; iter <= iterations; ++iter) {

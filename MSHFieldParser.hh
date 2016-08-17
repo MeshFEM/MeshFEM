@@ -45,7 +45,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Constructor parses the mesh and fields in the MSH file.
     ////////////////////////////////////////////////////////////////////////////
-    MSHFieldParser(const std::string &mshPath);
+    MSHFieldParser(const std::string &mshPath, bool permitDimMismatch = false);
 
     // Constructor used to avoid re-parsing the mesh part of the file.
     // (Often code parses the input mesh first to determine the dimension, then
@@ -53,7 +53,7 @@ public:
     MSHFieldParser(std::istream &is, const MeshIO::MeshType type,
                    std::vector<MeshIO::IOElement> &&elements,
                    std::vector<MeshIO::IOVertex>  &&vertices,
-                   const bool binary);
+                   const bool binary, bool permitDimMismatch = false);
 
     const std::vector<MeshIO::IOElement> &elements() const { return m_elements; }
     const std::vector<MeshIO::IOVertex > &vertices() const { return m_vertices; }

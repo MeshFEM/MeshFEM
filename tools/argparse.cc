@@ -5,17 +5,18 @@
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/optional.hpp>
 
 namespace po = boost::program_options;
 using namespace std;
 
 void usage(int status, const po::options_description &visible_opts) {
-    cout << "Usage: msh_field_extractor in.msh [options]" << endl;
+    cout << "Usage: msh_processor in.msh [options]" << endl;
     cout << visible_opts << endl;
     exit(status);
 }
 
-std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, char *argv[]) {
+std::tuple<std::string, std::vector<FilterInvocation>, boost::optional<size_t>> parseCmdLine(int argc, char *argv[]) {
     po::options_description hidden_opts("Hidden Arguments");
     hidden_opts.add_options()
         ("msh", po::value<string>(), "input msh file")
@@ -25,11 +26,12 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
 
     po::options_description parser_operations("Data source operations");
     parser_operations.add_options()
-        ("list",                           "List all fields in the msh")
-        ("extract,e", po::value<string>(), "Extract field(s) matching a given name (or name pattern)")
-        ("extractAll",                     "Extract all fields")
-        ("generate,g", po::value<string>(), "Generate a mesh property field (valid arguments: 'x', 'volume', 'barycenter')")
-        ("expression,E", po::value<string>(), "Generate a per-node scalar/vector field from an expression (comma separated components")
+        ("forceDimension", po::value<size_t>(), "Force the mesh to be interpreted as embedded in a particular dimension instead of using the simplex dimension.")
+        ("list",                                "List all fields in the msh")
+        ("extract,e", po::value<string>(),      "Extract field(s) matching a given name (or name pattern)")
+        ("extractAll",                          "Extract all fields")
+        ("generate,g", po::value<string>(),     "Generate a mesh property field (valid arguments: 'x', 'volume', 'barycenter')")
+        ("expression,E", po::value<string>(),   "Generate a per-node scalar/vector field from an expression (comma separated components")
         ("transferFieldsToPerElem,t", po::value<string>(), "Transfer fields on the stack to per-element fields on the passed target.msh (target.msh becomes current mesh/data source)")
         ("loadNewMSH,L",              po::value<string>(), "Load a new mesh/data source, replacing the current one. Must be of same spatial dimension as current mesh.")
         ;
@@ -41,6 +43,7 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
         ("push",      po::value<string>(), "Push a scalar literal to the top of the stack")
         ("reverse",                        "Reverse the entire stack.")
         ("import_sfield", po::value<string>(), "Import a scalar field from an ascii file")
+        ("import_vfield", po::value<string>(), "Import a vector field from an ascii file")
         ("noprint",                        "Suppress printing on exit")
         ("print,p",                        "Print top of stack")
         ("printName",                      "Print name of value at the top of the stack")
@@ -122,9 +125,11 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
     bool helpReq = false;
     string mshFile;
     vector<FilterInvocation> filters;
+    boost::optional<size_t> forcedDim;
     for (const auto &opt : parsedOptions->options) {
         if (opt.string_key == "msh") { ++numMeshes; mshFile = opt.value[0]; }
         else if (opt.string_key == "help") helpReq = true;
+        else if (opt.string_key == "forceDimension") forcedDim = std::stod(opt.value.at(0));
         else                         { filters.push_back({opt.string_key, (opt.value.size() ? opt.value[0] : "")}); }
     }
 
@@ -137,7 +142,7 @@ std::tuple<std::string, std::vector<FilterInvocation>> parseCmdLine(int argc, ch
     if (fail || helpReq)
         usage(fail, visible_opts);
 
-    return make_tuple(mshFile, filters);
+    return make_tuple(mshFile, filters, forcedDim);
 }
 
 int parseIntArg(const string &arg) {

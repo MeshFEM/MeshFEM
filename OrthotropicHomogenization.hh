@@ -72,7 +72,7 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     // Shearing probes:
     // 3D: shear probe s 0, 1, 2 ==> indices ij = 12, 20, 01
     // 2D: shear probe s 0       ==> indices ij = 01
-    // For reflection planes parallel to the probe shear plane (s), 
+    // For reflection planes parallel to the probe shear plane (s),
     //      w^ij(x)_c = 0 (plane with normal e_c)
     //      Note: this case only happens in 3D, where c = s
     // For reflection planes c perpendicular to the shear plane (c != s)
@@ -110,55 +110,50 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     for (size_t ij = 0; ij < flatLen(N); ++ij) {
         auto e_ij = -_Sim::SMatrix::CanonicalBasis(ij);
         l.push_back(sim.constantStrainLoad(e_ij));
-        auto &l_ij = l[ij];
-        continue;
-
-        // On the reflection planes, we must also accumulate contributions from
-        // the reflected elements:
-        // ACTUALLY: NOT REALLY??
-        for (size_t c = 0; c < N; ++c) {
-            Eigen::Matrix<Real, N, N> R;
-            R.setIdentity();
-            R(c, c) = -1.0;
-            // Strain in reflected element.
-            auto e_reflect = e_ij.transform(R);
-
-            typename _Sim::Mesh::ElementData::ElementLoad eLoad;
-            for (auto e : mesh.elements()) {
-                bool elementOnPlane = false;
-                for (auto n : e.nodes()) {
-                    auto bn = n.boundaryNode();
-                    if (!bn) continue;
-                    if (nodeFaceMemberships[bn.index()].onMinOrMaxFace(c))
-                        elementOnPlane = true;
-                }
-                if (elementOnPlane) {
-                    // Distribute load from reflected element to plane nodes.
-                    e->perElementConstantStrainLoad(e_reflect, eLoad);
-                    for (auto n : e.nodes()) {
-                        auto bn = n.boundaryNode();
-                        if (!bn) continue;
-                        // Note: load must be reflected.
-                        // Three reflections are effectively being applied here.
-                        // Four reflections (a nop) would correspond to
-                        // reflecting the FEM trial displacement function, which
-                        // we don't want.
-                        if (nodeFaceMemberships[bn.index()].onMinOrMaxFace(c))
-                            l_ij(n.index()) += R * eLoad.col(n.localIndex());
-                    }
-                }
-            }
-        }
     }
 
-    // MSHFieldWriter writer("adjustment_debug.msh", mesh);
-    // for (size_t ij = 0; ij < flatLen(N); ++ij) {
-    //     writer.addField("l_ij " + std::to_string(ij), l_ij);
-    // }
-
+    // Solve the cell problems.
     for (size_t ij = 0; ij < flatLen(N); ++ij) {
         if (ij < N) w_ij.push_back(probeSystems.at(         0)->solve(l[ij]));
         else        w_ij.push_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
+    }
+}
+
+constexpr inline size_t numReflectedCells(size_t N) { return 1 << N; }
+
+////////////////////////////////////////////////////////////////////////////////
+/*! Get the reflections mapping normals and displacements to the corresponding
+//  quantities in each of the reflected orthotropic base cell copies.
+//  @param[in]  probeIndex           which cell problem/probe condition?
+//  @param[out] normalReflect        scaling of each normal component
+//  @param[out] displacementReflect  scaling of each displacement component
+//                                   (for each reflected cell)
+*///////////////////////////////////////////////////////////////////////////////
+template<size_t N>
+void getReflectedCellInfo(size_t probeIndex,
+                          std::vector<VectorND<N>> &normalReflect,
+                          std::vector<VectorND<N>> &displacementReflect) {
+    constexpr size_t NR = numReflectedCells(N);
+    normalReflect.resize(NR), displacementReflect.resize(NR);
+
+    for (size_t r = 0; r < NR; ++r) {
+        for (size_t c = 0; c < N; ++c) {
+            normalReflect[r][c] = (r & (1 << c)) ? -1.0 : 1.0;
+            // stretching probe: displacement reflects across each plane
+            if (probeIndex < N) displacementReflect[r][c] = normalReflect[r][c];
+            else {
+                // shearing probe: displacement reflects across shearing plane (s)
+                const size_t sPlane = probeIndex - N;
+                displacementReflect[r][c] = (c == sPlane) ? normalReflect[r][c] : 1.0;
+                // displacement negates and reflects within shearing plane
+                for (size_t op = 1; op < N; ++op) {
+                    const size_t otherPlane = (sPlane + op) % N;
+                    if (c == otherPlane) continue; // net effect of negate + reflect is zero for the reflected component
+                    // the other components get negated
+                    if (r & (1 << otherPlane)) displacementReflect[r][c] *= -1.0;
+                }
+            }
+        }
     }
 }
 
@@ -175,58 +170,43 @@ typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
 
     // Assume elasticity tensor is constant over the entire base cell
     const typename _Sim::ETensor &EBase = mesh.element(0)->E();
+    constexpr size_t NR = numReflectedCells(N);
 
     typename _Sim::ETensor Eh;
     SMatrix nw_pq;
 
     // Displacement restricted to a boundary element
     Interpolant<VectorND<N>, _Sim::K - 1, _Sim::Degree> w_be;
-    for (auto be : mesh.boundaryElements()) {
-        typename _Sim::ETensor Econtrib;
-        const auto &n = be->normal();
-        for (size_t i = 0; i < w_ij.size(); ++i) {
-            const auto &w = w_ij[i];
+    for (size_t i = 0; i < w_ij.size(); ++i) {
+        const auto &w = w_ij[i];
+
+        std::vector<VectorND<N>> normR, dispR;
+        getReflectedCellInfo<N>(i, normR, dispR);
+
+        for (auto be : mesh.boundaryElements()) {
+            typename _Sim::ETensor Econtrib;
+            const auto &n = be->normal();
+
             // Copy the boundary node displacements into interpolant
-            for (size_t ni = 0; ni < w_be.size(); ++ni)
-                w_be[ni] = w(be.node(ni).volumeNode().index());
+            for (auto bn : be.nodes())
+                w_be[bn.localIndex()] = w(bn.volumeNode().index());
+
             auto w_be_int = w_be.integrate(be->volume());
-            
+
             nw_pq.clear();
 
-            constexpr size_t NReflectedCells = 1 << N;
-            Real scale = 1.0 / NReflectedCells;
-            for (size_t r = 0; r < NReflectedCells; ++r) {
-                // Which components of the fluctuation displacements and normals are reflected?
-                // TODO: change order of be/ij loops and factor this out.
-                VectorND<N> normalReflect, displacementReflect;
-                for (size_t c = 0; c < N; ++c) {
-                    normalReflect[c]       = (r & (1 << c)) ? -1.0 : 1.0;
-                    // stretching probe: displacement reflects across each plane
-                    if (i < N) displacementReflect[c] = normalReflect[c];
-                    else {
-                        // shearing probe: displacement reflects across shearing plane (s)
-                        const size_t sPlane = i - N;
-                        displacementReflect[c] = (c == sPlane) ? normalReflect[c] : 1.0;
-                        // displacement negates and reflects within shearing plane
-                        for (size_t op = 1; op < N; ++op) {
-                            const size_t otherPlane = (sPlane + op) % N;
-                            if (c == otherPlane) continue; // net effect of negate + reflect is zero for the reflected component
-                            // the other components get negated
-                            if (r & (1 << otherPlane)) displacementReflect[c] *= -1.0;
-                        }
-                    }
-                }
-
+            for (size_t r = 0; r < NR; ++r) {
                 for (size_t p = 0; p < N; ++p)
                     for (size_t q = p; q < N; ++q)
-                        nw_pq(p, q) += 0.5 * scale * (displacementReflect[p] * normalReflect[q] * w_be_int[p] * n[q]
-                                                    + displacementReflect[q] * normalReflect[p] * w_be_int[q] * n[p]);
+                        nw_pq(p, q) += dispR[r][p] * normR[r][q] * w_be_int[p] * n[q] +
+                                       dispR[r][q] * normR[r][p] * w_be_int[q] * n[p];
             }
 
             Eh.DRowAsSymMatrix(i) += EBase.doubleContract(nw_pq);
         }
     }
 
+    Eh *= 0.5 / NR;
     Eh += EBase * mesh.volume();
     Eh /= baseCellVolume;
 

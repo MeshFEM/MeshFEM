@@ -219,16 +219,13 @@ int main(int argc, const char *argv[])
             }
             else {
                 // Output is the unmodified surface mesh
-                for (size_t bvi = 0; bvi < mesh.numBoundaryVertices(); ++bvi)
-                    outVertices.push_back(mesh.boundaryVertex(bvi)->p);
+                for (auto bv : mesh.boundaryVertices())
+                    outVertices.push_back(bv->p);
 
-                MeshIO::IOElement btri(3);
-                for (size_t bfi = 0; bfi < mesh.numBoundaryFaces(); ++bfi) {
-                    Mesh::BoundaryFaceHandle bf = mesh.boundaryFace(bfi);
-                    btri[0] = bf.vertex(0).index();
-                    btri[1] = bf.vertex(1).index();
-                    btri[2] = bf.vertex(2).index();
-                    outElements.push_back(btri);
+                for (auto bf : mesh.boundaryFaces()) {
+                    outElements.emplace_back(bf.vertex(0).index(),
+                                             bf.vertex(1).index(),
+                                             bf.vertex(2).index());
                 }
             }
         }

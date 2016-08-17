@@ -103,9 +103,17 @@ struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     };
 
     Isotropic() {
-        // Default Parameters
-        vars[0] = 50.0;
-        vars[1] = 0.3;
+        // Default Parameters: midway between bounds (if they exist)
+        const auto &lb = this->lowerBounds();
+        const auto &ub = this->upperBounds();
+        if ((lb.size() == 2) && (ub.size() == 2)) {
+            for (auto &bd : lb) vars[bd.var]  = 0.5 * bd.value;
+            for (auto &bd : ub) vars[bd.var] += 0.5 * bd.value;
+        }
+        else {
+            vars[0] = 50.0;
+            vars[1] = 0.3;
+        }
     }
 
     static const std::string &variableName(size_t i) {

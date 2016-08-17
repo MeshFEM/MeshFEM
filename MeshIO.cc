@@ -88,6 +88,7 @@ Format guessFormat(const std::string &path) {
     if (ext == ".off")  return FMT_OFF;
     if (ext == ".obj")  return FMT_OBJ;
     if (ext == ".wire") return FMT_OBJ;
+    if (ext == ".stl")  return FMT_STL;
     if (ext == ".msh")  return FMT_MSH;
     if (ext == ".poly") return FMT_POLY;
     if (ext == ".node") return FMT_NODE_ELE;
@@ -109,12 +110,13 @@ MeshIO *getMeshIO(Format &format) {
     static MeshIO_MSH   s_mshASCIIIO;
     static MeshIO_POLY  s_polyIO;
     static MeshIO_Medit s_meditIO;
+    static MeshIO_STL   s_stlIO;
 
     s_mshASCIIIO.setBinary(false);
 
     // Indexed using Format enum (order must match enum)
     static std::vector<MeshIO *> IOs = { &s_offIO, &s_objIO, &s_mshIO, &s_mshASCIIIO,
-        &s_polyIO, NULL /* NodeEle must be handled specially */, &s_meditIO };
+        &s_polyIO, NULL /* NodeEle must be handled specially */, &s_meditIO, &s_stlIO };
 
     if (format == FMT_NODE_ELE)
         throw std::runtime_error("getMeshIO method doesn't support Node/Ele");
@@ -369,6 +371,50 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
     if (polySize == 3) return MESH_TRI;
     if (polySize == 4) return MESH_QUAD;
     return MESH_INVALID;
+}
+
+void MeshIO_STL::save(ostream &os, const vector<Vertex> &nodes,
+                      const vector<Element> &elements, MeshType /* t */) {
+    // Binary STL format for now.
+    char header[80];
+    string headerStr = "Binary STL created by Julian Panetta's MeshFEM (Little Endian)";
+    memset(header, 0, 80);
+    for (size_t i = 0; i < headerStr.size(); ++i) header[i] = headerStr[i];
+    os.write(header, sizeof(header));
+    const uint32_t numTriangles = elements.size();
+    os.write((const char *)&numTriangles, 4);
+
+    const uint16_t numAttributes = 0;
+    float singlePrecisionData[12];
+    for (auto &e : elements) {
+        if (e.size() != 3) throw std::runtime_error("STL only supports triangle meshes!");
+        Point3D p[] = { nodes.at(e[0]).point,
+                        nodes.at(e[1]).point,
+                        nodes.at(e[2]).point };
+        
+        Vector3D e1(p[0] - p[2]), e2(p[1] - p[0]);
+        Vector3D normal = e1.cross(e2);
+        normal /= normal.norm();
+
+        size_t offset = 0;
+        singlePrecisionData[offset++] = normal[0];
+        singlePrecisionData[offset++] = normal[1];
+        singlePrecisionData[offset++] = normal[2];
+
+        for (size_t i = 0; i < 3; ++i) {
+            singlePrecisionData[offset++] = p[i][0];
+            singlePrecisionData[offset++] = p[i][1];
+            singlePrecisionData[offset++] = p[i][2];
+        }
+
+        os.write((const char *)singlePrecisionData, sizeof(singlePrecisionData));
+        os.write((const char *)&numAttributes, sizeof(uint16_t));
+    }
+}
+
+MeshType MeshIO_STL::load(istream &/* is */, vector<Vertex> &/* nodes */,
+                          vector<Element> &/* elements */, MeshType /* t */) {
+    throw std::runtime_error("STL file import unsupported");
 }
 
 void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,

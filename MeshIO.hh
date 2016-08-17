@@ -27,7 +27,7 @@
 
 namespace MeshIO {
     /** Supported file formats */
-    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_MSH_ASCII = 3, FMT_POLY = 4, FMT_NODE_ELE = 5, FMT_MEDIT = 6,
+    typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_MSH_ASCII = 3, FMT_POLY = 4, FMT_NODE_ELE = 5, FMT_MEDIT = 6, FMT_STL = 7,
                    FMT_GUESS = -1, FMT_INVALID = -1 } Format;
 
     typedef enum { MESH_TRI = 0, MESH_TET = 1, MESH_QUAD = 2, MESH_TRI_QUAD = 3, MESH_HEX = 4,
@@ -158,6 +158,15 @@ namespace MeshIO {
     };
 
     class MeshIO_OBJ : public MeshIO {
+        public:
+            typedef IOVertex  Vertex;
+            typedef IOElement Element;
+
+            void save(std::ostream &os, const std::vector<Vertex> &v, const std::vector<Element> &e, MeshType t);
+            MeshType load(std::istream &is, std::vector<Vertex> &v, std::vector<Element> &e, MeshType t);
+    };
+
+    class MeshIO_STL : public MeshIO {
         public:
             typedef IOVertex  Vertex;
             typedef IOElement Element;

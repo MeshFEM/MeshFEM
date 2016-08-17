@@ -4,6 +4,11 @@
 /*! @file
 //      Construct the sparse FEM Laplacian matrix in triplet form.
 //      CONSTRUCTS UPPER TRIANGLE ONLY!!!
+//
+//      Note: this actually constructs the negative of negative semidefinite
+//      Laplacian operator. In other words, it's the matrix corresponding to the
+//      linear system:
+//      - laplacian u = f
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -14,6 +19,7 @@
 
 #include <SparseMatrices.hh>
 #include <limits>
+#include "GaussQuadrature.hh"
 
 namespace Laplacian {
 

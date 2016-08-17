@@ -133,9 +133,9 @@ void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
         catch(...) { }
     }
 
-    shared_ptr<MField> matField(new MField(inElements.size(), matIdxForElement));
     if (args.count("bounds"))
         _Material<_N>::setBoundsFromFile(args["bounds"].as<string>());
+    shared_ptr<MField> matField(new MField(inElements.size(), matIdxForElement));
 
     bool noRigidMotion;
     auto bconds = readBoundaryConditions<_N>(bcPath,
