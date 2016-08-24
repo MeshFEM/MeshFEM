@@ -64,14 +64,16 @@ std::vector<typename _Sim::VField> solveCellProblems(_Sim &sim, Real cellEpsilon
 //  where |Y| = periodic cell (grid bounding box) volume
 //  @param[in] w_ij           Fluctuation displacements
 //  @param[in] sim            Linear elasticity simulator for omega.
-//  @param[in] baseCellVolume |Y| (could differ from sim.boundingBox().volume())
+//  @param[in] baseCellVolume |Y| (defaults to mesh.boundingBox().volume())
 //  @return    Homogenized elasticity tensor
 *///////////////////////////////////////////////////////////////////////////
 template<class _Sim>
 typename _Sim::ETensor homogenizedElasticityTensor(
         const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
-        Real baseCellVolume) {
+        Real baseCellVolume = 0.0) {
     const auto &mesh = sim.mesh();
+    if (baseCellVolume == 0.0) baseCellVolume = mesh.boundingBox().volume();
+
     typedef typename _Sim::SMatrix SMatrix;
     constexpr size_t numStrains = SMatrix::flatSize();
     assert(w_ij.size() == numStrains);
@@ -91,6 +93,7 @@ typename _Sim::ETensor homogenizedElasticityTensor(
         Eh += Econtrib;
     }
     Eh /= baseCellVolume;
+
     return Eh;
 #if 0
         // The following "energy-like" version is equivalent to the more efficient
@@ -126,7 +129,7 @@ typename _Sim::ETensor homogenizedElasticityTensor(
 //  Assuming that the base elasticity tensor is constant over omega, we can
 //  rewrite the homogenized elasticity tensor stress integral formula in
 //  terms of displacements (using Green's theorem):
-//  Eh_ijkl = 1/|Y| int_w [E : strain(w_ij)]_kl + E_ijkl dy
+//  Eh_ijkl = 1/|Y| int_w [E : strain(w_kl)]_ij + E_ijkl dy
 //          = 1/|Y| int_dw E_ijpq frac{1}{2} (w^{kl}_p n_q + w^{kl}_q n_p) dA(y) + E * volFrac
 //          = 1/|Y| E_ijpq nw_pq + E * volFrac
 //  Where   |Y|  = periodic cell (grid bounding box) volume
@@ -176,14 +179,6 @@ typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
     Eh /= baseCellVolume;
 
     return Eh;
-}
-
-// Assumes the base cell is the axis-aligned mesh bounding box
-// (not true, e.g., for rotated base cells).
-template<class _Sim>
-typename _Sim::ETensor homogenizedElasticityTensor(
-        const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim) {
-    return homogenizedElasticityTensor(w_ij, sim, sim.mesh().boundingBox().volume());
 }
 
 ////////////////////////////////////////////////////////////////////////////

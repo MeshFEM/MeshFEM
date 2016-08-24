@@ -5,6 +5,7 @@
 //      Homogenization routines taking advantage of orthotropic symmetry by
 //      analyzing only the orthotropic base cell. This cuts the matrix size in
 //      four for 2D, eight for 3D.
+//      These routines assume an orthotropic base material.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -17,6 +18,7 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <bitset>
 
 #include "PeriodicBoundaryMatcher.hh"
 
@@ -76,22 +78,30 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     //      w^ij(x)_c = 0 (plane with normal e_c)
     //      Note: this case only happens in 3D, where c = s
     // For reflection planes c perpendicular to the shear plane (c != s)
-    //      w^ij(x)_{j != c} = 0   (two components: j = s, j!=c && j!=s)
+    //      w^ij(x)_{j != c} = 0   (two components in 3D: j = s, j!=c && j!=s)
     for (size_t s = 0; s < flatLen(N) - N; ++s) {
         auto shearSystem = Future::make_unique<SPSDSystem<Real>>(K);
         fixedVars.clear();
         // Note: nodes lying on the edges/corners may have more than one plane
         // trying to fix a particular coordinate; we could explicitly detect
         // this, but it's easier to just do a union of the fixVar set.
+        // (We must ensure fixVar doesn't contain duplicates.)
         std::vector<bool> fixVar(N * mesh.numNodes(), false);
         for (auto bn : mesh.boundaryNodes()) {
             const size_t ni = bn.volumeNode().index();
             for (size_t c = 0; c < N; ++c) {
                 if (nodeFaceMemberships[bn.index()].onMinOrMaxFace(c)) {
-                    // coordinate perpendicular to shear plane is always fixed
-                    fixVar.at(N * ni + s) = true;;
-                    // in 3D, fix coordinate equal to neither c nor s.
-                    if ((N == 3) && (c != s)) fixVar.at(N * ni + (N - (c + s))) = true;
+                    if (N == 3) {
+                        // always fix coordinate perpendicular to shear plane (whether or not c == s)
+                        fixVar.at(N * ni + s) = true;
+                        // For reflections in shear plane, also fix coordinate equal to neither c nor s.
+                        if (c != s) fixVar.at(N * ni + (N - (c + s))) = true;
+                    }
+                    else {
+                        // In 2D all reflections are in the shear plane; fix the
+                        // coordinate not equal to c.
+                        fixVar.at(N * ni + (c == 0)) = true;
+                    }
                 }
             }
         }
@@ -114,6 +124,7 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
 
     // Solve the cell problems.
     for (size_t ij = 0; ij < flatLen(N); ++ij) {
+        // std::cerr << "Solving cell problem " << ij << std::endl;
         if (ij < N) w_ij.push_back(probeSystems.at(         0)->solve(l[ij]));
         else        w_ij.push_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
     }
@@ -121,96 +132,63 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
 
 constexpr inline size_t numReflectedCells(size_t N) { return 1 << N; }
 
-////////////////////////////////////////////////////////////////////////////////
-/*! Get the reflections mapping normals and displacements to the corresponding
-//  quantities in each of the reflected orthotropic base cell copies.
-//  @param[in]  probeIndex           which cell problem/probe condition?
-//  @param[out] normalReflect        scaling of each normal component
-//  @param[out] displacementReflect  scaling of each displacement component
-//                                   (for each reflected cell)
-*///////////////////////////////////////////////////////////////////////////////
+// The shearing fluctuation displacements negate for reflections in the shearing
+// plane. (The sign is negative when the number of reflections is odd).
+// Determine this sign for shear probe "ij" and reflection "r" The bits of r
+// determine which of the N coordinate reflections are applied.
 template<size_t N>
-void getReflectedCellInfo(size_t probeIndex,
-                          std::vector<VectorND<N>> &normalReflect,
-                          std::vector<VectorND<N>> &displacementReflect) {
-    constexpr size_t NR = numReflectedCells(N);
-    normalReflect.resize(NR), displacementReflect.resize(NR);
+Real fluctuationDisplacementSign(size_t ij, size_t r) {
+    if (ij < N) return 1.0;
+    std::bitset<N> isReflected(r);
 
-    for (size_t r = 0; r < NR; ++r) {
-        for (size_t c = 0; c < N; ++c) {
-            normalReflect[r][c] = (r & (1 << c)) ? -1.0 : 1.0;
-            // stretching probe: displacement reflects across each plane
-            if (probeIndex < N) displacementReflect[r][c] = normalReflect[r][c];
-            else {
-                // shearing probe: displacement reflects across shearing plane (s)
-                const size_t sPlane = probeIndex - N;
-                displacementReflect[r][c] = (c == sPlane) ? normalReflect[r][c] : 1.0;
-                // displacement negates and reflects within shearing plane
-                for (size_t op = 1; op < N; ++op) {
-                    const size_t otherPlane = (sPlane + op) % N;
-                    if (c == otherPlane) continue; // net effect of negate + reflect is zero for the reflected component
-                    // the other components get negated
-                    if (r & (1 << otherPlane)) displacementReflect[r][c] *= -1.0;
-                }
+    if (N == 3) {
+        // Don't care about reflections orthogonal to shear plane in 3D
+        size_t sPlane = ij - N;
+        isReflected.reset(sPlane); 
+    }
+
+    return (isReflected.count() == 1) ? -1.0 : 1.0;
+}
+
+// Compute the full periodic homogenized elasticity tensor from the orthotropic
+// base cell quantity. The homogenized tensor is expressed as an integral over
+// the full period cell. But for orthotropic patterns, we can instead integrate
+// only over the orthotropic sub-base-cell (what happens when we call
+// PeriodicHomogenization::homogenizedElasticityTensor) and then reconstruct the
+// full integral by appropriate transformations.
+template<size_t N>
+ElasticityTensor<Real, N>
+homogenizedTensorFromOrthoCellQuantity(const ElasticityTensor<Real, N> &EhO) {
+    ElasticityTensor<Real, N> Eh;
+    for (size_t r = 0; r < numReflectedCells(N); ++r) {
+        for (size_t kl = 0; kl < flatLen(N); ++kl) {
+            Real s_kl = fluctuationDisplacementSign<N>(kl, r);
+            for (size_t ij = 0; ij <= kl; ++ij) {
+                Real s_ij = fluctuationDisplacementSign<N>(ij, r);
+                Eh.D(ij, kl) += s_ij * s_kl * EhO.D(ij, kl);
             }
         }
     }
+
+    Eh *= 1.0 / numReflectedCells(N);
+    return Eh;
 }
 
 template<class _Sim>
 typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
         const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
         Real baseCellVolume = 0.0) {
-    constexpr size_t N = _Sim::N;
-    const auto &mesh = sim.mesh();
-    if (baseCellVolume == 0.0) baseCellVolume = mesh.boundingBox().volume();
-    using SMatrix = typename _Sim::SMatrix ;
-    constexpr size_t numStrains = SMatrix::flatSize();
-    assert(w_ij.size() == numStrains);
+    auto EhOrtho = PeriodicHomogenization::homogenizedElasticityTensorDisplacementForm(
+                    w_ij, sim, baseCellVolume);
+    return homogenizedTensorFromOrthoCellQuantity(EhOrtho);
+}
 
-    // Assume elasticity tensor is constant over the entire base cell
-    const typename _Sim::ETensor &EBase = mesh.element(0)->E();
-    constexpr size_t NR = numReflectedCells(N);
-
-    typename _Sim::ETensor Eh;
-    SMatrix nw_pq;
-
-    // Displacement restricted to a boundary element
-    Interpolant<VectorND<N>, _Sim::K - 1, _Sim::Degree> w_be;
-    for (size_t i = 0; i < w_ij.size(); ++i) {
-        const auto &w = w_ij[i];
-
-        std::vector<VectorND<N>> normR, dispR;
-        getReflectedCellInfo<N>(i, normR, dispR);
-
-        for (auto be : mesh.boundaryElements()) {
-            typename _Sim::ETensor Econtrib;
-            const auto &n = be->normal();
-
-            // Copy the boundary node displacements into interpolant
-            for (auto bn : be.nodes())
-                w_be[bn.localIndex()] = w(bn.volumeNode().index());
-
-            auto w_be_int = w_be.integrate(be->volume());
-
-            nw_pq.clear();
-
-            for (size_t r = 0; r < NR; ++r) {
-                for (size_t p = 0; p < N; ++p)
-                    for (size_t q = p; q < N; ++q)
-                        nw_pq(p, q) += dispR[r][p] * normR[r][q] * w_be_int[p] * n[q] +
-                                       dispR[r][q] * normR[r][p] * w_be_int[q] * n[p];
-            }
-
-            Eh.DRowAsSymMatrix(i) += EBase.doubleContract(nw_pq);
-        }
-    }
-
-    Eh *= 0.5 / NR;
-    Eh += EBase * mesh.volume();
-    Eh /= baseCellVolume;
-
-    return Eh;
+template<class _Sim>
+typename _Sim::ETensor homogenizedElasticityTensor(
+        const std::vector<typename _Sim::VField> &w_ij, const _Sim &sim,
+        Real baseCellVolume = 0.0) {
+    auto EhOrtho = PeriodicHomogenization::homogenizedElasticityTensor(w_ij, sim, baseCellVolume);
+    return homogenizedTensorFromOrthoCellQuantity(EhOrtho);
 }
 
 } // Orthotropic

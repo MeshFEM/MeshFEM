@@ -112,7 +112,7 @@ void execute(const po::variables_map &args,
     else Eh = PeriodicHomogenization::Orthotropic::homogenizedElasticityTensorDisplacementForm(w_ij, sim);
     BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
-    cout << setprecision(16) << endl;
+    cout << setprecision(16);
     cout << "Homogenized elasticity tensor:" << endl;
     cout << Eh << endl << endl;
 
