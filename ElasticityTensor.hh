@@ -56,13 +56,13 @@ public:
     // interface--useful for periodic homogenization formulas where rows of the
     // flattened homogenized elasticity tensor are modulated by flattened
     // fluctuation stresses.
-    typedef SymmetricMatrixRef<_Dim, RowXpr, ConstRowXpr>     SMRowWrapper;
-    typedef ConstSymmetricMatrixRef<_Dim, ConstRowXpr>        ConstSMRowWrapper;
-    typedef SymmetricMatrixRef<_Dim, ColXpr, ConstColXpr>     SMColWrapper;
-    typedef ConstSymmetricMatrixRef<_Dim, ConstColXpr>        ConstSMColWrapper;
+    typedef      SymmetricMatrixRef<_Dim, RowXpr, ConstRowXpr>      SMRowWrapper;
+    typedef ConstSymmetricMatrixRef<_Dim,         ConstRowXpr> ConstSMRowWrapper;
+    typedef      SymmetricMatrixRef<_Dim, ColXpr, ConstColXpr>      SMColWrapper;
+    typedef ConstSymmetricMatrixRef<_Dim,         ConstColXpr> ConstSMColWrapper;
 
-    typedef Eigen::Matrix<Real, flatLen(_Dim), 1>             FlattenedRank2Tensor;
-    typedef SymmetricMatrix<_Dim, FlattenedRank2Tensor>       SMatrix;
+    typedef Eigen::Matrix<Real, flatLen(_Dim), 1>       FlattenedRank2Tensor;
+    typedef SymmetricMatrix<_Dim, FlattenedRank2Tensor> SMatrix;
 
     ElasticityTensor() : m_d(DType::Zero()) { }
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
@@ -103,6 +103,10 @@ public:
                                          m_d(1, 1) = lambda + 2 * mu;
             m_d(2, 2) = mu;
         }
+
+        // Not strictly necessary since only the upper triangle should ever be
+        // referenced (but may prevent confusion)
+        m_d = m_d.template selfadjointView<Eigen::Upper>();
     }
 
     void setOrthotropic3D(Real   Ex, Real   Ey, Real   Ez,
@@ -574,6 +578,11 @@ public:
             os << ((i < _Dim - 1) ? "}, " : "}");
         }
         os << "}";
+    }
+
+    // For debug purposes only
+    void writeD(std::ostream &os) const {
+        os << m_d;
     }
 
 private:
