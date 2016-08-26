@@ -22,13 +22,27 @@
 
 #include "PeriodicBoundaryMatcher.hh"
 
+// WARNING: ONLY WORKS WITH ORTHOTROPIC BASE MATERIAL
 namespace PeriodicHomogenization {
 namespace Orthotropic {
 
-// WARNING: ONLY WORKS WITH ORTHOTROPIC BASE MATERIAL
+////////////////////////////////////////////////////////////////////////////
+/*! Solve the linear elasticity periodic homogenization cell problems for
+//  each constant strain e^ij:
+//       -div E : [ strain(w^ij) + e^ij ] = 0 in omega
+//        n . E : [ strain(w^ij) + e^ij ] = 0 on omega's boundary
+//        w^ij periodic
+//        w^ij = 0 on arbitrary internal node ("pin" no rigid translation constraint)
+//  @param[out]   w_ij   Fluctuation displacements (cell problem solutions)
+//  @param[inout] sim    Linear elasticity simulator for omega.
+//  @return     The SPD cell problem systems (one for stretches, 3 for shears)
+//  Warning: this function mutates sim by removing periodic and pin
+//           constraints.
+*///////////////////////////////////////////////////////////////////////////
 template<class _Sim>
-void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
-                       Real cellEpsilon = 1e-7) {
+std::vector<std::unique_ptr<SPSDSystem<Real>>>
+solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
+                  Real cellEpsilon = 1e-7) {
     constexpr size_t N = _Sim::N;
 
     // Orthotropic homogenization doesn't need periodicity/NRM constraints
@@ -57,6 +71,13 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     nodeFaceMemberships.reserve(mesh.numBoundaryNodes());
     for (auto bn : mesh.boundaryNodes())
         nodeFaceMemberships.emplace_back(bn.volumeNode()->p, cell, cellEpsilon);
+
+    // Manually the internal faces (those on the orthotropic base cell faces).
+    // These are analogous to the periodic boundary elements in the triply
+    // periodic base cell case.
+    auto isInternalBE = PeriodicBoundaryMatcher::determineCellFaceBoundaryElements(mesh, nodeFaceMemberships);
+    for (auto be : sim.mesh().boundaryElements())
+        be->isInternal = isInternalBE.at(be.index());
 
     // Stretching probe:
     // w^ii(x)_c = 0 on reflection plane c (plane with normal e_c)
@@ -128,6 +149,8 @@ void solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
         if (ij < N) w_ij.push_back(probeSystems.at(         0)->solve(l[ij]));
         else        w_ij.push_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
     }
+
+    return probeSystems;
 }
 
 constexpr inline size_t numReflectedCells(size_t N) { return 1 << N; }
@@ -189,6 +212,19 @@ typename _Sim::ETensor homogenizedElasticityTensor(
         Real baseCellVolume = 0.0) {
     auto EhOrtho = PeriodicHomogenization::homogenizedElasticityTensor(w_ij, sim, baseCellVolume);
     return homogenizedTensorFromOrthoCellQuantity(EhOrtho);
+}
+
+// Compute the exact derivative of the full homogenized elasticity tensor with
+// respect to each mesh vertex position.
+template<class _Sim>
+OneForm<typename _Sim::ETensor, _Sim::N>
+homogenizedElasticityTensorDiscreteDifferential(
+        const std::vector<typename _Sim::VField> &w,
+        const _Sim &sim)
+{
+    using ET = typename _Sim::ETensor;
+    auto dEhOrtho = PeriodicHomogenization::homogenizedElasticityTensorDiscreteDifferential(w, sim);
+    return compose([](const ET &e) { return homogenizedTensorFromOrthoCellQuantity(e); }, dEhOrtho);
 }
 
 } // Orthotropic

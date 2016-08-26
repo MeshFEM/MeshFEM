@@ -119,6 +119,30 @@ void determineCellBoundaryFaceMembership(const PointCollection &bdryPoints,
     }
 }
 
+
+// Given the cell face membership of every node, determine which boundary
+// elements of the mesh lie on the cell faces (which boundary elements have all
+// nodes with a single face in common).
+template<size_t N, class _FEMMesh>
+std::vector<bool>
+determineCellFaceBoundaryElements(const _FEMMesh &mesh, const std::vector<FaceMembership<N>> &faceMemberships) {
+    std::vector<bool> isOnCellFace(mesh.numBoundaryElements());
+    for (auto be : mesh.boundaryElements()) {
+        // Determine what periodic boundary this element lies on.
+        auto pboundaries = FaceMembership<N>::AllFaces();
+        for (auto bn : be.nodes())
+            pboundaries &= faceMemberships.at(bn.index());
+        // An element can't be on more than one boundary...
+        size_t numBoundaries = pboundaries.count();
+        assert(numBoundaries < 2);
+        if (numBoundaries > 1)
+            throw std::runtime_error("Boundary element on more than one cell face.");
+
+        isOnCellFace[be.index()] = numBoundaries > 0;
+    }
+    return isOnCellFace;
+}
+
 // Determine the periodic cell nodes that are identified with each other.
 template<size_t N, class PointCollection>
 void match(const PointCollection &bdryPoints,

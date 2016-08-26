@@ -332,17 +332,8 @@ public:
 
         // Mark periodic boundary elements: those with all corners on the same
         // periodic boundary.
-        m_isPeriodicBoundaryElement.resize(mesh.numBoundaryElements());
-        for (auto be : mesh.boundaryElements()) {
-            // Determine what periodic boundary this element lies on.
-            auto pboundaries = m_periodicBoundariesForBoundaryNode.at(be.node(0).index());
-            for (size_t j = 1; j < be.numNodes(); ++j)
-                pboundaries &= m_periodicBoundariesForBoundaryNode.at(be.node(j).index());
-            // An element can't be on more than one boundary...
-            size_t numBoundaries = pboundaries.count();
-            assert(numBoundaries < 2);
-            m_isPeriodicBoundaryElement[be.index()] = numBoundaries > 0;
-        }
+        m_isPeriodicBoundaryElement = PeriodicBoundaryMatcher::determineCellFaceBoundaryElements(mesh,
+                m_periodicBoundariesForBoundaryNode);
 
         // Determine the "DoF index" for every node in the mesh. For internal
         // nodes, these are all unique. On the periodic boundary, these will be

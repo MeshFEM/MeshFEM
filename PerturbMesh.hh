@@ -33,7 +33,7 @@ void perturbedMesh(Real h, const VectorField<Real, 2> &v, const _FEMMesh &mesh,
             // Vertices on the periodic boundary don't move. This must
             // override any other setting, so we do it even if the vertex
             // has been visited before.
-            if (be->isPeriodic)
+            if (be->isInternal)
                 fixedLoc[vi] = bvv.node()->p;
             else {
                 // Visits from non-periodic boundary should not override.

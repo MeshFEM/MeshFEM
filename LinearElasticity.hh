@@ -345,7 +345,13 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         }
 
         Vector neumannTraction;
-        bool isPeriodic = false;
+
+        // In some cases, "boundary" faces can actually represent internal faces
+        // of the true object we're simulating. For example, for periodic
+        // boundary conditions, the faces with all nodes on the periodic
+        // boundary are actually internal after the identified nodes are
+        // stitched together.
+        bool isInternal = false;
     };
 
     struct BoundaryNode {
@@ -562,7 +568,7 @@ public:
                     for (size_t fi = 0; fi < e.numNeighbors(); ++fi) {
                         auto f = m_mesh.boundaryElement(e.interface(fi).boundaryEntity().index());
                         if (!f) continue;
-                        if (ignorePeriodicBdry && f->isPeriodic) continue;
+                        if (ignorePeriodicBdry && f->isInternal) continue;
                         restrictInterpolant(e, f, volPhiStrain, bdryPhiStrain);
 
                         auto  t_f =  t.at(f.index());
@@ -589,7 +595,7 @@ public:
 
         // Real totalVNManual = 0;
         // for (auto be : m_mesh.boundaryElements()) {
-        //     if (ignorePeriodicBdry && be->isPeriodic) continue;
+        //     if (ignorePeriodicBdry && be->isInternal) continue;
         //     totalVNManual += std::abs(vn[be.index()].integrate(be->volume()));
         // }
 
@@ -711,12 +717,14 @@ public:
         m_dofForNode = pc.periodicDoFsForNodes();
         m_numDoFs = pc.numPeriodicDoFs();
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
-            m_mesh.boundaryElement(i)->isPeriodic = pc.isPeriodicBE(i);
+            m_mesh.boundaryElement(i)->isInternal = pc.isPeriodicBE(i);
     }
 
     void removePeriodicConditions() {
         m_system.clear();
         m_dofForNode.clear();
+        for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
+            m_mesh.boundaryElement(i)->isInternal = false;
     }
 
     void applyBoundaryConditions(const std::vector<CondPtr<N>> &conds) {

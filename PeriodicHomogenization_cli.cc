@@ -101,7 +101,10 @@ void execute(const po::variables_map &args,
     BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
     if (args.count("orthotropicCell") == 0)      solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"));
-    else    PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
+    else {
+        auto systems = PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
+        cout << systems.size() << endl;
+    }
 
     BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
 
