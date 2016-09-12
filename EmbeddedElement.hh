@@ -259,7 +259,7 @@ public:
         //       *           ^ y
         //      / \          |
         //     1   0         |
-        //    /     \        +-----> x 
+        //    /     \        +-----> x
         //  0*---2---* 1
         // Inward-pointing edge perpendiculars
         Vector2D e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);

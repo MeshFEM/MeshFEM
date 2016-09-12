@@ -34,7 +34,7 @@ class FEMMesh;
 template<class _VertexData, class _HalfFaceData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
 struct MeshDataTraits<TetMesh<_VertexData, _HalfFaceData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>>
 {
-    static constexpr bool isFEMMesh = true;
+    static constexpr bool isFEMMesh = false;
     size_t K = 3;
 
     using VertexData           = _VertexData;
@@ -51,7 +51,7 @@ struct MeshDataTraits<TetMesh<_VertexData, _HalfFaceData, _TetData, _BoundaryVer
 template<class _VertexData, class _HalfEdgeData, class _TriData, class _BoundaryVertexData, class _BoundaryEdgeData>
 struct MeshDataTraits<TriMesh<_VertexData, _HalfEdgeData, _TriData, _BoundaryVertexData, _BoundaryEdgeData>>
 {
-    static constexpr bool isFEMMesh = true;
+    static constexpr bool isFEMMesh = false;
     size_t K = 2;
 
     using VertexData         = _VertexData;
