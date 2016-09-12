@@ -26,7 +26,7 @@ namespace MassMatrix {
 template<size_t Deg, class _FEMMesh>
 struct NodeGetter {
     static_assert(Deg == _FEMMesh::Deg, "Only full-degree and degree 1 mass matrices are supported.");
-    using EHandle = typename _FEMMesh::ConstElementHandle;
+    using EHandle = typename _FEMMesh::template EHandle<const _FEMMesh>;
     using NRT     = typename EHandle::NRangeTraits;
     static SubEntityHandleRange<NRT> nodes   (const  EHandle    &h) { return h.nodes(); }
     static size_t                    numNodes(const _FEMMesh &mesh) { return mesh.numNodes(); }
@@ -36,7 +36,7 @@ struct NodeGetter {
 // Degree-1 specialization: nodes always coincide with the vertices
 template<class _FEMMesh>
 struct NodeGetter<1, _FEMMesh> {
-    using EHandle = typename _FEMMesh::ConstElementHandle;
+    using EHandle = typename _FEMMesh::template EHandle<const _FEMMesh>;
     using VRT     = typename EHandle::VRangeTraits;
     static SubEntityHandleRange<VRT> nodes   (const  EHandle    &h) { return h.vertices(); }
     static size_t                    numNodes(const _FEMMesh &mesh) { return mesh.numVertices(); }
@@ -46,7 +46,7 @@ struct NodeGetter<1, _FEMMesh> {
 template<size_t Deg>
 struct Impl {
     template<class _FEMMesh>
-    static void construct(const _FEMMesh &mesh, 
+    static void construct(const _FEMMesh &mesh,
                           const std::vector<bool> &skipElem,
                           TripletMatrix<> &M) {
         bool skipping = (skipElem.size() == mesh.numElements());

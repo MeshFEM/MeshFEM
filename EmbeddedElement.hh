@@ -13,7 +13,7 @@
 //
 //  m_gradBarycentric holds the gradients of each barycentric coordinate
 //  function as column vectors.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/13/2014 15:19:00
@@ -139,7 +139,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace>
 using   AffineEmbeddedElement = EmbeddedElement<  AffineEmbeddedSimplex, _K, _Deg, EmbeddingSpace>;
 
 // Edges in 3D do not store normals, since the normal is ambiguous.
-// In the future, the normal could be defined to be in the plane of the 
+// In the future, the normal could be defined to be in the plane of the
 // incident triangle (if there is one).
 template<>
 class LinearlyEmbeddedSimplex<Simplex::Edge, Point3D> {
@@ -155,7 +155,7 @@ public:
         // Since vol = b * h / 3, this magnitude is b / (3 vol).
         //  0*-------* 1       +----->x
         Point3D e(p1 - p0);
-        m_volume = e.norm();        
+        m_volume = e.norm();
         e /= (m_volume * m_volume);
         m_gradBarycentric.col(0) = e;
         m_gradBarycentric.col(1) = -e;
@@ -188,7 +188,7 @@ public:
         //       |
         //  0*---+--->* 1       +----->x
         Point2D e(p1 - p0);
-        m_volume = e.norm();        
+        m_volume = e.norm();
 
         m_normal = Point2D(-e[1], e[0]);
         m_normal /= m_volume;
@@ -222,7 +222,7 @@ public:
         //       2             ^ y
         //       *             |
         //      / \            |
-        //     1 . 0           +-----> x 
+        //     1 . 0           +-----> x
         //    /  n  \         /
         //  0*---2---* 1     v z
         // Inward-pointing edge perpendiculars
@@ -295,7 +295,7 @@ public:
         //       *             z
         //      / \`.          ^
         //     /   \ `* 2      | ^ y
-        //    / __--\ /        |/  
+        //    / __--\ /        |/
         //  0*-------* 1       +----->x
         Point3D n0_doubleA = (p3 - p1).cross(p2 - p1);
         Real vol_6 = (p0 - p1).dot(n0_doubleA);

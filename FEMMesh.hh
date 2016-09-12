@@ -6,7 +6,7 @@
 //      discretizations.
 //      For linear FEM, nodes are located only on the vertices, and for
 //      quadratic FEM, nodes are located on both vertices and edge midpoints.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/16/2014 16:22:51
@@ -14,14 +14,16 @@
 #ifndef FEMMESH_HH
 #define FEMMESH_HH
 
-#include "Handle.hh"
+#include <map>
+#include <cassert>
+#include <type_traits>
+
 #include "Geometry.hh"
 #include "EmbeddedElement.hh"
 
 #include "SimplicialMesh.hh"
-#include <map>
-#include <cassert>
-#include <type_traits>
+#include "BoundaryMesh.hh"
+#include "Handles/FEMMeshHandles.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -73,130 +75,51 @@ struct DefaultFEMData {
     typedef LinearlyEmbeddedElement<_K - 1, _Deg, EmbeddingSpace> BoundaryElement;
 };
 
-// Boundary mesh wrapper: provide access to the boundary mesh using the same
-// interface as the volume mesh (except the boundary mesh has no boundary).
-// Const boundary meshes (BoundaryMesh<const FEMMesh>) can be constructed from
-// any FEMMesh, but non-const boundary meshes can only be constructed from
-// non-const meshes.
-template<bool isConst, class MeshType, class Derived>
-struct _BoundaryMeshAccess { };
-
-// Mutable
-template<class MeshType, class Derived>
-struct _BoundaryMeshAccess<false, MeshType, Derived> {
-    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle (i, static_cast<const Derived *>(this)->volumeMesh()); }
-    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle   (i, static_cast<const Derived *>(this)->volumeMesh()); }
-    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, static_cast<const Derived *>(this)->volumeMesh()); }
-
-    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-
-    typename MeshType::BoundaryVertexHandle   vertex(size_t i) { return typename MeshType::BoundaryVertexHandle (i, static_cast<Derived *>(this)->volumeMesh()); }
-    typename MeshType::BoundaryNodeHandle       node(size_t i) { return typename MeshType::BoundaryNodeHandle   (i, static_cast<Derived *>(this)->volumeMesh()); }
-    typename MeshType::BoundaryElementHandle element(size_t i) { return typename MeshType::BoundaryElementHandle(i, static_cast<Derived *>(this)->volumeMesh()); }
-
-    HandleRange<typename MeshType::BVRangeTraits> vertices() { return HandleRange<typename MeshType::BVRangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
-    HandleRange<typename MeshType::BNRangeTraits>    nodes() { return HandleRange<typename MeshType::BNRangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
-    HandleRange<typename MeshType::BERangeTraits> elements() { return HandleRange<typename MeshType::BERangeTraits>(static_cast<Derived *>(this)->volumeMesh()); }
-};
-
-// Immutable
-template<class MeshType, class Derived>
-struct _BoundaryMeshAccess<true, MeshType, Derived> {
-    typename MeshType::ConstBoundaryVertexHandle   vertex(size_t i) const { return typename MeshType::ConstBoundaryVertexHandle (i, static_cast<const Derived *>(this)->volumeMesh()); }
-    typename MeshType::ConstBoundaryNodeHandle       node(size_t i) const { return typename MeshType::ConstBoundaryNodeHandle   (i, static_cast<const Derived *>(this)->volumeMesh()); }
-    typename MeshType::ConstBoundaryElementHandle element(size_t i) const { return typename MeshType::ConstBoundaryElementHandle(i, static_cast<const Derived *>(this)->volumeMesh()); }
-
-    ConstHandleRange<typename MeshType::BVRangeTraits> vertices() const { return ConstHandleRange<typename MeshType::BVRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-    ConstHandleRange<typename MeshType::BNRangeTraits>    nodes() const { return ConstHandleRange<typename MeshType::BNRangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-    ConstHandleRange<typename MeshType::BERangeTraits> elements() const { return ConstHandleRange<typename MeshType::BERangeTraits>(static_cast<const Derived *>(this)->volumeMesh()); }
-};
-
-template<class CVMeshType>
-class BoundaryMesh : public _BoundaryMeshAccess<std::is_const<CVMeshType>::value,
-                                                typename std::remove_const<CVMeshType>::type,
-                                                BoundaryMesh<CVMeshType>>
-{
-    using _Access = _BoundaryMeshAccess<std::is_const<CVMeshType>::value, typename std::remove_const<CVMeshType>::type, BoundaryMesh>;
-public:
-    using MeshType           = typename std::remove_const<CVMeshType>::type;
-    using ConstElementHandle = typename MeshType::ConstBoundaryElementHandle;
-
-    // Boundary mesh's simplex dimension is one lower than volume mesh's
-    static constexpr size_t K = MeshType::K - 1;
-
-    BoundaryMesh(CVMeshType &m) : m_mesh(m) { }
-
-    using _Access::vertex;   using _Access::node;  using _Access::element;
-    using _Access::vertices; using _Access::nodes; using _Access::elements;
-
-    size_t numVertices()     const { return m_mesh.numBoundaryVertices(); }
-
-    size_t numElementNodes() const { return m_mesh.numBoundaryElementNodes(); }
-    size_t numVertexNodes()  const { return m_mesh.numBoundaryVertexNodes();  }
-    size_t numEdgeNodes()    const { return m_mesh.numBoundaryEdgeNodes();    }
-    size_t numNodes()        const { return m_mesh.numBoundaryNodes();        }
-    size_t numElements()     const { return m_mesh.numBoundaryElements();     }
-
-    typename std::add_const<CVMeshType>::type &volumeMesh() const { return m_mesh; }
-
-private:
-    CVMeshType &m_mesh;
-};
-
 template<size_t _K, size_t _Deg, class _EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
-class FEMMesh : public SimplicialMesh<_K,
+class FEMMesh : public Concepts::ElementMesh,
+    public SimplicialMesh<_K,
         // Store mesh-tied entities ({boundary,volume} {vertex,element} data) in the
         // underlying mesh data structure. The node data is managed by this data
         // structure.
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::Vertex,
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::Element,
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryVertex,
-        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement
-    >
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement>::type
 {
 public:
-    using EmbeddingSpace = _EmbeddingSpace;
-    // Unpack data types.
-    typedef _FEMData<_K, _Deg, EmbeddingSpace> FEMData;
-    typedef typename FEMData::Vertex          VertexData;
-    typedef typename FEMData::Node            NodeData;
-    typedef typename FEMData::Element         ElementData;
-    typedef typename FEMData::BoundaryVertex  BoundaryVertexData;
-    typedef typename FEMData::BoundaryNode    BoundaryNodeData;
-    typedef typename FEMData::BoundaryElement BoundaryElementData;
-
     static constexpr size_t K   = _K;
     static constexpr size_t Deg = _Deg;
+    using EmbeddingSpace = _EmbeddingSpace;
 
-    using BaseMesh = SimplicialMesh<_K, VertexData, ElementData, BoundaryVertexData, BoundaryElementData>;
+    // Unpack entity data types.
+    using FEMData = _FEMData<_K, _Deg, EmbeddingSpace>;
+    using VertexData          = typename FEMData::Vertex;
+    using NodeData            = typename FEMData::Node;
+    using ElementData         = typename FEMData::Element;
+    using BoundaryVertexData  = typename FEMData::BoundaryVertex;
+    using BoundaryNodeData    = typename FEMData::BoundaryNode;
+    using BoundaryElementData = typename FEMData::BoundaryElement;
 
-    template<typename Elements, typename Vertices>
-    FEMMesh(const Elements &elems, const Vertices &vertices);
-
-    // Entity handles (declared out-of-line in FEMMesh.inl).
-    // These are templated by mesh type so that subclasses of FEMMesh can more
-    // easily derive from them.
-    template<class _Mesh, template<class, class, class, class> class _HType> class  EHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BEHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  VHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  NHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BVHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BNHandle;
-    typedef  EHandle<FEMMesh, Handle>         ElementHandle; typedef  EHandle<FEMMesh, ConstHandle>         ConstElementHandle;
-    typedef BEHandle<FEMMesh, Handle> BoundaryElementHandle; typedef BEHandle<FEMMesh, ConstHandle> ConstBoundaryElementHandle;
-    typedef  VHandle<FEMMesh, Handle>          VertexHandle; typedef  VHandle<FEMMesh, ConstHandle>          ConstVertexHandle;
-    typedef BVHandle<FEMMesh, Handle>  BoundaryVertexHandle; typedef BVHandle<FEMMesh, ConstHandle>  ConstBoundaryVertexHandle;
-    typedef  NHandle<FEMMesh, Handle>            NodeHandle; typedef  NHandle<FEMMesh, ConstHandle>            ConstNodeHandle;
-    typedef BNHandle<FEMMesh, Handle>    BoundaryNodeHandle; typedef BNHandle<FEMMesh, ConstHandle>    ConstBoundaryNodeHandle;
+    // Determine base mesh type
+    using BaseMesh = typename SimplicialMesh<_K, VertexData, ElementData, BoundaryVertexData, BoundaryElementData>::type;
 
     size_t numElementNodes() const { return 0; }
     size_t numVertexNodes()  const { return BaseMesh::numVertices(); }
     size_t numEdgeNodes()    const { return m_edgeForEdgeNode.size(); }
     size_t numNodes()        const { return numVertexNodes() +  numEdgeNodes() + numElementNodes(); }
     size_t numElements()     const { return BaseMesh::numSimplices(); }
+
+    template<typename Elements, typename Vertices>
+    FEMMesh(const Elements &elems, const Vertices &vertices);
+
+    // Entity handles (declared in Handles/FEMMeshHandles.hh).
+    template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex
+    template<class _Mesh> using  NHandle = typename HandleTraits<FEMMesh>::template  NHandle<_Mesh>; // Node
+    template<class _Mesh> using  EHandle = typename HandleTraits<FEMMesh>::template  EHandle<_Mesh>; // Element
+    template<class _Mesh> using BVHandle = typename HandleTraits<FEMMesh>::template BVHandle<_Mesh>; // Boundary vertex
+    template<class _Mesh> using BNHandle = typename HandleTraits<FEMMesh>::template BNHandle<_Mesh>; // Boundary node
+    template<class _Mesh> using BEHandle = typename HandleTraits<FEMMesh>::template BEHandle<_Mesh>; // Boundary element
 
     // Number of strictly interior nodes (excluding nodes on the boundary).
     size_t numInternalNodes() const { return numNodes() - numBoundaryNodes(); }
@@ -214,44 +137,52 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
     ////////////////////////////////////////////////////////////////////////////
-               VertexHandle       vertex(size_t i)       { return       VertexHandle(i, *this); }
-          ConstVertexHandle       vertex(size_t i) const { return  ConstVertexHandle(i, *this); }
-                 NodeHandle         node(size_t i)       { return         NodeHandle(i, *this); }
-            ConstNodeHandle         node(size_t i) const { return    ConstNodeHandle(i, *this); }
-              ElementHandle      element(size_t i)       { return      ElementHandle(i, *this); }
-         ConstElementHandle      element(size_t i) const { return ConstElementHandle(i, *this); }
+     VHandle<FEMMesh>          vertex(size_t i) { return  VHandle<FEMMesh>(i, *this); }
+     NHandle<FEMMesh>            node(size_t i) { return  NHandle<FEMMesh>(i, *this); }
+     EHandle<FEMMesh>         element(size_t i) { return  EHandle<FEMMesh>(i, *this); }
+    BVHandle<FEMMesh>  boundaryVertex(size_t i) { return BVHandle<FEMMesh>(i, *this); }
+    BNHandle<FEMMesh>    boundaryNode(size_t i) { return BNHandle<FEMMesh>(i, *this); }
+    BEHandle<FEMMesh> boundaryElement(size_t i) { return BEHandle<FEMMesh>(i, *this); }
 
-         BoundaryVertexHandle  boundaryVertex(size_t i)       { return       BoundaryVertexHandle(i, *this); }
-    ConstBoundaryVertexHandle  boundaryVertex(size_t i) const { return  ConstBoundaryVertexHandle(i, *this); }
-           BoundaryNodeHandle    boundaryNode(size_t i)       { return         BoundaryNodeHandle(i, *this); }
-      ConstBoundaryNodeHandle    boundaryNode(size_t i) const { return    ConstBoundaryNodeHandle(i, *this); }
-        BoundaryElementHandle boundaryElement(size_t i)       { return      BoundaryElementHandle(i, *this); }
-   ConstBoundaryElementHandle boundaryElement(size_t i) const { return ConstBoundaryElementHandle(i, *this); }
+     VHandle<const FEMMesh>          vertex(size_t i) const { return  VHandle<const FEMMesh>(i, *this); }
+     NHandle<const FEMMesh>            node(size_t i) const { return  NHandle<const FEMMesh>(i, *this); }
+     EHandle<const FEMMesh>         element(size_t i) const { return  EHandle<const FEMMesh>(i, *this); }
+    BVHandle<const FEMMesh>  boundaryVertex(size_t i) const { return BVHandle<const FEMMesh>(i, *this); }
+    BNHandle<const FEMMesh>    boundaryNode(size_t i) const { return BNHandle<const FEMMesh>(i, *this); }
+    BEHandle<const FEMMesh> boundaryElement(size_t i) const { return BEHandle<const FEMMesh>(i, *this); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
+    // (We must overload the ones provided by the base mesh or else we'll get
+    //  the base mesh's handles instead of our derived ones.)
     ////////////////////////////////////////////////////////////////////////////
     // Specialization for nested class templates isn't allowed, so we can't
     // implement a true traits design pattern...
-    struct  VRangeTraits { typedef           VertexHandle HType; typedef           ConstVertexHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numVertices; };
-    struct  NRangeTraits { typedef             NodeHandle HType; typedef             ConstNodeHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numNodes; };
-    struct  ERangeTraits { typedef          ElementHandle HType; typedef          ConstElementHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numElements; };
-    struct BVRangeTraits { typedef   BoundaryVertexHandle HType; typedef   ConstBoundaryVertexHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryVertices; };
-    struct BNRangeTraits { typedef     BoundaryNodeHandle HType; typedef     ConstBoundaryNodeHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryNodes; };
-    struct BERangeTraits { typedef  BoundaryElementHandle HType; typedef  ConstBoundaryElementHandle CHType; static constexpr size_t (FEMMesh::*entityCount)() const = &FEMMesh::numBoundaryElements; };
+    template<template<class> class _Handle> using  HR = HandleRange<      FEMMesh, _Handle>;
+    template<template<class> class _Handle> using CHR = HandleRange<const FEMMesh, _Handle>;
+
 public:
-         HandleRange< VRangeTraits> vertices()               { return      HandleRange< VRangeTraits>(*this); }
-    ConstHandleRange< VRangeTraits> vertices() const         { return ConstHandleRange< VRangeTraits>(*this); }
-         HandleRange< NRangeTraits> nodes()                  { return      HandleRange< NRangeTraits>(*this); }
-    ConstHandleRange< NRangeTraits> nodes() const            { return ConstHandleRange< NRangeTraits>(*this); }
-         HandleRange< ERangeTraits> elements()               { return      HandleRange< ERangeTraits>(*this); }
-    ConstHandleRange< ERangeTraits> elements() const         { return ConstHandleRange< ERangeTraits>(*this); }
-         HandleRange<BVRangeTraits> boundaryVertices()       { return      HandleRange<BVRangeTraits>(*this); }
-    ConstHandleRange<BVRangeTraits> boundaryVertices() const { return ConstHandleRange<BVRangeTraits>(*this); }
-         HandleRange<BNRangeTraits> boundaryNodes()          { return      HandleRange<BNRangeTraits>(*this); }
-    ConstHandleRange<BNRangeTraits> boundaryNodes() const    { return ConstHandleRange<BNRangeTraits>(*this); }
-         HandleRange<BERangeTraits> boundaryElements()       { return      HandleRange<BERangeTraits>(*this); }
-    ConstHandleRange<BERangeTraits> boundaryElements() const { return ConstHandleRange<BERangeTraits>(*this); }
+    HR< VHandle>         vertices() { return HR< VHandle>(*this); }
+    HR< NHandle>            nodes() { return HR< NHandle>(*this); }
+    HR< EHandle>         elements() { return HR< EHandle>(*this); }
+    HR<BVHandle> boundaryVertices() { return HR<BVHandle>(*this); }
+    HR<BNHandle>    boundaryNodes() { return HR<BNHandle>(*this); }
+    HR<BEHandle> boundaryElements() { return HR<BEHandle>(*this); }
+
+    CHR< VHandle>         vertices() const { return CHR< VHandle>(*this); }
+    CHR< NHandle>            nodes() const { return CHR< NHandle>(*this); }
+    CHR< EHandle>         elements() const { return CHR< EHandle>(*this); }
+    CHR<BVHandle> boundaryVertices() const { return CHR<BVHandle>(*this); }
+    CHR<BNHandle>    boundaryNodes() const { return CHR<BNHandle>(*this); }
+    CHR<BEHandle> boundaryElements() const { return CHR<BEHandle>(*this); }
+
+    // Explicit const handle ranges (for const iteration over nonconst mesh)
+    CHR< VHandle>         constVertices() const { return CHR< VHandle>(*this); }
+    CHR< NHandle>            constNodes() const { return CHR< NHandle>(*this); }
+    CHR< EHandle>         constElements() const { return CHR< EHandle>(*this); }
+    CHR<BVHandle> constBoundaryVertices() const { return CHR<BVHandle>(*this); }
+    CHR<BNHandle>    constBoundaryNodes() const { return CHR<BNHandle>(*this); }
+    CHR<BEHandle> constBoundaryElements() const { return CHR<BEHandle>(*this); }
 
     // (re-)embed the mesh elements.
     // Mesh vertex nodes are read from the passed vertex position array and edge
@@ -259,13 +190,13 @@ public:
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
         for (size_t i = 0; i < numNodes(); ++i) {
-            NodeHandle n = node(i);
+            auto n = node(i);
             assert(n.isVertexNode() || n.isEdgeNode());
             if (n.isVertexNode())
                 n->p = truncateFrom3D<EmbeddingSpace>(vertices.at(n.vertex().index()));
         }
         for (size_t i = 0; i < numNodes(); ++i) {
-            NodeHandle n = node(i);
+            auto n = node(i);
             if (n.isEdgeNode()) {
                 const UnorderedPair &edge = m_edgeForEdgeNode.at(n.edgeNodeIndex());
                 n->p = 0.5 * (vertex(edge[0]).node()->p + vertex(edge[1]).node()->p);
@@ -279,7 +210,7 @@ public:
     // Also support reading from Luigi/Nico's vertex format
     void setNodePositions(const std::vector<std::array<double,
             EmbeddingSpace::RowsAtCompileTime>> &vertices) {
-        std::vector<Vector3D> convertedVertices(vertices.size()); 
+        std::vector<Vector3D> convertedVertices(vertices.size());
         for (size_t i = 0; i < vertices.size(); ++i) {
             convertedVertices[i][0] = vertices[i][0];
             convertedVertices[i][1] = vertices[i][1];
@@ -302,7 +233,7 @@ public:
 
     EmbeddingSpace elementBarycenter(size_t ei) const {
         EmbeddingSpace b(EmbeddingSpace::Zero());
-        ConstElementHandle e = element(ei);
+        auto e = element(ei);
         assert(e);
         for (size_t i = 0; i < e.numVertices(); ++i) {
             // Nodes 0...numVertices - 1 are located on the vertices
@@ -314,7 +245,7 @@ public:
 
     EmbeddingSpace boundaryElementBarycenter(size_t ei) const {
         EmbeddingSpace b(EmbeddingSpace::Zero());
-        ConstElementHandle e = boundaryElement(ei);
+        auto e = boundaryElement(ei);
         assert(e);
         for (size_t i = 0; i < e.numVertices(); ++i) {
             // Nodes 0...numVertices - 1 are located on the vertices
@@ -348,21 +279,20 @@ private:
     std::vector<int> m_volEdgeForBdryEdge;
 
     // Node data storage
-    std::vector<NodeData>         m_nodeData;
-    std::vector<BoundaryNodeData> m_boundaryNodeData;
+    DataStorage<typename FEMData::Node>         m_nodeData;
+    DataStorage<typename FEMData::BoundaryNode> m_boundaryNodeData;
 
     // Mesh bounding box, updated every time the node positions change with
     // setNodePositions()
     BBox<EmbeddingSpace> m_bbox;
 
-    // A pointer to the following is returned when accessing the data of type
-    // "TMEmptyData" to avoid allocating the above vectors
-    TMEmptyData m_emptyDataDummy;
-
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class Handle;
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class ConstHandle;
+    // Handles need access to private traversal operations below
+    template<class Mesh> friend class _FEMMeshHandleDetail::VHandle;
+    template<class Mesh> friend class _FEMMeshHandleDetail::NHandle;
+    template<class Mesh> friend class _FEMMeshHandleDetail::EHandle;
+    template<class Mesh> friend class _FEMMeshHandleDetail::BVHandle;
+    template<class Mesh> friend class _FEMMeshHandleDetail::BNHandle;
+    template<class Mesh> friend class _FEMMeshHandleDetail::BEHandle;
 
     // Nodes 0..#Vertices-1 are located on the corresponding vertex.
     // The remaining nodes do not have vertices.
@@ -387,7 +317,7 @@ private:
     }
 
     // Node index of each volume elements' nodes
-    // Nodes 0..Simplex::numVertices(_K)-1 indices coincide with vertex index 
+    // Nodes 0..Simplex::numVertices(_K)-1 indices coincide with vertex index
     // Nodes Simplex::numVertices(_K)..Simplex::numNodes()-1 indices are in m_N
     int m_nodeOfElement(size_t n, size_t e) const {
         assert((e < numElements()) && (n < Simplex::numNodes(_K, _Deg)));

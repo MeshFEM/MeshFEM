@@ -8,7 +8,7 @@
 //      t is a linearly interpolated per-boundary vertex displacement field.
 //      If desired, t can be specified on a subset of the vertices, in which
 //      case we effectively set t = u on the unprescribed boundary vertices.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  07/09/2014 01:34:28
@@ -215,7 +215,7 @@ template<template<size_t> class _ETensorGetter>
 struct MaterialOptimizationLEData {
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
 struct Data : public LinearElasticity::LinearElasticityData<_ETensorGetter>::template Data<_K, _Deg, EmbeddingSpace> {
-    typedef typename LinearElasticity::LinearElasticityData<_ETensorGetter>::template Data<_K, _Deg, EmbeddingSpace> BaseData;
+    using BaseData = typename LinearElasticity::LinearElasticityData<_ETensorGetter>::template Data<_K, _Deg, EmbeddingSpace>;
     struct BoundaryNode : public BaseData::BoundaryNode {
         ComponentMask targetComponents;
         VectorND<_K> targetDisplacement;
@@ -348,9 +348,9 @@ public:
         _chooseProblem(this);
         OPTPP::NLF1 nlp(m_matField->numVars(), _optAlgoEval, _optAlgoInit);
 
-        OPTPP::TOLS tol;         
+        OPTPP::TOLS tol;
         tol.setDefaultTol();
-        tol.setFTol(1.e-9);    // Set convergence tolerance to 1.e-9 
+        tol.setFTol(1.e-9);    // Set convergence tolerance to 1.e-9
         tol.setMaxIter(200);   // Set maximum number of outer iterations to 200
 
         // OPTPP::OptCG opt(&nlp);

@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //  Subdivide a triangle mesh represented with a halfedge data structure.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  06/23/2014 17:34:52

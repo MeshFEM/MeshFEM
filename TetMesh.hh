@@ -46,7 +46,7 @@
 //       *             z
 //      / \`.          ^
 //     /   \ `* 2      | ^ y
-//    / __--\ /        |/  
+//    / __--\ /        |/
 //  0*-------* 1       +----->x
 //  meaning the tet's (outward-oriented) half-faces are, in order,
 //  1-2-3, 0-3-2, 0-1-3, and 0-2-1. The (boundary) faces adopt the same vertex
@@ -75,19 +75,28 @@
 #define TETMESH_HH
 #include <vector>
 #include <cassert>
+
 #include "Geometry.hh"
-#include "Handle.hh"
 #include "Concepts.hh"
+#include "BoundaryMesh.hh"
+#include "Handles/TetMeshHandles.hh"
+#include "SimplicialMeshInterface.hh"
 
 template<class VertexData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
          class BoundaryFaceData = TMEmptyData>
-class TetMesh : public Concepts::Mesh, public Concepts::TetMesh {
+class TetMesh : public Concepts::Mesh,
+                public Concepts::TetMesh,
+                // Also provide a dimension-independent entity interface
+                public SimplicialMeshInterface<TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>>
+{
 public:
+    static constexpr size_t K = 3;
+
     // Constructor from tetrahedron soup.
     template<typename Tets>
     TetMesh(const Tets &tets, size_t nVertices);
-        
+
     size_t numVertices()  const { return VH.size(); }
     size_t numHalfFaces() const { return O.size(); }
     size_t numTets()      const { return V.size() / 4; }
@@ -96,215 +105,89 @@ public:
     size_t numBoundaryHalfEdges() const { return bOe.size(); }
     size_t numBoundaryFaces()     const { return bO.size(); }
 
-    size_t numSimplices()         const { return numTets(); }
-    size_t numBoundarySimplices() const { return numBoundaryFaces(); }
-
-    // Entity handles (declared out-of-line in TetMesh.inl).
-    // These are templated by mesh type so that subclasses of TetMesh can more
-    // easily derive from them.
-    template<class _Mesh, template<class, class, class, class> class _HType> class   VHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  HFHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class   THandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  BVHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BHEHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  BFHandle;
-
-    template<class _Mesh, template<class, class, class, class> class _HType> using  SHandle =  THandle<_Mesh, _HType>;
-    template<class _Mesh, template<class, class, class, class> class _HType> using BSHandle = BFHandle<_Mesh, _HType>;
-
-    typedef   VHandle<TetMesh, Handle>           VertexHandle; typedef   VHandle<TetMesh, ConstHandle> ConstVertexHandle;
-    typedef  HFHandle<TetMesh, Handle>         HalfFaceHandle; typedef  HFHandle<TetMesh, ConstHandle> ConstHalfFaceHandle;
-    typedef   THandle<TetMesh, Handle>              TetHandle; typedef   THandle<TetMesh, ConstHandle> ConstTetHandle;
-    typedef  BVHandle<TetMesh, Handle>   BoundaryVertexHandle; typedef  BVHandle<TetMesh, ConstHandle> ConstBoundaryVertexHandle;
-    typedef BHEHandle<TetMesh, Handle> BoundaryHalfEdgeHandle; typedef BHEHandle<TetMesh, ConstHandle> ConstBoundaryHalfEdgeHandle;
-    typedef  BFHandle<TetMesh, Handle>     BoundaryFaceHandle; typedef  BFHandle<TetMesh, ConstHandle> ConstBoundaryFaceHandle;
-
-    typedef   SHandle<TetMesh, Handle>         SimplexHandle; typedef   SHandle<TetMesh, ConstHandle>         ConstSimplexHandle;
-    typedef  BSHandle<TetMesh, Handle> BoundarySimplexHandle; typedef  BSHandle<TetMesh, ConstHandle> ConstBoundarySimplexHandle;
+    // Handles can be instantiated for const or non-const meshes.
+    // Defined in TetMeshHandles.hh
+    template<class _Mesh> using   VHandle = typename HandleTraits<TetMesh>::template   VHandle<_Mesh>; // Vertex
+    template<class _Mesh> using  HFHandle = typename HandleTraits<TetMesh>::template  HFHandle<_Mesh>; // Half-face
+    template<class _Mesh> using   THandle = typename HandleTraits<TetMesh>::template   THandle<_Mesh>; // Tetrahedron
+    template<class _Mesh> using  BVHandle = typename HandleTraits<TetMesh>::template  BVHandle<_Mesh>; // Boundary vertex
+    template<class _Mesh> using BHEHandle = typename HandleTraits<TetMesh>::template BHEHandle<_Mesh>; // Boundary half-edge
+    template<class _Mesh> using  BFHandle = typename HandleTraits<TetMesh>::template  BFHandle<_Mesh>; // Boundary face
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
     ////////////////////////////////////////////////////////////////////////////
-                   VertexHandle           vertex(size_t i)       { return                VertexHandle(i, *this); }
-              ConstVertexHandle           vertex(size_t i) const { return           ConstVertexHandle(i, *this); }
-                 HalfFaceHandle         halfFace(size_t i)       { return              HalfFaceHandle(i, *this); }
-            ConstHalfFaceHandle         halfFace(size_t i) const { return         ConstHalfFaceHandle(i, *this); }
-                      TetHandle              tet(size_t i)       { return                   TetHandle(i, *this); }
-                 ConstTetHandle              tet(size_t i) const { return              ConstTetHandle(i, *this); }
-           BoundaryVertexHandle   boundaryVertex(size_t i)       { return        BoundaryVertexHandle(i, *this); }
-      ConstBoundaryVertexHandle   boundaryVertex(size_t i) const { return   ConstBoundaryVertexHandle(i, *this); }
-         BoundaryHalfEdgeHandle boundaryHalfEdge(size_t i)       { return      BoundaryHalfEdgeHandle(i, *this); }
-    ConstBoundaryHalfEdgeHandle boundaryHalfEdge(size_t i) const { return ConstBoundaryHalfEdgeHandle(i, *this); }
-             BoundaryFaceHandle     boundaryFace(size_t i)       { return          BoundaryFaceHandle(i, *this); }
-        ConstBoundaryFaceHandle     boundaryFace(size_t i) const { return     ConstBoundaryFaceHandle(i, *this); }
+      VHandle<TetMesh>           vertex(size_t i) { return   VHandle<TetMesh>(i, *this); }
+     HFHandle<TetMesh>         halfFace(size_t i) { return  HFHandle<TetMesh>(i, *this); }
+      THandle<TetMesh>              tet(size_t i) { return   THandle<TetMesh>(i, *this); }
+     BVHandle<TetMesh>   boundaryVertex(size_t i) { return  BVHandle<TetMesh>(i, *this); }
+    BHEHandle<TetMesh> boundaryHalfEdge(size_t i) { return BHEHandle<TetMesh>(i, *this); }
+     BFHandle<TetMesh>     boundaryFace(size_t i) { return  BFHandle<TetMesh>(i, *this); }
 
-              VertexHandle                  node(size_t i)       { return vertex(i); }
-         ConstVertexHandle                  node(size_t i) const { return vertex(i); }
-              TetHandle                  element(size_t i)       { return tet(i); }
-         ConstTetHandle                  element(size_t i) const { return tet(i); }
-              BoundaryVertexHandle  boundaryNode(size_t i)       { return boundaryVertex(i); }
-         ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return boundaryVertex(i); }
-              BoundaryFaceHandle boundaryElement(size_t i)       { return boundaryFace(i); }
-         ConstBoundaryFaceHandle boundaryElement(size_t i) const { return boundaryFace(i); }
-
-                 SimplexHandle         simplex(size_t i)       { return tet(i); }
-            ConstSimplexHandle         simplex(size_t i) const { return tet(i); }
-         BoundarySimplexHandle boundarySimplex(size_t i)       { return boundaryFace(i); }
-    ConstBoundarySimplexHandle boundarySimplex(size_t i) const { return boundaryFace(i); }
+      VHandle<const TetMesh>           vertex(size_t i) const { return   VHandle<const TetMesh>(i, *this); }
+     HFHandle<const TetMesh>         halfFace(size_t i) const { return  HFHandle<const TetMesh>(i, *this); }
+      THandle<const TetMesh>              tet(size_t i) const { return   THandle<const TetMesh>(i, *this); }
+     BVHandle<const TetMesh>   boundaryVertex(size_t i) const { return  BVHandle<const TetMesh>(i, *this); }
+    BHEHandle<const TetMesh> boundaryHalfEdge(size_t i) const { return BHEHandle<const TetMesh>(i, *this); }
+     BFHandle<const TetMesh>     boundaryFace(size_t i) const { return  BFHandle<const TetMesh>(i, *this); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
-    // Note: we can't currently support const auto iterators. For example:
-    //      for (const auto v : nonconst_mesh)
-    // will still get a VertexHandle. However both of the following will get
+    // Note that
+    //      for (const auto v : nonconst_mesh.vertices())
+    // will get a non-const VertexHandle. However both of the following will get
     // const VertexHandles:
-    //      for (TetMesh::ConstVertexHandle v : nonconst_mesh)
-    //      for (auto v : const_mesh)
+    //      for (auto v : nonconst_mesh.constVertices())
+    //      for (auto v : const_mesh.vertices())
     ////////////////////////////////////////////////////////////////////////////
 private:
-    // Specialization for nested class templates isn't allowed, so we can't
-    // implement a true traits design pattern...
-    struct   VRangeTraits { typedef           VertexHandle HType; typedef           ConstVertexHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numVertices; };
-    struct  HFRangeTraits { typedef         HalfFaceHandle HType; typedef         ConstHalfFaceHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numHalfFaces; };
-    struct   TRangeTraits { typedef              TetHandle HType; typedef              ConstTetHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numTets; };
-    struct  BVRangeTraits { typedef   BoundaryVertexHandle HType; typedef   ConstBoundaryVertexHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryVertices; };
-    struct BHERangeTraits { typedef BoundaryHalfEdgeHandle HType; typedef ConstBoundaryHalfEdgeHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryHalfEdges; };
-    struct  BFRangeTraits { typedef     BoundaryFaceHandle HType; typedef     ConstBoundaryFaceHandle CHType; static constexpr size_t (TetMesh::*entityCount)() const = &TetMesh::numBoundaryFaces; };
+    // Handle ranges for const or non-const meshes.
+    template<template<class> class _Handle> using  HR = HandleRange<      TetMesh, _Handle>;
+    template<template<class> class _Handle> using CHR = HandleRange<const TetMesh, _Handle>;
 public:
-         HandleRange<  VRangeTraits> vertices()                { return      HandleRange<  VRangeTraits>(*this); }
-    ConstHandleRange<  VRangeTraits> vertices() const          { return ConstHandleRange<  VRangeTraits>(*this); }
-         HandleRange< HFRangeTraits> halfFaces()               { return      HandleRange< HFRangeTraits>(*this); }
-    ConstHandleRange< HFRangeTraits> halfFaces() const         { return ConstHandleRange< HFRangeTraits>(*this); }
-         HandleRange<  TRangeTraits> tets()                    { return      HandleRange<  TRangeTraits>(*this); }
-    ConstHandleRange<  TRangeTraits> tets() const              { return ConstHandleRange<  TRangeTraits>(*this); }
-         HandleRange< BVRangeTraits> boundaryVertices()        { return      HandleRange< BVRangeTraits>(*this); }
-    ConstHandleRange< BVRangeTraits> boundaryVertices() const  { return ConstHandleRange< BVRangeTraits>(*this); }
-         HandleRange<BHERangeTraits> boundaryHalfEdges()       { return      HandleRange<BHERangeTraits>(*this); }
-    ConstHandleRange<BHERangeTraits> boundaryHalfEdges() const { return ConstHandleRange<BHERangeTraits>(*this); }
-         HandleRange< BFRangeTraits> boundaryFaces()           { return      HandleRange< BFRangeTraits>(*this); }
-    ConstHandleRange< BFRangeTraits> boundaryFaces() const     { return ConstHandleRange< BFRangeTraits>(*this); }
+    HR<  VHandle> vertices()          { return HR<  VHandle>(*this); }
+    HR< HFHandle> halfFaces()         { return HR< HFHandle>(*this); }
+    HR<  THandle> tets()              { return HR<  THandle>(*this); }
+    HR< BVHandle> boundaryVertices()  { return HR< BVHandle>(*this); }
+    HR<BHEHandle> boundaryHalfEdges() { return HR<BHEHandle>(*this); }
+    HR< BFHandle> boundaryFaces()     { return HR< BFHandle>(*this); }
 
-    ////////////////////////////////////////////////////////////////////////////
-    // Boundary halfedge wrapper
-    ////////////////////////////////////////////////////////////////////////////
-    class ConstBoundaryMesh {
-    public:
-        ConstBoundaryMesh(const TetMesh &mesh) : m_mesh(mesh) { }
+    CHR<  VHandle> vertices()          const { return CHR<  VHandle>(*this); }
+    CHR< HFHandle> halfFaces()         const { return CHR< HFHandle>(*this); }
+    CHR<  THandle> tets()              const { return CHR<  THandle>(*this); }
+    CHR< BVHandle> boundaryVertices()  const { return CHR< BVHandle>(*this); }
+    CHR<BHEHandle> boundaryHalfEdges() const { return CHR<BHEHandle>(*this); }
+    CHR< BFHandle> boundaryFaces()     const { return CHR< BFHandle>(*this); }
 
-        typedef ConstBoundaryVertexHandle   ConstVertexHandle;
-        typedef ConstBoundaryHalfEdgeHandle ConstHalfEdgeHandle;
-        typedef ConstBoundaryFaceHandle     ConstFaceHandle;
+    // Explicit const handle ranges (for const iteration over nonconst mesh)
+    CHR<  VHandle> constVertices()          const { return CHR<  VHandle>(*this); }
+    CHR< HFHandle> constHalfFaces()         const { return CHR< HFHandle>(*this); }
+    CHR<  THandle> constTets()              const { return CHR<  THandle>(*this); }
+    CHR< BVHandle> constBoundaryVertices()  const { return CHR< BVHandle>(*this); }
+    CHR<BHEHandle> constBoundaryHalfEdges() const { return CHR<BHEHandle>(*this); }
+    CHR< BFHandle> constBoundaryFaces()     const { return CHR< BFHandle>(*this); }
 
-        size_t  numVertices() const { return m_mesh.numBoundaryVertices(); }
-        size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
-        size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
-
-        // For boundary meshes, faces are elements and vertices are nodes.
-        size_t numElements() const { return numFaces(); }
-        size_t numNodes()    const { return numVertices(); }
-
-          ConstVertexHandle   vertex(size_t i) const { return m_mesh.boundaryVertex(i); }
-        ConstHalfEdgeHandle halfEdge(size_t i) const { return m_mesh.boundaryHalfEdge(i); }
-            ConstFaceHandle     face(size_t i) const { return m_mesh.boundaryFace(i); }
-
-        ConstVertexHandle  node(size_t i) const { return vertex(i); }
-        ConstFaceHandle element(size_t i) const { return face(i); }
-
-        // Get the halfedge pointing from s to e.
-        ConstHalfEdgeHandle halfEdge(size_t s, size_t e) const { return halfEdge(halfedgeIndex(s, e)); }
-
-        /*! Get the index of the halfedge pointing from s to e */
-        int halfedgeIndex(size_t s, size_t e) const {
-            assert((s < numVertices()) && (e < numVertices()));
-            
-            ConstVertexHandle v = vertex(e);
-            ConstHalfEdgeHandle h = v.halfEdge();
-            ConstHalfEdgeHandle hit = h;
-            do {
-                if (hit.tail().index() == s) {
-                    return hit.index();
-                }
-            } while ((hit = hit.cw()) != h);
-
-            return -1;
-        }
-
-    private:
-        const TetMesh &m_mesh;
-    };
-
-    class BoundaryMesh {
-    public:
-        typedef      BoundaryVertexHandle      VertexHandle;
-        typedef ConstBoundaryVertexHandle ConstVertexHandle;
-        typedef      BoundaryHalfEdgeHandle      HalfEdgeHandle;
-        typedef ConstBoundaryHalfEdgeHandle ConstHalfEdgeHandle;
-        typedef      BoundaryFaceHandle      FaceHandle;
-        typedef ConstBoundaryFaceHandle ConstFaceHandle;
-        BoundaryMesh(TetMesh &mesh) : m_mesh(mesh) { }
-
-        size_t  numVertices() const { return m_mesh.numBoundaryVertices(); }
-        size_t     numFaces() const { return m_mesh.numBoundaryFaces(); }
-        size_t numHalfEdges() const { return m_mesh.numBoundaryHalfEdges(); }
-
-        // For boundary meshes, faces are elements and vertices are nodes.
-        size_t numElements() const { return numFaces(); }
-        size_t numNodes()    const { return numVertices(); }
-
-               VertexHandle   vertex(size_t i)       { return m_mesh.boundaryVertex(i); }
-          ConstVertexHandle   vertex(size_t i) const { return m_mesh.boundaryVertex(i); }
-             HalfEdgeHandle halfEdge(size_t i)       { return m_mesh.boundaryHalfEdge(i); }
-        ConstHalfEdgeHandle halfEdge(size_t i) const { return m_mesh.boundaryHalfEdge(i); }
-                 FaceHandle     face(size_t i)       { return m_mesh.boundaryFace(i); }
-            ConstFaceHandle     face(size_t i) const { return m_mesh.boundaryFace(i); }
-
-             VertexHandle  node(size_t i)       { return vertex(i); }
-        ConstVertexHandle  node(size_t i) const { return vertex(i); }
-             FaceHandle element(size_t i)       { return face(i); }
-        ConstFaceHandle element(size_t i) const { return face(i); }
-
-        // Get the halfedge pointing from s to e.
-             HalfEdgeHandle halfEdge(size_t s, size_t e)       { return halfEdge(halfedgeIndex(s, e)); }
-        ConstHalfEdgeHandle halfEdge(size_t s, size_t e) const { return halfEdge(halfedgeIndex(s, e)); }
-
-        /*! Get the index of the halfedge pointing from s to e */
-        int halfedgeIndex(size_t s, size_t e) const {
-            assert((s < numVertices()) && (e < numVertices()));
-            
-            ConstVertexHandle v = vertex(e);
-            ConstHalfEdgeHandle h = v.halfEdge();
-            ConstHalfEdgeHandle hit = h;
-            do {
-                if (size_t(hit.tail().index()) == s) {
-                    return hit.index();
-                }
-            } while ((hit = hit.cw()) != h);
-
-            return -1;
-        }
-
-    private:
-        TetMesh &m_mesh;
-    };
-
-    BoundaryMesh boundary()            { return BoundaryMesh(*this); }
-    ConstBoundaryMesh boundary() const { return ConstBoundaryMesh(*this); }
-
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class Handle;
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class ConstHandle;
+    // Boundary mesh access
+    BoundaryMesh<      TetMesh> boundary()       { return BoundaryMesh<      TetMesh>(*this); }
+    BoundaryMesh<const TetMesh> boundary() const { return BoundaryMesh<const TetMesh>(*this); }
 
 protected:
-    std::vector<VertexData>           m_vertexData;
-    std::vector<HalfFaceData>         m_halfFaceData;
-    std::vector<TetData>              m_tetData;
-    std::vector<BoundaryVertexData>   m_boundaryVertexData;
-    std::vector<BoundaryHalfEdgeData> m_boundaryHalfEdgeData;
-    std::vector<BoundaryFaceData>     m_boundaryFaceData;
-    // A pointer to the following is returned when accessing the data of type
-    // "EmptyData" to avoid allocating the above vectors
-    TMEmptyData m_emptyDataDummy;
+    ////////////////////////////////////////////////////////////////////////////
+    // DataStorage is empty for TMEmptyData. Otherwise, it's a std::vector.
+    DataStorage<VertexData>           m_vertexData;
+    DataStorage<HalfFaceData>         m_halfFaceData;
+    DataStorage<TetData>              m_tetData;
+    DataStorage<BoundaryVertexData>   m_boundaryVertexData;
+    DataStorage<BoundaryHalfEdgeData> m_boundaryHalfEdgeData;
+    DataStorage<BoundaryFaceData>     m_boundaryFaceData;
+
+    // Handles need access to private traversal operations below
+    template<class Mesh> friend class _TetMeshHandleDetail::VHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::THandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::HFHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::BVHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::BHEHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::BFHandle;
 
     // Outward-oriented half face corner indices and chaining
     // Note: could make this static and put in a .cc file
@@ -479,7 +362,7 @@ protected:
 
     /*    e
     //   / \
-    //  +--->  
+    //  +--->
     // Tip (>) of half-edge e is vertex e's previous vertex in the half face,
     // and tail (+) is the next.
     // Connectivity must be accessed through the volume half face.

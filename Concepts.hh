@@ -33,6 +33,7 @@ namespace Concepts {
 struct Mesh { };
 struct TetMesh { };
 struct TriMesh { };
+struct ElementMesh { };
 struct EdgeSoup { };
 
 }

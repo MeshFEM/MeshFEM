@@ -108,13 +108,13 @@ int main(int argc, char *argv[])
         Interpolant<Real, Edge,    Linear> efl(randDouble(), randDouble());
         Interpolant<Real, Edge, Quadratic> efa(randDouble(), randDouble(), randDouble());
         Interpolant<Real, Triangle,    Linear> tfl(randDouble(), randDouble(), randDouble());
-        Interpolant<Real, Triangle, Quadratic> tfa(randDouble(), randDouble(), randDouble(), 
+        Interpolant<Real, Triangle, Quadratic> tfa(randDouble(), randDouble(), randDouble(),
                                                    randDouble(), randDouble(), randDouble());
         Interpolant<Real, Tetrahedron,    Linear> tetfl(randDouble(), randDouble(), randDouble(), randDouble());
         Interpolant<Real, Tetrahedron, Quadratic> tetfa(randDouble(), randDouble(), randDouble(), randDouble(),
                                                         randDouble(), randDouble(), randDouble(),
                                                         randDouble(), randDouble(), randDouble());
-        
+
         // Compare versions of interpolation
         double l0 = randDouble();
         VectorND<2> edgeSample(l0, 1 - l0);

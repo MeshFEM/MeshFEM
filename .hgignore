@@ -1,2 +1,4 @@
 syntax: glob
 Makefile.depend
+.d
+*.o

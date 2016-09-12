@@ -66,7 +66,7 @@ private:
         m_outStream << "];" << std::endl << "elements = [ ";
         for (size_t i = 0; i < mesh.numSimplices(); ++i) {
             m_outStream << (i ? ", " : "") << "[";
-           auto e = mesh.element(i);
+           auto e = mesh.simplex(i);
             for (size_t j = 0; j < e.numVertices(); ++j) {
                 m_outStream << (j ? ", " : "") << e.vertex(j).index();
             }
@@ -75,7 +75,7 @@ private:
         m_outStream << " ];" << std::endl << "boundaryElements = [ ";
         for (size_t i = 0; i < mesh.numBoundarySimplices(); ++i) {
             m_outStream << (i ? ", " : "") << "[";
-           auto e = mesh.boundaryElement(i);
+           auto e = mesh.boundarySimplex(i);
             for (size_t j = 0; j < e.numVertices(); ++j) {
                 m_outStream << (j ? ", " : "") << e.vertex(j).volumeVertex().index();
             }

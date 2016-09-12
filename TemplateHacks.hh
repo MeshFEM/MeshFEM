@@ -15,4 +15,21 @@ template <bool... v> using any_false = static_not<std::is_same<bool_pack<false, 
 template <typename... T>
 constexpr bool all_integer_parameters() { return all_true<std::is_integral<T>::value...>::value; }
 
+// Copy the cv qualifiers from _CVType to _NonCVType
+template<class _CVType, class _NonCVType>
+struct CopyCV : public
+    std::conditional<std::is_const<_CVType>::value,
+             typename std::conditional<std::is_volatile<_CVType>::value,
+                                       typename std::   add_volatile<typename std::add_const<_NonCVType>::type>::type,
+                                       typename std::remove_volatile<typename std::add_const<_NonCVType>::type>::type
+                                      >::type,
+             typename std::conditional<std::is_volatile<_CVType>::value,
+                                       typename std::   add_volatile<typename std::remove_const<_NonCVType>::type>::type,
+                                       typename std::remove_volatile<typename std::remove_const<_NonCVType>::type>::type
+                                      >::type
+                    >
+{ };
+template<class _CVType, class _NonCVType>
+using CopyCV_t = typename CopyCV<_CVType, _NonCVType>::type;
+
 #endif /* end of include guard: TEMPLATE_HACKS_HH */

@@ -35,14 +35,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef TRIMESH_HH
 #define TRIMESH_HH
+#include <vector>
+#include <cassert>
 
-#include "Handle.hh"
 #include "Concepts.hh"
+#include "BoundaryMesh.hh"
+#include "Handles/TriMeshHandles.hh"
+#include "SimplicialMeshInterface.hh"
 
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
-class TriMesh : public Concepts::Mesh, public Concepts::TriMesh {
+class TriMesh : public SimplicialMeshInterface<TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>>,
+                public Concepts::Mesh,
+                public Concepts::TriMesh
+{
 public:
+    static constexpr size_t K = 2;
+
     // Constructor from triangle soup
     template<typename Tris>
     TriMesh(const Tris &tris, size_t nVertices);
@@ -55,80 +64,87 @@ public:
     size_t numBoundaryVertices() const { return bV.size(); }
     size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
 
-    size_t numSimplices()         const { return numTris(); }
-    size_t numBoundarySimplices() const { return numBoundaryEdges(); }
-
-    // Entity handles (declared out-of-line in TriMesh.inl).
-    // These are templated by mesh type so that subclasses of TriMesh can more
-    // easily derive from them.
-    template<class _Mesh, template<class, class, class, class> class _HType> class  VHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class HEHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class  THandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BVHandle;
-    template<class _Mesh, template<class, class, class, class> class _HType> class BEHandle;
-
-    template<class _Mesh, template<class, class, class, class> class _HType> using  SHandle =  THandle<_Mesh, _HType>;
-    template<class _Mesh, template<class, class, class, class> class _HType> using BSHandle = BEHandle<_Mesh, _HType>;
-
-    typedef  VHandle<TriMesh, Handle>         VertexHandle; typedef  VHandle<TriMesh, ConstHandle>         ConstVertexHandle;
-    typedef HEHandle<TriMesh, Handle>       HalfEdgeHandle; typedef HEHandle<TriMesh, ConstHandle>       ConstHalfEdgeHandle;
-    typedef  THandle<TriMesh, Handle>            TriHandle; typedef  THandle<TriMesh, ConstHandle>            ConstTriHandle;
-    typedef BVHandle<TriMesh, Handle> BoundaryVertexHandle; typedef BVHandle<TriMesh, ConstHandle> ConstBoundaryVertexHandle;
-    typedef BEHandle<TriMesh, Handle>   BoundaryEdgeHandle; typedef BEHandle<TriMesh, ConstHandle>   ConstBoundaryEdgeHandle;
-
-    typedef  SHandle<TriMesh, Handle>         SimplexHandle; typedef  SHandle<TriMesh, ConstHandle>         ConstSimplexHandle;
-    typedef BSHandle<TriMesh, Handle> BoundarySimplexHandle; typedef BSHandle<TriMesh, ConstHandle> ConstBoundarySimplexHandle;
+    // Handles can be instantiated for const or non-const meshes.
+    // Defined in TriMeshHandles.hh
+    template<class _Mesh> using  VHandle = typename HandleTraits<TriMesh>::template  VHandle<_Mesh>; // Vertex
+    template<class _Mesh> using HEHandle = typename HandleTraits<TriMesh>::template HEHandle<_Mesh>; // Half-edge
+    template<class _Mesh> using  THandle = typename HandleTraits<TriMesh>::template  THandle<_Mesh>; // Triangle
+    template<class _Mesh> using BVHandle = typename HandleTraits<TriMesh>::template BVHandle<_Mesh>; // Boundary vertex
+    template<class _Mesh> using BEHandle = typename HandleTraits<TriMesh>::template BEHandle<_Mesh>; // Boundary edge
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity access
     ////////////////////////////////////////////////////////////////////////////
-                 VertexHandle         vertex(size_t i)       { return              VertexHandle(i, *this); }
-            ConstVertexHandle         vertex(size_t i) const { return         ConstVertexHandle(i, *this); }
-               HalfEdgeHandle       halfEdge(size_t i)       { return            HalfEdgeHandle(i, *this); }
-          ConstHalfEdgeHandle       halfEdge(size_t i) const { return       ConstHalfEdgeHandle(i, *this); }
-                    TriHandle            tri(size_t i)       { return                 TriHandle(i, *this); }
-               ConstTriHandle            tri(size_t i) const { return            ConstTriHandle(i, *this); }
-                    TriHandle           face(size_t i)       { return                 TriHandle(i, *this); }
-               ConstTriHandle           face(size_t i) const { return            ConstTriHandle(i, *this); }
-         BoundaryVertexHandle boundaryVertex(size_t i)       { return      BoundaryVertexHandle(i, *this); }
-    ConstBoundaryVertexHandle boundaryVertex(size_t i) const { return ConstBoundaryVertexHandle(i, *this); }
-           BoundaryEdgeHandle   boundaryEdge(size_t i)       { return        BoundaryEdgeHandle(i, *this); }
-      ConstBoundaryEdgeHandle   boundaryEdge(size_t i) const { return   ConstBoundaryEdgeHandle(i, *this); }
+     VHandle<TriMesh>         vertex(size_t i) { return  VHandle<TriMesh>(i, *this); }
+    HEHandle<TriMesh>       halfEdge(size_t i) { return HEHandle<TriMesh>(i, *this); }
+     THandle<TriMesh>            tri(size_t i) { return  THandle<TriMesh>(i, *this); }
+     THandle<TriMesh>           face(size_t i) { return  THandle<TriMesh>(i, *this); }
+    BVHandle<TriMesh> boundaryVertex(size_t i) { return BVHandle<TriMesh>(i, *this); }
+    BEHandle<TriMesh>   boundaryEdge(size_t i) { return BEHandle<TriMesh>(i, *this); }
 
-          VertexHandle                  node(size_t i)       { return vertex(i); }
-     ConstVertexHandle                  node(size_t i) const { return vertex(i); }
-          TriHandle                  element(size_t i)       { return tri(i); }
-     ConstTriHandle                  element(size_t i) const { return tri(i); }
-          BoundaryVertexHandle  boundaryNode(size_t i)       { return boundaryVertex(i); }
-     ConstBoundaryVertexHandle  boundaryNode(size_t i) const { return boundaryVertex(i); }
-          BoundaryEdgeHandle boundaryElement(size_t i)       { return boundaryEdge(i); }
-     ConstBoundaryEdgeHandle boundaryElement(size_t i) const { return boundaryEdge(i); }
-
-                 SimplexHandle         simplex(size_t i)       { return tri(i); }
-            ConstSimplexHandle         simplex(size_t i) const { return tri(i); }
-         BoundarySimplexHandle boundarySimplex(size_t i)       { return boundaryEdge(i); }
-    ConstBoundarySimplexHandle boundarySimplex(size_t i) const { return boundaryEdge(i); }
-
+     VHandle<const TriMesh>         vertex(size_t i) const { return  VHandle<const TriMesh>(i, *this); }
+    HEHandle<const TriMesh>       halfEdge(size_t i) const { return HEHandle<const TriMesh>(i, *this); }
+     THandle<const TriMesh>            tri(size_t i) const { return  THandle<const TriMesh>(i, *this); }
+     THandle<const TriMesh>           face(size_t i) const { return  THandle<const TriMesh>(i, *this); }
+    BVHandle<const TriMesh> boundaryVertex(size_t i) const { return BVHandle<const TriMesh>(i, *this); }
+    BEHandle<const TriMesh>   boundaryEdge(size_t i) const { return BEHandle<const TriMesh>(i, *this); }
 
     // Higher-level entity access
-         HalfEdgeHandle halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }
-    ConstHalfEdgeHandle halfEdge(size_t s, size_t e) const { return halfEdge(m_halfedgeIndex(s, e)); }
+    HEHandle<      TriMesh> halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }
+    HEHandle<const TriMesh> halfEdge(size_t s, size_t e) const { return halfEdge(m_halfedgeIndex(s, e)); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Entity ranges (for range-based for).
+    // Note that
+    //      for (const auto v : nonconst_mesh.vertices())
+    // will get a non-const VertexHandle. However both of the following will get
+    // const VertexHandles:
+    //      for (auto v : nonconst_mesh.constVertices())
+    //      for (auto v : const_mesh.vertices())
+    ////////////////////////////////////////////////////////////////////////////
+private:
+    // Handle ranges for const or non-const meshes.
+    template<template<class> class _Handle> using  HR = HandleRange<      TriMesh, _Handle>;
+    template<template<class> class _Handle> using CHR = HandleRange<const TriMesh, _Handle>;
+public:
+    HR< VHandle> vertices()         { return HR< VHandle>(*this); }
+    HR<HEHandle> halfEdges()        { return HR<HEHandle>(*this); }
+    HR< THandle> tris()             { return HR< THandle>(*this); }
+    HR<BVHandle> boundaryVertices() { return HR<BVHandle>(*this); }
+    HR<BEHandle> boundaryEdges()    { return HR<BEHandle>(*this); }
+
+    CHR< VHandle> vertices()         const { return CHR< VHandle>(*this); }
+    CHR<HEHandle> halfEdges()        const { return CHR<HEHandle>(*this); }
+    CHR< THandle> tris()             const { return CHR< THandle>(*this); }
+    CHR<BVHandle> boundaryVertices() const { return CHR<BVHandle>(*this); }
+    CHR<BEHandle> boundaryEdges()    const { return CHR<BEHandle>(*this); }
+
+    // Explicit const handle ranges (for const iteration over nonconst mesh)
+    CHR< VHandle> constVertices()         const { return CHR< VHandle>(*this); }
+    CHR<HEHandle> constHalfEdges()        const { return CHR<HEHandle>(*this); }
+    CHR< THandle> constTris()             const { return CHR< THandle>(*this); }
+    CHR<BVHandle> constBoundaryVertices() const { return CHR<BVHandle>(*this); }
+    CHR<BEHandle> constBoundaryEdges()    const { return CHR<BEHandle>(*this); }
+
+    // Boundary mesh access
+    BoundaryMesh<      TriMesh> boundary()       { return BoundaryMesh<      TriMesh>(*this); }
+    BoundaryMesh<const TriMesh> boundary() const { return BoundaryMesh<const TriMesh>(*this); }
 
 protected:
     ////////////////////////////////////////////////////////////////////////////
-    std::vector<VertexData>         m_vertexData;
-    std::vector<HalfEdgeData>       m_halfEdgeData;
-    std::vector<TriData>            m_triData;
-    std::vector<BoundaryVertexData> m_boundaryVertexData;
-    std::vector<BoundaryEdgeData>   m_boundaryEdgeData;
-    // A pointer to the following is returned when accessing the data of type
-    // "EmptyData" to avoid allocating the above vectors
-    TMEmptyData m_emptyDataDummy;
+    // DataStorage is empty for TMEmptyData. Otherwise, it's a std::vector.
+    DataStorage<VertexData>         m_vertexData;
+    DataStorage<HalfEdgeData>       m_halfEdgeData;
+    DataStorage<TriData>            m_triData;
+    DataStorage<BoundaryVertexData> m_boundaryVertexData;
+    DataStorage<BoundaryEdgeData>   m_boundaryEdgeData;
 
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class Handle;
-    template<class Mesh, class Subtype, class ConstSubtype, class Data>
-    friend class ConstHandle;
+    // Handles need access to private traversal operations below
+    template<class Mesh> friend class _TriMeshHandleDetail::VHandle;
+    template<class Mesh> friend class _TriMeshHandleDetail::THandle;
+    template<class Mesh> friend class _TriMeshHandleDetail::HEHandle;
+    template<class Mesh> friend class _TriMeshHandleDetail::BVHandle;
+    template<class Mesh> friend class _TriMeshHandleDetail::BEHandle;
 
     // Index arrays, names analogous to those in TetMesh.hh
     ////////////////////////////////////////////////////////////////////////////
@@ -321,9 +337,8 @@ protected:
     int m_halfedgeIndex(size_t s, size_t e) const {
         assert((s < numVertices()) && (e < numVertices()));
 
-        ConstVertexHandle v = vertex(e);
-        ConstHalfEdgeHandle h = v.halfEdge();
-        ConstHalfEdgeHandle hit = h;
+        auto h = vertex(e).halfEdge();
+        auto hit = h;
         do {
             if (size_t(hit.tail().index()) == s) {
                 return hit.index();
