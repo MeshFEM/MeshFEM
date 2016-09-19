@@ -23,7 +23,7 @@ struct MeshDataTraits<const Mesh> : public MeshDataTraits<Mesh> { };
 ////////////////////////////////////////////////////////////////////////////////
 template<class VertexData, class HalfEdgeData, class TriData, class BoundaryVertexData, class BoundaryEdgeData>
 class TriMesh;
-template<class VertexData, class HalfFaceData, class TetData, class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
+template<class VertexData, class HalfFaceData, class HalfEdgeData, class TetData, class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
 class TetMesh;
 template<size_t _K, size_t _Deg, class _EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
 class FEMMesh;
@@ -31,14 +31,15 @@ class FEMMesh;
 ////////////////////////////////////////////////////////////////////////////////
 // Tetrahedral mesh traits
 ////////////////////////////////////////////////////////////////////////////////
-template<class _VertexData, class _HalfFaceData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
-struct MeshDataTraits<TetMesh<_VertexData, _HalfFaceData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>>
+template<class _VertexData, class _HalfFaceData, class _HalfEdgeData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
+struct MeshDataTraits<TetMesh<_VertexData, _HalfFaceData, _HalfEdgeData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>>
 {
     static constexpr bool isFEMMesh = false;
     size_t K = 3;
 
     using VertexData           = _VertexData;
     using HalfFaceData         = _HalfFaceData;
+    using HalfEdgeData         = _HalfEdgeData;
     using TetData              = _TetData;
     using BoundaryVertexData   = _BoundaryVertexData;
     using BoundaryHalfEdgeData = _BoundaryHalfEdgeData;

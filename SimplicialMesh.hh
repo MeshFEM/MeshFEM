@@ -37,7 +37,7 @@ struct SimplicialMesh<2, VData, SData, BVData, BSData> {
 // 3D case: TetMesh
 template<class VData, class SData, class BVData, class BSData>
 struct SimplicialMesh<3, VData, SData, BVData, BSData> {
-    using type = TetMesh<VData, TMEmptyData, SData, BVData, TMEmptyData, BSData>;
+    using type = TetMesh<VData, TMEmptyData, TMEmptyData, SData, BVData, TMEmptyData, BSData>;
 };
 
 #endif /* end of include guard: SIMPLICIALMESH_HH */

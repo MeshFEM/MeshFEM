@@ -5,11 +5,11 @@
 // Build index tables from tetrahedron soup
 ////////////////////////////////////////////////////////////////////////////////
 #include <map>
-template<class VertexData,         class HalfFaceData,         class TetData,
+template<class VertexData, class HalfFaceData, class HalfEdgeData, class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
 template<typename Tets>
-TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-TetMesh(const Tets &tets, size_t nVertices) {
+TetMesh<VertexData, HalfFaceData, HalfEdgeData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
+TetMesh(const Tets &tets, const size_t nVertices) {
     // Corner Creation
     V.resize(4 * tets.size());
     for (size_t t = 0; t < tets.size(); ++t) {
@@ -32,7 +32,7 @@ TetMesh(const Tets &tets, size_t nVertices) {
     FaceMap halfFaceForFace;
     std::runtime_error nonManifold("Non-manifold input detected.");
     O.assign(4 * tets.size(), -1);
-    size_t nHalfFaces = O.size();
+    const size_t nHalfFaces = O.size();
     for (size_t hf = 0; hf < 4 * tets.size(); ++hf) {
         UnorderedTriplet face(m_vertexOfHalfFace(0, hf),
                               m_vertexOfHalfFace(1, hf),
@@ -84,8 +84,8 @@ TetMesh(const Tets &tets, size_t nVertices) {
             }
         }
     }
-    size_t nBoundaryFaces    = bO.size();
-    size_t nBoundaryVertices = bV.size();
+    const size_t nBoundaryFaces    = bO.size();
+    const size_t nBoundaryVertices = bV.size();
     halfFaceForFace.clear();
 
     // Finish filling out VH by completing the interior vertex portion
@@ -103,38 +103,7 @@ TetMesh(const Tets &tets, size_t nVertices) {
         assert(size_t(VH[v]) < nHalfFaces);
     }
 
-    // Boundary Half-edge Adjacency
-    // Half-edges are represented as boundary face corner
-    // (an index in 0..3 * nBoundaryFaces)
-    // The corresponding (opposite) boundary vertex can be found in
-    // Vb[m_vertexOfHalfFace(he % 3, bO[he / 3])]
-    // Traversal (finding edge endpoints, next edge, etc) requires going into
-    // the incident tet, doing a face traversal, and going back.
-    typedef std::map<UnorderedPair, int> EdgeMap;
-    EdgeMap halfEdgeForEdge;
-    size_t nBoundaryHalfEdges = 3 * nBoundaryFaces;
-    bOe.assign(nBoundaryHalfEdges, -1);
-    for (size_t bhf = 0; bhf < bO.size(); ++bhf) {
-        int hf = bO[bhf];
-        assert(hf >= 0 && m_bdryFaceOfVolumeFace(hf) == int(bhf));
-        for (size_t c = 0; c < 3; ++c) {
-            int he = 3 * bhf + c;
-            UnorderedPair edge(m_vertexOfHalfFace((c + 1) % 3, hf),
-                               m_vertexOfHalfFace((c + 2) % 3, hf));
-            EdgeMap::iterator it = halfEdgeForEdge.find(edge);
-            if (it != halfEdgeForEdge.end()) {
-                int heO = it->second;
-                assert(size_t(heO) < bOe.size());
-                if (bOe[heO] != -1) throw nonManifold;
-                bOe[he] = heO;
-                bOe[heO] = he;
-                halfEdgeForEdge.erase(it);
-            }
-            else {
-                halfEdgeForEdge[edge] = he;
-            }
-        }
-    }
+    const size_t nBoundaryHalfEdges = 3 * nBoundaryFaces;
 
     // Allocate data arrays unless the special TMEmptyData type is passed
     m_vertexData          .resize(nVertices);

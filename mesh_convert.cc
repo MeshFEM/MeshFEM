@@ -186,7 +186,7 @@ int main(int argc, const char *argv[])
     }
 
     if (type == MeshIO::MESH_TET) {
-        typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, VertexData,
+        typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, TMEmptyData, VertexData,
                         HalfEdgeData, TMEmptyData> Mesh;
         Mesh mesh(inElements, inVertices.size());
 

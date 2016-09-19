@@ -5,6 +5,7 @@ namespace _TetMeshHandleDetail {
 
 template<class _Mesh> using   _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using  _HFData = typename MeshDataTraits<_Mesh>::HalfFaceData;
+template<class _Mesh> using  _HEData = typename MeshDataTraits<_Mesh>::HalfEdgeData;
 template<class _Mesh> using   _TData = typename MeshDataTraits<_Mesh>::TetData;
 template<class _Mesh> using  _BVData = typename MeshDataTraits<_Mesh>::BoundaryVertexData;
 template<class _Mesh> using _BHEData = typename MeshDataTraits<_Mesh>::BoundaryHalfEdgeData;
@@ -47,16 +48,20 @@ protected:
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
+    using HFH = typename _Mesh::template HFHandle<_Mesh>;
+    using  TH = typename _Mesh::template HFHandle<_Mesh>;
     using BFH = typename _Mesh::template BFHandle<_Mesh>;
 public:
     bool         valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
     bool    isBoundary() const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
     BFH   boundaryFace() const { return BFH(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
+    HFH       opposite() const { return HFH(m_mesh.m_oppFaceIdx(m_idx), m_mesh); }
     // Dimension-independent terminology:
     BFH boundaryEntity() const { return boundaryFace(); }
 
     static constexpr size_t numVertices() { return 3; }
     VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
+    TH            tet() const { return TH(m_mesh.m_tetOfHF(m_idx), m_mesh); }
 
     // Support range-based for over vertices
     struct  VRangeTraits { using SEHType = VH; using EHType = HFHandle; static constexpr size_t count = numVertices(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex; };
@@ -64,6 +69,50 @@ public:
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return m_mesh.m_halfFaceData.getPtr(m_idx); }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// HalfEdge Handles
+////////////////////////////////////////////////////////////////////////////////
+template<class _Mesh>
+class HEHandle : public Handle<_Mesh, HEHandle, _HEData<_Mesh>> {
+protected:
+    using _H = Handle<_Mesh, HEHandle::template HEHandle, _HEData<_Mesh>>;
+    using _H::m_mesh; using _H::m_idx; using _H::_H;
+    // Make sure we use the derived handles when we traverse a derived mesh...
+    using   VH = typename _Mesh::template   VHandle<_Mesh>;
+    using  HEH = typename _Mesh::template  HEHandle<_Mesh>;
+    using  HFH = typename _Mesh::template  HFHandle<_Mesh>;
+    using   TH = typename _Mesh::template   THandle<_Mesh>;
+    using BHEH = typename _Mesh::template BHEHandle<_Mesh>;
+public:
+    bool      valid() const { return (m_idx >= 0) && (m_idx < m_mesh.numHalfEdges()); }
+    // Is this (radially opposite) a boundary half-edge?
+    bool isBoundary() const { return halfFace().isBoundary(); }
+    // Boundary half-edge corresponding to this half-edge (only valid when isBoundary() is true).
+    BHEH boundaryHalfEdge() const { return BHEH(m_mesh.m_bdryHEOfHE(m_idx), m_mesh); }
+
+    HFH halfFace() const { return HFH(m_mesh.m_faceOfHE(m_idx), m_mesh); }
+    TH       tet() const { return  TH(m_mesh. m_tetOfHE(m_idx), m_mesh); }
+
+    // circulate in halfFace()
+    HEH     next() const { return HEH(m_mesh.  m_nextHE(m_idx), m_mesh); }
+    HEH     prev() const { return HEH(m_mesh.  m_prevHE(m_idx), m_mesh); }
+
+    // Opposite within tet()
+    HEH     mate() const { return HEH(m_mesh.  m_mateHE(m_idx), m_mesh); }
+    // Opposite within face halfFace()->opposite()
+    HEH   radial() const { return HEH(m_mesh.m_radialHE(m_idx), m_mesh); }
+
+    // Dimension-independent terminology:
+    BHEH boundaryEntity() const { return boundaryHalfEdge(); }
+
+    static constexpr size_t numVertices() { return 2; }
+    VH  tip() const { return VH(m_mesh. m_tipOfHE(m_idx), m_mesh); }
+    VH tail() const { return VH(m_mesh.m_tailOfHE(m_idx), m_mesh); }
+
+    // Warning: unguarded--only use if you know handle is valid and has data.
+    typename _H::value_ptr dataPtr() const { return m_mesh.m_halfEdgeData.getPtr(m_idx); }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -126,8 +175,8 @@ protected:
     using BHEH = typename _Mesh::template BHEHandle<_Mesh>;
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryVertices()); }
-    // The boundary of a tet mesh has no border.
-    bool isBorder() const { return false; }
+    // The boundary of a tet mesh has no boundary.
+    bool isBoundary() const { return false; }
 
     // Get handle for tet mesh vertex corresponding to this boundary vertex.
      VH volumeVertex() const { return VH(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
@@ -149,6 +198,7 @@ class BHEHandle : public Handle<_Mesh, BHEHandle, _BHEData<_Mesh>> {
 protected:
     using _H = Handle<_Mesh, BHEHandle::template BHEHandle, _BHEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
+    using  HEH = typename _Mesh::template  HEHandle<_Mesh>;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  BVH = typename _Mesh::template  BVHandle<_Mesh>;
     using  BFH = typename _Mesh::template  BFHandle<_Mesh>;
@@ -156,20 +206,22 @@ protected:
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numBoundaryHalfEdges()); }
     // The boundary of a tet mesh has no border.
-    bool isBorder()     const { return false; }
-    bool isBorderEdge() const { return false; }
+    bool isBoundary()     const { return false; }
+    bool isBoundaryEdge() const { return false; }
 
+    BHEH opposite() const { return BHEH(m_mesh.m_oppositeBdryHE(m_idx), m_mesh); }
+    BHEH  primary() const {   int opp = m_mesh.m_oppositeBdryHE(m_idx); return BHEH((opp < m_idx) ? opp : m_idx, m_mesh); }
     BHEH     next() const { return BHEH(m_mesh.template m_bdryHE<_Mesh::Direction::NEXT>(m_idx), m_mesh); }
     BHEH     prev() const { return BHEH(m_mesh.template m_bdryHE<_Mesh::Direction::PREV>(m_idx), m_mesh); }
-    BHEH opposite() const { return BHEH(m_mesh.template m_bdryHE<_Mesh::Direction::OPP >(m_idx), m_mesh); }
      BVH      tip() const { return  BVH(m_mesh.template m_bdryVertexOfBdryHE<_Mesh::HEVertex::TIP>(m_idx), m_mesh); }
      BVH     tail() const { return  BVH(m_mesh.template m_bdryVertexOfBdryHE<_Mesh::HEVertex::TAIL>(m_idx), m_mesh); }
-    BHEH  primary() const {   int opp = m_mesh.template m_bdryHE<_Mesh::Direction::OPP>(m_idx); return BHEH((opp < m_idx) ? opp : m_idx, m_mesh); }
 
     // Circulation around tip
     BHEH  ccw() const { return opposite().prev(); }
     BHEH   cw() const { return next().opposite(); }
      BFH face() const { return BFH(m_mesh.m_bdryFaceOfBdryHE(m_idx), m_mesh); }
+
+    HEH volumeHalfEdge() const { return HEH(m_mesh.m_volHEOfBdryHE(m_idx).index(), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return m_mesh.m_boundaryHalfEdgeData.getPtr(m_idx); }
@@ -194,10 +246,10 @@ public:
     static constexpr size_t numNeighbors() { return 3; }
     static constexpr size_t numVertices()  { return 3; }
 
-     HFH   volumeHalfFace() const { return  HFH(m_mesh.m_faceForBdryFace(m_idx), m_mesh); }
-     BVH   vertex(size_t i) const { BVH bv = volumeHalfFace().vertex(i).boundaryVertex(); assert(bv); return bv; }
-     BFH neighbor(size_t i) const { return  BFH(m_mesh.m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
-    BHEH halfEdge(size_t i) const { return BHEH(m_mesh.m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
+     HFH   volumeHalfFace() const { return  HFH(m_mesh.     m_faceForBdryFace(   m_idx), m_mesh); }
+     BVH   vertex(size_t i) const { return  BVH(m_mesh.m_bdryVertexOfBdryFace(i, m_idx), m_mesh); }
+     BFH neighbor(size_t i) const { return  BFH(m_mesh. m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
+    BHEH halfEdge(size_t i) const { return BHEH(m_mesh.    m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
 
     // Support range-based for over boundary vertices, neighboring boundary triangles, and half-edges
     struct   VRangeTraits { using SEHType =  BVH; using EHType = BFHandle; static constexpr size_t count = numVertices() ;  static constexpr auto get = &EHType::vertex  ; };
@@ -213,10 +265,11 @@ public:
 
 }
 
-template<class _VertexData, class _HalfFaceData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
-struct HandleTraits<TetMesh<_VertexData, _HalfFaceData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>> {
+template<class _VertexData, class _HalfFaceData, class _HalfEdgeData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
+struct HandleTraits<TetMesh<_VertexData, _HalfFaceData, _HalfEdgeData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>> {
     template<class _Mesh> using   VHandle = _TetMeshHandleDetail::  VHandle<_Mesh>; // Vertex
     template<class _Mesh> using  HFHandle = _TetMeshHandleDetail:: HFHandle<_Mesh>; // Half-face
+    template<class _Mesh> using  HEHandle = _TetMeshHandleDetail:: HEHandle<_Mesh>; // Half-edge
     template<class _Mesh> using   THandle = _TetMeshHandleDetail::  THandle<_Mesh>; // Tetrahedron
     template<class _Mesh> using  BVHandle = _TetMeshHandleDetail:: BVHandle<_Mesh>; // Boundary vertex
     template<class _Mesh> using BHEHandle = _TetMeshHandleDetail::BHEHandle<_Mesh>; // Boundary half-edge
@@ -226,6 +279,7 @@ struct HandleTraits<TetMesh<_VertexData, _HalfFaceData, _TetData, _BoundaryVerte
 // Range traits for all tet handle types: get the corresponding entity counts.
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::  VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()         ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: HFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfFaces()        ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: HEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfEdges()        ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::  THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTets()             ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };

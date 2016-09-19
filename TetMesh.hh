@@ -22,15 +22,6 @@
 //      hf  == bO[-1 - O[hf]]
 //      bhf == -1 - O[bO[bhf]]
 //
-//  The following operations are trivial (direct lookups):
-//      0) Tet-vertex adjacency
-//      1) Tet-tet adjacency
-//      2) Boundary mesh adjacencies (vertex->vertex, triangle->triangle)
-//      3) isBoundary queries (tets, faces, vertices),
-//  and the following are possible in constant time with a bfs/dfs:
-//      1) Vertex-vertex adjacency
-//      2) Vertex-tet adjacency
-//
 //  As suggested in
 //  [2] Gurung, Topraj, and Jarek Rossignac. "SOT: compact representation for
 //      tetrahedral meshes." 2009 SIAM/ACM Joint Conference on Geometric and
@@ -53,6 +44,16 @@
 //  numbering: vertex i of (boundary) face j is the (boundary vertex corresponding
 //  to) tet's volume vertex k, where k is the ith entry of the jth list above.
 //
+//  Face orientation:
+//  Differing from [1], we orient a tet's half-faces to point inward (so that
+//  their opposites point outward). In particular, by always reversing
+//  orientation accross half-faces, this ensures the correct orientation of
+//  boundary mesh triangles, whose opposites are the inward-pointing face of
+//  their incident tet.
+//  This convention is consistent with TriMesh, where a triangle's half-edges
+//  are oriented "inward" and boundary edges are oriented "outward"
+//  (inward/outward mean after ccw rotation by 90deg).
+//
 //  Connectivity is index-based rather than pointer-based, and for convenience,
 //  entities can be accessed through the pointer-like "handle" classes which
 //  comprise an entity index and a reference to the full mesh. These handles
@@ -63,6 +64,13 @@
 //  triangle vertices and boundary half-edges). That is, the index of a tet
 //  corner is also used as the index of the half-face, and the index of a
 //  boundary triangle corner is used as a boundary half-edge index.
+//
+//  Half-edges:
+//  Both [1] and [2] present a confusing approach for representing and
+//  traversing half-edges (also [1]'s radial implementation is incorrect).
+//  We implement a more intuitive representation that simplifies operations:
+//  a half-edge in tet t is the intersection of two distinct half-faces of t.
+//  See the half-edge implementation section below for more details.
 //
 //  Custom data can be stored on the mesh entities through the {Vertex,HalfFace,
 //  Tet,BoundaryVertex,BoundaryFace}Data classes.
@@ -82,13 +90,13 @@
 #include "Handles/TetMeshHandles.hh"
 #include "SimplicialMeshInterface.hh"
 
-template<class VertexData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
+template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
          class BoundaryFaceData = TMEmptyData>
 class TetMesh : public Concepts::Mesh,
                 public Concepts::TetMesh,
                 // Also provide a dimension-independent entity interface
-                public SimplicialMeshInterface<TetMesh<VertexData, HalfFaceData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>>
+                public SimplicialMeshInterface<TetMesh<VertexData, HalfFaceData, HalfEdgeData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>>
 {
 public:
     static constexpr size_t K = 3;
@@ -97,18 +105,20 @@ public:
     template<typename Tets>
     TetMesh(const Tets &tets, size_t nVertices);
 
-    size_t numVertices()  const { return VH.size(); }
-    size_t numHalfFaces() const { return O.size(); }
-    size_t numTets()      const { return V.size() / 4; }
+    size_t numVertices()  const { return      VH.size(); }
+    size_t numHalfFaces() const { return       O.size(); }
+    size_t numHalfEdges() const { return 12 * numTets(); }
+    size_t numTets()      const { return   V.size() / 4; }
 
-    size_t numBoundaryVertices()  const { return bV.size(); }
-    size_t numBoundaryHalfEdges() const { return bOe.size(); }
-    size_t numBoundaryFaces()     const { return bO.size(); }
+    size_t numBoundaryVertices()  const { return              bV.size(); }
+    size_t numBoundaryHalfEdges() const { return 3 * numBoundaryFaces(); }
+    size_t numBoundaryFaces()     const { return              bO.size(); }
 
     // Handles can be instantiated for const or non-const meshes.
     // Defined in TetMeshHandles.hh
     template<class _Mesh> using   VHandle = typename HandleTraits<TetMesh>::template   VHandle<_Mesh>; // Vertex
     template<class _Mesh> using  HFHandle = typename HandleTraits<TetMesh>::template  HFHandle<_Mesh>; // Half-face
+    template<class _Mesh> using  HEHandle = typename HandleTraits<TetMesh>::template  HEHandle<_Mesh>; // Half-edge
     template<class _Mesh> using   THandle = typename HandleTraits<TetMesh>::template   THandle<_Mesh>; // Tetrahedron
     template<class _Mesh> using  BVHandle = typename HandleTraits<TetMesh>::template  BVHandle<_Mesh>; // Boundary vertex
     template<class _Mesh> using BHEHandle = typename HandleTraits<TetMesh>::template BHEHandle<_Mesh>; // Boundary half-edge
@@ -119,6 +129,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
       VHandle<TetMesh>           vertex(size_t i) { return   VHandle<TetMesh>(i, *this); }
      HFHandle<TetMesh>         halfFace(size_t i) { return  HFHandle<TetMesh>(i, *this); }
+     HEHandle<TetMesh>         halfEdge(size_t i) { return  HEHandle<TetMesh>(i, *this); }
       THandle<TetMesh>              tet(size_t i) { return   THandle<TetMesh>(i, *this); }
      BVHandle<TetMesh>   boundaryVertex(size_t i) { return  BVHandle<TetMesh>(i, *this); }
     BHEHandle<TetMesh> boundaryHalfEdge(size_t i) { return BHEHandle<TetMesh>(i, *this); }
@@ -126,6 +137,7 @@ public:
 
       VHandle<const TetMesh>           vertex(size_t i) const { return   VHandle<const TetMesh>(i, *this); }
      HFHandle<const TetMesh>         halfFace(size_t i) const { return  HFHandle<const TetMesh>(i, *this); }
+     HFHandle<const TetMesh>         halfEdge(size_t i) const { return  HEHandle<const TetMesh>(i, *this); }
       THandle<const TetMesh>              tet(size_t i) const { return   THandle<const TetMesh>(i, *this); }
      BVHandle<const TetMesh>   boundaryVertex(size_t i) const { return  BVHandle<const TetMesh>(i, *this); }
     BHEHandle<const TetMesh> boundaryHalfEdge(size_t i) const { return BHEHandle<const TetMesh>(i, *this); }
@@ -176,27 +188,70 @@ protected:
     // DataStorage is empty for TMEmptyData. Otherwise, it's a std::vector.
     DataStorage<VertexData>           m_vertexData;
     DataStorage<HalfFaceData>         m_halfFaceData;
+    DataStorage<HalfEdgeData>         m_halfEdgeData;
     DataStorage<TetData>              m_tetData;
     DataStorage<BoundaryVertexData>   m_boundaryVertexData;
     DataStorage<BoundaryHalfEdgeData> m_boundaryHalfEdgeData;
     DataStorage<BoundaryFaceData>     m_boundaryFaceData;
 
     // Handles need access to private traversal operations below
-    template<class Mesh> friend class _TetMeshHandleDetail::VHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::THandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::HFHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::BVHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::  VHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail::  THandle;
+    template<class Mesh> friend class _TetMeshHandleDetail:: HFHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail:: HEHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail:: BVHandle;
     template<class Mesh> friend class _TetMeshHandleDetail::BHEHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::BFHandle;
+    template<class Mesh> friend class _TetMeshHandleDetail:: BFHandle;
 
-    // Outward-oriented half face corner indices and chaining
-    // Note: could make this static and put in a .cc file
-    const int m_faceCorners[4][3] = { {1, 2, 3}, {0, 3, 2},
-                                      {0, 1, 3}, {0, 2, 1} };
-    // m_nextFaceCorners[i][j] gives the corner after j in face i
-    // and, in fact, m_nextFaceCorners[j][i] gives the corner before j in face i
-    const int m_nextFaceCorners[4][4] = { {-1, 2, 3, 1}, {3, -1, 0, 2},
-                                          {1, 3, -1, 0}, {2, 0, 1, -1} };
+    // Inward-oriented half-face corner indices
+    // Face i is across tet corner i.
+    // m_faceCorners[i][j] gives tet corner index of face i's corner j.
+    //       3
+    //       *             z
+    //      / \`.          ^
+    //     /   \ `* 2      | ^ y
+    //    / __--\ /        |/
+    //  0*-------* 1       +----->x
+    static int m_faceCornerToTetCorner(int face, int faceCorner) {
+        assert((size_t(face) < 4) && (size_t(faceCorner) < 3));
+        static const int fc[4][3] = { {1, 3, 2}, {0, 2, 3},
+                                      {0, 3, 1}, {0, 1, 2} };
+        return fc[face][faceCorner];
+    }
+
+    // Tet corner after (ccw) tetCorner in vol face "face" 
+    // (-1 if tetCorner is not in face).
+    static int m_nextTetCornerInFace(int face, int tetCorner) {
+        assert(size_t(face) < 4);
+        assert(size_t(tetCorner) < 4);
+        static const int nfc[4][4] = {
+            {-1,  3,  1,  2},
+            { 2, -1,  3,  0},
+            { 3,  0, -1,  1},
+            { 1,  2,  0, -1}
+        };
+
+        return nfc[face][tetCorner];
+    }
+
+    // Tet corner before (cw) tetCorner in vol face "face" 
+    static int m_prevTetCornerInFace(int face, int tetCorner) {
+        // Note: transposing m_nextTetCornerInFace gets prev!
+        return m_nextTetCornerInFace(tetCorner, face);
+    }
+
+    // Local corner index within vol face
+    // "face" of tet corner index tetCorner
+    static int m_faceCornerForTetCorner(int face, int tetCorner) {
+        assert((size_t(face) < 4) && (size_t(tetCorner) < 4));
+        const int fc[4][4] = {
+            {-1,  0,  2,  1},
+            { 0, -1,  1,  2},
+            { 0,  2, -1,  1},
+            { 0,  1,  2, -1}
+        };
+        return fc[face][tetCorner];
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Index arrays, names from [1] except where noted
@@ -205,6 +260,8 @@ protected:
     // is stored in V[4 * t + c]
     std::vector<int> V;
     // Opposite half-face for each half-face.
+    // Note: the half-face across corner c of tet t is given index:
+    //      4 * t + c
     std::vector<int> O;
     // Arbitrary half-face incident on each vertex. If the vertex is on the
     // boundary, this half-face is guaranteed to be opposite a boundary
@@ -212,9 +269,12 @@ protected:
     std::vector<int> VH;
 
     // Surface/boundary mesh arrays
-    // Opposite boundary half-edge for boundary half-edge (called bO in [1])
-    // The ordering here matches the vetex ordering in face bO.
-    std::vector<int> bOe;
+    // Note: the bdry half edge across corner c of bdry face bf is given index:
+    //      3 * bf + c
+    // Also note: we avoid storing the opposite boundary half-edge table and
+    // instead determine opposites by circulation around half-edges. This slows
+    // down traversal slightly, but should be a neglibible overhead. If it turns
+    // out to be too slow, we can cache the result in a "bOe" table.
     // Volume (opposite) half-face for each boundary half-face (not in [1])
     std::vector<int> bO;
     // Volume vertex indices for each boundary vertex (different from bV in [1])
@@ -233,7 +293,7 @@ protected:
     /*! Find the boundary mesh vertex associated with the volume mesh index v.
      *  @return index of boundary vertex or -1 if v is an internal vertex. */
     int m_bdryVertexIdx(int v) const {
-        assert((size_t) v < Vb.size());
+        assert(size_t(v) < Vb.size());
         return Vb[v];
     }
 
@@ -260,36 +320,15 @@ protected:
 
     int m_vertexOfHalfFace(int c, int hf) const {
         assert(size_t(hf) < numHalfFaces() && c >= 0 && c < 3);
-        size_t vidx = 4 * (hf / 4) + m_faceCorners[hf % 4][c];
+        size_t vidx = 4 * (hf / 4) + m_faceCornerToTetCorner(hf % 4, c);
         assert(vidx < V.size());
         return V[vidx];
     }
 
-    /*! Find the next vertex in a particular half face (observing the half-face's
-    //  orientation.) */
-    int m_nextVertexOfHalfFace(int v, int hf) const {
-        int c = v % 4;
-        int t = v / 4;
-        int fc = hf % 4;
-
-        // v better be in the same triangle as hf
-        assert(t == hf / 4);
-        size_t vidx = 4 * t + m_nextFaceCorners[fc][c];
-        assert(vidx < V.size());
-        return V[vidx];
-    }
-
-    int m_prevVertexOfHalfFace(int v, int hf) const {
-        int c = v % 4;
-        int t = v / 4;
-        int fc = hf % 4;
-
-        // v better be in the same triangle as hf
-        assert(t == hf / 4);
-        // Transpose of m_nextFaceCorners gives us the reverse order!
-        size_t vidx = 4 * t + m_nextFaceCorners[c][fc];
-        assert(vidx < V.size());
-        return V[vidx];
+    int m_tetOfHF(int hf) const {
+        if (hf < 0) return -1;
+        assert(size_t(hf) < numHalfFaces());
+        return hf / 4;
     }
 
     ////////////////////////////////////
@@ -346,16 +385,14 @@ protected:
     }
 
     /*! Next, previous, and opposite boundary half edges */
-    enum class Direction : int { NEXT = 1, PREV = 2, OPP = 0 };
+    enum class Direction : int { NEXT = 1, PREV = 2 };
     template<Direction dir>
     int m_bdryHE(int bhe) const {
         assert(size_t(bhe) < numBoundaryHalfEdges());
         if ((dir == Direction::NEXT) || (dir == Direction::PREV)) {
             int bf = bhe / 3;
-            int  c = bhe % 3;
-            return 3 * bf + (c + static_cast<int>(dir)) % 3;
+            return 3 * bf + (bhe + static_cast<int>(dir)) % 3;
         }
-        else if (dir == Direction::OPP) return bOe[bhe];
         else assert(false);
         return -1;
     }
@@ -374,12 +411,32 @@ protected:
         assert((vtx == HEVertex::TIP) || (vtx == HEVertex::TAIL));
         assert(size_t(bhe) < numBoundaryHalfEdges());
         int bf = bhe / 3;
+        int  c = (bhe + static_cast<int>(vtx)) % 3;
+        return m_bdryVertexOfBdryFace(c, bf);
+    }
+
+    struct _HERep;
+    // Get the volume half-edge corresponding to this boundary he
+    _HERep m_volHEOfBdryHE(int bhe) const {
+        if (bhe < 0) return -1;
+        int bf = m_bdryFaceOfBdryHE(bhe);
         int  c = bhe % 3;
-        int  f = m_faceForBdryFace(bf);
-        int vb = m_bdryVertexIdx(m_vertexOfHalfFace(
-                    (c + static_cast<int>(vtx)) % 3, f));
-        assert(size_t(vb) < numBoundaryVertices());
-        return vb;
+        int vf = bO[bf];
+        int vc = m_volFaceCornerForBdryFaceCorner(c);
+
+        int t   = vf / 4;
+        int lvf = vf % 4;
+        int lvc = m_faceCornerToTetCorner(lvf, vc);
+        return _HERep(t, lvf, lvc);
+    }
+
+    // Find the boundary half-edge opposite bhe by circulating through the
+    // interior around the edge. (mate -> radial -> ...)
+    int m_oppositeBdryHE(int bhe) const {
+        _HERep vh = m_volHEOfBdryHE(bhe);
+        while (!vh.isBoundary())
+            vh = u_radialHE(vh.mate());
+        return vh.bdryHE();
     }
 
     ////////////////////////////////////
@@ -397,17 +454,215 @@ protected:
         return -1 - i;
     }
 
-    /* Find the index of an adjacent boundary face */
-    int m_bdryFaceAdjBdryFace(int adj, int bf) const {
-        assert(size_t(bf) < numBoundaryFaces() && adj >= 0 && adj < 3);
-        int heO = bOe[3 * bf + adj];
-        assert(size_t(heO) < bOe.size());
-        return heO / 3;
+    // Boundary faces are in the opposite orientation of their corresponding
+    // (opposite) volume half-face. In particular, we define the corner
+    // correspondence as:
+    //      corner c of boundary halfFace = corner 2 - c of volume halfFace.
+    static constexpr int m_bdryFaceCornerForVolFaceCorner(int c) { return 2 - c; }
+    static constexpr int m_volFaceCornerForBdryFaceCorner(int c) { return 2 - c; }
+
+    // Get the vertex corresponding to corner c of boundary face bf.
+    // (This this is also the vertex opposite boundary half edge 3 * bf + c)
+    int m_bdryVertexOfBdryFace(int c, int bf) const {
+        assert(size_t(bf) < numBoundaryFaces());
+        int hf = m_faceForBdryFace(bf);
+        int vi = m_vertexOfHalfFace(m_volFaceCornerForBdryFaceCorner(c), hf);
+        int vb = m_bdryVertexIdx(vi);
+        assert(size_t(vb) < numBoundaryVertices());
+        return vb;
     }
 
+    // Get boundary half-edge e (half-edge across from corner e)
     int m_bdryHEOfBdryFace(int e, int bf) const {
-        assert(size_t(bf) < numBoundaryFaces() && e >= 0 && e < 3);
+        assert((size_t(bf) < numBoundaryFaces()) && (e >= 0) && (e < 3));
         return 3 * bf + e;
+    }
+
+    // Find the index of the boundary face opposite half-edge i.
+    // This is the "ith neighbor"
+    int m_bdryFaceAdjBdryFace(int i, int bf) const {
+        assert(size_t(bf) < numBoundaryFaces() && i >= 0 && i < 3);
+        int bheO = m_oppositeBdryHE(3 * bf + i);
+        assert(size_t(bheO) < numBoundaryHalfEdges());
+        return bheO / 3;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Half-Edges
+    // Unguarded primitive implementations u_* sprinkled throughout derivation.
+    // These implement the operations described without checking for valid
+    // input.
+    ////////////////////////////////////////////////////////////////////////////
+    // A half-edge in tet t is specified by the intersection of two distinct
+    // half-faces of t. The order of the half-faces determines orientation: the
+    // first half-face "hf1" specifies in which tet face the half-edge lies,
+    // and the second half-face "hf2" picks one of the three halfedges in that
+    // face. This particular half-edge is the one opposite the corner
+    // corresponding to (i.e. opposite) "hf2." This representation is consistent
+    // with our identifying half-edges with opposite triangle corners in the
+    // triangle mesh case.
+    //
+    // Each tet has 4 * 3 = 12 half-edges (the number of ordered pairs of
+    // half-faces). Thus half-edges are given 1D indices 0..12*numTets().
+    // The half-edge with index "he" lies in tet t = floor(he / 12)
+    static int u_tetOfHE(int he) { return he / 12; }
+    // and has "local" half-edge index lhe = he % 12 in the range 0..12.
+    static int     u_lhe(int he) { return he % 12; }
+    // Half-edge he is represented as the ordered half-face index pair (hf1, hf2).
+    struct _HERep {
+        int    t, // tet index; negative for boundary half edge
+            lhf1, // local index of half-face containing the half-edge
+            lhf2; // local index of tet corner in lhf1 opposite the half-edge
+                  // (equivalently: half-face determining edge by intersection)
+
+        _HERep(int he) {
+            t = u_tetOfHE(he);
+            int lhe = u_lhe(he);
+            // The local indices of these half-faces in tet t are defined as
+            lhf1 = lhe / 3;                    // which of t's faces contains the half-edge?
+            lhf2 = (lhf1 + 1 + (lhe % 3)) % 4; // intersecting face chosen from remaining 3
+        }
+
+        _HERep(int _t, int _lhf1, int _lhf2) : t(_t), lhf1(_lhf1), lhf2(_lhf2) { }
+
+        // Inverse of the constructor: determine local and global 1D indices
+        int index() const { return isBoundary() ? -1 : (lhe() + 12 * t); }
+        int   lhe() const { return 3 * lhf1 + (lhf2 - lhf1 + 3) % 4; }
+
+        // global half face indices
+        int hf1() const { return 4 * t + lhf1; }
+        int hf2() const { return 4 * t + lhf2; }
+
+        int halfFace() const { return hf1(); }
+
+        //  *   <-- lhf2
+        // / \
+        //+--->
+        // Local corner indices in tet of tip/tail
+        int ltail() const { return m_nextTetCornerInFace(lhf1, lhf2); }
+        int  ltip() const { return m_prevTetCornerInFace(lhf1, lhf2); }
+
+        // Global corner indices of tip/tail
+        int gTailCorner() const { return 4 * t + ltail(); }
+        int  gTipCorner() const { return 4 * t +  ltip(); }
+        int  gOppCorner() const { return hf2(); }
+
+        // Circulate in face halfFace() (next: ccw, prev: cw)
+        _HERep next() const { return _HERep(t, lhf1, ltail()); }
+        _HERep prev() const { return _HERep(t, lhf1,  ltip()); }
+
+        // Oppositely oriented half-edge in the same tet (just swap half-faces)
+        _HERep mate() const { return _HERep(t, lhf2, lhf1); }
+
+        // This _HERep can also represent a boundary halfedge. In this case:
+        //   t = -1
+        //   lhf1 = bdryFaceIdx (global global boundary face index)
+        //   lhf2 = halfedge index in bdryFace (0, 1, or 2)
+        bool isBoundary() const { return (t < 0); }
+        // Retrieve the encoded boundary half-edge information.
+        // Only valid if isBoundary() is true.
+        int bdryFace()    const { return isBoundary() ? lhf1 : -1; }
+        int bdryHE()      const { return isBoundary() ? 3 * bdryFace() + lhf2 : -1; }
+    };
+
+    // Oppositely oriented half-edge in tet across face() (in face O[face().index()])
+    // This traversal requires access to TetMesh's index tables.
+    // Note: if the radial edge lives on the boundary mesh, an encoded boundary
+    //       half-edge is returned.
+    _HERep u_radialHE(const _HERep &h) const {
+        int ohf = m_oppFaceIdx(h.halfFace()); // negative if boundary
+        if (ohf < 0) {
+            // Radial half-edge is a boundary half-edge; encode it in a _HERep
+            int bf = -1 - ohf; // decode boundary face index
+            // Corresponding boundary half-edge is the one opposite the same
+            // corner in the corresponding boundary face.
+            int vfcorner = m_faceCornerForTetCorner(h.lhf1, h.lhf2);
+            int bfcorner = m_bdryFaceCornerForVolFaceCorner(vfcorner);
+            return _HERep(-1, bf, bfcorner);
+        }
+
+        // Radial half-edge is a volume half-edge
+        int otet = ohf / 4;
+        int lohf = ohf % 4;
+        // Radial half-edge is the one in face lohf opposite the same vertex as
+        // h. Because we don't know how adjacent faces are glued together, we
+        // must search ohf for the h's opposite vertex.
+        int oppV = V.at(h.gOppCorner());
+
+        // std::cout << "Seeking radial opposite " << oppV << std::endl;
+
+        int lohf2 = -1;
+        for (size_t fc = 0; (fc < 3) && (lohf2 == -1); ++fc) {
+            int tc = m_faceCornerToTetCorner(lohf, fc);
+            if (V.at(4 * otet + tc) == oppV) lohf2 = tc;
+        }
+
+        // We better have found it...
+        if (lohf2 == -1) {
+            // std::cout << "failed to link opposite faces with vertex " << oppV << std::endl;
+
+            // std::cout << "face: ";
+            // std::cout << " " << V.at(4 * h.t + m_faceCornerToTetCorner(h.lhf1, 0));
+            // std::cout << " " << V.at(4 * h.t + m_faceCornerToTetCorner(h.lhf1, 1));
+            // std::cout << " " << V.at(4 * h.t + m_faceCornerToTetCorner(h.lhf1, 2));
+            // std::cout << std::endl;
+
+            // std::cout << "opposite face: ";
+            // std::cout << " " << V.at(4 * otet + m_faceCornerToTetCorner(lohf, 0));
+            // std::cout << " " << V.at(4 * otet + m_faceCornerToTetCorner(lohf, 1));
+            // std::cout << " " << V.at(4 * otet + m_faceCornerToTetCorner(lohf, 2));
+            // std::cout << std::endl;
+
+            // int ohf = m_oppFaceIdx(h.halfFace()); // negative if boundary
+        }
+        assert(lohf2 >= 0);
+
+        // std::cout << "V[lohf2] = " << V.at(4 * otet + lohf2) << std::endl;
+        _HERep hopp(otet, lohf, lohf2);
+
+        // std::cout << "got " << V.at(hopp.gTailCorner()) << " -> " << V.at(hopp.gTipCorner()) << std::endl;
+
+        return hopp;
+    }
+
+    int u_bdryHEOfHE(const _HERep &h) const {
+        _HERep rhe = u_radialHE(h);
+        int bhe = -1;
+        if (rhe.isBoundary()) {
+            rhe = rhe.bdryHE();
+            assert(size_t(bhe) < numBoundaryHalfEdges());
+        }
+        return bhe;
+    }
+
+    // Guarded he index -> index map
+    // Execution guard to propagate invalid flag (-1) values and fail on out of
+    // range input values.
+    template<class F>
+    int m_guardFuncHE(int he, const F &f) const {
+        if (he == -1) return -1;
+        assert(size_t(he) < numHalfEdges());
+        return f(he);
+    }
+
+    int    m_tetOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return                  u_tetOfHE(he); }); }
+    int    m_tipOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return V.at(_HERep(he). gTipCorner()); }); }
+    int   m_tailOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return V.at(_HERep(he).gTailCorner()); }); }
+    int   m_faceOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return          _HERep(he).halfFace(); }); }
+    int     m_nextHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).next().index(); }); }
+    int     m_prevHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).prev().index(); }); }
+    int     m_mateHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).mate().index(); }); }
+    int   m_radialHE(int he) const { return m_guardFuncHE(he, [=](int he) { return u_radialHE(_HERep(he)).index(); }); }
+    int m_bdryHEOfHE(int he) const {
+        if (he == -1) return -1;
+        assert(size_t(he) < numHalfEdges());
+        _HERep rhe = u_radialHE(_HERep(he));
+        int bhe = -1;
+        if (rhe.isBoundary()) {
+            bhe = rhe.bdryHE();
+            assert(size_t(bhe) < numBoundaryHalfEdges());
+        }
+        return bhe;
     }
 };
 
