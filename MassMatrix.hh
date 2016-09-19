@@ -46,7 +46,7 @@ struct NodeGetter<1, _FEMMesh> {
 template<size_t Deg>
 struct Impl {
     template<class _FEMMesh>
-    static void construct(const _FEMMesh &mesh,
+    static void construct(const _FEMMesh &mesh, 
                           const std::vector<bool> &skipElem,
                           TripletMatrix<> &M) {
         bool skipping = (skipElem.size() == mesh.numElements());

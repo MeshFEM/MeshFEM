@@ -119,7 +119,6 @@ void determineCellBoundaryFaceMembership(const PointCollection &bdryPoints,
     }
 }
 
-
 // Given the cell face membership of every node, determine which boundary
 // elements of the mesh lie on the cell faces (which boundary elements have all
 // nodes with a single face in common).

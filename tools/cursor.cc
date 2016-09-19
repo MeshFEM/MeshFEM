@@ -13,6 +13,7 @@
 #include <cstdlib>
 
 #include <boost/algorithm/string.hpp>
+#include "../filters/gen_cursor.hh"
 
 #include "../MeshIO.hh"
 
@@ -47,22 +48,8 @@ int main(int argc, char *argv[])
     // Create crosshair cursor geometry
     std::vector<IOVertex> vertices;
     std::vector<IOElement> elements;
-    for (const auto &p : pts) {
-        size_t offset = vertices.size();
-        vertices.push_back(p);
-
-        vertices.emplace_back(p[0] - CURSOR_RADIUS, p[1], p[2]);
-        vertices.emplace_back(p[0] + CURSOR_RADIUS, p[1], p[2]);
-
-        vertices.emplace_back(p[0], p[1] - CURSOR_RADIUS, p[2]);
-        vertices.emplace_back(p[0], p[1] + CURSOR_RADIUS, p[2]);
-
-        vertices.emplace_back(p[0], p[1], p[2] - CURSOR_RADIUS);
-        vertices.emplace_back(p[0], p[1], p[2] + CURSOR_RADIUS);
-
-        for (size_t i = 1; i <= 6; ++i)
-            elements.emplace_back(offset, offset + i);
-    }
+    for (const auto &p : pts)
+        gen_cursor(CURSOR_RADIUS, p, vertices, elements);
 
     MeshIO_MSH io;
     io.setBinary(false);
