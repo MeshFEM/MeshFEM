@@ -37,8 +37,10 @@ TetMesh(const Tets &tets, const size_t nVertices) {
         UnorderedTriplet face(m_vertexOfHalfFace(0, hf),
                               m_vertexOfHalfFace(1, hf),
                               m_vertexOfHalfFace(2, hf));
-        FaceMap::iterator it = halfFaceForFace.find(face);
-        if (it != halfFaceForFace.end()) {
+        // attempt to insert half-face
+        auto res = halfFaceForFace.emplace(face, hf);
+        if (!res.second) { // already exists
+            auto it = res.first;
             int hfO = it->second;
             assert(size_t(hfO) < O.size());
             if (O[hfO] == -1) {
@@ -49,9 +51,6 @@ TetMesh(const Tets &tets, const size_t nVertices) {
             // because of the halfEdgeForEdge.erase(it) call...
             else throw nonManifold;
             halfFaceForFace.erase(it);
-        }
-        else {
-            halfFaceForFace[face] = hf;
         }
     }
 

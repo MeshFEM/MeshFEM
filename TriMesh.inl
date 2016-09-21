@@ -40,8 +40,10 @@ TriMesh(const Tris &tris, size_t nVertices) {
     for (size_t he = 0; he < 3 * tris.size(); ++he) {
         UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
                            m_vertexOfHE<HEVertex::TAIL>(he));
-        EdgeMap::const_iterator it = halfEdgeForEdge.find(edge);
-        if (it != halfEdgeForEdge.end()) {
+        // Attempt to insert half-edge
+        auto res = halfEdgeForEdge.emplace(edge, he);
+        if (!res.second) { // already exists
+            auto it = res.first;
             int heO = it->second;
             assert(size_t(heO) < O.size());
             if (O[heO] == -1) {
@@ -53,9 +55,6 @@ TriMesh(const Tris &tris, size_t nVertices) {
             // else throw nonManifold;
             else assert(false);
             halfEdgeForEdge.erase(it);
-        }
-        else {
-            halfEdgeForEdge[edge] = he;
         }
     }
 
