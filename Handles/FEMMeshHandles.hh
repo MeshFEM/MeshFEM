@@ -70,11 +70,8 @@ public:
 
     // Get the boundary node collocated with this volume node
     // Returns invalid if internal
-    BNH boundaryNode() const {
-        // Both traversals guaranteed to obtain invalid node (-1) if this node is internal
-        if (isVertexNode()) return vertex().boundaryVertex().node();
-        else return BNH(m_mesh.m_bdryEdgeNodeForVolEdgeNode(m_idx), m_mesh);
-    }
+    BNH boundaryNode() const { return BNH(m_mesh.m_bdryNodeForVolNode(m_idx), m_mesh); }
+
     // Identity operation--avoids explicitly handling some special use cases.
     const NHandle &volumeNode() const { return *this; }
           NHandle &volumeNode()       { return *this; }
@@ -131,14 +128,11 @@ public:
 
     int edgeNodeIndex() const { return m_mesh.m_bdryEdgeNodeIndex(m_idx); }
     bool   isEdgeNode() const { return edgeNodeIndex() >= 0; }
-    bool isVertexNode() const { return m_mesh.m_boundaryVertexForBoundaryNode(m_idx) >= 0; }
+    bool isVertexNode() const { return m_mesh.m_bdryVtxForBdryNode(m_idx) >= 0; }
 
-    BVH        vertex() const { return BVH(m_mesh.m_boundaryVertexForBoundaryNode(m_idx), m_mesh); }
+    BVH       vertex() const { return BVH(m_mesh.m_bdryVtxForBdryNode(m_idx), m_mesh); }
     // Get the volume node collocated with this boundary node.
-     NH    volumeNode() const {
-        if (isVertexNode()) return vertex().volumeVertex().node();
-        else return NH(m_mesh.m_volEdgeNodeForBdryEdgeNode(m_idx), m_mesh);
-    }
+    NH    volumeNode() const { return NH(m_mesh.m_volNodeForBdryNode(m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return m_mesh.m_boundaryNodeData.getPtr(m_idx); }

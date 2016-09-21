@@ -124,13 +124,9 @@ public:
     // Number of strictly interior nodes (excluding nodes on the boundary).
     size_t numInternalNodes() const { return numNodes() - numBoundaryNodes(); }
 
-    const UnorderedPair &edgeForEdgeNode(size_t eni) const {
-        return m_edgeForEdgeNode.at(eni);
-    }
-
     size_t numBoundaryElementNodes() const { return 0; }
     size_t numBoundaryVertexNodes()  const { return BaseMesh::numBoundaryVertices(); }
-    size_t numBoundaryEdgeNodes()    const { return m_edgeForBdryEdgeNode.size();  }
+    size_t numBoundaryEdgeNodes()    const { return m_volEdgeForBdryEdge.size();  }
     size_t numBoundaryNodes()        const { return numBoundaryVertexNodes() + numBoundaryEdgeNodes() + numBoundaryElementNodes(); }
     size_t numBoundaryElements()     const { return BaseMesh::numBoundarySimplices(); }
 
@@ -189,14 +185,12 @@ public:
     // nodes are positioned at the edge midpoint.
     template<typename Vertices>
     void setNodePositions(const Vertices &vertices) {
-        for (size_t i = 0; i < numNodes(); ++i) {
-            auto n = node(i);
+        for (auto n : nodes()) {
             assert(n.isVertexNode() || n.isEdgeNode());
             if (n.isVertexNode())
                 n->p = truncateFrom3D<EmbeddingSpace>(vertices.at(n.vertex().index()));
         }
-        for (size_t i = 0; i < numNodes(); ++i) {
-            auto n = node(i);
+        for (auto n : nodes()) {
             if (n.isEdgeNode()) {
                 const UnorderedPair &edge = m_edgeForEdgeNode.at(n.edgeNodeIndex());
                 n->p = 0.5 * (vertex(edge[0]).node()->p + vertex(edge[1]).node()->p);
@@ -270,7 +264,6 @@ private:
     std::vector<int> m_BN;
 
     std::vector<UnorderedPair> m_edgeForEdgeNode;
-    std::vector<UnorderedPair> m_edgeForBdryEdgeNode;
 
     // Look up the boundary/volume edge coinciding with a volume/boundary edge
     // Every boundary edge has a corresponding volume edge but not the other way
@@ -307,7 +300,7 @@ private:
 
     // Boundary Nodes 0..#BdryVertices-1 are located on the corresponding
     // boundary vertex. The remaining nodes do not have vertices.
-    int m_boundaryVertexForBoundaryNode(int bn) const {
+    int m_bdryVtxForBdryNode(int bn) const {
         if (size_t(bn) < BaseMesh::numBoundaryVertices()) return bn;
         else return -1;
     }
@@ -362,18 +355,24 @@ private:
         return bn;
     }
 
-    // Must be called on the global index of an edge node!
-    // Returns -1 for interior edge nodes
-    int m_bdryEdgeNodeForVolEdgeNode(size_t n) const {
-        size_t eidx = m_edgeNodeIndex(n);
-        assert(eidx < m_bdryEdgeForVolEdge.size());
-        int beidx = m_bdryEdgeForVolEdge[eidx];
-        if (beidx == -1) return -1; // internal edge node
-        assert(size_t(beidx) < numBoundaryEdgeNodes());
+    // returns -1 for interior nodes
+    int m_bdryNodeForVolNode(int n) const {
+        if (n == -1) return -1;
+        int v = m_vertexForNode(n);
+        // Vertex node indices coincide with vertex indices
+        if (v >= 0) return BaseMesh::m_bdryVertexIdx(v); // -1 if internal
+        // Edge nodes indices correspond to numVertices + edge index
+        size_t volEn = m_edgeNodeIndex(n);
+        assert(volEn < m_bdryEdgeForVolEdge.size());
+        int beidx = m_bdryEdgeForVolEdge[volEn];
+        if (beidx < 0) return beidx; // interior edge node
         return beidx + numBoundaryVertexNodes();
     }
-    // Must be called on the global index of a boundary edge node!
-    int m_volEdgeNodeForBdryEdgeNode(size_t n) const {
+
+    int m_volNodeForBdryNode(int n) const {
+        if (n < 0) return -1;
+        // Vertex node indices coincide with vertex indices
+        if (size_t(n) < BaseMesh::numBoundaryVertices()) return BaseMesh::m_vertexForBdryVertex(n);
         size_t beidx = m_bdryEdgeNodeIndex(n);
         assert(beidx < m_volEdgeForBdryEdge.size());
         return m_volEdgeForBdryEdge[beidx] + numVertexNodes();
