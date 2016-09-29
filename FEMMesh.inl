@@ -43,8 +43,7 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
                 UnorderedPair edge(s.vertex(Simplex::edgeStartNode(ei)).volumeVertex().index(),
                                    s.vertex(Simplex::  edgeEndNode(ei)).volumeVertex().index());
                 size_t volNode = edgeNodes.at(edge);
-                if (++numCoincidingBdryEdges[volNode] > 2)
-                    std::cerr << "WARNING: non-manifold tetmesh edge detected." << std::endl;
+                ++numCoincidingBdryEdges[volNode]; // for non-manifold edge check
                 int &bni = m_bdryEdgeForVolEdge[volNode];
                 if (bni == -1) {
                     // Create new boundary node.
@@ -54,6 +53,11 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
                 m_BN[s.index() * edgesPerBoundarySimplex + ei] = bni;
             }
         }
+        size_t numNonmanifoldEdges = 0;
+        for (size_t nc : numCoincidingBdryEdges)
+            numNonmanifoldEdges += nc > 2;
+        if (numNonmanifoldEdges > 0)
+            std::cerr << "WARNING: " << numNonmanifoldEdges << " non-manifold tetmesh edges detected." << std::endl;
     }
 
     // Allocate data arrays unless the special TMEmptyData type is passed

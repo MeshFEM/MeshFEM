@@ -18,7 +18,7 @@
 template<class Vertex, class Element>
 void highlight_dangling_vertices(const std::vector<Vertex>  &vertices,
                                  const std::vector<Element> &elements,
-                                 const std::string &path) {
+                                 const std::string &path, bool pointsOnly = false) {
     std::vector<MeshIO::IOVertex > highlightVertices;
     std::vector<MeshIO::IOElement> highlightEdges;
 
@@ -36,6 +36,8 @@ void highlight_dangling_vertices(const std::vector<Vertex>  &vertices,
             auto p = vertices[i].point;
             size_t offset = highlightVertices.size(), numPlusvertices = 0;
             highlightVertices.emplace_back(vertices[i]);
+            if (pointsOnly) continue;
+            // Create plus geometry
             for (size_t d = 0; d < 3; ++d) {
                 if (dim[d] > 0) {
                     Vector3D delta(Vector3D::Zero());

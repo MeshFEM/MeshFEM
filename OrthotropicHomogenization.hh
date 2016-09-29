@@ -21,6 +21,7 @@
 #include <bitset>
 
 #include "PeriodicBoundaryMatcher.hh"
+#include "PeriodicHomogenization.hh"
 
 // WARNING: ONLY WORKS WITH ORTHOTROPIC BASE MATERIAL
 namespace PeriodicHomogenization {

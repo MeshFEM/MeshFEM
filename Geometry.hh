@@ -37,8 +37,8 @@ struct BBox {
     BBox(const Vector &pt) : minCorner(pt), maxCorner(pt) { }
 
     // Construct bbox of a collection of points
-    template<class _VectorCollection>
-    BBox(const _VectorCollection &vectors) {
+    template<class _PointCollection>
+    BBox(const _PointCollection &vectors) {
         minCorner.setZero(), maxCorner.setZero();
         size_t i = 0;
         for (const auto &v : vectors) {
@@ -127,6 +127,7 @@ struct BBox {
     bool operator==(const BBox &b) const {
         return ((minCorner == b.minCorner) && (maxCorner == b.maxCorner));
     }
+    bool operator!=(const BBox &b) const { return !(*this == b); }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Determine whether there is any overlap with a circle.

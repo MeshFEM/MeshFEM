@@ -108,6 +108,9 @@ struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     using VF = VectorField<Real, N>;
     OneForm(size_t dsize = 0) : m_diff(dsize) { }
 
+    // "cast" from vector field.
+    OneForm(const VF &vf) { m_diff = vf; }
+
     typename VF::ValueType      operator()(size_t i)       { return m_diff(i); }
     typename VF::ConstValueType operator()(size_t i) const { return m_diff(i); }
 

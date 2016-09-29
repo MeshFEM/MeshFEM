@@ -514,7 +514,10 @@ const std::vector<MeshIO_MSH::ElementInfo> MeshIO_MSH::elementInfoArray = {
 
 void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType type) {
-    if (elements.size() == 0) std::cerr << "WARNING: saving mesh with no elements." << std::endl;
+    if (elements.size() == 0) {
+        std::cerr << "WARNING: saving mesh with no elements." << std::endl;
+        if (type == MESH_GUESS) type = MESH_TRI; // type doesn't matter, and we can't guess...
+    }
     if (nodes.size() == 0) throw std::runtime_error("Empty mesh.");
 
     ElementInfo ei;
@@ -555,11 +558,15 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
     os << "$Elements" << std::endl << elements.size() << std::endl;
 
     if (m_binary) {
-        int numElements = (int) elements.size();
-        int numTags = 0;
-        os.write((char *) &ei.elementType, sizeof(int));
-        os.write((char *) &numElements, sizeof(int));
-        os.write((char *) &numTags, sizeof(int));
+        if (elements.size() > 0) {
+            // Only write the header if we actually have elements
+            // (otherwise, this causes problems with our MSH parser)
+            int numElements = (int) elements.size();
+            int numTags = 0;
+            os.write((char *) &ei.elementType, sizeof(int));
+            os.write((char *) &numElements, sizeof(int));
+            os.write((char *) &numTags, sizeof(int));
+        }
         for (size_t i = 1; i <= elements.size(); ++i) {
             os.write((char *) &i, sizeof(int));
             if (elements[i - 1].size() != (size_t) ei.nodesPerElem)

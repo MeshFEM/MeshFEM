@@ -73,6 +73,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("reflect,r",                     po::value<string>(),              "Reflect a d-dim mesh around the bounding box's specified minimum faces into 2^d copies (e.g. -r xy)")
         ("refine,R",                      po::value<string>(),              "Refine the triangulation using triangle with the specified arguments")
         ("danglingVertexHighlightPath,d", po::value<string>(),              "Write line mesh geometry highlighting the mesh's dangling vertices.")
+        ("dumpDanglingVertices,D",        po::value<string>(),              "Write a point cloud mesh with the dangling vertices.")
         ("triangulate,t",                 po::value<double>(),              "Triangulate line mesh with maximal triangle area given as argument")
         ("clean,c",                                                         "Clean line mesh")
         ("periodic",                                                        "Perform the cleaning operation periodically")
@@ -155,10 +156,10 @@ int main(int argc, const char *argv[])
 
     size_t origSize = inVertices.size();
 
-    if (args.count("danglingVertexHighlightPath")) {
+    if (args.count("danglingVertexHighlightPath"))
         highlight_dangling_vertices(inVertices, inElements, args["danglingVertexHighlightPath"].as<string>());
-    }
-
+    if (args.count("dumpDanglingVertices"))
+        highlight_dangling_vertices(inVertices, inElements, args["dumpDanglingVertices"].as<string>(), true);
 
     remove_dangling_vertices(inVertices, inElements);
     if (inVertices.size() != origSize)
