@@ -22,3 +22,6 @@ CC=gcc
 # CPPFLAGS=-fopenmp (currently breaks cholmod :()
 # CPPFLAGS=-fopenmp
 CPPFLAGS+=-mno-avx -msse4.2
+
+# Don't use gcc's new c++11-compatible ABI--this breaks linking with old libraries.
+CPPFLAGS+=-D_GLIBCXX_USE_CXX11_ABI=0
