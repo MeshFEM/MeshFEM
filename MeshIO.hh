@@ -146,6 +146,7 @@ namespace MeshIO {
                               const std::vector<Element> &elements, MeshType t) = 0;
             virtual MeshType load(std::istream &is, std::vector<Vertex> &nodes,
                                   std::vector<Element> &elements, MeshType t) = 0;
+            virtual ~MeshIO() { }
     };
 
     class MeshIO_OFF : public MeshIO {

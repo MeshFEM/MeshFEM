@@ -74,6 +74,8 @@ struct VariableMaterial {
         for (const auto &b : _Mat<_N>::g_bounds.upper()) if (b.var >= numVars) throw indexError;
     }
 
+    virtual ~VariableMaterial() { }
+
     Real vars[numVars];
 };
 

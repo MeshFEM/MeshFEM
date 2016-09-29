@@ -12,6 +12,7 @@ LIBMATHEVAL_LFLAGS=-L$(LIBMATHEVAL_LIB) -lmatheval
 CLIPPER_LFLAGS=-L$(CLIPPER_PATH)/lib -lpolyclipping
 LEVMAR_LFLAGS=$(LEVMAR_LIB)/liblevmar.a
 TRIANGLE_LFLAGS=-L$(TRIANGLE_LIB) -ltriangle
+PYMESH_WIRES_LFLAGS=-L$(PYMESH_PATH)/lib -lwires -lMesh -ltetgen_wrapper -ltriangle_wrapper -lconvex_hull -lboolean -lMeshUtils
 
 NLOPT_LFLAGS=-L$(NLOPT_LIB) -lnlopt_cxx
 
@@ -25,3 +26,4 @@ CPPFLAGS+=-mno-avx -msse4.2
 
 # Don't use gcc's new c++11-compatible ABI--this breaks linking with old libraries.
 CPPFLAGS+=-D_GLIBCXX_USE_CXX11_ABI=0
+WARNING_FLAGS=-Wall -Wunused-parameter -Wsign-compare -Wpedantic -Wno-comment -Wdelete-non-virtual-dtor

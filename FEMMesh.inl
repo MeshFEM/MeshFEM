@@ -57,7 +57,7 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
         for (size_t nc : numCoincidingBdryEdges)
             numNonmanifoldEdges += nc > 2;
         if (numNonmanifoldEdges > 0)
-            std::cerr << "WARNING: " << numNonmanifoldEdges << " non-manifold tetmesh edges detected." << std::endl;
+            std::cerr << "WARNING: " << numNonmanifoldEdges << " non-manifold tetmesh edge(s) detected." << std::endl;
     }
 
     // Allocate data arrays unless the special TMEmptyData type is passed
