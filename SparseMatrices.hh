@@ -228,9 +228,10 @@ struct TripletMatrix {
         clear();
         m = B.m;
         n = B.n;
-        size_t numUpper = std::count_if(B.nz.begin(), B.nz.end(),
-                [](const Triplet &t) -> bool { return t.i <= t.j; });
-        reserve(numUpper);
+        // size_t numUpper = std::count_if(B.nz.begin(), B.nz.end(),
+        //         [](const Triplet &t) -> bool { return t.i <= t.j; });
+        // reserve(numUpper);
+        reserve(B.nnz()); // faster and not too wasteful...
         for (const Triplet &t : B.nz) {
             if (t.i <= t.j)
                 nz.push_back(t);
@@ -879,6 +880,7 @@ public:
     // can be returned from the solve() call.
     void fixVariables(const std::vector<size_t> &fixedVars,
                       const std::vector<_Real>  &fixedVarValues) {
+        BENCHMARK_START_TIMER("fixVariables");
         assert(fixedVars.size() == fixedVarValues.size());
         if (fixedVars.size() == 0) return;
         clearFactorization();
@@ -973,6 +975,7 @@ public:
         }
         m_fixedVarRHSContribution.erase(back, m_fixedVarRHSContribution.end());
         assert(m_fixedVarRHSContribution.size() == m_AUpper.m);
+        BENCHMARK_STOP_TIMER("fixVariables");
     }
 
     // Solve K u = f under any existing constraints/fixed variables.
@@ -1014,8 +1017,10 @@ public:
 
         if (m_isSPD) {
             if (!m_LLT) {
+                BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
                 m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper));
                 if (m_economyMode) m_clearAUpperTriplets();
+                BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
             }
 
             m_LLT->solve(bReduced, uReduced);
@@ -1023,12 +1028,14 @@ public:
         else {
             // Expand m_AUpper into a full matrix.
             if (!m_LU) {
+                BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
                 TMatrix A;
                 A.reserve(m_AUpper.nnz() + m_AUpper.strictUpperTriangleNNZ());
                 A = m_AUpper;
                 if (m_economyMode) m_clearAUpperTriplets();
                 A.reflectUpperTriangle();
                 m_LU = std::unique_ptr<_LUFactorizer>(new _LUFactorizer(A));
+                BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
             }
             m_LU->solve(bReduced, uReduced);
         }

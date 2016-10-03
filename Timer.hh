@@ -27,6 +27,7 @@ inline double Time() {
     return t.tv_sec + t.tv_usec/1.0e6;
 }
 
+
 class Timer
 {
 private:
@@ -93,7 +94,7 @@ private:
 
         void report(std::ostream &os) {
             for (auto &entry: timers)
-                os << entry.first << '\t' << entry.second.elapsed() << '\t'
+                os << displayName(entry.first) << '\t' << entry.second.elapsed() << '\t'
                    << entry.second.invocations << std::endl;
         }
     };
@@ -104,6 +105,17 @@ private:
 
     SectionMap                              m_sections;
     std::list<std::string>                  m_sectionStack;
+
+    static std::string displayName(std::string name) {
+        size_t levels = 0;
+        for (char c : name)
+            if (c == ':') ++levels;
+        if (levels == 0) return name;
+
+        std::string result(4 * levels, ' ');
+        result.append(name, name.rfind(':') + 1, std::string::npos);
+        return result;
+    }
 
 public:
     Timer() {
@@ -162,7 +174,7 @@ public:
     void report(std::ostream &os) {
         for (SectionIterator it = m_sections.begin(); it != m_sections.end(); ++it) {
             if (it->first != "") { // Skip global section... this is reported at the end
-                os << it->first << "\t" << it->second.elapsed()
+                os << displayName(it->first) << "\t" << it->second.elapsed()
                    << "\t" << it->second.invocations << std::endl;
                 it->second.report(os);
             }
