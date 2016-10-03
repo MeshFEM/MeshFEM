@@ -73,7 +73,7 @@ solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     for (auto bn : mesh.boundaryNodes())
         nodeFaceMemberships.emplace_back(bn.volumeNode()->p, cell, cellEpsilon);
 
-    // Manually the internal faces (those on the orthotropic base cell faces).
+    // Manually determine the internal faces (those on the orthotropic base cell faces).
     // These are analogous to the periodic boundary elements in the triply
     // periodic base cell case.
     auto isInternalBE = PeriodicBoundaryMatcher::determineCellFaceBoundaryElements(mesh, nodeFaceMemberships);
@@ -83,7 +83,9 @@ solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     // Stretching probe:
     // w^ii(x)_c = 0 on reflection plane c (plane with normal e_c)
     fixedVars.clear();
+    BENCHMARK_START_TIMER("Make SPSDSystem");
     auto stretchSystem = Future::make_unique<SPSDSystem<Real>>(K);
+    BENCHMARK_STOP_TIMER("Make SPSDSystem");
     for (auto bn : mesh.boundaryNodes()) {
         for (size_t c = 0; c < N; ++c)
             if (nodeFaceMemberships[bn.index()].onMinOrMaxFace(c))
@@ -102,7 +104,9 @@ solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
     // For reflection planes c perpendicular to the shear plane (c != s)
     //      w^ij(x)_{j != c} = 0   (two components in 3D: j = s, j!=c && j!=s)
     for (size_t s = 0; s < flatLen(N) - N; ++s) {
+        BENCHMARK_START_TIMER("Make SPSDSystem");
         auto shearSystem = Future::make_unique<SPSDSystem<Real>>(K);
+        BENCHMARK_STOP_TIMER("Make SPSDSystem");
         fixedVars.clear();
         // Note: nodes lying on the edges/corners may have more than one plane
         // trying to fix a particular coordinate; we could explicitly detect
@@ -135,20 +139,22 @@ solveCellProblems(std::vector<typename _Sim::VField> &w_ij, _Sim &sim,
         probeSystems.push_back(std::move(shearSystem));
     }
 
+    // Compute the constant strain loads
+    BENCHMARK_START_TIMER("Constant Strain Load");
     std::vector<VectorField<Real, N>> l;
     l.reserve(flatLen(N));
-
-    // Compute the constant strain loads
     for (size_t ij = 0; ij < flatLen(N); ++ij) {
         auto e_ij = -_Sim::SMatrix::CanonicalBasis(ij);
-        l.push_back(sim.constantStrainLoad(e_ij));
+        l.emplace_back(sim.constantStrainLoad(e_ij));
     }
+    BENCHMARK_STOP_TIMER("Constant Strain Load");
 
     // Solve the cell problems.
+    w_ij.reserve(flatLen(N));
     for (size_t ij = 0; ij < flatLen(N); ++ij) {
         // std::cerr << "Solving cell problem " << ij << std::endl;
-        if (ij < N) w_ij.push_back(probeSystems.at(         0)->solve(l[ij]));
-        else        w_ij.push_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
+        if (ij < N) w_ij.emplace_back(probeSystems.at(         0)->solve(l[ij]));
+        else        w_ij.emplace_back(probeSystems.at(ij - N + 1)->solve(l[ij]));
     }
 
     return probeSystems;
