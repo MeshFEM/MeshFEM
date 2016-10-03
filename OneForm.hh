@@ -26,6 +26,8 @@ template<typename T, size_t N>
 struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
     // Depending on T, possibly leaves value uninitialized!
     OneForm(size_t dsize = 0) : m_data(dsize) { }
+    OneForm(OneForm &&f)      : m_data(std::move(f.m_data)) { }
+    OneForm(const OneForm &f) : m_data(f.m_data) { }
 
     // Apply one-form to vector field v.
     T operator[](const VectorField<Real, N> &v) const {
@@ -54,6 +56,10 @@ struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
             for (size_t c = 0; c < N; ++c)
                 m_data[pt][c].clear();
     }
+
+    // Bring back default assignment operators
+    OneForm &operator=(const OneForm  &b) = default;
+    OneForm &operator=(      OneForm &&b) = default;
 
     ////////////////////////////////////////////////////////////////////////////
     // VectorSpace requirements
@@ -107,6 +113,7 @@ template<size_t N>
 struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     using VF = VectorField<Real, N>;
     OneForm(size_t dsize = 0) : m_diff(dsize) { }
+    OneForm(OneForm &&f) : m_diff(std::move(f.m_diff)) { }
 
     // "cast" from vector field.
     OneForm(const VF &vf) { m_diff = vf; }
@@ -127,6 +134,10 @@ struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     // identity metric.
           VF &asVectorField()       { return m_diff; }
     const VF &asVectorField() const { return m_diff; }
+
+    // Bring back default assignment operators
+    OneForm &operator=(const OneForm  &b) = default;
+    OneForm &operator=(      OneForm &&b) = default;
 
     ////////////////////////////////////////////////////////////////////////////
     // VectorSpace requirements
