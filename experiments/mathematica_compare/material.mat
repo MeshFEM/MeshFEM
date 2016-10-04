@@ -1,0 +1,5 @@
+{
+    "type": "isotropic_material",
+    "young": 1000.0,
+    "poisson": 0.33
+}
