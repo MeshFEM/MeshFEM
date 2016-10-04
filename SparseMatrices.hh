@@ -4,7 +4,7 @@
 /*! @file
 //		Provides a simple triplet-based sparse marix class "TripletMatrix" that
 //		supports conversion to umfpack/cholmod format.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  03/22/2014 16:40:42
@@ -25,6 +25,7 @@
 #include <memory>
 #include <cstdint>
 #include <cmath>
+#include "Parallelism.hh"
 
 #ifndef GLOBALBENCHMARK_HH
 #include "BenchmarkStub.hh"
@@ -79,6 +80,7 @@ struct TripletMatrix {
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
     TripletMatrix(size_t m = 0, size_t n = 0) : m(m), n(n) { }
+
     typedef TripletMatrix<_Triplet>         TMatrix;
     typedef _Triplet                        Triplet;
     typedef typename _Triplet::value_type   Real;
@@ -103,29 +105,56 @@ struct TripletMatrix {
     // Sort and sum of repeated entries
     void sumRepeated() {
         BENCHMARK_START_TIMER("Compress Matrix");
-
-        // Organize columns into buckets all stored contiguously in a vector.
-        // First compute the start/end of each bucket.
-        // (bucketStart[j] is the start of bucket j and end of bucket j - 1)
-        std::vector<size_t> bucketStart(n + 1, 0);
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
-        for (size_t ti = 0; ti < nz.size(); ++ti) {
-            size_t &bucketEnd = bucketStart[nz[ti].j + 1];
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-            ++bucketEnd;
+        const size_t origNNZ = nz.size();
+        // Check if entries are already sorted and unique
+        {
+            if (origNNZ < 2) { BENCHMARK_STOP_TIMER("Compress Matrix"); return; }
+            bool preSummed = true;
+            for (size_t ti = 1; ti < origNNZ; ++ti) {
+                if  (nz[ti].j  > nz[ti - 1].j) continue;
+                if ((nz[ti].j  < nz[ti - 1].j) ||
+                    (nz[ti].i <= nz[ti - 1].i)) {
+                    preSummed = false; break;
+                }
+            }
+            if (preSummed) {
+                BENCHMARK_STOP_TIMER("Compress Matrix");
+                return;
+            }
         }
 
+#define PARALLEL_BIN 0 // Parallel binning seems to actually slow things down...
+
+        // Organize columns into buckets all stored contiguously in a vector.
+        // First compute sizes and then the start/end of each bucket.
+        // (bucketStart[j] is the start of bucket j and end of bucket j - 1)
+#if PARALLEL_BIN
+        auto bucketStart = std::unique_ptr<std::atomic<size_t>[]>(new std::atomic<size_t>[n + 1]);
+        for (size_t i = 0; i < n + 1; ++i) bucketStart[i] = 0;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, origNNZ),
+            [&bucketStart, this](const tbb::blocked_range<size_t> &r) {
+                for (size_t ti = r.begin(); ti < r.end(); ++ti)
+                    ++bucketStart[nz[ti].j + 1];
+        });
+#else
+        std::vector<size_t> bucketStart(n + 1, 0);
+        for (size_t ti = 0; ti < origNNZ; ++ti)
+            ++bucketStart[nz[ti].j + 1];
+#endif
+        // compute bucket offsets
         for (size_t j = 1; j <= n; ++j) // get bucket offsets
             bucketStart[j] += bucketStart[j - 1];
         assert(bucketStart[n] == nz.size());
 
         // Index of current end of bucket (initially at the start since buckets
         // are empty).
+#if PARALLEL_BIN
+        auto bucketEndIndex = std::unique_ptr<std::atomic<size_t>[]>(new std::atomic<size_t>[n + 1]);
+        for (size_t i = 0; i < n + 1; ++i) bucketEndIndex[i] = bucketStart[i].load(); // atomic has no copy constructor
+#else
         std::vector<size_t> bucketEndIndex(bucketStart);
+#endif
 
         // Fill the buckets.
         // NOTE: the order of entries within each bucket is undefined when
@@ -134,86 +163,62 @@ struct TripletMatrix {
         // The roundoff error can be made deterministic by sorting the buckets
         // by value as well as row index (in fact, there's probably an order
         // that minimizes roundoff error).
-        typedef std::pair<size_t, Real> CEntry;
+        using CEntry = std::pair<size_t, Real>;
         std::vector<CEntry> columnBuckets(nz.size());
-#ifdef _OPENMP
-#pragma omp parallel for
+        auto placeInBucket = [&columnBuckets, &bucketEndIndex, this](size_t ti) {
+            const auto &t = nz[ti];
+            size_t newEntry = bucketEndIndex[t.j]++; // atomic!
+            columnBuckets[newEntry] = std::make_pair(t.i, t.v);
+        };
+#if PARALLEL_BIN
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, origNNZ),
+            [&](const tbb::blocked_range<size_t> &r) {
+                for (size_t ti = r.begin(); ti < r.end(); ++ti) placeInBucket(ti);
+        });
+#else
+        for (size_t ti = 0; ti < origNNZ; ++ti) placeInBucket(ti);
 #endif
-        for (size_t ti = 0; ti < nz.size(); ++ti) {
-            auto &t = nz[ti];
-            size_t &end = bucketEndIndex[t.j];
-            size_t newEntry;
-#ifdef _OPENMP
- #pragma omp atomic capture
-#endif
-            newEntry = end++;
-            auto &entry = columnBuckets[newEntry];
-            entry.first = t.i;
-            entry.second = t.v;
-        }
+
         for (size_t j = 0; j < n; ++j) // make sure we filled each bucket.
             assert(bucketEndIndex[j] == bucketStart[j + 1]);
 
-        int backIndex = -1;
+        // Sort each bucket in parallel and sum repeated entries into the
+        // nonzeros corresponding to the first few bucket entries.
+        // Can be called in parallel for each bucket.
+        auto sortAndSumBucket = [&columnBuckets, &bucketStart, this](size_t j) {
+            size_t si = bucketStart[j],
+                   ei = bucketStart[j + 1];
+            size_t len = ei - si;
+            if (len == 0) { return; }
+            if (len == 1) { nz[si] = { columnBuckets[si].first, j, columnBuckets[si].second }; return; }
 
-        // Sort each bucket in parallel. 
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
-        for (size_t j = 0; j < n; ++j) {
-            std::sort(columnBuckets.begin() + bucketStart[j],
-                      columnBuckets.begin() + bucketStart[j + 1],
+            std::sort(columnBuckets.begin() + si, columnBuckets.begin() + ei,
                       [](const CEntry &a, const CEntry &b) { return a.first < b.first; });
-        }
 
-        // sum each bucket's repeated entries into nz array
-        auto bucketBegin = columnBuckets.begin();
-        for (size_t j = 0; j < n; ++j) {
-            auto bucketEnd = columnBuckets.begin() + bucketStart[j + 1];
-            if (bucketBegin == bucketEnd) continue;
-            ++backIndex; // new column
-            nz[backIndex].j = j;
-            nz[backIndex].i = bucketBegin->first;
-            nz[backIndex].v = bucketBegin->second;
-            for (auto it = bucketBegin + 1; it != bucketEnd; ++it) {
-                auto &backEntry = nz[backIndex];
-                if (backEntry.i == it->first)
-                    backEntry.v += it->second;
-                else {
-                    ++backIndex;
-                    auto &newEntry = nz[backIndex];
-                    newEntry.j = j;
-                    newEntry.i = it->first;
-                    newEntry.v = it->second;
-                }
+            size_t backIndex = si;
+            nz[backIndex] = { columnBuckets[si].first, j, columnBuckets[si].second };
+            for (size_t k = si + 1; k < ei; ++k) {
+                if (nz[backIndex].i == columnBuckets[k].first)
+                    nz[backIndex].v += columnBuckets[k].second;
+                else nz[++backIndex] = { columnBuckets[k].first, j, columnBuckets[k].second };
             }
-            bucketBegin = bucketEnd; // move to next bucket
-        }
-        assert(size_t(backIndex) < nz.size());
-        nz.erase(nz.begin() + backIndex + 1, nz.end());
+            // Mark the unused entries for deletion
+            for (size_t k = backIndex + 1; k < ei; ++k)
+                nz[k] = { 0, 0, 0.0 };
+        };
 
-        // // in-place sum of repeated entries
-        // assert(nz.size() > 0);
-        // auto back = nz.begin();
-        // const size_t num_nz = nnz();
-        // for (size_t i = 1; i < num_nz; ++i) {
-        //     if (nz[i].row() == back->row() && nz[i].col() == back->col())
-        //         back->value() += nz[i].value();
-        //     else
-        //         *(++back) = nz[i];
-        // }
-        // // back points to the last entry... delete the ones after it
-        // nz.erase(++back, nz.end());
+#if USE_TBB
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, n),
+            [&](const tbb::blocked_range<size_t> &r) {
+                for (size_t j = r.begin(); j < r.end(); ++j) sortAndSumBucket(j);
+        });
+#else
+        for (size_t j = 0; j < n; ++j) sortAndSumBucket(j);
+#endif
 
-        // size_t oldSize = nz.size();
-        // // remove small entries
-        // back = std::remove_if(nz.begin(), nz.end(),
-        //         [](const Triplet &t) -> bool { return std::abs(t.v) < 1e-14; });
-        // nz.erase(back, nz.end());
-        // std::cout << "removed " << oldSize - nz.size() << " small entries" << std::endl;
-
-        // remove identically zero entries (should probably use the toleranced
-        // version above)
+        // remove identically zero entries (could use a tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
                 [](const Triplet &t) -> bool { return t.v == 0.0; });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
@@ -459,7 +464,7 @@ struct TripletMatrix {
             for (size_t i = 0; i < nnz(); ++i) {
                 outFile << nz[i].i << '\t' << nz[i].j << '\t'
                         << nz[i].v << std::endl;
-            }  
+            }
         }
     }
 
@@ -1003,7 +1008,7 @@ public:
         // Allocate space for solution + Lagrange multipliers
         std::vector<_Real> uReduced(m_AUpper.m);
 
-        // { 
+        // {
         //     m_AUpper.dump("A.txt");
         //     static int solve = 0;
         //     std::ofstream rhsOut("rhs_" + std::to_string(solve));

@@ -50,8 +50,11 @@ public:
     typedef typename ArrayType::ColXpr         ValueType;
     typedef typename ArrayType::ConstColXpr    ConstValueType;
 
-    // Copy constructor
-    VectorField(const VectorField &b) : m_values(b.m_values) { }
+    // Copy and move constructors/assignment
+    VectorField(const VectorField  &b) = default;
+    VectorField(      VectorField &&b) = default;
+    VectorField &operator=(const VectorField  &b) = default;
+    VectorField &operator=(      VectorField &&b) = default;
 
     // Flattened data constructor
     // Note: copies data
