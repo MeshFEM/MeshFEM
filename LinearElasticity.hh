@@ -8,7 +8,7 @@
 #include "GlobalBenchmark.hh"
 #include <Fields.hh>
 #include <SparseMatrices.hh>
-#include <Parallelism.hh>
+#include "Parallelism.hh"
 #include "Materials.hh"
 
 namespace LinearElasticity {
