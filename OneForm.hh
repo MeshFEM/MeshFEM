@@ -113,10 +113,14 @@ template<size_t N>
 struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     using VF = VectorField<Real, N>;
     OneForm(size_t dsize = 0) : m_diff(dsize) { }
-    OneForm(OneForm &&f) : m_diff(std::move(f.m_diff)) { }
 
     // "cast" from vector field.
     OneForm(const VF &vf) { m_diff = vf; }
+
+    OneForm(const OneForm  &f) = default;
+    OneForm(      OneForm &&f) = default;
+    OneForm &operator=(const OneForm  &b) = default;
+    OneForm &operator=(      OneForm &&b) = default;
 
     typename VF::ValueType      operator()(size_t i)       { return m_diff(i); }
     typename VF::ConstValueType operator()(size_t i) const { return m_diff(i); }
@@ -134,10 +138,6 @@ struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
     // identity metric.
           VF &asVectorField()       { return m_diff; }
     const VF &asVectorField() const { return m_diff; }
-
-    // Bring back default assignment operators
-    OneForm &operator=(const OneForm  &b) = default;
-    OneForm &operator=(      OneForm &&b) = default;
 
     ////////////////////////////////////////////////////////////////////////////
     // VectorSpace requirements
