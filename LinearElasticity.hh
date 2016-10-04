@@ -8,6 +8,7 @@
 #include "GlobalBenchmark.hh"
 #include <Fields.hh>
 #include <SparseMatrices.hh>
+#include <Parallelism.hh>
 #include "Materials.hh"
 
 namespace LinearElasticity {
@@ -1188,36 +1189,11 @@ private:
     void m_assembleStiffnessMatrix(TMatrix &K) const {
         typedef typename _Mesh::ElementData::PerElementStiffness PerElementStiffness;
         constexpr size_t KeSize = PerElementStiffness::RowsAtCompileTime;
-        K.init(N * numDoFs(), N * numDoFs());
-        // Note: it's difficult to predict the nonzero count of the stiffness
-        // matrix's upper triangle due to periodic DoFs. For now, allocate space
-        // for the full matrix's triplets. If memory is an issue, we can
-        // precompute the size by using a loop similar to the accumulation loop
-        // below.
-        size_t preallocSize = KeSize * KeSize * m_mesh.numElements();
-        K.reserve(preallocSize);
+        const size_t nelem = m_mesh.numElements();
+        const size_t n = N * numDoFs();
 
-#ifdef _OPENMP
-        // Build all the per-element matrices in parallel at once, then insert
-        // them into the nonzeros list serially. This approach uses more memory,
-        // but shouldn't be the memory bottleneck. It is much faster on parallel
-        // machines, but may be slightly slower without OpenMP support.
-        std::vector<PerElementStiffness> KeMatrices(m_mesh.numElements());
-#pragma omp parallel for default(shared)
-        for (size_t i = 0; i < m_mesh.numElements(); ++i) {
-            m_mesh.element(i)->perElementStiffness(KeMatrices[i]);
-        }
-
-        for (size_t i = 0; i < m_mesh.numElements(); ++i) {
-            auto elem = m_mesh.element(i);
-            auto &Ke = KeMatrices[i];
-#else
-        PerElementStiffness Ke;
-        for (size_t i = 0; i < m_mesh.numElements(); ++i) {
-            auto elem = m_mesh.element(i);
-            elem->perElementStiffness(Ke);
-#endif
-            // Accumulate into full stiffness matrix.
+        auto accumToSparseMatrix = [&](size_t ei, const PerElementStiffness &Ke, TMatrix &_K) {
+            auto elem = m_mesh.element(ei);
             constexpr size_t nNodes = Mesh::ElementData::nNodes;
             for (size_t i = 0; i < nNodes; ++i) {
                 int di = DoF(elem.node(i).index());
@@ -1231,15 +1207,43 @@ private:
                             int row = N * i + ci, col = N * j + cj;
                             // Only read upper triangle of symmetric Ke.
                             Real val = (row <= col) ? Ke(row, col) : Ke(col, row);
-                            K.addNZ(N * di + ci, N * dj + cj, val);
+                            _K.addNZ(N * di + ci, N * dj + cj, val);
                         }
                     }
                 }
             }
-        }
+        };
 
+        // Note: it's difficult to predict the nonzero count of the stiffness
+        // matrix's upper triangle due to periodic DoFs. For now, allocate space
+        // for the full matrix's triplets. If memory is an issue, we can
+        // precompute the size by using a loop similar to the accumulation loop
+        // below.
+        const size_t preallocSize = KeSize * KeSize * nelem;
+        K.init(n, n);
+        K.reserve(preallocSize);
+#if USE_TBB
+        // Build all per-element matrices in parallel, then collect nonzeros
+        std::vector<PerElementStiffness> elemMatrices(nelem);
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, nelem),
+            [&](const tbb::blocked_range<size_t> &r) {
+                for (size_t ei = r.begin(); ei < r.end(); ++ei)
+                    m_mesh.element(ei)->perElementStiffness(elemMatrices[ei]);
+            }
+        );
+
+        for (size_t i = 0; i < nelem; ++i)
+            accumToSparseMatrix(i, elemMatrices[i], K);
+#else
+        for (size_t i = 0; i < nelem; ++i) {
+            PerElementStiffness Ke;
+            m_mesh.element(i)->perElementStiffness(Ke);
+            accumToSparseMatrix(i, Ke, K);
+        }
         // Make sure our upper bound was correct--reallocation is undesirable.
         assert(K.nnz() <= preallocSize);
+#endif
+
     }
 
     static constexpr size_t numRotModes = (N == 3) ? 3 : 1;

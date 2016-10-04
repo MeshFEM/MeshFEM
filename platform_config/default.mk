@@ -21,6 +21,12 @@ PYMESH_WIRES_LFLAGS=-L$(PYMESH_PATH)/lib -lwires
 
 NLOPT_LFLAGS=-L/usr/local/lib -lnlopt_cxx
 
+ifdef TBB_INC
+TBB_IFLAGS=-isystem $(TBB_INC)
+TBB_LFLAGS=-L$(TBB_LIB) -ltbb -ltbbmalloc
+CPPFLAGS+=-DHAS_TBB
+endif
+
 CXX=clang++
 CC=clang
 WARNING_FLAGS=-Wall -Wunused-parameter -Wsign-compare -Wpedantic -Wdelete-non-virtual-dtor

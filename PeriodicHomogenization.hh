@@ -10,6 +10,7 @@
 #include "GlobalBenchmark.hh"
 
 #include <ElasticityTensor.hh>
+#include <Parallelism.hh>
 
 // #define FD_SD_DEBUG
 #ifdef FD_SD_DEBUG
@@ -385,20 +386,33 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
     using ETensor = typename _Sim::ETensor;
     using SMatrix = typename _Sim::SMatrix;
     using SFGradient = Interpolant<VectorND<N>, N, Deg - 1>; // Shape fn grad
+    using OF = OneForm<ETensor, N>;
+
+    const auto &mesh = sim.mesh();
 
     // Zero-initializes due to ETensor's default constructor.
-    OneForm<ETensor, N> dCh(sim.mesh().numVertices());
+    OF dCh(mesh.numVertices());
+
+#if USE_TBB
+    tbb::combinable<OF> sum(dCh);
+#endif
 
     // True deformation strains/stresses under each cell problem load
     // (constant + fluctuation)
     using Strain = typename _Sim::Strain;
-    std::vector<Strain> strain(flatLen(N));
-    std::vector<Strain> stress(flatLen(N));
-    std::vector<SFGradient> gradPhi_n;
 
     assert(w.size() == flatLen(N));
 
-    for (auto e : sim.mesh().elements()) {
+    auto accumElementContrib = [&](size_t ei) {
+        auto e = mesh.element(ei);
+        std::vector<Strain> strain(flatLen(N));
+        std::vector<Strain> stress(flatLen(N));
+        std::vector<SFGradient> gradPhi_n(e.numNodes());
+#if USE_TBB
+        OF &result = sum.local();
+#else
+        OF &result = dCh;
+#endif
         // Precompute stresses/strains
         for (size_t ij = 0; ij < flatLen(N); ++ij) {
             e->strain(e, w[ij], strain[ij]);
@@ -407,7 +421,6 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
         }
 
         // Precompute (scalar) shape function gradients.
-        gradPhi_n.resize(e.numNodes());
         for (size_t ni = 0; ni < e.numNodes(); ++ni)
             gradPhi_n[ni] = e->gradPhi(ni);
 
@@ -417,9 +430,10 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                 // Initialize with energy dilation term
                 Real mutualEnergy = Quadrature<Strain::K, 2 * Strain::Deg>::integrate([&](const EvalPt<N> &pt) { return
                         strain[ij](pt).doubleContract(stress[kl](pt)); }, e->volume());
-                for (auto v : e.vertices())
+                for (auto v : e.vertices()) {
                     for (size_t c = 0; c < N; ++c)
-                        dCh(v.index())[c].D(ij, kl) += mutualEnergy * e->gradBarycentric()(c, v.localIndex());
+                        result(v.index())[c].D(ij, kl) += mutualEnergy * e->gradBarycentric()(c, v.localIndex());
+                }
 
                 // Compute the delta strain phi contribution
                 for (auto n : e.nodes()) {
@@ -439,12 +453,23 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
                         VectorND<N> dstrainTerm = Quadrature<N, Deg>::integrate([&](const EvalPt<N> &pt) { return
                                 VectorND<N>(gbary.dot(stress_contract_w(pt)) * gphi(pt)); }, e->volume());
                         for (size_t c = 0; c < N; ++c)
-                            dCh(v.index())[c].D(ij, kl) -= dstrainTerm[c];
+                            result(v.index())[c].D(ij, kl) -= dstrainTerm[c];
                     }
                 }
             }
         }
-    }
+    };
+
+#if USE_TBB
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, mesh.numElements()),
+        [&](const tbb::blocked_range<size_t> &r) {
+            for (size_t ei = r.begin(); ei < r.end(); ++ei) accumElementContrib(ei);
+        });
+    dCh = sum.combine([](const OF &a, const OF &b) { return a + b; } );
+#else
+    for (auto e : sim.mesh().elements()) { accumElementContrib(e.index()); }
+#endif
 
     dCh /= sim.mesh().boundingBox().volume();
 

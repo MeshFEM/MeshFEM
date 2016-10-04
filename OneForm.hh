@@ -68,7 +68,7 @@ struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
     void Add(const OneForm &b) {
         for (size_t pt = 0; pt < domainSize(); ++pt)
             for (size_t c = 0; c < N; ++c)
-                m_data[pt][c] += b[pt][c];
+                m_data[pt][c] += b.m_data[pt][c];
     }
 
     void Scale(Real scalar) {
