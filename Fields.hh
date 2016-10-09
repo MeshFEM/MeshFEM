@@ -248,6 +248,7 @@ public:
 
     FieldType fieldType() const { return FIELD_SCALAR; }
 
+    Real squaredNorm() const { return m_values.squaredNorm(); }
     Real norm() const { return m_values.norm(); }
     Real  sum() const { return m_values.sum(); }
     Real  min() const { return m_values.minCoeff(); }
