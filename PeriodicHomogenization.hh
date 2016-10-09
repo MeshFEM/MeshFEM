@@ -10,7 +10,7 @@
 #include "GlobalBenchmark.hh"
 
 #include <ElasticityTensor.hh>
-#include <Parallelism.hh>
+#include "Parallelism.hh"
 
 // #define FD_SD_DEBUG
 #ifdef FD_SD_DEBUG

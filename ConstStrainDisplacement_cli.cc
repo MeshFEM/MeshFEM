@@ -119,7 +119,7 @@ void execute(const po::variables_map &args,
 
     // Parse strain/stress tensor.
     vector<string> probeComponents;
-    string probeString = args.count("string") ? args["strain"].as<string>() : args["stress"].as<string>();
+    string probeString = args.count("strain") ? args["strain"].as<string>() : args["stress"].as<string>();
     boost::trim(probeString);
     boost::split(probeComponents, probeString, boost::is_any_of("\t "),
                  boost::token_compress_on);
@@ -223,7 +223,7 @@ void execute(const po::variables_map &args,
             tmp *= (((i < _N) ? 1.0 : 2.0) * strain[i]);
             cstrainDisp += tmp;
 
-            // writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
+            writer.addField("w_ij " + to_string(i), w_ij[i], DomainType::PER_NODE);
             // auto strain = sim.averageStrainField(w_ij[i]);
             // writer.addField("strain w_ij " + to_string(i), strain, DomainType::PER_ELEMENT);
 

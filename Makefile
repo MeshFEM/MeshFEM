@@ -1,9 +1,11 @@
 include platform_defs.mk
 
 INCLUDES=-I$(CSGFEM) -isystem $(EIGEN_INC) -isystem $(SUITESPARSE_INC) -isystem $(BOOST_INC) \
-		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC) -isystem $(TRIANGLE_INC)
+		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC) -isystem $(TRIANGLE_INC) \
+		 $(TBB_IFLAGS)
 LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS)
 LIBS+=$(TRIANGLE_LFLAGS)
+LIBS+=$(TBB_LFLAGS)
 
 CONVERT_OBJS=mesh_convert.o MeshIO.o Types.o MSHFieldParser.o
 PERHOMO_OBJS=PeriodicHomogenization_cli.o MeshIO.o Types.o Materials.o GlobalBenchmark.o
@@ -19,10 +21,17 @@ SOURCES=ConstStrainDisplacement_cli.cc DeformedCells_cli.cc PeriodicHomogenizati
 TARGETS=mesh_convert PeriodicHomogenization_cli MaterialOptimization_cli Simulate_cli ConstStrainDisplacement_cli DeformedCells_cli 
 
 CPPFLAGS+=-std=c++11 $(WARNING_FLAGS) $(INCLUDES)
-CPPFLAGS+=-O2 -DBENCHMARK
+ifeq ($(DEBUG), 1)
+	CPPFLAGS+=-O0 -g
+else
+	CPPFLAGS+=-O2
+endif
+
+ifeq ($(DNDEBUG), 1)
+	CPPFLAGS+=-DNDEBUG
+endif
 # CPPFLAGS+=-DTOO_LARGE_FOR_METIS
 # CPPFLAGS+=-DVERBOSE_DANGLING_VERTEX
-# CPPFLAGS+=-O0 -g
 # CPPFLAGS+=-DHAVE_NAMESPACES -DHAVE_STD # Garbage for OptPP
 
 all: $(TARGETS)
