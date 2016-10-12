@@ -28,7 +28,7 @@ using boost::property_tree::ptree;
 // Parse a vector from a property tree leniently: accept either 2- or 3-vectors,
 // padding with zeros if necessary.
 Vector3D parseVectorLenient(const ptree &pt) {
-    Vector3D v;
+    Vector3D v(Vector3D::Zero());
     int nComponentsRead = 0;
     for (const ptree::value_type &val : pt) {
         if (!val.first.empty()) {
@@ -43,10 +43,8 @@ Vector3D parseVectorLenient(const ptree &pt) {
     }
 
     if ((nComponentsRead != 2) && (nComponentsRead != 3)) {
-        throw runtime_error(string("Error parsing vector"));
+        throw runtime_error(string("Error parsing vector; read " + std::to_string(nComponentsRead) + " components"));
     }
-
-    if (nComponentsRead < v.size()) v[2] = 0.0;
 
     return v;
 }
@@ -151,7 +149,7 @@ void writeBoundaryConditions(ostream &os,
         if (i > 0) os << ", ";
         os << " { \"type\": \"";
         VectorND<_N> value = VectorND<_N>::Zero();
-        if (auto cc = dynamic_pointer_cast<const NeumannCondition<_N> >(c)) {
+        if (auto cc = dynamic_cast<const NeumannCondition<_N> *>(c.get())) {
             switch (cc->type) {
                 case NeumannType::Pressure:
                     value[0] = cc->pressure();
@@ -169,15 +167,15 @@ void writeBoundaryConditions(ostream &os,
                     throw runtime_error("Illegal NeumannType");
             }
         }
-        else if (auto cc = dynamic_pointer_cast<const DirichletCondition<_N> >(c)) {
+        else if (auto cc = dynamic_cast<const DirichletCondition<_N> *>(c.get())) {
             os << "dirichlet";
             value = cc->displacement();
         }
-        else if (auto cc = dynamic_pointer_cast<const TargetCondition<_N> >(c)) {
+        else if (auto cc = dynamic_cast<const TargetCondition<_N> *>(c.get())) {
             os << "target";
             value = cc->displacement();
         }
-        else throw runtime_error("Illegal condition type.");
+        else throw runtime_error("Unsupported condition type.");
 
         os << "\", \"value\": ["
            << value[0] << ", " << value[1] << ", " << ((_N == 2) ?  0 : value[2])
@@ -257,11 +255,11 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         string type = tcond.get_child("type").get_value<string>();
 
         // Parse region and value first. This is either a box with associated
-        // value, a collection of node sets and their associated
-        // displacements, or a collection of elements (identified by corner
+        // value, a collection of node sets and their associated vector
+        // values, or a collection of elements (identified by corner
         // indices) and their values.
         vector<size_t>       node_indices;
-        vector<VectorND<_N>> node_displacements;
+        vector<VectorND<_N>> node_values;
 
         vector<UnorderedTriplet> element_corners;
         vector<VectorND<_N>>     element_values;
@@ -295,8 +293,8 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         }
         
         if (type.find("nodes") != string::npos) {
-            parseNodeConditionValues<_N>(tcond.get_child("values"), node_indices, node_displacements);
-            assert(node_indices.size() == node_displacements.size());
+            parseNodeConditionValues<_N>(tcond.get_child("values"), node_indices, node_values);
+            assert(node_indices.size() == node_values.size());
         }
         else if (type.find("elements") != string::npos) {
             parseElementConditionValues<_N>(tcond.get_child("values"), element_corners, element_values);
@@ -316,7 +314,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             }
             // Try to parse as plain vector first
             try {
-                value        = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("value")));
+                value = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("value")));
             }
             catch (...) {
                 // Try to parse as expression vector
@@ -333,10 +331,11 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         BoundaryCondition<_N> *c;
         if (exprVec.size() > 0) {
             // Expression vector
-            if      (type == "traction")  c = new   NeumannCondition<_N>(region, exprVec, NeumannType::Traction);
-            else if (type == "dirichlet") c = new DirichletCondition<_N>(region, exprVec, cmask);
-            else if (type == "target")    c = new    TargetCondition<_N>(region, exprVec, cmask);
-            else throw runtime_error("Only traction, dirichlet, and target support expression vectors");
+            if      (type == "traction")    c = new    NeumannCondition<_N>(region, exprVec, NeumannType::Traction);
+            else if (type == "dirichlet")   c = new  DirichletCondition<_N>(region, exprVec, cmask);
+            else if (type == "target")      c = new     TargetCondition<_N>(region, exprVec, cmask);
+            else if (type == "delta force") c = new DeltaForceCondition<_N>(region, exprVec);
+            else throw runtime_error("Only region-based traction, dirichlet, target, and delta force support expression vectors");
         }
         else {
             // Plain vector/scalar
@@ -345,10 +344,12 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             else if (type == "force")     c = new   NeumannCondition<_N>(region, value, NeumannType::Force);
             else if (type == "dirichlet") c = new DirichletCondition<_N>(region, value, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
-            else if (type == "dirichlet nodes") c =   new  DirichletNodesCondition<_N>(node_indices, node_displacements, cmask);
-            else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_displacements, cmask);
+            else if (type == "dirichlet nodes") c =   new  DirichletNodesCondition<_N>(node_indices, node_values, cmask);
+            else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "traction elements") c = new NeumannElementsCondition<_N>(NeumannType::Traction, element_corners, element_values);
             else if (type == "pressure elements") c = new NeumannElementsCondition<_N>(NeumannType::Pressure, element_corners, element_values);
+            else if (type == "delta force")       c = new DeltaForceCondition<_N>(region, value);
+            else if (type == "delta force nodes") c = new DeltaForceNodesCondition<_N>(node_indices, node_values);
             else    throw runtime_error("Invalid type '" + type + "'");
         }
 

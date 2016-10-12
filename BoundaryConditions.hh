@@ -181,11 +181,7 @@ private:
 // not to interpret target conditions as Dirichlet.
 template<size_t _N>
 struct TargetCondition : public DirichletCondition<_N> {
-    TargetCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
-        : DirichletCondition<_N>(region, d, m) { }
-    TargetCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev, const ComponentMask &m)
-        : DirichletCondition<_N>(region, ev, m) { }
-    virtual ~TargetCondition() { }
+    using DirichletCondition<_N>::DirichletCondition;
 };
 
 template<size_t _N>
@@ -273,15 +269,41 @@ struct DirichletNodesCondition : public BoundaryCondition<_N> {
 // WARNING: will dynamically cast to DirichletCondition, so care must be taken
 // not to interpret target conditions as Dirichlet.
 template<size_t _N>
-struct TargetNodesCondition : public BoundaryCondition<_N> {
-    TargetNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> ndisps, const ComponentMask &m)
-        : componentMask(m), indices(nidxs), displacements(ndisps) { }
+struct TargetNodesCondition : public DirichletNodesCondition<_N> {
+    using DirichletNodesCondition<_N>::DirichletNodesCondition;
+};
 
-    // All nodes in the condition get the same mask
-    ComponentMask componentMask;
+// Delta function applied to all volume/boundary nodes appearing in region.
+template<size_t _N>
+struct DeltaForceCondition : public BoundaryCondition<_N> {
+    DeltaForceCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &f)
+        : BoundaryCondition<_N>(region), m_isExpr(false), m_force(f) { }
+
+    DeltaForceCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev)
+        : BoundaryCondition<_N>(region), m_isExpr(true), m_forceExpr(ev) {
+        if (ev.size() != _N) throw std::runtime_error("Bad expression vector length");
+    }
+
+    VectorND<_N> force(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        if (m_isExpr) return m_forceExpr.eval<_N>(env);
+        else          return m_force;
+    }
+
+    virtual ~DeltaForceCondition() { }
+private:
+    bool m_isExpr;
+    VectorND<_N> m_force;
+    ExpressionVector m_forceExpr;
+};
+
+template<size_t _N>
+struct DeltaForceNodesCondition : public BoundaryCondition<_N> {
+    DeltaForceNodesCondition(std::vector<size_t> nidxs, std::vector<VectorND<_N>> nforces)
+        : indices(nidxs), forces(nforces) { }
+
     std::vector<size_t> indices;
-    std::vector<VectorND<_N>> displacements;
-    virtual ~TargetNodesCondition() { }
+    std::vector<VectorND<_N>> forces;
+    virtual ~DeltaForceNodesCondition() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////

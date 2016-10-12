@@ -653,6 +653,7 @@ public:
     }
 
     // Compute the load on the DoFs from the Neumann boundary conditions.
+    // (And optional per-vertex delta function forces)
     VField neumannLoad() const {
         VField load(numDoFs());
         load.clear();
@@ -661,6 +662,11 @@ public:
                 load(DoF(be.node(n).volumeNode().index()))
                     += be->nodalNeumannLoad(n);
         }
+
+        // Add in the delta function forces
+        for (auto &ndf : m_nodalDeltaFunctionForces)
+            load(DoF(ndf.first)) += ndf.second;
+
         return load;
     }
 
@@ -738,18 +744,18 @@ public:
 
         size_t dirichletRegionIdx = 0;
         if (conds.size() > 0) m_system.clear();
-        for (auto cond : conds) {
+        for (const auto &cond : conds) {
             env.setVectorValue("region_size_", cond->region.dimensions());
             env.setVectorValue("region_min_",  cond->region.minCorner);
             env.setVectorValue("region_max_",  cond->region.maxCorner);
             std::runtime_error illegalCondition("Illegal BC type");
             std::runtime_error unimplemented("Unimplemented BC type");
             std::string nonbdryMsg("Condition applied to non-boundary node ");
-            if (auto nc = std::dynamic_pointer_cast<const NeumannCondition<N> >(cond)) {
+
+            if (auto nc = dynamic_cast<const NeumannCondition<N> *>(cond.get())) {
                 Real regionArea = 0.0;
                 std::vector<size_t> region;
-                for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i) {
-                    auto be = m_mesh.boundaryElement(i);
+                for (auto be : m_mesh.boundaryElements()) {
                     Point center(Point::Zero());
                     for (size_t c = 0; c < be.numVertices(); ++c)
                         center += be.vertex(c).volumeVertex().node()->p;
@@ -757,7 +763,7 @@ public:
                     if (nc->containsPoint(center)) {
                         env.setXYZ(center);
                         regionArea += be->volume();
-                        region.push_back(i);
+                        region.push_back(be.index());
                         if (nc->type == NeumannType::Pressure)
                              be->neumannTraction = -nc->pressure(env) * be->normal();
                         else if (nc->type == NeumannType::Traction)
@@ -781,16 +787,15 @@ public:
                     }
                 }
             }
-            else if ((std::dynamic_pointer_cast<const TargetCondition<N>>(cond)) ||
-                     (std::dynamic_pointer_cast<const TargetNodesCondition<N>>(cond))) {
+            else if ((dynamic_cast<const TargetCondition<N> *>(cond.get())) ||
+                     (dynamic_cast<const TargetNodesCondition<N> *>(cond.get()))) {
                 // Prevent TargetConditions from being interpreted as Dirichlet
                 // conditions.
                 std::cerr << "WARNING: ignoring target boundary conditions." << std::endl;
             }
-            else if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<N> >(cond)) {
+            else if (auto dc = dynamic_cast<const DirichletCondition<N> *>(cond.get())) {
                 ++dirichletRegionIdx;
-                for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-                    auto bn = m_mesh.boundaryNode(i);
+                for (auto bn : m_mesh.boundaryNodes()) {
                     if (dc->containsPoint(bn.volumeNode()->p)) {
                         env.setXYZ(bn.volumeNode()->p);
                         bn->setDirichlet(dc->componentMask, dc->displacement(env));
@@ -798,10 +803,9 @@ public:
                     }
                 }
             }
-            else if (auto nec = std::dynamic_pointer_cast<const NeumannElementsCondition<N> >(cond)) {
+            else if (auto nec = dynamic_cast<const NeumannElementsCondition<N> *>(cond.get())) {
                 size_t numSet = 0;
-                for (size_t bei = 0; bei < m_mesh.numBoundaryElements(); ++bei) {
-                    auto be = m_mesh.boundaryElement(bei);
+                for (auto be : m_mesh.boundaryElements()) {
                     UnorderedTriplet elem(
                                    be.vertex(0).volumeVertex().index(),
                                    be.vertex(1).volumeVertex().index(),
@@ -819,13 +823,31 @@ public:
                 if (numSet != nec->numElements())
                     throw std::runtime_error("Some element boundary conditions weren't matched.");
             }
-            else if (auto dnc = std::dynamic_pointer_cast<const DirichletNodesCondition<N>>(cond)) {
+            else if (auto dnc = dynamic_cast<const DirichletNodesCondition<N> *>(cond.get())) {
+                std::cerr << "WARNING: dirichlet region index currently not set for DirichletNodesCondition;"
+                          << " region force printout will be inaccurate."
+                          << std::endl;
                 for (size_t i = 0; i < dnc->indices.size(); ++i) {
                     size_t ni = dnc->indices[i];
                     auto n = m_mesh.node(ni);
                     auto bn = n.boundaryNode();
                     if (!bn) throw std::runtime_error(nonbdryMsg + std::to_string(ni));
                     bn->setDirichlet(dnc->componentMask, dnc->displacements[i]);
+                }
+            }
+            else if (auto fc = dynamic_cast<const DeltaForceCondition<N> *>(cond.get())) {
+                for (auto n : m_mesh.nodes()) {
+                    if (fc->containsPoint(n->p)) {
+                        env.setXYZ(n->p);
+                        m_nodalDeltaFunctionForces.emplace_back(n.index(), fc->force(env));
+                    }
+                }
+            }
+            else if (auto fnc = dynamic_cast<const DeltaForceNodesCondition<N> *>(cond.get())) {
+                for (size_t i = 0; i < fnc->indices.size(); ++i) {
+                    size_t ni = fnc->indices[i];
+                    if (ni > m_mesh.numNodes()) throw std::runtime_error("DeltaForceNodesCondition node index out of bounds: " + std::to_string(ni));
+                    m_nodalDeltaFunctionForces.emplace_back(ni, fnc->forces[i]);
                 }
             }
             else throw illegalCondition;
@@ -1424,6 +1446,10 @@ private:
     // instead of using a Lagrange multiplier-based no rigid translation
     // constraint.
     bool m_useNRTPinConstraint;
+
+    // Optional per-node delta function forces to be added directly to the
+    // load vector; stored in a sparse format to avoid wasting space if unused.
+    std::vector<std::pair<size_t, VectorND<N>>> m_nodalDeltaFunctionForces;
 
 protected:
     // m_system implements caching of system matrices for multiple solves.
