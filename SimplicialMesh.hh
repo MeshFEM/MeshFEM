@@ -15,6 +15,11 @@
 #include "TriMesh.hh"
 #include "TetMesh.hh"
 
+// Metafunction to choose simplicial mesh (Tri/Tet) based on dimension.
+template<size_t _K, class  VData = TMEmptyData, class  SData = TMEmptyData,
+                    class BVData = TMEmptyData, class BSData = TMEmptyData>
+struct SimplicialMeshSelector;
+
 // Simplicial mesh type with optional data to store on:
 //       VData: vertices
 //       SData: simplices
@@ -22,21 +27,17 @@
 //      BSData: boundary simplices
 template<size_t _K, class  VData = TMEmptyData, class  SData = TMEmptyData,
                     class BVData = TMEmptyData, class BSData = TMEmptyData>
-struct SimplicialMesh;
-
-template<size_t _K, class  VData = TMEmptyData, class  SData = TMEmptyData,
-                    class BVData = TMEmptyData, class BSData = TMEmptyData>
-using SimplicialMesh_t = typename SimplicialMesh<_K, VData, SData, BVData, BSData>::type;
+using SimplicialMesh = typename SimplicialMeshSelector<_K, VData, SData, BVData, BSData>::type;
 
 // 2D case: TriMesh
 template<class VData, class SData, class BVData, class BSData>
-struct SimplicialMesh<2, VData, SData, BVData, BSData> {
+struct SimplicialMeshSelector<2, VData, SData, BVData, BSData> {
     using type = TriMesh<VData, TMEmptyData, SData, BVData, BSData>;
 };
 
 // 3D case: TetMesh
 template<class VData, class SData, class BVData, class BSData>
-struct SimplicialMesh<3, VData, SData, BVData, BSData> {
+struct SimplicialMeshSelector<3, VData, SData, BVData, BSData> {
     using type = TetMesh<VData, TMEmptyData, TMEmptyData, SData, BVData, TMEmptyData, BSData>;
 };
 

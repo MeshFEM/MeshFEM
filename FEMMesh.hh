@@ -85,7 +85,7 @@ class FEMMesh : public Concepts::ElementMesh,
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::Vertex,
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::Element,
         typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryVertex,
-        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement>::type
+        typename _FEMData<_K, _Deg, _EmbeddingSpace>::BoundaryElement>
 {
 public:
     static constexpr size_t K   = _K;
@@ -102,7 +102,7 @@ public:
     using BoundaryElementData = typename FEMData::BoundaryElement;
 
     // Determine base mesh type
-    using BaseMesh = typename SimplicialMesh<_K, VertexData, ElementData, BoundaryVertexData, BoundaryElementData>::type;
+    using BaseMesh = SimplicialMesh<_K, VertexData, ElementData, BoundaryVertexData, BoundaryElementData>;
 
     size_t numElementNodes() const { return 0; }
     size_t numVertexNodes()  const { return BaseMesh::numVertices(); }

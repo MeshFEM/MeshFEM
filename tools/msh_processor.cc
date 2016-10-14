@@ -64,11 +64,13 @@
 #include <sstream>
 
 #include <Types.hh>
+#include <VonMises.hh>
 #include "argparse.hh"
 #include "Sampler.hh"
 #include "Values.hh"
 #include "MeshConnectivity.hh"
 #include "../ExpressionVector.hh"
+#include "../SimplicialMesh.hh"
 
 using namespace MeshIO;
 using namespace std;
@@ -104,14 +106,13 @@ template<> const ElementSampler::Sampler<2> &getElementSampler<2>() { if (g_samp
 template<> const ElementSampler::Sampler<3> &getElementSampler<3>() { if (g_sampler3D) return *g_sampler3D; g_sampler3D = make_unique<ElementSampler::Sampler<3>>(g_parser3D->vertices(), g_parser3D->elements()); return *g_sampler3D; }
 
 // Global lazily-constructed mesh data structures for 2 and 3D cases.
-#include "../SimplicialMesh.hh"
 unique_ptr<SimplicialMesh<2>> g_triMesh;
 unique_ptr<SimplicialMesh<3>> g_tetMesh;
 
 template<size_t N>
 const SimplicialMesh<N> &getMeshDS();
-template<> const SimplicialMesh<2> &getMeshDS() { if (g_triMesh) return *g_triMesh; else g_triMesh = make_unique<SimplicialMesh<2>>(g_parser2D->elements(), g_parser2D->vertices().size()); return *g_triMesh; }
-template<> const SimplicialMesh<3> &getMeshDS() { if (g_tetMesh) return *g_tetMesh; else g_tetMesh = make_unique<SimplicialMesh<3>>(g_parser3D->elements(), g_parser3D->vertices().size()); return *g_tetMesh; }
+template<> const SimplicialMesh<2> &getMeshDS<2>() { if (g_triMesh) return *g_triMesh; else g_triMesh = make_unique<SimplicialMesh<2>>(g_parser2D->elements(), g_parser2D->vertices().size()); return *g_triMesh; }
+template<> const SimplicialMesh<3> &getMeshDS<3>() { if (g_tetMesh) return *g_tetMesh; else g_tetMesh = make_unique<SimplicialMesh<3>>(g_parser3D->elements(), g_parser3D->vertices().size()); return *g_tetMesh; }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Stack operations
@@ -342,27 +343,48 @@ size_t pull(const string &, const string &arg, Stack &stack, const Modifiers &) 
     throw runtime_error("Couldn't find '" + arg + "' for pull.");
 }
 
-// This matrix->vector operator unfortunately must be implemented manually in
-// the current framework...
-size_t eigenvalue(const string &, const string &arg, Stack &stack, const Modifiers &) {
+////////////////////////////////////////////////////////////////////////////////
+// Symmetric matrix operations
+////////////////////////////////////////////////////////////////////////////////
+struct Eigenvalues {
+    // Returns a vector of eigenvalues.
+    using value_type = VValue;
+    static constexpr const char *name = "eigenvalues";
+    static VValue apply(const SMValue &sm) { return VValue(sm.value.eigenvalues()); }
+};
+
+struct VonMises {
+    // Returns a symmetric matrix
+    using value_type = SMValue;
+    static constexpr const char *name = "vonMises";
+    static SMValue apply(const SMValue &sm) { return vonMises(sm.value); }
+};
+
+struct FrobeniusNorm {
+    // Returns a scalar
+    using value_type = SValue;
+    static constexpr const char *name = "frobeniusNorm";
+    static SValue apply(const SMValue &sm) { return sqrt(sm.value.frobeniusNormSq()); }
+};
+
+template<class Op>
+size_t SMatrixOperation(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    using VT = typename Op::value_type;
     auto val = popValue(stack);
-    string name = "eigenvalues(" + val.name + ")";
+    string name = std::string(Op::name) + "(" + val.name + ")";
     if (auto sm = dynamic_cast<SMValue *>(VPtr(val)))
-        stack.push_back(TypedNamedValue<VValue>(name, sm->value.eigenvalues()));
-    else if (auto  ism = dynamic_cast<ISMValue *>(VPtr(val))) {
-        auto result = make_unique<IVValue>(ism->simplexDimension());
-        for (size_t i = 0; i < result->dim(); ++i) {
-            auto &sm = (*ism)[i];
-            (*result)[i] = VValue(sm.value.eigenvalues());
-        }
+        stack.push_back(TypedNamedValue<VT>(name, Op::apply(sm->value)));
+    else if (auto ism = dynamic_cast<ISMValue *>(VPtr(val))) {
+        auto result = make_unique<InterpolantValue<VT>>(ism->simplexDimension());
+        for (size_t i = 0; i < result->dim(); ++i)
+            (*result)[i] = VT(Op::apply((*ism)[i].value));
         stack.emplace_back(name, std::move(result));
     }
-    else if (auto  fsm = dynamic_cast<FSMValue *>(VPtr(val))) {
-        auto result = make_unique<FVValue>(fsm->size());
+    else if (auto fsm = dynamic_cast<FSMValue *>(VPtr(val))) {
+        auto result = make_unique<FieldValue<VT>>(fsm->size());
         result->domainType = fsm->domainType;
         for (size_t i = 0; i < result->size(); ++i) {
-            auto &sm = (*fsm)[i];
-            (*result)[i] = VValue(sm.value.eigenvalues());
+            (*result)[i] = VT(Op::apply((*fsm)[i].value));
         }
         stack.emplace_back(name, std::move(result));
     }
@@ -690,7 +712,9 @@ void execute(vector<FilterInvocation> &filters) {
         {"print",          Filter::print},
         {"noprint",        Filter::noprint},
         {"printName",      Filter::printName},
-        {"eigenvalues",    Filter::eigenvalue},
+        {"eigenvalues",    Filter::SMatrixOperation<Filter::Eigenvalues>},
+        {"vonMises",       Filter::SMatrixOperation<Filter::VonMises>},
+        {"frobeniusNorm",  Filter::SMatrixOperation<Filter::FrobeniusNorm>},
         // {"eigs",           Filter::eigenvaluesAndEigenvectors},
         {"sample",         Filter::sample<N>},
         {"elementAverage", Filter::elementAverage<N>},
@@ -725,7 +749,8 @@ void execute(vector<FilterInvocation> &filters) {
     set<string> suppressImplicitPrint = { "noprint", "print", "outMSH", "list" };
 
     // Apply-all makes sense only for the following operations:
-    set<string> acceptsApplyAll = { "print", "printName", "eigenvalue", "sample" };
+    set<string> acceptsApplyAll = { "print", "printName", "eigenvalues",
+                                    "vonMises", "frobeniusNorm", "sample" };
     acceptsApplyAll.insert(reductions.begin(), reductions.end());
     acceptsApplyAll.insert(  unaryOps.begin(),   unaryOps.end());
     acceptsApplyAll.insert( binaryOps.begin(),  binaryOps.end());

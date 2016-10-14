@@ -19,16 +19,10 @@ template<size_t _K, size_t _Deg, class _EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
 struct BaseMesh<FEMMesh<_K, _Deg, _EmbeddingSpace, _FEMData>> {
     using DMesh = FEMMesh<_K, _Deg, _EmbeddingSpace, _FEMData>;
-    using type = typename SimplicialMesh<_K, _VData<DMesh>, _EData<DMesh>, _BVData<DMesh>, _BEData<DMesh>>::type;
+    using type = SimplicialMesh<_K, _VData<DMesh>, _EData<DMesh>, _BVData<DMesh>, _BEData<DMesh>>;
     static constexpr size_t   K = _K;
     static constexpr size_t Deg = _Deg;
 };
-
-// // Note: for now, "boundary meshes" actually all the same handles and types as
-// // volume meshes, but rename the entity accessors accordingly--they are just
-// // wrappers.
-// template<class _FEMMesh>
-// struct BaseMesh<BoundaryFEMMesh<_FEMMesh>> : public BaseMesh<_FEMMesh> { };
 
 template<class _Mesh>
 struct BaseMesh : public BaseMesh<typename std::decay<_Mesh>::type> { };

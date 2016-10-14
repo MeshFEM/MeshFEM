@@ -77,7 +77,8 @@ std::tuple<std::string, std::vector<FilterInvocation>, boost::optional<size_t>> 
     po::options_description matrix_operations("Special symmetric matrix (and symmetric matrix field) operations");
     matrix_operations.add_options()
         ("eigenvalues,l", "Eigenvalues")
-        // ("vonMises,v",    "von Mises stress measure (deviatoric part, weighted by sqrt(3))")
+        ("vonMises,v",    "von Mises stress measure (deviatoric part, weighted by sqrt(3/2))")
+        ("frobeniusNorm", "Frobenius norm of tensor")
         // ("eigs",          "Eigenvalues + eigenvectors")
         ;
     po::options_description field_operations("Field operations: sampling of fields, fields of interpolants, and interpolants");
