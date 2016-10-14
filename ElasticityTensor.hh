@@ -70,6 +70,9 @@ public:
     // Copy constructor
     ElasticityTensor(const ElasticityTensor &b) { m_d = b.m_d; }
 
+    // The symmetric rank 4 identity tensor corresponds to lambda = 0, mu = 1/2
+    void setIdentity() { setIsotropicLame(0, 0.5); }
+
     // Configure the elasticity tensor with a Young's modulus and Poisson ratio
     void setIsotropic(Real E, Real nu) {
         // Lame formula:

@@ -354,7 +354,9 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////
 // Dynamic symmetric matrix--for dynamic cases which can be either 2x2 or 3x3
-// (Allocates storage for a 3x3, but dynamically chooses to use a subset.
+// Allocates storage for a 3x3, but dynamically chooses to use a subset. The
+// unused portion remains zero so, e.g., Base::frobeniusNormSq gives the correct
+// result.
 ////////////////////////////////////////////////////////////////////////////////
 template<typename Real>
 class DynamicSymmetricMatrix : public SymmetricMatrixValue<Real, 3> {
@@ -384,9 +386,10 @@ public:
         return (*this)[flattenIndices(m_dynamicSize, i, j)];
     }
 
-    // Note: matrix after resize is "uninitialized" (doesn't simply
+    // Note: matrix after resize is zero (doesn't simply
     // clip/pad--that would require a bit more code)
     void resize(size_t n) {
+        Base::clear();
         reinterpret_resize(n);
     }
 
