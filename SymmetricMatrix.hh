@@ -354,9 +354,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////
 // Dynamic symmetric matrix--for dynamic cases which can be either 2x2 or 3x3
-// Allocates storage for a 3x3, but dynamically chooses to use a subset. The
-// unused portion remains zero so, e.g., Base::frobeniusNormSq gives the correct
-// result.
+// Allocates storage for a 3x3, but dynamically chooses to use a subset. 
 ////////////////////////////////////////////////////////////////////////////////
 template<typename Real>
 class DynamicSymmetricMatrix : public SymmetricMatrixValue<Real, 3> {
@@ -417,6 +415,18 @@ public:
                     mat(i, j) = operator()(i, j);
             return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
         }
+    }
+
+    // Base::frobeniusNormSq() gives the wrong result for 2x2 :(
+    Real frobeniusNormSq() const {
+        Real val = 0;
+        for (size_t i = 0; i < size(); ++i) {
+            for (size_t j = 0; j < size(); ++j) {
+                Real e = (*this)(i, j);
+                val += e * e;
+            }
+        }
+        return val;
     }
 
     size_t     size() const { return m_dynamicSize; }

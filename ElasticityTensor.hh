@@ -107,8 +107,6 @@ public:
             m_d(2, 2) = mu;
         }
 
-        // Not strictly necessary since only the upper triangle should ever be
-        // referenced (but may prevent confusion)
         m_d = m_d.template selfadjointView<Eigen::Upper>();
     }
 
