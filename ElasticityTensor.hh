@@ -67,8 +67,22 @@ public:
     ElasticityTensor() : m_d(DType::Zero()) { }
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
     ElasticityTensor(Real E, Real nu) { setIsotropic(E, nu); }
-    // Copy constructor
-    ElasticityTensor(const ElasticityTensor &b) { m_d = b.m_d; }
+
+    // Allow converting constructor to and from major symmetric tensors.
+    // Converting to a major symmetric tensor verifies that the input is indeed
+    // major symmetric.
+    template<bool _MajorSymmetry2>
+    ElasticityTensor(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &b) {
+        if ( _MajorSymmetry == _MajorSymmetry2) m_d = b.m_d;
+        if (!_MajorSymmetry && _MajorSymmetry2) {
+            m_d = b.m_d.template selfadjointView<Eigen::Upper>();
+        }
+        if ( _MajorSymmetry && !_MajorSymmetry2) {
+            if (!b.hasMajorSymmetry())
+                throw std::runtime_error("Attempting to copy construct major-symmetric tensor from non-major symmetric tensor");
+            m_d = b.m_d.template selfadjointView<Eigen::Upper>();
+        }
+    }
 
     // The symmetric rank 4 identity tensor corresponds to lambda = 0, mu = 1/2
     void setIdentity() { setIsotropicLame(0, 0.5); }
@@ -491,16 +505,19 @@ public:
         return result;
     }
 
+    // If major symmetry isn't enforced, check whether it exists.
+    bool hasMajorSymmetry() const {
+        if (_MajorSymmetry) return true;
+        return (m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10;
+    }
+
     // Computes the eigenstrains with maximum eigenvalue (and this eigenvalue).
     // In otherwords, we find the (s, lambda) satisfying:
     //     E : s = lambda s
     // for greatest lambda.
     // Should only be used on major-symmetric tensors.
     std::tuple<SMatrix, Real>  maxEigenstrain() const {
-        if (!_MajorSymmetry) {
-            // Validate major symmetry if it hasn't been enforced.
-            assert((m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10);
-        }
+        assert(hasMajorSymmetry());
 
         // We are solving the problem:
         //    lambda = max_||s||^2_F=1   s : E : s
@@ -584,6 +601,10 @@ public:
     // For debug purposes only
     void writeD(std::ostream &os) const {
         os << m_d;
+    }
+
+    void readD(std::istream &is) const {
+        is >> m_d;
     }
 
 private:

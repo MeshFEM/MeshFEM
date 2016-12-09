@@ -322,7 +322,7 @@ public:
     typedef Eigen::Matrix<Real, flatLen(t_N), Eigen::Dynamic> ArrayType;
 
     typedef SymmetricMatrixRef<t_N, typename ArrayType::ColXpr,
-            typename ArrayType::ConstColXpr> ValueType;
+            const typename ArrayType::ColXpr> ValueType;
     typedef ConstSymmetricMatrixRef<t_N,
             typename ArrayType::ConstColXpr> ConstValueType;
 
