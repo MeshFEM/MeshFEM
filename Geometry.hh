@@ -250,6 +250,57 @@ private:
     int vmin, vmax;
 };
 
+// OrientedTriplet instances compare equal if they hold the same 3 integers up
+// to cyclic permutation.
+// This triplet is cyclically permuted at construction so that the minimum index
+// comes first to simplify operations (comparisons, etc.)
+// It must always remain this way for correct operation.
+struct OrientedTriplet {
+    OrientedTriplet(size_t v0, size_t v1, size_t v2) {
+        size_t vmin = std::min(std::min(v0, v1), v2);
+        if      (v0 == vmin) corners = { { v0, v1, v2 } };
+        else if (v1 == vmin) corners = { { v1, v2, v0 } };
+        else if (v2 == vmin) corners = { { v2, v0, v1 } };
+    }
+
+    bool operator==(const OrientedTriplet &b) const {
+        // Note: equal triangles are assumed to have been cyclically
+        // permuted so that the index arrays exactly equal
+        return b.corners == corners;
+    }
+
+    // Check for (combinatorially) degenerate cases
+    size_t dimension() const {
+        if (corners[0] == corners[1]) {
+            if (corners[1] == corners[2])
+                return 0;
+            return 1;
+        }
+        if (corners[0] == corners[2]) return 1;
+        return (corners[1] == corners[2]) ? 1 : 2;
+    }
+
+    // Equivalent edge geometry
+    // (Assumes this is a triangle that has degenerated to an edge).
+    UnorderedPair degenerateAsEdge() const {
+        if (corners[0] == corners[1])
+            return UnorderedPair(corners[1], corners[2]);
+        return UnorderedPair(corners[0], corners[1]);
+    }
+
+    bool containsEdge(const UnorderedPair &e) const {
+        bool has_vmin = false, has_vmax = false;
+        for (size_t i = 0; i < 3; ++i) {
+            has_vmin |= (corners[i] == size_t(e[0]));
+            has_vmax |= (corners[i] == size_t(e[1]));
+        }
+        return has_vmin && has_vmax;
+    }
+
+    // Note: minimum index must always come first!
+    std::array<size_t, 3> corners;
+};
+
 struct UnorderedQuadruplet {
     UnorderedQuadruplet() : m_v{{-1, -1, -1}} { }
 

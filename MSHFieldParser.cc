@@ -70,7 +70,10 @@ void MSHFieldParser<N>::m_parseFields(istream &is, const bool binary) {
     // Interpolants are (currently) only quadratic--we must upscale linear ones
     if      (meshDegree() == 1) upscaleLinearInterp = true;
     else if (meshDegree() == 2) upscaleLinearInterp = false;
-    else throw std::runtime_error("Unknown or unsupported mesh degree: " + to_string(meshDegree()));
+    else {
+        std::cerr << "WARNING: Unknown or unsupported mesh degree: " + to_string(meshDegree()) << std::endl;
+        upscaleLinearInterp = false;
+    }
 
     while (getline(is, header)) {
         string fieldName;
