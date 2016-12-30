@@ -22,3 +22,7 @@ void BENCHMARK_REPORT() {
         cout << message << endl;
     g_timer.report(cout);
 }
+
+void BENCHMARK_REPORT_NO_MESSAGES() {
+    g_timer.report(cout);
+}
