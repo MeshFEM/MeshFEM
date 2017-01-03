@@ -62,6 +62,13 @@ namespace MeshIO {
         operator const Point3D &() const { return point; }
         operator       Point3D &()       { return point; }
         operator Point2D() const { return truncateFrom3D<Point2D>(point); }
+
+        // Lexicographic comparison for simple sorting
+        bool operator<(const IOVertex &b) const {
+            return std::lexicographical_compare(  point.data(),   point.data() + 3,
+                                                b.point.data(), b.point.data() + 3);
+        }
+
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -95,6 +102,12 @@ namespace MeshIO {
             return *this;
         }
 
+        // Lexicographic comparison for simple sorting
+        bool operator<(const IOElement &b) const {
+            if (b.size() != size()) throw std::runtime_error("Attempted to compare elements of different sizes.");
+            return std::lexicographical_compare(  begin(),   end(),
+                                                b.begin(), b.end());
+        }
     };
     // Ascii element input
     std::istream  &operator>>(std::istream &, IOElement &);

@@ -77,6 +77,9 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("triangulate,t",                 po::value<double>(),              "Triangulate line mesh with maximal triangle area given as argument")
         ("clean,c",                                                         "Clean line mesh")
         ("periodic",                                                        "Perform the cleaning operation periodically")
+        ("sortVertices",                                                    "spatially sort the vertices")
+        ("sortElementCorners",                                              "sort the indices appearing in an element (useful for comparisons when orientation doesn't matter, done after sortVertices, before sortElements)")
+        ("sortElements",                                                    "sort elements lexicographically by their vertex indices (done after sortVertices and sortElementCorners, if called)")
         ;
 
     po::options_description cli_opts;
@@ -155,6 +158,34 @@ int main(int argc, const char *argv[])
     if (args.count("outFile")) outPath = args["outFile"].as<string>();
 
     size_t origSize = inVertices.size();
+
+    if (args.count("sortVertices")) {
+        // Permute vertex indices into sorted order
+        // order[i] is the ith vertex in sorted order (orig index corresponding
+        // to sorted index)
+        const auto order = sortPermutation(inVertices);
+        // New, sorted index corresponding to each original index
+        std::vector<size_t> newIndex(order.size());
+        outVertices = inVertices;
+        for (size_t i = 0; i < order.size(); ++i) {
+            inVertices[i] = outVertices[order[i]];
+            newIndex[order[i]] = i;
+        }
+        // Re-index elements
+        for (auto &e : inElements) {
+            for (size_t &j : e)
+                j = newIndex[j];
+        }
+    }
+
+    if (args.count("sortElementCorners")) {
+        for (auto &e : inElements)
+            std::sort(e.begin(), e.end());
+    }
+
+    if (args.count("sortElements")) {
+        std::sort(inElements.begin(), inElements.end());
+    }
 
     if (args.count("danglingVertexHighlightPath"))
         highlight_dangling_vertices(inVertices, inElements, args["danglingVertexHighlightPath"].as<string>());
