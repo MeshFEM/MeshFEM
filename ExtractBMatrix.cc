@@ -2,7 +2,7 @@
 // ExtractBMatrix.cc
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Extract the stress->strain matrix in triplet format.
+//      Extract the displacement->strain matrix in triplet format.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
@@ -52,7 +52,7 @@ void execute(const std::vector<MeshIO::IOVertex > &vertices,
             }
         }
     }
-    // Write in binary format; see $CSGFEM/matlabl/read_sparse_matrix_binary.m
+    // Write in binary format; see $CSGFEM/matlab/read_sparse_matrix_binary.m
     B.sumRepeated();
     B.dumpBinary(outPath);
 }
