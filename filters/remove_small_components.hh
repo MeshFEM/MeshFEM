@@ -2,8 +2,8 @@
 // remove_small_components.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Removes the same volume components of a mesh, leaving only the largest
-//      connected component.
+//      Removes the small (measured by element count) volume components of a
+//      mesh, leaving only the largest connected component.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
