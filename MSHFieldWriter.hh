@@ -306,6 +306,9 @@ public:
         m_outStream << "$EndElementNodeData" << std::endl;
     }
 
+    const size_t numVertices() const { return m_numVertices; }
+    const size_t numElements() const { return m_numElements; }
+
     // Type cast to bool checks if the output file is open and ready
     operator bool() const {
         return m_outStream.is_open();

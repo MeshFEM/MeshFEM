@@ -31,13 +31,27 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
              const std::vector<Element> &inElements,
              std::vector<Vertex>  &outVertices,
              std::vector<Element> &outElements,
-             const ComponentMask &mask = ComponentMask("xyz"))
+             const ComponentMask &mask = ComponentMask("xyz"),
+             std::vector<size_t> *origVertex  = nullptr, // optional tracking of origin vertex/elem
+             std::vector<size_t> *origElement = nullptr
+             )
 {
     static constexpr double tolerance = double(TOL::num) / double(TOL::den);
     BBox<decltype(inVertices[0].point)> bbox((inVertices));
 
     outVertices = inVertices;
     outElements = inElements;
+
+    if (origVertex) {
+        origVertex->resize(inVertices.size());
+        for (size_t i = 0; i < inVertices.size(); ++i)
+            (*origVertex)[i] = i;
+    }
+    if (origElement) {
+        origElement->resize(inElements.size());
+        for (size_t i = 0; i < inElements.size(); ++i)
+            (*origElement)[i] = i;
+    }
 
     // Reflect geometry in the dth dimension
     for (size_t d = 0; d < Dim; ++d) {
@@ -57,6 +71,7 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
                 auto reflV = outVertices[vi];
                 reflV[d] *= -1; reflV[d] += 2 * bbox.minCorner[d];
                 outVertices.push_back(reflV);
+                if (origVertex) { origVertex->push_back(origVertex->at(vi)); }
             }
         }
 
@@ -75,6 +90,7 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
             re[1] = globalVertexIndex.at(tmp);
             for (size_t d = 2; d < re.size(); ++d) re[d] = globalVertexIndex.at(re[d]);
             outElements.push_back(re);
+            if (origElement) { origElement->push_back(origElement->at(ei)); }
         }
     }
 }
