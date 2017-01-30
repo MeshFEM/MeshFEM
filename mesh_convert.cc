@@ -15,6 +15,7 @@
 #include "filters/highlight_dangling_vertices.hh"
 #include "filters/reflect.hh"
 #include "filters/CurveCleanup.hh"
+#include "filters/reorient_negative_elements.hh"
 #include "Triangulate.h"
 #include "ComponentMask.hh"
 
@@ -77,6 +78,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("triangulate,t",                 po::value<double>(),              "Triangulate line mesh with maximal triangle area given as argument")
         ("clean,c",                                                         "Clean line mesh")
         ("periodic",                                                        "Perform the cleaning operation periodically")
+        ("reorientNegativeElements",                                        "Correct each element's orientation (make volumes positive).")
         ("sortVertices",                                                    "spatially sort the vertices")
         ("sortElementCorners",                                              "sort the indices appearing in an element (useful for comparisons when orientation doesn't matter, done after sortVertices, before sortElements)")
         ("sortElements",                                                    "sort elements lexicographically by their vertex indices (done after sortVertices and sortElementCorners, if called)")
@@ -198,6 +200,12 @@ int main(int argc, const char *argv[])
              << " dangling vertice(s) removed" << endl;
     
     if (inElements.size() == 0) throw runtime_error("No elements read.");
+
+    if (args.count("reorientNegativeElements")) {
+        size_t numFlipped = reorient_negative_elements(inVertices, inElements);
+        if (numFlipped > 0)
+            std::cerr << "Reoriented " << numFlipped << " negatively oriented elements." << std::endl;
+    }
 
     // Apply coordinate translations/scalings
     for (size_t i = 0; i < inVertices.size(); ++i) {

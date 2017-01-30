@@ -86,6 +86,7 @@ void execute(const po::variables_map &args,
     typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
     using Simulator = LinearElasticity::Simulator<Mesh>;
     Simulator sim(inElements, inVertices);
+
     typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
                  &matFieldName = args[      "matFieldName"].as<string>(),

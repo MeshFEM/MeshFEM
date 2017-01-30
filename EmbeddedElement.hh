@@ -263,9 +263,8 @@ public:
         //  0*---2---* 1
         // Inward-pointing edge perpendiculars
         Vector2D e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);
-        // In the 2D case where triangles have flipped normal, we still want
-        // positive area.
-        Real doubleA = std::abs(e1[0] * e2[1] - e1[1] * e2[0]);
+
+        Real doubleA = e1[0] * e2[1] - e1[1] * e2[0];
         m_volume = doubleA / 2.0;
 
         m_gradBarycentric.col(0) = Vector2D(-e0[1], e0[0]) / doubleA;

@@ -22,6 +22,8 @@ SOURCES=ConstStrainDisplacement_cli.cc DeformedCells_cli.cc PeriodicHomogenizati
 TARGETS=mesh_convert PeriodicHomogenization_cli MaterialOptimization_cli Simulate_cli ConstStrainDisplacement_cli DeformedCells_cli 
 
 CPPFLAGS+=-std=c++11 $(WARNING_FLAGS) $(INCLUDES)
+CPPFLAGS+= -DBENCHMARK
+
 ifeq ($(DEBUG), 1)
 	CPPFLAGS+=-O0 -g
 else

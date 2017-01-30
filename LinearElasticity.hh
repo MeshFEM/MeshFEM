@@ -428,7 +428,14 @@ public:
     template<class Elements, class Vertices>
     Simulator(const Elements &elems, const Vertices &vertices)
         : m_useRigidMotionConstraint(false), m_useNRTPinConstraint(false),
-          m_mesh(elems, vertices) { }
+          m_mesh(elems, vertices)
+    {
+        size_t negativeElements = 0;
+        for (auto e : m_mesh.elements())
+            if (e->volume() < 0) ++negativeElements;
+        if (negativeElements > 0)
+            throw std::runtime_error("Mesh has negatively oriented elements.\nCorrect with: mesh_convert --reorientNegativeElements.");
+    }
 
     const _Mesh &mesh() const { return m_mesh; }
           _Mesh &mesh()       { return m_mesh; }
@@ -990,6 +997,7 @@ public:
         else if (needsTranslations.hasAny(N) || (totalConstrained < ((N == 2) ? 3 : 6))) {
             std::cerr << "WARNING: analysis of partial Dirichlet rotational posedness not yet implemented!"
                 << std::endl;
+            std::cerr << "Unconstrained translation components: " << needsTranslations.componentString() << std::endl; 
         }
     }
 

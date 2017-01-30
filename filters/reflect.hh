@@ -33,7 +33,9 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
              std::vector<Element> &outElements,
              const ComponentMask &mask = ComponentMask("xyz"),
              std::vector<size_t> *origVertex  = nullptr, // optional tracking of origin vertex/elem
-             std::vector<size_t> *origElement = nullptr
+             std::vector<size_t> *origElement = nullptr,
+             std::vector<ComponentMask> *vtxReflection = nullptr, // the reflection applied to generate each output vertex
+             std::vector<ComponentMask> *elmReflection = nullptr  // the reflection applied to generate each output elem
              )
 {
     static constexpr double tolerance = double(TOL::num) / double(TOL::den);
@@ -46,11 +48,13 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
         origVertex->resize(inVertices.size());
         for (size_t i = 0; i < inVertices.size(); ++i)
             (*origVertex)[i] = i;
+        if (vtxReflection) vtxReflection->assign(inVertices.size(), ComponentMask());
     }
     if (origElement) {
         origElement->resize(inElements.size());
         for (size_t i = 0; i < inElements.size(); ++i)
             (*origElement)[i] = i;
+        if (elmReflection) elmReflection->assign(inElements.size(), ComponentMask());
     }
 
     // Reflect geometry in the dth dimension
@@ -72,6 +76,11 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
                 reflV[d] *= -1; reflV[d] += 2 * bbox.minCorner[d];
                 outVertices.push_back(reflV);
                 if (origVertex) { origVertex->push_back(origVertex->at(vi)); }
+                if (vtxReflection) {
+                    ComponentMask refl = vtxReflection->at(vi);
+                    refl.set(d);
+                    vtxReflection->push_back(refl);
+                }
             }
         }
 
@@ -91,6 +100,11 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
             for (size_t d = 2; d < re.size(); ++d) re[d] = globalVertexIndex.at(re[d]);
             outElements.push_back(re);
             if (origElement) { origElement->push_back(origElement->at(ei)); }
+            if (elmReflection) {
+                ComponentMask refl = elmReflection->at(ei);
+                refl.set(d);
+                elmReflection->push_back(refl);
+            }
         }
     }
 }

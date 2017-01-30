@@ -134,8 +134,9 @@ determineCellFaceBoundaryElements(const _FEMMesh &mesh, const std::vector<FaceMe
         // An element can't be on more than one boundary...
         size_t numBoundaries = pboundaries.count();
         // assert(numBoundaries < 2);
-        if (numBoundaries > 1)
+        if (numBoundaries > 1) {
             throw std::runtime_error("Boundary element on more than one cell face.");
+        }
 
         isOnCellFace[be.index()] = numBoundaries > 0;
     }
