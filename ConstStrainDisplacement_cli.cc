@@ -32,6 +32,7 @@
 #include "LinearElasticity.hh"
 #include "Materials.hh"
 #include "PeriodicHomogenization.hh"
+#include "OrthotropicHomogenization.hh"
 #include "MSHFieldWriter.hh"
 
 #include <boost/program_options.hpp>
@@ -62,10 +63,11 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("material,m", po::value<string>(), "base material")
         ("strain,s", po::value<string>(), "macroscopic strain tensor")
         ("stress,S", po::value<string>(), "macroscopic stress tensor")
-        ("degree,d",   po::value<int>()->default_value(1), "degree of finite elements")
+        ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("nodalLoad,l",                     "compute the effective force on each node.")
         ("addFluctuation,f",                "add fluctuation strains to the displacement")
-        ("macroOut,O", po::value<string>(), "also output the unit cell deformation")
+        ("macroOut", po::value<string>(),   "also output the unit cell deformation")
+        ("orthotropicCell,O",               "Analyze the orthotropic symmetry base cell only")
         ;
 
     po::options_description cli_opts;
@@ -133,9 +135,20 @@ void execute(const po::variables_map &args,
 
     // Convert stress probe to corresponding strain probe.
     std::vector<VField> w_ij;
+
+    auto doCellProblemSolve = [&]() {
+        if (args.count("orthotropicCell") == 0)   solveCellProblems(w_ij, sim, 1e-7);
+        else PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
+    };
+
+    auto getHomogenizedTensor = [&]() {
+        if (args.count("orthotropicCell") == 0)   return homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        else return PeriodicHomogenization::Orthotropic::homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+    };
+
     if (args.count("stress")) {
-        solveCellProblems(w_ij, sim);
-        auto Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        doCellProblemSolve();
+        auto Eh = getHomogenizedTensor();
         auto Sh = Eh.inverse();
         strain = Sh.doubleContract(strain);
     }
@@ -152,8 +165,8 @@ void execute(const po::variables_map &args,
         VField uMacro(4);
         SymmetricMatrixField<Real, _N> stressMacro(2);
 
-        if (w_ij.size() == 0) solveCellProblems(w_ij, sim);
-        auto Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        if (w_ij.size() == 0) doCellProblemSolve();
+        auto Eh = getHomogenizedTensor();
         stressMacro(0) = stressMacro(1) = Eh.doubleContract(strain);
 
         // 2   3
@@ -187,7 +200,7 @@ void execute(const po::variables_map &args,
 
 
     if (args.count("addFluctuation")) {
-        if (w_ij.size() == 0) solveCellProblems(w_ij, sim);
+        if (w_ij.size() == 0) doCellProblemSolve();
         // Remove rigid translation of fluctuation displacements relative to the
         // base cell (i.e. try to keep the fluctuation-displaced microstructure
         // "within" the base cell):
