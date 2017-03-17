@@ -31,7 +31,7 @@ struct PoissonFEMData : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         using Base::gradPhi; using Base::volume;
         Real stiffness(size_t i, size_t j) const {
             return Quadrature<_K, 2 * (_Deg - 1)>::integrate(
-                [&] (const VectorND<Simplex::numVertices(_K)> &p) {
+                [&] (const EvalPt<_K> &p) {
                     return gradPhi(i)(p).dot(gradPhi(j)(p));
             }, volume());
         }

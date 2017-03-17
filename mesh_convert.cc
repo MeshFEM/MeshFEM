@@ -316,7 +316,34 @@ int main(int argc, const char *argv[])
             //          << (mesh.halfEdge(hei).isBoundary() ? "boundary" : "internal")
             //          << ") length: " << edgeLengths.at(perm.at(i))  << endl;
             // }
+
+            std::queue<size_t> bfsQueue;
+            std::vector<size_t> component(mesh.numSimplices(), 0);
+            std::vector<size_t> componentSizes;
+            for (auto e : mesh.simplices()) {
+                if (component[e.index()] == 0) {
+                    componentSizes.push_back(1);
+                    component[e.index()] = componentSizes.size();
+                    bfsQueue.push(e.index());
+                }
+                while (!bfsQueue.empty()) {
+                    size_t u = bfsQueue.front();
+                    bfsQueue.pop();
+                    for (auto ne : mesh.simplex(u).neighbors()) {
+                        if (!ne) continue;
+                        if (component.at(ne.index()) == 0) {
+                            component[ne.index()] = componentSizes.size();
+                            ++componentSizes.back();
+                            bfsQueue.push(ne.index());
+                        }
+                    }
+                }
+            }
+
+            for (size_t i = 0; i < componentSizes.size(); ++i)
+                std::cout << "component " << i << " size:\t" << componentSizes[i] << std::endl;
         }
+
         if (args.count("subdivide")) {
             subdivide(mesh, outVertices, outElements);
         }
