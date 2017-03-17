@@ -3,3 +3,5 @@ Makefile.depend
 .clang_complete
 .d
 *.o
+
+build/*

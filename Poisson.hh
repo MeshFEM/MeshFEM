@@ -4,7 +4,7 @@
 /*! @file
 //      Demonstrates FEMMesh by implementing a simple poisson solver supporting
 //      Dirichlet and 0 Neumann boundary conditions.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/17/2014 00:56:34
