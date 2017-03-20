@@ -24,6 +24,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 include(CMakeToolsHelpers OPTIONAL)
 
 ################################################################################
+# Platform-specific options
+################################################################################
+option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ON)
+
+################################################################################
+# Configure manual compiler flags based on options
+################################################################################
+if(DISABLE_CXX11_ABI_GCC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+endif()
+
+################################################################################
 # MeshFEM sources
 ################################################################################
 
@@ -52,31 +64,39 @@ find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
 # Boost library
-find_package(Boost 1.59 QUIET REQUIRED COMPONENTS filesystem system program_options thread)
-target_include_directories(${PROJECT_NAME} PUBLIC ${Boost_INCLUDE_DIRS})
+find_package(Boost 1.55 QUIET REQUIRED COMPONENTS filesystem system program_options thread)
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 # Eigen3 library
-find_package(Eigen3 REQUIRED NO_MODULE)
-target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
+find_package(Eigen3 REQUIRED MODULE)
+if(TARGET Eigen3::EIGEN)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
+else()
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${EIGEN_INCLUDE_DIRS})
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${EIGEN_INCLUDE_DIRS}/unsupported)
+endif()
 
 # CSGFEM library
 find_package(CSGFEM REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC CSGFEM)
 
 # TBB library
-find_package(TBB REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${TBB_LIBRARIES})
-target_include_directories(${PROJECT_NAME} PUBLIC ${TBB_INCLUDE_DIRS})
+find_package(TBB)
+if(TBB_FOUND)
+    add_definitions(-DHAS_TBB)
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${TBB_LIBRARIES})
+endif()
 
 # Triangle library
 find_package(Triangle REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${Triangle_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
 
 # Clipper library
 find_package(Clipper REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CLIPPER_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CLIPPER_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${CLIPPER_LIBRARIES})
 
 # Matheval library
@@ -85,12 +105,12 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Matheval::matheval)
 
 # Cholmod solver
 find_package(Cholmod REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CHOLMOD_INCLUDES})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CHOLMOD_INCLUDES})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${CHOLMOD_LIBRARIES})
 
 # UmfPack solver
 find_package(Umfpack REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${UMFPACK_INCLUDES})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${UMFPACK_INCLUDES})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 
 # Lapack library (do we need this?)
@@ -99,7 +119,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 
 # Ceres library
 find_package(Ceres REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CERES_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
 
 ################################################################################
