@@ -52,12 +52,12 @@ find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
 # Boost library
-find_package(Boost 1.61 QUIET REQUIRED COMPONENTS filesystem system program_options thread)
+find_package(Boost 1.59 QUIET REQUIRED COMPONENTS filesystem system program_options thread)
 target_include_directories(${PROJECT_NAME} PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 # Eigen3 library
-find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
 
 # CSGFEM library

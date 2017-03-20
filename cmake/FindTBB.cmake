@@ -54,7 +54,9 @@ ELSE ()
 
   FIND_PATH(TBB_ROOT include/tbb/task_scheduler_init.h
     DOC "Root of TBB installation"
-    PATHS ${PROJECT_SOURCE_DIR}/tbb /opt/intel/composerxe/tbb
+    PATHS ${PROJECT_SOURCE_DIR}/tbb
+    /opt/intel/composerxe/tbb
+    $ENV{TBB_INC}/..
   )
   
   IF (TBB_ROOT STREQUAL "")
