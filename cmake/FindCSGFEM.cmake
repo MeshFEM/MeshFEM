@@ -8,12 +8,12 @@
 # It searches the environment variable $CSGFEM_INC
 ################################################################################
 
-# If nothing is found, search against but include system paths
 find_path(CSGFEM_INCLUDE
 		CSGFile.hh
 		HINTS
-			ENV CSGFEM_INC
+			${PROJECT_SOURCE_DIR}/../CSGFEM
 		PATHS
+			ENV CSGFEM_INC
 			${THIRD_PARTY_DIR}/CSGFEM
 			${PROJECT_SOURCE_DIR}/../CSGFEM
 			"C:/Program Files/CSGFEM/"
