@@ -5,6 +5,11 @@
 cmake_minimum_required(VERSION 3.0)
 project(MeshFEM)
 
+# CMP0063: Honor visibility properties for all target types.
+if(POLICY CMP0063)
+	cmake_policy(SET CMP0063 NEW)
+endif()
+
 ################################################################################
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -60,6 +65,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 # Use C++11
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
+
+# Hide internal symbols
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 # C++11 Thread library
 find_package(Threads REQUIRED)

@@ -11,7 +11,7 @@
 //
 //      SFINAE is used to "overload" the integration routines to work in both of
 //      these cases.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/10/2014 17:13:25
@@ -55,7 +55,7 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
 // Triangle function (2D)
 // 1 point quadrature for const and linear, 3 for quadratic, 4 for cubic, and 6
 // for quartic
-// For efficiency, a negative weight rule is used for cubic 
+// For efficiency, a negative weight rule is used for cubic
 // integrals (the nonnegative weight rule would use 6 points)
 // This means that the rule should not be used for stiffness matrix construction
 // to avoid ruining positive semidefiniteness (This is only a problem for FEM
@@ -165,7 +165,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
         tmp += f(c1_0, c1_0, c1_0, c0_0);
         tmp *= 343.0 / 7500.0;
         result += tmp;
-        
+
         constexpr double c0_1 = 0.39940357616679920500; // (14 + sqrt(70)) / 56
         constexpr double c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
         tmp  = f(c0_1, c0_1, c1_1, c1_1);
