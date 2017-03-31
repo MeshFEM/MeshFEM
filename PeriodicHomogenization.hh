@@ -385,8 +385,8 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
     constexpr size_t Deg = _Sim::Degree;
     using ETensor = typename _Sim::ETensor;
     using SMatrix = typename _Sim::SMatrix;
-    using SFGradient = Interpolant<VectorND<N>, N, Deg - 1>; // Shape fn grad
-    using OF = OneForm<ETensor, N>;
+    using SFGradient = Interpolant<VectorND<_Sim::N>, _Sim::N, _Sim::Degree - 1>; // Shape fn grad
+    using OF = OneForm<ETensor, _Sim::N>;
 
     const auto &mesh = sim.mesh();
 

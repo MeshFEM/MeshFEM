@@ -2,7 +2,7 @@
 # General Informations
 ################################################################################
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 project(MeshFEM)
 
 # CMP0063: Honor visibility properties for all target types.
@@ -50,7 +50,6 @@ add_library(${PROJECT_NAME}
 		BoundaryConditions.cc
 		EdgeFields.cc
 		GlobalBenchmark.cc
-		MaterialOptimization.cc
 		Materials.cc
 		MeshIO.cc
 		MSHFieldParser.cc
@@ -123,14 +122,17 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 # target_link_libraries(${PROJECT_NAME} PUBLIC ${LAPACK_LIBRARIES})
 
 # Ceres library
-find_package(Ceres REQUIRED)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
+find_package(Ceres)
+if (CERES_FOUND)
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
+else()
+    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+endif()
 
 ################################################################################
 # Independent binaries
 ################################################################################
-
 add_executable(mesh_convert mesh_convert.cc)
 target_link_libraries(mesh_convert ${PROJECT_NAME})
 set_target_properties(mesh_convert PROPERTIES CXX_STANDARD 11)
@@ -147,7 +149,10 @@ add_executable(DeformedCells_cli DeformedCells_cli.cc)
 target_link_libraries(DeformedCells_cli ${PROJECT_NAME})
 set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
 
-add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc)
+if (CERES_FOUND)
+    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+endif()
+        
 target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
 set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
 
