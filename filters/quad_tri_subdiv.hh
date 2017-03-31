@@ -55,9 +55,9 @@ void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
             throw std::runtime_error("Non-quad encountered.");
         }
         Point3D center = inVertices[e[0]];
-        center += Point3D(inVertices[e[1]]);
-        center += Point3D(inVertices[e[2]]);
-        center += Point3D(inVertices[e[3]]);
+        center += Point3D(inVertices[e[1]].point);
+        center += Point3D(inVertices[e[2]].point);
+        center += Point3D(inVertices[e[3]].point);
         center /= 4.0;
         // 3rd vertex of each new triangle is the center.
         newTri[2] = outVertices.size();

@@ -52,10 +52,10 @@ void quad_subdiv(const std::vector<Vertex>  &inVertices,
         if (e.size() != 4) throw std::runtime_error("Non-quad encountered.");
 
         // Midpoint vertices
-        Point3D m[4] = { (Point3D(inVertices[e[0]]) + Point3D(inVertices[e[1]])) / 2,
-                         (Point3D(inVertices[e[1]]) + Point3D(inVertices[e[2]])) / 2,
-                         (Point3D(inVertices[e[2]]) + Point3D(inVertices[e[3]])) / 2,
-                         (Point3D(inVertices[e[3]]) + Point3D(inVertices[e[0]])) / 2 };
+        Point3D m[4] = { (Point3D(inVertices[e[0]].point) + Point3D(inVertices[e[1]].point)) / 2,
+                         (Point3D(inVertices[e[1]].point) + Point3D(inVertices[e[2]].point)) / 2,
+                         (Point3D(inVertices[e[2]].point) + Point3D(inVertices[e[3]].point)) / 2,
+                         (Point3D(inVertices[e[3]].point) + Point3D(inVertices[e[0]].point)) / 2 };
 
         Point3D center = (m[0] + m[2]) / 2;
         // Generate/merge new midpoint vertices.

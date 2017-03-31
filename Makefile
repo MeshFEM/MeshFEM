@@ -1,9 +1,11 @@
 include platform_defs.mk
 
 INCLUDES=-I$(CSGFEM) -isystem $(EIGEN_INC) -isystem $(SUITESPARSE_INC) -isystem $(BOOST_INC) \
-		 -isystem $(CERES_INC) -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC) -isystem $(TRIANGLE_INC) \
+		 -isystem $(LIBMATHEVAL_INC) -isystem $(CLIPPER_INC) -isystem $(TRIANGLE_INC) \
 		 $(TBB_IFLAGS)
-LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(CERES_LFLAGS) $(LIBMATHEVAL_LFLAGS)
+LIBS=$(BOOST_LFLAGS) $(SUITESPARSE_LFLAGS) $(LIBMATHEVAL_LFLAGS)
+# INCLUDES+=-isystem $(CERES_INC)
+# LIBS+=-isystem $(CERES_LFLAGS)
 LIBS+=$(TRIANGLE_LFLAGS)
 LIBS+=$(TBB_LFLAGS)
 
@@ -19,7 +21,7 @@ OBJS=$(SIM_OBJS) $(CONVERT_OBJS) $(PERHOMO_OBJS) $(MATOPT_OBJS) $(CSDISP_OBJS) $
 SOURCES=ConstStrainDisplacement_cli.cc DeformedCells_cli.cc PeriodicHomogenization_cli.cc MaterialOptimization_cli.cc Simulate_cli.cc \
 		mesh_convert.cc MeshIO.cc Types.cc BoundaryConditions.cc MSHFieldParser.cc \
         MaterialOptimization.cc Materials.cc
-TARGETS=mesh_convert PeriodicHomogenization_cli MaterialOptimization_cli Simulate_cli ConstStrainDisplacement_cli DeformedCells_cli 
+TARGETS=mesh_convert PeriodicHomogenization_cli Simulate_cli ConstStrainDisplacement_cli DeformedCells_cli # MaterialOptimization_cli 
 
 CPPFLAGS+=-std=c++11 $(WARNING_FLAGS) $(INCLUDES)
 CPPFLAGS+= -DBENCHMARK

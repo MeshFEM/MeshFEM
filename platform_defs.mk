@@ -27,6 +27,16 @@ ifneq (,$(findstring compute,$(HOST)))
     HOST=mercer
 endif
 
+# Assume hostnames like "log-1" are the Prince cluster
+ifneq (,$(findstring log-,$(HOST)))
+    HOST=prince
+endif
+
+# Assume hostnames like "c16-03" are the Prince cluster
+ifneq (,$(findstring c16,$(HOST)))
+    HOST=prince
+endif
+
 # The VGL cluster is all the same
 VLG_HOSTS=banquo blakey cassio ceres django duncan horatio humair iago iris \
 		  juno macbeth othello rose1 rose2 rose3 rose4 texier

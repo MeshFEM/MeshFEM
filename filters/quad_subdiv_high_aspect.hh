@@ -125,8 +125,8 @@ bool quad_subdiv_high_aspect(
         if (e.size() != 4) continue;
         auto &d = elemData[i];
         // TODO: check for non-planar and non-rectangular cases!!!
-        Point3D e0 = Point3D(inVertices[e[1]]) - Point3D(inVertices[e[0]]);
-        Point3D e1 = Point3D(inVertices[e[2]]) - Point3D(inVertices[e[1]]);
+        Point3D e0 = Point3D(inVertices[e[1]].point) - Point3D(inVertices[e[0]].point);
+        Point3D e1 = Point3D(inVertices[e[2]].point) - Point3D(inVertices[e[1]].point);
         if (e0.norm() > (aspectThreshold * e1.norm())) d.splitPair = 0;
         if (e1.norm() > (aspectThreshold * e0.norm())) d.splitPair = 1;
         if (!d.wantsSplit()) continue;
@@ -185,8 +185,8 @@ bool quad_subdiv_high_aspect(
         //      0---------1     0----m0---1
 
         // Midpoint vertices
-        Point3D m[2] = { (Point3D(inVertices[e[0 + ed.splitPair]]) + Point3D(inVertices[e[ 1 + ed.splitPair     ]])) / 2,
-                         (Point3D(inVertices[e[2 + ed.splitPair]]) + Point3D(inVertices[e[(3 + ed.splitPair) % 4]])) / 2, };
+        Point3D m[2] = { (Point3D(inVertices[e[0 + ed.splitPair]].point) + Point3D(inVertices[e[ 1 + ed.splitPair     ]].point)) / 2,
+                         (Point3D(inVertices[e[2 + ed.splitPair]].point) + Point3D(inVertices[e[(3 + ed.splitPair) % 4]].point)) / 2, };
 
         // Look up or generate new midpoint vertices.
         size_t midx[2];

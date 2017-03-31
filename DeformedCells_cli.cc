@@ -290,7 +290,7 @@ void execute(const po::variables_map &args,
                     if (_N > 2) delta[2] = k * bbox.dimensions()[2];
                     auto vtxPosOffset = (jacobian * delta).eval();
                     for (const auto &v : deformedVertices)
-                        tiledVertices.emplace_back((VectorND<_N>(v) + vtxPosOffset).eval());
+                        tiledVertices.emplace_back((truncateFrom3D<VectorND<_N>>(v.point) + vtxPosOffset).eval());
                     for (auto e : inElements) {
                         for (size_t ei = 0; ei < e.size(); ++ei)
                             e[ei] = e[ei] + vtxIdxOffset(i, j, k);
