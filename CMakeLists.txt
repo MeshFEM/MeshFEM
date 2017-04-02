@@ -98,11 +98,6 @@ find_package(Triangle REQUIRED)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
 
-# Clipper library
-find_package(Clipper REQUIRED)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CLIPPER_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CLIPPER_LIBRARIES})
-
 # Matheval library
 find_package(Matheval REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Matheval::matheval)
