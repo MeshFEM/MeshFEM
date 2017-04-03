@@ -14,10 +14,27 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+set(CMAKE_C_FLAGS_RELWITHASSERT          "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT    "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+set(CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+set(CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+set(CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
+mark_as_advanced(
+    CMAKE_CXX_FLAGS_RELWITHASSERT
+    CMAKE_C_FLAGS_RELWITHASSERT
+    CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
+    )
+
 if(NOT CMAKE_BUILD_TYPE)
-	message(STATUS "No build type selected, default to Release")
-	set(CMAKE_BUILD_TYPE "Release")
+    message(STATUS "No build type selected, default to RelWithAssert")
+    set(CMAKE_BUILD_TYPE "RelWithAssert")
 endif()
+
+set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of build. Options are: None Debug Release RelWithDebInfo MinSizeRel RelWithAssert" FORCE)
 
 # Color output
 include(UseColors)
@@ -65,8 +82,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 
-# Hide internal symbols
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+# # Hide internal symbols
+# set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 # C++11 Thread library
 find_package(Threads REQUIRED)
@@ -146,10 +163,9 @@ set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
 
 if (CERES_FOUND)
     add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+    target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
+    set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
 endif()
-        
-target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
-set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
 
 add_executable(Simulate_cli Simulate_cli.cc)
 target_link_libraries(Simulate_cli ${PROJECT_NAME})
