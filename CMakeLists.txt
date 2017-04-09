@@ -52,14 +52,6 @@ include(CMakeToolsHelpers OPTIONAL)
 option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
 
 ################################################################################
-# Configure manual compiler flags based on options
-################################################################################
-
-if(DISABLE_CXX11_ABI_GCC)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-endif()
-
-################################################################################
 # MeshFEM sources
 ################################################################################
 
@@ -73,6 +65,15 @@ add_library(${PROJECT_NAME}
 		Types.cc)
 
 target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+################################################################################
+# Configure manual compiler flags based on options
+################################################################################
+
+if(DISABLE_CXX11_ABI_GCC)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
+
 
 ################################################################################
 # Required libraries
