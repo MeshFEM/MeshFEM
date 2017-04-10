@@ -57,7 +57,7 @@ public:
 
     // Get a single valid, matching node pair that can implement this condition.
     // Guarantees to always return the same pair (and the pair is cached).
-    // Be careful not to requse the same PeriodicPairDirichletCondition with
+    // Be careful not to reuse the same PeriodicPairDirichletCondition with
     // different meshes!
     template<typename Mesh>
     std::pair<size_t, size_t> pair(const Mesh &mesh, Real epsilon = 1e-5) {
@@ -313,8 +313,8 @@ template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const
 template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
 template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
 template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
+template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation

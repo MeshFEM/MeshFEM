@@ -922,6 +922,24 @@ public:
         }
     }
 
+    void applyTranslationPins(const ComponentMask &c) {
+        assert(m_mesh.numBoundaryNodes() > 0);
+        for (size_t d = 0; d < N; ++d) {
+            if (!c.has(d)) continue;
+            // Pin to zero the dth translation component of the
+            // minimally-positioned node along direction d.
+            auto bnMin = m_mesh.boundaryNode(0);
+            for (auto bn : m_mesh.boundaryNodes()) {
+                if (bn.volumeNode()->p[d] < bnMin.volumeNode()->p[d])
+                    bnMin = bn;
+            }
+            ComponentMask dmask;
+            dmask.set(d);
+            assert(bnMin.valid());
+            bnMin->setDirichlet(dmask, VectorND<N>::Zero());
+        }
+    }
+
     // Compute R * u. This is useful for computing a no-rigid-motion right
     // hand side that is compatible with a particular Dirichlet solution.
     void getRigidInnerProduct(const VField &u, std::vector<Real> &innerProduct) const {
@@ -997,7 +1015,7 @@ public:
         else if (needsTranslations.hasAny(N) || (totalConstrained < ((N == 2) ? 3 : 6))) {
             std::cerr << "WARNING: analysis of partial Dirichlet rotational posedness not yet implemented!"
                 << std::endl;
-            std::cerr << "Unconstrained translation components: " << needsTranslations.componentString() << std::endl; 
+            std::cerr << "Unconstrained translation components: " << needsTranslations.componentString() << std::endl;
         }
     }
 

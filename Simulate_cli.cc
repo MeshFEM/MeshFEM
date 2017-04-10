@@ -80,7 +80,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
 template<size_t _N, size_t _Deg>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements) {
     size_t numElements = inElements.size();
     typedef LinearElasticity::Mesh<_N, _Deg> Mesh;
@@ -169,7 +169,9 @@ void execute(const po::variables_map &args,
 
     bool noRigidMotion;
     vector<PeriodicPairDirichletCondition<_N>> pps;
-    auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(), noRigidMotion, pps);
+    ComponentMask pinTranslationComponents;
+    auto bconds = readBoundaryConditions<_N>(bcPath, sim.mesh().boundingBox(), noRigidMotion, pps, pinTranslationComponents);
+    sim.applyTranslationPins(pinTranslationComponents);
     sim.applyBoundaryConditions(bconds);
     sim.applyPeriodicPairDirichletConditions(pps);
     if (noRigidMotion) sim.applyNoRigidMotionConstraint();
