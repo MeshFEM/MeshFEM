@@ -181,3 +181,6 @@ target_link_libraries(ExtractBMatrix ${PROJECT_NAME})
 set_target_properties(ExtractBMatrix PROPERTIES CXX_STANDARD 11)
 
 ################################################################################
+# Include binaries in tools/
+################################################################################
+add_subdirectory(tools)
