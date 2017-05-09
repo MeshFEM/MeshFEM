@@ -254,8 +254,9 @@ void MeshIO_OFF::save(ostream &os, const vector<Vertex> &nodes,
 MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType /* t */) {
     std::string line; getDataLine(is, line);
+    boost::trim(line);
     if (line != "OFF")
-        throw std::runtime_error("Didn't read file magic");
+        throw std::runtime_error("Didn't read file magic; got line '" + line + "'");
 
     getDataLine(is, line);
     std::istringstream iss(line);
