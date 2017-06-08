@@ -23,7 +23,7 @@ std::istream & operator>>(std::istream &is, IOVertex &v) {
         is.setstate(std::ios_base::failbit);
     else
         v = temp;
-    return is; 
+    return is;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +56,7 @@ std::istream & operator>>(std::istream &is, IOElement &e) {
         e = temp;
     else
         is.setstate(std::ios_base::failbit);
-    return is; 
+    return is;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -392,7 +392,7 @@ void MeshIO_STL::save(ostream &os, const vector<Vertex> &nodes,
         Point3D p[] = { nodes.at(e[0]).point,
                         nodes.at(e[1]).point,
                         nodes.at(e[2]).point };
-        
+
         Vector3D e1(p[0] - p[2]), e2(p[1] - p[0]);
         Vector3D normal = e1.cross(e2);
         normal /= normal.norm();
@@ -425,7 +425,7 @@ void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
     // if ((elements.size() < 1) || (elements[0].size() != 3))
     //     throw typeError;
     // #Vertices, 3D, 0 attr, 0 bdry marks
-    os << nodes.size() << " 3 0 0" << std::endl; 
+    os << nodes.size() << " 3 0 0" << std::endl;
     for (size_t i = 0; i < nodes.size(); ++i)
         os << i << ' ' << nodes[i];
     os << elements.size() << " 0" << std::endl; // 0 bdry marks
@@ -534,7 +534,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
         os.write((char *) &one, sizeof(int));
         os << std::endl;
     }
-        
+
     os << "$EndMeshFormat" << std::endl;
     os << "$Nodes" << std::endl << nodes.size() << std::endl;
 
@@ -613,7 +613,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
     std::string line; getDataLine(is, line);
     if (line != "$MeshFormat") throw badFmt;
     double version;
-    int file_type, data_size; 
+    int file_type, data_size;
     is >> version >> file_type >> data_size;
     if ((size_t(file_type) > 1) ||
         (data_size != sizeof(double))) throw unsFmt;
@@ -753,61 +753,69 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
     size_t dim = stoi(tokens.at(1));
     if ((dim != 2) && (dim != 3)) throw runtime_error("Only dimension 2 and 3 supported");
 
-    getDataLine(is, line);
-    if (line != "Vertices") throw badFMT;
-    getDataLine(is, line);
-    size_t numVertices = stoi(line);
-    nodes.reserve(numVertices);
-    for (size_t i = 0; getDataLine(is, line) && i < numVertices; ++i) {
-        tokens = tokenize(line);
-        // Each node entry has dim components plus a reference field
-        if (tokens.size() != dim + 1) throw badFMT;
-        IOVertex v;
-        for (size_t c = 0; c < dim; ++c)
-            v[c] = stod(tokens[c]);
-        nodes.push_back(v);
-    }
-    if (nodes.size() != numVertices) throw badFMT;
-
-    if (line != "Triangles") throw badFMT;
-    getDataLine(is, line);
-    size_t numTriangles = stoi(line);
     vector<Element> triangles;
-    triangles.reserve(numTriangles);
-    for (size_t i = 0; getDataLine(is, line) && i < numTriangles; ++i) {
-        tokens = tokenize(line);
-        // Each triangle entry has 3 indices plus a reference field
-        if (tokens.size() != 4) throw badFMT;
-        triangles.emplace_back(3);
-        for (size_t c = 0; c < 3; ++c)
-            triangles.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
-    }
-    if (triangles.size() != numTriangles) throw badFMT;
-
-    // If only triangles are present, it's a triangle mesh
-    if (line == "End") {
-        elements.swap(triangles);
-        return MESH_TRI;
-    }
-    // The only other thing we support is a tetrahedral mesh
-    if (line != "Tetrahedra") throw badFMT;
-    getDataLine(is, line);
-    size_t numTetrahedra = stoi(line);
     vector<Element> tetrahedra;
-    tetrahedra.reserve(numTetrahedra);
-    for (size_t i = 0; getDataLine(is, line) && i < numTetrahedra; ++i) {
-        tokens = tokenize(line);
-        // Each triangle entry has 4 indices plus a reference field
-        if (tokens.size() != 5) throw badFMT;
-        tetrahedra.emplace_back(4);
-        for (size_t c = 0; c < 4; ++c)
-            tetrahedra.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
-    }
-    if (tetrahedra.size() != numTetrahedra) throw badFMT;
-
-    if (line == "End") {
-        elements.swap(tetrahedra);
-        return MESH_TET;
+    while (getDataLine(is, line)) {
+        if (line == "Vertices") {
+            getDataLine(is, line);
+            size_t numVertices = stoi(line);
+            nodes.reserve(numVertices);
+            for (size_t i = 0; i < numVertices && getDataLine(is, line); ++i) {
+                tokens = tokenize(line);
+                // Each node entry has dim components plus a reference field
+                if (tokens.size() != dim + 1) throw badFMT;
+                IOVertex v;
+                for (size_t c = 0; c < dim; ++c)
+                    v[c] = stod(tokens[c]);
+                nodes.push_back(v);
+            }
+            if (nodes.size() != numVertices) throw badFMT;
+        } else if (line == "Triangles") {
+            getDataLine(is, line);
+            size_t numTriangles = stoi(line);
+            triangles.reserve(numTriangles);
+            for (size_t i = 0; i < numTriangles && getDataLine(is, line); ++i) {
+                tokens = tokenize(line);
+                // Each triangle entry has 3 indices plus a reference field
+                if (tokens.size() != 4) throw badFMT;
+                triangles.emplace_back(3);
+                for (size_t c = 0; c < 3; ++c)
+                    triangles.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
+            }
+            if (triangles.size() != numTriangles) throw badFMT;
+        } else if (line == "Tetrahedra") {
+            getDataLine(is, line);
+            size_t numTetrahedra = stoi(line);
+            tetrahedra.reserve(numTetrahedra);
+            for (size_t i = 0; i < numTetrahedra && getDataLine(is, line); ++i) {
+                tokens = tokenize(line);
+                // Each triangle entry has 4 indices plus a reference field
+                if (tokens.size() != 5) throw badFMT;
+                tetrahedra.emplace_back(4);
+                for (size_t c = 0; c < 4; ++c)
+                    tetrahedra.back()[c] = stoi(tokens[c]) - 1; // medit is 1-indexed
+            }
+            if (tetrahedra.size() != numTetrahedra) throw badFMT;
+        } else if (line == "Edges") {
+            getDataLine(is, line);
+            size_t numEdges = stoi(line);
+            for (size_t i = 0; i < numEdges && getDataLine(is, line); ++i) {
+                // Skip line
+            }
+        } else if (line == "End") {
+            if (!tetrahedra.empty()) {
+                // If tetrahedrons are present, it's a tetrahedral mesh (no joke)
+                elements.swap(tetrahedra);
+                return MESH_TET;
+            } else {
+                // If only triangles are present, it's a triangle mesh
+                elements.swap(triangles);
+                return MESH_TRI;
+            }
+        } else {
+            // Element not supported
+            throw badFMT;
+        }
     }
 
     throw badFMT;
