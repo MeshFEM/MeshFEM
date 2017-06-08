@@ -21,17 +21,17 @@ set(CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during R
 set(CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
 set(CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
 mark_as_advanced(
-    CMAKE_CXX_FLAGS_RELWITHASSERT
-    CMAKE_C_FLAGS_RELWITHASSERT
-    CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT
-    CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT
-    CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT
-    CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
-    )
+	CMAKE_CXX_FLAGS_RELWITHASSERT
+	CMAKE_C_FLAGS_RELWITHASSERT
+	CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT
+	CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT
+	CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT
+	CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
+)
 
 if(NOT CMAKE_BUILD_TYPE)
-    message(STATUS "No build type selected, default to RelWithAssert")
-    set(CMAKE_BUILD_TYPE "RelWithAssert")
+	message(STATUS "No build type selected, default to RelWithAssert")
+	set(CMAKE_BUILD_TYPE "RelWithAssert")
 endif()
 
 set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of build. Options are: None Debug Release RelWithDebInfo MinSizeRel RelWithAssert" FORCE)
@@ -39,7 +39,7 @@ set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of buil
 # Color output
 include(UseColors)
 
-# Export compile flags(used for autocompletion of the C++ code)
+# Export compile flags (used for autocompletion of the C++ code)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 # CMake plugin for vscode
@@ -73,7 +73,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 if(DISABLE_CXX11_ABI_GCC)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
-
 
 ################################################################################
 # Required libraries
@@ -136,16 +135,17 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 
 # Ceres library
 find_package(Ceres)
-if (CERES_FOUND)
-    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
+if(CERES_FOUND)
+	target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
+	target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
 else()
-    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+	message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
 endif()
 
 ################################################################################
 # Independent binaries
 ################################################################################
+
 add_executable(mesh_convert mesh_convert.cc)
 target_link_libraries(mesh_convert ${PROJECT_NAME})
 set_target_properties(mesh_convert PROPERTIES CXX_STANDARD 11)
@@ -162,10 +162,10 @@ add_executable(DeformedCells_cli DeformedCells_cli.cc)
 target_link_libraries(DeformedCells_cli ${PROJECT_NAME})
 set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
 
-if (CERES_FOUND)
-    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-    target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
-    set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
+if(CERES_FOUND)
+	add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+	target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
+	set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
 endif()
 
 add_executable(Simulate_cli Simulate_cli.cc)
@@ -183,4 +183,5 @@ set_target_properties(ExtractBMatrix PROPERTIES CXX_STANDARD 11)
 ################################################################################
 # Include binaries in tools/
 ################################################################################
+
 add_subdirectory(tools)
