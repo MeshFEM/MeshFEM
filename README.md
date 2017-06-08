@@ -1,3 +1,6 @@
+<!-- MarkdownTOC autolink="true" bracket="round" depth=3 -->
+<!-- /MarkdownTOC -->
+
 MeshFEM
 =======
 
@@ -64,7 +67,7 @@ Region box:
 - `N` for forces
 - `MPa` for Young's modulus and traction (same as `N/mm^2`)
 
-### Run the simulation
+### Running the simulation
 
     ./Simulate_cli -m B9Creator.material -b loads.bc -o output.msh <input_mesh>
 
@@ -89,3 +92,32 @@ Output fields:
 - `stress`: per-element stress tensor.
 
 **Note**: per-vertex vector attributes (displacements `u` or `load`) are always stored as `Vector3d`, even in 2D (in which case they are padded with 0). Similarly, `strain` and `stress` tensors are stored as always `3x3` matrices, possibly padde with 0 (for the 2D case).
+
+### Post-processing
+
+To interpret the results of a simulation, the `tools/msh_processor` can be used. E.g.:
+
+    $MeshFEM/build/tools/msh_processor in.msh -e ‘stress’ --eigenvalues --max --max
+
+Will compute the maximum max eigenvalue of the stress field.
+
+    $MeshFEM/build/tools/msh_processor in.msh -e ‘stress’ --eigenvalues --max -o out.msh
+
+Will write a file `out.msh` with a scalar field with the max stress of each element.
+
+
+Homogenization
+--------------
+
+Given a base material, you can homogenize the behavior of a periodic pattern (2D or 3D) in a linearly deformed cell (square in 2D, cube in 3D) by calling the following code:
+
+    DeformedCells_cli examples/meshes/square_hole.off -m $MICRO_DIR/materials/B9Creator.material --homogenize --jacobian '2 0 0 1' --transformVersion
+
+Explanation of the arguments:
+
+- ` --jacobian 'xx xy yx yy'`. This is the Jacobian of the deformation that maps the undeformed square/cube to the deformed configuration.
+
+- `--transformVersion`.
+By default, `DeformedCells_cli` actually warps the periodic mesh into a parallelogram and then runs homogenization. If you pass `--transformVersion` it solves the transformed homogenization problem over the original undeformed mesh (by transforming the printing material properties accordingly and transforming the resulting effective tensor back). Both approaches should give identical results up to roundoff.
+
+- It has an additional mode for the 2D case (`--parametrizedTransform`) where a sequence of deformations are read from stdin (one per line) and the resulting tensor is output for each. These deformations are parametrized by `theta lambda`, which specifies the Jacobian $$J = Rot(\theta) [\lambda\; 0; 0\; 1] Rot(\theta)^T$$.
