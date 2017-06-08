@@ -46,6 +46,7 @@ Example with a file named **`B9Creator.material`**:
 ```
 
 Possible types (non-exhaustive list):
+
 - `dirichlet`: target displacement.
 - `force`: directional load (total).
 - `traction`: directional load (per-unit).
@@ -54,13 +55,37 @@ Possible types (non-exhaustive list):
 **Tip**: Use `dirichletxy` to fix only the X and Y component of a region (then value[0:2] will be used). Same can done with the other types.
 
 Region box:
+
 - `box`: use absolute coordinates.
 - `box%`: relative to the bounding box of the input mesh.
+
+**Units**:
+- `mm` for node positions
+- `N` for forces
+- `MPa` for Young's modulus and traction (same as `N/mm^2`)
 
 ### Run the simulation
 
     ./Simulate_cli -m B9Creator.material -b loads.bc -o output.msh <input_mesh>
 
-Accepted file formats:
-- `input.msh`: tet-mesh only (no triangles)
-- ???
+The only possible output file format is `.msh`.
+
+Accepted input file formats: (non-exhaustive list):
+
+- Tetrahedral meshes:
+  - `.msh`, with tets only (no triangles).
+  - `.mesh`, medit file format.
+- Triangle meshes:
+  - `.off`
+  - `.obj`
+  - `.stl`
+
+Output fields:
+
+- `u`: per-vertex displacement.
+- `load`: per-vertex external forces.
+- `Ku`: per-vertex actual force applied to the shape (including `no_rigid_motion` compensation, and ignoring external forces on Dirichlet nodes).
+- `strain`: per-element strain tensor.
+- `stress`: per-element stress tensor.
+
+**Note**: per-vertex vector attributes (displacements `u` or `load`) are always stored as `Vector3d`, even in 2D (in which case they are padded with 0). Similarly, `strain` and `stress` tensors are stored as always `3x3` matrices, possibly padde with 0 (for the 2D case).
