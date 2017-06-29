@@ -14,46 +14,44 @@
 #define RANDOMACCESSINDEXSET_HH
 
 struct RandomAccessIndexSet {
-    RandomAccessIndexSet(size_t N) : m_inSet(N, false) { }
+    RandomAccessIndexSet(size_t N) : m_locInSetPlusOne(N, 0) { }
 
     // returns true if the set changed
     bool insert(size_t i) {
         if (contains(i)) return false;
         m_indices.push_back(i);
-        m_inSet.at(i) = true;
-        ++m_size;
+        m_locInSetPlusOne.at(i) = m_indices.size();
         return true;
     }
+
+    void remove(size_t i) { removeIndexAtLocation(locOfIndex(i)); }
 
     void removeIndexAtLocation(size_t loc) {
         size_t i = m_indices.at(loc);
         m_indices[loc] = m_indices.back();
         m_indices.resize(m_indices.size() - 1);
 
-        assert(m_inSet.at(i) == true);
-        m_inSet.at(i) = false;
-        assert(m_size > 0);
-        --m_size;
+        assert(contains(i));
+        m_locInSetPlusOne[i] = 0;
     }
 
-    // WARNING: linear time operation
-    size_t findIndex(size_t idx) const {
-        for (size_t loc = 0; loc < m_indices.size(); ++loc)
-            if (m_indices[loc] == idx) return loc;
-        throw std::runtime_error("findIndex error: idx not in RandomAccessIndexSet");
+    size_t locOfIndex(size_t idx) const {
+        size_t loc = m_locInSetPlusOne.at(idx);
+        if (loc == 0) throw std::runtime_error("findIndex error: idx not in RandomAccessIndexSet");
+        --loc;
+        assert(m_indices.at(loc) == idx);
+        return loc;
     }
 
-    size_t indexAtLocation(size_t i) const {
-        return m_indices.at(i);
-    }
+    size_t indexAtLocation(size_t i) const { return m_indices.at(i); }
 
-    size_t size() const { return m_size; }
-    bool  empty() const { return size() == 0; }
+    size_t size() const { return m_indices.size(); }
+    bool  empty() const { return m_indices.empty(); }
 
-    bool contains(size_t i) const { return m_inSet.at(i); }
+    bool contains(size_t i) const { return m_locInSetPlusOne.at(i) > 0; }
 private:
     std::vector<size_t> m_indices;
-    std::vector<bool> m_inSet;
+    std::vector<size_t> m_locInSetPlusOne;
     size_t m_size = 0;
 };
 

@@ -48,6 +48,7 @@ std::tuple<std::string, std::vector<FilterInvocation>, boost::optional<size_t>> 
         ("print,p",                        "Print top of stack")
         ("printName",                      "Print name of value at the top of the stack")
         ("rename,r",  po::value<string>(), "Rename the field(s) at the top of the stack (multiple names separated by commas)")
+        ("setNodePositions",               "Overwrite the mesh node positions with the vector field at the top of the stack (popping the vector field)")
         ("outMSH,o",  po::value<string>(), "Output msh file with named fields for each entry in the stack")
         ;
     po::options_description modifiers("Modifiers: change the behavior of the next operation");

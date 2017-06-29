@@ -139,10 +139,6 @@ protected:
 template<class T>
 struct TypedNamedValue : public NamedValue {
     // Throw exceptions for invalid types.
-    TypedNamedValue(const NamedValue &v) : NamedValue(v) {
-        if (dynamic_cast<const T *>(m_valptr.get()) == nullptr)
-            throw std::runtime_error("Invalid argument");
-    }
     TypedNamedValue(NamedValue &&v) : NamedValue(std::move(v)) {
         if (dynamic_cast<const T *>(m_valptr.get()) == nullptr)
             throw std::runtime_error("Invalid argument");

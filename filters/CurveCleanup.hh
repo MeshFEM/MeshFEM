@@ -52,11 +52,12 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   Real featureAngleThreshold, bool periodic = false,
                   const std::vector<Real> &variableMinLen = std::vector<Real>(),
                   Real cellEpsilon = 1e-5) {
+    // std::cout << "Simplifying curve of len " << curve.size() << std::endl;
     using Point = VectorND<N>;
     using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
     static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
 
-    // Vertices are linked with their outgoing edge.
+    // Vertices are identified with their outgoing edge.
     using  Curve = std::list<Point>;
     using  VtxIt = typename Curve::iterator;
     using EdgeIt = typename Curve::iterator;
@@ -167,14 +168,14 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     auto collapse = [&](VtxIt tail, Point &collapsePt) {
         VtxIt tip = next(tail);
         *tip = collapsePt;
-        curve.erase(tail);
         edgeIndex.erase(tail);
+        curve.erase(tail);
 
         // The lengths of neighboring edges have changed--add any newly created
         // short edges to the short edge queue.
         EdgeIt eprev = prev(tip);
-        size_t  tipIdx = edgeIndex[tip],
-               prevIdx = edgeIndex[eprev];
+        size_t  tipIdx = edgeIndex.at(tip),
+               prevIdx = edgeIndex.at(eprev);
         if (edgeLen(  tip) < getMinLen(tipIdx))   shortEdges.insert(tipIdx);
         if (edgeLen(eprev) < getMinLen(prevIdx)) shortEdges.insert(prevIdx);
     };
@@ -191,7 +192,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 
         // Choose a random short edge to improve quality in case of many merges.
         // If edges are merged in order, the merge point will "walk" around the
-        // curve, causing much more extreme merging than desired.
+        // curve, causing much more extreme merge than desired.
         size_t loc = 0;
         if (shortEdges.size() > 1) {
             std::uniform_int_distribution<int> distribution(0, shortEdges.size() - 1);
@@ -262,16 +263,16 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         else                    continue; // no merge possible
 
         ////////////////////////////////////////////////////////////////////////
-        // Perform the collapse (but first the periodically-corresponding
-        // collapse if periodicity preservation is requested)
+        // Perform the collapse (but first do the periodically-corresponding
+        // collapse if we need to preserve periodicity).
         ////////////////////////////////////////////////////////////////////////
         if (periodic && seFM.count()) {
             // Since we only support the 2D case, the edge should be on only a
             // single period cell face.
-            if (seFM.count() > 1) throw std::runtime_error("ERROR: edge on more than one periodic cell face.");
+            if (seFM.count() > 1) throw std::runtime_error("ERROR: short edge on more than one periodic cell face.");
 
-            // By periodicity, if this is a periodic edge, its pair should also
-            // need collapsing. Do it now to ensure periodicity is maintained.
+            // By periodicity, the periodic pair should also need collapsing;
+            // do it now to maintain periodicity.
             auto pse_map_iter = pair.find(se);
             if (pse_map_iter == pair.end()) throw std::runtime_error("Couldn't find periodic edge pair!");
             EdgeIt pse = pse_map_iter->second;
@@ -287,8 +288,8 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
             }
             assert(flip);
 
-            // Remove the short edge record (linear time!)
-            shortEdges.removeIndexAtLocation(shortEdges.findIndex(pseIdx));
+            // Remove the short edge record
+            shortEdges.remove(pseIdx);
 
             // Remove from our iterator collections the iterators that are about
             // to be erased (invalidated)
@@ -317,29 +318,23 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 #endif
     }
 
-    return;
-
     // Splitting is much easier--periodicity is automatically maintained, and
     // iterators are not invalidated.
-    IteratorSet<EdgeIt> longEdges;
+    // Subdivide each long edge into segments of length geomMean(minLen, maxLen)
+    std::vector<EdgeIt> longEdges;
     for (auto ei = curve.begin(); ei != curve.end(); ++ei)
-        if (edgeLen(ei) > maxLen) longEdges.insert(ei);
-    while (!longEdges.empty()) {
-        auto leEntry = longEdges.begin();
-        EdgeIt le = *leEntry;
-        longEdges.erase(leEntry);
+        if (edgeLen(ei) > maxLen) longEdges.push_back(ei);
+    for (EdgeIt ei : longEdges) {
+        Real targetLen = sqrt(getMinLen(edgeIndex.at(ei)) * maxLen);
+        size_t nSubdiv = ceil(edgeLen(ei) / targetLen);
 
-        const auto &p0 = *le;
-        const auto &p1 = *next(le);
-        // Insert midpoint of p0 and p1 between le and next(le)
-        auto enew = curve.insert(next(le), 0.5 * (p0 + p1));
-        // le is the newly shortened edge, and enew is the newly created edge.
-        // They should both have equal sizes...
-        Real newLen = edgeLen(enew);
-        assert(std::abs(newLen - edgeLen(le)) < 1e-8);
-        if (newLen > maxLen) {
-            longEdges.insert(le);
-            longEdges.insert(enew);
+        const auto &p0 = *ei;
+        const auto &p1 = *next(ei);
+        EdgeIt it = ei;
+        it = next(it);
+        for (size_t i = 1; i < nSubdiv; ++i) {
+            Real alpha = Real(i) / nSubdiv;
+            curve.insert(it, (1 - alpha) * p0 + alpha * p1);
         }
     }
 }

@@ -63,6 +63,17 @@ public:
         // Note: throws exception for mixed element type meshes (as it should).
         return MeshIO::nodesPerElement(m_type);
     }
+
+    // Reposition the nodes in this mesh.
+    template<class PtType>
+    void setNodePositions(const std::vector<PtType> &pos) {
+        const size_t nnodes = numVertices();
+        if (pos.size() != nnodes)
+            throw std::runtime_error("Attempted to reposition nodes with incorrectly sized array.");
+        for (size_t i = 0; i < nnodes; ++i)
+            m_vertices[i].point = pos[i];
+    }
+
     MeshIO::MeshType meshType() const { return m_type; }
 
     size_t numElements() const { return m_elements.size(); }

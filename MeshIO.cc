@@ -637,7 +637,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
 
     nodes.resize(numNodes);
 
-    // We only support the case were nodes are consecutively numbered
+    // We only support the case where nodes are consecutively numbered
     // and 1-indexed (this is the default for gmsh).
     if (m_binary) {
         skipNewline(is);

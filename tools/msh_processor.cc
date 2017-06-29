@@ -38,8 +38,6 @@
 //      TODO: store element *index* on interpolant: binary operations can only
 //      act on a pair of interpolants with matching element index.
 //
-//      TODO: Add "expression" that can generate scalar/vector fields as
-//      functions of the stack top.
 //      TODO: Add "setNodePositions" operation that repositions the mesh nodes
 //      to the locations specified by the vector field at the top of the stack.
 */ 
@@ -143,9 +141,9 @@ TypedNamedValue<T> &getTypedValue(Stack &stack, size_t offset = 0) {
 
 template<typename T>
 TypedNamedValue<T> popTypedValue(Stack &stack) {
-    TypedNamedValue<T> tVal(std::move(getTypedValue<T>(stack)));
+    NamedValue val = std::move(stack.back());
     stack.pop_back();
-    return tVal;
+    return std::move(val);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -654,6 +652,19 @@ size_t rename(const string &op, const string &arg, Stack &stack, const Modifiers
     return names.size();
 }
 
+template<size_t N>
+size_t setNodePositions(const string &, const string &arg, Stack &stack, const Modifiers &) {
+    const auto &top = popTypedValue<FVValue>(stack);
+
+    size_t nVals = top->size();
+    std::vector<PointND<3>> newPositions(nVals);
+    for (size_t i = 0; i < nVals; ++i)
+        newPositions[i] = top->operator[](i).value;
+
+    getMutableParser<N>().setNodePositions(newPositions);
+    return 0;
+}
+
 template<class R>
 size_t applyReduction(const string &op, const string &arg, Stack &stack, const Modifiers &m) {
     auto top = popValue(stack);
@@ -733,6 +744,7 @@ void execute(vector<FilterInvocation> &filters) {
         {"import_sfield", Filter::importScalarField<N>},
         {"import_vfield", Filter::importVectorField<N>},
         {"reverse",       Filter::reverse},
+        {"setNodePositions", Filter::setNodePositions<N>},
         {"outMSH",        Filter::outputMSH<N>},
 
         {"transferFieldsToPerElem", Filter::elementBarycenterFieldTransfer<N>},
