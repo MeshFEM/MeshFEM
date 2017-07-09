@@ -15,7 +15,7 @@
 //  For vector fields, the resulting flattened vector looks like:
 //      [v_0x, v_0y, v_0z, v_1x, ..., v_|D|z]
 //  This vector can be obtained with the getFlattened() method.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  02/13/2013 16:27:14
@@ -337,7 +337,7 @@ public:
 
     SymmetricMatrixField(size_t domainSize = 0)
         : m_values(dim(), domainSize) { }
-    
+
     constexpr size_t dim() const { return flatLen(t_N); }
     size_t N()   const { return t_N; }
     size_t domainSize() const { return m_values.cols(); }
@@ -512,7 +512,7 @@ public:
         }
         return os;
     }
-    
+
 private:
     size_t m_dim;
     std::vector<_Real> m_storage;
