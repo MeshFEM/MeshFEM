@@ -18,7 +18,7 @@ struct DivOp : public BinaryOp { virtual Real operator()(Real a, Real b) const {
 template<class T1, class T2, typename = void>
 struct BinaryOpImpl {
     using ResultType = T1; // ResultType can be arbitrary since actual results aren't generated.
-    static std::unique_ptr<ResultType> apply(const BinaryOp &op, T1, T2) {
+    static std::unique_ptr<ResultType> apply(const BinaryOp &/* op */, T1, T2) {
         throw std::runtime_error(std::string("Illegal binary operation between ") + typeid(T1).name() + " and " + typeid(T2).name());
     }
 };
@@ -173,7 +173,7 @@ struct BinaryOpImpl<SValue, SValue> {
 // need to implement this inner lookup.
 // Do this with a sequence of automatically generated dynamic cast type checks.
 template<class T1>
-UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &op, const T1 &a, CVPtr b) { throw std::runtime_error("Unknown dynamic type: " + std::string(typeid(*b).name())); }
+UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &/* op */, const T1 &, CVPtr b) { throw std::runtime_error("Unknown dynamic type: " + std::string(typeid(*b).name())); }
 template<class T1, class TCheck, class... Args>
 UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &op, const T1 &a, CVPtr b) {
     if (auto val = dynamic_cast<const TCheck *>(b)) return BinaryOpImpl<T1, TCheck>::apply(op, a, *val);

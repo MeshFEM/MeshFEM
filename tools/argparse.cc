@@ -128,7 +128,7 @@ std::tuple<std::string, std::vector<FilterInvocation>, boost::optional<size_t>> 
     bool helpReq = false;
     string mshFile;
     vector<FilterInvocation> filters;
-    boost::optional<size_t> forcedDim;
+    auto forcedDim = boost::make_optional(false, size_t()); // work around maybe-uninitialized GCC warning bug
     for (const auto &opt : parsedOptions->options) {
         if (opt.string_key == "msh") { ++numMeshes; mshFile = opt.value[0]; }
         else if (opt.string_key == "help") helpReq = true;

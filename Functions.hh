@@ -309,7 +309,7 @@ public:
     using SP::numNodalValues;
     using SP::SP;
     Interpolant() : SP() { } // Can't seem to inherit the default constructor...
-    Interpolant(const Interpolant &b) { *this = b; }
+    Interpolant(const Interpolant &b) : SP(), InterpolantBase() { *this = b; }
     Interpolant(Interpolant &&b) : SP(std::move(b)) { }
 
     // Allow a promoting conversion constructor from interpolants of the

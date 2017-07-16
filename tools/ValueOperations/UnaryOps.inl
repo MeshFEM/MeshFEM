@@ -17,7 +17,7 @@ struct ScaleOp : public UnaryOp { virtual Real operator()(Real a) const { return
 private:
     Real m_s;
 };
-struct SetOp   : public UnaryOp { virtual Real operator()(Real a) const { return m_s; };
+struct SetOp   : public UnaryOp { virtual Real operator()(Real /* a */) const { return m_s; };
     SetOp(const std::string &arg) { setArg(arg); }
     virtual void setArg(const std::string &arg) { m_s = parseRealArg(arg); }
 private:

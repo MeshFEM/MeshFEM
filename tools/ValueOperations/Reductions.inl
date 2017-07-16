@@ -90,7 +90,7 @@ struct OneDimensionalReductionImpl {
 template<class T, typename = void>
 struct InnerReductionImpl {
     using ResultType = T;
-    static ResultType apply(Reduction &r, const T &val) { throw std::runtime_error("Illegal reduction on type " + std::string(typeid(T).name())); }
+    static ResultType apply(Reduction &, const T &) { throw std::runtime_error("Illegal reduction on type " + std::string(typeid(T).name())); }
 };
 
 // Terminal case: we've reached the innermost indexed object
@@ -139,7 +139,7 @@ std::unique_ptr<IRT<T>> applyInnerReduction(Reduction &r, const T &val) {
 template<class T, typename = void>
 struct OuterReductionImpl {
     using ResultType = T;
-    static ResultType apply(Reduction &r, const T &val) { throw std::runtime_error("Illegal reduction on type " + std::string(typeid(T).name())); }
+    static ResultType apply(Reduction &/* r */, const T &/* val */) { throw std::runtime_error("Illegal reduction on type " + std::string(typeid(T).name())); }
 };
 
 // 1D object case is trivial...

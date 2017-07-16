@@ -1,13 +1,13 @@
 // Types not supporting averaging.
 template<class T, typename>
-struct ElmAvgImpl { static UVPtr run(const T &val, const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) { throw std::runtime_error("Invalid operand for elementAverage"); } };
+struct ElmAvgImpl { static UVPtr run(const T &/* val */, const std::vector<MeshIO::IOElement> &/* elems */, size_t /* meshDeg */, size_t /* meshDim */) { throw std::runtime_error("Invalid operand for elementAverage"); } };
 
 // Plain interpolant types.
 template<class _PointValue>
 struct ElmAvgImpl<InterpolantValue<_PointValue>> {
     using ResultType = _PointValue;
     using URPtr = std::unique_ptr<ResultType>;
-    static URPtr run(const InterpolantValue<_PointValue> &val, const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) {
+    static URPtr run(const InterpolantValue<_PointValue> &val, const std::vector<MeshIO::IOElement> &/* elems */, size_t /* meshDeg */, size_t /* meshDim */) {
         return std::make_unique<ResultType>(val.average());
     }
 };
@@ -42,7 +42,7 @@ template<class _PointValue>
 struct ElmAvgImpl<FieldValue<InterpolantValue<_PointValue>>, typename enable_if_point_value<_PointValue>::type> {
     using ResultType = FieldValue<_PointValue>;
     using URPtr = std::unique_ptr<ResultType>;
-    static URPtr run(const FieldValue<InterpolantValue<_PointValue>> &val, const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim) {
+    static URPtr run(const FieldValue<InterpolantValue<_PointValue>> &val, const std::vector<MeshIO::IOElement> &elems, size_t /* meshDeg */, size_t /* meshDim */) {
         size_t nElems = elems.size();
         if (val.domainType == DomainType::PER_ELEMENT) { 
             if (val.size() != nElems) throw std::runtime_error("Invalid interpolant field size");

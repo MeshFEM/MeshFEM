@@ -3,8 +3,8 @@ template<class _Val>
 struct SmoothedElmFldImpl {
     using ResultType = _Val; // Dummy
     using URPtr = std::unique_ptr<ResultType>;
-    static URPtr run(const _Val &val, const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim,
-                     const std::vector<Real> &volumes, const MeshConnectivity &conn) {
+    static URPtr run(const _Val &/* val */, const std::vector<MeshIO::IOElement> &/* elems */, size_t /* meshDeg */, size_t /* meshDim */,
+                     const std::vector<Real> &/* volumes */, const MeshConnectivity &/* conn */) {
         throw std::runtime_error("smoothedElementField only acts on FieldValues");
     }
 };
