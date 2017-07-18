@@ -12,6 +12,7 @@
 #ifndef FUTURE_HH
 #define FUTURE_HH
 #include <memory>
+#include <utility>
 
 namespace Future {
 
@@ -52,6 +53,50 @@ template<class F, typename Tuple>
 auto apply(const F &f, Tuple &&t) -> decltype(detail::Apply<detail::TSize<Tuple>::value>::run(f, std::forward<Tuple>(t))) {
     return detail::Apply<detail::TSize<Tuple>::value>::run(f, std::forward<Tuple>(t));
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// make_integer_sequence/make_index_sequence
+// Construct an integer_sequence containing 0..N
+////////////////////////////////////////////////////////////////////////////////
+template<typename T, T... Ints>
+struct integer_sequence { using type = integer_sequence; };
+
+template<size_t... I>
+using index_sequence = integer_sequence<size_t, I...>;
+
+namespace detail {
+    template<typename IS1, typename IS2> struct Merger;
+
+    template<size_t... Ints1, size_t... Ints2>
+    struct Merger<index_sequence<Ints1...>,
+                  index_sequence<Ints2...>> {
+        static constexpr size_t leftSize = sizeof...(Ints1);
+        using type = index_sequence<Ints1..., (leftSize + Ints2)...>;
+    };
+
+    template<size_t N>
+    struct MIXS {
+        using type = typename Merger<typename MIXS<    N / 2>::type,
+                                     typename MIXS<N - N / 2>::type>::type;
+    };
+
+    template<> struct MIXS<1> { using type = index_sequence<0>; };
+    template<> struct MIXS<0> { using type = index_sequence<>; };
+
+    template<typename T, typename IXSeq>
+    struct ISTyper;
+
+    template<typename T, size_t... Idxs>
+    struct ISTyper<T, index_sequence<Idxs...>> {
+        using type = integer_sequence<T, (T(Idxs))...>;
+    };
+}
+
+template<size_t N>
+using make_index_sequence = typename detail::MIXS<N>::type;
+
+template<typename T, T N>
+using make_integer_sequence = typename detail::ISTyper<T, typename detail::MIXS<N>::type>::type;
 
 }
 
