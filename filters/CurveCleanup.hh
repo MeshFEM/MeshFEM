@@ -35,6 +35,8 @@
 #include <random>
 #include <utility>
 
+#include <boost/optional.hpp>
+
 #include "extract_polygons.hh"
 #include "../PeriodicBoundaryMatcher.hh"
 #include "../MeshIO.hh"
@@ -45,11 +47,14 @@
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.
 // We take advantage of this representation to identify edge v0->v1 with vertex v0.
+// cellBdryEdgeLen: if set, determines the resolution at which the boundary is
+// meshed. Otherwise, the cell boundary edges are left unsubdivided.
 template<size_t N>
 void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
                   Real featureAngleThreshold, bool periodic = false,
+                  boost::optional<Real> cellBdryEdgeLen = boost::optional<Real>(),
                   const std::vector<Real> &variableMinLen = std::vector<Real>(),
                   Real cellEpsilon = 1e-5) {
     // std::cout << "Simplifying curve of len " << curve.size() << std::endl;
@@ -218,7 +223,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // is on. The exception is when this merge would create a non-manifold
         // vertex in the tiled mesh.
         // This exceptional case happens when neither of the two adjacent edges
-        // lines on the same cell face.
+        // lies on the same cell face.
         // These are hard constraints; never perform merges that violate them.
         FMembership fm0(*v0, cell, cellEpsilon), fm1(*v1, cell, cellEpsilon);
         bool merge01 = (fm0 <= fm1), merge10 = (fm1 <= fm0);
@@ -233,12 +238,6 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
         // If neither neighbor is on the same cell face, block collapse
         if ((seFM != nextEdgeFM) && (seFM != prevEdgeFM))
             merge01 = merge10 = false;
-
-        // verbose = (((*v0)[1] > 0.99951171875) || ((*v1)[1] > 0.99951171875));
-        // if (verbose) {
-        //     std::cout << "v0 [" << (*v0)[0] << ", " << (*v0)[1] << "], fm: " << fm0 << std::endl;
-        //     std::cout << "v1 [" << (*v1)[0] << ", " << (*v1)[1] << "], fm: " << fm1 << std::endl;
-        // }
 
         // We try to avoid merging a feature vertex into another vertex.
         // However, we never let the existence of features prevent a merge:
@@ -321,11 +320,30 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
     // Splitting is much easier--periodicity is automatically maintained, and
     // iterators are not invalidated.
     // Subdivide each long edge into segments of length geomMean(minLen, maxLen)
+    // Only subdivide cell boundary edges if the cellBdryEdgeLen option was
+    // passed.
     std::vector<EdgeIt> longEdges;
-    for (auto ei = curve.begin(); ei != curve.end(); ++ei)
-        if (edgeLen(ei) > maxLen) longEdges.push_back(ei);
-    for (EdgeIt ei : longEdges) {
+    std::vector<bool>   isLECellBoundaryEdge;
+    {
+        size_t i = 0;
+        std::vector<FMembership> fm;
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(curve, cell, fm, cellEpsilon);
+        for (auto ei = curve.begin(); ei != curve.end(); ++ei, ++i) {
+            if (edgeLen(ei) > maxLen) {
+                longEdges.push_back(ei);
+                isLECellBoundaryEdge.push_back(
+                    ((fm.at(i) & fm.at((i + 1) % curve.size())).onAnyFace()));
+            }
+        }
+    }
+
+    for (size_t li = 0; li < longEdges.size(); ++li) {
+        EdgeIt ei = longEdges[li];
         Real targetLen = sqrt(getMinLen(edgeIndex.at(ei)) * maxLen);
+        if (isLECellBoundaryEdge[li]) {
+            if (cellBdryEdgeLen) targetLen = *cellBdryEdgeLen;
+            else                 continue;
+        }
         size_t nSubdiv = ceil(edgeLen(ei) / targetLen);
 
         const auto &p0 = *ei;
