@@ -46,7 +46,6 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
                   Real cellEpsilon = 1e-5) {
     if (variableMinLen.size() > 0)
         throw std::runtime_error("Curve resampling does not yet support spatial adaptivity.");
-    // std::cout << "Simplifying curve of len " << curve.size() << std::endl;
     using Point = VectorND<N>;
     using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
 
@@ -88,7 +87,7 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
     }
 
     VtxIt segmentStart = start;
-    while (true) {
+    do {
         // Find the end of this segment (the next feature vertex, if one exists.)
         VtxIt segmentEnd = next(segmentStart);
         while (!isFeature(segmentEnd) && (segmentEnd != start))
@@ -96,7 +95,7 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
 
         // Determine if this segment lies on a cell boundary
         auto segmentFM = FMembership(*segmentEnd, cell, cellEpsilon);
-        for (VtxIt it = segmentStart; it != segmentEnd; ++it)
+        for (VtxIt it = segmentStart; it != segmentEnd; it = next(it))
             segmentFM &= FMembership(*it, cell, cellEpsilon);
 
         // For segments on the cell boundary, either remesh at resolution
@@ -132,7 +131,7 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
                     loc += distToNext;
                     distToNext = spacing;
                     Point pt = p + (loc / elen) * (pn - p);
-                    if (newPts.size() == nSubdiv - 1) // Apart from numerical issues, we should generate exactly nSubdiv - 1
+                    if (newPts.size() == nSubdiv - 1) // In absence of numerical issues, we should generate exactly nSubdiv - 1
                         assert((pt - *segmentEnd).norm() < 1e-8);
                     else
                         newPts.emplace_back(pt);
@@ -151,10 +150,8 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
                 curve.insert(segmentEnd, p);
         }
 
-        if (segmentEnd == start)
-            break; // This was the last segment; we're done.
         segmentStart = segmentEnd;
-    }
+    } while (segmentStart != start);
 }
 
 #endif /* end of include guard: RESAMPLECURVE_HH */
