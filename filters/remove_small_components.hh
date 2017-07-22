@@ -14,73 +14,54 @@
 
 #include <queue>
 #include <vector>
+#include <algorithm>
+#include "../algorithms/get_element_components.hh"
+#include "../algorithms/remove_if_index.hh"
 #include "remove_dangling_vertices.hh"
 
+// Remove small components based on pre-computed partitioning
 // Returns true iff the mesh is altered, in which case the new mesh can be
 // found in [vertices, elements].
 // (Otherwise vertices and elements arrays are unmodified.)
+// componentIndex: index of the component into which each element falls
+// componentSize:  number of elements in each component
+bool remove_small_components(const std::vector<size_t> &componentIndex,
+                             const std::vector<size_t> &componentSize,
+                             std::vector<MeshIO::IOVertex> &vertices,
+                             std::vector<MeshIO::IOElement>&elements) {
+    const size_t numComponents = componentSize.size();
+    const size_t origSize = elements.size();
+    if (numComponents == 1) return false; // Already a single component.
+
+    assert(numComponents > 0);
+    assert(componentIndex.size() == origSize);
+
+    size_t largestComponent = std::distance(
+            componentSize.begin(),
+            std::max_element(componentSize.begin(), componentSize.end())
+    );
+
+    auto newEnd = remove_if_index(elements.begin(), elements.end(),
+            [&](size_t i) { return componentIndex[i] != largestComponent; });
+    elements.erase(newEnd, elements.end());
+
+    // By removing elements, we have created dangling vertices we must remove.
+    remove_dangling_vertices(vertices, elements);
+    return true;
+}
+
+// Version first determining the connected components of "elements" using
+// simplicial mesh "m" to determine connectivity.
 template<class Mesh>
 bool remove_small_components(const Mesh &m,
                              std::vector<MeshIO::IOVertex> &vertices,
                              std::vector<MeshIO::IOElement>&elements) {
     if (m.numSimplices() == 0) return false;
 
-    // Components are numbered 1..numComponents in component array,
-    // but indexed as 0..numComponents-1 in componentSizes
-    std::vector<size_t> component(m.numSimplices(), 0);
-    std::vector<size_t> componentSizes;
-
-    // Element (dual) BFS.
-    std::queue<size_t> bfsQueue;
-    for (auto e : m.simplices()) {
-        if (component.at(e.index()) != 0) continue;
-        componentSizes.push_back(0);
-        const size_t currComponent = componentSizes.size();
-
-        component[e.index()] = currComponent;
-        bfsQueue.push(e.index());
-        while (!bfsQueue.empty()) {
-            size_t u = bfsQueue.front();
-            bfsQueue.pop();
-
-            for (auto ne : m.simplex(u).neighbors()) {
-                if (!ne) continue; // nonexistent neighbors are iterated too.
-                size_t v = ne.index();
-                if (component.at(v) != currComponent) {
-                    assert(component[v] == 0);
-                    component[v] = currComponent;
-                    bfsQueue.push(v);
-                    ++componentSizes[currComponent - 1];
-                }
-            }
-        }
-    }
-    const size_t numComponents = componentSizes.size();
-    assert(numComponents > 0);
-    if (numComponents == 1) return false; // Already a single component.
-
-    size_t largestComponent = std::distance(
-            componentSizes.begin(),
-            std::max_element(componentSizes.begin(), componentSizes.end())
-        );
-    ++largestComponent; // convert from index to component number.
-    assert((largestComponent  > 0) && (largestComponent <= numComponents));
-
-    elements.clear();
-    for (auto e : m.simplices()) {
-        assert(component.at(e.index()) != 0);
-        if (component.at(e.index()) == largestComponent) {
-            elements.emplace_back(e.numVertices());
-            auto &outE = elements.back();
-            outE.clear();
-            for (auto v : e.vertices())
-                outE.push_back(v.index());
-        }
-    }
-
-    // By removing elements, we have created dangling vertices we must remove.
-    remove_dangling_vertices(vertices, elements);
-    return true;
+    std::vector<size_t> componentIndex;
+    std::vector<size_t> componentSize;
+    get_element_components(m, componentIndex, componentSize);
+    return remove_small_components(componentIndex, componentSize, vertices, elements);
 }
 
 

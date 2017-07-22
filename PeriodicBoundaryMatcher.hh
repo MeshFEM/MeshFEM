@@ -25,6 +25,8 @@
 
 namespace PeriodicBoundaryMatcher {
 
+static constexpr size_t NONE = std::numeric_limits<size_t>::max();
+
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic Cell Face Membership
 ////////////////////////////////////////////////////////////////////////////////
@@ -171,7 +173,6 @@ void match(const PointCollection &bdryPoints,
             cgrid.addPoint(p, i);
     }
 
-    static constexpr size_t NONE = std::numeric_limits<size_t>::max();
     nodeSetForNode.assign(bdryPoints.size(), NONE);
 
     // Determine number of nodesets.
@@ -257,7 +258,6 @@ void matchPermittingMismatch(const PointCollection &bdryPoints,
         std::vector<size_t>                  &nodeSetForNode,
         Real epsilon = 1e-7)
 {
-    static constexpr size_t NONE = std::numeric_limits<size_t>::max();
     assert(bdryPoints.size() == faceMembership.size());
     const size_t numBdryPts = bdryPoints.size();
 

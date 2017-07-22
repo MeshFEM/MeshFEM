@@ -571,7 +571,8 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
         for (size_t i = 1; i <= elements.size(); ++i) {
             os.write((char *) &i, sizeof(int));
             if (elements[i - 1].size() != (size_t) ei.nodesPerElem)
-                throw std::runtime_error("Illegal sized element");
+                throw std::runtime_error("Illegal sized element (" + std::to_string(elements[i - 1].size())
+                        + " vs " + std::to_string(ei.nodesPerElem) + ")");
             for (size_t c = 0; c < ei.nodesPerElem; ++c) {
                 int cidx = (int) (elements[i - 1][c] + 1);
                 os.write((char *) &cidx, sizeof(int));
@@ -583,7 +584,8 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
         for (size_t i = 0; i < elements.size(); ++i) {
             os << i + 1 << " " << ei.elementType << " " << 0 /* no tags */;
             if (elements[i].size() != (size_t) ei.nodesPerElem)
-                throw std::runtime_error("Illegal sized element");
+                throw std::runtime_error("Illegal sized element (" + std::to_string(elements[i - 1].size())
+                        + " vs " + std::to_string(ei.nodesPerElem) + ")");
             for (size_t c = 0; c < ei.nodesPerElem; ++c)
                 os << " " << elements[i][c] + 1;
             os << std::endl;
