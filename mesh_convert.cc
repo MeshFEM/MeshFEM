@@ -198,7 +198,7 @@ int main(int argc, const char *argv[])
     if (inVertices.size() != origSize)
         cout << "WARNING: " << origSize - inVertices.size()
              << " dangling vertice(s) removed" << endl;
-    
+
     if (inElements.size() == 0) throw runtime_error("No elements read.");
 
     if (args.count("reorientNegativeElements")) {
@@ -537,7 +537,7 @@ int main(int argc, const char *argv[])
         throw runtime_error("Unrecognized mesh type.");
     }
 
-    if (outPath != "") save(outPath, outVertices, outElements); 
+    if (outPath != "") save(outPath, outVertices, outElements);
 
     return 0;
 }

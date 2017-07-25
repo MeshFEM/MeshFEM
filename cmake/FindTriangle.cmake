@@ -30,6 +30,8 @@ find_package_handle_standard_args(Triangle
   "Triangle could not be found."
   Triangle_LIBRARIES Triangle_INCLUDE_DIRS)
 
+# message(STATUS "Triangle: " ${Triangle_INCLUDE_DIRS} " " ${Triangle_LIBRARIES})
+
 mark_as_advanced(
   Triangle_INCLUDE_DIRS
   Triangle_LIBRARIES

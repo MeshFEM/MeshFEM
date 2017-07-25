@@ -74,6 +74,21 @@ inline void freeIO(triangulateio &in, triangulateio &out) {
     if (out.trianglelist          && (out.trianglelist          != in.trianglelist)         ) trifree((VOID *)out.trianglelist);
 }
 
+template<typename Vertices, typename Edges>
+void write_poly(const std::string &filename, const Vertices &v, const Edges &e) {
+    using namespace std;
+    std::ofstream out(filename);
+    out << v.size() << " 2 0 0" << endl;
+    for (size_t i = 0; i < v.size(); ++i) {
+        out << i << ' ' << v[i][0] << ' ' << v[i][1] << endl;
+    }
+    out << e.size() << ' ' << e.size() << endl;
+    for (size_t i = 0; i < e.size(); ++i) {
+        out << i << ' ' << e[i].first << ' ' << e[i].second << " 1" << endl;
+    }
+    out << "0\n" << endl;
+}
+
 // Largely taken from Luigi/Nico's tessellator2d.h
 template<class _EdgeSoup, class HolePoint>
 void triangulatePSLC(const _EdgeSoup &edgeSoup,
@@ -103,6 +118,7 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     for (const auto &p : edgeSoup.points()) {
         in.pointlist[i++] = p[0];
         in.pointlist[i++] = p[1];
+        // std::cout << "p: " << p[0] << ' ' << p[1] << std::endl;
     }
 
     // fill triangle input structure with boundary segments
@@ -112,6 +128,7 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         in.segmentlist[2 * i    ] = EdgeAccessAdaptor<EdgeType>:: first(e);
         in.segmentlist[2 * i + 1] = EdgeAccessAdaptor<EdgeType>::second(e);
         in.segmentmarkerlist[i] = 1; // mark each segment as boundary
+        // std::cout << "e3: " << in.segmentlist[2 * i    ] << ' ' << in.segmentlist[2 * i  +1  ] << std::endl;
         ++i;
     }
 
@@ -120,12 +137,22 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     for (const auto &h : holes) {
         in.holelist[i++] = h[0];
         in.holelist[i++] = h[1];
+        // std::cout << "h: " << h[0] << ' ' << h[1] << std::endl;
     }
+    // write_poly("out.poly", edgeSoup.points(), edgeSoup.edges());
 
     std::stringstream flags_stream;
     flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
     std::string flags = flags_stream.str();
     // std::cout << "Running triangulate with flags " << flags << std::endl;
+    // {
+    //     std::cout << sizeof(triangulateio) << std::endl;
+    //     std::ofstream file("in.bin", std::ios::binary);
+    //     file.write(reinterpret_cast<const char*>(&in), sizeof(triangulateio));
+    //     file.write(reinterpret_cast<const char *>(in.pointlist), in.numberofpoints   * 2 * sizeof(REAL));
+    //     file.write(reinterpret_cast<const char *>(in.segmentlist), in.numberofsegments * 2 * sizeof(int));
+    //     file.write(reinterpret_cast<const char *>(in.segmentmarkerlist), in.numberofsegments * sizeof(int));
+    // }
     triangulate(const_cast<char *>(flags.c_str()), &in, &out, NULL);
     // std::cout << "Triangulate finished." << std::endl;
 
@@ -216,7 +243,7 @@ inline void refineTriangulation(
     // Optionally fill with per-triangle areas
     bool hasPerTriangleArea = perTriangleArea.size() == nt;
     if (hasPerTriangleArea) {
-        in.trianglearealist = (REAL *) malloc(nt * sizeof(REAL)); 
+        in.trianglearealist = (REAL *) malloc(nt * sizeof(REAL));
         for (size_t i = 0; i < nt; ++i)
             in.trianglearealist[i] = perTriangleArea[i];
     }

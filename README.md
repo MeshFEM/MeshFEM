@@ -91,7 +91,7 @@ Output fields:
 - `strain`: per-element strain tensor.
 - `stress`: per-element stress tensor.
 
-**Note**: per-vertex vector attributes (displacements `u` or `load`) are always stored as `Vector3d`, even in 2D (in which case they are padded with 0). Similarly, `strain` and `stress` tensors are stored as always `3x3` matrices, possibly padde with 0 (for the 2D case).
+**Note**: per-vertex vector attributes (displacements `u` or `load`) are always stored as `Vector3d`, even in 2D (in which case they are padded with 0). Similarly, `strain` and `stress` tensors are stored as always `3x3` matrices, possibly padded with 0 (for the 2D case).
 
 ### Post-processing
 
