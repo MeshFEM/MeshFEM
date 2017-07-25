@@ -33,7 +33,7 @@ struct RandomAccessIndexSet {
     void removeIndexAtLocation(size_t loc) {
         size_t i = m_indices.at(loc);
         m_indices[loc] = m_indices.back();
-        m_indices.resize(m_indices.size() - 1);
+        m_indices.pop_back();
 
         assert(contains(i));
         m_locInSetPlusOne[i] = 0;
