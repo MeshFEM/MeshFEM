@@ -40,7 +40,7 @@ namespace details {
         return std::distance(adl_begin(container), adl_end(container));
     }
 
-    template <typename C> size_t size(C& container, chooser<0>) { return 0; } // size deduction failed
+    template <typename C> size_t size(C& /* container */, chooser<0>) { return 0; } // size deduction failed
 
     template <typename C>
     size_t size(C& container) { return size(container, details::chooser<10>{}); }

@@ -23,6 +23,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <iomanip>
+#include <iostream>
 #include <vector>
 
 namespace MeshIO {
@@ -388,6 +389,10 @@ namespace MeshIO {
     template<class _EdgeSoup>
     enable_if_models_concept_t<Concepts::EdgeSoup, _EdgeSoup, void>
     save(const std::string &path, const _EdgeSoup &edgeSoup, Format format = FMT_GUESS, MeshType type = MESH_GUESS) {
+        if (edgeSoup.points().size() == 0) {
+            std::cerr << "WARNING: tried to save empty mesh; skipped." << std::endl;
+            return;
+        }
         std::vector<IOVertex>  vertices;
         std::vector<IOElement> elements;
         for (const auto &p : edgeSoup.points()) vertices.emplace_back(p);
