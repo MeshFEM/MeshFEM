@@ -29,6 +29,13 @@ bool remove_small_components(const std::vector<size_t> &componentIndex,
                              const std::vector<size_t> &componentSize,
                              std::vector<MeshIO::IOVertex> &vertices,
                              std::vector<MeshIO::IOElement>&elements) {
+    if (elements.size() == 0) {
+        size_t origNV = vertices.size();
+        remove_dangling_vertices(vertices, elements);
+        std::cerr << "WARNING: remove_small_components called on empty mesh" << std::endl;
+        return vertices.size() != origNV;
+    }
+
     const size_t numComponents = componentSize.size();
     const size_t origSize = elements.size();
     if (numComponents == 1) return false; // Already a single component.
