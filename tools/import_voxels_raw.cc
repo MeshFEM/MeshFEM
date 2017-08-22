@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
     string rawfile(argv[1]), outfile(argv[5]);
-    array<size_t, 3> dims = {
+    array<size_t, 3> dims = {{
         size_t(stoi(argv[2])),
         size_t(stoi(argv[3])),
         size_t(stoi(argv[4]))
-    };
+    }};
 
     size_t size = dims[0] * dims[1] * dims[2];
 
