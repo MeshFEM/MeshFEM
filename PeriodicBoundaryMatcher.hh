@@ -215,8 +215,23 @@ void match(const PointCollection &bdryPoints,
                 if (result.first < 0) {
                     std::stringstream ss;
                     ss << "Couldn't find " << n << "th periodic-identified node "
-                       << "for minimal boundary node " << i << " at " << p
-                       << "; looking for " << query << std::endl;
+                       << "for minimal boundary node " << i << " at " << p.transpose()
+                       << "; looking for " << query.transpose() << std::endl;
+
+
+                    double closestDist = std::numeric_limits<double>::max();
+                    auto closestPt = bdryPoints.front();
+                    for (const auto &pp : bdryPoints) {
+                        double dist = (query - pp).norm();
+                        if (dist < closestDist) {
+                            closestPt = pp;
+                            closestDist = dist;
+                        }
+                    }
+
+                    ss << "Closest candidate at distance " << closestDist << ":\t";
+                    ss << closestPt.transpose() << std::endl;
+
                     throw std::runtime_error(ss.str());
                 }
                 size_t pair = result.first;

@@ -70,7 +70,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////
 // Helper struct implementations
 ////////////////////////////////////////////////////////////////////////////////
-// Compute replicate "Dim" into N dimension arguments for NDArray
+// Replicate "Dim" into N dimension arguments for NDArray (to implement cube array type)
 template<typename T, size_t N, size_t Dim, size_t... Dims>
 struct NDCAHelper<T, N, Dim, Dims...> : public NDCAHelper<T, N - 1, Dim, Dim, Dims...> { };
 template<typename T, size_t Dim, size_t... Dims>
@@ -166,7 +166,7 @@ struct NDArrayScanner<0> {
         f(theArray(indices...));
     }
 
-    // visitor functions accepting value only
+    // visitor functions accepting NDArrayIndex
     template<class F, typename T, typename... Indices>
     static typename std::enable_if<AcceptsNDArrayIndex<F, sizeof...(Indices)>::value, void>::type
     scan(F &&f, T &theArray, Indices... indices) {

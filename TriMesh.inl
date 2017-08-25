@@ -1,5 +1,6 @@
 #include <map>
 #include <stdexcept>
+#include <iostream>
 #include "Geometry.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +97,12 @@ TriMesh(const Tris &tris, size_t nVertices) {
         bTipTail.push_back(Vb[ tipVV]);
         bTipTail.push_back(Vb[tailVV]);
     }
-    assert(bV.size() == nBoundaryVertices);
+
+    if (bV.size() != nBoundaryVertices) {
+        std::cerr << "Boundary edge count: "   << nBoundaryEdges << std::endl;
+        std::cerr << "Boundary vertex count: " << bV.size()      << std::endl;
+        throw std::runtime_error("Nonmanifold boundary vertex/vertices detected");
+    }
 
     // Finish filling out VH with incoming half-edges
     for (size_t he = 0; he < nHalfEdges; ++he) {

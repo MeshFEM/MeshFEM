@@ -24,7 +24,9 @@
 #include <list>
 #include <vector>
 #include <utility>
+#include <tuple>
 #include <cassert>
+#include <iomanip>
 
 #include <boost/optional.hpp>
 
@@ -58,12 +60,14 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
     auto prev = [&](VtxIt i) { if (i == curve.begin()) i = curve.end(); return --i; };
     auto segmentLen = [&](VtxIt s, VtxIt e) {
         Real len = 0;
+		size_t subdivCount = 0;
         do {
             auto n = next(s);
             len += (*n - *s).norm();
             s = n;
+			++subdivCount;
         } while (s != e);
-        return len;
+        return std::make_tuple(len, subdivCount);
     };
 
     // Vertices are features if they have an incident angle significantly
@@ -109,9 +113,15 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
 
         // Remesh this segment with a uniform spacing as close as possible
         // to, but not exceeding, segmentTargetSpacing.
+
         if (!skip) {
-            Real slen = segmentLen(segmentStart, segmentEnd);
-            size_t nSubdiv = std::max<size_t>(ceil(slen / segmentTargetSpacing), 1);
+            Real slen;
+            size_t currentEdgeCount;
+            std::tie(slen, currentEdgeCount) = segmentLen(segmentStart, segmentEnd);
+
+            // Never simplify so much that the polygon could become degenerate.
+            size_t minSubdiv = std::min<size_t>(2, currentEdgeCount);
+            size_t nSubdiv = std::max<size_t>(ceil(slen / segmentTargetSpacing), minSubdiv);
             Real spacing = slen / nSubdiv;
 
             // Build up the remeshed curve segment points in newPts
@@ -140,6 +150,17 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
                 if (nextIt == segmentEnd) break;
             }
             assert(newPts.size() == nSubdiv - 1);
+
+#if 0
+            std::cerr << std::setprecision(19);
+            std::cerr << "Original pts:" << std::endl;
+            for (VtxIt it = segmentStart; it != segmentEnd; it = next(it))
+                std::cerr << "\t" << it->transpose() << std::endl;
+            std::cerr << "New pts:" << std::endl;
+            for (const auto &p : newPts)
+                std::cerr << "\t" << p.transpose() << std::endl;
+            std::cerr << std::endl;
+#endif
 
             // Remove the existing vertices in (segmentStart, segmentEnd)
             while (next(segmentStart) != segmentEnd)
