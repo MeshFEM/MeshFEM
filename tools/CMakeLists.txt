@@ -12,3 +12,7 @@ set_target_properties(grid PROPERTIES CXX_STANDARD 11)
 add_executable(       import_voxels_raw import_voxels_raw.cc)
 target_link_libraries(import_voxels_raw MeshFEM)
 set_target_properties(import_voxels_raw PROPERTIES CXX_STANDARD 11)
+
+add_executable(       triangulate_standalone triangulate_standalone.cc)
+target_link_libraries(triangulate_standalone MeshFEM)
+set_target_properties(triangulate_standalone PROPERTIES CXX_STANDARD 11)

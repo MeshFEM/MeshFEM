@@ -110,7 +110,7 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
 
     in.pointlist         = (REAL *) malloc(in.numberofpoints   * 2 * sizeof(REAL));
     in.segmentlist       = (int *)  malloc(in.numberofsegments * 2 * sizeof(int));
-    in.segmentmarkerlist = (int *)  malloc(in.numberofsegments * sizeof(int));
+    in.segmentmarkerlist = (int *)  malloc(in.numberofsegments * 1 * sizeof(int));
     in.holelist          = (REAL *) malloc(in.numberofholes    * 2 * sizeof(REAL));
 
     // fill triangle input structure with points
@@ -144,15 +144,18 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     std::stringstream flags_stream;
     flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
     std::string flags = flags_stream.str();
-    // std::cout << "Running triangulate with flags " << flags << std::endl;
-    // {
-    //     std::cout << sizeof(triangulateio) << std::endl;
-    //     std::ofstream file("in.bin", std::ios::binary);
-    //     file.write(reinterpret_cast<const char*>(&in), sizeof(triangulateio));
-    //     file.write(reinterpret_cast<const char *>(in.pointlist), in.numberofpoints   * 2 * sizeof(REAL));
-    //     file.write(reinterpret_cast<const char *>(in.segmentlist), in.numberofsegments * 2 * sizeof(int));
-    //     file.write(reinterpret_cast<const char *>(in.segmentmarkerlist), in.numberofsegments * sizeof(int));
-    // }
+#if 0
+    std::cout << "Running triangulate with flags " << flags << std::endl;
+    {
+        std::cout << sizeof(triangulateio) << std::endl;
+        std::ofstream file("in.bin", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(&in), sizeof(triangulateio));
+        file.write(reinterpret_cast<const char *>(in.pointlist),         in.numberofpoints   * 2 * sizeof(REAL));
+        file.write(reinterpret_cast<const char *>(in.segmentlist),       in.numberofsegments * 2 * sizeof(int));
+        file.write(reinterpret_cast<const char *>(in.segmentmarkerlist), in.numberofsegments * 1 * sizeof(int));
+        file.write(reinterpret_cast<const char *>(in.holelist),          in.numberofholes    * 2 * sizeof(REAL));
+    }
+#endif
     triangulate(const_cast<char *>(flags.c_str()), &in, &out, NULL);
     // std::cout << "Triangulate finished." << std::endl;
 

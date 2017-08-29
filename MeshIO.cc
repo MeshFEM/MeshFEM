@@ -294,7 +294,7 @@ MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
 
 void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
-    os << std::setprecision(16);
+    os << std::setprecision(17);
     for (const auto &n : nodes)
         os << "v " << n;
 
@@ -421,19 +421,34 @@ MeshType MeshIO_STL::load(istream &/* is */, vector<Vertex> &/* nodes */,
 void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
                        const vector<Element> &elements, MeshType /* t */) {
     // Actually, .poly format should work with any polygonal elements!
-    // auto typeError = std::runtime_error("Only support triangle .poly.");
-    // if ((elements.size() < 1) || (elements[0].size() != 3))
-    //     throw typeError;
-    // #Vertices, 3D, 0 attr, 0 bdry marks
-    os << nodes.size() << " 3 0 0" << std::endl;
-    for (size_t i = 0; i < nodes.size(); ++i)
-        os << i << ' ' << nodes[i];
-    os << elements.size() << " 0" << std::endl; // 0 bdry marks
-    for (size_t i = 0; i < elements.size(); ++i) {
-        os << "1" << std::endl;
-        os << elements[i];
+    auto typeError = std::runtime_error("Only support triangle, line mesh .poly.");
+    if (elements.size() < 1) throw typeError;
+    os << std::setprecision(17);
+    const size_t elSize = elements.front().size();
+    if (elSize == 3) {
+        // TetGen Format
+        // #Vertices, 3D, 0 attr, 0 bdry marks
+        os << nodes.size() << " 3 0 0" << std::endl;
+        for (size_t i = 0; i < nodes.size(); ++i)
+            os << i << ' ' << nodes[i];
+        os << elements.size() << " 0" << std::endl; // 0 bdry marks
+        for (size_t i = 0; i < elements.size(); ++i) {
+            os << "1" << std::endl;
+            os << elements[i];
+        }
+        os << 0 << std::endl; // no holes
     }
-    os << 0 << std::endl; // no holes
+    else if (elSize == 2) {
+        // Triangle Format
+        os << nodes.size() << " 2 0 0" << std::endl;
+        for (size_t i = 0; i < nodes.size(); ++i)
+            os << i << ' ' << truncateFrom3D<Point2D>(nodes[i]).transpose() << std::endl;
+        os << elements.size() << " 0" << std::endl; // 0 bdry marks
+        for (size_t i = 0; i < elements.size(); ++i)
+            os << i << ' ' << elements[i].at(0) << ' ' << elements[i].at(1) << std::endl;
+        os << 0 << std::endl; // no holes
+    }
+    else throw typeError;
 }
 
 MeshType MeshIO_POLY::load(istream &/* is */, vector<Vertex> &/* nodes */,
@@ -550,7 +565,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
         os << std::endl;
     }
     else {
-        os << std::setprecision(16);
+        os << std::setprecision(17);
         for (size_t i = 0; i < nodes.size(); ++i)
             os << i + 1 << " " << nodes[i];
     }
