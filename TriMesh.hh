@@ -173,7 +173,7 @@ protected:
     ////////////////////////////////////
     // Find the boundary mesh vertex associated with the volume mesh index v.
     // Operation:
-    //     incoming volume halfedge -> outgoing boundary edge outgoing -> tail
+    //     incoming volume halfedge -> outgoing boundary edge -> tail
     // Works because the incident halfedge is guaranteed to be on the boundary.
     // @return index of boundary vertex or -1 if v is an internal vertex.
     int m_bdryVertexIdx(int v) const {

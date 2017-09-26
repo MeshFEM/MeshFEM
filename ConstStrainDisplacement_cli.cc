@@ -67,6 +67,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("nodalLoad,l",                     "compute the effective force on each node.")
         ("addFluctuation,f",                "add fluctuation strains to the displacement")
         ("macroOut", po::value<string>(),   "also output the unit cell deformation")
+        ("manualPeriodicVertices", po::value<string>(), "Manually specify identified periodic vertices using a hacky file format (see PeriodicCondition constructor)")
         ("orthotropicCell,O",               "Analyze the orthotropic symmetry base cell only")
         ;
 
@@ -136,8 +137,12 @@ void execute(const po::variables_map &args,
     // Convert stress probe to corresponding strain probe.
     std::vector<VField> w_ij;
 
+    std::unique_ptr<PeriodicCondition<_N>> pc;
+    if (args.count("manualPeriodicVertices"))
+        pc = Future::make_unique<PeriodicCondition<_N>>(sim.mesh(), args["manualPeriodicVertices"].as<string>());
+
     auto doCellProblemSolve = [&]() {
-        if (args.count("orthotropicCell") == 0)   solveCellProblems(w_ij, sim, 1e-7);
+        if (args.count("orthotropicCell") == 0)   solveCellProblems(w_ij, sim, 1e-7, false, std::move(pc));
         else PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
     };
 

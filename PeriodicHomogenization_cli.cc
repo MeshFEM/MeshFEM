@@ -47,6 +47,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("distanceToIsotropy",                             "Output the distance to the closest isotropic tensor")
         ("distanceToMaterial", po::value<string>(),        "Output the distance to a particular material")
         ("ignorePeriodicMismatch",                         "Ignore mismatched nodes on the periodic faces (useful for voxel grids)")
+        ("manualPeriodicVertices", po::value<string>(),    "Manually specify identified periodic vertices using a hacky file format (see PeriodicCondition constructor)")
         ("orthotropicCell,O",                              "Analyze the orthotropic symmetry base cell only")
         ;
 
@@ -100,7 +101,12 @@ void execute(const po::variables_map &args,
 
     BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
-    if (args.count("orthotropicCell") == 0)      solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"));
+    std::unique_ptr<PeriodicCondition<_N>> pc;
+    if (args.count("manualPeriodicVertices"))
+        pc = Future::make_unique<PeriodicCondition<_N>>(sim.mesh(), args["manualPeriodicVertices"].as<string>());
+    if (args.count("orthotropicCell") == 0) {
+        solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"), std::move(pc));
+    }
     else {
         auto systems = PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
         cout << systems.size() << endl;

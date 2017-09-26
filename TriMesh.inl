@@ -66,11 +66,11 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // entries for these in the bV array. Also fill out bTipTail and start
     // filling out the half-edge incidence table VH since VH[v] is required to
     // be a boundary edge if v is a boundary vertex.
-    size_t nBoundaryEdges = halfEdgeForEdge.size();
-    // There are as many boundary vertices as boundary edges: boundary is closed
-    size_t nBoundaryVertices = nBoundaryEdges;
+    const size_t nBoundaryEdges = halfEdgeForEdge.size();
     bTipTail.reserve(2 * nBoundaryEdges), bTipTail.clear();
-    bV.reserve(nBoundaryVertices), bV.clear();
+    // Provided the boundary is manifold, there are as many boundary vertices
+    // as boundary edges (boundary is closed)
+    bV.reserve(nBoundaryEdges), bV.clear();
 
     // Temporary array mapping volume vertices to boundary vertices
     // needed to create bV and link boundary edges to vertices.
@@ -98,10 +98,11 @@ TriMesh(const Tris &tris, size_t nVertices) {
         bTipTail.push_back(Vb[tailVV]);
     }
 
-    if (bV.size() != nBoundaryVertices) {
+    if (bV.size() != nBoundaryEdges) {
         std::cerr << "Boundary edge count: "   << nBoundaryEdges << std::endl;
         std::cerr << "Boundary vertex count: " << bV.size()      << std::endl;
-        throw std::runtime_error("Nonmanifold boundary vertex/vertices detected");
+        std::cerr << "WARNING: Boundary is non-manifold; this will break certain traversal operations" << std::endl;
+        // throw std::runtime_error("Nonmanifold boundary vertex/vertices detected");
     }
 
     // Finish filling out VH with incoming half-edges
@@ -120,6 +121,6 @@ TriMesh(const Tris &tris, size_t nVertices) {
     m_vertexData        .resize(nVertices);
     m_halfEdgeData      .resize(nHalfEdges);
     m_triData           .resize(tris.size());
-    m_boundaryVertexData.resize(nBoundaryVertices);
+    m_boundaryVertexData.resize(bV.size());
     m_boundaryEdgeData  .resize(nBoundaryEdges);
 }

@@ -22,7 +22,7 @@
 #ifndef EDGESOUPADAPTOR_HH
 #define EDGESOUPADAPTOR_HH
 
-#include <list>
+#include <type_traits>
 #include "../Concepts.hh"
 
 // The default, trivial model of EdgeSoup: simply wrap point and edge
@@ -39,28 +39,30 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// Zero-overhead wrapper for list of list of points polygons type.
+// Zero-overhead wrapper for collection-of-collection-of-points polygon types.
 // Provides iteration over the points/edges of such a representation.
 // Edges are created on-the-fly in a configurable format (e.g.
 // pair<size_t, size_t> or MeshIO::IOElement).
 ////////////////////////////////////////////////////////////////////////////////
-template<class Point>
-struct ClosedPolygonListEntityIterator {
-    using Polygon         = std::list<Point>;
-    using PolygonList     = std::list<Polygon>;
-    using PointIterator   = typename Polygon::const_iterator;
-    using PolygonIterator = typename PolygonList::const_iterator;
+template<class PolygonCollection_>
+struct ClosedPolygonCollectionEntityIterator {
+    using PolygonCollection = PolygonCollection_;
+    using Polygon = typename PolygonCollection::value_type;
+    using Point   = typename Polygon::value_type;
 
-    ClosedPolygonListEntityIterator(PolygonIterator _p_it,
-                                    PointIterator  _pp_it,
-                                    PolygonIterator _p_last)
+    using PolygonIterator = typename PolygonCollection::const_iterator;
+    using PointIterator   = typename Polygon::const_iterator;
+
+    ClosedPolygonCollectionEntityIterator(PolygonIterator _p_it,
+                                          PointIterator  _pp_it,
+                                          PolygonIterator _p_last)
         : p_it(_p_it), pp_it(_pp_it),
           polygons_last(_p_last),
           current_point_index(0), polygon_offset_index(0)
     { }
 
-    ClosedPolygonListEntityIterator &operator++() {
-        // Iterate through (polygon_list, curr_polygon), stopping at the end.
+    ClosedPolygonCollectionEntityIterator &operator++() {
+        // Iterate through (polygon_collection, curr_polygon), stopping at the end.
         if (isEnd()) return *this;
 
         ++pp_it;
@@ -75,8 +77,8 @@ struct ClosedPolygonListEntityIterator {
         return *this;
     }
 
-    bool operator==(const ClosedPolygonListEntityIterator<Point> &b) const { return (p_it == b.p_it) && (pp_it == b.pp_it); }
-    bool operator!=(const ClosedPolygonListEntityIterator<Point> &b) const { return !(*this == b); }
+    bool operator==(const ClosedPolygonCollectionEntityIterator<PolygonCollection_> &b) const { return (p_it == b.p_it) && (pp_it == b.pp_it); }
+    bool operator!=(const ClosedPolygonCollectionEntityIterator<PolygonCollection_> &b) const { return !(*this == b); }
 
     bool isEnd() {
         return (p_it == polygons_last) && (pp_it == p_it->end());
@@ -91,22 +93,23 @@ protected:
     size_t polygon_offset_index;
 };
 
-template<class Point>
-struct ClosedPolygonListPointIterator : public ClosedPolygonListEntityIterator<Point> {
-    using Base = ClosedPolygonListEntityIterator<Point>;
+template<class PolygonCollection_>
+struct ClosedPolygonCollectionPointIterator : public ClosedPolygonCollectionEntityIterator<PolygonCollection_> {
+    using Base = ClosedPolygonCollectionEntityIterator<PolygonCollection_>;
     using Base::Base;
+    using Point = typename Base::Point;
     const Point &operator*() const { return *(this->pp_it); }
 };
 
 template<class _EdgeType>
 struct EdgeMaker;
 
-template<> struct EdgeMaker<std::pair<size_t, size_t>> { static           std::pair<size_t, size_t> make_edge(size_t u, size_t v) { return    std::make_pair(u, v); } };
-template<> struct EdgeMaker<MeshIO::IOElement        > { static           MeshIO::IOElement         make_edge(size_t u, size_t v) { return MeshIO::IOElement(u, v); } };
+template<> struct EdgeMaker<std::pair<size_t, size_t>> { static std::pair<size_t, size_t> make_edge(size_t u, size_t v) { return    std::make_pair(u, v); } };
+template<> struct EdgeMaker<MeshIO::IOElement        > { static MeshIO::IOElement         make_edge(size_t u, size_t v) { return MeshIO::IOElement(u, v); } };
 
-template<class Point, class _EdgeType>
-struct ClosedPolygonListEdgeIterator : public ClosedPolygonListEntityIterator<Point> {
-    using Base = ClosedPolygonListEntityIterator<Point>;
+template<class PolygonCollection_, class _EdgeType>
+struct ClosedPolygonCollectionEdgeIterator : public ClosedPolygonCollectionEntityIterator<PolygonCollection_> {
+    using Base = ClosedPolygonCollectionEntityIterator<PolygonCollection_>;
     using Base::Base;
     _EdgeType operator*() const {
         typename Base::PointIterator pp_next = this->pp_it;
@@ -116,14 +119,14 @@ struct ClosedPolygonListEdgeIterator : public ClosedPolygonListEntityIterator<Po
     }
 };
 
-template<class Point> using ClosedPolygonListEdgePairIterator      = ClosedPolygonListEdgeIterator<Point, std::pair<size_t, size_t>>;
-template<class Point> using ClosedPolygonListEdgeIOElementIterator = ClosedPolygonListEdgeIterator<Point, MeshIO::IOElement>;
+template<class PolygonCollection_> using ClosedPolygonCollectionEdgePairIterator      = ClosedPolygonCollectionEdgeIterator<PolygonCollection_, std::pair<size_t, size_t>>;
+template<class PolygonCollection_> using ClosedPolygonCollectionEdgeIOElementIterator = ClosedPolygonCollectionEdgeIterator<PolygonCollection_, MeshIO::IOElement>;
 
 template<class _EntityIterator>
 struct ClosedPolygonEntityRange {
-    using PolygonList = typename _EntityIterator::PolygonList;
-    ClosedPolygonEntityRange(const PolygonList &plist)
-        : m_polygons(plist) {
+    using PolygonCollection = typename _EntityIterator::PolygonCollection;
+    ClosedPolygonEntityRange(const PolygonCollection &polygons)
+        : m_polygons(polygons) {
         m_size = 0;
         for (const auto &poly : m_polygons) { m_size += poly.size(); }
     }
@@ -131,33 +134,36 @@ struct ClosedPolygonEntityRange {
     _EntityIterator cbegin() const { auto last = m_polygons.cend(); --last; auto first = m_polygons.cbegin(); return _EntityIterator(first, first->cbegin(), last); }
     _EntityIterator   cend() const { auto last = m_polygons.cend(); --last;                                   return _EntityIterator( last,    last->cend(), last); }
 
+    // Lazy hack: this is also a const_iterator
     _EntityIterator begin() const { return cbegin(); }
     _EntityIterator   end() const { return   cend(); }
     size_t size() const { return m_size; }
 protected:
-    const PolygonList &m_polygons;
+    const PolygonCollection &m_polygons;
     size_t m_size;
 };
 
-template<class Point, class _EdgeIterator = ClosedPolygonListEdgePairIterator<Point>>
-struct EdgeSoupFromClosedPolygonList : public Concepts::EdgeSoup {
-    using PolygonList = std::list<std::list<Point>>;
-    using PointIterator = ClosedPolygonListPointIterator<Point>;
-    using EdgeIterator = _EdgeIterator;
+template<class PolygonCollection_, class _EdgeType = std::pair<size_t, size_t>>
+struct EdgeSoupFromClosedPolygonCollection : public Concepts::EdgeSoup {
+    using PolygonCollection = typename std::remove_cv<typename std::remove_reference<PolygonCollection_>::type>::type;
+    using PointIterator = ClosedPolygonCollectionPointIterator<PolygonCollection>;
+    using  EdgeIterator = ClosedPolygonCollectionEdgeIterator<PolygonCollection, _EdgeType>;
 
     using PointRange = ClosedPolygonEntityRange<PointIterator>;
     using  EdgeRange = ClosedPolygonEntityRange< EdgeIterator>;
 
-    EdgeSoupFromClosedPolygonList(const PolygonList &polygons)
+    EdgeSoupFromClosedPolygonCollection(const PolygonCollection &polygons)
         : m_polygons(polygons) { }
-    ClosedPolygonEntityRange<PointIterator> points() const { return PointRange(m_polygons); }
-    ClosedPolygonEntityRange< EdgeIterator>  edges() const { return  EdgeRange(m_polygons); }
+
+    PointRange points() const { return PointRange(m_polygons); }
+     EdgeRange  edges() const { return  EdgeRange(m_polygons); }
 protected:
-    const PolygonList &m_polygons;
+    const PolygonCollection &m_polygons;
 };
 
-template<class Point>
-using IOElementEdgeSoupFromClosedPolygonList =
-      EdgeSoupFromClosedPolygonList<Point, ClosedPolygonListEdgeIOElementIterator<Point>>;
+
+template<class PolygonCollection>
+using IOElementEdgeSoupFromClosedPolygonCollection =
+      EdgeSoupFromClosedPolygonCollection<PolygonCollection, MeshIO::IOElement>;
 
 #endif /* end of include guard: EDGESOUPADAPTOR_HH */

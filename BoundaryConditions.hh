@@ -25,6 +25,7 @@
 #include <queue>
 #include <memory>
 #include <iostream>
+#include <fstream>
 #include <bitset>
 #include <cassert>
 #include <limits>
@@ -390,6 +391,56 @@ public:
             assert(m_dofForNode[i] != NO_DOF);
             assert(m_dofForNode[i] < numPeriodicDoFs());
         }
+    }
+
+    // Constructor reading the periodic boundary conditions from a file
+    // This is a hack that only supports meshes with only periodic vertices (no
+    // periodic boundary elements)--i.e. only a nonmanifold tiling.
+    template<typename Mesh>
+    PeriodicCondition(const Mesh &mesh, const std::string &pcFile) {
+        // The periodic condition file contains pairs of *vertices*
+        // that are periodically identified.
+        std::cout << "WARNING: periodic boundary condition files are a temporary hack." << std::endl;
+
+        // For now, we assume that each vertex appears in only a single pairing.
+        std::vector<size_t> pair(mesh.numVertices(), size_t(NO_PAIR));
+
+        std::ifstream file(pcFile);
+        if (!file.is_open()) throw std::runtime_error("Couldn't open " + pcFile);
+
+        std::string line;
+        while (std::getline(file, line)) {
+            std::istringstream ls(line);
+            size_t a, b;
+            ls >> a >> b;
+
+            // Link later vertex to its earlier paired vertex
+            size_t later = std::max(a, b);
+            assert(pair.at(later) == NO_PAIR);
+            pair.at(later) = std::min(a, b);
+        }
+
+        // Create dofs for every vertex that hasn't been linked.
+        m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
+        m_nodesForDoF.reserve(mesh.numNodes());
+        m_nodesForDoF.clear();
+        for (auto n : mesh.nodes()) {
+            auto v = n.vertex();
+            if (!v || (pair.at(n.vertex().index()) == NO_PAIR)) {
+                assert(m_dofForNode[n.index()] == NO_DOF);
+                m_dofForNode[n.index()] = m_nodesForDoF.size();
+                m_nodesForDoF.emplace_back(1, n.index());
+            }
+            else {
+                size_t v_pair = pair.at(n.vertex().index());
+                size_t n_pair = mesh.vertex(v_pair).node().index();
+                size_t dof = m_dofForNode.at(n_pair);
+                assert(dof != NO_DOF);
+                m_dofForNode[n.index()] = dof;
+                m_nodesForDoF[dof].push_back(n.index());
+            }
+        }
+        m_isPeriodicBoundaryElement.assign(mesh.numBoundaryElements(), false);
     }
 
     const std::vector<size_t> &periodicDoFsForNodes() const {

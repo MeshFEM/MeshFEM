@@ -170,7 +170,7 @@ public:
     bool valid() const { return size_t(m_idx) < m_mesh.numBoundaryVertices(); }
 
      VH volumeVertex() const { return  VH(m_mesh.m_vertexForBdryVertex(m_idx), m_mesh); }
-    // Going and incoming boundary edges. Note: getting the incoming edge is
+    // Outgoing and incoming boundary edges. Note: getting the incoming edge is
     // slightly more expensive since it can't be retrieved directly from the
     // lookup tables--circulation is required.
     BEH outEdge() const { return BEH(m_mesh.m_bdryELeavingBdryVertex(m_idx), m_mesh); }

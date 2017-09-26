@@ -23,7 +23,7 @@ typedef enum { CONSTRAINT_DIRICHLET, CONSTRAINT_NONE } ConstraintType;
 
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
 struct PoissonFEMData : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
-    typedef DefaultFEMData<_K, _Deg, EmbeddingSpace> BaseData;
+    using BaseData = DefaultFEMData<_K, _Deg, EmbeddingSpace>;
     struct Element : public BaseData::Element {
     public:
         typedef typename BaseData::Element Base;
@@ -53,9 +53,11 @@ struct PoissonFEMData : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
 
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
 class PoissonMesh : public FEMMesh<_K, _Deg, EmbeddingSpace, PoissonFEMData> {
-    typedef FEMMesh<_K, _Deg, EmbeddingSpace, PoissonFEMData> Base;
-    using Base::Base;
+    using Base = FEMMesh<_K, _Deg, EmbeddingSpace, PoissonFEMData>;
 public:
+    // Inherit constructors
+    using Base::Base;
+
     // Note: the Linear elasticity boundary conditions format/classes are used
     // here. The Dirichlet scalar values are encoded in the Dirichlet
     // "displacement's" first component.

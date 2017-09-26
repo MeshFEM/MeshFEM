@@ -201,7 +201,7 @@ void triangulatePSLC(const std::list<std::list<Point>> &polygons,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "") {
-    triangulatePSLC(EdgeSoupFromClosedPolygonList<Point>(polygons),
+    triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
             holes, outVertices, outTriangles, area, additionalFlags);
 }
 

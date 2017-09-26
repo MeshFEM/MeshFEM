@@ -40,9 +40,9 @@ int main(int argc, const char *argv[]) {
 
     std::vector<MeshIO::IOVertex > polyVertices;
     std::vector<MeshIO::IOElement> polyElements;
-    for (size_t i = 0; i < in.numberofpoints; ++i)
+    for (int i = 0; i < in.numberofpoints; ++i)
         polyVertices.emplace_back(in.pointlist[2 * i + 0], in.pointlist[2 * i + 1]);
-    for (size_t i = 0; i < in.numberofsegments; ++i)
+    for (int i = 0; i < in.numberofsegments; ++i)
         polyElements.emplace_back(in.segmentlist[2 * i + 0], in.segmentlist[2 * i + 1]);
     MeshIO::save("input.poly", polyVertices, polyElements);
 

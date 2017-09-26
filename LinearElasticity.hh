@@ -545,7 +545,7 @@ public:
     //      d[vn] int_vol phi . div t dV - int_bdry phi . t n dA =
     //    - d[vn] int_vol strain(phi) : t dV =
     //    - int_bdry (strain(phi) : t) vn dA
-    // This is useful for direct shape differentiation of an solution.
+    // This is useful for forward shape differentiation of an solution.
     // Since t is only needed on the boundary, we expect a per-boundary-element
     // interpolant.
     // If ignorePeriodic is true, no contribution from periodic boundaries is
@@ -725,13 +725,14 @@ public:
     //  Updates m_dofForNode.
     *///////////////////////////////////////////////////////////////////////
     void applyPeriodicConditions(Real epsilon = 1e-7,
-                                 bool ignoreMismatch = false) {
+                                 bool ignoreMismatch = false,
+                                 std::unique_ptr<PeriodicCondition<N>> pc = nullptr) {
         m_system.clear();
-        PeriodicCondition<N> pc(m_mesh, epsilon, ignoreMismatch);
-        m_dofForNode = pc.periodicDoFsForNodes();
-        m_numDoFs = pc.numPeriodicDoFs();
+        if (!pc) pc = Future::make_unique<PeriodicCondition<N>>(m_mesh, epsilon, ignoreMismatch);
+        m_dofForNode = pc->periodicDoFsForNodes();
+        m_numDoFs = pc->numPeriodicDoFs();
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
-            m_mesh.boundaryElement(i)->isInternal = pc.isPeriodicBE(i);
+            m_mesh.boundaryElement(i)->isInternal = pc->isPeriodicBE(i);
     }
 
     void removePeriodicConditions() {
