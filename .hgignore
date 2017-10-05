@@ -4,5 +4,7 @@ Makefile.depend
 .d
 *.o
 
+.idea/*
 build/*
 node_modules/
+cmake-build-*/

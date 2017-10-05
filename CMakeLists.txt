@@ -65,7 +65,61 @@ add_library(${PROJECT_NAME}
 		Materials.cc
 		MeshIO.cc
 		MSHFieldParser.cc
-		Types.cc)
+		Types.cc
+
+		BaseCellType.hh
+		BoundaryConditions.hh
+		BoundaryLaplacian.hh
+		BoundaryMesh.hh
+		CollisionGrid.hh
+		ComponentMask.hh
+		Concepts.hh
+		DenseCollisionGrid.hh
+		EdgeFields.hh
+		EmbeddedElement.hh
+		ExpressionVector.hh
+		FEMMesh.hh
+		function_traits.hh
+		Functions.hh
+		Future.hh
+		GaussQuadrature.hh
+		Geometry.hh
+		GlobalBenchmark.hh
+		GridFunction.hh
+		HalfEdge.hh
+		HalfedgeDictionary.hh
+		InterpolantRestriction.hh
+		JSFieldWriter.hh
+		Laplacian.hh
+		LinearElasticity.hh
+		MassMatrix.hh
+		MaterialField.hh
+		MaterialOptimization.hh
+		Materials.hh
+		MeshDataTraits.hh
+		MeshIO.hh
+		MSHFieldParser.hh
+		MSHFieldWriter.hh
+		NTuple.hh
+		OneForm.hh
+		OrthotropicHomogenization.hh
+		PeriodicBoundaryMatcher.hh
+		PeriodicHomogenization.hh
+		PerturbMesh.hh
+		Poisson.hh
+		Simplex.hh
+		SimplicialMesh.hh
+		SimplicialMeshInterface.hh
+		SymmetricMatrixInterpolant.hh
+		TemplateHacks.hh
+		TetMesh.hh
+		TriMesh.hh
+		Types.hh
+		UniformLaplacian.hh
+
+		Triangulate.h
+		util.h
+)
 
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
