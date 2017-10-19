@@ -12,6 +12,7 @@ endif()
 
 ################################################################################
 
+set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
@@ -168,9 +169,13 @@ if(TBB_FOUND)
 endif()
 
 # Triangle library
-find_package(Triangle REQUIRED)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
+# find_package(Triangle REQUIRED)
+# target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
+# target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
+if(NOT TARGET triangle)
+	add_subdirectory(${THIRD_PARTY_DIR}/triangle triangle)
+	target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
+endif()
 
 # Matheval library
 find_package(Matheval REQUIRED)
