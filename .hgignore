@@ -1,0 +1,8 @@
+syntax: glob
+Makefile.depend
+.clang_complete
+.d
+*.o
+
+build/*
+node_modules/
