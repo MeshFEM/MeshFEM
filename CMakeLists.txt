@@ -175,6 +175,7 @@ endif()
 if(NOT TARGET triangle)
 	add_subdirectory(${THIRD_PARTY_DIR}/triangle triangle)
 	target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
+	target_include_directories(${PROJECT_NAME} PUBLIC ${THIRD_PARTY_DIR}/triangle)
 endif()
 
 # Matheval library
