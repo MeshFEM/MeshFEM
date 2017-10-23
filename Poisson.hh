@@ -93,12 +93,14 @@ public:
         // Build FEM Laplacian (Upper triangle)
         TripletMatrix<Triplet<Real> > L(Base::numNodes(), Base::numNodes());
         for (auto e : Base::elements()) {
-            for (size_t i = 0; i < e.numNodes(); ++i) {
-                for (size_t j = 0; j < e.numNodes(); ++j) {
-                    if (e.node(i).index() > e.node(j).index()) continue;
-                    L.addNZ(e.node(i).index(),
-                            e.node(j).index(),
-                            e->stiffness(i, j));
+            for (auto ni : e.nodes()) {
+                for (auto nj : e.nodes()) {
+                    if (ni.index() > nj.index()) continue;
+                    L.addNZ(ni.index(),
+                            nj.index(),
+                            e->stiffness(ni.localIndex(),
+                                         nj.localIndex()));
+
                 }
             }
         }
