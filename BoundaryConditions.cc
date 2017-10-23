@@ -367,20 +367,20 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
 ////////////////////////////////////////////////////////////////////////////////
 // Instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template void writeBoundaryConditions<3>(const string &cpath,
-                           const vector<ConstCondPtr<3> > &conds);
-template void writeBoundaryConditions<3>(ostream &os,
-                           const vector<ConstCondPtr<3> > &conds);
-template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &);
+template void writeBoundaryConditions<3ul>(const string &cpath,
+                           const vector<ConstCondPtr<3ul> > &conds);
+template void writeBoundaryConditions<3ul>(ostream &os,
+                           const vector<ConstCondPtr<3ul> > &conds);
+template vector<CondPtr<3ul> > readBoundaryConditions<3ul>(const string &, const BBox<VectorND<3ul>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
+template vector<CondPtr<3ul> > readBoundaryConditions<3ul>(istream &,      const BBox<VectorND<3ul>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
+template vector<CondPtr<3ul> > readBoundaryConditions<3ul>(const string &, const BBox<VectorND<3ul>> &, bool &);
+template vector<CondPtr<3ul> > readBoundaryConditions<3ul>(istream &,      const BBox<VectorND<3ul>> &, bool &);
 
-template void writeBoundaryConditions<2>(const string &cpath,
-                           const vector<ConstCondPtr<2> > &conds);
-template void writeBoundaryConditions<2>(ostream &os,
-                           const vector<ConstCondPtr<2> > &conds);
-template vector<CondPtr<2> > readBoundaryConditions(const std::string &, const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
-template vector<CondPtr<2> > readBoundaryConditions(std::istream &,      const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
-template vector<CondPtr<2> > readBoundaryConditions(const std::string &, const BBox<VectorND<2> > &, bool &);
-template vector<CondPtr<2> > readBoundaryConditions(std::istream &,      const BBox<VectorND<2> > &, bool &);
+template void writeBoundaryConditions<2ul>(const string &cpath,
+                           const vector<ConstCondPtr<2ul> > &conds);
+template void writeBoundaryConditions<2ul>(ostream &os,
+                           const vector<ConstCondPtr<2ul> > &conds);
+template vector<CondPtr<2ul> > readBoundaryConditions<2ul>(const std::string &, const BBox<VectorND<2ul> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
+template vector<CondPtr<2ul> > readBoundaryConditions<2ul>(std::istream &,      const BBox<VectorND<2ul> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
+template vector<CondPtr<2ul> > readBoundaryConditions<2ul>(const std::string &, const BBox<VectorND<2ul> > &, bool &);
+template vector<CondPtr<2ul> > readBoundaryConditions<2ul>(std::istream &,      const BBox<VectorND<2ul> > &, bool &);
