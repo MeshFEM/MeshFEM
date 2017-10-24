@@ -308,6 +308,27 @@ public:
         return result;
     }
 
+    // For rank deficient elasticity tensors, get the tensor Epinv such that
+    // E : (Epinv : E) = E.
+    ElasticityTensor pseudoinverse() const {
+        auto eigs = computeEigenstrains();
+        // note: computeEigenstrains() performs the decomposition
+        // D^1/2 F(E) D^1/2 = Q Lambda Q^T
+        // And actually returns D^(-1/2) Q as the "eigenstrains".
+        // We need to compute
+        // F(Epinv) = [D^(-1/2) Q] Lambda_pinv [D^(-1/2) Q]^T
+        for (int i = 0; i < eigs.lambdas.size(); ++i) {
+            // TODO: think more about threshold here
+            if (std::abs(eigs.lambdas[i]) > 1e-8)
+                eigs.lambdas[i] = 1.0 / eigs.lambdas[i];
+            else eigs.lambdas[i] = 0;
+        }
+
+        ElasticityTensor result;
+        result.m_d = eigs.strains * (eigs.lambdas.asDiagonal() * eigs.strains.transpose());
+        return result;
+    }
+
     // Get the ***major*** transposed tensor E^T:
     // E^T_ijkl = E_klij
     // For major-symmetric tensors, this is an identity operation--returns copy.
@@ -511,12 +532,16 @@ public:
         return (m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10;
     }
 
-    // Computes the eigenstrains with maximum eigenvalue (and this eigenvalue).
-    // In otherwords, we find the (s, lambda) satisfying:
-    //     E : s = lambda s
-    // for greatest lambda.
+    // Compute all the eigenstrains and corresponding eigenvalues. In other words,
+    // find the (s, lambda) pairs satisfying:
+    //      E : s = lambda s
     // Should only be used on major-symmetric tensors.
-    std::tuple<SMatrix, Real>  maxEigenstrain() const {
+    // Eigenvalues/vectors are sorted in order of increasing eigenvalue.
+    struct EigenDecomposition {
+        Eigen::MatrixXd strains;
+        Eigen::VectorXd lambdas;
+    };
+    EigenDecomposition computeEigenstrains() const {
         assert(hasMajorSymmetry());
 
         // We are solving the problem:
@@ -529,51 +554,50 @@ public:
         //    lambda = max_(||e||^2 = 1) e^T D^(1/2) F(E) D^(1/2) e
         // i.e. an ordinary eigenvalue problem for D^(1/2) F(E) D^(1/2).
         // We then retrieve eigenstrain F(s) = D^(-1/2) e.
+        //
         DType mat(m_d.template selfadjointView<Eigen::Upper>());
         leftApplySqrtShearDoubler(mat);
         rightApplySqrtShearDoubler(mat);
         Eigen::SelfAdjointEigenSolver<DType> solver;
         solver.compute(mat);
 
-        // Eigenvalues/eigenvectors are sorted in increasing eigenvalue order
-        constexpr size_t largestIdx = flatLen(_Dim) - 1;
-        Real lambda = solver.eigenvalues()[largestIdx];
-        FlattenedRank2Tensor e = solver.eigenvectors().col(largestIdx);
+        Eigen::MatrixXd Q = solver.eigenvectors();
+        Eigen::VectorXd Lambda = solver.eigenvalues();
+        leftApplySqrtShearDoublerInverse(Q);
+        return EigenDecomposition{Q, Lambda};
+    }
 
-        leftApplySqrtShearDoublerInverse(e);
-        return std::make_tuple(SMatrix(e), lambda);
+    // Computes the eigenstrains with maximum eigenvalue (and this eigenvalue).
+    // In otherwords, we find the (s, lambda) satisfying:
+    //     E : s = lambda s
+    // for greatest lambda.
+    // Should only be used on major-symmetric tensors.
+    std::tuple<SMatrix, Real> maxEigenstrain() const {
+        auto eigs = computeEigenstrains();
+        // Eigenvalues sorted in increasing order
+        constexpr size_t largestIdx = flatLen(_Dim) - 1;
+        return std::make_tuple(SMatrix(eigs.strains.col(largestIdx)), eigs.lambdas[largestIdx]);
     }
 
     // Same as above, but also approximate the algebraic multiplicity of the
     // maximum eigenvalue (within the specified tolerance) and also return the
     // second largest eigenvalue.
     std::tuple<SMatrix, Real, int, Real>  maxEigenstrainMultiplicity(Real tol = 1e-3) const {
-        if (!_MajorSymmetry) {
-            // Validate major symmetry if it hasn't been enforced.
-            assert((m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10);
-        }
+        auto eigs = computeEigenstrains();
 
-        DType mat(m_d.template selfadjointView<Eigen::Upper>());
-        leftApplySqrtShearDoubler(mat);
-        rightApplySqrtShearDoubler(mat);
-        Eigen::SelfAdjointEigenSolver<DType> solver;
-        solver.compute(mat);
-
-        // Eigenvalues/eigenvectors are sorted in increasing eigenvalue order
+        // Eigenvalues sorted in increasing order
         constexpr size_t largestIdx = flatLen(_Dim) - 1;
-        Real lambda = solver.eigenvalues()[largestIdx];
+        Real lambda = eigs.lambdas[largestIdx];
 
         // Approximate multiplicity
         int multiplicity = 1;
         for (size_t i = largestIdx; i > 0; --i) {
-            if ((lambda - solver.eigenvalues()[i - 1]) < lambda * tol) ++multiplicity;
+            if ((lambda - eigs.lambdas[i - 1]) < lambda * tol) ++multiplicity;
             else break;
         }
-
-        FlattenedRank2Tensor e = solver.eigenvectors().col(largestIdx);
-
-        leftApplySqrtShearDoublerInverse(e);
-        return std::make_tuple(SMatrix(e), lambda, multiplicity, solver.eigenvalues()[largestIdx - 1]);
+        FlattenedRank2Tensor e = eigs.strains.col(largestIdx);
+        return std::make_tuple(SMatrix(eigs.strains.col(largestIdx)), lambda, multiplicity,
+                               eigs.lambdas[largestIdx - 1]);
     }
 
     // Write unflattened tensor in Mathematica array syntax.
