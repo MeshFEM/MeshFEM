@@ -1,0 +1,22 @@
+# expected variables to be set:
+#   run_dir, fluctuation
+# eg: run_dir='results/skip_0'; fluctuation=0
+fluctuationNames = "w_00 w_11 w_01"
+fname = word(fluctuationNames, fluctuation + 1);
+
+deg1_data = run_dir . "/deg_1.txt";
+deg2_data = run_dir . "/deg_2.txt";
+strain_col = fluctuation + 10;
+
+set title 'Maximum Max-Strain for Fluctuation Displacement ' . fname noenhanced;
+set xlabel 'Median edge length (mm)';
+set ylabel 'Maximum max-strain (unitless)';
+
+set logscale x 2
+set yrange [0:10]
+set xrange [:0.25]
+
+set term pngcairo size 1024,768
+set output run_dir . '/max_strain_' . fname . ".png";
+plot '< sort -g ' . deg1_data using 4:(column(strain_col)) with lp lw 2.0 ps 2.0 title 'linear elements', \
+     '< sort -g ' . deg2_data using 4:(column(strain_col)) with lp lw 2.0 ps 2.0 title 'quadratic elements';

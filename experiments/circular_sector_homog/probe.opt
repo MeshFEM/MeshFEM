@@ -1,0 +1,4 @@
+Plugin(Probe).X = 0.5;
+Plugin(Probe).Y = 0.5;
+Plugin(Probe).View = 0;
+Plugin(Probe).Run;
