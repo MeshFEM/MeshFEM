@@ -1,0 +1,10 @@
+syntax: glob
+Makefile.depend
+.clang_complete
+.d
+*.o
+
+.idea/*
+build/*
+node_modules/
+cmake-build-*/
