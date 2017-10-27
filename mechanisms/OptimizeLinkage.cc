@@ -6,6 +6,7 @@
 #include "../OrthotropicHomogenization.hh"
 #include "../GlobalBenchmark.hh"
 #include <vector>
+
 #include <queue>
 #include <iostream>
 #include <iomanip>
@@ -40,7 +41,6 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     visible_opts.add_options()("help", "Produce this help message")
         ("material,m", po::value<string>(),                 "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
-        ("m2mstress,M",po::value<string>(),                "Dump macroscopic to microscopic stress tensors to specified file")
         ("fieldOutput,o",po::value<string>(),              "Dump fluctuation stress and strain fields to specified msh file")
         ("centerFluctuationDisplacements,c",               "Shift each fluctuation displacement so that it averages to zero")
         ("fullDegreeFieldOutput,D",                        "Output full-degree nodal fields (don't do piecewise linear subsample)")
@@ -83,6 +83,24 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
     return vm;
 }
 
+// Sum the values appearing on periodically-identified vertices.
+// First sum onto the reduced DoFs, then redistribute.
+template<class Sim, class VField>
+VField sumIdentifiedValues(const Sim &sim, VField v) {
+    const auto &mesh = sim.mesh();
+    if (v.domainSize() != mesh.numNodes())
+        throw std::runtime_error("Expected per-node vector field");
+
+    VField dofField(sim.numDoFs());
+    dofField.clear();
+    for (size_t i = 0; i < mesh.numNodes(); ++i)
+        dofField(sim.DoF(i)) +=  v(i);
+    for (size_t i = 0; i < mesh.numNodes(); ++i)
+        v(i) = dofField(sim.DoF(i));
+
+    return v;
+}
+
 template<size_t _N>
 using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::template Getter<_N>;
 
@@ -102,36 +120,87 @@ void execute(const po::variables_map &args,
     BENCHMARK_START_TIMER_SECTION("Cell Problems");
     std::vector<VField> w_ij;
     std::unique_ptr<PeriodicCondition<_N>> pc;
-    if (args.count("manualPeriodicVertices"))
-        pc = Future::make_unique<PeriodicCondition<_N>>(sim.mesh(), args["manualPeriodicVertices"].as<string>());
-    if (args.count("orthotropicCell") == 0) {
-        solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"), std::move(pc));
-    }
-    else {
-        auto systems = PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
-        cout << systems.size() << endl;
-    }
-
-    BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
-
-    BENCHMARK_START_TIMER_SECTION("Compute Tensor");
-    // ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
     ETensor Eh;
-    if (args.count("orthotropicCell") == 0)   Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
-    else Eh = PeriodicHomogenization::Orthotropic::homogenizedElasticityTensorDisplacementForm(w_ij, sim);
-    BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
+    for (size_t it = 0; it < 20; ++it) {
+        if (args.count("manualPeriodicVertices"))
+            pc = Future::make_unique<PeriodicCondition<_N>>(sim.mesh(), args["manualPeriodicVertices"].as<string>());
+        if (args.count("orthotropicCell") == 0) {
+            solveCellProblems(w_ij, sim, 1e-7, args.count("ignorePeriodicMismatch"), std::move(pc));
+        }
+        else {
+            auto systems = PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
+            cout << systems.size() << endl;
+        }
 
-    cout << setprecision(16);
-    cout << "Homogenized elasticity tensor:" << endl;
-    cout << Eh << endl << endl;
+        BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
 
-    auto eigs = Eh.computeEigenstrains();
-    cout << "Minimum Eh eigenvalue " << eigs.lambdas[0] << " for eigenstrain: "
-         << eigs.strains.col(0).transpose() << endl;
+        BENCHMARK_START_TIMER_SECTION("Compute Tensor");
+        // ETensor Eh = homogenizedElasticityTensor(w_ij, sim);
+        if (args.count("orthotropicCell") == 0)   Eh = homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        else Eh = PeriodicHomogenization::Orthotropic::homogenizedElasticityTensorDisplacementForm(w_ij, sim);
+        BENCHMARK_STOP_TIMER_SECTION("Compute Tensor");
 
-    ETensor Eh_pinv = Eh.pseudoinverse();
-    cout << "Eh : Eh_pinv: " << endl << Eh.doubleContract(Eh_pinv) << endl << endl;
-    cout << "Eh : Eh_pinv : Eh " << endl << Eh.doubleContract(Eh_pinv).doubleContract(Eh) << endl << endl;
+        cout << setprecision(16);
+        cout << "Homogenized elasticity tensor:" << endl;
+        cout << Eh << endl << endl;
+
+        auto eigs = Eh.computeEigenstrains();
+        // Make all eigenstrains positive
+        if (eigs.strains(0, 0) < 0) eigs.strains.col(0) *= -1;
+        if (eigs.strains(1, 0) < 0) eigs.strains.col(1) *= -1;
+        if (eigs.strains(2, 0) < 0) eigs.strains.col(2) *= -1;
+
+        cout << "Minimum Eh eigenvalue " << eigs.lambdas[0] << " for eigenstrain: "
+             << eigs.strains.col(0).transpose() << endl;
+
+        SymmetricMatrixValue<Real, _N> minEigenstrain(eigs.strains.col(0));
+        SymmetricMatrixValue<Real, _N> midEigenstrain(eigs.strains.col(1));
+        SymmetricMatrixValue<Real, _N> maxEigenstrain(eigs.strains.col(2));
+
+        ETensor Eh_pinv = Eh.pseudoinverse();
+        // cout << "Eh : Eh_pinv: " << endl << Eh.doubleContract(Eh_pinv) << endl << endl;
+        // cout << "Eh : Eh_pinv : Eh " << endl << Eh.doubleContract(Eh_pinv).doubleContract(Eh) << endl << endl;
+
+        // Compute discrete shape derivative of minimum eigenvalue and
+        // one of the eigenstrain components
+        // (to steer away from the uniform expansion mode).
+        auto dEh = homogenizedElasticityTensorDiscreteDifferential(w_ij, sim);
+        // Work with vector fields instead of OneForms; we probably can't compute a
+        // proper Riesz representative on non-manifold meshes anyway, so don't
+        // worry about distinction between one-forms and vector fields.
+        VField dMinEigenvalue = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return minEigenstrain.doubleContract(E.doubleContract(minEigenstrain)); }, dEh).asVectorField());
+        VField dMidEigenvalue = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return midEigenstrain.doubleContract(E.doubleContract(midEigenstrain)); }, dEh).asVectorField());
+        VField dMaxEigenvalue = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return maxEigenstrain.doubleContract(E.doubleContract(maxEigenstrain)); }, dEh).asVectorField());
+
+        VField dMinEigenstrainC0 = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return -Eh_pinv.doubleContract(E.doubleContract(minEigenstrain))(0, 0); }, dEh).asVectorField());
+        VField dMinEigenstrainC1 = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return -Eh_pinv.doubleContract(E.doubleContract(minEigenstrain))(1, 1); }, dEh).asVectorField());
+        VField dMinEigenstrainC2 = sumIdentifiedValues(sim, compose([&](const ETensor &E) { return -Eh_pinv.doubleContract(E.doubleContract(minEigenstrain))(0, 1); }, dEh).asVectorField());
+
+        bool linearSubsampleFields = args.count("fullDegreeFieldOutput") == 0;
+        MSHFieldWriter writer("vertical_linkage_it" + std::to_string(it) + ".msh", sim.mesh(), linearSubsampleFields);
+        writer.addField("dE00", sumIdentifiedValues(sim, compose([&](const ETensor &E) { return E.D(0,0); }, dEh).asVectorField()), DomainType::PER_NODE);
+        writer.addField("dE01", sumIdentifiedValues(sim, compose([&](const ETensor &E) { return E.D(0,1); }, dEh).asVectorField()), DomainType::PER_NODE);
+        writer.addField("dE11", sumIdentifiedValues(sim, compose([&](const ETensor &E) { return E.D(1,1); }, dEh).asVectorField()), DomainType::PER_NODE);
+        writer.addField("dE22", sumIdentifiedValues(sim, compose([&](const ETensor &E) { return E.D(2,2); }, dEh).asVectorField()), DomainType::PER_NODE);
+
+        writer.addField("dMinEigenvalue", dMinEigenvalue, DomainType::PER_NODE);
+        writer.addField("dMidEigenvalue", dMidEigenvalue, DomainType::PER_NODE);
+        writer.addField("dMaxEigenvalue", dMaxEigenvalue, DomainType::PER_NODE);
+
+        writer.addField("dMinEigenstrainC0", dMinEigenstrainC0, DomainType::PER_NODE);
+        writer.addField("dMinEigenstrainC1", dMinEigenstrainC1, DomainType::PER_NODE);
+        writer.addField("dMinEigenstrainC2", dMinEigenstrainC2, DomainType::PER_NODE);
+
+        VField descentStep = dMinEigenstrainC1;
+        descentStep.maxColumnNormalize();
+        descentStep *= 0.01;
+        std::vector<MeshIO::IOVertex> pts(sim.mesh().numVertices());
+        for (auto v : sim.mesh().vertices()) {
+            pts[v.index()] = v.node()->p;
+            pts[v.index()].point += padTo3D(PointND<_N>(descentStep(v.index())));
+        }
+        sim.updateMeshNodePositions(pts);
+    }
 
     ETensor S = Eh.inverse();
     cout << "Homogenized compliance tensor:" << endl;
@@ -169,22 +238,6 @@ void execute(const po::variables_map &args,
     }
 
     cout << "Anisotropy:\t" << Eh.anisotropy() << endl;
-
-    if (args.count("m2mstress")) {
-        string mpath = args["m2mstress"].as<string>();
-        ofstream mfile(mpath);
-        ofstream gfile("gtensors.txt");
-        mfile << setprecision(16);
-        gfile << setprecision(16);
-        if (!mfile.is_open()) throw runtime_error("Failed to open output file " + mpath);
-        auto G = macroStrainToMicroStrainTensors(w_ij, sim);
-        for (size_t ei = 0; ei < sim.mesh().numElements(); ++ei) {
-            G.at(ei).writeUnflattened(gfile); gfile << endl;
-            auto F = mat.getTensor().doubleContract(G.at(ei).doubleContract(S));
-            F.writeUnflattened(mfile);
-            mfile << endl;
-        }
-    }
 
     if (args.count("fieldOutput")) {
         bool linearSubsampleFields = args.count("fullDegreeFieldOutput") == 0;

@@ -618,7 +618,7 @@ public:
     VField solve() const { return solve(neumannLoad()); }
 
     ////////////////////////////////////////////////////////////////////////
-    /*! Expand the reduced DoFs' values into per-vertex quantities
+    /*! Expand the reduced DoFs' values into per-node quantities
     //  @param[in]  x       DoF solution values
     //  @return     per-node displacement vector field.
     *///////////////////////////////////////////////////////////////////////
