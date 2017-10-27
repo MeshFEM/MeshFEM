@@ -199,7 +199,7 @@ struct NDArrayScannerCompileTime<N, Future::index_sequence<Idxs...>, I, Dim, Dim
 template<size_t N, size_t... Idxs, size_t Dim, size_t... Dims>
 struct NDArrayScannerCompileTime<N, Future::index_sequence<Idxs...>, /* I = */ Dim, Dim, Dims...> {
     template<class F, typename T>
-    static void scan(F &&f, T &theArray) {}
+    static void scan(F &&/* f */, T &/* theArray */) {}
 };
 
 // Base case: actually apply the visitor function on compile-time index sequence Idxs
