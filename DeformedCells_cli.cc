@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Generates and homogenizes cells that have been deformed linearly.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  05/12/2015 15:22:14
@@ -24,8 +24,10 @@
 #include "filters/remove_dangling_vertices.hh"
 
 #include <boost/program_options.hpp>
+#include <json.hpp>
 
 namespace po = boost::program_options;
+using json = nlohmann::json;
 using namespace std;
 using namespace PeriodicHomogenization;
 
@@ -54,6 +56,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("tile,t",     po::value<string>(), "tilings 'nx ny nz' (default: 1)")
         ("out,o",      po::value<string>(), "output file of deformed geometry (and w_ij fields if homogenization is run)")
+        ("dumpJson",   po::value<string>(), "dump info into a json file)")
         ;
 
     po::options_description cli_opts;
@@ -102,7 +105,7 @@ using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::tem
 
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements)
 {
     auto &mat = HMG<_N>::material;
@@ -222,6 +225,24 @@ void execute(const po::variables_map &args,
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
         EhDefo.printOrthotropic(cout);
+        if (args.count("dumpJson")) {
+            json data;
+            data["elasticity_tensor"] = json::array();
+            auto E = EhDefo.getCoefficients();
+            for (auto x : E) {
+                data["elasticity_tensor"].push_back(x);
+            }
+            data["homogenized_moduli"] = json::array();
+            std::vector<double> P;
+            EhDefo.getOrthotropicParameters(P);
+            for (auto x : P) {
+                data["homogenized_moduli"].push_back(x);
+            }
+
+            // Write json
+            std::ofstream out(args["dumpJson"].as<string>());
+            out << data;
+        }
     }
     else if (args.count("tile")) {
         mesh.setNodePositions(deformedVertices);
