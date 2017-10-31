@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef FLATTENING_HH
 #define FLATTENING_HH
+#include <cstddef>
 
 // Length of a flattened rank 2 tensor in "dim" dimensions.
 // This is also the row and column size of the flattened rank 4 tensor.

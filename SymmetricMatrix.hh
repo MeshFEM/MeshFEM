@@ -310,6 +310,21 @@ public:
     }
     template<typename _ST2, typename _CSRT2>
     SymmetricMatrix(const ConstSymmetricMatrixBase<_Real, t_N, _ST2, _CSRT2> &b) : Base(b.m_data) { }
+    // Construction from general NxN matrix (validates symmetry)
+    template<class Derived, typename std::enable_if<(Derived::RowsAtCompileTime == t_N) &&
+                                                    (Derived::ColsAtCompileTime == t_N), int>::type = 0>
+    SymmetricMatrix(const Eigen::MatrixBase<Derived> &mat): Base(Storage::Zero()) {
+        // Build symmetric matrix from upper triangle
+        for (size_t i = 0; i < t_N; ++i)
+            for (size_t j = i; j < t_N; ++j)
+                (*this)(i, j) = mat(i, j);
+
+        // Validate symmetry by checking lower triangle
+        for (size_t i = 0; i < t_N; ++i)
+            for (size_t j = 0; j < i; ++j)
+                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-16)
+                    throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+    }
 
     // Construct a unit canonical basis symmetric matrix:
     // e_ij = .5 * (e_i e_j^T + e_j e_i^T)
