@@ -48,7 +48,7 @@ public:
 template<class _Mesh>
 class NHandle : public Handle<_Mesh, NHandle, _NData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, NHandle::template NHandle, _NData<_Mesh>>;
+    using _H = Handle<_Mesh, NHandle, _NData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using BNH = typename _Mesh::template BNHandle<_Mesh>;
@@ -113,7 +113,7 @@ public:
 template<class _Mesh>
 class BNHandle : public Handle<_Mesh, BNHandle, _BNData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BNHandle::template BNHandle, _BNData<_Mesh>>;
+    using _H = Handle<_Mesh, BNHandle, _BNData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  NH = typename _Mesh::template  NHandle<_Mesh>;
     using BVH = typename _Mesh::template BVHandle<_Mesh>;

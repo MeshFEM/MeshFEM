@@ -19,7 +19,7 @@ protected:
     // not template. We need the following trick to refer to the template (seems
     // to be non-standard compiler behavior:
     // http://stackoverflow.com/questions/17287778/how-do-i-use-the-class-name-inside-the-class-itself-as-a-template-argument
-    using _H = Handle<_Mesh, VHandle::template VHandle, _VData<_Mesh>>;
+    using _H = Handle<_Mesh, VHandle, _VData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
@@ -58,7 +58,7 @@ public:
 template<class _Mesh>
 class HEHandle : public Handle<_Mesh, HEHandle, _HEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, HEHandle::template HEHandle, _HEData<_Mesh>>;
+    using _H = Handle<_Mesh, HEHandle, _HEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using HEH = typename _Mesh::template HEHandle<_Mesh>;
@@ -115,7 +115,7 @@ public:
 template<class _Mesh>
 class THandle : public Handle<_Mesh, THandle, _TData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, THandle::template THandle, _TData<_Mesh>>;
+    using _H = Handle<_Mesh, THandle, _TData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  TH = typename _Mesh::template  THandle<_Mesh>;
@@ -159,7 +159,7 @@ public:
 template<class _Mesh>
 class BVHandle : public Handle<_Mesh, BVHandle, _BVData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BVHandle::template BVHandle, _BVData<_Mesh>>;
+    using _H = Handle<_Mesh, BVHandle, _BVData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using BVH = typename _Mesh::template BVHandle<_Mesh>;
@@ -185,7 +185,7 @@ public:
 template<class _Mesh>
 class BEHandle : public Handle<_Mesh, BEHandle, _BEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BEHandle::template BEHandle, _BEData<_Mesh>>;
+    using _H = Handle<_Mesh, BEHandle, _BEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using BEH = typename _Mesh::template BEHandle<_Mesh>;

@@ -17,7 +17,7 @@ template<class _Mesh> using  _BFData = typename MeshDataTraits<_Mesh>::BoundaryF
 template<class _Mesh>
 class VHandle : public Handle<_Mesh, VHandle, _VData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, VHandle::template VHandle, _VData<_Mesh>>;
+    using _H = Handle<_Mesh, VHandle, _VData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
@@ -44,7 +44,7 @@ public:
 template<class _Mesh>
 class HFHandle : public Handle<_Mesh, HFHandle, _HFData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, HFHandle::template HFHandle, _HFData<_Mesh>>;
+    using _H = Handle<_Mesh, HFHandle, _HFData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
@@ -77,7 +77,7 @@ public:
 template<class _Mesh>
 class HEHandle : public Handle<_Mesh, HEHandle, _HEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, HEHandle::template HEHandle, _HEData<_Mesh>>;
+    using _H = Handle<_Mesh, HEHandle, _HEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using   VH = typename _Mesh::template   VHandle<_Mesh>;
@@ -121,7 +121,7 @@ public:
 template<class _Mesh>
 class THandle : public Handle<_Mesh, THandle, _TData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, THandle::template THandle, _TData<_Mesh>>;
+    using _H = Handle<_Mesh, THandle, _TData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  TH = typename _Mesh::template  THandle<_Mesh>;
@@ -167,7 +167,7 @@ public:
 template<class _Mesh>
 class BVHandle : public Handle<_Mesh, BVHandle, _BVData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BVHandle::template BVHandle, _BVData<_Mesh>>;
+    using _H = Handle<_Mesh, BVHandle, _BVData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using   VH = typename _Mesh::template   VHandle<_Mesh>;
@@ -196,7 +196,7 @@ public:
 template<class _Mesh>
 class BHEHandle : public Handle<_Mesh, BHEHandle, _BHEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BHEHandle::template BHEHandle, _BHEData<_Mesh>>;
+    using _H = Handle<_Mesh, BHEHandle, _BHEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  HEH = typename _Mesh::template  HEHandle<_Mesh>;
     // Make sure we use the derived handles when we traverse a derived mesh...
@@ -233,7 +233,7 @@ public:
 template<class _Mesh>
 class BFHandle : public Handle<_Mesh, BFHandle, _BFData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BFHandle::template BFHandle, _BFData<_Mesh>>;
+    using _H = Handle<_Mesh, BFHandle, _BFData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  BVH = typename _Mesh::template  BVHandle<_Mesh>;
