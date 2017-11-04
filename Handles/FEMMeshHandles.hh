@@ -3,7 +3,11 @@
 // #include "../BoundaryMesh.hh"
 #include "../MeshDataTraits.hh"
 
-namespace _FEMMeshHandleDetail {
+namespace _FEMMeshHandles {
+
+// We need to expliclty reference this enclosing scope to hack around an old
+// clang bug involving injected class names; make it less verbose
+namespace _hndl = ::_FEMMeshHandles;
 
 template<class _Mesh> using  _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using  _NData = typename MeshDataTraits<_Mesh>::NodeData;
@@ -48,7 +52,7 @@ public:
 template<class _Mesh>
 class NHandle : public Handle<_Mesh, NHandle, _NData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, NHandle, _NData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::NHandle, _NData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using BNH = typename _Mesh::template BNHandle<_Mesh>;
@@ -113,7 +117,7 @@ public:
 template<class _Mesh>
 class BNHandle : public Handle<_Mesh, BNHandle, _BNData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BNHandle, _BNData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::BNHandle, _BNData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  NH = typename _Mesh::template  NHandle<_Mesh>;
     using BVH = typename _Mesh::template BVHandle<_Mesh>;
@@ -155,18 +159,18 @@ public:
 template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
 struct HandleTraits<FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>> {
-    template<class _Mesh> using  VHandle = _FEMMeshHandleDetail:: VHandle<_Mesh>; // Vertex
-    template<class _Mesh> using  NHandle = _FEMMeshHandleDetail:: NHandle<_Mesh>; // Node
-    template<class _Mesh> using  EHandle = _FEMMeshHandleDetail:: EHandle<_Mesh>; // Element
-    template<class _Mesh> using BVHandle = _FEMMeshHandleDetail::BVHandle<_Mesh>; // Boundary vertex
-    template<class _Mesh> using BNHandle = _FEMMeshHandleDetail::BNHandle<_Mesh>; // Boundary node
-    template<class _Mesh> using BEHandle = _FEMMeshHandleDetail::BEHandle<_Mesh>; // Boundary element
+    template<class _Mesh> using  VHandle = _FEMMeshHandles:: VHandle<_Mesh>; // Vertex
+    template<class _Mesh> using  NHandle = _FEMMeshHandles:: NHandle<_Mesh>; // Node
+    template<class _Mesh> using  EHandle = _FEMMeshHandles:: EHandle<_Mesh>; // Element
+    template<class _Mesh> using BVHandle = _FEMMeshHandles::BVHandle<_Mesh>; // Boundary vertex
+    template<class _Mesh> using BNHandle = _FEMMeshHandles::BNHandle<_Mesh>; // Boundary node
+    template<class _Mesh> using BEHandle = _FEMMeshHandles::BEHandle<_Mesh>; // Boundary element
 };
 
 // Range traits for all tri handle types: get the corresponding entity counts.
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail:: VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()        ; } }; // Vertex
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail:: NHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numNodes()           ; } }; // Node
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail:: EHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numElements()        ; } }; // Element
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } }; // Boundary vertex
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail::BNHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryNodes()   ; } }; // Boundary node
-template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandleDetail::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryElements(); } }; // Boundary element
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()        ; } }; // Vertex
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: NHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numNodes()           ; } }; // Node
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: EHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numElements()        ; } }; // Element
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } }; // Boundary vertex
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BNHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryNodes()   ; } }; // Boundary node
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryElements(); } }; // Boundary element

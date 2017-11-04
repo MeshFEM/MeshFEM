@@ -225,6 +225,11 @@ int main(int argc, const char *argv[])
                 ComponentMask(args["reflect"].as<string>()));
     }
 
+    // Mesh type-generic information
+    if (args.count("info")) {
+        cout << "Bounding box:\t" << BBox<Point3D>(inVertices) << endl;
+    }
+
     if (type == MeshIO::MESH_TET) {
         typedef TetMesh<VertexData, TMEmptyData, TMEmptyData, TMEmptyData, VertexData,
                         HalfEdgeData, TMEmptyData> Mesh;

@@ -140,11 +140,11 @@ protected:
     DataStorage<BoundaryEdgeData>   m_boundaryEdgeData;
 
     // Handles need access to private traversal operations below
-    template<class Mesh> friend class _TriMeshHandleDetail::VHandle;
-    template<class Mesh> friend class _TriMeshHandleDetail::THandle;
-    template<class Mesh> friend class _TriMeshHandleDetail::HEHandle;
-    template<class Mesh> friend class _TriMeshHandleDetail::BVHandle;
-    template<class Mesh> friend class _TriMeshHandleDetail::BEHandle;
+    template<class Mesh> friend class _TriMeshHandles::VHandle;
+    template<class Mesh> friend class _TriMeshHandles::THandle;
+    template<class Mesh> friend class _TriMeshHandles::HEHandle;
+    template<class Mesh> friend class _TriMeshHandles::BVHandle;
+    template<class Mesh> friend class _TriMeshHandles::BEHandle;
 
     // Index arrays, names analogous to those in TetMesh.hh
     ////////////////////////////////////////////////////////////////////////////

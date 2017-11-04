@@ -280,12 +280,12 @@ private:
     BBox<EmbeddingSpace> m_bbox;
 
     // Handles need access to private traversal operations below
-    template<class Mesh> friend class _FEMMeshHandleDetail::VHandle;
-    template<class Mesh> friend class _FEMMeshHandleDetail::NHandle;
-    template<class Mesh> friend class _FEMMeshHandleDetail::EHandle;
-    template<class Mesh> friend class _FEMMeshHandleDetail::BVHandle;
-    template<class Mesh> friend class _FEMMeshHandleDetail::BNHandle;
-    template<class Mesh> friend class _FEMMeshHandleDetail::BEHandle;
+    template<class Mesh> friend class _FEMMeshHandles::VHandle;
+    template<class Mesh> friend class _FEMMeshHandles::NHandle;
+    template<class Mesh> friend class _FEMMeshHandles::EHandle;
+    template<class Mesh> friend class _FEMMeshHandles::BVHandle;
+    template<class Mesh> friend class _FEMMeshHandles::BNHandle;
+    template<class Mesh> friend class _FEMMeshHandles::BEHandle;
 
     // Nodes 0..#Vertices-1 are located on the corresponding vertex.
     // The remaining nodes do not have vertices.

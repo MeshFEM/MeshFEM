@@ -33,7 +33,7 @@ std::istream & operator>>(std::istream &is, IOVertex &v) {
 //  @return     output stream for stream operator chaining
 *///////////////////////////////////////////////////////////////////////////////
 std::ostream & operator<<(std::ostream &os, const IOVertex &v) {
-    os << v[0] << " " << v[1] << " " << v[2] << " " << std::endl;
+    os << v[0] << " " << v[1] << " " << v[2] << '\n';
     return os;
 }
 
@@ -70,7 +70,7 @@ std::ostream & operator<<(std::ostream &os, const IOElement &e) {
     os << e.size();
     for (unsigned int i = 0; i < e.size(); ++i)
         os << ' ' << e[i];
-    os << std::endl;
+    os << '\n';
     return os;
 }
 
@@ -240,9 +240,9 @@ MeshType load(const std::string &path, std::vector<IOVertex> &nodes,
 ////////////////////////////////////////////////////////////////////////////////
 void MeshIO_OFF::save(ostream &os, const vector<Vertex> &nodes,
                       const vector<Element> &elements, MeshType /* t */) {
-    os << "OFF" << std::endl
+    os << "OFF\n"
        << nodes.size() << " " << elements.size() << " "
-       << 0 << std::endl; // Edge count ignored
+       << 0 << '\n'; // Edge count ignored
 
     for (size_t i = 0; i < nodes.size(); ++i)
         os << nodes[i];
@@ -304,7 +304,7 @@ void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
         for (size_t j = 0; j < polySize; ++j) {
             os << ' ' << e[j] + 1; // OBJ is 1-indexed
         }
-        os << endl;
+        os << '\n';
     }
 }
 
@@ -428,25 +428,25 @@ void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
     if (elSize == 3) {
         // TetGen Format
         // #Vertices, 3D, 0 attr, 0 bdry marks
-        os << nodes.size() << " 3 0 0" << std::endl;
+        os << nodes.size() << " 3 0 0\n";
         for (size_t i = 0; i < nodes.size(); ++i)
             os << i << ' ' << nodes[i];
-        os << elements.size() << " 0" << std::endl; // 0 bdry marks
+        os << elements.size() << " 0\n"; // 0 bdry marks
         for (size_t i = 0; i < elements.size(); ++i) {
-            os << "1" << std::endl;
+            os << "1\n";
             os << elements[i];
         }
-        os << 0 << std::endl; // no holes
+        os << 0 << '\n'; // no holes
     }
     else if (elSize == 2) {
         // Triangle Format
-        os << nodes.size() << " 2 0 0" << std::endl;
+        os << nodes.size() << " 2 0 0\n";
         for (size_t i = 0; i < nodes.size(); ++i)
-            os << i << ' ' << truncateFrom3D<Point2D>(nodes[i]).transpose() << std::endl;
-        os << elements.size() << " 0" << std::endl; // 0 bdry marks
+            os << i << ' ' << truncateFrom3D<Point2D>(nodes[i]).transpose() << '\n';
+        os << elements.size() << " 0\n"; // 0 bdry marks
         for (size_t i = 0; i < elements.size(); ++i)
-            os << i << ' ' << elements[i].at(0) << ' ' << elements[i].at(1) << std::endl;
-        os << 0 << std::endl; // no holes
+            os << i << ' ' << elements[i].at(0) << ' ' << elements[i].at(1) << '\n';
+        os << 0 << '\n'; // no holes
     }
     else throw typeError;
 }
@@ -542,16 +542,16 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
 
     int file_type = m_binary ? 1 : 0;
     int data_size = sizeof(double);
-    os << "$MeshFormat" << std::endl << 2.2 << " " << file_type << " "
-        << data_size << std::endl;
+    os << "$MeshFormat\n" << 2.2 << " " << file_type << " "
+        << data_size << '\n';
     if (m_binary) {
         int one = 1;
         os.write((char *) &one, sizeof(int));
-        os << std::endl;
+        os << '\n';
     }
 
-    os << "$EndMeshFormat" << std::endl;
-    os << "$Nodes" << std::endl << nodes.size() << std::endl;
+    os << "$EndMeshFormat\n";
+    os << "$Nodes\n" << nodes.size() << '\n';
 
     // Note: all indices must be positive, so we use 1-indexing
     // Write node indices and coordinates, padding with z = 0 for 2D
@@ -562,16 +562,16 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                               nodes[i - 1][2] };
             os.write((char *) xyz, 3 * sizeof(double));
         }
-        os << std::endl;
+        os << '\n';
     }
     else {
         os << std::setprecision(17);
         for (size_t i = 0; i < nodes.size(); ++i)
             os << i + 1 << " " << nodes[i];
     }
-    os << "$EndNodes" << std::endl;
+    os << "$EndNodes\n";
 
-    os << "$Elements" << std::endl << elements.size() << std::endl;
+    os << "$Elements\n" << elements.size() << '\n';
 
     if (m_binary) {
         if (elements.size() > 0) {
@@ -593,7 +593,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                 os.write((char *) &cidx, sizeof(int));
             }
         }
-        os << std::endl;
+        os << '\n';
     }
     else {
         for (size_t i = 0; i < elements.size(); ++i) {
@@ -603,11 +603,11 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
                         + " vs " + std::to_string(ei.nodesPerElem) + ")");
             for (size_t c = 0; c < ei.nodesPerElem; ++c)
                 os << " " << elements[i][c] + 1;
-            os << std::endl;
+            os << '\n';
         }
     }
 
-    os << "$EndElements" << std::endl;
+    os << "$EndElements\n";
 }
 
 // Formerly used is >> ws to skip newline/whitespace, but in binary files,

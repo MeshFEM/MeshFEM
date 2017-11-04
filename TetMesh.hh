@@ -195,13 +195,13 @@ protected:
     DataStorage<BoundaryFaceData>     m_boundaryFaceData;
 
     // Handles need access to private traversal operations below
-    template<class Mesh> friend class _TetMeshHandleDetail::  VHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::  THandle;
-    template<class Mesh> friend class _TetMeshHandleDetail:: HFHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail:: HEHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail:: BVHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail::BHEHandle;
-    template<class Mesh> friend class _TetMeshHandleDetail:: BFHandle;
+    template<class Mesh> friend class _TetMeshHandles::  VHandle;
+    template<class Mesh> friend class _TetMeshHandles::  THandle;
+    template<class Mesh> friend class _TetMeshHandles:: HFHandle;
+    template<class Mesh> friend class _TetMeshHandles:: HEHandle;
+    template<class Mesh> friend class _TetMeshHandles:: BVHandle;
+    template<class Mesh> friend class _TetMeshHandles::BHEHandle;
+    template<class Mesh> friend class _TetMeshHandles:: BFHandle;
 
     // Inward-oriented half-face corner indices
     // Face i is across tet corner i.

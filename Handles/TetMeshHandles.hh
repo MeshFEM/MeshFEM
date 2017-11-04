@@ -1,7 +1,11 @@
 #include "Handle.hh"
 #include "../MeshDataTraits.hh"
 
-namespace _TetMeshHandleDetail {
+namespace _TetMeshHandles {
+
+// We need to expliclty reference this enclosing scope to hack around an old
+// clang bug involving injected class names; make it less verbose
+namespace _hndl = ::_TetMeshHandles;
 
 template<class _Mesh> using   _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using  _HFData = typename MeshDataTraits<_Mesh>::HalfFaceData;
@@ -17,7 +21,7 @@ template<class _Mesh> using  _BFData = typename MeshDataTraits<_Mesh>::BoundaryF
 template<class _Mesh>
 class VHandle : public Handle<_Mesh, VHandle, _VData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, VHandle, _VData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::VHandle, _VData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
@@ -44,7 +48,7 @@ public:
 template<class _Mesh>
 class HFHandle : public Handle<_Mesh, HFHandle, _HFData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, HFHandle, _HFData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::HFHandle, _HFData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
@@ -77,7 +81,7 @@ public:
 template<class _Mesh>
 class HEHandle : public Handle<_Mesh, HEHandle, _HEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, HEHandle, _HEData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::HEHandle, _HEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using   VH = typename _Mesh::template   VHandle<_Mesh>;
@@ -121,7 +125,7 @@ public:
 template<class _Mesh>
 class THandle : public Handle<_Mesh, THandle, _TData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, THandle, _TData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::THandle, _TData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  TH = typename _Mesh::template  THandle<_Mesh>;
@@ -167,7 +171,7 @@ public:
 template<class _Mesh>
 class BVHandle : public Handle<_Mesh, BVHandle, _BVData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BVHandle, _BVData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::BVHandle, _BVData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using   VH = typename _Mesh::template   VHandle<_Mesh>;
@@ -196,7 +200,7 @@ public:
 template<class _Mesh>
 class BHEHandle : public Handle<_Mesh, BHEHandle, _BHEData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BHEHandle, _BHEData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::BHEHandle, _BHEData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  HEH = typename _Mesh::template  HEHandle<_Mesh>;
     // Make sure we use the derived handles when we traverse a derived mesh...
@@ -233,7 +237,7 @@ public:
 template<class _Mesh>
 class BFHandle : public Handle<_Mesh, BFHandle, _BFData<_Mesh>> {
 protected:
-    using _H = Handle<_Mesh, BFHandle, _BFData<_Mesh>>;
+    using _H = Handle<_Mesh, _hndl::BFHandle, _BFData<_Mesh>>;
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  BVH = typename _Mesh::template  BVHandle<_Mesh>;
@@ -267,20 +271,20 @@ public:
 
 template<class _VertexData, class _HalfFaceData, class _HalfEdgeData, class _TetData, class _BoundaryVertexData, class _BoundaryHalfEdgeData, class _BoundaryFaceData>
 struct HandleTraits<TetMesh<_VertexData, _HalfFaceData, _HalfEdgeData, _TetData, _BoundaryVertexData, _BoundaryHalfEdgeData, _BoundaryFaceData>> {
-    template<class _Mesh> using   VHandle = _TetMeshHandleDetail::  VHandle<_Mesh>; // Vertex
-    template<class _Mesh> using  HFHandle = _TetMeshHandleDetail:: HFHandle<_Mesh>; // Half-face
-    template<class _Mesh> using  HEHandle = _TetMeshHandleDetail:: HEHandle<_Mesh>; // Half-edge
-    template<class _Mesh> using   THandle = _TetMeshHandleDetail::  THandle<_Mesh>; // Tetrahedron
-    template<class _Mesh> using  BVHandle = _TetMeshHandleDetail:: BVHandle<_Mesh>; // Boundary vertex
-    template<class _Mesh> using BHEHandle = _TetMeshHandleDetail::BHEHandle<_Mesh>; // Boundary half-edge
-    template<class _Mesh> using  BFHandle = _TetMeshHandleDetail:: BFHandle<_Mesh>; // Boundary face
+    template<class _Mesh> using   VHandle = _TetMeshHandles::  VHandle<_Mesh>; // Vertex
+    template<class _Mesh> using  HFHandle = _TetMeshHandles:: HFHandle<_Mesh>; // Half-face
+    template<class _Mesh> using  HEHandle = _TetMeshHandles:: HEHandle<_Mesh>; // Half-edge
+    template<class _Mesh> using   THandle = _TetMeshHandles::  THandle<_Mesh>; // Tetrahedron
+    template<class _Mesh> using  BVHandle = _TetMeshHandles:: BVHandle<_Mesh>; // Boundary vertex
+    template<class _Mesh> using BHEHandle = _TetMeshHandles::BHEHandle<_Mesh>; // Boundary half-edge
+    template<class _Mesh> using  BFHandle = _TetMeshHandles:: BFHandle<_Mesh>; // Boundary face
 };
 
 // Range traits for all tet handle types: get the corresponding entity counts.
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::  VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()         ; } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: HFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfFaces()        ; } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: HEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfEdges()        ; } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::  THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTets()             ; } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };
-template<class _Mesh> struct HandleRangeTraits<_TetMeshHandleDetail:: BFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryFaces()    ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::  VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()         ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: HFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfFaces()        ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: HEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfEdges()        ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::  THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTets()             ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };
+template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryFaces()    ; } };
