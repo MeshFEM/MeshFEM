@@ -160,6 +160,12 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
 find_package(CSGFEM REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC CSGFEM)
 
+# json library
+if(NOT TARGET json)
+    add_library(json INTERFACE)
+    target_include_directories(json SYSTEM INTERFACE ${THIRD_PARTY_DIR}/json)
+endif()
+
 # TBB library
 find_package(TBB)
 if(TBB_FOUND)
@@ -221,7 +227,7 @@ target_link_libraries(ConstStrainDisplacement_cli ${PROJECT_NAME})
 set_target_properties(ConstStrainDisplacement_cli PROPERTIES CXX_STANDARD 11)
 
 add_executable(DeformedCells_cli DeformedCells_cli.cc)
-target_link_libraries(DeformedCells_cli ${PROJECT_NAME})
+target_link_libraries(DeformedCells_cli ${PROJECT_NAME} json)
 set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
 
 if(CERES_FOUND)
