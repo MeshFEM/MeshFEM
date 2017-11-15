@@ -7,7 +7,7 @@
 //      This allows the tensor to be stored as a symmetric 6x6 matrix "D"
 //      See doc/meshless_fem/TensorFlattening.pdf
 //      for details of this transformation.
-//      
+//
 //      When _MajorSymmetry == true, symmetry is enforced by only storing the
 //      upper triangle of D internally. This means matrix element accesses must
 //      be done through method D(i, j), and matrix operations need to be
@@ -20,7 +20,7 @@
 //      these shouldn't be used as true elasticity tensors). This can be useful
 //      to store intermediate computation results on rank 4 tensors: e.g. the
 //      double contraction of two elasticity tensors.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  05/11/2014 15:14:13
@@ -170,7 +170,7 @@ public:
                              moduli[3], moduli[4], moduli[5],
                              moduli[6], moduli[7], moduli[8]);
         }
-        else { 
+        else {
             throw std::runtime_error("Invalid instance dimension.");
         }
     }
@@ -620,6 +620,27 @@ public:
             os << ((i < _Dim - 1) ? "}, " : "}");
         }
         os << "}";
+    }
+
+    // For serialization into a json file
+    std::vector<typename DType::Scalar> getCoefficients() {
+        std::vector<typename DType::Scalar> coeffs;
+        if (_MajorSymmetry) {
+            auto M = (DType) m_d.template selfadjointView<Eigen::Upper>();
+            for (int i = 0; i < M.rows(); ++i) {
+                for (int j = 0; j < M.cols(); ++j) {
+                    coeffs.push_back(M(i, j));
+                }
+            }
+        } else {
+            auto M = m_d;
+            for (int i = 0; i < M.rows(); ++i) {
+                for (int j = 0; j < M.cols(); ++j) {
+                    coeffs.push_back(M(i, j));
+                }
+            }
+        }
+        return coeffs;
     }
 
     // For debug purposes only
