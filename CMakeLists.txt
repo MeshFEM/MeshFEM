@@ -7,7 +7,7 @@ project(MeshFEM)
 
 # CMP0063: Honor visibility properties for all target types.
 if(POLICY CMP0063)
-	cmake_policy(SET CMP0063 NEW)
+    cmake_policy(SET CMP0063 NEW)
 endif()
 
 ################################################################################
@@ -22,17 +22,17 @@ set(CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during R
 set(CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
 set(CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
 mark_as_advanced(
-	CMAKE_CXX_FLAGS_RELWITHASSERT
-	CMAKE_C_FLAGS_RELWITHASSERT
-	CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT
-	CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT
-	CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT
-	CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_CXX_FLAGS_RELWITHASSERT
+    CMAKE_C_FLAGS_RELWITHASSERT
+    CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT
+    CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
 )
 
 if(NOT CMAKE_BUILD_TYPE)
-	message(STATUS "No build type selected, default to RelWithAssert")
-	set(CMAKE_BUILD_TYPE "RelWithAssert")
+    message(STATUS "No build type selected, default to RelWithAssert")
+    set(CMAKE_BUILD_TYPE "RelWithAssert")
 endif()
 
 set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of build. Options are: None Debug Release RelWithDebInfo MinSizeRel RelWithAssert" FORCE)
@@ -60,66 +60,66 @@ option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent l
 ################################################################################
 
 add_library(${PROJECT_NAME}
-		BoundaryConditions.cc
-		EdgeFields.cc
-		GlobalBenchmark.cc
-		Materials.cc
-		MeshIO.cc
-		MSHFieldParser.cc
-		Types.cc
+        BoundaryConditions.cc
+        EdgeFields.cc
+        GlobalBenchmark.cc
+        Materials.cc
+        MeshIO.cc
+        MSHFieldParser.cc
+        Types.cc
 
-		BaseCellType.hh
-		BoundaryConditions.hh
-		BoundaryLaplacian.hh
-		BoundaryMesh.hh
-		CollisionGrid.hh
-		ComponentMask.hh
-		Concepts.hh
-		DenseCollisionGrid.hh
-		EdgeFields.hh
-		EmbeddedElement.hh
-		ExpressionVector.hh
-		FEMMesh.hh
-		function_traits.hh
-		Functions.hh
-		Future.hh
-		GaussQuadrature.hh
-		Geometry.hh
-		GlobalBenchmark.hh
-		GridFunction.hh
-		HalfEdge.hh
-		HalfedgeDictionary.hh
-		InterpolantRestriction.hh
-		JSFieldWriter.hh
-		Laplacian.hh
-		LinearElasticity.hh
-		MassMatrix.hh
-		MaterialField.hh
-		MaterialOptimization.hh
-		Materials.hh
-		MeshDataTraits.hh
-		MeshIO.hh
-		MSHFieldParser.hh
-		MSHFieldWriter.hh
-		NTuple.hh
-		OneForm.hh
-		OrthotropicHomogenization.hh
-		PeriodicBoundaryMatcher.hh
-		PeriodicHomogenization.hh
-		PerturbMesh.hh
-		Poisson.hh
-		Simplex.hh
-		SimplicialMesh.hh
-		SimplicialMeshInterface.hh
-		SymmetricMatrixInterpolant.hh
-		TemplateHacks.hh
-		TetMesh.hh
-		TriMesh.hh
-		Types.hh
-		UniformLaplacian.hh
+        BaseCellType.hh
+        BoundaryConditions.hh
+        BoundaryLaplacian.hh
+        BoundaryMesh.hh
+        CollisionGrid.hh
+        ComponentMask.hh
+        Concepts.hh
+        DenseCollisionGrid.hh
+        EdgeFields.hh
+        EmbeddedElement.hh
+        ExpressionVector.hh
+        FEMMesh.hh
+        function_traits.hh
+        Functions.hh
+        Future.hh
+        GaussQuadrature.hh
+        Geometry.hh
+        GlobalBenchmark.hh
+        GridFunction.hh
+        HalfEdge.hh
+        HalfedgeDictionary.hh
+        InterpolantRestriction.hh
+        JSFieldWriter.hh
+        Laplacian.hh
+        LinearElasticity.hh
+        MassMatrix.hh
+        MaterialField.hh
+        MaterialOptimization.hh
+        Materials.hh
+        MeshDataTraits.hh
+        MeshIO.hh
+        MSHFieldParser.hh
+        MSHFieldWriter.hh
+        NTuple.hh
+        OneForm.hh
+        OrthotropicHomogenization.hh
+        PeriodicBoundaryMatcher.hh
+        PeriodicHomogenization.hh
+        PerturbMesh.hh
+        Poisson.hh
+        Simplex.hh
+        SimplicialMesh.hh
+        SimplicialMeshInterface.hh
+        SymmetricMatrixInterpolant.hh
+        TemplateHacks.hh
+        TetMesh.hh
+        TriMesh.hh
+        Types.hh
+        UniformLaplacian.hh
 
-		Triangulate.h
-		util.h
+        Triangulate.h
+        util.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC .)
@@ -129,7 +129,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 ################################################################################
 
 if(DISABLE_CXX11_ABI_GCC)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 
 ################################################################################
@@ -144,11 +144,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 # set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 # C++11 Thread library
-find_package(Threads REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+# find_package(Threads REQUIRED)
+# target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
 # Boost library
-find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options thread)
+find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
@@ -169,9 +169,9 @@ endif()
 # TBB library
 find_package(TBB)
 if(TBB_FOUND)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC -DHAS_TBB)
-	target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
-	target_link_libraries(${PROJECT_NAME} PUBLIC ${TBB_LIBRARIES})
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DHAS_TBB)
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${TBB_LIBRARIES})
 endif()
 
 # Triangle library
@@ -179,8 +179,8 @@ endif()
 # target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
 # target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
 if(NOT TARGET triangle)
-	add_subdirectory(${THIRD_PARTY_DIR}/triangle triangle)
-	target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
+    add_subdirectory(${THIRD_PARTY_DIR}/triangle triangle)
+    target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
 endif()
 
 # Matheval library
@@ -204,10 +204,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 # Ceres library
 find_package(Ceres)
 if(CERES_FOUND)
-	target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-	target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
 else()
-	message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
 endif()
 
 ################################################################################
@@ -231,9 +231,9 @@ target_link_libraries(DeformedCells_cli ${PROJECT_NAME} json)
 set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
 
 if(CERES_FOUND)
-	add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-	target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
-	set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
+    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+    target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
+    set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
 endif()
 
 add_executable(Simulate_cli Simulate_cli.cc)
