@@ -21,6 +21,8 @@ endif()
 
 # Hard-coded guesses
 set(_MATHEVAL_SEARCH_DIRS
+	${THIRD_PARTY_DIR}/matheval
+	${MESHFEM_THIRD_PARTY_DIR}/matheval
 	${MATHEVAL_ROOT_DIR}
 	/usr/local
 	/sw # Fink
@@ -34,10 +36,10 @@ find_path(MATHEVAL_INCLUDE_DIR
 		matheval.h
 	HINTS
 		${_MATHEVAL_SEARCH_DIRS}
-	PATH_SUFFIXES
-		include
 	PATHS
 		$ENV{LIBMATHEVAL_INC}
+	PATH_SUFFIXES
+		include
 )
 
 find_library(MATHEVAL_LIBRARY
@@ -45,10 +47,10 @@ find_library(MATHEVAL_LIBRARY
 		matheval
 	HINTS
 		${_MATHEVAL_SEARCH_DIRS}
-	PATH_SUFFIXES
-		lib64 lib
 	PATHS
 		$ENV{LIBMATHEVAL_LIB}
+	PATH_SUFFIXES
+		lib64 lib
 )
 
 # handle the QUIETLY and REQUIRED arguments and set MATHEVAL_FOUND to TRUE if

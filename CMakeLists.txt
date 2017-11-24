@@ -53,7 +53,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Wno-comment")
 # Platform-specific options
 ################################################################################
 
-option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
+cmake_host_system_information(RESULT MY_HOSTNAME QUERY HOSTNAME)
+if(MY_HOSTNAME MATCHES "log-*")
+	set(DISABLE_CXX11_ABI_DEFAULT ON)
+else()
+	set(DISABLE_CXX11_ABI_DEFAULT OFF)
+endif()
+option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 
 ################################################################################
 # MeshFEM sources
