@@ -12,7 +12,7 @@ endif()
 
 ################################################################################
 
-set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/)
+set(MESHFEM_THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
@@ -163,7 +163,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CSGFEM)
 # json library
 if(NOT TARGET json)
     add_library(json INTERFACE)
-    target_include_directories(json SYSTEM INTERFACE ${THIRD_PARTY_DIR}/json)
+    target_include_directories(json SYSTEM INTERFACE ${MESHFEM_THIRD_PARTY_DIR}/json)
 endif()
 
 # TBB library
@@ -179,7 +179,7 @@ endif()
 # target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
 # target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
 if(NOT TARGET triangle)
-    add_subdirectory(${THIRD_PARTY_DIR}/triangle triangle)
+    add_subdirectory(${MESHFEM_THIRD_PARTY_DIR}/triangle triangle)
     target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
 endif()
 
