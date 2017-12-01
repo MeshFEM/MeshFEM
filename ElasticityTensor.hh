@@ -623,7 +623,7 @@ public:
     }
 
     // For serialization into a json file
-    std::vector<typename DType::Scalar> getCoefficients() {
+    std::vector<typename DType::Scalar> getCoefficients() const {
         std::vector<typename DType::Scalar> coeffs;
         if (_MajorSymmetry) {
             auto M = (DType) m_d.template selfadjointView<Eigen::Upper>();
