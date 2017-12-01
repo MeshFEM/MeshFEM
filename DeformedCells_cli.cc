@@ -103,6 +103,26 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 template<size_t _N>
 using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::template Getter<_N>;
 
+template<typename T>
+void dumpJson(const T &EhDefo, const std::string &filename) {
+    json data;
+    data["elasticity_tensor"] = json::array();
+    auto E = EhDefo.getCoefficients();
+    for (auto x : E) {
+        data["elasticity_tensor"].push_back(x);
+    }
+    data["homogenized_moduli"] = json::array();
+    std::vector<double> P;
+    EhDefo.getOrthotropicParameters(P);
+    for (auto x : P) {
+        data["homogenized_moduli"].push_back(x);
+    }
+
+    // Write json
+    std::ofstream out(filename);
+    out << data;
+}
+
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
              const vector<MeshIO::IOVertex> &inVertices,
@@ -146,6 +166,7 @@ void execute(const po::variables_map &args,
             stretch << lambda, 0,
                        0,      1;
             jacobian = rot * stretch * rot.transpose();
+            std::cout << jacobian << std::endl;
             mat.setTensor(EBase.transform(jacobian.inverse()));
 
             vector<VField> w_ij;
@@ -160,6 +181,9 @@ void execute(const po::variables_map &args,
                  << ShDefo.D(0, 0) << '\t' << ShDefo.D(0, 1) << '\t' << ShDefo.D(0, 2) << '\t'
                                            << ShDefo.D(1, 1) << '\t' << ShDefo.D(1, 2) << '\t'
                                                                      << ShDefo.D(2, 2) << endl;
+            if (args.count("dumpJson")) {
+                dumpJson(EhDefo, args["dumpJson"].as<string>());
+            }
         }
         // BENCHMARK_REPORT();
         return;
@@ -202,6 +226,9 @@ void execute(const po::variables_map &args,
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
         EhDefo.printOrthotropic(cout);
+        if (args.count("dumpJson")) {
+            dumpJson(EhDefo, args["dumpJson"].as<string>());
+        }
     }
     else if (args.count("homogenize")) {
         sim.applyPeriodicConditions();
@@ -226,22 +253,7 @@ void execute(const po::variables_map &args,
         cout << "Homogenized Moduli: ";
         EhDefo.printOrthotropic(cout);
         if (args.count("dumpJson")) {
-            json data;
-            data["elasticity_tensor"] = json::array();
-            auto E = EhDefo.getCoefficients();
-            for (auto x : E) {
-                data["elasticity_tensor"].push_back(x);
-            }
-            data["homogenized_moduli"] = json::array();
-            std::vector<double> P;
-            EhDefo.getOrthotropicParameters(P);
-            for (auto x : P) {
-                data["homogenized_moduli"].push_back(x);
-            }
-
-            // Write json
-            std::ofstream out(args["dumpJson"].as<string>());
-            out << data;
+            dumpJson(EhDefo, args["dumpJson"].as<string>());
         }
     }
     else if (args.count("tile")) {
