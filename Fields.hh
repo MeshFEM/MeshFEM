@@ -166,7 +166,7 @@ public:
 
     // Flattened access
     size_t size() const { return dim() * domainSize(); }
-    void resize(size_t i) { assert(i % dim() == 0); resizeDomain(i / 3); }
+    void resize(size_t i) { assert(i % dim() == 0); resizeDomain(i / dim()); }
           Real &operator[](size_t i)       { assert(i < size()); return m_values.data()[i]; }
     const Real &operator[](size_t i) const { assert(i < size()); return m_values.data()[i]; }
 
