@@ -42,8 +42,8 @@ struct BBox {
         minCorner.setZero(), maxCorner.setZero();
         size_t i = 0;
         for (const auto &v : vectors) {
-            if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(v);
-            else          unionPoint(truncateFrom3D<Vector>(v));
+            if (i++ == 0) minCorner = maxCorner = truncateFromND<Vector>(v);
+            else          unionPoint(truncateFromND<Vector>(v));
         }
     }
 
@@ -55,8 +55,8 @@ struct BBox {
         minCorner.setZero(), maxCorner.setZero();
         size_t i = 0;
         for (size_t v : subset) {
-            if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(pts[v]);
-            else          unionPoint(truncateFrom3D<Vector>(pts[v]));
+            if (i++ == 0) minCorner = maxCorner = truncateFromND<Vector>(pts[v]);
+            else          unionPoint(truncateFromND<Vector>(pts[v]));
         }
     }
 

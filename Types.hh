@@ -22,9 +22,20 @@ extern Eigen::IOFormat pointFormatter;
 // Warning: template parameter deduction doesn't work well with Eigen's
 // expressions since, e.g., Point2D - Point2D is really a CwiseBinaryOp. You
 // must either manually specify the type, or use the .eval() method.
-template<class EmbeddingSpace> 
+template<class EmbeddingSpace>
 Point3D padTo3D(const EmbeddingSpace &p);
-template<class EmbeddingSpace> 
+template<class EmbeddingSpace>
 EmbeddingSpace truncateFrom3D(const Point3D &p);
+
+template<class EmbeddingSpace, class InputDerived>
+EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
+    static_assert(InputDerived::RowsAtCompileTime >= EmbeddingSpace::RowsAtCompileTime, "Truncation cannot upsize");
+    EmbeddingSpace result = p.template head<EmbeddingSpace::RowsAtCompileTime>();
+    for (int i = EmbeddingSpace::RowsAtCompileTime; i < InputDerived::RowsAtCompileTime; ++i) {
+        if (std::abs(p[i]) > 1e-6)
+            throw std::runtime_error("Nonzero component truncated.");
+    }
+    return result;
+}
 
 #endif /* end of include guard: TYPES_HH */

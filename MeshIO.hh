@@ -72,6 +72,8 @@ namespace MeshIO {
 
     };
 
+    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return truncateFromND<EmbeddingSpace>(p.point); }
+
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
     //  Minimal polygon/polyhedron class for unattributed mesh i/o 
