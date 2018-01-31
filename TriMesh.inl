@@ -32,13 +32,25 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // TriMesh::numVertices() is used below and needs VH.size()
     VH.assign(nVertices, -1);
 
+    using EdgeMap = std::map<UnorderedPair, int>;
     // Half-edge Adjacency
-    typedef std::map<UnorderedPair, int> EdgeMap;
     EdgeMap halfEdgeForEdge;
     // std::runtime_error nonManifold("Non-manifold input detected.");
     O.assign(3 * tris.size(), -1);
-    size_t nHalfEdges = O.size();
-    for (size_t he = 0; he < 3 * tris.size(); ++he) {
+    const size_t nHalfEdges = O.size();
+    {
+        EdgeMap incidentTris;
+        for (size_t he = 0; he < nHalfEdges; ++he) {
+            UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
+                               m_vertexOfHE<HEVertex::TAIL>(he));
+            incidentTris[edge]++;
+        }
+        for (const auto &p : incidentTris)
+            if (p.second > 2) throw std::runtime_error("Non-manifold edge detected");
+    }
+
+
+    for (size_t he = 0; he < nHalfEdges; ++he) {
         UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
                            m_vertexOfHE<HEVertex::TAIL>(he));
         // Attempt to insert half-edge

@@ -400,7 +400,7 @@ public:
     PeriodicCondition(const Mesh &mesh, const std::string &pcFile) {
         // The periodic condition file contains pairs of *vertices*
         // that are periodically identified.
-        std::cout << "WARNING: periodic boundary condition files are a temporary hack." << std::endl;
+        std::cerr << "WARNING: periodic boundary condition files are a temporary hack." << std::endl;
 
         // For now, we assume that each vertex appears in only a single pairing.
         std::vector<size_t> pair(mesh.numVertices(), size_t(NO_PAIR));

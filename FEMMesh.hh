@@ -121,6 +121,10 @@ public:
     template<class _Mesh> using BNHandle = typename HandleTraits<FEMMesh>::template BNHandle<_Mesh>; // Boundary node
     template<class _Mesh> using BEHandle = typename HandleTraits<FEMMesh>::template BEHandle<_Mesh>; // Boundary element
 
+    // We also want to allow traversal of this derived mesh starting from hafledges,
+    // so we need to override the halfEdge(i)/halfEdges() methods.
+    template<class _Mesh> using HEHandle = typename BaseMesh::template HEHandle<_Mesh>; // Halfedge (tri or tet)
+
     // Number of strictly interior nodes (excluding nodes on the boundary).
     size_t numInternalNodes() const { return numNodes() - numBoundaryNodes(); }
 
@@ -136,6 +140,7 @@ public:
      VHandle<FEMMesh>          vertex(size_t i) { return  VHandle<FEMMesh>(i, *this); }
      NHandle<FEMMesh>            node(size_t i) { return  NHandle<FEMMesh>(i, *this); }
      EHandle<FEMMesh>         element(size_t i) { return  EHandle<FEMMesh>(i, *this); }
+    HEHandle<FEMMesh>        halfEdge(size_t i) { return HEHandle<FEMMesh>(i, *this); }
     BVHandle<FEMMesh>  boundaryVertex(size_t i) { return BVHandle<FEMMesh>(i, *this); }
     BNHandle<FEMMesh>    boundaryNode(size_t i) { return BNHandle<FEMMesh>(i, *this); }
     BEHandle<FEMMesh> boundaryElement(size_t i) { return BEHandle<FEMMesh>(i, *this); }
@@ -143,6 +148,7 @@ public:
      VHandle<const FEMMesh>          vertex(size_t i) const { return  VHandle<const FEMMesh>(i, *this); }
      NHandle<const FEMMesh>            node(size_t i) const { return  NHandle<const FEMMesh>(i, *this); }
      EHandle<const FEMMesh>         element(size_t i) const { return  EHandle<const FEMMesh>(i, *this); }
+    HEHandle<const FEMMesh>        halfEdge(size_t i) const { return HEHandle<const FEMMesh>(i, *this); }
     BVHandle<const FEMMesh>  boundaryVertex(size_t i) const { return BVHandle<const FEMMesh>(i, *this); }
     BNHandle<const FEMMesh>    boundaryNode(size_t i) const { return BNHandle<const FEMMesh>(i, *this); }
     BEHandle<const FEMMesh> boundaryElement(size_t i) const { return BEHandle<const FEMMesh>(i, *this); }
@@ -161,6 +167,7 @@ public:
     HR< VHandle>         vertices() { return HR< VHandle>(*this); }
     HR< NHandle>            nodes() { return HR< NHandle>(*this); }
     HR< EHandle>         elements() { return HR< EHandle>(*this); }
+    HR<HEHandle>        halfEdges() { return HR<HEHandle>(*this); }
     HR<BVHandle> boundaryVertices() { return HR<BVHandle>(*this); }
     HR<BNHandle>    boundaryNodes() { return HR<BNHandle>(*this); }
     HR<BEHandle> boundaryElements() { return HR<BEHandle>(*this); }
@@ -168,6 +175,7 @@ public:
     CHR< VHandle>         vertices() const { return CHR< VHandle>(*this); }
     CHR< NHandle>            nodes() const { return CHR< NHandle>(*this); }
     CHR< EHandle>         elements() const { return CHR< EHandle>(*this); }
+    CHR<HEHandle>        halfEdges() const { return CHR<HEHandle>(*this); }
     CHR<BVHandle> boundaryVertices() const { return CHR<BVHandle>(*this); }
     CHR<BNHandle>    boundaryNodes() const { return CHR<BNHandle>(*this); }
     CHR<BEHandle> boundaryElements() const { return CHR<BEHandle>(*this); }
@@ -176,6 +184,7 @@ public:
     CHR< VHandle>         constVertices() const { return CHR< VHandle>(*this); }
     CHR< NHandle>            constNodes() const { return CHR< NHandle>(*this); }
     CHR< EHandle>         constElements() const { return CHR< EHandle>(*this); }
+    CHR<HEHandle>        constHalfEdges() const { return CHR<HEHandle>(*this); }
     CHR<BVHandle> constBoundaryVertices() const { return CHR<BVHandle>(*this); }
     CHR<BNHandle>    constBoundaryNodes() const { return CHR<BNHandle>(*this); }
     CHR<BEHandle> constBoundaryElements() const { return CHR<BEHandle>(*this); }

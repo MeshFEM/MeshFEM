@@ -9,8 +9,10 @@
 #include "filters/subdivide.hh"
 #include "filters/extrude.hh"
 #include "filters/quad_tri_subdiv.hh"
+#include "filters/quad_tri_subdiv_asymmetric.hh"
 #include "filters/quad_subdiv.hh"
 #include "filters/quad_subdiv_high_aspect.hh"
+#include "filters/hex_tet_subdiv.hh"
 #include "filters/remove_dangling_vertices.hh"
 #include "filters/highlight_dangling_vertices.hh"
 #include "filters/reflect.hh"
@@ -69,7 +71,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("subdivide,s",                                                     "Subdivide geometry (surface mesh only)")
         ("quadAspectSubdiv,A",                                              "Split rectangular quads until aspect ratios are below threshold")
         ("quadAspectThreshold,a", po::value<double>()->default_value(1.75), "Aspect ratio threshold for subdivision.")
-        ("quadSubdivideAndTriangulate,q", po::value<size_t>(),              "Run quad subdivision for #iterations and then triangulate symmetrically.")
+        ("quadSubdivideAndTriangulate,q", po::value<size_t>(),              "Run quad subdivision for #iterations and then triangulate symmetrically (or tetrahedralize without subdivision in tet mesh case).")
+        ("quadTriangulateAsymmetric",                                       "Asymmetrically triangulate quads in the mesh (conflicts with quadSubdivideAndTriangulate)")
         ("propagateFields,f",                                               "Propagate the fields on the input mesh over to the output mesh. Currently only works for quad mesh subdivision.")
         ("reflect,r",                     po::value<string>(),              "Reflect a d-dim mesh around the bounding box's specified minimum faces into 2^d copies (e.g. -r xy)")
         ("refine,R",                      po::value<string>(),              "Refine the triangulation using triangle with the specified arguments")
@@ -223,11 +226,6 @@ int main(int argc, const char *argv[])
         size_t dim = ((type == MeshIO::MESH_TET) || (type == MeshIO::MESH_HEX)) ? 3 : 2;
         reflect(dim, inVertices, inElements, inVertices, inElements,
                 ComponentMask(args["reflect"].as<string>()));
-    }
-
-    // Mesh type-generic information
-    if (args.count("info")) {
-        cout << "Bounding box:\t" << BBox<Point3D>(inVertices) << endl;
     }
 
     if (type == MeshIO::MESH_TET) {
@@ -414,6 +412,16 @@ int main(int argc, const char *argv[])
             inVertices.swap(outVertices);
             inElements.swap(outElements);
         }
+        if (args.count("quadTriangulateAsymmetric")) {
+            // Operate on the output of previous filter, if one was run.
+            if (outElements.size() > 0) {
+                inVertices.swap(outVertices);
+                inElements.swap(outElements);
+            }
+            quad_tri_subdiv_asymmetric(inVertices, inElements, outVertices, outElements, quadIdx);
+            if (args.count("quadSubdivideAndTriangulate"))
+                throw std::runtime_error("--quadSubdivideAndTriangulate and --quadTriangulateAsymmetric operations comflict");
+        }
         if (args.count("quadSubdivideAndTriangulate")) {
             // Operate on the output of previous filter, if one was run.
             if (outElements.size() > 0) {
@@ -467,6 +475,7 @@ int main(int argc, const char *argv[])
     }
     else if (type == MeshIO::MESH_HEX) {
         cout << "WARNING: hex mesh transformations are mostly unimplemented." << endl;
+        vector<size_t> hexIdx;
         if (args.count("truncateElements")) {
             int t = args["truncateElements"].as<int>();
             if (t > 0)
@@ -478,17 +487,15 @@ int main(int argc, const char *argv[])
             else throw std::runtime_error("Can't truncate to 0");
             remove_dangling_vertices(inVertices, inElements);
         }
-        MSHFieldParser<3> fields(inPath);
-        DomainType type;
 
-        outElements = inElements;
-        outVertices = inVertices;
+        if (args.count("quadSubdivideAndTriangulate") || args.count("quadTriangulateAsymmetric")) {
+            hex_tet_subdiv(inVertices, inElements, outVertices, outElements, hexIdx);
+        }
+
         if (!args.count("stripFields")) {
+            MSHFieldParser<3> fields(inPath);
+            DomainType type;
             MSHFieldWriter writer(outPath, outVertices, outElements);
-
-            std::vector<size_t> hexIdx;
-            for (size_t i = 0; i < outElements.size(); ++i)
-                hexIdx.push_back(i);
 
             std::vector<string> fnames = fields.vectorFieldNames();
             for (const string &name: fnames) {

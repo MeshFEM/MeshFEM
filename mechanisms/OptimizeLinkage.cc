@@ -147,8 +147,8 @@ void execute(const po::variables_map &args,
         auto eigs = Eh.computeEigenstrains();
         // Make all eigenstrains positive
         if (eigs.strains(0, 0) < 0) eigs.strains.col(0) *= -1;
-        if (eigs.strains(1, 0) < 0) eigs.strains.col(1) *= -1;
-        if (eigs.strains(2, 0) < 0) eigs.strains.col(2) *= -1;
+        if (eigs.strains(0, 1) < 0) eigs.strains.col(1) *= -1;
+        if (eigs.strains(0, 2) < 0) eigs.strains.col(2) *= -1;
 
         cout << "Minimum Eh eigenvalue " << eigs.lambdas[0] << " for eigenstrain: "
              << eigs.strains.col(0).transpose() << endl;

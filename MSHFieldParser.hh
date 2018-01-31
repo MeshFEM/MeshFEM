@@ -79,6 +79,18 @@ public:
     size_t numElements() const { return m_elements.size(); }
     size_t numVertices() const { return m_vertices.size(); }
 
+    void replaceMesh(const std::vector<MeshIO::IOElement> &elements,
+                     const std::vector<MeshIO::IOVertex > &vertices) {
+        m_elements = elements;
+        m_vertices = vertices;
+                            m_vectorFields.clear();
+                            m_scalarFields.clear();
+                   m_symmetricMatrixFields.clear();
+                 m_vectorInterpolantFields.clear();
+                 m_scalarInterpolantFields.clear();
+        m_symmetricMatrixInterpolantFields.clear();
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Field accessors.
     // Take name and optional domain type of field (per-element, per-node).
@@ -144,7 +156,6 @@ public:
         actualType = reqType;
         return m_getField(m_symmetricMatrixInterpolantFields, name, actualType);
     }
-
 
     ////////////////////////////////////////////////////////////////////////////
     // Get names of all the fields of a particular type.

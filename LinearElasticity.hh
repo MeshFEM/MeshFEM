@@ -1234,6 +1234,7 @@ private:
         m_system.setEconomyMode(true);
     }
 
+public:
     // Build *upper triangle* of stiffness matrix
     void m_assembleStiffnessMatrix(TMatrix &K) const {
         typedef typename _Mesh::ElementData::PerElementStiffness PerElementStiffness;
@@ -1294,6 +1295,7 @@ private:
 #endif
 
     }
+private:
 
     static constexpr size_t numRotModes = (N == 3) ? 3 : 1;
     void m_assembleRigidModeMatrix(TMatrix &R) const {

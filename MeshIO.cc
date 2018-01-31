@@ -306,6 +306,7 @@ void MeshIO_OBJ::save(ostream &os, const vector<Vertex> &nodes,
         }
         os << '\n';
     }
+    os.flush();
 }
 
 MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
@@ -608,6 +609,7 @@ void MeshIO_MSH::save(ostream &os, const vector<Vertex> &nodes,
     }
 
     os << "$EndElements\n";
+    os.flush();
 }
 
 // Formerly used is >> ws to skip newline/whitespace, but in binary files,

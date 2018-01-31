@@ -43,7 +43,7 @@ struct Impl {
                     auto grad_phi_j = e->gradPhi(j);
                     size_t nj = e.node(j).index();
                     Real val = Quadrature<N, 2 * (Deg - 1)>::integrate(
-                        [&](const VectorND<e.numVertices()> &pt) { return
+                        [&](const EvalPt<N> &pt) { return
                             grad_phi_i(pt).dot(grad_phi_j(pt));
                         }, e->volume());
                     if (ni <= nj) L.addNZ(ni, nj, val);

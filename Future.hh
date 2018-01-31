@@ -56,7 +56,7 @@ auto apply(const F &f, Tuple &&t) -> decltype(detail::Apply<detail::TSize<Tuple>
 
 ////////////////////////////////////////////////////////////////////////////////
 // make_integer_sequence/make_index_sequence
-// Construct an integer_sequence containing 0..N
+// Construct an integer_sequence of length N containing 0..N-1
 ////////////////////////////////////////////////////////////////////////////////
 template<typename T, T... Ints>
 struct integer_sequence { using type = integer_sequence; };

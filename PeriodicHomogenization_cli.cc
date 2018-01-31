@@ -109,7 +109,6 @@ void execute(const po::variables_map &args,
     }
     else {
         auto systems = PeriodicHomogenization::Orthotropic::solveCellProblems(w_ij, sim, 1e-7);
-        cout << systems.size() << endl;
     }
 
     BENCHMARK_STOP_TIMER_SECTION("Cell Problems");
@@ -128,6 +127,12 @@ void execute(const po::variables_map &args,
     auto eigs = Eh.computeEigenstrains();
     cout << "Minimum Eh eigenvalue " << eigs.lambdas[0] << " for eigenstrain: "
          << eigs.strains.col(0).transpose() << endl;
+
+    cout << "Intermediate Eh eigenvalue " << eigs.lambdas[1] << " for eigenstrain: "
+         << eigs.strains.col(1).transpose() << endl;
+
+    cout << "Max Eh eigenvalue " << eigs.lambdas[2] << " for eigenstrain: "
+         << eigs.strains.col(2).transpose() << endl;
 
     ETensor S = Eh.inverse();
     cout << "Homogenized compliance tensor:" << endl;

@@ -63,12 +63,16 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         cout << "Error: must specify input mesh" << endl;
         fail = true;
     }
-    if (vm.count("boundaryConditions") == 0) {
-        cout << "Error: must specify boundary conditions" << endl;
-        fail = true;
+
+    if (vm.count("dumpMatrix") == 0) {
+        if (vm.count("outputMSH") == 0) {
+            cout << "Error: must specify output msh file (unless dumping a stiffness matrix)" << endl;
+            fail = true;
+        }
     }
-    if (vm.count("outputMSH") == 0) {
-        cout << "Error: must specify output msh file" << endl;
+
+    if (vm.count("outputMSH") && (vm.count("boundaryConditions") == 0)) {
+        cout << "Error: must specify boundary conditions to run a simulation" << endl;
         fail = true;
     }
 
@@ -90,9 +94,11 @@ void execute(const po::variables_map &args,
     typedef ScalarField<Real> SField;
     const string &materialPath = args[          "material"].as<string>(),
                  &matFieldName = args[      "matFieldName"].as<string>(),
-                 &bcPath       = args["boundaryConditions"].as<string>(),
-                 &outMSH       = args[         "outputMSH"].as<string>(),
                  &matrixPath   = args[        "dumpMatrix"].as<string>();
+
+    string bcPath, outMSH;
+    if (args.count("boundaryConditions")) bcPath = args["boundaryConditions"].as<string>();
+    if (args.count(         "outputMSH")) outMSH = args[         "outputMSH"].as<string>();
 
     if (fileExtension(materialPath) == ".msh") {
         MSHFieldParser<_N> fieldParser(materialPath);
@@ -165,6 +171,15 @@ void execute(const po::variables_map &args,
         LinearElasticity::ETensorStoreGetter<_N> store(mat.getTensor());
         for (size_t i = 0; i < sim.mesh().numElements(); ++i)
             sim.mesh().element(i)->configure(store);
+    }
+
+    // Check if we're just dumping the stiffness matrix without simulating
+    if ((matrixPath != "") && (bcPath == "")) {
+        typename Simulator::TMatrix K;
+        sim.m_assembleStiffnessMatrix(K);
+        K.sumRepeated();
+        K.dumpBinary(matrixPath);
+        exit(0);
     }
 
     bool noRigidMotion;

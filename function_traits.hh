@@ -1,5 +1,6 @@
 #ifndef FUNCTION_TRAITS_HH
 #define FUNCTION_TRAITS_HH
+#include <tuple>
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Generalization of function_traits to work with lambda/functors. Allows
@@ -40,5 +41,9 @@ struct function_traits<ReturnType(ClassType::*)(Args...)>
         // composed of those arguments.
     };
 };
+
+// Convenience metafunction to get F's return type.
+template<typename F>
+using return_type = typename function_traits<F>::result_type;
 
 #endif /* end of include guard: FUNCTION_TRAITS_HH */

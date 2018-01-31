@@ -42,8 +42,8 @@ struct BBox {
         minCorner.setZero(), maxCorner.setZero();
         size_t i = 0;
         for (const auto &v : vectors) {
-            if (i++ == 0) minCorner = maxCorner = v;
-            else          unionPoint(v);
+            if (i++ == 0) minCorner = maxCorner = truncateFrom3D<Vector>(v);
+            else          unionPoint(truncateFrom3D<Vector>(v));
         }
     }
 

@@ -69,6 +69,7 @@
 #include "MeshConnectivity.hh"
 #include "../ExpressionVector.hh"
 #include "../SimplicialMesh.hh"
+#include "../filters/remove_dangling_vertices.hh"
 
 using namespace MeshIO;
 using namespace std;
@@ -471,6 +472,32 @@ size_t loadNewMSH(const string &, const string &arg, Stack &, const Modifiers &)
     return 0;
 }
 
+// Filter elements using an indicator scalar field.
+// (elements with value > 0 are kept).
+template<size_t N>
+size_t filterElements(const string &, const string &, Stack &stack, const Modifiers &) {
+    auto invalid = std::runtime_error("Invalid argument to filterElements. Argument must be a per-element scalar field.");
+    try {
+        auto &currentMesh = getMutableParser<N>();
+        auto top = popTypedValue<FSValue>(stack);
+        if (top->domainType != DomainType::PER_ELEMENT)
+            throw invalid;
+        auto verts = currentMesh.vertices();
+        const auto &oldElems  = currentMesh.elements();
+        std::vector<MeshIO::IOElement> elems;
+        for (size_t i = 0; i < oldElems.size(); ++i) {
+            if (top->value[i].value > 0) elems.emplace_back(oldElems[i]);
+        }
+        remove_dangling_vertices(verts, elems);
+        currentMesh.replaceMesh(elems, verts);
+        stack.clear();
+    }
+    catch (...) {
+        throw invalid;
+    }
+    return 0;
+}
+
 // Sample a field at the point(s) specified by vector list encoded in "arg".
 // Nodal fields are interpolated using the mesh's finite element basis functions.
 // Element fields are interpolated piecewise constant
@@ -597,7 +624,7 @@ size_t outputMSH(const string &/* op */, const string &arg, Stack &stack, const 
     // mesh elements are linear. But in these cases, the original extracted
     // interpolant fields were linear as well.
     // TODO: rewrite as template code.
-    MSHFieldWriter writer(arg, parser.vertices(), parser.elements());
+    MSHFieldWriter writer(arg, parser.vertices(), parser.elements(), parser.meshType());
     for (const auto &val : stack) {
         if (auto fs = dynamic_cast<const FSValue *>(CVPtr(val))) {
             ScalarField<Real> sf(fs->value.size());
@@ -748,7 +775,8 @@ void execute(vector<FilterInvocation> &filters) {
         {"outMSH",        Filter::outputMSH<N>},
 
         {"transferFieldsToPerElem", Filter::elementBarycenterFieldTransfer<N>},
-        {"loadNewMSH", Filter::loadNewMSH<N>}
+        {"loadNewMSH", Filter::loadNewMSH<N>},
+        {"filterElements", Filter::filterElements<N>}
     };
 
     // Classify the operations.
