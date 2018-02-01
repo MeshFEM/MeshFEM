@@ -7,7 +7,7 @@
 //      Read/write a plain polygon/polyhedron element soup using the functions:
 //          load(path, nodes, elements[, format])
 //          save(path, nodes, elements[, format])
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  05/07/2012 11:55:27
@@ -37,7 +37,7 @@ namespace MeshIO {
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOVertex
-    //  Minimal vertex class for unattributed mesh I/O 
+    //  Minimal vertex class for unattributed mesh I/O
     *///////////////////////////////////////////////////////////////////////////
     class IOVertex {
         typedef typename Point3D::Scalar _Real;
@@ -72,11 +72,11 @@ namespace MeshIO {
 
     };
 
-    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return truncateFromND<EmbeddingSpace>(p.point); }
+    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return ::truncateFromND<EmbeddingSpace>(p.point); }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
-    //  Minimal polygon/polyhedron class for unattributed mesh i/o 
+    //  Minimal polygon/polyhedron class for unattributed mesh i/o
     //  Note: inheriting from STL is dangerous because STL containers do not
     //  have virtual destructors. However, since we don't intend to use this
     //  class polymorphically, we should be fine using this hack...
