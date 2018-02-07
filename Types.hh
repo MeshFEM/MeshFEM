@@ -29,9 +29,11 @@ EmbeddingSpace truncateFrom3D(const Point3D &p);
 
 template<class EmbeddingSpace, class InputDerived>
 EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
-    static_assert(InputDerived::RowsAtCompileTime >= EmbeddingSpace::RowsAtCompileTime, "Truncation cannot upsize");
+    const size_t  inRows = InputDerived::RowsAtCompileTime,
+                 outRows = EmbeddingSpace::RowsAtCompileTime;
+    static_assert(inRows >= outRows, "Truncation cannot upsize");
     EmbeddingSpace result = p.template head<EmbeddingSpace::RowsAtCompileTime>();
-    for (int i = EmbeddingSpace::RowsAtCompileTime; i < InputDerived::RowsAtCompileTime; ++i) {
+    for (size_t i = outRows; i < inRows; ++i) {
         if (std::abs(p[i]) > 1e-6)
             throw std::runtime_error("Nonzero component truncated.");
     }
