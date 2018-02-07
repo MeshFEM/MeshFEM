@@ -72,7 +72,7 @@ namespace MeshIO {
 
     };
 
-    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return ::truncateFromND<EmbeddingSpace>(p.point); }
+    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return ::truncateFromND<EmbeddingSpace, Point3D>(p.point); }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
