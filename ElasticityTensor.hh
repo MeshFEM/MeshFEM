@@ -340,7 +340,7 @@ public:
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    // In place application of shear doubling matrices (both left and right)
+    // In-place application of shear doubling matrices (both left and right)
     ////////////////////////////////////////////////////////////////////////////
     template<class T>
     void leftApplyShearDoubler(T &val) const {
@@ -529,7 +529,9 @@ public:
     // If major symmetry isn't enforced, check whether it exists.
     bool hasMajorSymmetry() const {
         if (_MajorSymmetry) return true;
-        return (m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm() < 1e-10;
+        Real absDiff = (m_d - DType(m_d.template selfadjointView<Eigen::Upper>())).norm();
+        // Permit small relative or absolute deviations.
+        return (absDiff < 1e-10) || (absDiff < 1e-10 * m_d.norm());
     }
 
     // Compute all the eigenstrains and corresponding eigenvalues. In other words,
