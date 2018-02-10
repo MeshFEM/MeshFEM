@@ -266,6 +266,7 @@ struct TripletMatrix {
             if (t.i < t.j)
                 nz.push_back(Triplet(t.j, t.i, t.v));
         }
+        symmetry_mode = SymmetryMode::NONE;
     }
 
     // WARNING: Assumes sumRepeated() has already been called.
@@ -687,7 +688,7 @@ class CholmodFactorizer {
 public:
     template<typename _Triplet>
     CholmodFactorizer(const TripletMatrix<_Triplet> &tmat)
-        : m_A(NULL), m_L(NULL) {
+        : m_A(NULL), m_L(NULL), m_b(NULL) {
         TripletMatrix<_Triplet> mat(tmat);
         mat.removeLowerTriangle();
         mat.sumRepeated();
@@ -724,6 +725,11 @@ public:
                 CHOLMOD_REAL,   // Keep it real
                 &m_c);
 
+        m_b = cholmod_l_allocate_dense(mat.n, 1,
+                mat.n,        // Leading dimension
+                CHOLMOD_REAL, // Keep it real
+                &m_c);
+
         mat.getCompressedColumn((SuiteSparse_long *) m_A->p,
                 (SuiteSparse_long *) m_A->i, (double *) m_A->x);
     }
@@ -746,28 +752,28 @@ public:
 
     template<typename _Vec1, typename _Vec2>
     void solve(const _Vec1 &b, _Vec2 &x) {
+        assert(b.size() == m_A->nrow);
+        x.resize(m_A->ncol);
+        solveRaw(&b[0], &x[0]);
+    }
+
+    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
+    void solveRaw(const Real *b, Real *x) {
         if (m_L == NULL) factorize();
 
-        size_t m = m_A->nrow, n = m_A->ncol;
-        assert(b.size() == m);
-        cholmod_dense *chol_b = cholmod_l_allocate_dense(n, 1,
-                n,            // Leading dimension
-                CHOLMOD_REAL, // Keep it real
-                &m_c);
+        const size_t m = m_A->nrow, n = m_A->ncol;
 
         for (size_t i = 0; i < m; ++i)
-            ((double *) chol_b->x)[i] = b[i];
+            ((double *) m_b->x)[i] = b[i];
 
         BENCHMARK_START_TIMER("CHOLMOD Backsub");
-        cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, chol_b, &m_c);
+        cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, m_b, &m_c);
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
 
-        x.resize(n);
         for (size_t i = 0; i < n; ++i)
             x[i] = ((double *) chol_x->x)[i];
 
         cholmod_l_free_dense(&chol_x, &m_c);
-        cholmod_l_free_dense (&chol_b, &m_c);
     }
 
     double peakMemoryMB() const {
@@ -781,6 +787,7 @@ public:
     ~CholmodFactorizer() {
         clearFactors();
         if (m_A) cholmod_l_free_sparse(&m_A, &m_c);
+        if (m_b) cholmod_l_free_dense(&m_b, &m_c);
         cholmod_l_finish(&m_c);
     }
 
@@ -805,6 +812,7 @@ private:
     cholmod_common m_c;
     cholmod_sparse *m_A;
     cholmod_factor *m_L;
+    cholmod_dense  *m_b;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
