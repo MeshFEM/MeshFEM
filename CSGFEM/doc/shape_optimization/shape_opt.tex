@@ -1,0 +1,519 @@
+\documentclass[10pt]{article}
+
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{upgreek}
+\usepackage{amsthm}
+\usepackage{fullpage}
+\usepackage{graphicx}
+\usepackage{cancel}
+\usepackage{subfigure}
+\usepackage{mathrsfs}
+\usepackage{outlines}
+\usepackage[font={sf,it}, labelfont={sf,bf}, labelsep=space, belowskip=5pt]{caption}
+\usepackage{hyperref}
+
+\usepackage{fancyhdr}
+\usepackage[title]{appendix}
+
+\DeclareMathOperator{\sgn}{sgn}
+
+\pagestyle{fancy}
+\headheight 24pt
+\headsep    12pt
+\lhead{Low Dimensional Shape Optimization}
+\fancyfoot[C]{} % hide the default page number at the bottom
+\lfoot{}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand\footrulewidth{0.4pt}
+\providecommand{\abs}[1]{\lvert#1\rvert}
+\providecommand{\norm}[1]{\lVert#1\rVert}
+\providecommand{\dx}{\, \mathrm{d}x}
+% \providecommand{\vint}[2]{\int_{#1} \! #2 \, \mathrm{d}x}
+% \providecommand{\sint}[2]{\int_{\partial #1} \! #2 \, \mathrm{d}A}
+\renewcommand{\div}{\nabla \cdot}
+\providecommand{\shape}{\Omega(p)}
+\providecommand{\boundary}{\partial \shape}
+\providecommand{\vint}[1]{\int_{\shape} \! #1 \, \mathrm{d}x}
+\providecommand{\sint}[1]{\int_{\boundary} \! #1 \, \mathrm{d}A}
+\providecommand{\pder}[2]{\frac{\partial #1}{\partial #2}}
+\providecommand{\tder}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+\providecommand{\evalat}[2]{\left.#1\right|_{#2}}
+\newcommand{\defeq}{\vcentcolon=}
+\newtheorem{lemma}{Lemma}
+
+\makeatletter
+\usepackage{mathtools}
+\newcases{mycases}{\quad}{%
+  \hfil$\m@th\displaystyle{##}$}{$\m@th\displaystyle{##}$\hfil}{\lbrace}{.}
+\makeatother
+
+\title{Low Dimensional Shape Optimization}
+\author{Julian Panetta}
+
+% BEGIN DOCUMENT
+\begin{document}
+
+\maketitle
+
+We seek to optimize a small set of shape parameters, $p \in
+\mathbb{R}^{n_p}$, that define an object $\shape \subset \mathbb{R}^n$.
+The objective, $J$, is a volume integral of some function, $j$, of the stress
+tensor under a particular loading scenario (using linear elasticity):
+\begin{align}
+    J(p) = \vint{j(x, \sigma(u)(x))} \label{eqn:objective} \\
+    \text{s.t.}\quad \begin{mycases}
+        -\div \sigma(u) = f(p)   & \text{in}\, \shape \\
+        \sigma(u) \hat{n} = g(p) & \text{on}\, \Gamma_N(p) \\
+        u = 0 & \text{on}\, \Gamma_D
+        \label{eqn:state}
+    \end{mycases}
+\end{align}
+where $\sigma(u) = C:\epsilon(u),\ \epsilon(u) = \frac{1}{2}\left(\nabla u + (\nabla u)^T\right)$
+(i.e. $\sigma_{ij} = C_{ijkl} \epsilon_{kl},\ \epsilon_{kl} = \frac{1}{2}\left(u_{k,l} + u_{l,
+k}\right)$), $\hat{n}$ is the outward-pointing normal, and $\Gamma_N(p) \defeq
+\boundary \setminus \Gamma_D$. Notice the inclusion of a fixed Dirichlet
+boundary; we discuss in Section \ref{sec:no_dirichlet} how to optimize without
+this constraint. We focus on the task of computing this objective function's
+gradient with respect to the shape parameters, neglecting for now the terms
+that penalize shapes differing too greatly from the initial design,
+$\Omega(p_0)$.
+
+Using a finite difference-based differentiation scheme is difficult due to the
+challenge of choosing a reasonable step size. Not only is a good step size, e.g.
+for a rectangle's rotation parameter, not immediately clear, but also as
+we shrink the step size to get a more accurate approximation, the
+noise/errors in the PDE constraint solution will dominate. Instead, we use the
+adjoint method \cite{ambrad:website} to compute the gradient. This will involve
+solving a single additional ``adjoint'' PDE of the same type as
+the state equation (\ref{eqn:state}) and computing a volume and surface
+integral per parameter. The derivation here follows roughly that in
+\cite{Allaire2008909}, but it handles volume forces, it allows the entire Neumann
+boundary to evolve, and it is phrased in terms of shape parameters.
+
+\section{The Lagrangian and the Adjoint Method}
+We want to differentiate (\ref{eqn:objective}) with respect to parameter
+$p_i$. However, proceeding in a straight-forward way quickly hits a dead end:
+$$
+\pder{}{p_i} J(p) = \pder{}{p_i} \vint{j(x, \sigma)} = \sint{j(x, \sigma) (v_i(p) \cdot \hat{n})} + \vint{\pder{}{p_i} j(x, \sigma)},
+$$
+where $v_i(p)$ is the velocity of the boundary while varying $p_i$. This
+formula follows immediately from Reynold's transport theorem, but it also can be
+understood intuitively: the integral changes due to volume entering/leaving the
+integration domain (the first term) and due to the integrand changing (the
+second). The first term is easy to compute, but the second requires determining
+how the equilibrium displacement changes as the shape changes (hard). The
+adjoint method is a tool to sidestep that computation.
+
+Following the traditional adjoint method derivation \cite{ambrad:website}, we
+write the Lagrangian for the PDE-constrained optimization. We introduce
+Lagrange multipliers $\lambda\colon \overline{\Omega}(p) \to \mathbb{R}^n$ for
+the volume and Neumann boundary constraints in (\ref{eqn:state}), but set $\lambda
+= 0$ on $\Gamma_D$  since we do not need a term in the Lagrangian for the
+Dirichlet condition (we will always
+have $u$ and all its perturbations vanish on the fixed $\Gamma_D$). The
+Lagrangian is thus:
+$$
+\mathcal{L}(p, u, \lambda) = \vint{j(x, \sigma(u))} - \vint{\lambda \cdot \left[\div \sigma(u) + f(p)\right]}
++ \sint{\lambda \cdot \left[\sigma(u) \hat{n} - g(p)\right]},
+$$
+where $u = 0$ on $\Gamma_D$ is a displacement field independent of $p$ (i.e. not
+necessarily the equilibrium displacement). Notice that if we take $u = u_*(p)$,
+the solution to the state equation, then $\mathcal{L}(p, u_*(p), \lambda) =
+J(p)$, independent of $\lambda$. Therefore:
+$$
+\pder{J}{p_i}(p) = \tder{\mathcal{L}(p, u_*(p), \lambda)}{p_i}
+= \pder{\mathcal{L}}{p_i}(p, u_*(p), \lambda) + \left<\pder{\mathcal{L}}{u}(p, u_*(p), \lambda), \pder{u_*}{p_i}(p)\right>,
+$$
+where $\pder{\mathcal{L}}{u}$ is a linear functional that, when fed a vector
+field $\phi$, computes the derivative of $\mathcal{L}$ in the $\phi$ direction (i.e. the Frech\'et derivative):
+$$
+\left<\pder{\mathcal{L}}{u}(p, u_*(p), \lambda), \phi\right> =
+\evalat{\pder{\mathcal{L}(p, u_*(p) + h \phi, \lambda)}{h}}{h = 0}.
+$$
+Here is the key insight of the adjoint method: if we can choose $\lambda = \lambda_*(p)$ so
+that this linear functional is zero (vanishes on all admissible input vector fields), then
+we don't have to compute the problematic term $\pder{u_*}{p_i}(p)$. Then we
+just have:
+\begin{equation}
+\pder{J}{p_i}(p) = \pder{\mathcal{L}}{p_i}(p, u_*(p), \lambda_*(p)).
+\label{eqn:gradient_format}
+\end{equation}
+Finding such a $\lambda_*(p)$ is called the adjoint problem.
+
+\section{The Adjoint Problem}
+Soon we will derive the adjoint equations by setting
+$$
+\left<\pder{\mathcal{L}}{u}(p, u_*(p), \lambda), \phi \right> \overset{!}{=} 0 \quad \forall \phi,
+$$
+but first we rewrite $\mathcal{L}$ in a more convenient form by restating
+in terms of strains and integrating by parts:
+\begin{align}
+    \mathcal{L}(p, u, \lambda) = \vint{j(x, \sigma(u))} &- \vint{\lambda \cdot \left(\div \left[ C:\epsilon(u)\right] + f(p)\right)}
+    + \sint{\lambda \cdot \left(\left[C : \epsilon(u)\right] \hat{n} - g(p)\right)} \notag \\
+    = \vint{j(x, \sigma(u))} &+ \overbrace{\vint{\epsilon(\lambda) : C : \epsilon(u)}
+- \cancel{\sint{\lambda \cdot \left[C:\epsilon(u)\right]\hat{n}}}}^{\text{from I.B.P. identity (\ref{eqn:IBP_1}) in Appendix \ref{sec:IBP}}}
+- \vint{\lambda \cdot f(p)} \notag \\
+        &+ \cancel{\sint{\lambda \cdot \left[C:\epsilon(u)\right]\hat{n}}}
+         - \sint{\lambda \cdot g(p)} \notag \\
+    = \vint{j(x, \sigma(u))} &+ \vint{\epsilon(\lambda) : C : \epsilon(u)} - \vint{\lambda \cdot f(p)} - \sint{\lambda \cdot g(p)}
+    \label{eqn:lagrangian}
+\end{align}
+
+Now we're ready to differentiate with respect to $u$. Let $\phi$ be an
+arbitrary perturbation vanishing on $\Gamma_D$. Then:
+\begin{align*}
+    \left<\pder{\mathcal{L}}{u}(p, u, \lambda), \phi \right> &= \evalat{\tder{}{h}}{h = 0}
+\left(\vint{j\big(x, \sigma(u + h\phi)\big) + \epsilon(\lambda) : C : \epsilon(u + h\phi)}\right) \\
+&= \vint{\evalat{\pder{}{h}}{h = 0}j\big(x, \sigma(u) + h \sigma(\phi)\big) + \evalat{\pder{}{h}}{h = 0}\epsilon(\lambda) : C : \left[\epsilon(u) + h\epsilon(\phi)\right]},
+\end{align*}
+where we used the linearity of $\epsilon$ and $\sigma$. Now, defining $j'$ to be
+the rank 2 tensor of partial derivatives of $j$ wrt. $\sigma_{ij}$, we get by the chain rule:
+\begin{align*}
+    \left<\pder{\mathcal{L}}{u}(p, u, \lambda), \phi \right>
+    &= \vint{j'\big(x, \sigma(u)\big) : \sigma(\phi) + \epsilon(\lambda):C:\epsilon(\phi)} \\
+    &= \vint{\left[j'\big(x, \sigma(u)\big) + \epsilon(\lambda)\right] : C : \epsilon(\phi)}
+\end{align*}
+Integrating by parts (see (\ref{eqn:IBP_2}) in Appendix \ref{sec:IBP}) to move the strain operator off $\phi$ we get:
+\begin{align*}
+    \left<\pder{\mathcal{L}}{u}(p, u, \lambda), \phi \right> &=
+    -\vint{\left(\div C : \left[j'\big(x, \sigma(u)\big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
+    + \sint{\left(C : \left[j'\big(x, \sigma(u)\big)+ \epsilon(\lambda)\right]\right) \hat{n} \cdot \phi}
+\end{align*}
+Finally, we derive the adjoint equation by plugging in $u_*(p)$ and requiring
+this derivative to be zero:
+$$
+- \vint{\left(\div C : \left[j'\Big(x, \sigma\big(u_*(p)\big)\Big)+ \epsilon(\lambda)\right]\right) \cdot \phi}
++ \sint{\left(C : \left[j'\Big(x, \sigma\big(u_*(p)\big)\Big)+ \epsilon(\lambda)\right]\right) \hat{n} \cdot \phi}
+\overset{!}{=} 0.
+$$
+For this to be true for all $\phi = 0$ on $\Gamma_D$, we must have:
+\begin{align}
+    \begin{mycases}
+        -\div \sigma(\lambda) = \div \left[C: j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] & \text{in}\, \shape \\
+        -\sigma(\lambda) \hat{n} = \left[C : j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] \hat{n} & \text{on}\, \Gamma_N(p) \\
+        \lambda = 0 & \text{on}\, \Gamma_D
+    \end{mycases}
+\end{align}
+where the Dirichlet condition comes from the requirement that $\lambda$ vanish on $\Gamma_D$.
+This is a well-posed elastostatic problem whose solution is called the ``adjoint
+state,'' $\lambda_*(p)$.
+
+\section{The Gradient}
+We compute the right-hand side of (\ref{eqn:gradient_format}) by applying Reynold's
+transport theorem and (\ref{eqn:surface_derivative}) from Appendix
+\ref{sec:der_sint} to (\ref{eqn:lagrangian}):
+\begin{align*}
+    \pder{\mathcal{L}}{p_i} = &\sint{\left[j\big(x, \sigma(u)\big) + \epsilon(\lambda) : C : \epsilon(u) -
+  \lambda \cdot f(p) - H \lambda \cdot g(p) - \pder{\big(\lambda \cdot g(p)\big)}{\hat{n}}\right] (v_i(p) \cdot \hat{n})} \\
+  - &\sint{\lambda \cdot \pder{g(p)}{p_i}}
+- \vint{\lambda \cdot \pder{f(p)}{p_i}},
+\end{align*}
+where $H = \div\hat{n}$ is the curvature (twice the mean curvature in 3D).
+
+Now, using (\ref{eqn:gradient_format}) and plugging in equilibrium and adjoint states $u_*(p)$ and $\lambda_*(p)$, we get:
+\begin{align}
+    \begin{split}
+        \pder{J}{p_i}(p) &= \sint{\left[j\big(x, \sigma(u_*)\big) + \epsilon(\lambda_*) : C : \epsilon(u_*) -
+    \lambda_* \cdot f(p) - H \lambda_* \cdot g(p) - \pder{\big(\lambda_* \cdot g(p)\big)}{\hat{n}}\right] (v_i(p) \cdot \hat{n})} \\
+   &-\sint{\lambda_* \cdot \pder{g(p)}{p_i}}
+    - \vint{\lambda_* \cdot \pder{f(p)}{p_i}}.
+    \end{split}
+    \label{eqn:partials}
+\end{align}
+This equation tells us how to compute each component of the gradient provided we have:
+
+\begin{enumerate}
+    \item (Normal) boundary velocities induced by each parameter.
+    \item How $f$ and $g$ change with $p_i$.
+    \item How $\lambda_* \cdot g(p)$ changes in the normal direction.
+\end{enumerate}
+Item 1 is relatively easy and will be discussed in the following subsections.
+Items 2 and 3 are more problematic. In particular, item 3 is not well-defined
+as stated since $g$ is only defined on the boundary. As discussed in Appendix
+\ref{sec:der_sint}, the {\it existence} of an extension into a neighborhood of
+the boundary is needed at the very least. As discussed there, it may be
+possible to drop the normal derivative term---the case here is less clear since
+$\lambda_*$ already is defined inside the object. Another possible way to
+side-step this term is to blur all surface tractions into volume forces and set
+$g = 0$ (which is how the current meshfree discretization works anyway).
+However, we'd still have to figure out how to differentiate the resulting
+volume force, $f$, as mentioned in item 2.
+
+\subsection{Boundary Velocities for CSG Trees}
+\label{sub:For CSG Trees}
+In the case of objects represented by CSG trees, $p$ is a vector of all the
+parameters appearing in any primitive of the tree. As claimed in
+\cite{Chen:2007}, assuming primitives in a CSG object intersect
+transversely, the boundary can be decomposed into segments controlled by a
+single primitive's design parameters. Then, $v_i(p)$ is zero on every
+boundary segment not belonging to $p_i$'s primitive(s). On each boundary
+segment where it is nonzero, $v_i(p)$ can be found by analyzing the
+corresponding primitive in isolation.
+
+The boundary velocities for translation parameters are trivial. Rotation is not
+so hard either: for a rotation around axis $\hat{a}$ through point $c$, the
+velocity at a boundary point $b$ is $\hat{a} \times (b - c)$. Size parameters
+for some primitives are easy (boxes), but for others they will require more
+thought (ellipsoids).
+
+Incidentally, it is unclear how \cite{Chen:2007} maintains its fixed Dirichlet
+boundary. It must only consider examples where there are no parameters affecting
+the Dirichlet boundary. In our case this is too restrictive, so we will need to
+relax the requirement of a nonempty Dirichlet boundary (see Section
+\ref{sec:no_dirichlet}).
+
+\subsection{Boundary Velocities for Parametrized Level Set Functions} % (fold)
+\label{sub:Gradients for Arbitrary Level Set Functions}
+Suppose now that we do not have the structure of a CSG tree and instead have
+only a parameterized level set function $\Phi(p, x)$ defining the object:
+$$
+    \begin{cases}
+        \Phi(p, x) > 0 &\text{ for } x \in \shape \\
+        \Phi(p, x) = 0 &\text{ for } x \in \boundary \\
+        \Phi(p, x) < 0 &\text{ for } x \in \mathbb{R}^n \setminus \overline{\Omega}(p) \\
+    \end{cases}
+$$
+We can find the boundary velocity by considering the position of a particular point
+on the boundary as a function, $x(p)$. The boundary velocity is, by definition, $v_i(p)(x)
+= \pder{x}{p_i}$, and the chain rule gives:
+$$
+\Phi(p, x(p)) = 0 \quad \Longrightarrow \quad \pder{\Phi(p, x(p))}{p_i} = 0 =
+\pder{\Phi}{p_i}(p, x(p)) + \nabla \Phi \cdot v_i(p)\
+$$
+Recalling the basic level set result, $\hat{n} = -\frac{\nabla \Phi}{\norm{\nabla \Phi}}$:
+$$
+-\norm{\nabla \Phi} \hat{n} \cdot v_i(p) = -\pder{\Phi}{p_i}(p, x(p))  \quad \Longrightarrow \quad
+\hat{n} \cdot v_i(p) = \frac{1}{\norm{\nabla \Phi}} \pder{\Phi}{p_i}(p, x(p)).
+$$
+This equation gives us the normal velocity for points on any boundary of the object.
+
+\section{Getting Rid of $\Gamma_D$}
+\label{sec:no_dirichlet}
+The fixed Dirichlet boundary $\Gamma_D$ is incompatible with our goals.
+Unfortunately, all existing literature seems to rely on this boundary condition;
+though \cite{Allaire2008909} mentions that ``an equilibrium condition on g'' is
+needed in the absence of the Dirichlet boundary, they do not discuss how to keep
+the adjoint problem well-posed.
+Ideally, we would instead use the no-rigid-motion constraints from our
+Worst-case Structural Analysis paper and allow the entire boundary to evolve:
+\begin{align}
+    J(p) = \vint{j(x, \sigma(u)(x))} \notag \\
+    \text{s.t.}\quad \begin{mycases}
+        -\div \sigma(u) = f(p)   & \text{in}\, \shape \\
+        \sigma(u) \hat{n} = g(p) & \text{on}\, \boundary \\
+        \vint{u} = 0 , & \vint{u \times x} = 0
+    \end{mycases}
+    \label{eqn:state_nodirichlet}
+\end{align}
+Introducing the Lagrange multiplier {\it vectors}, $\lambda_t$ and $\lambda_r$,
+for the zero net translation and zero net rotation constraints respectively,
+the Lagrangian becomes:
+\begin{align*}
+\mathcal{L}(p, u, \lambda, \lambda_t, \lambda_r) = &\vint{j(x, \sigma(u))} - \vint{\lambda \cdot \left[\div \sigma(u) + f(p)\right]}
++ \sint{\lambda \cdot \left[\sigma(u) \hat{n} - g(p)\right]} + \\ 
+&\lambda_t \cdot \vint{u} + \lambda_r \cdot \vint{u \times x}
+\end{align*}
+Again, $\mathcal{L}$ is independent of $\lambda$, $\lambda_t$, $\lambda_r$ when
+$u$ is chosen as a solution to (\ref{eqn:state_nodirichlet}). This allows us to
+still choose choose the Lagrange multipliers so that:
+\begin{align*}
+    \left<\pder{\mathcal{L}}{u}(p, u, \lambda, \lambda_t, \lambda_r), \phi \right> &= 0,
+\end{align*}
+which can be shown to happen when $\lambda_t = 0$, $\lambda_r = 0$, and $\lambda$ satisfies
+\begin{align}
+    \begin{mycases}
+        -\div \sigma(\lambda) = \div \left[C: j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] & \text{in}\, \shape \\
+        \sigma(\lambda) \hat{n} = \left[C : j'\Big(x, \sigma\big(u_*(p)\big)\Big)\right] \hat{n} & \text{on}\, \boundary \\
+    \end{mycases}
+\end{align}
+This, however, is {\it not} a well-posed elastostatic problem: $\lambda_*$ is
+determined only up to a rigid motion offset. While this offset doesn't affect the
+terms of the gradient where the adjoint state enters though the strain
+operator, it does affect the terms like $\lambda_* \cdot f$. More thought is
+needed to determine how to proceed.
+
+\section{Contributions}
+\label{sec:Contributions}
+So far, if we solve the remaining problems, the contributions would be:
+\begin{itemize}
+    \item Minimize stress-based objectives {\it with respect to shape
+        parameters} (ideally, parameters more general than those controlling
+        a single primitive).
+    \item Optimize without Dirichlet constraints (with no-rigid-motion constraints).
+    \item Handle design-dependent loads. There isn't so much literature on this.
+        The closest thing I've seen is handling constant pressure Neumann
+        conditions on the evolving boundary, but more of a literature search is
+        needed.
+    \item Penalize visual dissimilarity instead of the traditional volume
+          penalties/constraints.
+\end{itemize}
+
+\section{What is Needed/Concerns}
+So far, it appears the additional derivation/code needed to compute gradients of
+stress-based objectives is:
+\begin{itemize}
+    \item Computing boundary velocity per primitive.
+    \item Computing the divergence of the tensor field
+          $C: j'\Big(x, \sigma\big(u_*(p)\big)\Big)$. This is likely to have numerical
+          robustness/accuracy issues due to cancellation.
+    \item Predicting how worst-case volume forces or surface tractions change
+        with boundary movement.
+\end{itemize}
+
+The additional theory questions/points that need to be addressed are:
+\begin{itemize}
+    \item How do we reformulate with no-rigid-motion constrains instead of
+          Dirichlet boundary conditions while keeping the adjoint problem well-posed?
+    \item Can we drop the normal derivative term appearing in (\ref{eqn:partials})?
+    \item How do we model loading scenarios changing as the boundary changes?
+    \item Find a more rigorous derivation for Appendix \ref{sec:der_sint} (e.g., see footnote).
+\end{itemize}
+
+Finally, it is worrying that the gradient specified by (\ref{eqn:partials}) has
+the term $\sint{j\big(x, \sigma(u_*)\big) v_i(p) \cdot \hat{n}}$, which encourages
+removal of high-stress material. While this term makes sense in context of the
+formal derivation, intuitively it is counterproductive; removing high-stress
+regions only redistributes their stresses inward and will in fact weaken the
+object further. The term must be compensated for by the rest of the gradient's
+terms (involving the adjoint state), but it makes me worry that the stress
+field doesn't satisfy some of the differentiability properties we implicitly
+assume while carrying out the formal computations. This could possibly
+invalidate the derivations.
+
+\begin{appendices}
+    \section{Integration By Parts Formulas}
+    \label{sec:IBP}
+    Here we derive the two integration by parts formulas used in this writeup. The
+    derivations are straightforward in index notation. First, we derive the one
+    for
+    $
+    \vint{\lambda \cdot \left(\div \left[ C:\epsilon(u)\right]\right)}
+    $, i.e. $ \vint{\lambda_i \pder{}{x_j}\big[C_{ijkl} \epsilon_{kl}\big]}. $
+    From product rule:
+    $$
+    \vint{\lambda_i \pder{}{x_j}C_{ijkl} \epsilon_{kl}(u)} =
+    \vint{\pder{}{x_j} \big[\lambda_i C_{ijkl} \epsilon_{kl}(u)\big] -
+    \pder{\lambda_i}{x_j} C_{ijkl} \epsilon_{kl}(u)}.
+    $$
+    Notice that $\pder{\lambda_i}{x_j} C_{ijkl} = \epsilon_{ij}(\lambda) C_{ijkl}$ by
+    the symmetry $C_{ijkl} = C_{jikl}$. This plus Gauss' theorem for the first
+    term gives:
+    $$
+    \sint{\lambda_i C_{ijkl} \epsilon_{kl}(u)\hat{n}_j} -
+    \vint{\epsilon_{ij}(\lambda)C_{ijkl} \epsilon_{kl}(u)}.
+    $$
+    Reinterpreting these in coordinate-free notation, we arrive at the desired expression,
+    \begin{align}
+    \sint{\lambda \cdot \big[C : \epsilon(u) \big]\hat{n}} - \vint{\epsilon(\lambda) : C : \epsilon(u)}.
+    \label{eqn:IBP_1}
+    \end{align}
+
+    Next, we derive the identity used to move the strain operator off $\phi$ in
+    $$
+    \vint{\left[j'(x, \sigma(u)) + \epsilon(\lambda)\right] : C : \epsilon(\phi)}
+    $$
+    To simplify notation, let $\gamma(x, u, \lambda)$ be the rank 2 tensor
+    $j'(x, \sigma(u)) + \epsilon(\lambda)$. We want to show:
+    \begin{align}
+    \vint{\gamma(x, u, \lambda) : C : \epsilon(\phi)} =
+    -\vint{\left(\div \big[C : \gamma(x, u, \lambda)\big]\right) \cdot \phi}
+    + \sint{\big[C : \gamma(x, u, \lambda) \big] \hat{n} \cdot \phi}
+    \label{eqn:IBP_2}
+    \end{align}
+    In component notation we have, by symmetry $C_{ijkl} = C_{ijlk}$,
+    $$
+    \vint{\gamma_{ij} C_{ijkl} \epsilon_{kl}(\phi)} = \vint{\gamma_{ij} C_{ijkl} \pder{\phi_k}{x_l}}.
+    $$
+    By product rule, the expression becomes:
+    $$
+    \vint{\pder{}{x_l}\big[\gamma_{ij} C_{ijkl} \phi_k \big] - \pder{\gamma_{ij} C_{ijkl}}{x_l} \phi_k}.
+    $$
+    Applying Gauss' theorem to the left term and using major symmetry $C_{ijkl} = C_{klij}$:
+    $$
+    \sint{\gamma_{kl} C_{ijkl} \phi_i \hat{n}_j} - \vint{\pder{\gamma_{kl}C_{ijkl} }{x_j} \phi_i}.
+    $$
+    Reinterpreting in coordinate-free notation, gives the desired formula, (\ref{eqn:IBP_2}).
+    \section{Derivative of a Surface Integral}
+    \label{sec:der_sint}
+    Here we compute the derivative of a boundary integral. Unlike the volume
+    integral case, to which Reynold's transport theorem applies, there doesn't
+    seem to be a classical theorem available. We derive a slightly more general
+    statement than those appearing without proof in many of the topology
+    optimization papers (e.g. \cite{Allaire2008909}). This more general version
+    has a chance of handling design-dependent loads, but there are still
+    problems to be solved as we will soon see.
+
+    The task is to compute:
+    $$
+    \pder{}{p_i} \sint{h(p, x)}
+    $$
+    We use Gauss' theorem to rewrite as a volume integral so that we can apply
+    Reynold's transport theorem:
+    \begin{align*}
+        \pder{}{p_i} \sint{h(p, x)} = \pder{}{p_i} \sint{\tilde{h}(p, x)\tilde{n} \cdot \hat{n}}
+    = \pder{}{p_i} \vint{\div \big[\tilde{h}(p, x)\tilde{n} \big]}
+    \end{align*}
+
+    Here $\tilde{h}$ and $\tilde{n}$ represent an extension of the surface
+    fields $h$ and $\hat{n}$ into the volume ($\tilde{h} = h$ and $\tilde{n} =
+    \hat{n}$ on $\boundary$). It will turn out that $\tilde{n}$
+    is only ever evaluated on the boundary, so only its existence is needed.
+    However, {\it we will end up needing to compute normal derivatives of
+    $\tilde{h}$}. In \cite{chen2007shape} a similar extension is needed, and
+    they discuss using ``transfinite interpolation'' with approximate distance
+    fields.
+    
+    Applying Reynold's transport theorem, the derivative becomes:
+    $$
+    \sint{\div \big[\tilde{h}(p, x)\tilde{n} \big] \big( v_i(p) \cdot \hat{n} \big)}
++ \vint{\pder{}{p_i} \div \big[\tilde{h}(p, x)\tilde{n} \big]}
+    $$
+    Applying the product rule $\div \big[\tilde{h}(p, x)\tilde{n} \big] =
+    \nabla \tilde{h}(p, x) \cdot \tilde{n} + \tilde{h}(p, x)\div \tilde{n}$ on
+    the left and exchanging the order of differentiation on the right:
+    $$
+    \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+    + \vint{\div \left[\pder{\tilde{h}}{p_i}(p, x)\tilde{n} + \tilde{h}(p, x) \pder{\tilde{n}}{p_i} \right]},
+    $$
+    where we replaced tilde quantities evaluated on the boundary with there
+    pre-extension counterparts and set $H = \evalat{\div \tilde{n}}{\boundary}$,
+    which should be the trace of the shape operator (the sum of the principle
+    curvatures) for any reasonable extension $\tilde{n}$. We claim the
+    boundary normal and its extension change negligibly with $p_i$ so we can
+    drop the last term\footnote{I do not have a proof for this, but it seems
+    sensible...}. Applying Gauss' theorem:
+    $$
+    \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+    + \sint{\left[\pder{\tilde{h}}{p_i}(p, x)\tilde{n}\right] \cdot \hat{n}},
+    $$
+    so finally we get the identity:
+    \begin{equation}
+     \pder{}{p_i} \sint{h(p, x)} =
+        \sint{\left[\pder{\tilde{h}(p, x)}{\hat{n}} + h(p, x) H \right]\big(v_i(p) \cdot \hat{n}\big)}
+        + \sint{\pder{h}{p_i}(p, x)}.
+        \label{eqn:surface_derivative}
+    \end{equation}
+    Though this requires a careful handling of $\tilde{h}$, each term has an
+    intuitive meaning: the first accounts for the boundary moving to encounter
+    new scalar field values, the second handles dilation/contraction of the
+    boundary (since $H v_i(p) \cdot \hat{n}$ gives the change in surface area due to
+    normal motion), and the third handles the parameterized changes of $h$ (in
+    our case, the changes in the design-dependent load).
+
+    If we can define $\tilde{h}$ so that $\evalat{\pder{\tilde{h}(p, x)}{\hat{n}}}{\boundary} = 0$
+    (the most natural choice, which should be possible to do in a
+    neighborhood though I don't have a proof), then the first term
+    vanishes and we are left with:
+    \begin{equation}
+     \pder{}{p_i} \sint{h(p, x)} =
+     \sint{h(p, x) H v_i(p) \cdot \hat{n}}
+        + \sint{\pder{h}{p_i}(p, x)}.
+        \label{eqn:surface_derivative_simple}
+    \end{equation}
+\end{appendices}
+\bibliographystyle{plain}
+\bibliography{References}
+
+\end{document}
