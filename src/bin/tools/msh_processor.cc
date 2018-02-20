@@ -40,7 +40,7 @@
 //
 //      TODO: Add "setNodePositions" operation that repositions the mesh nodes
 //      to the locations specified by the vector field at the top of the stack.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  08/16/2014 15:26:04
@@ -67,9 +67,9 @@
 #include "Sampler.hh"
 #include "Values.hh"
 #include "MeshConnectivity.hh"
-#include "../ExpressionVector.hh"
-#include "../SimplicialMesh.hh"
-#include "../filters/remove_dangling_vertices.hh"
+#include "ExpressionVector.hh"
+#include "SimplicialMesh.hh"
+#include "filters/remove_dangling_vertices.hh"
 
 using namespace MeshIO;
 using namespace std;
@@ -423,7 +423,7 @@ size_t SMatrixOperation(const string &, const string &/* arg */, Stack &stack, c
 //         throw std::runtime_error("Not yet implemented.");
 //     }
 //     else throw runtime_error("called on non-matrix type argument");
-// 
+//
 //     return 1;
 // }
 

@@ -1,10 +1,10 @@
-#include "../MeshIO.hh"
-#include "../MSHFieldWriter.hh"
-#include "../LinearElasticity.hh"
-#include "../Materials.hh"
-#include "../PeriodicHomogenization.hh"
-#include "../OrthotropicHomogenization.hh"
-#include "../GlobalBenchmark.hh"
+#include "MeshIO.hh"
+#include "MSHFieldWriter.hh"
+#include "LinearElasticity.hh"
+#include "Materials.hh"
+#include "PeriodicHomogenization.hh"
+#include "OrthotropicHomogenization.hh"
+#include "GlobalBenchmark.hh"
 #include <vector>
 
 #include <queue>
@@ -106,7 +106,7 @@ using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::tem
 
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements) {
     auto &mat = HMG<_N>::material;
     if (args.count("material")) mat.setFromFile(args["material"].as<string>());

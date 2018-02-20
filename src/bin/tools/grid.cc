@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Create grid meshes, optionally tesselated into tetrahedra or triangles.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  06/20/2015 18:23:24
@@ -12,9 +12,9 @@
 #include <iterator>
 #include <string>
 #include <vector>
-#include "../filters/gen_grid.hh"
-#include "../filters/voxels_to_simplices.hh"
-#include "../MSHFieldWriter.hh"
+#include "filters/gen_grid.hh"
+#include "filters/voxels_to_simplices.hh"
+#include "MSHFieldWriter.hh"
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -101,7 +101,7 @@ Point3D parseVector(size_t expectedSize, const string &cstring) {
 int main(int argc, const char *argv[])
 {
     po::variables_map args = parseCmdLine(argc, argv);
-    
+
     vector<MeshIO::IOVertex>  gridVertices, simplexVertices;
     vector<MeshIO::IOElement> gridElements, simplices;
 
@@ -114,7 +114,7 @@ int main(int argc, const char *argv[])
 
     gen_grid(sizes, gridVertices, gridElements);
 
-    // Transform grid vertices to the requested 
+    // Transform grid vertices to the requested
     if (args.count("minCorner")) {
         Point3D minCorner = parseVector(sizes.size(), args["minCorner"].as<string>());
         Point3D maxCorner = parseVector(sizes.size(), args["maxCorner"].as<string>());

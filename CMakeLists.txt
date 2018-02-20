@@ -66,69 +66,17 @@ option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent l
 ################################################################################
 
 add_library(${PROJECT_NAME}
-        BoundaryConditions.cc
-        EdgeFields.cc
-        GlobalBenchmark.cc
-        Materials.cc
-        MeshIO.cc
-        MSHFieldParser.cc
-        Types.cc
-
-        BaseCellType.hh
-        BoundaryConditions.hh
-        BoundaryLaplacian.hh
-        BoundaryMesh.hh
-        CollisionGrid.hh
-        ComponentMask.hh
-        Concepts.hh
-        DenseCollisionGrid.hh
-        EdgeFields.hh
-        EmbeddedElement.hh
-        ExpressionVector.hh
-        FEMMesh.hh
-        function_traits.hh
-        Functions.hh
-        Future.hh
-        GaussQuadrature.hh
-        Geometry.hh
-        GlobalBenchmark.hh
-        GridFunction.hh
-        HalfEdge.hh
-        HalfedgeDictionary.hh
-        InterpolantRestriction.hh
-        JSFieldWriter.hh
-        Laplacian.hh
-        LinearElasticity.hh
-        MassMatrix.hh
-        MaterialField.hh
-        MaterialOptimization.hh
-        Materials.hh
-        MeshDataTraits.hh
-        MeshIO.hh
-        MSHFieldParser.hh
-        MSHFieldWriter.hh
-        NTuple.hh
-        OneForm.hh
-        OrthotropicHomogenization.hh
-        PeriodicBoundaryMatcher.hh
-        PeriodicHomogenization.hh
-        PerturbMesh.hh
-        Poisson.hh
-        Simplex.hh
-        SimplicialMesh.hh
-        SimplicialMeshInterface.hh
-        SymmetricMatrixInterpolant.hh
-        TemplateHacks.hh
-        TetMesh.hh
-        TriMesh.hh
-        Types.hh
-        UniformLaplacian.hh
-
-        Triangulate.h
-        util.h
+        src/lib/MeshFEM/BoundaryConditions.cc
+        src/lib/MeshFEM/EdgeFields.cc
+        src/lib/MeshFEM/GlobalBenchmark.cc
+        src/lib/MeshFEM/Materials.cc
+        src/lib/MeshFEM/MeshIO.cc
+        src/lib/MeshFEM/MSHFieldParser.cc
+        src/lib/MeshFEM/Types.cc
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM)
+target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM)
 
 ################################################################################
 # Configure manual compiler flags based on options
@@ -161,10 +109,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 # Eigen3 library
 find_package(Eigen3 REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
-
-# CSGFEM library
-find_package(CSGFEM REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC CSGFEM)
 
 # json library
 if(NOT TARGET json)
@@ -217,47 +161,8 @@ else()
 endif()
 
 ################################################################################
-# Independent binaries
+# Subdirectories
 ################################################################################
 
-add_executable(mesh_convert mesh_convert.cc)
-target_link_libraries(mesh_convert ${PROJECT_NAME})
-set_target_properties(mesh_convert PROPERTIES CXX_STANDARD 11)
-
-add_executable(PeriodicHomogenization_cli PeriodicHomogenization_cli.cc)
-target_link_libraries(PeriodicHomogenization_cli ${PROJECT_NAME})
-set_target_properties(PeriodicHomogenization_cli PROPERTIES CXX_STANDARD 11)
-
-add_executable(ConstStrainDisplacement_cli ConstStrainDisplacement_cli.cc)
-target_link_libraries(ConstStrainDisplacement_cli ${PROJECT_NAME})
-set_target_properties(ConstStrainDisplacement_cli PROPERTIES CXX_STANDARD 11)
-
-add_executable(DeformedCells_cli DeformedCells_cli.cc)
-target_link_libraries(DeformedCells_cli ${PROJECT_NAME} json)
-set_target_properties(DeformedCells_cli PROPERTIES CXX_STANDARD 11)
-
-if(CERES_FOUND)
-    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-    target_link_libraries(MaterialOptimization_cli ${PROJECT_NAME})
-    set_target_properties(MaterialOptimization_cli PROPERTIES CXX_STANDARD 11)
-endif()
-
-add_executable(Simulate_cli Simulate_cli.cc)
-target_link_libraries(Simulate_cli ${PROJECT_NAME})
-set_target_properties(Simulate_cli PROPERTIES CXX_STANDARD 11)
-
-add_executable(Poisson_cli Poisson_cli.cc)
-target_link_libraries(Poisson_cli ${PROJECT_NAME})
-set_target_properties(Poisson_cli PROPERTIES CXX_STANDARD 11)
-
-add_executable(ExtractBMatrix ExtractBMatrix.cc)
-target_link_libraries(ExtractBMatrix ${PROJECT_NAME})
-set_target_properties(ExtractBMatrix PROPERTIES CXX_STANDARD 11)
-
-################################################################################
-# Include binaries in tools/
-################################################################################
-
-add_subdirectory(tools)
-add_subdirectory(mechanisms)
+add_subdirectory(src/bin)
 add_subdirectory(tests)

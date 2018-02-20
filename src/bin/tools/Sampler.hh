@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <sstream>
 #include <memory>
-#include "../DenseCollisionGrid.hh"
-#include "../Future.hh"
+#include "DenseCollisionGrid.hh"
+#include "Future.hh"
 
 template<size_t N>
 struct EmbedSimplexImpl;
