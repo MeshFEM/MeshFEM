@@ -1,4 +1,4 @@
-#include "Materials.hh"
+#include <MeshFEM/Materials.hh>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>

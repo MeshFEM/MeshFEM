@@ -15,9 +15,9 @@
 #include <queue>
 #include <vector>
 #include <algorithm>
-#include "../algorithms/get_element_components.hh"
-#include "../algorithms/remove_if_index.hh"
-#include "remove_dangling_vertices.hh"
+#include <MeshFEM/algorithms/get_element_components.hh>
+#include <MeshFEM/algorithms/remove_if_index.hh>
+#include <MeshFEM/remove_dangling_vertices.hh>
 
 // Remove small components based on pre-computed partitioning
 // Returns true iff the mesh is altered, in which case the new mesh can be

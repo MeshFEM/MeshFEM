@@ -15,7 +15,7 @@
 #define EXTRACT_HOLE_BOUNDARIES_HH
 #include <vector>
 #include <queue>
-#include "../Types.hh"
+#include <MeshFEM/Types.hh>
 
 template<class _Mesh>
 void extract_hole_boundaries(const _Mesh &m,

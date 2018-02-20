@@ -1,5 +1,5 @@
-#include "Handle.hh"
-#include "../MeshDataTraits.hh"
+#include <MeshFEM/Handles/Handle.hh>
+#include <MeshFEM/MeshDataTraits.hh>
 
 namespace _TetMeshHandles {
 

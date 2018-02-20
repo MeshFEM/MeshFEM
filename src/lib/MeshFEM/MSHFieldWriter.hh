@@ -33,10 +33,10 @@
 #include <set>
 #include <type_traits>
 
-#include <Fields.hh>
-#include <Flattening.hh>
-#include "Functions.hh"
-#include "MeshIO.hh"
+#include <CSGFEM/Fields.hh>
+#include <CSGFEM/Flattening.hh>
+#include <MeshFEM/Functions.hh>
+#include <MeshFEM/MeshIO.hh>
 
 class MSHFieldWriter {
 protected:

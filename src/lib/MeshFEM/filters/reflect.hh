@@ -2,8 +2,8 @@
 #define REFLECT_HH
 #include <ratio>
 #include <vector>
-#include "../Geometry.hh"
-#include "../ComponentMask.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/ComponentMask.hh>
 
 inline bool isEq(Real a, Real b, Real tol = 0) {
     return std::abs(a - b) < tol;

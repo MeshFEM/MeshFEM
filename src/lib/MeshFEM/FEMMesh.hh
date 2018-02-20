@@ -18,12 +18,12 @@
 #include <cassert>
 #include <type_traits>
 
-#include "Geometry.hh"
-#include "EmbeddedElement.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/EmbeddedElement.hh>
 
-#include "SimplicialMesh.hh"
-#include "BoundaryMesh.hh"
-#include "Handles/FEMMeshHandles.hh"
+#include <MeshFEM/SimplicialMesh.hh>
+#include <MeshFEM/BoundaryMesh.hh>
+#include <MeshFEM/Handles/FEMMeshHandles.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -404,6 +404,6 @@ private:
     }
 };
 
-#include "FEMMesh.inl"
+#include <MeshFEM/FEMMesh.inl>
 
 #endif /* end of include guard: FEMMESH_HH */

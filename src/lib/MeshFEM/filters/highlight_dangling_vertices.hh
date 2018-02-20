@@ -12,8 +12,8 @@
 #ifndef HIGHLIGHT_DANGLING_VERTICES_HH
 #define HIGHLIGHT_DANGLING_VERTICES_HH
 
-#include "Geometry.hh"
-#include "../MeshIO.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/MeshIO.hh>
 
 template<class Vertex, class Element>
 void highlight_dangling_vertices(const std::vector<Vertex>  &vertices,

@@ -25,15 +25,15 @@
 #include <boost/algorithm/string.hpp>
 #include <string>
 #include <vector>
-#include "Types.hh"
-#include <SymmetricMatrix.hh>
-#include "FEMMesh.hh"
-#include "MeshIO.hh"
-#include "LinearElasticity.hh"
-#include "Materials.hh"
-#include "PeriodicHomogenization.hh"
-#include "OrthotropicHomogenization.hh"
-#include "MSHFieldWriter.hh"
+#include <MeshFEM/Types.hh>
+#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/FEMMesh.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/PeriodicHomogenization.hh>
+#include <MeshFEM/OrthotropicHomogenization.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
 
 #include <boost/program_options.hpp>
 

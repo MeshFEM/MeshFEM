@@ -21,11 +21,11 @@
 #include <string>
 #include <limits>
 
-#include "Types.hh"
-#include <SparseMatrices.hh>
-#include "filters/gen_grid.hh"
-#include "Geometry.hh"
-#include "MSHFieldWriter.hh"
+#include <MeshFEM/Types.hh>
+#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/filters/gen_grid.hh>
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
 
 struct GridConstants {
     static constexpr size_t NONE = std::numeric_limits<size_t>::max();

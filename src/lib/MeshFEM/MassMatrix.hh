@@ -15,7 +15,7 @@
 #ifndef MASSMATRIX_HH
 #define MASSMATRIX_HH
 
-#include <SparseMatrices.hh>
+#include <CSGFEM/SparseMatrices.hh>
 #include <limits>
 #include <stdexcept>
 

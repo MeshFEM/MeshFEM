@@ -20,8 +20,8 @@
 #include <sstream>
 #include <queue>
 
-#include "CollisionGrid.hh"
-#include "Geometry.hh"
+#include <MeshFEM/CollisionGrid.hh>
+#include <MeshFEM/Geometry.hh>
 
 namespace PeriodicBoundaryMatcher {
 

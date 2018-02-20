@@ -29,8 +29,8 @@
 #include <string>
 #include <stdexcept>
 
-#include "MSHFieldWriter.hh"
-#include <Fields.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <CSGFEM/Fields.hh>
 
 // Per-element material field
 template<class _Material>

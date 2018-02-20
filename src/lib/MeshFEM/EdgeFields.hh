@@ -12,16 +12,16 @@
 //      #components
 //      comp0...
 //      ...
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  08/28/2014 10:43:42
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EDGEFIELDS_HH
 #define EDGEFIELDS_HH
-#include "Types.hh"
-#include "Geometry.hh"
-#include <Fields.hh>
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/Geometry.hh>
+#include <CSGFEM/Fields.hh>
 
 #include <map>
 #include <iostream>
@@ -82,7 +82,7 @@ public:
             addField(entry.first, entry.second);
     }
 
-    // *Overwrite* this field collection with one from a file. 
+    // *Overwrite* this field collection with one from a file.
     void read(std::istream &is);
     void read(const std::string &path) {
         std::ifstream inFile(path);

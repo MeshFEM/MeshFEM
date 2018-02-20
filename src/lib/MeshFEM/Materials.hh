@@ -9,7 +9,7 @@
 //
 //      The exception is ConstantMaterial, which is intended to be read from a
 //      file and which doesn't support material optimization.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  07/11/2014 15:48:34
@@ -17,9 +17,9 @@
 #ifndef MATERIAL_HH
 #define MATERIAL_HH
 
-#include "Types.hh"
-#include <Flattening.hh>
-#include <ElasticityTensor.hh>
+#include <MeshFEM/Types.hh>
+#include <CSGFEM/Flattening.hh>
+#include <CSGFEM/ElasticityTensor.hh>
 #include <stdexcept>
 #include <vector>
 #include <string>
@@ -227,7 +227,7 @@ struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
             // for (size_t i = 0; i < flatLen(_N); ++i) {
             //     e[i] -= T(stress[i]);
             // }
-            
+
             return true;
         }
 

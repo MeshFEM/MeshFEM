@@ -20,8 +20,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EMBEDDEDELEMENT_HH
 #define EMBEDDEDELEMENT_HH
-#include "Simplex.hh"
-#include "Functions.hh"
+#include <MeshFEM/Simplex.hh>
+#include <MeshFEM/Functions.hh>
 
 // The *EmbeddedSimplex classes store the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the

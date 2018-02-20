@@ -28,7 +28,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef QUAD_SUBDIV_HIGH_ASPECT_HH
 #define QUAD_SUBDIV_HIGH_ASPECT_HH
-#include "Geometry.hh"
+#include <MeshFEM/Geometry.hh>
 #include <map>
 #include <vector>
 #include <array>

@@ -11,10 +11,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef BOUNDARYCONDITIONS_HH
 #define BOUNDARYCONDITIONS_HH
-#include "PeriodicBoundaryMatcher.hh"
-#include "Geometry.hh"
-#include "Types.hh"
-#include "ExpressionVector.hh"
+#include <MeshFEM/PeriodicBoundaryMatcher.hh>
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/ExpressionVector.hh>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,7 +30,7 @@
 #include <cassert>
 #include <limits>
 #include <bitset>
-#include "ComponentMask.hh"
+#include <MeshFEM/ComponentMask.hh>
 
 template<size_t _N>
 struct BoundaryCondition {

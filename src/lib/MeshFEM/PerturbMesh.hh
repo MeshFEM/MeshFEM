@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef PERTURBMESH_HH
 #define PERTURBMESH_HH
-#include "UniformLaplacian.hh"
+#include <MeshFEM/UniformLaplacian.hh>
 
 // Perturb mesh by boundary vector field h * v, leaving the periodic boundary
 // vertices fixed.

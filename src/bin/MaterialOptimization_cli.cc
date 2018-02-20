@@ -1,10 +1,10 @@
-#include "BoundaryConditions.hh"
-#include "MeshIO.hh"
-#include "MSHFieldWriter.hh"
-#include "MSHFieldParser.hh"
-#include "Materials.hh"
-#include "MaterialField.hh"
-#include "MaterialOptimization.hh"
+#include <MeshFEM/BoundaryConditions.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/MSHFieldParser.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/MaterialField.hh>
+#include <MeshFEM/MaterialOptimization.hh>
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -97,7 +97,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 /*! Run material optimization on a particular (mesh, bc) pair.
 *///////////////////////////////////////////////////////////////////////////
 template<size_t _N, size_t _FEMDegree, template<size_t> class _Material>
-void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices, 
+void execute(const string &meshPath, const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements,
              const po::variables_map &args) {
     const string &bcPath = args["boundaryConditions"].as<string>(),

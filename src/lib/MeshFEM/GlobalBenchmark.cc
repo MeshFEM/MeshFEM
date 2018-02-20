@@ -1,7 +1,7 @@
 #ifndef BENCHMARK
 #define BENCHMARK
 #endif
-#include "GlobalBenchmark.hh"
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <iostream>
 
 using namespace std;

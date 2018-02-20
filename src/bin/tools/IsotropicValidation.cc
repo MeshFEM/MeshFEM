@@ -6,17 +6,17 @@
 //      homogenizing rotated versions of the pattern.
 //
 //      Rotations are chosen randomly by picking a random axis and angle.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  01/02/2015 06:17:34
 ////////////////////////////////////////////////////////////////////////////////
-#include "MeshIO.hh"
-#include "MSHFieldWriter.hh"
-#include "LinearElasticity.hh"
-#include "Materials.hh"
-#include "PeriodicHomogenization.hh"
-#include "GlobalBenchmark.hh"
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/PeriodicHomogenization.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -145,7 +145,7 @@ struct ErrorRecord {
 
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements) {
     auto &mat = HMG<_N>::material;
     if (args.count("material")) mat.setFromFile(args["material"].as<string>());

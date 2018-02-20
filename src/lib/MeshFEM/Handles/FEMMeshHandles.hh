@@ -1,7 +1,7 @@
 #include <type_traits>
-#include "Handle.hh"
-// #include "../BoundaryMesh.hh"
-#include "../MeshDataTraits.hh"
+#include <MeshFEM/Handles/Handle.hh>
+// #include <MeshFEM/BoundaryMesh.hh>
+#include <MeshFEM/MeshDataTraits.hh>
 
 namespace _FEMMeshHandles {
 

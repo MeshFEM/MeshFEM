@@ -12,9 +12,9 @@
 #include <iterator>
 #include <string>
 #include <vector>
-#include "filters/gen_grid.hh"
-#include "filters/voxels_to_simplices.hh"
-#include "MSHFieldWriter.hh"
+#include <MeshFEM/filters/gen_grid.hh>
+#include <MeshFEM/filters/voxels_to_simplices.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>

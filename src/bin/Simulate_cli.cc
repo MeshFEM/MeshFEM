@@ -1,10 +1,10 @@
-#include "MeshIO.hh"
-#include "MSHFieldWriter.hh"
-#include "MSHFieldParser.hh"
-#include "LinearElasticity.hh"
-#include "Materials.hh"
-#include "GlobalBenchmark.hh"
-#include "util.h"
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/MSHFieldParser.hh>
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/util.h>
 #include <vector>
 #include <queue>
 #include <iostream>

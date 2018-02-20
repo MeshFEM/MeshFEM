@@ -75,8 +75,9 @@ add_library(${PROJECT_NAME}
         src/lib/MeshFEM/Types.cc
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM)
-target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM)
+target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM) # will be removed
+target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM) # will be removed
+target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
 
 ################################################################################
 # Configure manual compiler flags based on options

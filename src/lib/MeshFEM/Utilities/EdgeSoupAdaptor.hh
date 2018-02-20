@@ -23,7 +23,7 @@
 #define EDGESOUPADAPTOR_HH
 
 #include <type_traits>
-#include "../Concepts.hh"
+#include <MeshFEM/Concepts.hh>
 
 // The default, trivial model of EdgeSoup: simply wrap point and edge
 // collections.

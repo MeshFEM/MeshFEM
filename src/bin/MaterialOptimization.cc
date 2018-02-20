@@ -4,10 +4,10 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "Types.hh"
-#include <Flattening.hh>
-#include <ElasticityTensor.hh>
-#include "MaterialOptimization.hh"
+#include <MeshFEM/Types.hh>
+#include <CSGFEM/Flattening.hh>
+#include <CSGFEM/ElasticityTensor.hh>
+#include <MeshFEM/MaterialOptimization.hh>
 
 using namespace std;
 

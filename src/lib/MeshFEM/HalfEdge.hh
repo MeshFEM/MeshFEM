@@ -23,8 +23,8 @@
 
 #include <vector>
 
-#include "Geometry.hh"
-#include "HalfedgeDictionary.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/HalfedgeDictionary.hh>
 
 class EmptyData { };
 
@@ -216,6 +216,6 @@ private:
     std::vector<Facet>    facets;
 };
 
-#include "HalfEdge.inl"
+#include <MeshFEM/HalfEdge.inl>
 
 #endif // HALF_EDGE_HH

@@ -10,7 +10,7 @@
 #ifndef MERGE_DUPLICATE_VERTICES_HH
 #define MERGE_DUPLICATE_VERTICES_HH
 #include <limits>
-#include "../CollisionGrid.hh"
+#include <MeshFEM/CollisionGrid.hh>
 
 void merge_duplicate_vertices(
     const std::vector<MeshIO::IOVertex > &inVertices,

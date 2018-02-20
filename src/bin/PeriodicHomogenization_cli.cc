@@ -1,10 +1,10 @@
-#include "MeshIO.hh"
-#include "MSHFieldWriter.hh"
-#include "LinearElasticity.hh"
-#include "Materials.hh"
-#include "PeriodicHomogenization.hh"
-#include "OrthotropicHomogenization.hh"
-#include "GlobalBenchmark.hh"
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/PeriodicHomogenization.hh>
+#include <MeshFEM/OrthotropicHomogenization.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -15,7 +15,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
-#include <TensorProjection.hh>
+#include <CSGFEM/TensorProjection.hh>
 
 namespace po = boost::program_options;
 using namespace std;
@@ -88,7 +88,7 @@ using HMG = LinearElasticity::HomogenousMaterialGetter<Materials::Constant>::tem
 
 template<size_t _N, size_t _FEMDegree>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements) {
     auto &mat = HMG<_N>::material;
     if (args.count("material")) mat.setFromFile(args["material"].as<string>());
@@ -235,7 +235,7 @@ void execute(const po::variables_map &args,
     }
 
     if (args.count("distanceToMaterial")) {
-        Materials::Constant<_N> targetMat(args.at("distanceToMaterial").as<string>()); 
+        Materials::Constant<_N> targetMat(args.at("distanceToMaterial").as<string>());
         auto tgtE = targetMat.getTensor();
         cout << "(Sq Rel Frob) Distance to Specified Tensor:\t" << (Eh - tgtE).frobeniusNormSq() / tgtE.frobeniusNormSq() << endl;
     }

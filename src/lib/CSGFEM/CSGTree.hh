@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Implements a binary tree constructing a CSG object.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  01/28/2013 16:37:07
@@ -148,7 +148,7 @@ public:
             parameters.push_back(prim->getRotationRad());
         }
     };
-    
+
     struct CSGParameterSetter {
         const std::vector<Real> &parameters;
         size_t primitivesVisited;

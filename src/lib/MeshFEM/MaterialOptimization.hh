@@ -24,11 +24,11 @@
 #include <OPT++/OptLBFGS.h>
 #endif
 
-#include "LinearElasticity.hh"
-#include "GaussQuadrature.hh"
-#include "Materials.hh"
-#include "MaterialField.hh"
-#include "MSHFieldWriter.hh"
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/Materials.hh>
+#include <MeshFEM/MaterialField.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
 #include <cassert>
 #include <stdexcept>
 #include <iostream>

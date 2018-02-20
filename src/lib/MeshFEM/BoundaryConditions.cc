@@ -8,9 +8,9 @@
 //  Company:  New York University
 //  Created:  07/09/2014 17:35:17
 ////////////////////////////////////////////////////////////////////////////////
-#include "Types.hh"
+#include <MeshFEM/Types.hh>
 
-#include "BoundaryConditions.hh"
+#include <MeshFEM/BoundaryConditions.hh>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/algorithm/string.hpp>

@@ -30,8 +30,8 @@
 
 #include <boost/optional.hpp>
 
-#include "../PeriodicBoundaryMatcher.hh"
-#include "../Geometry.hh"
+#include <MeshFEM/PeriodicBoundaryMatcher.hh>
+#include <MeshFEM/Geometry.hh>
 
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.

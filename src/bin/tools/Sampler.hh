@@ -1,13 +1,13 @@
 #ifndef SAMPLER_HH
 #define SAMPLER_HH
 
-#include <EmbeddedElement.hh>
-#include <MeshIO.hh>
+#include <MeshFEM/EmbeddedElement.hh>
+#include <MeshFEM/MeshIO.hh>
 #include <stdexcept>
 #include <sstream>
 #include <memory>
-#include "DenseCollisionGrid.hh"
-#include "Future.hh"
+#include <MeshFEM/DenseCollisionGrid.hh>
+#include <MeshFEM/Future.hh>
 
 template<size_t N>
 struct EmbedSimplexImpl;

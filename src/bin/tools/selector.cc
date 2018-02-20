@@ -12,7 +12,7 @@
 #include <MeshIO.hh>
 #include <MSHFieldWriter.hh>
 #include <MSHFieldParser.hh>
-#include <Fields.hh>
+#include <CSGFEM/Fields.hh>
 #include <stdexcept>
 #include <vector>
 

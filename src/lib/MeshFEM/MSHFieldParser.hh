@@ -5,7 +5,7 @@
 //      Read Scalar/vector/matrix fields in the MSH format.
 //      Fields are identified by name, so all fields (or, at the very least,
 //      all fields of the same type) should have distinct names.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  07/23/2014 13:25:57
@@ -21,11 +21,11 @@
 #include <stdexcept>
 #include <Eigen/Dense>
 
-#include "MeshIO.hh"
-#include "Types.hh"
-#include "Functions.hh"
-#include <Fields.hh>
-#include <SymmetricMatrix.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/Functions.hh>
+#include <CSGFEM/Fields.hh>
+#include <CSGFEM/SymmetricMatrix.hh>
 
 // N: spatial dimension
 template<size_t N>
@@ -183,7 +183,7 @@ private:
 
     // Find a particular "type" of field of a particular name.
     // This "type" comprises both the domain type (i.e. DomainType) and range
-    // type (vector, scalar, symmetric matrix...) 
+    // type (vector, scalar, symmetric matrix...)
     // Throws exception if no matching field is found.
     template<class _Field>
     static const _Field &m_getField(const std::map<std::string, std::pair<DomainType, _Field> > &fields,
@@ -202,7 +202,7 @@ private:
 
     // Get the names of all fields of a particular "type."
     // This "type" comprises both the domain type (i.e. DomainType) and range
-    // type (vector, scalar, symmetric matrix...) 
+    // type (vector, scalar, symmetric matrix...)
     template<class CollectionType>
     static std::vector<std::string> m_getKeysOfType(const CollectionType &fields, DomainType type) {
         std::vector<std::string> result;

@@ -18,7 +18,7 @@
 #ifndef QUAD_SUBDIV_HH
 #define QUAD_SUBDIV_HH
 #include <stdexcept>
-#include "../CollisionGrid.hh"
+#include <MeshFEM/CollisionGrid.hh>
 
 // quadIdx: index of the quad from which each output element originated
 //          This can be propagated across several subdivisions by passing the

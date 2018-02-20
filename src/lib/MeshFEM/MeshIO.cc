@@ -1,9 +1,9 @@
-#include "MeshIO.hh"
+#include <MeshFEM/MeshIO.hh>
 #include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <deque>
 #include <limits>
-#include "util.h"
+#include <MeshFEM/util.h>
 
 using namespace std;
 

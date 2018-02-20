@@ -18,8 +18,8 @@
 #include <vector>
 #include <map>
 
-#include "Types.hh"
-#include "MeshIO.hh"
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/MeshIO.hh>
 
 template<size_t N>
 class JSFieldWriter {

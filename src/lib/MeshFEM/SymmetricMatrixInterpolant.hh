@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //      Provides a symmetric matrix-valued interpolant.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/20/2014 16:52:35
@@ -11,9 +11,9 @@
 #ifndef SYMMETRICMATRIXINTERPOLANT_HH
 #define SYMMETRICMATRIXINTERPOLANT_HH
 
-#include <SymmetricMatrix.hh>
-#include <ElasticityTensor.hh>
-#include "Functions.hh"
+#include <CSGFEM/SymmetricMatrix.hh>
+#include <CSGFEM/ElasticityTensor.hh>
+#include <MeshFEM/Functions.hh>
 
 template<class SMat, size_t _K, size_t _Deg>
 class SymmetricMatrixInterpolant : public Interpolant<SMat, _K, _Deg>

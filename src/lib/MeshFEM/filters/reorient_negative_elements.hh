@@ -14,7 +14,7 @@
 #include <vector>
 #include <limits>
 #include <algorithm>
-#include "../Types.hh"
+#include <MeshFEM/Types.hh>
 
 template<class Vertex, class Element>
 size_t reorient_negative_elements(std::vector<Vertex>  &vertices,

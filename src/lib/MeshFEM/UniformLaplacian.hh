@@ -18,7 +18,7 @@
 #include <stdexcept>
 #include <iostream>
 
-#include "SparseMatrices.hh"
+#include <CSGFEM/SparseMatrices.hh>
 
 namespace UniformLaplacian {
 

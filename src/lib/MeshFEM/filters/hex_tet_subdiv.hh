@@ -13,7 +13,7 @@
 
 #include <stdexcept>
 #include <map>
-#include "../Geometry.hh"
+#include <MeshFEM/Geometry.hh>
 
 // hexIdx: index of the hex from which each output tetrahedron originated
 //         This can be propagated across several subdivisions by passing the

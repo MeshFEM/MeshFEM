@@ -25,7 +25,7 @@
 #include <array>
 #include <utility>
 #include <iostream>
-#include "Geometry.hh"
+#include <MeshFEM/Geometry.hh>
 
 template<size_t N>
 struct DenseGridStorage;

@@ -84,11 +84,11 @@
 #include <vector>
 #include <cassert>
 
-#include "Geometry.hh"
-#include "Concepts.hh"
-#include "BoundaryMesh.hh"
-#include "Handles/TetMeshHandles.hh"
-#include "SimplicialMeshInterface.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/Concepts.hh>
+#include <MeshFEM/BoundaryMesh.hh>
+#include <MeshFEM/Handles/TetMeshHandles.hh>
+#include <MeshFEM/SimplicialMeshInterface.hh>
 
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
@@ -666,6 +666,6 @@ protected:
     }
 };
 
-#include "TetMesh.inl"
+#include <MeshFEM/TetMesh.inl>
 
 #endif /* end of include guard: TETMESH_HH */

@@ -17,10 +17,10 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include "filters/gen_grid.hh"
-#include "filters/remove_dangling_vertices.hh"
-#include "filters/voxels_to_simplices.hh"
-#include "MeshIO.hh"
+#include <MeshFEM/filters/gen_grid.hh>
+#include <MeshFEM/filters/remove_dangling_vertices.hh>
+#include <MeshFEM/filters/voxels_to_simplices.hh>
+#include <MeshFEM/MeshIO.hh>
 
 using namespace std;
 

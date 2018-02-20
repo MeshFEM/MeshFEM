@@ -1,5 +1,5 @@
-#include "EdgeFields.hh"
-#include "util.h"
+#include <MeshFEM/EdgeFields.hh>
+#include <MeshFEM/util.h>
 
 #include <boost/algorithm/string.hpp>
 

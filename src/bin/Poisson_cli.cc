@@ -1,8 +1,8 @@
 #include <iostream>
-#include "Poisson.hh"
-#include "MSHFieldWriter.hh"
-#include "Geometry.hh"
-#include "MeshIO.hh"
+#include <MeshFEM/Poisson.hh>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/MeshIO.hh>
 
 #include <boost/program_options.hpp>
 
@@ -67,7 +67,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
 template<size_t _N, size_t _Deg>
 void execute(const po::variables_map &args,
-             const vector<MeshIO::IOVertex> &inVertices, 
+             const vector<MeshIO::IOVertex> &inVertices,
              const vector<MeshIO::IOElement> &inElements) {
     PoissonMesh<_N, _Deg, VectorND<_N>> poissonMesh(inElements, inVertices);
     bool dummy;

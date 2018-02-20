@@ -11,10 +11,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef POISSON_HH
 #define POISSON_HH
-#include "FEMMesh.hh"
-#include "GaussQuadrature.hh"
-#include "SparseMatrices.hh"
-#include "BoundaryConditions.hh"
+#include <MeshFEM/FEMMesh.hh>
+#include <MeshFEM/GaussQuadrature.hh>
+#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/BoundaryConditions.hh>
 #include <vector>
 #include <array>
 #include <memory>

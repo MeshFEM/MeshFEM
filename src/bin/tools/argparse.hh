@@ -4,7 +4,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
-#include <Types.hh>
+#include <MeshFEM/Types.hh>
 #include <boost/optional.hpp>
 
 // Filter invocation: (name, argument string)

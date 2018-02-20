@@ -12,8 +12,8 @@
 #ifndef SIMPLICIALMESH_HH
 #define SIMPLICIALMESH_HH
 
-#include "TriMesh.hh"
-#include "TetMesh.hh"
+#include <MeshFEM/TriMesh.hh>
+#include <MeshFEM/TetMesh.hh>
 
 // Metafunction to choose simplicial mesh (Tri/Tet) based on dimension.
 template<size_t _K, class  VData = TMEmptyData, class  SData = TMEmptyData,

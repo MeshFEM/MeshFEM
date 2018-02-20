@@ -8,7 +8,7 @@
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  08/29/2017 19:31:23
 ////////////////////////////////////////////////////////////////////////////////
-#include <Triangulate.h>
+#include <MeshFEM/Triangulate.h>
 
 int main(int argc, const char *argv[]) {
     if (argc != 3) {

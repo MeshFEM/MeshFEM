@@ -9,8 +9,8 @@
 //  Created:  01/09/2017 18:00:05
 ////////////////////////////////////////////////////////////////////////////////
 #include <cstddef>
-#include "LinearElasticity.hh"
-#include "MeshIO.hh"
+#include <MeshFEM/LinearElasticity.hh>
+#include <MeshFEM/MeshIO.hh>
 
 template<size_t N, size_t Deg>
 void execute(const std::vector<MeshIO::IOVertex > &vertices,
@@ -65,7 +65,7 @@ int main(int argc, const char *argv[]) {
     const std::string &meshPath = argv[1];
     size_t deg = std::stoi(argv[2]);
     const std::string &matPath = argv[3];
-    
+
     std::vector<MeshIO::IOVertex > vertices;
     std::vector<MeshIO::IOElement> elements;
     MeshIO::load(meshPath, vertices, elements);

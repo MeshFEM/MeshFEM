@@ -38,10 +38,10 @@
 #include <vector>
 #include <cassert>
 
-#include "Concepts.hh"
-#include "BoundaryMesh.hh"
-#include "Handles/TriMeshHandles.hh"
-#include "SimplicialMeshInterface.hh"
+#include <MeshFEM/Concepts.hh>
+#include <MeshFEM/BoundaryMesh.hh>
+#include <MeshFEM/Handles/TriMeshHandles.hh>
+#include <MeshFEM/SimplicialMeshInterface.hh>
 
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
@@ -349,6 +349,6 @@ protected:
     }
 };
 
-#include "TriMesh.inl"
+#include <MeshFEM/TriMesh.inl>
 
 #endif /* end of include guard: TRIMESH_HH */

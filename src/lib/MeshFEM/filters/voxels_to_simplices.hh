@@ -6,7 +6,7 @@
 //      respectively).
 //      Note: this uses a symmetric tesselation. An asymmetric tesselation can
 //      be done using fewer vertices.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  06/19/2015 17:38:16
@@ -16,8 +16,8 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include "quad_tri_subdiv.hh"
-#include "hex_tet_subdiv.hh"
+#include <MeshFEM/filters/quad_tri_subdiv.hh>
+#include <MeshFEM/filters/hex_tet_subdiv.hh>
 
 template<class Vertex, class Element>
 void voxels_to_simplices(const std::vector<Vertex>  &inVertices,

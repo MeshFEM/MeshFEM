@@ -23,8 +23,8 @@
 #include <cassert>
 #include <type_traits>
 #include <utility>
-#include "../Future.hh"
-#include "../function_traits.hh"
+#include <MeshFEM/Future.hh>
+#include <MeshFEM/function_traits.hh>
 
 template<size_t N, size_t... Dims> struct NDArrayIndexer; // ND -> 1D flattening
 template<size_t N, size_t... Dims> struct NDArrayScanner; // scanline traversal

@@ -37,12 +37,12 @@
 
 #include <boost/optional.hpp>
 
-#include "extract_polygons.hh"
-#include "../PeriodicBoundaryMatcher.hh"
-#include "../MeshIO.hh"
-#include "../Utilities/IteratorMap.hh"
-#include "../Utilities/RandomAccessIndexSet.hh"
-#include "../Geometry.hh"
+#include <MeshFEM/filters/extract_polygons.hh>
+#include <MeshFEM/PeriodicBoundaryMatcher.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Utilities/IteratorMap.hh>
+#include <MeshFEM/Utilities/RandomAccessIndexSet.hh>
+#include <MeshFEM/Geometry.hh>
 
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.

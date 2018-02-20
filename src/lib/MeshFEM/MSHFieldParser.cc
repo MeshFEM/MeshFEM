@@ -1,5 +1,5 @@
-#include "MSHFieldParser.hh"
-#include "Types.hh"
+#include <MeshFEM/MSHFieldParser.hh>
+#include <MeshFEM/Types.hh>
 
 #include <boost/algorithm/string.hpp>
 #include <iostream>

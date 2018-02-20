@@ -1,5 +1,5 @@
-#include "Functions.hh"
-#include "GaussQuadrature.hh"
+#include <MeshFEM/Functions.hh>
+#include <MeshFEM/GaussQuadrature.hh>
 #include <iostream>
 #include <iomanip>
 

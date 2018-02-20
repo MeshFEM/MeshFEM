@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef SIMPLICIALMESHINTERFACE_HH
 #define SIMPLICIALMESHINTERFACE_HH
-#include "Handles/Handle.hh"
+#include <MeshFEM/Handles/Handle.hh>
 
 template<class _Mesh>
 struct SimplicialMeshTraits;

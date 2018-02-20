@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef QUAD_TRI_SUBDIV_HH
 #define QUAD_TRI_SUBDIV_HH
-#include "../Types.hh"
+#include <MeshFEM/Types.hh>
 #include <vector>
 
 // quadIdx: index of the quad from which each output element originated

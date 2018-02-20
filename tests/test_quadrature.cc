@@ -16,7 +16,7 @@
 #include <functional>
 #include <vector>
 #include <cmath>
-#include "GaussQuadrature.hh"
+#include <MeshFEM/GaussQuadrature.hh>
 
 using namespace std;
 

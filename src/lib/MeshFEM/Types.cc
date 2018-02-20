@@ -1,4 +1,4 @@
-#include "Types.hh"
+#include <MeshFEM/Types.hh>
 
 // Print points as [x, y, z]
 Eigen::IOFormat pointFormatter(Eigen::FullPrecision, Eigen::DontAlignCols,

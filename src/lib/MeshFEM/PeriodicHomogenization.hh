@@ -3,18 +3,18 @@
 
 #include <vector>
 #include <string>
-#include "OneForm.hh"
+#include <MeshFEM/OneForm.hh>
 
-#include "GaussQuadrature.hh"
-#include "InterpolantRestriction.hh"
-#include "GlobalBenchmark.hh"
+#include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/InterpolantRestriction.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
-#include <ElasticityTensor.hh>
-#include "Parallelism.hh"
+#include <CSGFEM/ElasticityTensor.hh>
+#include <CSGFEM/Parallelism.hh>
 
 // #define FD_SD_DEBUG
 #ifdef FD_SD_DEBUG
-#include "MSHFieldWriter.hh"
+#include <MeshFEM/MSHFieldWriter.hh>
 #endif
 
 namespace PeriodicHomogenization {

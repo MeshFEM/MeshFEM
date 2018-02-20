@@ -12,9 +12,9 @@
 #ifndef BOUNDARYMESH_HH
 #define BOUNDARYMESH_HH
 #include <type_traits>
-#include "Handles/Handle.hh"
-#include "TemplateHacks.hh"
-#include "MeshDataTraits.hh"
+#include <MeshFEM/Handles/Handle.hh>
+#include <MeshFEM/TemplateHacks.hh>
+#include <MeshFEM/MeshDataTraits.hh>
 
 template<class _Mesh, size_t VolK = _Mesh::K, bool IsFemMesh = MeshDataTraits<_Mesh>::isFEMMesh>
 struct BoundaryMesh;

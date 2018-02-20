@@ -21,7 +21,7 @@
 //      raw_type                the type of data stored at the point
 //      static_sized_raw_type   statically sized data type from which the point
 //                              value can be constructed
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/29/2015 15:42:26
@@ -38,9 +38,9 @@
 #include <type_traits>
 
 #include <Eigen/Dense>
-#include <SymmetricMatrix.hh>
-#include <Simplex.hh>
-#include <Functions.hh>
+#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/Simplex.hh>
+#include <MeshFEM/Functions.hh>
 
 #include "Sampler.hh"
 #include "MeshConnectivity.hh"

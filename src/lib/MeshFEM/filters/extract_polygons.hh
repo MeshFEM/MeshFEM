@@ -13,8 +13,8 @@
 #include <vector>
 #include <list>
 #include <queue>
-#include "../MeshIO.hh"
-#include "../Utilities/EdgeAccessAdaptor.hh"
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
 
 template<size_t N, class PointType, class EdgeType>
 void extract_polygons(const std::vector<PointType> &inVertices,

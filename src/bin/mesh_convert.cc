@@ -1,25 +1,25 @@
-#include "Geometry.hh"
-#include "TetMesh.hh"
-#include "TriMesh.hh"
-#include "MeshIO.hh"
-#include "util.h"
-#include "MSHFieldWriter.hh"
-#include "MSHFieldParser.hh"
-#include "JSFieldWriter.hh"
-#include "filters/subdivide.hh"
-#include "filters/extrude.hh"
-#include "filters/quad_tri_subdiv.hh"
-#include "filters/quad_tri_subdiv_asymmetric.hh"
-#include "filters/quad_subdiv.hh"
-#include "filters/quad_subdiv_high_aspect.hh"
-#include "filters/hex_tet_subdiv.hh"
-#include "filters/remove_dangling_vertices.hh"
-#include "filters/highlight_dangling_vertices.hh"
-#include "filters/reflect.hh"
-#include "filters/CurveCleanup.hh"
-#include "filters/reorient_negative_elements.hh"
-#include "Triangulate.h"
-#include "ComponentMask.hh"
+#include <MeshFEM/Geometry.hh>
+#include <MeshFEM/TetMesh.hh>
+#include <MeshFEM/TriMesh.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/util.h>
+#include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/MSHFieldParser.hh>
+#include <MeshFEM/JSFieldWriter.hh>
+#include <MeshFEM/filters/subdivide.hh>
+#include <MeshFEM/filters/extrude.hh>
+#include <MeshFEM/filters/quad_tri_subdiv.hh>
+#include <MeshFEM/filters/quad_tri_subdiv_asymmetric.hh>
+#include <MeshFEM/filters/quad_subdiv.hh>
+#include <MeshFEM/filters/quad_subdiv_high_aspect.hh>
+#include <MeshFEM/filters/hex_tet_subdiv.hh>
+#include <MeshFEM/filters/remove_dangling_vertices.hh>
+#include <MeshFEM/filters/highlight_dangling_vertices.hh>
+#include <MeshFEM/filters/reflect.hh>
+#include <MeshFEM/filters/CurveCleanup.hh>
+#include <MeshFEM/filters/reorient_negative_elements.hh>
+#include <MeshFEM/Triangulate.h>
+#include <MeshFEM/ComponentMask.hh>
 
 
 #include <limits>
@@ -29,7 +29,7 @@
 #include <queue>
 #include <algorithm>
 #include <boost/program_options.hpp>
-#include <utils.hh>
+#include <CSGFEM/utils.hh>
 namespace po = boost::program_options;
 
 using namespace std;

@@ -14,14 +14,14 @@
 #ifndef ORTHOTROPICHOMOGENIZATION_HH
 #define ORTHOTROPICHOMOGENIZATION_HH
 
-#include <SparseMatrices.hh>
+#include <CSGFEM/SparseMatrices.hh>
 #include <vector>
 #include <memory>
 #include <stdexcept>
 #include <bitset>
 
-#include "PeriodicBoundaryMatcher.hh"
-#include "PeriodicHomogenization.hh"
+#include <MeshFEM/PeriodicBoundaryMatcher.hh>
+#include <MeshFEM/PeriodicHomogenization.hh>
 
 // WARNING: ONLY WORKS WITH ORTHOTROPIC BASE MATERIAL
 namespace PeriodicHomogenization {

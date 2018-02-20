@@ -18,9 +18,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef GAUSSQUADRATURE_HH
 #define GAUSSQUADRATURE_HH
-#include "Types.hh"
-#include "Functions.hh"
-#include "function_traits.hh"
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/Functions.hh>
+#include <MeshFEM/function_traits.hh>
 
 // Edge function (1D)
 // 1 point quadrature for const and linear, 2 point for quadratic and cubic, 3 for quartic and quintic

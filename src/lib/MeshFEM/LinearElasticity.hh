@@ -1,15 +1,15 @@
 #ifndef NEWLINEARELASTICITY_HH
 #define NEWLINEARELASTICITY_HH
 
-#include "SymmetricMatrixInterpolant.hh"
-#include "GaussQuadrature.hh"
-#include "FEMMesh.hh"
-#include "BoundaryConditions.hh"
-#include "GlobalBenchmark.hh"
-#include <Fields.hh>
-#include <SparseMatrices.hh>
-#include "Parallelism.hh"
-#include "Materials.hh"
+#include <MeshFEM/SymmetricMatrixInterpolant.hh>
+#include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/FEMMesh.hh>
+#include <MeshFEM/BoundaryConditions.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <CSGFEM/Fields.hh>
+#include <CSGFEM/SparseMatrices.hh>
+#include <CSGFEM/Parallelism.hh>
+#include <MeshFEM/Materials.hh>
 
 namespace LinearElasticity {
 

@@ -24,9 +24,9 @@
 #include <utility>
 #include <type_traits>
 
-#include "MeshIO.hh"
-#include "Utilities/EdgeAccessAdaptor.hh"
-#include "Utilities/EdgeSoupAdaptor.hh"
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
+#include <MeshFEM/Utilities/EdgeSoupAdaptor.hh>
 
 // Free the data structures passed to/from Triangle. Both input and output must
 // be handled at once because sometimes Triangle passes arrays through from

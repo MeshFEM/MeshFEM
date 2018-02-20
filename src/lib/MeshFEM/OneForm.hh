@@ -15,12 +15,12 @@
 #include <vector>
 #include <array>
 #include <functional>
-#include <Fields.hh>
+#include <CSGFEM/Fields.hh>
 #include <stdexcept>
 
-#include <Algebra.hh>
+#include <CSGFEM/Algebra.hh>
 
-#include "function_traits.hh"
+#include <MeshFEM/function_traits.hh>
 
 template<typename T, size_t N>
 struct OneForm : public VectorSpace<Real, OneForm<T, N>> {

@@ -11,7 +11,7 @@
 #ifndef GEOMETRY_HH
 #define GEOMETRY_HH
 
-#include "Types.hh"
+#include <MeshFEM/Types.hh>
 #include <vector>
 #include <array>
 #include <algorithm>
