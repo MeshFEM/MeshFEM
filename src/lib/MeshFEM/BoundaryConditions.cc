@@ -9,11 +9,8 @@
 //  Created:  07/09/2014 17:35:17
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Types.hh>
-
 #include <MeshFEM/BoundaryConditions.hh>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/algorithm/string.hpp>
+#include <json.hpp>
 
 #include <fstream>
 #include <stdexcept>
@@ -23,20 +20,17 @@
 
 using namespace std;
 
-using boost::property_tree::ptree;
+using json = nlohmann::json;
 
 // Parse a vector from a property tree leniently: accept either 2- or 3-vectors,
 // padding with zeros if necessary.
-Vector3D parseVectorLenient(const ptree &pt) {
+Vector3D parseVectorLenient(const json &params) {
     Vector3D v(Vector3D::Zero());
     int nComponentsRead = 0;
-    for (const ptree::value_type &val : pt) {
-        if (!val.first.empty()) {
-            nComponentsRead = -1; break;
-        }
+    for (const auto &val : params) {
         try {
             if (nComponentsRead < v.size())
-                v[nComponentsRead] = val.second.get_value<double>();
+                v[nComponentsRead] = val;
             ++nComponentsRead;
         }
         catch (...) { nComponentsRead = -1; break; }
@@ -50,81 +44,73 @@ Vector3D parseVectorLenient(const ptree &pt) {
 }
 
 // Parse a vector of expressions
-std::vector<string> parseExpressionVector(const ptree &pt) {
+std::vector<string> parseExpressionVector(const json &params) {
     runtime_error err("Failed to parse expression vector");
     vector<string> result;
-    for (const auto &val : pt) {
-        if (!val.first.empty()) throw err;
-        result.push_back(val.second.get_value<string>());
+    for (const auto &val : params) {
+        result.push_back(val);
     }
     return result;
 }
 
 template <size_t _N>
-void parseNodeConditionValues(const ptree &pt, vector<size_t> &indices,
-                                vector<VectorND<_N>> &displacements) {
-    Vector3D disp;
+void parseNodeConditionValues(const json &params, vector<size_t> &indices,
+                              vector<VectorND<_N>> &displacements) {
     indices.clear(), displacements.clear();
     runtime_error err("Error parsing node condition values.");
 
     // The values key holds a list of assignments
-    for (const ptree::value_type &val : pt) {
-        if (!val.first.empty()) throw err;
+    for (const auto &val : params) {
         // Each assignment is a tuple: (value, region)
-        int i = 0;
-        for (const ptree::value_type &tuple_entry : val.second) {
-            if (!tuple_entry.first.empty()) throw err;
-            if (i == 0) disp = parseVectorLenient(tuple_entry.second);
-            else if (i == 1) {
-                // Region is specified as a list of node indices
-                for (const ptree::value_type &nd : tuple_entry.second) {
-                    if (!nd.first.empty()) throw err;
-                    try { indices.push_back(nd.second.get_value<int>()); }
-                    catch (...) { throw err; }
-                    displacements.push_back(truncateFrom3D<VectorND<_N>>(disp));
-                }
-            }
-            else throw err;
-            ++i;
+        Vector3D disp = parseVectorLenient(val[0]);
+
+        // Region is specified as a list of node indices
+        for (const auto &nd : val[1]) {
+            try { indices.push_back(nd); }
+            catch (...) { throw err; }
+            displacements.push_back(truncateFrom3D<VectorND<_N>>(disp));
         }
     }
 }
 
 template <size_t _N>
-void parseElementConditionValues(const ptree &pt, vector<UnorderedTriplet> &corners,
+void parseElementConditionValues(const json &params, vector<UnorderedTriplet> &corners,
                                 vector<VectorND<_N>> &values) {
-    Vector3D vecValue;
     corners.clear(), values.clear();
     runtime_error err("Error parsing element condition values.");
     std::vector<size_t> idx;
 
     // The values key holds a list of assignments
-    for (const ptree::value_type &val : pt) {
-        if (!val.first.empty()) throw err;
+    for (const auto &val : params) {
         // Each assignment is a tuple: (value, region)
-        int i = 0;
-        for (const ptree::value_type &tuple_entry : val.second) {
-            if (!tuple_entry.first.empty()) throw err;
-            if (i == 0) vecValue = parseVectorLenient(tuple_entry.second);
-            else if (i == 1) {
-                // Region is specified as a list of element corner lists
-                for (const ptree::value_type &elem : tuple_entry.second) {
-                    if (!elem.first.empty()) throw err;
-                    idx.clear();
-                    for (const ptree::value_type &cidx : elem.second) {
-                        if (!cidx.first.empty()) throw err;
-                        try { idx.push_back(cidx.second.get_value<int>()); }
-                        catch (...) { throw err; }
-                    }
-                    if (idx.size() == 2) idx.push_back(0);
-                    if (idx.size() != 3) throw err;
-                    values.push_back(truncateFrom3D<VectorND<_N>>(vecValue));
-                    corners.push_back(UnorderedTriplet(idx[0], idx[1], idx[2]));
-                }
+        Vector3D vecValue = parseVectorLenient(val[0]);
+
+        // Region is specified as a list of element corner lists
+        for (const auto &elem : val[1]) {
+            idx.clear();
+            for (const auto &cidx : elem) {
+                try { idx.push_back(cidx); }
+                catch (...) { throw err; }
             }
-            else throw err;
-            ++i;
+            if (idx.size() == 2) idx.push_back(0);
+            if (idx.size() != 3) throw err;
+            values.push_back(truncateFrom3D<VectorND<_N>>(vecValue));
+            corners.push_back(UnorderedTriplet(idx[0], idx[1], idx[2]));
         }
+    }
+}
+
+template <size_t _N>
+void parseElementVertices(const json &params, vector<IVectorND<_N>> &element_vertices) {
+    element_vertices.clear();
+    runtime_error err("Error parsing element vertices.");
+
+    for (const auto &val : params) {
+        IVectorND<_N> corners;
+        size_t i = 0;
+        for (const auto &x : val) { corners[i++] = x; }
+        if (i != _N) { throw err; }
+        element_vertices.push_back(corners);
     }
 }
 
@@ -225,13 +211,14 @@ template<size_t _N>
 vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion,
         std::vector<PeriodicPairDirichletCondition<_N>> &pps,
-        ComponentMask &pinTranslation) {
-    ptree pt;
-    read_json(is, pt);
+        ComponentMask &pinTranslation)
+{
+    json params;
+    is >> params;
 
     vector<CondPtr<_N> > conds;
 
-    noRigidMotion = pt.get<bool>("no_rigid_motion", false);
+    noRigidMotion = params.value("no_rigid_motion", false);
 
     // Periodic pair condition: fix a single pair of matching nodes on the
     // + and - faces of each specified axis.
@@ -239,8 +226,8 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
     for (size_t c = 0; c < _N; ++c) {
         static const vector<string> componentStrings = {"x", "y", "z"};
         string pairCondition("fix_periodic_pair_" + componentStrings[c]);
-        if (pt.count(pairCondition)) {
-            string faceSpecifier = pt.get<string>(pairCondition);
+        if (params.count(pairCondition)) {
+            string faceSpecifier = params[pairCondition];
             size_t face = _N;
             for (size_t c2 = 0; c2 < _N; ++c2) {
                 if (c2 == c) continue;
@@ -252,12 +239,10 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         }
     }
 
-    pinTranslation.setComponentString(pt.get<string>("pin_translation", ""));
+    pinTranslation.setComponentString(params.value("pin_translation", ""));
 
-    ptree regions = pt.get_child("regions");
-    for (const ptree::value_type &val : regions) {
-        ptree tcond = val.second;
-        string type = tcond.get_child("type").get_value<string>();
+    for (const auto &tcond : params["regions"]) {
+        string type = tcond["type"];
 
         // Parse region and value first. This is either a box with associated
         // value, a collection of node sets and their associated vector
@@ -266,6 +251,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         vector<size_t>       node_indices;
         vector<VectorND<_N>> node_values;
 
+        vector<IVectorND<_N>>    element_vertices;
         vector<UnorderedTriplet> element_corners;
         vector<VectorND<_N>>     element_values;
 
@@ -288,7 +274,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         if (prefix.size()) {
             size_t len = 0;
             for (char c : type) {
-                if (!(boost::is_any_of("xyz")(c))) break;
+                if (c < 'x' || c > 'z') { break; }
                 ++len;
             }
             if (len > 3) throw runtime_error("invalid mask");
@@ -298,32 +284,35 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         }
 
         if (type.find("nodes") != string::npos) {
-            parseNodeConditionValues<_N>(tcond.get_child("values"), node_indices, node_values);
+            parseNodeConditionValues<_N>(tcond["values"], node_indices, node_values);
             assert(node_indices.size() == node_values.size());
         }
-        else if (type.find("elements") != string::npos) {
-            parseElementConditionValues<_N>(tcond.get_child("values"), element_corners, element_values);
+        else if (type == "traction elements" || type == "pressure elements") {
+            parseElementConditionValues<_N>(tcond["values"], element_corners, element_values);
             assert(element_corners.size() == element_values.size());
         }
         else {
             if (tcond.count("box")) {
-                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.minCorner")));
-                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box.maxCorner")));
+                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["minCorner"]));
+                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["maxCorner"]));
             }
             else if (tcond.count("box%")) {
-                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box%.minCorner")));
-                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("box%.maxCorner")));
+                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["minCorner"]));
+                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["maxCorner"]));
                 // Convert relative coordinates to absolute coordinates
                 region.minCorner = bbox.interpolatePoint(region.minCorner);
                 region.maxCorner = bbox.interpolatePoint(region.maxCorner);
             }
+            else if (tcond.count("element vertices")) {
+                parseElementVertices<_N>(tcond["element vertices"], element_vertices);
+            }
             // Try to parse as plain vector first
             try {
-                value = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond.get_child("value")));
+                value = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["value"]));
             }
             catch (...) {
                 // Try to parse as expression vector
-                auto expressions = parseExpressionVector(tcond.get_child("value"));
+                auto expressions = parseExpressionVector(tcond["value"]);
                 if ((_N == 2) && (expressions.size() == 3) && (stod(expressions[2]) == 0))
                     expressions.pop_back();
                 if (expressions.size() != _N)
@@ -338,6 +327,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             // Expression vector
             if      (type == "traction")    c = new    NeumannCondition<_N>(region, exprVec, NeumannType::Traction);
             else if (type == "dirichlet")   c = new  DirichletCondition<_N>(region, exprVec, cmask);
+            else if (type == "dirichlet elements") c = new  DirichletElementsCondition<_N>(element_vertices, exprVec, cmask);
             else if (type == "target")      c = new     TargetCondition<_N>(region, exprVec, cmask);
             else if (type == "delta force") c = new DeltaForceCondition<_N>(region, exprVec);
             else throw runtime_error("Only region-based traction, dirichlet, target, and delta force support expression vectors");
@@ -348,6 +338,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             else if (type == "traction")  c = new   NeumannCondition<_N>(region, value, NeumannType::Traction);
             else if (type == "force")     c = new   NeumannCondition<_N>(region, value, NeumannType::Force);
             else if (type == "dirichlet") c = new DirichletCondition<_N>(region, value, cmask);
+            else if (type == "dirichlet elements") c = new DirichletElementsCondition<_N>(element_vertices, value, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
             else if (type == "dirichlet nodes") c =   new  DirichletNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_values, cmask);

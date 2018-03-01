@@ -55,7 +55,7 @@ Possible types (non-exhaustive list):
 - `traction`: directional load (per-unit).
 - `presssure`: load along the normal direction.
 
-**Tip**: Use `dirichletxy` to fix only the X and Y component of a region (then value[0:2] will be used). Same can done with the other types.
+**Tip**: Use `dirichletxy` to fix only the X and Y component of a region (then value[0:2] will be used). Same can be done with the other types.
 
 Region box:
 
@@ -66,6 +66,37 @@ Region box:
 - `mm` for node positions
 - `N` for forces
 - `MPa` for Young's modulus and traction (same as `N/mm^2`)
+
+#### Examples
+
+You can also set Dirichlet boundary conditions per boundary elements, by specifying the vertices belonging to each boundary element (edge in 2D, triangle in 3D), in arbitrary order. Example:
+
+```json
+{
+    "no_rigid_motion": false,
+    "regions": [
+        {
+            "element vertices": [
+                [ 0, 3 ],
+                [ 2, 3 ],
+                [ 2, 4 ],
+                [ 4, 5 ],
+                [ 5, 6 ],
+                [ 6, 7 ],
+                [ 0, 8 ],
+                [ 7, 8 ]
+            ],
+            "type": "dirichlet elements",
+            "value": [
+                "cos(y)",
+                "sin(x)",
+                "0"
+            ]
+        }
+    ]
+}
+```
+
 
 ### Running the simulation
 

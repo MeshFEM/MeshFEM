@@ -4,7 +4,7 @@
 /*! @file
 //      Represents various boundary conditions and the regions over which they
 //      are applied.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  06/16/2014 04:10:48
@@ -46,7 +46,7 @@ struct BoundaryCondition {
 // boundary node pair's displacement to zero.  This component must be orthogonal
 // to the periodic face normal. E.g. fixing the x component on the y = 0 and y =
 // 1 faces.
-template<size_t _N> 
+template<size_t _N>
 class PeriodicPairDirichletCondition {
 public:
     PeriodicPairDirichletCondition(size_t c, size_t f)
@@ -201,7 +201,7 @@ struct NeumannElementsCondition : public BoundaryCondition<_N> {
         Value(Real p = 0.0) : type(NeumannType::Pressure) { m_val[0] = p; }
         Value(const VectorND<_N> &t) : type(NeumannType::Traction), m_val(t) { }
         NeumannType type;
-        
+
         Real pressure() const {
             if (type != NeumannType::Pressure)
                 throw std::runtime_error("Neumann condition isn't pressure.");
@@ -264,6 +264,44 @@ struct DirichletNodesCondition : public BoundaryCondition<_N> {
     std::vector<size_t> indices;
     std::vector<VectorND<_N>> displacements;
     virtual ~DirichletNodesCondition() { }
+};
+
+template<size_t _N>
+struct DirichletElementsCondition : public BoundaryCondition<_N> {
+    DirichletElementsCondition(
+            std::vector<IVectorND<_N>> nidxs, const VectorND<_N> &d, const ComponentMask &m)
+        : componentMask(m), m_corners(nidxs), m_isExpr(false), m_displacement(d)
+    { sortIndices(); }
+
+    DirichletElementsCondition(
+            std::vector<IVectorND<_N>> nidxs, const ExpressionVector &ev, const ComponentMask &m)
+        : componentMask(m), m_corners(nidxs), m_isExpr(true), m_displacementExpr(ev)
+    { sortIndices(); }
+
+    virtual ~DirichletElementsCondition() { }
+
+    bool containsElement(IVectorND<_N> idx) const {
+        std::sort(idx.begin(), idx.end());
+        return std::binary_search(m_corners.begin(), m_corners.end(), idx);
+    }
+
+    VectorND<_N> displacement(const ExpressionEnvironment &env = ExpressionEnvironment()) const {
+        if (m_isExpr) return m_displacementExpr.eval<_N>(env);
+        else          return m_displacement;
+    }
+
+    // All nodes in the condition get the same mask
+    ComponentMask componentMask;
+private:
+    std::vector<IVectorND<_N>> m_corners;
+    bool m_isExpr;
+    VectorND<_N> m_displacement;
+    ExpressionVector m_displacementExpr;
+
+    void sortIndices() {
+        for (auto &idx : m_corners) { std::sort(idx.begin(), idx.end()); }
+        std::sort(m_corners.begin(), m_corners.end());
+    }
 };
 
 // Behaves just like Dirichlet

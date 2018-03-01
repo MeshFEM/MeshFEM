@@ -378,7 +378,7 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         }
 
         void setDirichletRegion(size_t idx) {
-            if (dirichletRegionIdx != 0) {
+            if (dirichletRegionIdx != 0 && dirichletRegionIdx != idx) {
                 std::cerr << "WARNING: region traction currently unsupported for vertices "
                           << "belonging to multiple regions" << std::endl;
             }
@@ -808,6 +808,22 @@ public:
                         env.setXYZ(bn.volumeNode()->p);
                         bn->setDirichlet(dc->componentMask, dc->displacement(env));
                         bn->setDirichletRegion(dirichletRegionIdx);
+                    }
+                }
+            }
+            else if (auto dc = dynamic_cast<const DirichletElementsCondition<N> *>(cond.get())) {
+                ++dirichletRegionIdx;
+                for (auto be : m_mesh.boundaryElements()) {
+                    IVectorND<N> idx;
+                    for (size_t c = 0; c < be.numVertices(); ++c) {
+                        idx[c] = be.vertex(c).volumeVertex().index();
+                    }
+                    if (dc->containsElement(idx)) {
+                        for (size_t n = 0; n < be.numNodes(); ++n) {
+                            env.setXYZ(be.node(n).volumeNode()->p);
+                            be.node(n)->setDirichlet(dc->componentMask, dc->displacement(env));
+                            be.node(n)->setDirichletRegion(dirichletRegionIdx);
+                        }
                     }
                 }
             }
