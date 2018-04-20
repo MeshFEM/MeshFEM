@@ -52,6 +52,8 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("transformVersion",              "use transform version of homogenization")
         ("material,m", po::value<string>(), "base material")
         ("jacobian,j", po::value<string>(), "linear deformation jacobian")
+        ("displacedMesh", po::value<string>(), "file prefix containing displaced mesh")
+        ("displacementScale", po::value<double>(), "used to scale displacements obtained from constant plus periodic strain")
         ("parametrizedTransform,p",         "read a list of parameterized deformations from stdin")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("tile,t",     po::value<string>(), "tilings 'nx ny nz' (default: 1)")
@@ -244,14 +246,64 @@ void execute(const po::variables_map &args,
         for (size_t i = 0; i < numStrains; ++i) {
             VField rhs(sim.constantStrainLoad(-SMatrix::CanonicalBasis(i)));
             w_ij.push_back(sim.solve(rhs));
-            if (writer)
+            if (writer) {
+                writer->addField("load_ij " + to_string(i), sim.dofToNodeField(rhs), DomainType::PER_NODE);
                 writer->addField("w_ij" + to_string(i), w_ij.back(), DomainType::PER_NODE);
+                writer->addField("strain w_ij " + to_string(i), sim.averageStrainField(w_ij[i]),
+                                 DomainType::PER_ELEMENT);
+            }
         }
         auto EhDefo = homogenizedElasticityTensorDisplacementForm(w_ij, sim, deformedCellVolume);
         cout << "Elasticity tensor:" << endl;
         cout << EhDefo << endl << endl;
         cout << "Homogenized Moduli: ";
         EhDefo.printOrthotropic(cout);
+
+        if (args.count("displacedMesh")) {
+            string out_mesh = args["displacedMesh"].as<string>();
+            SymmetricMatrixValue<Real, _N> strain;
+            auto bbox = mesh.boundingBox();
+            VectorND<_N> center = bbox.center();
+
+            vector<VField> cstrainDisp_ij;
+
+            for (unsigned index = 0; index < 3; index++) {
+                VField cstrainDisp(mesh.numNodes());
+                strain = SMatrix::CanonicalBasis(index);
+                for (auto n : mesh.nodes())
+                    cstrainDisp(n.index()) = strain.contract(n->p - center);
+
+                cstrainDisp_ij.push_back(cstrainDisp);
+            }
+
+            for (unsigned index = 0; index < 3; index++) {
+                for (auto n : mesh.nodes())
+                    cstrainDisp_ij[index](n.index()) += w_ij[index](n.index());
+
+                writer->addField("u_cstrain_ij" + to_string(index), cstrainDisp_ij[index], DomainType::PER_NODE);
+            }
+
+            // Adding displacement to each node:
+            for (unsigned index = 0; index < 3; index++) {
+                vector<MeshIO::IOVertex> displacedVertices;
+                VField cstrainDisp = cstrainDisp_ij[index];
+                Eigen::Matrix<Real, _N, Eigen::Dynamic> cstrainDisp_v = sim.template nodeToVertexField<VField>(
+                        cstrainDisp).data();
+                assert(mesh.numVertices() == cstrainDisp_v.cols());
+                for (size_t vi = 0; vi < mesh.numVertices(); ++vi) {
+                    VectorND<_N> p = mesh.vertex(vi).node()->p;
+                    VectorND<_N> cstrainDisp_vi = cstrainDisp_v.col(vi);
+                    double displacementScale = args.count("displacementScale") ? args["displacementScale"].as<double>() : 0.1;
+                    displacedVertices.emplace_back((p + displacementScale * cstrainDisp_vi).eval());
+                }
+
+                sim.updateMeshNodePositions(displacedVertices);
+                shared_ptr<MSHFieldWriter> writerDisplacedMesh;
+
+                writerDisplacedMesh = make_shared<MSHFieldWriter>(out_mesh + to_string(index) + ".msh", mesh);
+            }
+        }
+
         if (args.count("dumpJson")) {
             dumpJson(EhDefo, args["dumpJson"].as<string>());
         }

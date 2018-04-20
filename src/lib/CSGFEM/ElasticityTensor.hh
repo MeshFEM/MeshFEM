@@ -64,6 +64,9 @@ public:
     typedef Eigen::Matrix<Real, flatLen(_Dim), 1>       FlattenedRank2Tensor;
     typedef SymmetricMatrix<_Dim, FlattenedRank2Tensor> SMatrix;
 
+    static const bool MajorSymmetry = _MajorSymmetry;
+    static const size_t Dim = _Dim;
+
     ElasticityTensor() : m_d(DType::Zero()) { }
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
     ElasticityTensor(Real E, Real nu) { setIsotropic(E, nu); }

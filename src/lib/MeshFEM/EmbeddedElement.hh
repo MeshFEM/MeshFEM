@@ -157,8 +157,8 @@ public:
         Point3D e(p1 - p0);
         m_volume = e.norm();
         e /= (m_volume * m_volume);
-        m_gradBarycentric.col(0) = e;
-        m_gradBarycentric.col(1) = -e;
+        m_gradBarycentric.col(0) = -e;
+        m_gradBarycentric.col(1) = e;
     }
 
     Real volume() const { return m_volume; }
@@ -194,8 +194,8 @@ public:
         m_normal /= m_volume;
 
         e /= (m_volume * m_volume);
-        m_gradBarycentric.col(0) = e;
-        m_gradBarycentric.col(1) = -e;
+        m_gradBarycentric.col(0) = -e;
+        m_gradBarycentric.col(1) = e;
     }
 
     Real volume() const { return m_volume; }

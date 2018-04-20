@@ -345,6 +345,29 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             return weight * neumannTraction;
         }
 
+    template<class CornerPerturbations>
+    Vector nodalDeltaNeumannLoad(size_t ni, const CornerPerturbations &delta_p, Real neumannArea, Real intNablaDotV) const {
+        Vector result;
+
+        // prepare phi
+        Interpolant<Real, _K - 1, _Deg> phi;
+        phi = 0;
+        phi[ni] = 1.0;
+
+        // prepare dvol, representing \nabla . v
+        Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
+
+        // compute weight
+        Real weight = phi.integrate(dvol);
+
+        result = weight * neumannTraction;
+
+        // Now, sum up the term related to how the area change
+        result -= intNablaDotV / neumannArea * phi.integrate(Base::volume()) * neumannTraction;
+
+        return result;
+    }
+
         Vector neumannTraction;
 
         // In some cases, "boundary" faces can actually represent internal faces
@@ -414,6 +437,8 @@ public:
     static constexpr size_t K = Mesh::FEMData::N;
     static constexpr size_t Degree = Mesh::FEMData::Degree;
     static constexpr size_t numElemVertices = Simplex::numVertices(N);
+
+    using  OForm = ScalarOneForm<N>;
 
     typedef ScalarField<Real>             SField;
     typedef VectorField<Real, N>          VField;
@@ -677,6 +702,85 @@ public:
         return load;
     }
 
+    // Computes a differential form that can be used with velocity fields to produce the
+    // perturbation in volume that the object suffers
+    OForm deltaVolumeForm() const {
+        OForm result(mesh().vertices().size());
+
+        for (unsigned v = 0; v < mesh().vertices().size(); v++) {
+            result(v).fill(0.0);
+        }
+
+        for (auto e : mesh().elements()) {
+            for (auto v_m : e.vertices()) {
+                auto gradLam_m = e->gradBarycentric().col(v_m.localIndex());
+
+                result(v_m.index()) += gradLam_m * e->volume();
+            }
+        }
+
+        return result;
+    }
+
+    // Computes the surface area where some neumann load is acting
+    Real neumannBoundaryArea() {
+        // Compute boundary length/area
+        double neumannArea = 0.0;
+        for (auto be : m_mesh.boundaryElements()) {
+            if (be->neumannTraction.norm() < 1e-15)
+                continue;
+
+            neumannArea += be->volume();
+        }
+
+        return neumannArea;
+    }
+
+
+    // Compute the delta of the load from the Neumann boundary conditions.
+    // This load is computed differentiating the neumann load w.r.t time and for a given velocity delta_p
+    VField deltaNeumannLoad(const VField &delta_p) const {
+        VField load(numDoFs());
+        load.clear();
+
+        // Compute boundary length/area
+        double neumannArea = 0.0;
+        double intNablaDotV = 0.0;
+        for (auto be : m_mesh.boundaryElements()) {
+            if (be->neumannTraction.norm() < 1e-15)
+                continue;
+
+            neumannArea += be->volume();
+
+            //std::vector<VectorND<N>> cornerPerturbations;
+            double relativeDeltaVolume = 0.0;
+            for (auto v : be.vertices()) {
+                //cornerPerturbations.push_back(delta_p(v.volumeVertex().index()));
+                auto gradLam_m = be->gradBarycentric().col(v.localIndex());
+                relativeDeltaVolume += gradLam_m.dot(delta_p(v.volumeVertex().index()));
+            }
+
+            intNablaDotV += be->volume() * relativeDeltaVolume;
+        }
+
+        for (auto be : m_mesh.boundaryElements()) {
+            if (be->neumannTraction.norm() < 1e-15)
+                continue;
+
+            std::vector<VectorND<N>> cornerPerturbations;
+            //extractElementCornerValues(be, delta_p, cornerPerturbations); // does not work for boundary elements
+
+            for (auto v : be.vertices())
+                cornerPerturbations.push_back(delta_p(v.volumeVertex().index()));
+
+            for (size_t n = 0; n < be.numNodes(); ++n) {
+                load(DoF(be.node(n).volumeNode().index())) += be->nodalDeltaNeumannLoad(n, cornerPerturbations, neumannArea, intNablaDotV);
+            }
+        }
+
+        return load;
+    }
+
     // Compute the load on the nodes due to external forces under a particular
     // equilibrium deformation. (I.e. apply stiffness matrix: K * u). The
     // internal forces are -applyStiffnessMatrix(u)
@@ -733,6 +837,24 @@ public:
         m_numDoFs = pc->numPeriodicDoFs();
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
             m_mesh.boundaryElement(i)->isInternal = pc->isPeriodicBE(i);
+    }
+
+    // In non periodic structures, it may be the case where a shape is clipped by a frame. The interior
+    // of the shape can then become part of the boundary, although we don't want to consider it in
+    // shape velocity computations (for example, if this region is fixed). This function sets these
+    // boundary mesh elements as internal.
+    void setInternalElements(BBox<VectorND<N>> cell) {
+        std::vector<VectorND<N>> bdryPts;
+        bdryPts.reserve(m_mesh.numBoundaryNodes());
+        for (auto bn : m_mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
+
+        std::vector<PeriodicBoundaryMatcher::FaceMembership<N>> periodicBoundariesForBoundaryNode;
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts, cell, periodicBoundariesForBoundaryNode);
+
+        std::vector<bool> isPeriodicBoundaryElement = PeriodicBoundaryMatcher::determineCellFaceBoundaryElements(m_mesh, periodicBoundariesForBoundaryNode);
+
+        for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
+            m_mesh.boundaryElement(i)->isInternal = isPeriodicBoundaryElement.at(i);
     }
 
     void removePeriodicConditions() {
