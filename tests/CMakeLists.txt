@@ -1,6 +1,7 @@
 ################################################################################
 # Independent binaries
 ################################################################################
+
 add_executable(       test_quadrature test_quadrature.cc)
 target_link_libraries(test_quadrature MeshFEM)
 target_compile_options(test_quadrature PRIVATE -Wno-unused-parameter)
