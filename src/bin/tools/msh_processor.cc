@@ -484,7 +484,7 @@ size_t filterElements(const string &, const string &, Stack &stack, const Modifi
             throw invalid;
         auto verts = currentMesh.vertices();
         const auto &oldElems  = currentMesh.elements();
-        std::vector<MeshIO::IOElement> elems;
+        std::vector<::MeshIO::IOElement> elems;
         for (size_t i = 0; i < oldElems.size(); ++i) {
             if (top->value[i].value > 0) elems.emplace_back(oldElems[i]);
         }
