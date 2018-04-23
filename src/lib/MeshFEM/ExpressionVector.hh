@@ -4,33 +4,33 @@
 /*! @file
 //      Provides a wrapper for libmatheval that evalutes vector-valued
 //      expressions.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  08/26/2014 20:40:39
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EXPRESSIONVECTOR_HH
 #define EXPRESSIONVECTOR_HH
-#include <matheval.h>
+#include <tinyexpr.h>
 #include <vector>
 #include <stdexcept>
 #include <string>
 #include <memory>
 
-// There's some sketchyness that has to happen here (like const_cast and
-// mutable) to hack around some of libmatheval's unfortunate interface
-// decisions.
+// Expression environment for storing variable and their values
 struct ExpressionEnvironment {
     void setValue(const std::string &name, double value) {
-        for (size_t i = 0; i < names.size(); ++i) {
-            if (*names[i] == name) {
-                values[i] = value;
+        for (auto & var : m_variables) {
+            if (var->name == name) {
+                var->value = value;
                 return;
             }
         }
-        names.push_back(std::make_shared<std::string>(name));
-        values.push_back(value);
-        cnames.push_back(const_cast<char *>(names.back()->c_str()));
+        auto var = std::make_shared<Variable>();
+        var->name = name;
+        var->value = value;
+        m_variables.push_back(var);
+        m_ptrs.push_back({ var->name.c_str(), &(var->value), TE_VARIABLE, 0 });
     }
 
     // Sets a value for each component with the names name1, name2...
@@ -53,47 +53,63 @@ struct ExpressionEnvironment {
         setValue("z", (N == 3) ? v[2] : 0);
     }
 
-    char **getNames() const {
-        return &cnames[0];
-    }
+    size_t numVars() const { return m_variables.size(); }
 
-    double *getValues() const {
-        return &values[0];
-    }
+    const te_variable * lookup() const { return m_ptrs.data(); }
 
-    size_t numVars() const { return names.size(); }
 private:
-    std::vector<std::shared_ptr<std::string>> names;
-    mutable std::vector<double> values;
-    mutable std::vector<char *> cnames;
+    struct Variable {
+        std::string name;
+        double value;
+    };
+
+    std::vector<std::shared_ptr<Variable>> m_variables;
+    std::vector<te_variable> m_ptrs;
 };
 
 // Expression wrapper handling destruction that should be wrapped in a smart
 // pointer.
 class Expression {
 public:
-    // Copies string for const correctness...
-    // (libmatheval wants non-const pointers)
-    Expression(std::string s) {
-        m_eval = evaluator_create(const_cast<char *>(s.c_str()));
-        if (!m_eval)
-            throw std::runtime_error("Failed to parse expression '" + s + "'");
-    }
+    // Copy the expression string (will be compiled lazily)
+    Expression(std::string s)
+        : m_str(s)
+        , m_expr(nullptr)
+        , m_lookup(nullptr)
+    { }
 
     // DAANNGEROUS... get rid of it
     Expression &operator=(const Expression&e) = delete;
 
-    double eval(const ExpressionEnvironment &e) const {
-        if (e.numVars() == 0)
+    // Not const because it lazily compiles the expression for the given environment
+    double eval(const ExpressionEnvironment &e) {
+        if (e.numVars() == 0) {
             throw std::runtime_error("Empty environment");
-        return evaluator_evaluate(m_eval, e.numVars(), e.getNames(), e.getValues());
+        }
+
+        if (m_lookup != e.lookup()) {
+            // Free previously compiled expression, if any
+            if (m_expr) { te_free(m_expr); }
+
+            // Lazy compilation of the expression + environment
+            int error = 0;
+            m_lookup = e.lookup();
+            m_expr = te_compile(m_str.c_str(), m_lookup, e.numVars(), &error);
+            if (error) {
+                throw std::runtime_error("Failed to parse expression '" + m_str + "'");
+            }
+        }
+
+        return te_eval(m_expr);
     }
 
     ~Expression() {
-        if (m_eval) evaluator_destroy(m_eval);
+        if (m_expr) { te_free(m_expr); }
     }
 private:
-    void *m_eval;
+    std::string m_str;
+    te_expr *m_expr;
+    const te_variable *m_lookup;
 };
 
 class ExpressionVector {

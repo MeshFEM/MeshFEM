@@ -135,9 +135,12 @@ if(NOT TARGET triangle)
     target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
 endif()
 
-# Matheval library
-find_package(Matheval REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC Matheval::matheval)
+# TinyExpr library
+if(NOT TARGET tinyexpr)
+    add_library(tinyexpr ${MESHFEM_THIRD_PARTY_DIR}/tinyexpr/tinyexpr.c)
+    target_include_directories(tinyexpr PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/tinyexpr)
+endif()
+target_link_libraries(${PROJECT_NAME} PUBLIC tinyexpr)
 
 # Cholmod solver
 find_package(Cholmod REQUIRED)

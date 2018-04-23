@@ -1,0 +1,3 @@
+[submodule "3rdparty/tinyexpr"]
+	path = 3rdparty/tinyexpr
+	url = https://github.com/codeplea/tinyexpr.git
