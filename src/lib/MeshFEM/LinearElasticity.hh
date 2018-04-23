@@ -10,6 +10,7 @@
 #include <CSGFEM/SparseMatrices.hh>
 #include <CSGFEM/Parallelism.hh>
 #include <MeshFEM/Materials.hh>
+#include <MeshFEM/OneForm.hh>
 
 namespace LinearElasticity {
 
