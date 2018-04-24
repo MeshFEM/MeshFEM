@@ -78,8 +78,8 @@ add_library(${PROJECT_NAME}
         src/lib/MeshFEM/Types.cc
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM) # will be removed
-target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM) # will be removed
+# target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM) # will be removed
+# target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM) # will be removed
 target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
 
 ################################################################################
@@ -96,13 +96,6 @@ endif()
 
 # Use C++11
 target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
-
-# # Hide internal symbols
-# set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-
-# C++11 Thread library
-# find_package(Threads REQUIRED)
-# target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
 # Boost library
 find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options)
@@ -129,9 +122,6 @@ if(TBB_FOUND)
 endif()
 
 # Triangle library
-# find_package(Triangle REQUIRED)
-# target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Triangle_INCLUDE_DIRS})
-# target_link_libraries(${PROJECT_NAME} PUBLIC ${Triangle_LIBRARIES})
 if(NOT TARGET triangle)
     add_subdirectory(${MESHFEM_THIRD_PARTY_DIR}/triangle triangle)
     target_link_libraries(${PROJECT_NAME} PUBLIC triangle)

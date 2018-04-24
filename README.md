@@ -4,6 +4,21 @@
 MeshFEM
 =======
 
+Installation
+------------
+
+Dependencies included directly or as submodules:
+
+- [json](https://github.com/nlohmann/json)
+- [triangle](https://www.cs.cmu.edu/~quake/triangle.html)
+- [tinyexpr](https://github.com/codeplea/tinyexpr)
+- [Eigen](https://github.com/eigenteam/eigen-git-mirror) (TODO)
+- [TBB](https://github.com/01org/tbb), optional (TODO)
+
+Dependencies *not* included:
+
+- Boost
+
 Elastic simulation
 ------------------
 
