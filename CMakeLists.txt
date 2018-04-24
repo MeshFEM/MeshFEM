@@ -92,8 +92,7 @@ endif()
 ################################################################################
 
 # Use C++11
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
+target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
 
 # # Hide internal symbols
 # set_target_properties(${PROJECT_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
