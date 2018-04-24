@@ -14,11 +14,6 @@ target_link_libraries(ConstStrainDisplacement_cli MeshFEM)
 add_executable(DeformedCells_cli DeformedCells_cli.cc)
 target_link_libraries(DeformedCells_cli MeshFEM json)
 
-if(CERES_FOUND)
-    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-    target_link_libraries(MaterialOptimization_cli MeshFEM)
-endif()
-
 add_executable(Simulate_cli Simulate_cli.cc)
 target_link_libraries(Simulate_cli MeshFEM)
 
@@ -27,6 +22,14 @@ target_link_libraries(Poisson_cli MeshFEM)
 
 add_executable(ExtractBMatrix ExtractBMatrix.cc)
 target_link_libraries(ExtractBMatrix MeshFEM)
+
+find_package(Ceres)
+if(CERES_FOUND)
+	add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+	target_link_libraries(MaterialOptimization_cli MeshFEM ${CERES_LIBRARIES})
+else()
+    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+endif()
 
 ################################################################################
 # Subdirectories

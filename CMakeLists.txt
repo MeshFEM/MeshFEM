@@ -97,14 +97,17 @@ endif()
 # Use C++11
 target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
 
+# C++11 Thread library
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+
 # Boost library
 find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 # Eigen3 library
-find_package(Eigen3 REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
+target_include_directories(${PROJECT_NAME} PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/eigen)
 
 # json library
 if(NOT TARGET json)
@@ -147,15 +150,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
 # Lapack library (do we need this?)
 # find_package(LAPACK REQUIRED)
 # target_link_libraries(${PROJECT_NAME} PUBLIC ${LAPACK_LIBRARIES})
-
-# Ceres library
-find_package(Ceres)
-if(CERES_FOUND)
-    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${CERES_LIBRARIES})
-else()
-    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
-endif()
 
 ################################################################################
 # Subdirectories
