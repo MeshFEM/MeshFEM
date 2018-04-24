@@ -40,6 +40,9 @@ set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of buil
 # Color output
 include(UseColors)
 
+# C++11/14 features
+include(CXXFeatures)
+
 # Export compile flags (used for autocompletion of the C++ code)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
