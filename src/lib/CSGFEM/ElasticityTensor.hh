@@ -600,7 +600,6 @@ public:
             if ((lambda - eigs.lambdas[i - 1]) < lambda * tol) ++multiplicity;
             else break;
         }
-        FlattenedRank2Tensor e = eigs.strains.col(largestIdx);
         return std::make_tuple(SMatrix(eigs.strains.col(largestIdx)), lambda, multiplicity,
                                eigs.lambdas[largestIdx - 1]);
     }

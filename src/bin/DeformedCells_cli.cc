@@ -289,7 +289,7 @@ void execute(const po::variables_map &args,
                 VField cstrainDisp = cstrainDisp_ij[index];
                 Eigen::Matrix<Real, _N, Eigen::Dynamic> cstrainDisp_v = sim.template nodeToVertexField<VField>(
                         cstrainDisp).data();
-                assert(mesh.numVertices() == cstrainDisp_v.cols());
+                assert(mesh.numVertices() == size_t(cstrainDisp_v.cols()));
                 for (size_t vi = 0; vi < mesh.numVertices(); ++vi) {
                     VectorND<_N> p = mesh.vertex(vi).node()->p;
                     VectorND<_N> cstrainDisp_vi = cstrainDisp_v.col(vi);
