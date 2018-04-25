@@ -1,5 +1,7 @@
 ################################################################################
-# Independent binaries
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/MeshFEM/tools)
+
 ################################################################################
 
 add_executable(msh_processor msh_processor.cc argparse.cc)

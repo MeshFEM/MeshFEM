@@ -1,5 +1,7 @@
 ################################################################################
-# Independent binaries
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/MeshFEM/mechanisms)
+
 ################################################################################
 
 add_executable(OptimizeLinkage OptimizeLinkage.cc)
