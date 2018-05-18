@@ -53,7 +53,7 @@ include(CMakeToolsHelpers OPTIONAL)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Wno-comment")
 
 ################################################################################
-# Platform-specific options
+# Options
 ################################################################################
 
 cmake_host_system_information(RESULT MY_HOSTNAME QUERY HOSTNAME)
@@ -63,6 +63,8 @@ else()
     set(DISABLE_CXX11_ABI_DEFAULT OFF)
 endif()
 option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
+
+option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
 
 ################################################################################
 # MeshFEM sources
@@ -88,6 +90,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
 
 if(DISABLE_CXX11_ABI_GCC)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
+
+if(ENABLE_BENCHMARKING)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
 endif()
 
 ################################################################################

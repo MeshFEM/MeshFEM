@@ -1,8 +1,7 @@
-#ifndef BENCHMARK
-#define BENCHMARK
-#endif
-#include <MeshFEM/GlobalBenchmark.hh>
+#include "GlobalBenchmark.hh"
 #include <iostream>
+
+#ifdef BENCHMARK
 
 using namespace std;
 
@@ -26,3 +25,5 @@ void BENCHMARK_REPORT() {
 void BENCHMARK_REPORT_NO_MESSAGES() {
     g_timer.report(cout);
 }
+
+#endif
