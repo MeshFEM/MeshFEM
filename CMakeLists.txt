@@ -118,7 +118,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/eig
 # json library
 if(NOT TARGET json)
     add_library(json INTERFACE)
-    target_include_directories(json SYSTEM INTERFACE ${MESHFEM_THIRD_PARTY_DIR}/json/single_include/nlohmann)
+    target_include_directories(json SYSTEM INTERFACE ${MESHFEM_THIRD_PARTY_DIR}/json)
 endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC json)
 

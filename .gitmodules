@@ -4,6 +4,3 @@
 [submodule "3rdparty/eigen"]
 	path = 3rdparty/eigen
 	url = git@github.com:eigenteam/eigen-git-mirror.git
-[submodule "3rdparty/json"]
-	path = 3rdparty/json
-	url = git@github.com:nlohmann/json.git
