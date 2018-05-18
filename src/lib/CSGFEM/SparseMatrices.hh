@@ -27,9 +27,7 @@
 #include <cmath>
 #include "Parallelism.hh"
 
-#ifndef GLOBALBENCHMARK_HH
-#include "BenchmarkStub.hh"
-#endif
+#include <MeshFEM/GlobalBenchmark.hh>
 
 extern "C" {
 #include <umfpack.h>

@@ -113,7 +113,7 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 # Eigen3 library
-target_include_directories(${PROJECT_NAME} PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/eigen)
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/eigen)
 
 # json library
 if(NOT TARGET json)
