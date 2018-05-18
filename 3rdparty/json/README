@@ -1,0 +1,4 @@
+This is the header from the "JSON for Modern C++" library:
+https://github.com/nlohmann/json/tree/develop/single_include/nlohmann
+
+We don't include this library as a submodule because its benchmark and test directories are huge.
