@@ -166,7 +166,8 @@ struct TripletMatrix {
         auto placeInBucket = [&columnBuckets, &bucketEndIndex, this](size_t ti) {
             const auto &t = nz[ti];
             size_t newEntry = bucketEndIndex[t.j]++; // atomic!
-            columnBuckets[newEntry] = std::make_pair(t.i, t.v);
+            columnBuckets[newEntry].first  = t.i;
+            columnBuckets[newEntry].second = t.v;
         };
 #if PARALLEL_BIN
         tbb::parallel_for(
@@ -203,7 +204,7 @@ struct TripletMatrix {
             }
             // Mark the unused entries for deletion
             for (size_t k = backIndex + 1; k < ei; ++k)
-                nz[k] = { 0, 0, 0.0 };
+                nz[k].v = 0;
         };
 
 #if USE_TBB
@@ -466,7 +467,6 @@ struct TripletMatrix {
             }
         }
     }
-
 
     // Much more efficient matrix dumping--output in a binary format:
     // number of nonzeros (uint64)

@@ -84,11 +84,11 @@ private:
         }
 
         void start(const std::string &name) {
-            TimerIterator it = timers.find(name);
-            if (it != timers.end())
-                timers.at(name).start();
+            auto lb = timers.lower_bound(name);
+            if ((lb == timers.end()) || (lb->first != name))
+                timers.emplace_hint(lb, name, _Timer());
             else
-                timers.insert(std::make_pair(name, _Timer()));
+                lb->second.start(); // The full section timer must be started too...
         }
         void stop(const std::string &name) { timers.at(name).stop(); }
 
@@ -127,10 +127,11 @@ public:
         if (!m_sectionStack.empty())
             name = m_sectionStack.back() + ':' + name;
         m_sectionStack.push_back(name);
-        if (m_sections.count(name))
-            m_sections.at(name).start(); // The full section timer must be started too...
+        auto lb = m_sections.lower_bound(name);
+        if ((lb == m_sections.end()) || (lb->first != name))
+            m_sections.emplace_hint(lb, name, _Section());
         else
-            m_sections.insert(std::make_pair(name, _Section()));
+            lb->second.start(); // The full section timer must be started too...
     }
 
     void stopSection(std::string name) {
