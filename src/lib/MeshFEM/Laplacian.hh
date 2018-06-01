@@ -5,9 +5,9 @@
 //      Construct the sparse FEM Laplacian matrix in triplet form.
 //      CONSTRUCTS UPPER TRIANGLE ONLY!!!
 //
-//      Note: this actually constructs the negative of negative semidefinite
-//      Laplacian operator. In other words, it's the matrix corresponding to the
-//      linear system:
+//      Note: this actually constructs the negative of the negative semidefinite
+//      Laplacian operator. In other words, it's the positive semidefinite
+//      matrix for the PDE:
 //      - laplacian u = f
 */ 
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com

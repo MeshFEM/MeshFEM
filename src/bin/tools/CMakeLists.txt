@@ -16,3 +16,6 @@ target_link_libraries(import_voxels_raw MeshFEM)
 
 add_executable(triangulate_standalone triangulate_standalone.cc)
 target_link_libraries(triangulate_standalone MeshFEM)
+
+add_executable(ellipse ellipse.cc)
+target_link_libraries(ellipse MeshFEM)
