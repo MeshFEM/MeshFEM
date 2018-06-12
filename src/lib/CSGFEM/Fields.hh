@@ -217,8 +217,8 @@ public:
     class ValueType {
     public:
         ValueType(Real &val) : m_val(val) { }
-              Real &operator[](size_t i)       { assert(i == 0); return m_val; }
-        const Real &operator[](size_t i) const { assert(i == 0); return m_val; }
+              Real &operator[](size_t i)       { (void) (i); assert(i == 0); return m_val; }
+        const Real &operator[](size_t i) const { (void) (i); assert(i == 0); return m_val; }
         operator Real&()      { return m_val; }
         operator Real() const { return m_val; }
         ValueType &operator=(Real val) { m_val = val; return *this; }
@@ -228,7 +228,7 @@ public:
     class ConstValueType {
     public:
         ConstValueType(const Real &val) : m_val(val) { }
-        Real  operator[](size_t i) const { assert(i == 0); return m_val; }
+        Real  operator[](size_t i) const { (void) i; assert(i == 0); return m_val; }
         operator Real() const { return m_val; }
     private:
         const Real &m_val;

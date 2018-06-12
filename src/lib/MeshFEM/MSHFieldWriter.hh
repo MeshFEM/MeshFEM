@@ -218,6 +218,7 @@ public:
         InterpolantTypeWrapper(const T &) { }
         size_t dim = 1, paddedDim = 1;
         double component(const T &val, size_t i) const {
+            (void) (i);
             assert(i < paddedDim);
             return val;
         }

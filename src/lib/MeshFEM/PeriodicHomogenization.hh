@@ -78,6 +78,7 @@ typename _Sim::ETensor homogenizedElasticityTensor(
 
     typedef typename _Sim::SMatrix SMatrix;
     constexpr size_t numStrains = SMatrix::flatSize();
+    (void) (numStrains);
     assert(w_ij.size() == numStrains);
 
     typename _Sim::ETensor Eh;
@@ -150,6 +151,7 @@ typename _Sim::ETensor homogenizedElasticityTensorDisplacementForm(
     if (baseCellVolume == 0.0) baseCellVolume = mesh.boundingBox().volume();
     using SMatrix = typename _Sim::SMatrix ;
     constexpr size_t numStrains = SMatrix::flatSize();
+    (void) (numStrains);
     assert(w_ij.size() == numStrains);
 
     // Assume elasticity tensor is constant over the entire base cell

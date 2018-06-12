@@ -362,7 +362,7 @@ void execute(const po::variables_map &args,
         // Tiled vertex indieces are of the form:
         //   base_vertex_index + vtxOffset(i, j, k)
         //
-        auto vtxIdxOffset = [=](int i, int j, int k) -> size_t {
+        auto vtxIdxOffset = [numCellVertices, tilings](int i, int j, int k) -> size_t {
             return numCellVertices * (i * tilings[2] * tilings[1] + j * tilings[2] + k);
         };
 

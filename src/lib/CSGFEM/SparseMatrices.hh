@@ -376,6 +376,7 @@ struct TripletMatrix {
     *///////////////////////////////////////////////////////////////////////////
     void append(const TMatrix &B, AppendPos pos, bool pad = false,
                 bool transpose = false) {
+        (void) (pad);
         size_t Bm = transpose ? B.n : B.m, Bn = transpose ? B.m : B.n;
 
         switch (pos) {
