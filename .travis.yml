@@ -7,21 +7,21 @@ matrix:
       compiler: gcc-7
       addons:
         sources:
-          - ubuntu-toolchain-r-test
+        - ubuntu-toolchain-r-test
         packages:
-          - gcc-7
-          - g++-7
-          - libboost-all-dev
-          - libsuitesparse-dev
+        - gcc-7
+        - g++-7
+        - libboost-all-dev
+        - libsuitesparse-dev
       script:
         - cmake -DCMAKE_BUILD_TYPE=Debug ..
         - make -j2
       env:
-        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+        - MATRIX_EVAL="export CC=gcc-7 && CXX=g++-7"
 
-    - os: osx
-      compiler: clang
-      script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
+    # - os: osx
+    #   compiler: clang
+    #   script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse; fi
