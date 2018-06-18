@@ -7,17 +7,19 @@ MeshFEM
 Installation
 ------------
 
-Dependencies included directly or as submodules:
+Dependencies included directly as external projects:
 
 - [json](https://github.com/nlohmann/json)
 - [triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [tinyexpr](https://github.com/codeplea/tinyexpr)
 - [Eigen](https://github.com/eigenteam/eigen-git-mirror)
-- [TBB](https://github.com/01org/tbb), optional (TODO)
+- [TBB](https://github.com/01org/tbb), optional
 
-Dependencies *not* included:
+Dependencies *not* included (should be installed system-wide:
 
 - Boost
+- Cholmod
+- Umfpack
 
 Elastic simulation
 ------------------

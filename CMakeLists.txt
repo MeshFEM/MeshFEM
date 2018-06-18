@@ -62,8 +62,8 @@ if("$ENV{CLUSTER}" STREQUAL "PRINCE")
 else()
     set(DISABLE_CXX11_ABI_DEFAULT OFF)
 endif()
-option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 
+option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
 
 ################################################################################
