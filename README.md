@@ -15,7 +15,7 @@ Dependencies included directly as external projects:
 - [Eigen](https://github.com/eigenteam/eigen-git-mirror)
 - [TBB](https://github.com/01org/tbb), optional
 
-Dependencies *not* included (should be installed system-wide:
+Dependencies *not* included (should be installed system-wide):
 
 - Boost
 - Cholmod
