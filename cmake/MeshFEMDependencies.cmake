@@ -20,7 +20,7 @@ include(MeshFEMDownloadExternal)
 find_package(Threads REQUIRED) # provides Threads::Threads
 
 # Boost library
-find_package(Boost 1.55 QUIET REQUIRED COMPONENTS filesystem system program_options)
+find_package(Boost 1.54 QUIET REQUIRED COMPONENTS filesystem system program_options)
 if(NOT TARGET meshfem::boost)
     add_library(meshfem_boost INTERFACE)
     if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
