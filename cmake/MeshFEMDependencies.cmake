@@ -26,15 +26,14 @@ find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options)
 if(NOT TARGET Eigen3::Eigen)
     add_library(Eigen3::Eigen INTERFACE IMPORTED)
     meshfem_download_eigen()
-    target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/eigen)
+    set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${MESHFEM_EXTERNAL}/eigen)
 endif()
 
 # json library
 if(NOT TARGET json::json)
     add_library(json::json INTERFACE IMPORTED)
     meshfem_download_json()
-    target_include_directories(json::json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json)
-    target_include_directories(json::json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json/nlohmann)
+    set_target_properties(json::json PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${MESHFEM_EXTERNAL}/json;${MESHFEM_EXTERNAL}/json/nlohmann")
 endif()
 
 # TBB library
@@ -49,17 +48,16 @@ if(NOT TARGET tbb::tbb)
     add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb)
     set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
 
-    add_library(meshfem_tbb INTERFACE)
-    target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
-    target_link_libraries(meshfem_tbb INTERFACE tbb_static)
-    add_library(tbb::tbb ALIAS meshfem_tbb)
+    add_library(tbb::tbb INTERFACE IMPORTED)
+    set_target_properties(tbb::tbb PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${MESHFEM_EXTERNAL}/tbb/include)
+    set_target_properties(tbb::tbb PROPERTIES INTERFACE_LINK_LIBRARIES tbb_static)
 endif()
 
 # Triangle library
 if(NOT TARGET triangle::triangle)
     meshfem_download_triangle()
     add_subdirectory(${MESHFEM_EXTERNAL}/triangle triangle)
-    target_include_directories(triangle INTERFACE ${MESHFEM_EXTERNAL}/triangle)
+    target_include_directories(triangle SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/triangle)
     add_library(triangle::triangle ALIAS triangle)
 endif()
 
@@ -67,7 +65,7 @@ endif()
 if(NOT TARGET tinyexpr::tinyexpr)
     meshfem_download_tinyexpr()
     add_library(meshfem_tinyexpr ${MESHFEM_EXTERNAL}/tinyexpr/tinyexpr.c)
-    target_include_directories(meshfem_tinyexpr PUBLIC ${MESHFEM_EXTERNAL}/tinyexpr)
+    target_include_directories(meshfem_tinyexpr SYSTEM PUBLIC ${MESHFEM_EXTERNAL}/tinyexpr)
     add_library(tinyexpr::tinyexpr ALIAS meshfem_tinyexpr)
 endif()
 

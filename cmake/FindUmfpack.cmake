@@ -1,9 +1,9 @@
 # Umfpack lib usually requires linking to a blas library.
 # It is up to the user of this module to find a BLAS and link to it.
 
-if (UMFPACK_INCLUDES AND UMFPACK_LIBRARIES)
+if(UMFPACK_INCLUDES AND UMFPACK_LIBRARIES)
   set(UMFPACK_FIND_QUIETLY TRUE)
-endif (UMFPACK_INCLUDES AND UMFPACK_LIBRARIES)
+endif(UMFPACK_INCLUDES AND UMFPACK_LIBRARIES)
 
 find_path(UMFPACK_INCLUDES
   NAMES
@@ -55,8 +55,15 @@ find_package_handle_standard_args(UMFPACK DEFAULT_MSG
 
 mark_as_advanced(UMFPACK_INCLUDES UMFPACK_LIBRARIES AMD_LIBRARY COLAMD_LIBRARY SUITESPARSE_LIBRARY)
 
-if(NOT TARGET umfpack::umfpack)
-  add_library(umfpack::umfpack INTERFACE IMPORTED)
-  target_include_directories(umfpack::umfpack SYSTEM INTERFACE ${UMFPACK_INCLUDES})
-  target_link_libraries(umfpack::umfpack INTERFACE ${UMFPACK_LIBRARIES})
+if(UMFPACK_FOUND AND NOT TARGET umfpack::umfpack)
+  if(${CMAKE_VERSION} VERSION_LESS "3.11.0")
+    add_library(umfpack_umfpack INTERFACE)
+    target_include_directories(umfpack_umfpack SYSTEM INTERFACE ${UMFPACK_INCLUDES})
+    target_link_libraries(umfpack_umfpack INTERFACE "${UMFPACK_LIBRARIES}")
+    add_library(umfpack::umfpack ALIAS umfpack_umfpack)
+  else()
+    add_library(umfpack::umfpack INTERFACE IMPORTED)
+    target_include_directories(umfpack::umfpack SYSTEM INTERFACE ${UMFPACK_INCLUDES})
+    target_link_libraries(umfpack::umfpack INTERFACE "${UMFPACK_LIBRARIES}")
+  endif()
 endif()

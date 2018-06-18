@@ -18,7 +18,7 @@ matrix:
       script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install boost && brew install suite-sparse; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse; fi
 before_script:
   - mkdir build
   - cd build
