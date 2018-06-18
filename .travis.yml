@@ -14,8 +14,10 @@ matrix:
           - libboost-all-dev
           - libsuitesparse-dev
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 ..
+        - cmake -DCMAKE_BUILD_TYPE=Debug ..
         - make -j2
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
 
     - os: osx
       compiler: clang
@@ -23,6 +25,8 @@ matrix:
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse; fi
+  - eval "${MATRIX_EVAL}"
+
 before_script:
   - mkdir build
   - cd build
