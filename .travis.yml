@@ -1,32 +1,35 @@
 dist: trusty
 sudo: false
 language: cpp
-addons:
-  sources:
-    - ubuntu-toolchain-r-test
-  packages:
-    - gcc-7
-    - g++-7
-    - libboost-all-dev
-    - libsuitesparse-dev
 matrix:
   include:
     - os: linux
       compiler: gcc-7
-      script:
-        - cmake -DCMAKE_BUILD_TYPE=Debug ..
-        - make -j2
+      addons:
+        apt:
+          sources:
+          - ubuntu-toolchain-r-test
+          packages:
+          - gcc-7
+          - g++-7
+          - libboost-filesystem-dev
+          - libboost-program-options-dev
+          - libboost-system-dev
+          - libsuitesparse-dev
       env:
-        - MATRIX_EVAL="export CC=gcc-7 && CXX=g++-7"
+        - MATRIX_EVAL="export CC=gcc-7 && CXX=g++-7 && CONFIG=Debug"
 
-    # - os: osx
-    #   compiler: clang
-    #   script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
+    - os: osx
+      compiler: clang
+      env:
+        - MATRIX_EVAL="export CONFIG=Debug"
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse; fi
   - eval "${MATRIX_EVAL}"
 
-before_script:
+script:
   - mkdir build
   - cd build
+  - cmake -DCMAKE_BUILD_TYPE=$CONFIG ..
+  - make -j2
