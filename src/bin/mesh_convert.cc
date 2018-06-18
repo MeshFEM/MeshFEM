@@ -20,7 +20,7 @@
 #include <MeshFEM/filters/reorient_negative_elements.hh>
 #include <MeshFEM/Triangulate.h>
 #include <MeshFEM/ComponentMask.hh>
-
+#include <MeshFEM/utils.hh>
 
 #include <limits>
 #include <iostream>
@@ -29,7 +29,7 @@
 #include <queue>
 #include <algorithm>
 #include <boost/program_options.hpp>
-#include <CSGFEM/utils.hh>
+
 namespace po = boost::program_options;
 
 using namespace std;

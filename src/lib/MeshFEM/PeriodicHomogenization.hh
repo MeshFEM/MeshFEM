@@ -9,8 +9,8 @@
 #include <MeshFEM/InterpolantRestriction.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 
-#include <CSGFEM/ElasticityTensor.hh>
-#include <CSGFEM/Parallelism.hh>
+#include <MeshFEM/ElasticityTensor.hh>
+#include <MeshFEM/Parallelism.hh>
 
 // #define FD_SD_DEBUG
 #ifdef FD_SD_DEBUG

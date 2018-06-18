@@ -4,6 +4,16 @@
 MeshFEM
 =======
 
+CSGFEM/Algebra.hh
+CSGFEM/ElasticityTensor.hh
+CSGFEM/Fields.hh
+CSGFEM/Flattening.hh
+CSGFEM/Parallelism.hh
+CSGFEM/SparseMatrices.hh
+CSGFEM/SymmetricMatrix.hh
+CSGFEM/Timer.hh
+
+
 Installation
 ------------
 

@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 #include <MeshFEM/Types.hh>
-#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/LinearElasticity.hh>

@@ -14,7 +14,7 @@
 #include <MeshFEM/util.h>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
-#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/LinearElasticity.hh>

@@ -30,7 +30,7 @@
 #include <stdexcept>
 
 #include <MeshFEM/MSHFieldWriter.hh>
-#include <CSGFEM/Fields.hh>
+#include <MeshFEM/Fields.hh>
 
 // Per-element material field
 template<class _Material>

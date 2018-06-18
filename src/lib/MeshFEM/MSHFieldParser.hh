@@ -24,8 +24,8 @@
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Functions.hh>
-#include <CSGFEM/Fields.hh>
-#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/Fields.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
 
 // N: spatial dimension
 template<size_t N>

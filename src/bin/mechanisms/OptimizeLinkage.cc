@@ -5,6 +5,7 @@
 #include <MeshFEM/PeriodicHomogenization.hh>
 #include <MeshFEM/OrthotropicHomogenization.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/TensorProjection.hh>
 #include <vector>
 
 #include <queue>
@@ -15,8 +16,6 @@
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-
-#include <CSGFEM/TensorProjection.hh>
 
 namespace po = boost::program_options;
 using namespace std;

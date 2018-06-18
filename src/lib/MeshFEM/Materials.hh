@@ -18,8 +18,8 @@
 #define MATERIAL_HH
 
 #include <MeshFEM/Types.hh>
-#include <CSGFEM/Flattening.hh>
-#include <CSGFEM/ElasticityTensor.hh>
+#include <MeshFEM/Flattening.hh>
+#include <MeshFEM/ElasticityTensor.hh>
 #include <stdexcept>
 #include <vector>
 #include <string>

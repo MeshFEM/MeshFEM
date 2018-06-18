@@ -1,7 +1,0 @@
-{
-    "name": "Pie 180",
-    "type": "pieslice",
-    "center": [0, 0],
-    "dimensions": [25, 3.141592653589793],
-    "rotation": 180
-}

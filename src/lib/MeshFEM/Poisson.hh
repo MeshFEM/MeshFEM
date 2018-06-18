@@ -13,7 +13,7 @@
 #define POISSON_HH
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/GaussQuadrature.hh>
-#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <vector>
 #include <array>

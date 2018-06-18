@@ -15,10 +15,10 @@
 #include <vector>
 #include <array>
 #include <functional>
-#include <CSGFEM/Fields.hh>
+#include <MeshFEM/Fields.hh>
 #include <stdexcept>
 
-#include <CSGFEM/Algebra.hh>
+#include <MeshFEM/Algebra.hh>
 
 #include <MeshFEM/function_traits.hh>
 

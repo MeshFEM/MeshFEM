@@ -11,8 +11,8 @@
 #ifndef SYMMETRICMATRIXINTERPOLANT_HH
 #define SYMMETRICMATRIXINTERPOLANT_HH
 
-#include <CSGFEM/SymmetricMatrix.hh>
-#include <CSGFEM/ElasticityTensor.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
+#include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/Functions.hh>
 
 template<class SMat, size_t _K, size_t _Deg>

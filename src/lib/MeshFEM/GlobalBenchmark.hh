@@ -4,7 +4,7 @@
 #include <string>
 
 #ifdef BENCHMARK
-#include <CSGFEM/Timer.hh>
+#include <MeshFEM/Timer.hh>
 void BENCHMARK_START_TIMER_SECTION(const std::string &name);
 void  BENCHMARK_STOP_TIMER_SECTION(const std::string &name);
 void         BENCHMARK_START_TIMER(const std::string &name);

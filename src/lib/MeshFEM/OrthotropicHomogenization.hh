@@ -14,7 +14,7 @@
 #ifndef ORTHOTROPICHOMOGENIZATION_HH
 #define ORTHOTROPICHOMOGENIZATION_HH
 
-#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/SparseMatrices.hh>
 #include <vector>
 #include <memory>
 #include <stdexcept>

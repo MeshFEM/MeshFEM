@@ -1,6 +1,0 @@
-{ "regions": [
- { "type": "dirichlet", "value": [0.0,  0.0, 0.0], "box": { "minCorner": [-0.01, -0.01, 0.0], "maxCorner": [0.25, 0.01, 0.0] } },
- { "type": "dirichlet", "value": [0.0,  0.0, 0.0], "box": { "minCorner": [-0.01,  0.99, 0.0], "maxCorner": [0.25, 1.01, 0.0] } },
- { "type": "dirichlet", "value": [0.0, -1.0, 0.0], "box": { "minCorner": [ 0.75, -0.01, 0.0], "maxCorner": [1.01, 0.01, 0.0] } },
- { "type": "dirichlet", "value": [0.0,  1.0, 0.0], "box": { "minCorner": [ 0.75,  0.99, 0.0], "maxCorner": [1.01, 1.01, 0.0] } } 
- ] }

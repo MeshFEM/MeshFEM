@@ -6,9 +6,9 @@
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
-#include <CSGFEM/Fields.hh>
-#include <CSGFEM/SparseMatrices.hh>
-#include <CSGFEM/Parallelism.hh>
+#include <MeshFEM/Fields.hh>
+#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Parallelism.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/OneForm.hh>
 

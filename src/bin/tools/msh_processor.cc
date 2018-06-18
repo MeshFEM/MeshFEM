@@ -45,8 +45,17 @@
 //  Company:  New York University
 //  Created:  08/16/2014 15:26:04
 ////////////////////////////////////////////////////////////////////////////////
+#include "argparse.hh"
+#include "Sampler.hh"
+#include "Values.hh"
+#include "MeshConnectivity.hh"
+#include <MeshFEM/ExpressionVector.hh>
+#include <MeshFEM/filters/remove_dangling_vertices.hh>
 #include <MeshFEM/MSHFieldParser.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
+#include <MeshFEM/SimplicialMesh.hh>
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/VonMises.hh>
 
 #include <iomanip>
 #include <regex>
@@ -60,16 +69,6 @@
 #include <functional>
 #include <limits>
 #include <sstream>
-
-#include <MeshFEM/Types.hh>
-#include <CSGFEM/VonMises.hh>
-#include "argparse.hh"
-#include "Sampler.hh"
-#include "Values.hh"
-#include "MeshConnectivity.hh"
-#include <MeshFEM/ExpressionVector.hh>
-#include <MeshFEM/SimplicialMesh.hh>
-#include <MeshFEM/filters/remove_dangling_vertices.hh>
 
 using namespace MeshIO;
 using namespace std;

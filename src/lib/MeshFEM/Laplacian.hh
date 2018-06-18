@@ -17,7 +17,7 @@
 #ifndef LAPLACIAN_HH
 #define LAPLACIAN_HH
 
-#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/SparseMatrices.hh>
 #include <limits>
 #include <MeshFEM/GaussQuadrature.hh>
 

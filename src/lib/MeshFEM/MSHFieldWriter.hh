@@ -33,8 +33,8 @@
 #include <set>
 #include <type_traits>
 
-#include <CSGFEM/Fields.hh>
-#include <CSGFEM/Flattening.hh>
+#include <MeshFEM/Fields.hh>
+#include <MeshFEM/Flattening.hh>
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/MeshIO.hh>
 

@@ -38,9 +38,10 @@
 #include <type_traits>
 
 #include <Eigen/Dense>
-#include <CSGFEM/SymmetricMatrix.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
+#include <MeshFEM/Fields.hh>
 
 #include "Sampler.hh"
 #include "MeshConnectivity.hh"

@@ -21,7 +21,7 @@
 #define EDGEFIELDS_HH
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Geometry.hh>
-#include <CSGFEM/Fields.hh>
+#include <MeshFEM/Fields.hh>
 
 #include <map>
 #include <iostream>

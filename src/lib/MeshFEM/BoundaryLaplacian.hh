@@ -75,7 +75,7 @@
 #ifndef BOUNDARYLAPLACIAN_HH
 #define BOUNDARYLAPLACIAN_HH
 
-#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 
 #include <vector>

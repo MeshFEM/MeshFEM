@@ -1,7 +1,0 @@
-{
-    "name": "Ellipse",
-    "type": "ellipse",
-    "center": [0, 0],
-    "dimensions": [12, 12],
-    "rotation": 0
-}

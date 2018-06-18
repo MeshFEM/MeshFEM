@@ -22,7 +22,7 @@
 #include <limits>
 
 #include <MeshFEM/Types.hh>
-#include <CSGFEM/SparseMatrices.hh>
+#include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/filters/gen_grid.hh>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
