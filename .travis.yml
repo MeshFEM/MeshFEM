@@ -4,6 +4,7 @@ language: cpp
 matrix:
   include:
     - os: linux
+      compiler: gcc-7
       addons:
         sources:
           - ubuntu-toolchain-r-test
@@ -11,7 +12,9 @@ matrix:
           - g++-7
           - libboost-all-dev
           - libsuitesparse-dev
-      script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
+      script:
+        - cmake -DCMAKE_BUILD_TYPE=Debug ..
+        - make -j2
 
     - os: osx
       compiler: clang

@@ -82,6 +82,9 @@ add_library(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
 
+# Use C++11
+target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
+
 ################################################################################
 # Configure manual compiler flags based on options
 ################################################################################
@@ -103,9 +106,7 @@ include(MeshFEMDependencies)
 
 target_link_libraries(${PROJECT_NAME}
         Threads::Threads
-        Boost::filesystem
-        Boost::system
-        Boost::program_options
+        meshfem::boost
         Eigen3::Eigen
         json::json
         tbb::tbb
