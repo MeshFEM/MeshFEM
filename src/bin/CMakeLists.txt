@@ -14,7 +14,7 @@ add_executable(ConstStrainDisplacement_cli ConstStrainDisplacement_cli.cc)
 target_link_libraries(ConstStrainDisplacement_cli MeshFEM)
 
 add_executable(DeformedCells_cli DeformedCells_cli.cc)
-target_link_libraries(DeformedCells_cli MeshFEM json)
+target_link_libraries(DeformedCells_cli MeshFEM json::json)
 
 add_executable(Simulate_cli Simulate_cli.cc)
 target_link_libraries(Simulate_cli MeshFEM)

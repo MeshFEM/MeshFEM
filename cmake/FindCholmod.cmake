@@ -1,13 +1,13 @@
 # Cholmod lib usually requires linking to a blas and lapack library.
 # It is up to the user of this module to find a BLAS and link to it.
 
-if (CHOLMOD_FOUND)
+if(CHOLMOD_FOUND)
 	return()
 endif()
 
-if (CHOLMOD_INCLUDES AND CHOLMOD_LIBRARIES)
+if(CHOLMOD_INCLUDES AND CHOLMOD_LIBRARIES)
   set(CHOLMOD_FIND_QUIETLY TRUE)
-endif (CHOLMOD_INCLUDES AND CHOLMOD_LIBRARIES)
+endif(CHOLMOD_INCLUDES AND CHOLMOD_LIBRARIES)
 
 find_path(CHOLMOD_INCLUDES
   NAMES
@@ -99,3 +99,9 @@ find_package_handle_standard_args(CHOLMOD DEFAULT_MSG
                                   CHOLMOD_INCLUDES CHOLMOD_LIBRARIES)
 
 mark_as_advanced(CHOLMOD_INCLUDES CHOLMOD_LIBRARIES AMD_LIBRARY COLAMD_LIBRARY SUITESPARSE_LIBRARY CAMD_LIBRARY CCOLAMD_LIBRARY CHOLMOD_METIS_LIBRARY)
+
+if(NOT TARGET cholmod::cholmod)
+  add_library(cholmod::cholmod INTERFACE IMPORTED)
+  target_include_directories(cholmod::cholmod SYSTEM INTERFACE ${CHOLMOD_INCLUDES})
+  target_link_libraries(cholmod::cholmod INTERFACE ${CHOLMOD_LIBRARIES})
+endif()

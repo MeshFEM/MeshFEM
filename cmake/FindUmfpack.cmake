@@ -36,7 +36,7 @@ if(UMFPACK_LIBRARIES)
   if (COLAMD_LIBRARY)
     set(UMFPACK_LIBRARIES ${UMFPACK_LIBRARIES} ${COLAMD_LIBRARY})
   endif (COLAMD_LIBRARY)
-  
+
   find_library(AMD_LIBRARY amd PATHS ${UMFPACK_LIBDIR} $ENV{UMFPACKDIR} ${LIB_INSTALL_DIR})
   if (AMD_LIBRARY)
     set(UMFPACK_LIBRARIES ${UMFPACK_LIBRARIES} ${AMD_LIBRARY})
@@ -54,3 +54,9 @@ find_package_handle_standard_args(UMFPACK DEFAULT_MSG
                                   UMFPACK_INCLUDES UMFPACK_LIBRARIES)
 
 mark_as_advanced(UMFPACK_INCLUDES UMFPACK_LIBRARIES AMD_LIBRARY COLAMD_LIBRARY SUITESPARSE_LIBRARY)
+
+if(NOT TARGET umfpack::umfpack)
+  add_library(umfpack::umfpack INTERFACE IMPORTED)
+  target_include_directories(umfpack::umfpack SYSTEM INTERFACE ${UMFPACK_INCLUDES})
+  target_link_libraries(umfpack::umfpack INTERFACE ${UMFPACK_LIBRARIES})
+endif()

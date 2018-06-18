@@ -396,7 +396,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
     // Zero-initializes due to ETensor's default constructor.
     OF dCh(mesh.numVertices());
 
-#if USE_TBB
+#if MESHFEM_WITH_TBB
     tbb::combinable<OF> sum(dCh);
 #endif
 
@@ -411,7 +411,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
         std::vector<Strain> strain(flatLen(N));
         std::vector<Strain> stress(flatLen(N));
         std::vector<SFGradient> gradPhi_n(e.numNodes());
-#if USE_TBB
+#if MESHFEM_WITH_TBB
         OF &result = sum.local();
 #else
         OF &result = dCh;
@@ -463,7 +463,7 @@ homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim:
         }
     };
 
-#if USE_TBB
+#if MESHFEM_WITH_TBB
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, mesh.numElements()),
         [&](const tbb::blocked_range<size_t> &r) {

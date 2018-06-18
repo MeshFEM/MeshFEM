@@ -80,8 +80,6 @@ add_library(${PROJECT_NAME}
         src/lib/MeshFEM/Types.cc
 )
 
-# target_include_directories(${PROJECT_NAME} PUBLIC src/lib/MeshFEM) # will be removed
-# target_include_directories(${PROJECT_NAME} PUBLIC src/lib/CSGFEM) # will be removed
 target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
 
 ################################################################################
@@ -97,79 +95,27 @@ if(ENABLE_BENCHMARKING)
 endif()
 
 ################################################################################
-# Required libraries
+# Dependencies
 ################################################################################
 
-# Use C++11
-target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
+# Download and define targets
+include(MeshFEMDependencies)
 
-# C++11 Thread library
-find_package(Threads REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${PROJECT_NAME}
+        Threads::Threads
+        Boost::filesystem
+        Boost::system
+        Boost::program_options
+        Eigen3::Eigen
+        json::json
+        tbb::tbb
+        triangle::triangle
+        tinyexpr::tinyexpr
+        cholmod::cholmod
+        umfpack::umfpack
+)
 
-# Boost library
-find_package(Boost 1.55 REQUIRED COMPONENTS filesystem system program_options)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
-
-# Eigen3 library
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/eigen)
-
-# json library
-if(NOT TARGET json)
-    add_library(json INTERFACE)
-    target_include_directories(json SYSTEM INTERFACE ${MESHFEM_THIRD_PARTY_DIR}/json)
-endif()
-target_link_libraries(${PROJECT_NAME} PUBLIC json)
-
-# TBB library
-find_package(TBB)
-if(TBB_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DHAS_TBB)
-    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${TBB_LIBRARIES})
-endif()
-
-# Triangle library
-if(NOT TARGET triangle)
-    add_subdirectory(${MESHFEM_THIRD_PARTY_DIR}/triangle triangle)
-    target_link_libraries(${PROJECT_NAME} PUBLIC triangle)
-endif()
-
-# TinyExpr library
-if(NOT TARGET tinyexpr)
-    add_library(tinyexpr ${MESHFEM_THIRD_PARTY_DIR}/tinyexpr/tinyexpr.c)
-    target_include_directories(tinyexpr PUBLIC ${MESHFEM_THIRD_PARTY_DIR}/tinyexpr)
-endif()
-target_link_libraries(${PROJECT_NAME} PUBLIC tinyexpr)
-
-# Cholmod solver
-find_package(Cholmod REQUIRED)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CHOLMOD_INCLUDES})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${CHOLMOD_LIBRARIES})
-
-# UmfPack solver
-find_package(Umfpack REQUIRED)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${UMFPACK_INCLUDES})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${UMFPACK_LIBRARIES})
-
-# Lapack library (do we need this?)
-# find_package(LAPACK REQUIRED)
-# target_link_libraries(${PROJECT_NAME} PUBLIC ${LAPACK_LIBRARIES})
-
-################################################################################
-# Optional libraries
-################################################################################
-
-find_package(Ceres)
-if(CERES_FOUND)
-    add_library(ceres_lib INTERFACE)
-    target_include_directories(ceres_lib SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-    target_link_libraries(ceres_lib MeshFEM ${CERES_LIBRARIES})
-    add_library(ceres::ceres ALIAS ceres_lib)
-else()
-    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
-endif()
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
 
 ################################################################################
 # Subdirectories

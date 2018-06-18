@@ -1411,7 +1411,7 @@ public:
         const size_t preallocSize = KeSize * KeSize * nelem;
         K.init(n, n);
         K.reserve(preallocSize);
-#if USE_TBB
+#if MESHFEM_WITH_TBB
         // Build all per-element matrices in parallel, then collect nonzeros
         std::vector<PerElementStiffness> elemMatrices(nelem);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, nelem),

@@ -207,7 +207,7 @@ struct TripletMatrix {
                 nz[k].v = 0;
         };
 
-#if USE_TBB
+#if MESHFEM_WITH_TBB
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, n),
             [&](const tbb::blocked_range<size_t> &r) {

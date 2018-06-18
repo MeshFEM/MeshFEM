@@ -10,6 +10,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Triangulate.h>
 
+#define VOID MESHFEM_VOID
+#define REAL MESHFEM_REAL
+
 int main(int argc, const char *argv[]) {
     if (argc != 3) {
         std::cerr << "usage: triangulate_standalone in.bin flags_string" << std::endl;

@@ -12,10 +12,12 @@
 #ifndef TRIANGULATE_H
 #define TRIANGULATE_H
 
-#include <local_triangle.h>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
+#include <MeshFEM/Utilities/EdgeSoupAdaptor.hh>
+#include <MeshFEM/wrappers/meshfem_triangle.h>
 
 #include <string.h>
-
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -24,45 +26,41 @@
 #include <utility>
 #include <type_traits>
 
-#include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
-#include <MeshFEM/Utilities/EdgeSoupAdaptor.hh>
-
 // Free the data structures passed to/from Triangle. Both input and output must
 // be handled at once because sometimes Triangle passes arrays through from
 // input to output without copying them
 inline void freeIO(triangulateio &in, triangulateio &out) {
     // deallocate the triangle library input
-    if (in.edgelist)              trifree((VOID *)in.edgelist);
-    if (in.edgemarkerlist)        trifree((VOID *)in.edgemarkerlist);
-    if (in.holelist)              trifree((VOID *)in.holelist);
-    if (in.neighborlist)          trifree((VOID *)in.neighborlist);
-    if (in.normlist)              trifree((VOID *)in.normlist);
-    if (in.pointattributelist)    trifree((VOID *)in.pointattributelist);
-    if (in.pointlist)             trifree((VOID *)in.pointlist);
-    if (in.pointmarkerlist)       trifree((VOID *)in.pointmarkerlist);
-    if (in.regionlist)            trifree((VOID *)in.regionlist);
-    if (in.segmentlist)           trifree((VOID *)in.segmentlist);
-    if (in.segmentmarkerlist)     trifree((VOID *)in.segmentmarkerlist);
-    if (in.trianglearealist)      trifree((VOID *)in.trianglearealist);
-    if (in.triangleattributelist) trifree((VOID *)in.triangleattributelist);
-    if (in.trianglelist)          trifree((VOID *)in.trianglelist);
+    if (in.edgelist)              trifree((MESHFEM_VOID *)in.edgelist);
+    if (in.edgemarkerlist)        trifree((MESHFEM_VOID *)in.edgemarkerlist);
+    if (in.holelist)              trifree((MESHFEM_VOID *)in.holelist);
+    if (in.neighborlist)          trifree((MESHFEM_VOID *)in.neighborlist);
+    if (in.normlist)              trifree((MESHFEM_VOID *)in.normlist);
+    if (in.pointattributelist)    trifree((MESHFEM_VOID *)in.pointattributelist);
+    if (in.pointlist)             trifree((MESHFEM_VOID *)in.pointlist);
+    if (in.pointmarkerlist)       trifree((MESHFEM_VOID *)in.pointmarkerlist);
+    if (in.regionlist)            trifree((MESHFEM_VOID *)in.regionlist);
+    if (in.segmentlist)           trifree((MESHFEM_VOID *)in.segmentlist);
+    if (in.segmentmarkerlist)     trifree((MESHFEM_VOID *)in.segmentmarkerlist);
+    if (in.trianglearealist)      trifree((MESHFEM_VOID *)in.trianglearealist);
+    if (in.triangleattributelist) trifree((MESHFEM_VOID *)in.triangleattributelist);
+    if (in.trianglelist)          trifree((MESHFEM_VOID *)in.trianglelist);
 
     // deallocate the triangle library output (this is unbelievable!!)
-    if (out.edgelist              && (out.edgelist              != in.edgelist)             ) trifree((VOID *)out.edgelist);
-    if (out.edgemarkerlist        && (out.edgemarkerlist        != in.edgemarkerlist)       ) trifree((VOID *)out.edgemarkerlist);
-    if (out.holelist              && (out.holelist              != in.holelist)             ) trifree((VOID *)out.holelist);
-    if (out.neighborlist          && (out.neighborlist          != in.neighborlist)         ) trifree((VOID *)out.neighborlist);
-    if (out.normlist              && (out.normlist              != in.normlist)             ) trifree((VOID *)out.normlist);
-    if (out.pointattributelist    && (out.pointattributelist    != in.pointattributelist)   ) trifree((VOID *)out.pointattributelist);
-    if (out.pointlist             && (out.pointlist             != in.pointlist)            ) trifree((VOID *)out.pointlist);
-    if (out.pointmarkerlist       && (out.pointmarkerlist       != in.pointmarkerlist)      ) trifree((VOID *)out.pointmarkerlist);
-    if (out.regionlist            && (out.regionlist            != in.regionlist)           ) trifree((VOID *)out.regionlist);
-    if (out.segmentlist           && (out.segmentlist           != in.segmentlist)          ) trifree((VOID *)out.segmentlist);
-    if (out.segmentmarkerlist     && (out.segmentmarkerlist     != in.segmentmarkerlist)    ) trifree((VOID *)out.segmentmarkerlist);
-    if (out.trianglearealist      && (out.trianglearealist      != in.trianglearealist)     ) trifree((VOID *)out.trianglearealist);
-    if (out.triangleattributelist && (out.triangleattributelist != in.triangleattributelist)) trifree((VOID *)out.triangleattributelist);
-    if (out.trianglelist          && (out.trianglelist          != in.trianglelist)         ) trifree((VOID *)out.trianglelist);
+    if (out.edgelist              && (out.edgelist              != in.edgelist)             ) trifree((MESHFEM_VOID *)out.edgelist);
+    if (out.edgemarkerlist        && (out.edgemarkerlist        != in.edgemarkerlist)       ) trifree((MESHFEM_VOID *)out.edgemarkerlist);
+    if (out.holelist              && (out.holelist              != in.holelist)             ) trifree((MESHFEM_VOID *)out.holelist);
+    if (out.neighborlist          && (out.neighborlist          != in.neighborlist)         ) trifree((MESHFEM_VOID *)out.neighborlist);
+    if (out.normlist              && (out.normlist              != in.normlist)             ) trifree((MESHFEM_VOID *)out.normlist);
+    if (out.pointattributelist    && (out.pointattributelist    != in.pointattributelist)   ) trifree((MESHFEM_VOID *)out.pointattributelist);
+    if (out.pointlist             && (out.pointlist             != in.pointlist)            ) trifree((MESHFEM_VOID *)out.pointlist);
+    if (out.pointmarkerlist       && (out.pointmarkerlist       != in.pointmarkerlist)      ) trifree((MESHFEM_VOID *)out.pointmarkerlist);
+    if (out.regionlist            && (out.regionlist            != in.regionlist)           ) trifree((MESHFEM_VOID *)out.regionlist);
+    if (out.segmentlist           && (out.segmentlist           != in.segmentlist)          ) trifree((MESHFEM_VOID *)out.segmentlist);
+    if (out.segmentmarkerlist     && (out.segmentmarkerlist     != in.segmentmarkerlist)    ) trifree((MESHFEM_VOID *)out.segmentmarkerlist);
+    if (out.trianglearealist      && (out.trianglearealist      != in.trianglearealist)     ) trifree((MESHFEM_VOID *)out.trianglearealist);
+    if (out.triangleattributelist && (out.triangleattributelist != in.triangleattributelist)) trifree((MESHFEM_VOID *)out.triangleattributelist);
+    if (out.trianglelist          && (out.trianglelist          != in.trianglelist)         ) trifree((MESHFEM_VOID *)out.trianglelist);
 }
 
 template<typename Vertices, typename Edges>
@@ -99,10 +97,10 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     in.numberofsegments = edgeSoup.edges().size();
     in.numberofholes = holes.size();
 
-    in.pointlist         = (REAL *) malloc(in.numberofpoints   * 2 * sizeof(REAL));
+    in.pointlist         = (MESHFEM_REAL *) malloc(in.numberofpoints   * 2 * sizeof(MESHFEM_REAL));
     in.segmentlist       = (int *)  malloc(in.numberofsegments * 2 * sizeof(int));
     in.segmentmarkerlist = (int *)  malloc(in.numberofsegments * 1 * sizeof(int));
-    in.holelist          = (REAL *) malloc(in.numberofholes    * 2 * sizeof(REAL));
+    in.holelist          = (MESHFEM_REAL *) malloc(in.numberofholes    * 2 * sizeof(MESHFEM_REAL));
 
     // fill triangle input structure with points
     size_t i = 0;
@@ -141,10 +139,10 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         std::cout << sizeof(triangulateio) << std::endl;
         std::ofstream file("in.bin", std::ios::binary);
         file.write(reinterpret_cast<const char*>(&in), sizeof(triangulateio));
-        file.write(reinterpret_cast<const char *>(in.pointlist),         in.numberofpoints   * 2 * sizeof(REAL));
+        file.write(reinterpret_cast<const char *>(in.pointlist),         in.numberofpoints   * 2 * sizeof(MESHFEM_REAL));
         file.write(reinterpret_cast<const char *>(in.segmentlist),       in.numberofsegments * 2 * sizeof(int));
         file.write(reinterpret_cast<const char *>(in.segmentmarkerlist), in.numberofsegments * 1 * sizeof(int));
-        file.write(reinterpret_cast<const char *>(in.holelist),          in.numberofholes    * 2 * sizeof(REAL));
+        file.write(reinterpret_cast<const char *>(in.holelist),          in.numberofholes    * 2 * sizeof(MESHFEM_REAL));
     }
 #endif
     triangulate(const_cast<char *>(flags.c_str()), &in, &out, NULL);
@@ -219,7 +217,7 @@ inline void refineTriangulation(
     in.numberoftriangles = nt;
     in.numberofcorners   = 3;
 
-    in.pointlist    = (REAL *) malloc(nv * 2 * sizeof(REAL));
+    in.pointlist    = (MESHFEM_REAL *) malloc(nv * 2 * sizeof(MESHFEM_REAL));
     in.trianglelist = (int  *) malloc(nt * 3 * sizeof(int));
 
     // fill triangle input structure with points, triangles
@@ -237,7 +235,7 @@ inline void refineTriangulation(
     // Optionally fill with per-triangle areas
     bool hasPerTriangleArea = perTriangleArea.size() == nt;
     if (hasPerTriangleArea) {
-        in.trianglearealist = (REAL *) malloc(nt * sizeof(REAL));
+        in.trianglearealist = (MESHFEM_REAL *) malloc(nt * sizeof(MESHFEM_REAL));
         for (size_t i = 0; i < nt; ++i)
             in.trianglearealist[i] = perTriangleArea[i];
     }
