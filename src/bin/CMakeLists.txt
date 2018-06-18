@@ -25,13 +25,9 @@ target_link_libraries(Poisson_cli MeshFEM)
 add_executable(ExtractBMatrix ExtractBMatrix.cc)
 target_link_libraries(ExtractBMatrix MeshFEM)
 
-find_package(Ceres)
-if(CERES_FOUND)
-	add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-    target_include_directories(MaterialOptimization_cli SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-	target_link_libraries(MaterialOptimization_cli MeshFEM ${CERES_LIBRARIES})
-else()
-    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+if(TARGET ceres::ceres)
+    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
+    target_link_libraries(MaterialOptimization_cli MeshFEM ceres::ceres)
 endif()
 
 ################################################################################
