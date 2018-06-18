@@ -1,0 +1,21 @@
+dist: trusty
+sudo: false
+language: cpp
+matrix:
+  include:
+    - os: linux
+      addons:
+        packages:
+          - libboost-all-dev
+          - libsuitesparse-dev
+      script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
+
+    - os: osx
+      compiler: clang
+      script: cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install openblas && brew install suite-sparse; fi
+before_script:
+  - mkdir build
+  - cd build
