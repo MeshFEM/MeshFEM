@@ -49,9 +49,10 @@ if(NOT TARGET tbb::tbb)
     add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb)
     set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
 
-    add_library(tbb::tbb INTERFACE IMPORTED)
-    target_include_directories(tbb::tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
-    target_link_libraries(tbb::tbb INTERFACE tbb_static)
+    add_library(meshfem_tbb INTERFACE)
+    target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
+    target_link_libraries(meshfem_tbb INTERFACE tbb_static)
+    add_library(tbb::tbb ALIAS meshfem_tbb)
 endif()
 
 # Triangle library
