@@ -65,7 +65,7 @@ if(NOT TARGET tbb::tbb)
     meshfem_download_tbb()
     add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb)
     set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
-    set_target_properties(tbb_static PROPERTIES COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter")
+    set_target_properties(tbb_static PROPERTIES COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter -Wno-keyword-macro")
 
     add_library(meshfem_tbb INTERFACE)
     target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
