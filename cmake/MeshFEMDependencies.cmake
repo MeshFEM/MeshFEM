@@ -1,8 +1,8 @@
-# Prepare MeshFEM dependencies
+# Prepare dependencies
 #
 # For each third-party library, if the appropriate target doesn't exist yet,
 # download it via external project, and add_subdirectory to build it alongside
-# MeshFEM
+# this project.
 
 ### Configuration
 set(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
