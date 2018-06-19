@@ -46,9 +46,12 @@ endif()
 
 # json library
 if(NOT TARGET json::json)
-    add_library(json::json INTERFACE IMPORTED)
+    add_library(meshfem_json INTERFACE)
+    message("yay json")
     meshfem_download_json()
-    set_target_properties(json::json PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${MESHFEM_EXTERNAL}/json;${MESHFEM_EXTERNAL}/json/nlohmann")
+    target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json)
+    target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json/nlohmann)
+    add_library(json::json ALIAS meshfem_json)
 endif()
 
 # TBB library
