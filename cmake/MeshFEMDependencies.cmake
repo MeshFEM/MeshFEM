@@ -38,9 +38,10 @@ endif()
 
 # Eigen3 library
 if(NOT TARGET Eigen3::Eigen)
-    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    add_library(meshfem_eigen INTERFACE)
     meshfem_download_eigen()
-    set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${MESHFEM_EXTERNAL}/eigen)
+    target_include_directories(meshfem_eigen SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/eigen)
+    add_library(Eigen3::Eigen ALIAS meshfem_eigen)
 endif()
 
 # json library
@@ -62,9 +63,10 @@ if(NOT TARGET tbb::tbb)
     add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb)
     set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
 
-    add_library(tbb::tbb INTERFACE IMPORTED)
-    set_target_properties(tbb::tbb PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${MESHFEM_EXTERNAL}/tbb/include)
-    set_target_properties(tbb::tbb PROPERTIES INTERFACE_LINK_LIBRARIES tbb_static)
+    add_library(meshfem_tbb INTERFACE)
+    target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
+    target_link_libraries(meshfem_tbb INTERFACE tbb_static)
+    add_library(tbb::tbb ALIAS meshfem_tbb)
 endif()
 
 # Triangle library
