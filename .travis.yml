@@ -1,35 +1,37 @@
 dist: trusty
 sudo: false
 language: cpp
+cache: ccache
 matrix:
   include:
-    - os: linux
-      compiler: gcc-7
-      addons:
-        apt:
-          sources:
-          - ubuntu-toolchain-r-test
-          packages:
-          - gcc-7
-          - g++-7
-          - libboost-filesystem-dev
-          - libboost-program-options-dev
-          - libboost-system-dev
-          - libsuitesparse-dev
-      env:
-        - MATRIX_EVAL="export CC=gcc-7 && CXX=g++-7 && CONFIG=Debug"
+  - os: linux
+    compiler: gcc-7
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gcc-7
+        - g++-7
+        - libboost-filesystem-dev
+        - libboost-program-options-dev
+        - libboost-system-dev
+        - libsuitesparse-dev
+    env:
+    - MATRIX_EVAL="export CC=gcc-7 && CXX=g++-7 && CONFIG=Debug"
 
-    - os: osx
-      compiler: clang
-      env:
-        - MATRIX_EVAL="export CONFIG=Debug"
+  - os: osx
+    compiler: clang
+    env:
+    - MATRIX_EVAL="export CONFIG=Debug"
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse; fi
-  - eval "${MATRIX_EVAL}"
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install suite-sparse ccache; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
+- eval "${MATRIX_EVAL}"
 
 script:
-  - mkdir build
-  - cd build
-  - cmake -DCMAKE_BUILD_TYPE=$CONFIG ..
-  - make -j2
+- mkdir build
+- cd build
+- cmake -DCMAKE_BUILD_TYPE=$CONFIG ..
+- make -j2
