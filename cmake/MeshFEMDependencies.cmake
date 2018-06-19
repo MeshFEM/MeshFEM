@@ -47,7 +47,6 @@ endif()
 # json library
 if(NOT TARGET json::json)
     add_library(meshfem_json INTERFACE)
-    message("yay json")
     meshfem_download_json()
     target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json)
     target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json/nlohmann)
