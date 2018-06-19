@@ -39,6 +39,9 @@ set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of buil
 # Color output
 include(UseColors)
 
+# Make sure warnings/errors are still colorized when using Ninja for building.
+add_definitions(-fdiagnostics-color=always)
+
 # C++11/14 features
 include(CXXFeatures)
 
