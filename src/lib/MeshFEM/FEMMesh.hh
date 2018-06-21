@@ -234,6 +234,18 @@ public:
         return vol;
     }
 
+    EmbeddingSpace centerOfMass() const {
+        EmbeddingSpace result;
+        for (const auto &e : elements()) {
+            // Center of mass of each element is just its barycenter...
+            EmbeddingSpace contrib(EmbeddingSpace::Zero());
+            for (const auto &v : e.vertices())
+                contrib += v.node()->p;
+            result += contrib * (e->volume() / e.numVertices());
+        }
+        return result / volume();
+    }
+
     EmbeddingSpace elementBarycenter(size_t ei) const {
         EmbeddingSpace b(EmbeddingSpace::Zero());
         auto e = element(ei);
@@ -257,6 +269,7 @@ public:
         b /= e.numVertices();
         return b;
     }
+
 
     BoundaryMesh<      FEMMesh> boundary()       { return BoundaryMesh<      FEMMesh>(*this); }
     BoundaryMesh<const FEMMesh> boundary() const { return BoundaryMesh<const FEMMesh>(*this); }
