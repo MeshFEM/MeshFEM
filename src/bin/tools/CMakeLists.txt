@@ -19,3 +19,9 @@ target_link_libraries(triangulate_standalone MeshFEM)
 
 add_executable(ellipse ellipse.cc)
 target_link_libraries(ellipse MeshFEM)
+
+add_executable(L_shape L_shape.cc)
+target_link_libraries(L_shape MeshFEM)
+
+add_executable(plus_shape plus_shape.cc)
+target_link_libraries(plus_shape MeshFEM)

@@ -235,7 +235,7 @@ public:
     }
 
     EmbeddingSpace centerOfMass() const {
-        EmbeddingSpace result;
+        EmbeddingSpace result(EmbeddingSpace::Zero());
         for (const auto &e : elements()) {
             // Center of mass of each element is just its barycenter...
             EmbeddingSpace contrib(EmbeddingSpace::Zero());
