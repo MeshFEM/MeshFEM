@@ -63,7 +63,10 @@ public:
         return operator[](flattenIndices<N>(i, j));
     }
 
-    Eigen::Matrix<_Real, N, 1> eigenvalues() const {
+    using EigenvaluesType  = Eigen::Matrix<_Real, N, 1>;
+    using EigenvectorsType = Eigen::Matrix<_Real, N, N>;
+    using EigenDecompositionType = std::pair<EigenvaluesType, EigenvectorsType>;
+    EigenvaluesType eigenvalues() const {
         Eigen::Matrix<_Real, N, N> mat;
         for (size_t j = 0; j < N; ++j)
             for (size_t i = 0; i <= j; ++i)
@@ -71,26 +74,34 @@ public:
         return mat.template selfadjointView<Eigen::Upper>().eigenvalues();
     }
 
-    // Gets the symmetric matrix's eigenvectors, but scaled so their norms are
-    // their eigenvalue.
-    // Returns a matrix with each scaled eigenvector as a column. The
-    // eigenvectors are sorted in decreasing eigenvalue **magnitude** order.
-    Eigen::Matrix<_Real, N, N> eigenvalueScaledEigenvectors() const {
+    // Get the eigenvalues (first) and eigenvectors (second) of this symmetric
+    // matrix. Returns (diag(Lambda), Q) so that this matrix is
+    // Q Lambda Q^T
+    EigenDecompositionType eigenDecomposition() const {
         Eigen::Matrix<_Real, N, N> mat;
         for (size_t i = 0; i < N; ++i)
             for (size_t j = 0; j < N; ++j)
                 mat(i, j) = operator()(i, j);
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix<_Real, N, N>> solver;
         solver.compute(mat);
+        return { solver.eigenvalues(), solver.eigenvectors() };
+    }
+
+    // Gets the symmetric matrix's eigenvectors, but scaled so their norms are
+    // their eigenvalue.
+    // Returns a matrix with each scaled eigenvector as a column. The
+    // eigenvectors are sorted in decreasing eigenvalue **magnitude** order.
+    EigenvectorsType eigenvalueScaledEigenvectors() const {
+        auto decomposition = eigenDecomposition();
 
         std::vector<size_t> perm;
         std::vector<_Real> evMags(N);
-        for (size_t i = 0; i < N; ++i) evMags[i] = std::abs(solver.eigenvalues()[i]);
+        for (size_t i = 0; i < N; ++i) evMags[i] = std::abs(decomposition.first[i]);
         sortPermutation(evMags, perm, true);
 
-        Eigen::Matrix<_Real, N, N> result;
+        EigenvectorsType result;
         for (size_t i = 0; i < N; ++i)
-            result.col(i) = solver.eigenvectors().col(perm[i]) * evMags[perm[i]];
+            result.col(i) = decomposition.second.col(perm[i]) * evMags[perm[i]];
 
         return result;
     }

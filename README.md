@@ -4,6 +4,8 @@
 MeshFEM
 =======
 
+[![Build Status](https://travis-ci.com/geometryprocessing/MeshFEM.svg?token=euzAY1sxC114E8ufzcZx&branch=master)](https://travis-ci.com/geometryprocessing/MeshFEM)
+
 Installation
 ------------
 
