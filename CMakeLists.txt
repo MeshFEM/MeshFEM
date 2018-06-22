@@ -51,6 +51,9 @@ include(CMakeToolsHelpers OPTIONAL)
 # Enable more warnings
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Wno-comment")
 
+# Helper function
+include(MeshFEMSingleApp)
+
 ################################################################################
 # Options
 ################################################################################

@@ -4,26 +4,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/MeshFEM)
 
 ################################################################################
 
-add_executable(mesh_convert mesh_convert.cc)
-target_link_libraries(mesh_convert MeshFEM)
-
-add_executable(PeriodicHomogenization_cli PeriodicHomogenization_cli.cc)
-target_link_libraries(PeriodicHomogenization_cli MeshFEM)
-
-add_executable(ConstStrainDisplacement_cli ConstStrainDisplacement_cli.cc)
-target_link_libraries(ConstStrainDisplacement_cli MeshFEM)
-
-add_executable(DeformedCells_cli DeformedCells_cli.cc)
-target_link_libraries(DeformedCells_cli MeshFEM json::json)
-
-add_executable(Simulate_cli Simulate_cli.cc)
-target_link_libraries(Simulate_cli MeshFEM)
-
-add_executable(Poisson_cli Poisson_cli.cc)
-target_link_libraries(Poisson_cli MeshFEM)
-
-add_executable(ExtractBMatrix ExtractBMatrix.cc)
-target_link_libraries(ExtractBMatrix MeshFEM)
+meshfem_single_app(mesh_convert MeshFEM)
+meshfem_single_app(PeriodicHomogenization_cli MeshFEM)
+meshfem_single_app(ConstStrainDisplacement_cli MeshFEM)
+meshfem_single_app(DeformedCells_cli MeshFEM json::json)
+meshfem_single_app(Simulate_cli MeshFEM)
+meshfem_single_app(Poisson_cli MeshFEM)
+meshfem_single_app(ExtractBMatrix MeshFEM)
 
 if(TARGET ceres::ceres)
     add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
