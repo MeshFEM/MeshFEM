@@ -169,8 +169,8 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
 }
 
 // Convenience function for point/edge collections representation
-template<class Point, class HolePoint, class Edge>
-void triangulatePSLC(const std::vector<Point> &inPoints,
+template<class Point, class HolePoint, class Edge, class PtAllocator>
+void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         const std::vector<Edge> &inEdges,
         const std::vector<HolePoint> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
@@ -178,7 +178,7 @@ void triangulatePSLC(const std::vector<Point> &inPoints,
         double area = 0.01,
         const std::string additionalFlags = "") {
     triangulatePSLC(
-            EdgeSoup<std::vector<Point>, std::vector<Edge>>(inPoints, inEdges),
+            EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
             holes, outVertices, outTriangles, area, additionalFlags);
 }
 

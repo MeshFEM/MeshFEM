@@ -18,7 +18,7 @@ int main(int argc, const char *argv[]) {
          b = std::stod(argv[2]);
     const std::string outPath(argv[3]);
 
-    size_t nsubdiv = 800;
+    size_t nsubdiv = 20;
     std::vector<Vector2D> bdryPts;
     std::vector<std::pair<size_t, size_t>> bdryEdges;
     for (size_t k = 0; k < nsubdiv; ++k) {
