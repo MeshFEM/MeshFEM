@@ -67,6 +67,7 @@ endif()
 
 option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
+option(MESHFEM_USE_PIC "Generate position-independent code (for linking with shared library)" OFF)
 
 ################################################################################
 # MeshFEM sources
@@ -119,6 +120,9 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
+if (MESHFEM_USE_PIC)
+    set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-fPIC")
+endif()
 
 ################################################################################
 # Subdirectories

@@ -17,7 +17,6 @@
 //             a
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
-//  Company:  New York University
 //  Created:  06/22/2018 00:59:11
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Triangulate.h>
