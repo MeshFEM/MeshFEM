@@ -269,8 +269,9 @@ struct TripletMatrix {
     }
 
     // WARNING: Assumes sumRepeated() has already been called.
-    void getCompressedColumn(SuiteSparse_long *Ap, SuiteSparse_long *Ai,
-                             double *Ax) const {
+    template<typename _Index, typename _Real>
+    void getCompressedColumn(_Index *Ap, _Index *Ai,
+                             _Real *Ax) const {
         const size_t num_nz = nnz();
         for (size_t i = 0; i < num_nz; ++i) {
             Ai[i] = nz[i].row();
@@ -567,16 +568,18 @@ struct TripletMatrix {
     }
 };
 
-struct SuiteSparseMatrix {
-    std::vector<SuiteSparse_long>  Ap, Ai;
-    std::vector<double>            Ax;
-    SuiteSparse_long m, n, nz;
+// Matrix in Compressed Sparse Column format
+template<typename _Index, typename _Real>
+struct CSCMatrix {
+    std::vector<_Index>  Ap, Ai; // Column pointer and row index arrays
+    std::vector<_Real>   Ax;     // Value array
+    _Index m, n, nz;             // Number of rows, columns, and nonzeros
 
-    SuiteSparseMatrix()
+    CSCMatrix()
         : m(0), n(0), nz(0) { }
 
     template<typename TMatrix>
-    SuiteSparseMatrix(TMatrix &mat) { setFromTMatrix(mat); }
+    CSCMatrix(TMatrix &mat) { setFromTMatrix(mat); }
 
     // Set from a triplet matrix
     // Side effect: mat's triplets are sorted and compressed.
@@ -593,6 +596,8 @@ struct SuiteSparseMatrix {
         mat.getCompressedColumn(&Ap[0], &Ai[0], &Ax[0]);
     }
 };
+
+using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 
 class UmfpackFactorizer {
 public:
@@ -991,8 +996,8 @@ public:
     }
 
     // Solve K u = f under any existing constraints/fixed variables.
-    template<class _Vec>
-    void solve(const _Vec &f, std::vector<_Real> &u) {
+    template<class _Vec, class _SolnVec>
+    void solve(const _Vec &f, _SolnVec &u) {
         // number of non-Lagrange multiplier variables
         size_t nPrimaryVars = f.size();
 
