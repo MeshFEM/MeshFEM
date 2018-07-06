@@ -547,7 +547,7 @@ struct TripletMatrix {
     _Vector apply(const _Vector &x) const {
         _Vector result(x.size());
         // Some _Vector types don't zero-initialize.
-        for (size_t i = 0; i < result.size(); ++i) result[i] = 0.0;
+        for (size_t i = 0; i < size_t(result.size()); ++i) result[i] = 0.0;
         if (symmetry_mode == SymmetryMode::NONE) {
             for (const Triplet &t: nz)
                 result[t.i] += t.v * x[t.j];
@@ -565,6 +565,38 @@ struct TripletMatrix {
         }
         else throw std::runtime_error("Unsupported matrix symmetry mode");
         return result;
+    }
+
+    // Remove the rows and columns at particular indices. This is intended to
+    // be called on a symmetric matrix, in which case solving the resulting
+    // linear system (with corresponding entries deleted in the RHS vector as
+    // well) effectively minimizing energy while fixing the deleted variables at 0.
+    void rowColRemoval(const std::vector<size_t> &indices) {
+        if (m != n) throw std::runtime_error("rowColRemoval supported for square matrices only");
+
+        const size_t nvars = m;
+        std::vector<bool> keepVar(nvars, true);
+        for (size_t i : indices) keepVar[i] = false;
+
+        // Remove the triplets for deleted variables
+        auto back = std::remove_if(nz.begin(), nz.end(),
+                [&keepVar](const Triplet &t) -> bool { return !(keepVar[t.i] && keepVar[t.j]); });
+        nz.erase(back, nz.end());
+
+        // Calculate the new index of each kept variable
+        std::vector<size_t> newIndex(nvars);
+        size_t idx = 0;
+        for (size_t i = 0; i < nvars; ++i)
+            if (keepVar[i]) newIndex[i] = idx++;
+
+        // Update matrix size.
+        m = n = idx;
+
+        // Update the row/col indices for the kept triplets.
+        for (Triplet &t : nz) {
+            t.i = newIndex[t.i];
+            t.j = newIndex[t.j];
+        }
     }
 };
 
