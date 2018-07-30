@@ -11,11 +11,13 @@
 #ifndef APPLY_HH
 #define APPLY_HH
 
-#include <vector>
 #include <type_traits>
+#include <vector>
+
+namespace MeshFEM {
 
 template <typename C> auto adl_begin(C &&c) -> decltype(std::begin(std::forward<C>(c))) { return std::begin(std::forward<C>(c)); }
-template <typename C> auto   adl_end(C &&c) -> decltype(std::  end(std::forward<C>(c))) { return std::  end(std::forward<C>(c)); }    
+template <typename C> auto   adl_end(C &&c) -> decltype(std::  end(std::forward<C>(c))) { return std::  end(std::forward<C>(c)); }
 
 namespace details {
     template <int I> struct chooser : chooser<I-1> { };
@@ -30,7 +32,7 @@ namespace details {
     template <typename C,
               typename It = decltype(adl_begin(std::declval<C&>()))
               >
-    auto size(C& container, chooser<1>) 
+    auto size(C& container, chooser<1>)
     -> typename std::enable_if<
         !std::is_same<std::input_iterator_tag,
             typename std::iterator_traits<It>::iterator_category
@@ -61,5 +63,7 @@ std::vector<E> apply(C&& container, F&& func)
         result.push_back(std::forward<F>(func)(std::forward<decltype(elem)>(elem)));
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: APPLY_HH */
