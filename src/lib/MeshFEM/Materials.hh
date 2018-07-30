@@ -20,12 +20,12 @@
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Flattening.hh>
 #include <MeshFEM/ElasticityTensor.hh>
+#include <boost/property_tree/ptree_fwd.hpp>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <vector>
 #include <string>
 #include <iostream>
-
-#include <boost/property_tree/ptree_fwd.hpp>
 
 namespace Materials {
 
@@ -394,6 +394,7 @@ struct Constant {
 
     void setFromFile(const std::string &materialFile);
     void setFromPTree(const boost::property_tree::ptree &pt);
+    void setFromJson(const nlohmann::json &entry);
 
     // Used for adjoint method gradient-based optimization
     void getETensorDerivative(size_t /* p */, ETensor &/* d */) const {
@@ -405,6 +406,8 @@ struct Constant {
     void setTensor(const ETensor &tensor) { m_E = tensor; }
 
     void setIsotropic(Real E, Real nu) { m_E.setIsotropic(E, nu); }
+
+    nlohmann::json getJson() const;
 
     // "type": "anisotropic",
     // "dim": 3,

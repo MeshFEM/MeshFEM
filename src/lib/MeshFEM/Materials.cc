@@ -221,6 +221,28 @@ void Constant<_N>::setFromFile(const string &materialPath) {
     setFromPTree(pt);
 }
 
+template<size_t _N>
+void Constant<_N>::setFromJson(const nlohmann::json &) {
+    throw std::runtime_error("Not implemented yet");
+}
+
+template<size_t _N>
+nlohmann::json Constant<_N>::getJson() const {
+    nlohmann::json entry;
+
+    std::array<std::array<Real, flatLen(N)>, flatLen(N)> mat;
+    for (size_t i = 0; i < flatLen(N); ++i) {
+        for (size_t j = 0; j < flatLen(N); ++j) {
+            mat[i][j] = m_E.D(i, j);
+        }
+    }
+
+    entry["type"] = "anisotropic";
+    entry["material_matrix"] = mat;
+
+    return entry;
+}
+
 void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
     bounds.clear();
     runtime_error err("Failed to parse variable bounds.");
@@ -249,6 +271,7 @@ void Bounds::setFromFile(const std::string &boundsPath) {
 // Explicit Instantiations
 // Has the nice side-effect that only code using valid dimensions 2 and 3 links.
 ////////////////////////////////////////////////////////////////////////////////
+
 template struct Orthotropic<2>;
 template struct Orthotropic<3>;
 
