@@ -418,16 +418,18 @@ struct Constant {
     //                     [C_40, C_41, C42, C43, C44, C45],
     //                     [C_50, C_51, C52, C53, C54, C55]]
     friend std::ostream &operator<<(std::ostream &os, const Constant &cmat) {
-        os << "{ \"type\": \"anisotropic\"," << std::endl;
-        os << "\"material_matrix\": [";
-        for (size_t i = 0; i < flatLen(N); ++i) {
-            for (size_t j = 0; j < flatLen(N); ++j) {
-                os << (j ? ", " : "[") << cmat.m_E.D(i, j);
-            }
-            os << (i == flatLen(N) - 1 ? "]]" : "],") << std::endl;
-        }
-        os << "}";
+        os << cmat.getJson().dump(4);
         return os;
+        // os << "{ \"type\": \"anisotropic\"," << std::endl;
+        // os << "\"material_matrix\": [";
+        // for (size_t i = 0; i < flatLen(N); ++i) {
+        //     for (size_t j = 0; j < flatLen(N); ++j) {
+        //         os << (j ? ", " : "[") << cmat.m_E.D(i, j);
+        //     }
+        //     os << (i == flatLen(N) - 1 ? "]]" : "],") << std::endl;
+        // }
+        // os << "}";
+        // return os;
     }
 
 private:
