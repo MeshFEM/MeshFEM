@@ -43,6 +43,7 @@ TEST_CASE("reading material json files", "[materials]" ) {
 		//     "shear": [shear_xy],
 		config2d = R"({
 			"type": "orthotropic",
+
 			"young":   [2.933545, 2.933545],
 			"poisson": [0.27186, 0.27186],
 			"shear":   [0.87212]
@@ -55,9 +56,9 @@ TEST_CASE("reading material json files", "[materials]" ) {
 		//     "shear": [shear_yz, shear_zx, shear_xy],
 		config3d = R"({
 			"type": "orthotropic",
-			"young":   [2.933545, 2.933545, 2.933545],
-			"poisson": [0.27186, 0.27186, 0.27186, 0.27186, 0.27186, 0.27186],
-			"shear":   [0.87212, 0.87212, 0.87212]
+			"young": [1.0, 2.0, 3.0],
+			"poisson": [0.6, 0.9, 0.9, 0.3, 0.3, 0.6],
+			"shear": [0.1, 0.2, 0.3]
 		})";
 	}
 
@@ -71,21 +72,21 @@ TEST_CASE("reading material json files", "[materials]" ) {
 		config2d = R"({
 			"type": "anisotropic",
 			"material_matrix": [
-				[1, 0, 0],
-				[0, 1, 0],
-				[0, 0, 0.5]
+				[9.0, 0.1, 0.2],
+				[0.1, 9.0, 0.3],
+				[0.2, 0.3, 1.0]
 			]
 		})";
 
 		config3d = R"({
 			"type": "anisotropic",
 			"material_matrix": [
-				[1, 0, 0, 0, 0, 0],
-				[0, 1, 0, 0, 0, 0],
-				[0, 0, 1, 0, 0, 0],
-				[0, 0, 0, 0.5, 0, 0],
-				[0, 0, 0, 0, 0.5, 0],
-				[0, 0, 0, 0, 0, 0.5]
+				[9.0, 0.1, 0.2, 0.5, 0.5, 0.5],
+				[0.1, 9.0, 0.3, 0.5, 0.5, 0.5],
+				[0.2, 0.3, 9.0, 0.5, 0.5, 0.5],
+				[0.5, 0.5, 0.5, 1.5, 0.1, 0.2],
+				[0.5, 0.5, 0.5, 0.1, 1.6, 0.3],
+				[0.5, 0.5, 0.5, 0.2, 0.3, 1.7]
 			]
 		})";
 	}

@@ -69,25 +69,6 @@ option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent l
 option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
 
 ################################################################################
-# MeshFEM sources
-################################################################################
-
-add_library(${PROJECT_NAME}
-        src/lib/MeshFEM/BoundaryConditions.cc
-        src/lib/MeshFEM/EdgeFields.cc
-        src/lib/MeshFEM/GlobalBenchmark.cc
-        src/lib/MeshFEM/Materials.cc
-        src/lib/MeshFEM/MeshIO.cc
-        src/lib/MeshFEM/MSHFieldParser.cc
-        src/lib/MeshFEM/Types.cc
-)
-
-target_include_directories(${PROJECT_NAME} PUBLIC src/lib)
-
-# Use C++11
-target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
-
-################################################################################
 # Configure manual compiler flags based on options
 ################################################################################
 
@@ -103,27 +84,14 @@ endif()
 # Dependencies
 ################################################################################
 
-# Download and define targets
+# Download and define targets for third-party dependencies
 include(MeshFEMDependencies)
-
-target_link_libraries(${PROJECT_NAME}
-        Threads::Threads
-        meshfem::boost
-        Eigen3::Eigen
-        json::json
-        tbb::tbb
-        triangle::triangle
-        tinyexpr::tinyexpr
-        cholmod::cholmod
-        umfpack::umfpack
-)
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
 
 ################################################################################
 # Subdirectories
 ################################################################################
 
+add_subdirectory(src/lib)
 add_subdirectory(src/bin)
 
 # Compile tests only if this is a top-level project

@@ -1,30 +1,35 @@
 #include <MeshFEM/EdgeFields.hh>
+#include <MeshFEM/StringUtils.hh>
 #include <MeshFEM/util.h>
 
-#include <boost/algorithm/string.hpp>
+#include <iostream>
 
 using namespace std;
 
-template<typename T>
-void parseNVector(size_t N, const string &line, vector<T> &vals) {
-    vector<string> lineComponents;
-    boost::split(lineComponents, line, boost::is_any_of("\t "));
-    if (lineComponents.size() != N)
-        throw runtime_error("Bad line size in Edge Field");
-    vals.resize(N);
-    for (size_t i = 0; i < N; ++i) {
-        Real val = stod(lineComponents[i]);
-        vals[i] = val;
-        if (vals[i] != val) throw runtime_error("Bad number type");
-    }
-}
+namespace {
 
-template<typename T>
-void parseNVector(size_t N, istream &is, vector<T> &vals) {
-    string line;
-    getDataLine(is, line);
-    parseNVector<T>(N, line, vals);
-}
+    template<typename T>
+    void parseNVector(size_t N, const string &line, vector<T> &vals) {
+        vector<string> lineComponents = MeshFEM::split(line, "\t ");
+        if (lineComponents.size() != N) {
+            throw runtime_error("Bad line size in Edge Field");
+        }
+        vals.resize(N);
+        for (size_t i = 0; i < N; ++i) {
+            Real val = std::stod(lineComponents[i]);
+            vals[i] = val;
+            if (vals[i] != val) throw runtime_error("Bad number type");
+        }
+    }
+
+    template<typename T>
+    void parseNVector(size_t N, istream &is, vector<T> &vals) {
+        string line;
+        getDataLine(is, line);
+        parseNVector<T>(N, line, vals);
+    }
+
+} // anonymous namespace
 
 void EdgeFields::read(istream &is) {
     m_fields.clear();

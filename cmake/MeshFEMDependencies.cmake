@@ -60,6 +60,14 @@ if(NOT TARGET json::json)
     add_library(json::json ALIAS meshfem_json)
 endif()
 
+# Optional library
+if(NOT TARGET optional::optional)
+    meshfem_download_optional()
+    add_library(optional_lite INTERFACE)
+    target_include_directories(optional_lite SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/optional/include)
+    add_library(optional::optional ALIAS optional_lite)
+endif()
+
 # TBB library
 if(NOT TARGET tbb::tbb)
     set(TBB_BUILD_STATIC ON CACHE BOOL " " FORCE)

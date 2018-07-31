@@ -28,7 +28,7 @@
 #include <cassert>
 #include <iomanip>
 
-#include <boost/optional.hpp>
+#include <nonstd/optional.hpp>
 
 #include <MeshFEM/PeriodicBoundaryMatcher.hh>
 #include <MeshFEM/Geometry.hh>
@@ -43,7 +43,7 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
                   Real targetLen,
                   Real featureAngleThreshold,
-                  boost::optional<Real> cellBdryEdgeLen = boost::optional<Real>(),
+                  nonstd::optional<Real> cellBdryEdgeLen = nonstd::optional<Real>(),
                   const std::vector<Real> &variableMinLen = std::vector<Real>(),
                   Real cellEpsilon = 1e-5) {
     if (variableMinLen.size() > 0)

@@ -1,5 +1,5 @@
 #include <MeshFEM/MeshIO.hh>
-#include <boost/algorithm/string.hpp>
+#include <MeshFEM/StringUtils.hh>
 #include <iostream>
 #include <deque>
 #include <limits>
@@ -253,8 +253,9 @@ void MeshIO_OFF::save(ostream &os, const vector<Vertex> &nodes,
 
 MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType /* t */) {
-    std::string line; getDataLine(is, line);
-    boost::trim(line);
+    std::string line;
+    getDataLine(is, line);
+    MeshFEM::trim(line);
     if (line != "OFF")
         throw std::runtime_error("Didn't read file magic; got line '" + line + "'");
 
@@ -316,11 +317,10 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
 
     runtime_error badFMT("Bad OBJ face format.");
     while (getDataLine(is, line)) {
-        deque<string> lineComponents;
-        boost::trim(line);
-        boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
-        string first = lineComponents.at(0);
-        lineComponents.pop_front();
+        MeshFEM::trim(line);
+        auto tmp = MeshFEM::split(line, "\t ");
+        string first = tmp.at(0);
+        vector<string> lineComponents(tmp.begin() + 1, tmp.end());
         if (first == "v") {
             IOVertex v;
             size_t ncomps = lineComponents.size();
@@ -751,10 +751,8 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
 }
 
 vector<string> tokenize(std::string line) {
-    vector<string> lineComponents;
-    boost::trim(line);
-    boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
-    return lineComponents;
+    MeshFEM::trim(line);
+    return MeshFEM::split(line, "\t ");
 }
 
 MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,

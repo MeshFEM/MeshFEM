@@ -37,6 +37,14 @@ function(meshfem_download_json)
     )
 endfunction()
 
+## Optional
+function(meshfem_download_optional)
+    meshfem_download_project(optional
+        URL     https://github.com/martinmoene/optional-lite/archive/v3.0.0.tar.gz
+        URL_MD5 a66541380c51c0d0a1e593cc2ca9fe8a
+    )
+endfunction()
+
 ## TBB
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
