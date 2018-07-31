@@ -124,7 +124,7 @@ namespace {
         }
     }
 
-    // Epected values:
+    // Expected values:
     // "young": #
     // "poisson": #
     template<size_t _N>
@@ -328,19 +328,41 @@ nlohmann::json Constant<_N>::getJson() const {
     return entry;
 }
 
-void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
-    bounds.clear();
-    runtime_error err("Failed to parse variable bounds.");
-    vector<Real> tmp;
-    for (const auto &bd : pt) {
-        if (!bd.first.empty()) throw err;
-        parseNVector(2, bd.second, tmp);
-        size_t var = tmp[0];
-        if ((double) var != tmp[0])
-            throw runtime_error("Bound on non-integer variable index.");
-        bounds.push_back(Bounds::Bound(var, tmp[1]));
+////////////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+    void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
+        bounds.clear();
+        runtime_error err("Failed to parse variable bounds.");
+        vector<Real> tmp;
+        for (const auto &bd : pt) {
+            if (!bd.first.empty()) throw err;
+            parseNVector(2, bd.second, tmp);
+            size_t var = tmp[0];
+            if ((double) var != tmp[0])
+                throw runtime_error("Bound on non-integer variable index.");
+            bounds.push_back(Bounds::Bound(var, tmp[1]));
+        }
     }
-}
+
+    // void parseVariableBounds(const nlohmann::json &entry, vector<Bounds::Bound> &bounds) {
+    //     bounds.clear();
+    //     runtime_error err("Failed to parse variable bounds.");
+    //     vector<Real> tmp;
+    //     for (const auto &bd : pt) {
+    //         if (!bd.first.empty()) throw err;
+    //         parseNVector(2, bd.second, tmp);
+    //         size_t var = tmp[0];
+    //         if ((double) var != tmp[0])
+    //             throw runtime_error("Bound on non-integer variable index.");
+    //         bounds.push_back(Bounds::Bound(var, tmp[1]));
+    //     }
+    // }
+
+} // anonymous namespace
+
+////////////////////////////////////////////////////////////////////////////////
 
 void Bounds::setFromFile(const std::string &boundsPath) {
     ifstream is(boundsPath);

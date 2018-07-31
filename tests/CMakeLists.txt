@@ -12,6 +12,7 @@ add_executable(unit_tests
 	main.cc
 	test_quadrature.cc
 	test_interpolant.cc
+	test_materials.cc
 )
 
 target_link_libraries(unit_tests PUBLIC
