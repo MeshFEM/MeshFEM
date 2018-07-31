@@ -20,12 +20,12 @@
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Flattening.hh>
 #include <MeshFEM/ElasticityTensor.hh>
-#include <boost/property_tree/ptree_fwd.hpp>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
-#include <vector>
-#include <string>
+#include <fstream>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace Materials {
 
@@ -40,7 +40,7 @@ struct Bounds {
     Bounds(const std::vector<Bound> &l, const std::vector<Bound> &u)
         : m_lower(l), m_upper(u) { }
 
-    void setFromFile(const std::string &boundsPath);
+    void setFromJson(const nlohmann::json &entry);
 
     const std::vector<Bound> &lower() const { return m_lower; }
     const std::vector<Bound> &upper() const { return m_upper; }
@@ -67,7 +67,17 @@ struct VariableMaterial {
     static void setLowerBounds(const std::vector<Bounds::Bound> &l) { _Mat<_N>::g_bounds.setLower(l); }
 
     static void setBoundsFromFile(const std::string &path) {
-        _Mat<_N>::g_bounds.setFromFile(path);
+        std::ifstream is(path);
+        if (!is.is_open()) {
+            throw std::runtime_error("Couldn't open bounds " + path);
+        }
+        nlohmann::json config;
+        is >> config;
+        setBoundsFromJson(config);
+    }
+
+    static void setBoundsFromJson(const nlohmann::json &config) {
+        _Mat<_N>::g_bounds.setFromJson(config);
         // Validate bounds.
         std::runtime_error indexError("Bounds variable index out-of-bounds.");
         for (const auto &b : _Mat<_N>::g_bounds.lower()) if (b.var >= numVars) throw indexError;
@@ -393,8 +403,7 @@ struct Constant {
 
 
     void setFromFile(const std::string &materialFile);
-    void setFromPTree(const boost::property_tree::ptree &pt);
-    void setFromJson(const nlohmann::json &entry);
+    void setFromJson(const nlohmann::json &config);
 
     // Used for adjoint method gradient-based optimization
     void getETensorDerivative(size_t /* p */, ETensor &/* d */) const {

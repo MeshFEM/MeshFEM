@@ -5,7 +5,26 @@
 
 using json = nlohmann::json;
 
-TEST_CASE("reading material json files", "[io]" ) {
+////////////////////////////////////////////////////////////////////////////////
+
+template<int N>
+void test_material(const std::string &config) {
+	// Test reading
+	Materials::Constant<N> mat;
+	mat.setFromJson(json::parse(config));
+	std::cout << mat.getJson().dump(4) << std::endl;
+
+	// Test writing and reading again
+	json output1 = mat.getJson();
+	Materials::Constant<N> mat2;
+	mat2.setFromJson(output1);
+	json output2 = mat2.getJson();
+	REQUIRE(output1 == output2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+TEST_CASE("reading material json files", "[materials]" ) {
 
 	std::string config2d;
 	std::string config3d;
@@ -71,11 +90,18 @@ TEST_CASE("reading material json files", "[io]" ) {
 		})";
 	}
 
-	Materials::Constant<2> mat2d;
-	mat2d.setFromJson(json::parse(config2d));
-	std::cout << mat2d.getJson().dump(4) << std::endl;
+	test_material<2>(config2d);
+	test_material<3>(config3d);
+}
 
-	Materials::Constant<3> mat3d;
-	mat3d.setFromJson(json::parse(config3d));
-	std::cout << mat3d.getJson().dump(4) << std::endl;
+TEST_CASE("setting material bounds", "[materials]" ) {
+	const std::string config = R"({
+		"lower": [ [0,  25], [1, 0.1] ],
+		"upper": [ [0, 292], [1, 0.6] ]
+	})";
+
+	Materials::Isotropic<2>::setBoundsFromJson(json::parse(config));
+	Materials::Orthotropic<2>::setBoundsFromJson(json::parse(config));
+	Materials::Isotropic<3>::setBoundsFromJson(json::parse(config));
+	Materials::Orthotropic<3>::setBoundsFromJson(json::parse(config));
 }

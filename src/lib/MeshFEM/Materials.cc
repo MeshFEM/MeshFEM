@@ -5,12 +5,6 @@
 #include <fstream>
 #include <map>
 
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
-
-using namespace std;
-using boost::property_tree::ptree;
-
 namespace Materials {
 
 // Derivatives of the elasticity tensor with respect to the material properties:
@@ -107,6 +101,7 @@ void Orthotropic<_N>::getETensorDerivative(size_t p, Orthotropic<_N>::ETensor &d
 
 namespace {
 
+#if 0
     void parseNVector(size_t N, const ptree &pt, std::vector<Real> &v) {
         v.clear();
         runtime_error err("Failed to parse vector of size " + to_string(N));
@@ -117,16 +112,6 @@ namespace {
         if (v.size() != N) throw err;
     }
 
-    void parseNVector(size_t N, const nlohmann::json &entry, std::vector<Real> &v) {
-        v = entry.get<std::vector<Real>>();
-        if (v.size() != N) {
-            throw std::runtime_error("Failed to parse vector of size " + to_string(N));
-        }
-    }
-
-    // Expected values:
-    // "young": #
-    // "poisson": #
     template<size_t _N>
     void parseIsotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
         Real young = pt.get<Real>("young");
@@ -134,22 +119,6 @@ namespace {
         E.setIsotropic(young, poisson);
     }
 
-    template<size_t _N>
-    void parseIsotropic(const nlohmann::json &entry, ElasticityTensor<Real, _N> &E) {
-        Real young = entry["young"];
-        Real poisson = entry["poisson"];
-        E.setIsotropic(young, poisson);
-    }
-
-    // Expected values:
-    // 3D: "young": [young_x, young_y, young_z],
-    //     "poisson": [poisson_yz, poisson_zy,
-    //                 poisson_zx, poisson_xz,
-    //                 poisson_xy, poisson_yx],
-    //     "shear": [shear_yz, shear_zx, shear_xy],
-    // 2D: "young": [young_x, young_y],
-    //     "poisson": [poisson_xy, poisson_yx],
-    //     "shear": [shear_xy],
     template<size_t _N>
     void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
         std::vector<Real> poisson, young, shear;
@@ -186,6 +155,54 @@ namespace {
         }
     }
 
+    template<size_t _N>
+    void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+        runtime_error err("Failed to parse material_matrix");
+        size_t row = 0;
+        for (const auto &rpt : pt.get_child("material_matrix")) {
+            if (!rpt.first.empty()) throw err;
+            size_t col = 0;
+            for (const auto &cpt : rpt.second) {
+                if (!cpt.first.empty()) throw err;
+                Real val = cpt.second.get_value<Real>();
+                if (row <= col)
+                    E.D(row, col) = val;
+                else if (std::abs(E.D(row, col) - val) > 1e-10) {
+                    throw runtime_error("Asymmetric material_matrix");
+                }
+                ++col;
+            }
+            ++row;
+        }
+    }
+#endif
+
+    void parseNVector(size_t N, const nlohmann::json &entry, std::vector<Real> &v) {
+        v = entry.get<std::vector<Real>>();
+        if (v.size() != N) {
+            throw std::runtime_error("Failed to parse vector of size " + std::to_string(N));
+        }
+    }
+
+    // Expected values:
+    // "young": #
+    // "poisson": #
+    template<size_t _N>
+    void parseIsotropic(const nlohmann::json &entry, ElasticityTensor<Real, _N> &E) {
+        Real young = entry["young"];
+        Real poisson = entry["poisson"];
+        E.setIsotropic(young, poisson);
+    }
+
+    // Expected values:
+    // 3D: "young": [young_x, young_y, young_z],
+    //     "poisson": [poisson_yz, poisson_zy,
+    //                 poisson_zx, poisson_xz,
+    //                 poisson_xy, poisson_yx],
+    //     "shear": [shear_yz, shear_zx, shear_xy],
+    // 2D: "young": [young_x, young_y],
+    //     "poisson": [poisson_xy, poisson_yx],
+    //     "shear": [shear_xy],
     template<size_t _N>
     void parseOrthotropic(const nlohmann::json &entry, ElasticityTensor<Real, _N> &E) {
         std::vector<Real> poisson, young, shear;
@@ -230,27 +247,6 @@ namespace {
     //                     [C_40, C_41, C42, C43, C44, C45],
     //                     [C_50, C_51, C52, C53, C54, C55]],
     template<size_t _N>
-    void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
-        runtime_error err("Failed to parse material_matrix");
-        size_t row = 0;
-        for (const auto &rpt : pt.get_child("material_matrix")) {
-            if (!rpt.first.empty()) throw err;
-            size_t col = 0;
-            for (const auto &cpt : rpt.second) {
-                if (!cpt.first.empty()) throw err;
-                Real val = cpt.second.get_value<Real>();
-                if (row <= col)
-                    E.D(row, col) = val;
-                else if (std::abs(E.D(row, col) - val) > 1e-10) {
-                    throw runtime_error("Asymmetric material_matrix");
-                }
-                ++col;
-            }
-            ++row;
-        }
-    }
-
-    template<size_t _N>
     void parseAnisotropic(const nlohmann::json &entry, ElasticityTensor<Real, _N> &E) {
         std::runtime_error err("Failed to parse material_matrix");
         size_t row = 0;
@@ -261,7 +257,7 @@ namespace {
                 if (row <= col) {
                     E.D(row, col) = val;
                 } else if (std::abs(E.D(row, col) - val) > 1e-10) {
-                    throw runtime_error("Asymmetric material_matrix");
+                    throw std::runtime_error("Asymmetric material_matrix");
                 }
                 ++col;
             }
@@ -273,6 +269,7 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#if 0
 template<size_t _N>
 void Constant<_N>::setFromPTree(const ptree &pt) {
     std::string type = pt.get<std::string>("type");
@@ -284,36 +281,34 @@ void Constant<_N>::setFromPTree(const ptree &pt) {
     else if (type == "anisotropic")          { parseAnisotropic<_N>(pt, m_E); }
     else { throw std::runtime_error("Invalid type."); }
 }
+#endif
 
 template<size_t _N>
-void Constant<_N>::setFromJson(const nlohmann::json &entry) {
-    std::string type = entry["type"];
-    if (type == "isotropic_material")        { parseIsotropic<_N>(entry, m_E);   }
-    else if (type == "isotropic")            { parseIsotropic<_N>(entry, m_E);   }
-    else if (type == "orthotropic_material") { parseOrthotropic<_N>(entry, m_E); }
-    else if (type == "orthotropic")          { parseOrthotropic<_N>(entry, m_E); }
-    else if (type == "symmetric_material")   { parseAnisotropic<_N>(entry, m_E); }
-    else if (type == "anisotropic")          { parseAnisotropic<_N>(entry, m_E); }
+void Constant<_N>::setFromJson(const nlohmann::json &config) {
+    std::string type = config["type"];
+    if (type == "isotropic_material")        { parseIsotropic<_N>(config, m_E);   }
+    else if (type == "isotropic")            { parseIsotropic<_N>(config, m_E);   }
+    else if (type == "orthotropic_material") { parseOrthotropic<_N>(config, m_E); }
+    else if (type == "orthotropic")          { parseOrthotropic<_N>(config, m_E); }
+    else if (type == "symmetric_material")   { parseAnisotropic<_N>(config, m_E); }
+    else if (type == "anisotropic")          { parseAnisotropic<_N>(config, m_E); }
     else { throw std::runtime_error("Invalid type."); }
 }
 
 template<size_t _N>
-void Constant<_N>::setFromFile(const string &materialPath) {
-    ifstream is(materialPath);
+void Constant<_N>::setFromFile(const std::string &materialPath) {
+    std::ifstream is(materialPath);
     if (!is.is_open()) {
         throw std::runtime_error("Couldn't open material " + materialPath);
     }
-    nlohmann::json entry;
-    is >> entry;
-    setFromJson(entry);
-    // ptree pt;
-    // read_json(is, pt);
-    // setFromPTree(pt);
+    nlohmann::json config;
+    is >> config;
+    setFromJson(config);
 }
 
 template<size_t _N>
 nlohmann::json Constant<_N>::getJson() const {
-    nlohmann::json entry;
+    nlohmann::json config;
 
     std::array<std::array<Real, flatLen(N)>, flatLen(N)> mat;
     for (size_t i = 0; i < flatLen(N); ++i) {
@@ -322,16 +317,17 @@ nlohmann::json Constant<_N>::getJson() const {
         }
     }
 
-    entry["type"] = "anisotropic";
-    entry["material_matrix"] = mat;
+    config["type"] = "anisotropic";
+    config["material_matrix"] = mat;
 
-    return entry;
+    return config;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 namespace {
 
+#if 0
     void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
         bounds.clear();
         runtime_error err("Failed to parse variable bounds.");
@@ -345,33 +341,28 @@ namespace {
             bounds.push_back(Bounds::Bound(var, tmp[1]));
         }
     }
+#endif
 
-    // void parseVariableBounds(const nlohmann::json &entry, vector<Bounds::Bound> &bounds) {
-    //     bounds.clear();
-    //     runtime_error err("Failed to parse variable bounds.");
-    //     vector<Real> tmp;
-    //     for (const auto &bd : pt) {
-    //         if (!bd.first.empty()) throw err;
-    //         parseNVector(2, bd.second, tmp);
-    //         size_t var = tmp[0];
-    //         if ((double) var != tmp[0])
-    //             throw runtime_error("Bound on non-integer variable index.");
-    //         bounds.push_back(Bounds::Bound(var, tmp[1]));
-    //     }
-    // }
+    void parseVariableBounds(const nlohmann::json &entry, std::vector<Bounds::Bound> &bounds) {
+        bounds.clear();
+        std::vector<Real> tmp;
+        for (const auto &bd : entry) {
+            parseNVector(2, bd, tmp);
+            size_t var = tmp[0];
+            if ((double) var != tmp[0]) {
+                throw std::runtime_error("Bound on non-integer variable index.");
+            }
+            bounds.push_back(Bounds::Bound(var, tmp[1]));
+        }
+    }
 
 } // anonymous namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void Bounds::setFromFile(const std::string &boundsPath) {
-    ifstream is(boundsPath);
-    if (!is.is_open())
-        throw std::runtime_error("Couldn't open bounds " + boundsPath);
-    ptree pt;
-    read_json(is, pt);
-    parseVariableBounds(pt.get_child("lower"), m_lower);
-    parseVariableBounds(pt.get_child("upper"), m_upper);
+void Bounds::setFromJson(const nlohmann::json &config) {
+    parseVariableBounds(config["lower"], m_lower);
+    parseVariableBounds(config["upper"], m_lower);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
