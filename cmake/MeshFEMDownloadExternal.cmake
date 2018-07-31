@@ -13,6 +13,14 @@ endfunction()
 
 ################################################################################
 
+## Catch2
+function(meshfem_download_catch)
+    meshfem_download_project(Catch2
+        URL     https://github.com/catchorg/Catch2/archive/v2.3.0.tar.gz
+        URL_MD5 1fc90ff3b7b407b83057537f4136489e
+    )
+endfunction()
+
 ## Eigen
 function(meshfem_download_eigen)
     meshfem_download_project(eigen

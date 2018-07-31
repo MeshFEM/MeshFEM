@@ -125,4 +125,11 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
 ################################################################################
 
 add_subdirectory(src/bin)
-add_subdirectory(tests)
+
+# Compile tests only if this is a top-level project
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    # Unit tests
+    include(CTest)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

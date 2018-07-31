@@ -12,19 +12,19 @@
 //  Company:  New York University
 //  Created:  12/14/2014 16:02:02
 ////////////////////////////////////////////////////////////////////////////////
+#include <MeshFEM/GaussQuadrature.hh>
+#include <catch2/catch.hpp>
 #include <iostream>
 #include <functional>
 #include <vector>
 #include <cmath>
-#include <MeshFEM/GaussQuadrature.hh>
 
 using namespace std;
 
 typedef double Real;
 
 template<size_t K, size_t Deg, typename F>
-void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints,
-          int &numPassed, int &numTests) {
+void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
     for (size_t d = 0; d <= Deg; ++d) {
         for (size_t i = 0; i < funcs[d].size(); ++i) {
             Real val = Quadrature<K, Deg>::integrate(funcs[d][i], 1.0);
@@ -34,20 +34,15 @@ void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints,
                      << " (Deg " << Deg << " quadrature): " << relError << endl;
                 cerr << "computed: " << val << ", true: " << ints.at(d).at(i) << endl;
             }
-            else ++numPassed;
-            ++numTests;
+            REQUIRE(relError <= 1e-15);
         }
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/*! Program entry point
-//  @param[in]  argc    Number of arguments
-//  @param[in]  argv    Argument strings
-//  @return     status  (0 on success)
-*///////////////////////////////////////////////////////////////////////////////
-int main(int argc, char *argv[])
-{
+
+TEST_CASE("quadrature routines", "[quadrature]" ) {
+
     // 1D functions up to degree 4
     vector<vector<function<Real(Real, Real)>>> functions1D =
             {{[](Real u, Real other) { return 1; }},
@@ -133,36 +128,38 @@ int main(int argc, char *argv[])
          {1.0 / 20.0,1.0 / 60.0,1.0 / 60.0,1.0 / 20.0,1.0 / 60.0,1.0 / 120.0,1.0 / 60.0,1.0 / 60.0,1.0 / 60.0,1.0 / 20.0},
          {1.0 / 35.0,1.0 / 140.0,1.0 / 210.0,1.0 / 140.0,1.0 / 35.0,1.0 / 140.0,1.0 / 420.0,1.0 / 420.0,1.0 / 140.0,1.0 / 210.0,1.0 / 420.0,1.0 / 210.0,1.0 / 140.0,1.0 / 140.0,1.0 / 35.0}};
 
-    // Degree 0 tests
-    int numTests = 0, numPassed = 0;
-    test<1, 0>(functions1D, integrals1D, numPassed, numTests);
-    test<2, 0>(functions2D, integrals2D, numPassed, numTests);
-    test<3, 0>(functions3D, integrals3D, numPassed, numTests);
+    SECTION("Degree 0 tests") {
+      test<1, 0>(functions1D, integrals1D);
+      test<2, 0>(functions2D, integrals2D);
+      test<3, 0>(functions3D, integrals3D);
+    }
 
-    // Degree 1 tests
-    test<1, 1>(functions1D, integrals1D, numPassed, numTests);
-    test<2, 1>(functions2D, integrals2D, numPassed, numTests);
-    test<3, 1>(functions3D, integrals3D, numPassed, numTests);
+    SECTION("Degree 1 tests") {
+      test<1, 1>(functions1D, integrals1D);
+      test<2, 1>(functions2D, integrals2D);
+      test<3, 1>(functions3D, integrals3D);
+    }
 
-    // Degree 2 tests
-    test<1, 2>(functions1D, integrals1D, numPassed, numTests);
-    test<2, 2>(functions2D, integrals2D, numPassed, numTests);
-    test<3, 2>(functions3D, integrals3D, numPassed, numTests);
+    SECTION("Degree 2 tests") {
+      test<1, 2>(functions1D, integrals1D);
+      test<2, 2>(functions2D, integrals2D);
+      test<3, 2>(functions3D, integrals3D);
+    }
 
-    // Degree 3 tests
-    test<1, 3>(functions1D, integrals1D, numPassed, numTests);
-    test<2, 3>(functions2D, integrals2D, numPassed, numTests);
-    test<3, 3>(functions3D, integrals3D, numPassed, numTests);
+    SECTION("Degree 3 tests") {
+      test<1, 3>(functions1D, integrals1D);
+      test<2, 3>(functions2D, integrals2D);
+      test<3, 3>(functions3D, integrals3D);
+    }
 
-    // Degree 4 tests
-    test<1, 4>(functions1D, integrals1D, numPassed, numTests);
-    test<2, 4>(functions2D, integrals2D, numPassed, numTests);
-    test<3, 4>(functions3D, integrals3D, numPassed, numTests);
+    SECTION("Degree 4 tests") {
+      test<1, 4>(functions1D, integrals1D);
+      test<2, 4>(functions2D, integrals2D);
+      test<3, 4>(functions3D, integrals3D);
+    }
 
-    // Degree 5 tests
-    test<2, 5>(functions2D, integrals2D, numPassed, numTests);
+    SECTION("Degree 5 tests") {
+      test<2, 5>(functions2D, integrals2D);
+    }
 
-    cout << numPassed << " / " << numTests << " passed." << endl;
-
-    return 0;
 }

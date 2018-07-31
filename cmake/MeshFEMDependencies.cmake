@@ -36,6 +36,13 @@ if(NOT TARGET meshfem::boost)
     add_library(meshfem::boost ALIAS meshfem_boost)
 endif()
 
+# Catch2
+if(NOT TARGET Catch2::Catch2)
+    meshfem_download_catch()
+    add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
+    list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)
+endif()
+
 # Eigen3 library
 if(NOT TARGET Eigen3::Eigen)
     add_library(meshfem_eigen INTERFACE)
