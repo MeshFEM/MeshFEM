@@ -69,18 +69,6 @@ option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent l
 option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
 
 ################################################################################
-# Configure manual compiler flags based on options
-################################################################################
-
-if(DISABLE_CXX11_ABI_GCC)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-
-if(ENABLE_BENCHMARKING)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
-endif()
-
-################################################################################
 # Dependencies
 ################################################################################
 
@@ -93,6 +81,18 @@ include(MeshFEMDependencies)
 
 add_subdirectory(src/lib)
 add_subdirectory(src/bin)
+
+################################################################################
+# Configure manual compiler flags based on options
+################################################################################
+
+if(DISABLE_CXX11_ABI_GCC)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
+
+if(ENABLE_BENCHMARKING)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
+endif()
 
 # Compile tests only if this is a top-level project
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
