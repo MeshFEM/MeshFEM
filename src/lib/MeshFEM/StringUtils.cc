@@ -30,10 +30,21 @@ namespace {
 
 namespace MeshFEM {
 
+// Convert to lowercase
+std::string lowercase(std::string data) {
+    std::transform(data.begin(), data.end(), data.begin(), ::tolower);
+    return data;
+}
+
 // trim from both ends (in place)
 void trim(std::string &s) {
     ltrim(s);
     rtrim(s);
+}
+
+// Tests whether a string starts with a given prefix
+bool startswith(const std::string &str, const std::string &prefix) {
+    return (str.compare(0, prefix.size(), prefix) == 0);
 }
 
 // Split a string into tokens
