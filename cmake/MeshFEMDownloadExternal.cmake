@@ -13,6 +13,14 @@ endfunction()
 
 ################################################################################
 
+## Catch2
+function(meshfem_download_catch)
+    meshfem_download_project(Catch2
+        URL     https://github.com/catchorg/Catch2/archive/v2.3.0.tar.gz
+        URL_MD5 1fc90ff3b7b407b83057537f4136489e
+    )
+endfunction()
+
 ## Eigen
 function(meshfem_download_eigen)
     meshfem_download_project(eigen
@@ -26,6 +34,14 @@ function(meshfem_download_json)
     meshfem_download_project(json
         URL      https://github.com/nlohmann/json/releases/download/v3.1.2/include.zip
         URL_HASH SHA256=495362ee1b9d03d9526ba9ccf1b4a9c37691abe3a642ddbced13e5778c16660c
+    )
+endfunction()
+
+## Optional
+function(meshfem_download_optional)
+    meshfem_download_project(optional
+        URL     https://github.com/martinmoene/optional-lite/archive/v3.0.0.tar.gz
+        URL_MD5 a66541380c51c0d0a1e593cc2ca9fe8a
     )
 endfunction()
 

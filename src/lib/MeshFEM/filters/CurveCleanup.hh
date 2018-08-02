@@ -35,7 +35,7 @@
 #include <random>
 #include <utility>
 
-#include <boost/optional.hpp>
+#include <nonstd/optional.hpp>
 
 #include <MeshFEM/filters/extract_polygons.hh>
 #include <MeshFEM/PeriodicBoundaryMatcher.hh>
@@ -54,7 +54,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
                   Real minLen, Real maxLen,
                   Real featureAngleThreshold, bool periodic = false,
-                  boost::optional<Real> cellBdryEdgeLen = boost::optional<Real>(),
+                  nonstd::optional<Real> cellBdryEdgeLen = nonstd::optional<Real>(),
                   const std::vector<Real> &variableMinLen = std::vector<Real>(),
                   Real cellEpsilon = 1e-5) {
     // std::cout << "Simplifying curve of len " << curve.size() << std::endl;

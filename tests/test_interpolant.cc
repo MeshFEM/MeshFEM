@@ -1,5 +1,6 @@
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/GaussQuadrature.hh>
+#include <catch2/catch.hpp>
 #include <iostream>
 #include <iomanip>
 
@@ -45,29 +46,27 @@ void interpolant_test(const vector<vector<F>> &funcs) {
                     std::cout << "interp sample:"   << evalAt<K>(samplePt, interp) << std::endl;
                     std::cout << "function sample:" << evalAt<K>(samplePt,      f) << std::endl;
                     std::cout << "sample pt:" << samplePt.transpose() << std::endl;
-                    throw std::runtime_error("Interpolation error of " + std::to_string(diff) + " in <"
+                    std::cout << "Interpolation error of " + std::to_string(diff) + " in <"
                             + std::to_string(K) + ", " + std::to_string(Deg) + "> interpolant of deg "
-                            + std::to_string(d) + " function.");
+                            + std::to_string(d) + " function." << std::endl;
                 }
+                REQUIRE(std::abs(diff) <= 1e-13);
             }
             double diff = interp.integrate(1.0) - Quadrature<K, Deg>::integrate(f, 1.0);
             if (std::abs(diff) > 1e-16) {
-                throw std::runtime_error("Quadrature error of " + std::to_string(diff) + " in <"
+                std::cout << "Quadrature error of " + std::to_string(diff) + " in <"
                         + std::to_string(K) + ", " + std::to_string(Deg) + "> interpolant of deg "
-                        + std::to_string(d) + " function.");
+                        + std::to_string(d) + " function." << std::endl;
             }
+            REQUIRE(std::abs(diff) <= 1e-16);
         }
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/*! Program entry point
-//  @param[in]  argc    Number of arguments
-//  @param[in]  argv    Argument strings
-//  @return     status  (0 on success)
-*///////////////////////////////////////////////////////////////////////////////
-int main(int argc, char *argv[])
-{
+
+TEST_CASE("interpolant functions", "[quadrature]" ) {
+
     cout << std::setprecision(16);
     // Interpolant<Real, 2, 1> f(vector<Real>({1.0, 2.0, 3.0}));
     Interpolant<Real, Triangle, Linear> f(0.5, 2.0, 3.0);
@@ -114,84 +113,83 @@ int main(int argc, char *argv[])
     fQuadTet2 = 99;
     cout << "fQuadTet2 = 99, integral: " << (fQuadTet2 + fConstTet).integrate(1.0) << endl;
 
+    SECTION("Multiple runs") {
+      auto assert_eq = [&](size_t ln, double a, double b) -> bool {
+          double err = std::abs(a - b) / std::abs(b);
+          bool eq = err < 1e-9; // Interpolation can have cancellation error, so be lenient on it.
+          if (!eq) {
+            cout <<  "Line " << ln <<  " ERROR: " << err << ", ABS ERROR: " << std::abs(a - b) << endl;
+          }
+          REQUIRE(eq);
+          return eq;
+      };
 
-    size_t numPass = 0, numTests = 0;
-    auto assert_eq = [&](size_t ln, double a, double b) -> bool {
-        double err = std::abs(a - b) / std::abs(b);
-        bool eq = err < 1e-9; // Interpolation can have cancellation error, so be lenient on it.
-        if (!eq) cout <<  "Line " << ln <<  " ERROR: " << err << ", ABS ERROR: " << std::abs(a - b) << endl;
-        else ++numPass;
-        ++numTests;
-        return eq;
-    };
+      auto ecfi = Interpolation<Simplex::Edge, 0>::interpolant([] (Real, Real) { return 1.0; });
+      assert_eq(__LINE__, ecfi.integrate(1.0), 1.0);
+      size_t runs = 200000;
 
-    auto ecfi = Interpolation<Simplex::Edge, 0>::interpolant([] (Real, Real) { return 1.0; });
-    assert_eq(__LINE__, ecfi.integrate(1.0), 1.0);
-    size_t runs = 200000;
+      for (size_t i = 0; i < runs; ++i) {
+          Interpolant<Real, Edge,    Linear> efl(randDouble(), randDouble());
+          Interpolant<Real, Edge, Quadratic> efa(randDouble(), randDouble(), randDouble());
+          Interpolant<Real, Triangle,    Linear> tfl(randDouble(), randDouble(), randDouble());
+          Interpolant<Real, Triangle, Quadratic> tfa(randDouble(), randDouble(), randDouble(),
+                                                     randDouble(), randDouble(), randDouble());
+          Interpolant<Real, Tetrahedron,    Linear> tetfl(randDouble(), randDouble(), randDouble(), randDouble());
+          Interpolant<Real, Tetrahedron, Quadratic> tetfa(randDouble(), randDouble(), randDouble(), randDouble(),
+                                                          randDouble(), randDouble(), randDouble(),
+                                                          randDouble(), randDouble(), randDouble());
 
-    for (size_t i = 0; i < runs; ++i) {
-        Interpolant<Real, Edge,    Linear> efl(randDouble(), randDouble());
-        Interpolant<Real, Edge, Quadratic> efa(randDouble(), randDouble(), randDouble());
-        Interpolant<Real, Triangle,    Linear> tfl(randDouble(), randDouble(), randDouble());
-        Interpolant<Real, Triangle, Quadratic> tfa(randDouble(), randDouble(), randDouble(),
-                                                   randDouble(), randDouble(), randDouble());
-        Interpolant<Real, Tetrahedron,    Linear> tetfl(randDouble(), randDouble(), randDouble(), randDouble());
-        Interpolant<Real, Tetrahedron, Quadratic> tetfa(randDouble(), randDouble(), randDouble(), randDouble(),
-                                                        randDouble(), randDouble(), randDouble(),
-                                                        randDouble(), randDouble(), randDouble());
+          double l0 = randDouble();
+          VectorND<2> edgeSample(l0, 1 - l0);
+          l0 = randDouble(); double l1 = randDouble();
+          VectorND<3> triSample(l0, l1, 1 - (l0 + l1));
+          l0 = randDouble(); l1 = randDouble(); double l2 = randDouble();
+          VectorND<4> tetSample(l0, l1, l2, 1 - (l0 + l1 + l2));
+  #if 0
+          // Compare versions of interpolation
+          assert_eq(__LINE__, efl(edgeSample), efl(edgeSample[0], edgeSample[1]));
+          assert_eq(__LINE__, efa(edgeSample), efa(edgeSample[0], edgeSample[1]));
 
-        double l0 = randDouble();
-        VectorND<2> edgeSample(l0, 1 - l0);
-        l0 = randDouble(); double l1 = randDouble();
-        VectorND<3> triSample(l0, l1, 1 - (l0 + l1));
-        l0 = randDouble(); l1 = randDouble(); double l2 = randDouble();
-        VectorND<4> tetSample(l0, l1, l2, 1 - (l0 + l1 + l2));
-#if 0
-        // Compare versions of interpolation
-        assert_eq(__LINE__, efl(edgeSample), efl(edgeSample[0], edgeSample[1]));
-        assert_eq(__LINE__, efa(edgeSample), efa(edgeSample[0], edgeSample[1]));
+          assert_eq(__LINE__, tfl(triSample), tfl(triSample[0], triSample[1], triSample[2]));
+          assert_eq(__LINE__, tfa(triSample), tfa(triSample[0], triSample[1], triSample[2]));
 
-        assert_eq(__LINE__, tfl(triSample), tfl(triSample[0], triSample[1], triSample[2]));
-        assert_eq(__LINE__, tfa(triSample), tfa(triSample[0], triSample[1], triSample[2]));
+          assert_eq(__LINE__, tetfl(tetSample), tetfl(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
+          assert_eq(__LINE__, tetfa(tetSample), tetfa(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
+  #endif
 
-        assert_eq(__LINE__, tetfl(tetSample), tetfl(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
-        assert_eq(__LINE__, tetfa(tetSample), tetfa(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
-#endif
+          // Compare versions of integration
+          assert_eq(__LINE__, integrate_edge<1>([&] (Real a, Real b) { return efl(a, b); }), efl.integrate(1.0));
+          assert_eq(__LINE__, integrate_edge<2>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
+          assert_eq(__LINE__, integrate_edge<3>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
 
-        // Compare versions of integration
-        assert_eq(__LINE__, integrate_edge<1>([&] (Real a, Real b) { return efl(a, b); }), efl.integrate(1.0));
-        assert_eq(__LINE__, integrate_edge<2>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
-        assert_eq(__LINE__, integrate_edge<3>([&] (Real a, Real b) { return efa(a, b); }), efa.integrate(1.0));
+          assert_eq(__LINE__, integrate_tri<1>([&] (Real a, Real b, Real c) { return tfl(a, b, c); }), tfl.integrate(1.0));
+          assert_eq(__LINE__, integrate_tri<2>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
+          assert_eq(__LINE__, integrate_tri<3>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
 
-        assert_eq(__LINE__, integrate_tri<1>([&] (Real a, Real b, Real c) { return tfl(a, b, c); }), tfl.integrate(1.0));
-        assert_eq(__LINE__, integrate_tri<2>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
-        assert_eq(__LINE__, integrate_tri<3>([&] (Real a, Real b, Real c) { return tfa(a, b, c); }), tfa.integrate(1.0));
+          assert_eq(__LINE__, integrate_tet<1>([&] (Real a, Real b, Real c, Real d) { return tetfl(a, b, c, d); }), tetfl.integrate(1.0));
+          assert_eq(__LINE__, integrate_tet<2>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
+          assert_eq(__LINE__, integrate_tet<3>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
 
-        assert_eq(__LINE__, integrate_tet<1>([&] (Real a, Real b, Real c, Real d) { return tetfl(a, b, c, d); }), tetfl.integrate(1.0));
-        assert_eq(__LINE__, integrate_tet<2>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
-        assert_eq(__LINE__, integrate_tet<3>([&] (Real a, Real b, Real c, Real d) { return tetfa(a, b, c, d); }), tetfa.integrate(1.0));
+          // Test expression interpolants
+          Interpolant<Real, Edge,    Constant> efc(randDouble());
+          auto edgeExpr = [&] (Real a, Real b) { return efc(a, b) + efl(a, b) + efa(a, b); };
+          assert_eq(__LINE__, edgeExpr(edgeSample[0], edgeSample[1]), Interpolation<Edge, Quadratic>::interpolant(edgeExpr)(edgeSample[0], edgeSample[1]));
 
-        // Test expression interpolants
-        Interpolant<Real, Edge,    Constant> efc(randDouble());
-        auto edgeExpr = [&] (Real a, Real b) { return efc(a, b) + efl(a, b) + efa(a, b); };
-        assert_eq(__LINE__, edgeExpr(edgeSample[0], edgeSample[1]), Interpolation<Edge, Quadratic>::interpolant(edgeExpr)(edgeSample[0], edgeSample[1]));
+          Interpolant<Real, Triangle,    Constant> tfc(randDouble());
+          auto triExpr = [&] (Real a, Real b, Real c) { return tfc(a, b, c) + tfl(a, b, c) + tfa(a, b, c); };
+          auto triExprInterp = Interpolation<Triangle, Quadratic>::interpolant(triExpr);
+          if (!assert_eq(__LINE__, triExpr(triSample[0], triSample[1], triSample[2]), triExprInterp(triSample[0], triSample[1], triSample[2]))) {
+              cout << tfc << tfl << tfa << triExprInterp;
+              cout << "sample at:\t" << triSample[0] << ", " << triSample[1] << ", " << triSample[2] << endl;
+              cout << "true val: " << triExpr(triSample[0], triSample[1], triSample[2]) << endl;
+              cout << "interp val: " << triExprInterp(triSample[0], triSample[1], triSample[2]) << endl;
+          }
 
-        Interpolant<Real, Triangle,    Constant> tfc(randDouble());
-        auto triExpr = [&] (Real a, Real b, Real c) { return tfc(a, b, c) + tfl(a, b, c) + tfa(a, b, c); };
-        auto triExprInterp = Interpolation<Triangle, Quadratic>::interpolant(triExpr);
-        if (!assert_eq(__LINE__, triExpr(triSample[0], triSample[1], triSample[2]), triExprInterp(triSample[0], triSample[1], triSample[2]))) {
-            cout << tfc << tfl << tfa << triExprInterp;
-            cout << "sample at:\t" << triSample[0] << ", " << triSample[1] << ", " << triSample[2] << endl;
-            cout << "true val: " << triExpr(triSample[0], triSample[1], triSample[2]) << endl;
-            cout << "interp val: " << triExprInterp(triSample[0], triSample[1], triSample[2]) << endl;
-        }
-
-        Interpolant<Real, Tetrahedron, Constant> tetfc(randDouble());
-        auto tetExpr = [&] (Real a, Real b, Real c, Real d) { return tetfc(a, b, c, d) + tetfl(a, b, c, d) + tetfa(a, b, c, d); };
-        assert_eq(__LINE__, tetExpr(tetSample[0], tetSample[1], tetSample[2], tetSample[3]), Interpolation<Tetrahedron, Quadratic>::interpolant(tetExpr)(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
+          Interpolant<Real, Tetrahedron, Constant> tetfc(randDouble());
+          auto tetExpr = [&] (Real a, Real b, Real c, Real d) { return tetfc(a, b, c, d) + tetfl(a, b, c, d) + tetfa(a, b, c, d); };
+          assert_eq(__LINE__, tetExpr(tetSample[0], tetSample[1], tetSample[2], tetSample[3]), Interpolation<Tetrahedron, Quadratic>::interpolant(tetExpr)(tetSample[0], tetSample[1], tetSample[2], tetSample[3]));
+      }
     }
-
-    cout << numPass << " / " << numTests << " passed" << endl;
 
     // 1D functions up to degree 4
     vector<vector<function<Real(Real, Real)>>> functions1D =
@@ -263,28 +261,33 @@ int main(int argc, char *argv[])
           [](Real u, Real v, Real w, Real other) { return v*(u*u*u); },
           [](Real u, Real v, Real w, Real other) { return u*u*u*u; }}};
 
-    // Degree 0 tests
-    interpolant_test<1, 0>(functions1D);
-    interpolant_test<2, 0>(functions2D);
-    interpolant_test<3, 0>(functions3D);
+    SECTION("Degree 0 tests") {
+      interpolant_test<1, 0>(functions1D);
+      interpolant_test<2, 0>(functions2D);
+      interpolant_test<3, 0>(functions3D);
+    }
 
-    // Degree 1 tests
-    interpolant_test<1, 1>(functions1D);
-    interpolant_test<2, 1>(functions2D);
-    interpolant_test<3, 1>(functions3D);
+    SECTION("Degree 1 tests") {
+      interpolant_test<1, 1>(functions1D);
+      interpolant_test<2, 1>(functions2D);
+      interpolant_test<3, 1>(functions3D);
+    }
 
-    // Degree 2 tests
-    interpolant_test<1, 2>(functions1D);
-    interpolant_test<2, 2>(functions2D);
-    interpolant_test<3, 2>(functions3D);
+    SECTION("Degree 2 tests") {
+      interpolant_test<1, 2>(functions1D);
+      interpolant_test<2, 2>(functions2D);
+      interpolant_test<3, 2>(functions3D);
+    }
 
-    // Degree 3 tests (only cubic triangles implemented)
-    interpolant_test<2, 3>(functions2D);
+    SECTION("Degree 3 tests") {
+      // (only cubic triangles implemented)
+      interpolant_test<2, 3>(functions2D);
+    }
 
-    // Degree 4 tests (only quartic triangles implemented)
-    // interpolant_test<1, 4>(functions1D);
-    interpolant_test<2, 4>(functions2D);
-    // interpolant_test<3, 4>(functions3D);
-
-    return 0;
+    SECTION("Degree 4 tests") {
+      // (only quartic triangles implemented)
+      // interpolant_test<1, 4>(functions1D);
+      interpolant_test<2, 4>(functions2D);
+      // interpolant_test<3, 4>(functions3D);
+    }
 }

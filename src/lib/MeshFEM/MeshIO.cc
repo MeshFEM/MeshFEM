@@ -1,5 +1,5 @@
 #include <MeshFEM/MeshIO.hh>
-#include <boost/algorithm/string.hpp>
+#include <MeshFEM/StringUtils.hh>
 #include <iostream>
 #include <deque>
 #include <limits>
@@ -253,8 +253,9 @@ void MeshIO_OFF::save(ostream &os, const vector<Vertex> &nodes,
 
 MeshType MeshIO_OFF::load(istream &is, vector<Vertex> &nodes,
                           vector<Element> &elements, MeshType /* t */) {
-    std::string line; getDataLine(is, line);
-    boost::trim(line);
+    std::string line;
+    getDataLine(is, line);
+    MeshFEM::trim(line);
     if (line != "OFF")
         throw std::runtime_error("Didn't read file magic; got line '" + line + "'");
 
@@ -316,11 +317,10 @@ MeshType MeshIO_OBJ::load(istream &is, vector<Vertex> &nodes,
 
     runtime_error badFMT("Bad OBJ face format.");
     while (getDataLine(is, line)) {
-        deque<string> lineComponents;
-        boost::trim(line);
-        boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
-        string first = lineComponents.at(0);
-        lineComponents.pop_front();
+        MeshFEM::trim(line);
+        auto tmp = MeshFEM::split(line, "\t ");
+        string first = tmp.at(0);
+        vector<string> lineComponents(tmp.begin() + 1, tmp.end());
         if (first == "v") {
             IOVertex v;
             size_t ncomps = lineComponents.size();
@@ -750,11 +750,52 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
     return ei.meshType;
 }
 
+void MeshIO_Medit::save(std::ostream &fout, const std::vector<Vertex> &vertices,
+                        const std::vector<Element> &elements, MeshType type)
+{
+    if (elements.size() == 0) {
+        std::cerr << "WARNING: saving mesh with no elements." << std::endl;
+        if (type == MESH_GUESS) type = MESH_TET; // type doesn't matter, and we can't guess...
+    }
+    if (vertices.size() == 0) throw std::runtime_error("Empty mesh.");
+
+    auto typeError = std::runtime_error("Only support linear tets.");
+    if (type != MeshType::MESH_TET && type != MESH_GUESS) throw typeError;
+    if (type == MESH_GUESS && elements[0].size() != 4) throw typeError;
+
+    fout.precision(16);
+    fout << "MeshVersionFormatted 1" << std::endl;
+    fout << "Dimension 3" << std::endl;
+
+    // Write vertices
+    fout << "Vertices" << std::endl;
+    const size_t num_vertices = vertices.size();
+    fout << num_vertices << std::endl;
+    for (size_t i=0; i<num_vertices; i++) {
+        fout << vertices[i][0] << " ";
+        fout << vertices[i][1] << " ";
+        fout << vertices[i][2] << " ";
+        fout << -1 << std::endl;
+    }
+
+    // Write cells
+    if (elements.size() != 0){
+        assert(elements[0].size() == 4);
+        const size_t num_elements = elements.size();
+        fout << "Tetrahedra" << std::endl;
+        fout << num_elements << std::endl;
+        for (size_t i=0; i<num_elements; i++) {
+            for (size_t j=0; j<4; j++) {
+                fout << elements[i][j]+1 << " ";
+            }
+            fout << -1 << std::endl;
+        }
+    }
+}
+
 vector<string> tokenize(std::string line) {
-    vector<string> lineComponents;
-    boost::trim(line);
-    boost::split(lineComponents, line, boost::is_any_of("\t "), boost::token_compress_on);
-    return lineComponents;
+    MeshFEM::trim(line);
+    return MeshFEM::split(line, "\t ");
 }
 
 MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,

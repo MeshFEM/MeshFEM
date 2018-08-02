@@ -271,9 +271,7 @@ namespace MeshIO {
         typedef IOElement Element;
 
         void save(std::ostream &/* os */, const std::vector<Vertex> &/* nodes */,
-                  const std::vector<Element> &/* elements */, MeshType /* type */) {
-            throw std::runtime_error("Medit saving currently unsupported");
-        }
+                  const std::vector<Element> &/* elements */, MeshType /* type */);
 
         MeshType load(std::istream &is, std::vector<Vertex> &nodes,
                       std::vector<Element> &elements, MeshType type);

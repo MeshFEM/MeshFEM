@@ -159,8 +159,7 @@ public:
 
     // Get the orthotropic material parameters (assuming the material is
     // in fact orthotropic).
-    void getOrthotropicParameters(std::vector<Real> &moduli) const
-    {
+    void getOrthotropicParameters(std::vector<Real> &moduli) const {
         if (_Dim == 2) {
             moduli.resize(4);
             // Ex Ey nuYX nuXY
@@ -176,6 +175,12 @@ public:
         else {
             throw std::runtime_error("Invalid instance dimension.");
         }
+    }
+
+    std::vector<Real> getOrthotropicParameters() const {
+        std::vector<Real> moduli;
+        getOrthotropicParameters(moduli);
+        return moduli;
     }
 
     // Get the orthotropic material parameters (assuming the material is in fact

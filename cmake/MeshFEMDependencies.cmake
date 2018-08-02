@@ -9,7 +9,8 @@ set(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
 
 # Download and update 3rdparty libraries
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
+list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 include(MeshFEMDownloadExternal)
 
 ################################################################################
@@ -36,6 +37,13 @@ if(NOT TARGET meshfem::boost)
     add_library(meshfem::boost ALIAS meshfem_boost)
 endif()
 
+# Catch2
+if(NOT TARGET Catch2::Catch2 AND (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR))
+    meshfem_download_catch()
+    add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
+    list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)
+endif()
+
 # Eigen3 library
 if(NOT TARGET Eigen3::Eigen)
     add_library(meshfem_eigen INTERFACE)
@@ -51,6 +59,14 @@ if(NOT TARGET json::json)
     target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json)
     target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json/nlohmann)
     add_library(json::json ALIAS meshfem_json)
+endif()
+
+# Optional library
+if(NOT TARGET optional::optional)
+    meshfem_download_optional()
+    add_library(optional_lite INTERFACE)
+    target_include_directories(optional_lite SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/optional/include)
+    add_library(optional::optional ALIAS optional_lite)
 endif()
 
 # TBB library

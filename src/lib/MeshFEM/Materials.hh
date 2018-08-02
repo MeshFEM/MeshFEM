@@ -20,12 +20,12 @@
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Flattening.hh>
 #include <MeshFEM/ElasticityTensor.hh>
-#include <stdexcept>
-#include <vector>
-#include <string>
+#include <nlohmann/json.hpp>
+#include <fstream>
 #include <iostream>
-
-#include <boost/property_tree/ptree_fwd.hpp>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace Materials {
 
@@ -40,7 +40,7 @@ struct Bounds {
     Bounds(const std::vector<Bound> &l, const std::vector<Bound> &u)
         : m_lower(l), m_upper(u) { }
 
-    void setFromFile(const std::string &boundsPath);
+    void setFromJson(const nlohmann::json &entry);
 
     const std::vector<Bound> &lower() const { return m_lower; }
     const std::vector<Bound> &upper() const { return m_upper; }
@@ -67,7 +67,17 @@ struct VariableMaterial {
     static void setLowerBounds(const std::vector<Bounds::Bound> &l) { _Mat<_N>::g_bounds.setLower(l); }
 
     static void setBoundsFromFile(const std::string &path) {
-        _Mat<_N>::g_bounds.setFromFile(path);
+        std::ifstream is(path);
+        if (!is.is_open()) {
+            throw std::runtime_error("Couldn't open bounds " + path);
+        }
+        nlohmann::json config;
+        is >> config;
+        setBoundsFromJson(config);
+    }
+
+    static void setBoundsFromJson(const nlohmann::json &config) {
+        _Mat<_N>::g_bounds.setFromJson(config);
         // Validate bounds.
         std::runtime_error indexError("Bounds variable index out-of-bounds.");
         for (const auto &b : _Mat<_N>::g_bounds.lower()) if (b.var >= numVars) throw indexError;
@@ -393,7 +403,7 @@ struct Constant {
 
 
     void setFromFile(const std::string &materialFile);
-    void setFromPTree(const boost::property_tree::ptree &pt);
+    void setFromJson(const nlohmann::json &config);
 
     // Used for adjoint method gradient-based optimization
     void getETensorDerivative(size_t /* p */, ETensor &/* d */) const {
@@ -406,6 +416,8 @@ struct Constant {
 
     void setIsotropic(Real E, Real nu) { m_E.setIsotropic(E, nu); }
 
+    nlohmann::json getJson() const;
+
     // "type": "anisotropic",
     // "dim": 3,
     // "material_matrix": [[C_00, C_01, C02, C03, C04, C05],
@@ -415,16 +427,18 @@ struct Constant {
     //                     [C_40, C_41, C42, C43, C44, C45],
     //                     [C_50, C_51, C52, C53, C54, C55]]
     friend std::ostream &operator<<(std::ostream &os, const Constant &cmat) {
-        os << "{ \"type\": \"anisotropic\"," << std::endl;
-        os << "\"material_matrix\": [";
-        for (size_t i = 0; i < flatLen(N); ++i) {
-            for (size_t j = 0; j < flatLen(N); ++j) {
-                os << (j ? ", " : "[") << cmat.m_E.D(i, j);
-            }
-            os << (i == flatLen(N) - 1 ? "]]" : "],") << std::endl;
-        }
-        os << "}";
+        os << cmat.getJson().dump(4);
         return os;
+        // os << "{ \"type\": \"anisotropic\"," << std::endl;
+        // os << "\"material_matrix\": [";
+        // for (size_t i = 0; i < flatLen(N); ++i) {
+        //     for (size_t j = 0; j < flatLen(N); ++j) {
+        //         os << (j ? ", " : "[") << cmat.m_E.D(i, j);
+        //     }
+        //     os << (i == flatLen(N) - 1 ? "]]" : "],") << std::endl;
+        // }
+        // os << "}";
+        // return os;
     }
 
 private:
