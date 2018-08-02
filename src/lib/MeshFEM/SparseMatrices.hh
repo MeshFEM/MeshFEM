@@ -240,6 +240,8 @@ struct TripletMatrix {
             if (t.i <= t.j)
                 nz.push_back(t);
         }
+
+        symmetry_mode = SymmetryMode::UPPER_TRIANGLE;
     }
 
     void removeLowerTriangle() {

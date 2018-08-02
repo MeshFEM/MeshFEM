@@ -377,6 +377,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         // boundary are actually internal after the identified nodes are
         // stitched together.
         bool isInternal = false;
+
+        bool isInContactRegion = false;
     };
 
     struct BoundaryNode {
@@ -459,8 +461,11 @@ public:
         size_t negativeElements = 0;
         for (auto e : m_mesh.elements())
             if (e->volume() < 0) ++negativeElements;
-        if (negativeElements > 0)
-            throw std::runtime_error("Mesh has negatively oriented elements.\nCorrect with: mesh_convert --reorientNegativeElements.");
+        if (negativeElements > 0) {
+            std::cerr << "Found " << negativeElements << " elements with negative volume..." << std::endl;
+            throw std::runtime_error(
+                    "Mesh has negatively oriented elements.\nCorrect with: mesh_convert --reorientNegativeElements.");
+        }
     }
 
     const _Mesh &mesh() const { return m_mesh; }
@@ -1183,7 +1188,7 @@ public:
 
         TMatrix R;
         if (m_useRigidMotionConstraint) {
-            m_appendInfinitesimalRotationMatrix(R);
+            m_appendInfinitesimalRotationMatrix(R); // NO RIGID ROTATIONS
             if (m_useNRTPinConstraint) m_pinNode(fixedVars, fixedVarValues);
             else                       m_appendTranslationMatrix(R);
 
@@ -1434,6 +1439,58 @@ public:
 #endif
 
     }
+
+    // Append to dirichletVars and dirichletValues
+    void m_getDirichletVarsAndValues(std::vector<size_t> &dirichletVars,
+                                     std::vector<Real> &dirichletValues) const {
+        // Validate and convert to per-periodic DoF constraints.
+        // constraintDisplacements[i] holds the displacement to which
+        // components constraintComponents[i] of DoF constraintDoFs[i] are
+        // constrained.
+        std::vector<Point>         constraintDisplacements;
+        std::vector<int>           constraintDoFs;
+        std::vector<ComponentMask> constraintComponents;
+        // Index into the above arrays a DoF's constraint, or -1 for none.
+        // I.e. if constraintDoFs[i] > -1, the following holds:
+        //  constraintDoFs[constraintIndex[i]] = i
+        std::vector<int> constraintIndex(numDoFs(), -1); // HAS SIZE EQUAL TO NUMBER OF NODES = numDoFs!
+        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
+            auto bn = m_mesh.boundaryNode(i); // FOR EACH NODE!
+            if (bn->hasDirichlet()) { // HAS DIRICHLET CONDITION ON NODE
+                int dof = DoF(bn.volumeNode().index()); // USUALLY, DOF IS SAME AS NODE. IT CAN BE DIFFERENT WHEN DEALING WITH PERIODIC BOUNDARIES
+                if (constraintIndex[dof] < 0) { // NO CONSTRAINT? THEN ADD NEW CONSTRAINT WITH DISPLACEMENTS
+                    constraintIndex[dof] = constraintDoFs.size();
+                    constraintDoFs.push_back(dof);
+                    constraintDisplacements.push_back(
+                            bn->dirichletDisplacement);
+                    constraintComponents.push_back(
+                            bn->dirichletComponents);
+                }
+                else { // IF ALREADY HAD CONSTRAINTS ON DOF, SPITS ERROR!!
+                    std::cerr << "WARNING: Dirichlet condition on periodic "
+                              << "boundary applies to all identified nodes."
+                              << std::endl;
+                    auto diff = bn->dirichletDisplacement -
+                                constraintDisplacements[constraintIndex[dof]];
+                    bool cdiffer = (bn->dirichletComponents !=
+                                    constraintComponents[constraintIndex[dof]]);
+                    if ((diff.norm() > 1e-10) || cdiffer) {
+                        throw std::runtime_error("Mismatched Dirichlet "
+                                                         "constraint on periodic DoF");
+                    }
+                    // Ignore redundant but compatible Dirichlet conditions.
+                }
+            }
+        }
+
+        for (size_t i = 0; i < constraintDoFs.size(); ++i) {
+            for (size_t c = 0; c < N; ++c) {
+                if (!constraintComponents[i].has(c)) continue;
+                dirichletVars.push_back(N * constraintDoFs[i] + c); // constraintDoFs[i] MEANS THE NODE TO BE CONSTRAINED? WHILE dirichletVars is the variable in the linear system
+                dirichletValues.push_back(constraintDisplacements[i][c]);
+            }
+        }
+    }
 private:
 
     static constexpr size_t numRotModes = (N == 3) ? 3 : 1;
@@ -1531,58 +1588,6 @@ private:
             if (components.has(d)) {
                 fixedVars.push_back(N * DoF(nodeToPin) + d);
                 fixedVarValues.push_back(0.0);
-            }
-        }
-    }
-
-    // Append to dirichletVars and dirichletValues
-    void m_getDirichletVarsAndValues(std::vector<size_t> &dirichletVars,
-                                     std::vector<Real> &dirichletValues) const {
-        // Validate and convert to per-periodic DoF constraints.
-        // constraintDisplacements[i] holds the displacement to which
-        // components constraintComponents[i] of DoF constraintDoFs[i] are
-        // constrained.
-        std::vector<Point>         constraintDisplacements;
-        std::vector<int>           constraintDoFs;
-        std::vector<ComponentMask> constraintComponents;
-        // Index into the above arrays a DoF's constraint, or -1 for none.
-        // I.e. if constraintDoFs[i] > -1, the following holds:
-        //  constraintDoFs[constraintIndex[i]] = i
-        std::vector<int> constraintIndex(numDoFs(), -1);
-        for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
-            auto bn = m_mesh.boundaryNode(i);
-            if (bn->hasDirichlet()) {
-                int dof = DoF(bn.volumeNode().index());
-                if (constraintIndex[dof] < 0) {
-                    constraintIndex[dof] = constraintDoFs.size();
-                    constraintDoFs.push_back(dof);
-                    constraintDisplacements.push_back(
-                            bn->dirichletDisplacement);
-                    constraintComponents.push_back(
-                            bn->dirichletComponents);
-                }
-                else {
-                    std::cerr << "WARNING: Dirichlet condition on periodic "
-                        << "boundary applies to all identified nodes."
-                        << std::endl;
-                    auto diff = bn->dirichletDisplacement -
-                        constraintDisplacements[constraintIndex[dof]];
-                    bool cdiffer = (bn->dirichletComponents !=
-                                    constraintComponents[constraintIndex[dof]]);
-                    if ((diff.norm() > 1e-10) || cdiffer) {
-                        throw std::runtime_error("Mismatched Dirichlet "
-                            "constraint on periodic DoF");
-                    }
-                    // Ignore redundant but compatible Dirichlet conditions.
-                }
-            }
-        }
-
-        for (size_t i = 0; i < constraintDoFs.size(); ++i) {
-            for (size_t c = 0; c < N; ++c) {
-                if (!constraintComponents[i].has(c)) continue;
-                dirichletVars.push_back(N * constraintDoFs[i] + c);
-                dirichletValues.push_back(constraintDisplacements[i][c]);
             }
         }
     }

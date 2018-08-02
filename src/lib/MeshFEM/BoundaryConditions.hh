@@ -105,6 +105,18 @@ using CondPtr      = std::shared_ptr<BoundaryCondition<_N> >;
 template<size_t _N>
 using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_N> >;
 
+
+// Initially, only important thing is the contact region itself. In the future, a friction coefficient may be added and
+// some other parameters
+template<size_t _N>
+struct ContactCondition : public BoundaryCondition<_N> {
+    ContactCondition(const BBox<VectorND<_N>> &region) : BoundaryCondition<_N>(region) { }
+
+private:
+    virtual ~ContactCondition() { }
+};
+
+
 enum class NeumannType { Pressure, Traction, Force };
 // For the NeumannType::Force case, the force vector is stored in the "traction"
 // field, and it is divided by the region's boundary area at application time.

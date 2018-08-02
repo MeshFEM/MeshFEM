@@ -11,6 +11,7 @@ meshfem_single_app(DeformedCells_cli MeshFEM json::json)
 meshfem_single_app(Simulate_cli MeshFEM)
 meshfem_single_app(Poisson_cli MeshFEM)
 meshfem_single_app(ExtractBMatrix MeshFEM)
+meshfem_single_app(SimulateWithContact_cli MeshFEM)
 
 if(TARGET ceres::ceres)
     add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)

@@ -340,6 +340,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             else if (type == "dirichlet") c = new DirichletCondition<_N>(region, value, cmask);
             else if (type == "dirichlet elements") c = new DirichletElementsCondition<_N>(element_vertices, value, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
+            else if (type == "contact")   c = new   ContactCondition<_N>(region);
             else if (type == "dirichlet nodes") c =   new  DirichletNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "traction elements") c = new NeumannElementsCondition<_N>(NeumannType::Traction, element_corners, element_values);
