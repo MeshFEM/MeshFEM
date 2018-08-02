@@ -750,6 +750,49 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
     return ei.meshType;
 }
 
+void MeshIO_Medit::save(std::ostream &fout, const std::vector<Vertex> &vertices,
+                        const std::vector<Element> &elements, MeshType type)
+{
+    if (elements.size() == 0) {
+        std::cerr << "WARNING: saving mesh with no elements." << std::endl;
+        if (type == MESH_GUESS) type = MESH_TET; // type doesn't matter, and we can't guess...
+    }
+    if (vertices.size() == 0) throw std::runtime_error("Empty mesh.");
+
+    auto typeError = std::runtime_error("Only support linear tets.");
+    if (type != MeshType::MESH_TET && type != MESH_GUESS) throw typeError;
+    if (type == MESH_GUESS && elements[0].size() != 4) throw typeError;
+
+    fout.precision(16);
+    fout << "MeshVersionFormatted 1" << std::endl;
+    fout << "Dimension 3" << std::endl;
+
+    // Write vertices
+    fout << "Vertices" << std::endl;
+    const size_t num_vertices = vertices.size();
+    fout << num_vertices << std::endl;
+    for (size_t i=0; i<num_vertices; i++) {
+        fout << vertices[i][0] << " ";
+        fout << vertices[i][1] << " ";
+        fout << vertices[i][2] << " ";
+        fout << -1 << std::endl;
+    }
+
+    // Write cells
+    if (elements.size() != 0){
+        assert(elements[0].size() == 4);
+        const size_t num_elements = elements.size();
+        fout << "Tetrahedra" << std::endl;
+        fout << num_elements << std::endl;
+        for (size_t i=0; i<num_elements; i++) {
+            for (size_t j=0; j<4; j++) {
+                fout << elements[i][j]+1 << " ";
+            }
+            fout << -1 << std::endl;
+        }
+    }
+}
+
 vector<string> tokenize(std::string line) {
     MeshFEM::trim(line);
     return MeshFEM::split(line, "\t ");
