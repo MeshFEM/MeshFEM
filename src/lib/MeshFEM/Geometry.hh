@@ -12,16 +12,30 @@
 #define GEOMETRY_HH
 
 #include <MeshFEM/Types.hh>
+#include <iostream>
 #include <vector>
 #include <array>
 #include <algorithm>
 #include <type_traits>
 
+template<typename _Vector>
+struct Region {
+    typedef _Vector                 Vector;
+    typedef typename Vector::Scalar Real;
+
+    virtual bool containsPoint(const Vector &/*p*/) const {
+        std::cerr << "containsPoint not implemented" << std::endl;
+        throw std::runtime_error("containsPoint not implemented");
+
+        return false;
+    }
+};
+
 // Warning: uninitialized/default bboxes are always a dimension-zero bbox around
 // the origin. This may lead to unintended behavior if unions are performed
 // without care.
 template<typename _Vector>
-struct BBox {
+struct BBox : Region<_Vector> {
     // Make sure min/max corner vectors are aligned during dynamic allocation...
     // (Needed for aligned vector types)
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -94,7 +108,7 @@ struct BBox {
         return ((v - minCorner).array() / dimensions().array()).matrix();
     }
 
-    bool containsPoint(const Vector &p) const {
+    virtual bool containsPoint(const Vector &p) const override {
         return (p.array() >= minCorner.array()).all() &&
                (p.array() <= maxCorner.array()).all();
     }
@@ -151,6 +165,23 @@ struct BBox {
             return true;
 
         return (c_prime - boxHalfDims).squaredNorm() <= r * r;
+    }
+};
+
+// BBox complement let's you define regions that are complement of others. For example, if
+// you want to define a boundary condition on the entire shape except on a small box.
+template<typename _Vector>
+struct BBoxComplement : Region<_Vector> {
+    typedef _Vector                 Vector;
+    typedef typename Vector::Scalar Real;
+
+    BBox<Vector> complement;
+
+    BBoxComplement(const Vector &minCorner, const Vector &maxCorner)
+            : complement(minCorner, maxCorner) { }
+
+    virtual bool containsPoint(const Vector &p) const override {
+        return !complement.containsPoint(p);
     }
 };
 
