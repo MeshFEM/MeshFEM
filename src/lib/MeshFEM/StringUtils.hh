@@ -19,4 +19,7 @@ namespace MeshFEM {
 	// Split a string into tokens
 	std::vector<std::string> split(const std::string &str, const std::string &delimiters = " ");
 
+	// Replace extension after the last "dot"
+	std::string replace_ext(const std::string &filename, const std::string &newext);
+
 } // namespace MeshFEM
