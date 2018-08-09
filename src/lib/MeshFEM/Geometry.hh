@@ -23,6 +23,8 @@ struct Region {
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
+    virtual ~Region() = default;
+
     virtual bool containsPoint(const Vector &/*p*/) const {
         std::cerr << "containsPoint not implemented" << std::endl;
         throw std::runtime_error("containsPoint not implemented");

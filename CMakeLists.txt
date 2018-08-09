@@ -49,7 +49,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 include(CMakeToolsHelpers OPTIONAL)
 
 # Enable more warnings
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Wno-comment")
+include(Warnings)
 
 # Helper function
 include(MeshFEMSingleApp)
@@ -58,6 +58,7 @@ include(MeshFEMSingleApp)
 # Options
 ################################################################################
 
+# By default, disable C++11 ABI on the Prince cluster
 cmake_host_system_information(RESULT MY_HOSTNAME QUERY HOSTNAME)
 if("$ENV{CLUSTER}" STREQUAL "PRINCE")
     set(DISABLE_CXX11_ABI_DEFAULT ON)
@@ -65,8 +66,16 @@ else()
     set(DISABLE_CXX11_ABI_DEFAULT OFF)
 endif()
 
-option(DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
-option(ENABLE_BENCHMARKING "Enable the benchmarking code" OFF)
+# By default, compile binaries only for toplevel projects
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(MESHFEM_LIB_ONLY_DEFAULT OFF)
+else()
+    set(MESHFEM_LIB_ONLY_DEFAULT ON)
+endif()
+
+option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
+option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
+option(MESHFEM_LIB_ONLY              "Compile only the MeshFEM library (not the binary applications)" ${MESHFEM_LIB_ONLY_DEFAULT})
 
 ################################################################################
 # Dependencies
@@ -80,17 +89,19 @@ include(MeshFEMDependencies)
 ################################################################################
 
 add_subdirectory(src/lib)
-add_subdirectory(src/bin)
+if(NOT MESHFEM_LIB_ONLY)
+    add_subdirectory(src/bin)
+endif()
 
 ################################################################################
 # Configure manual compiler flags based on options
 ################################################################################
 
-if(DISABLE_CXX11_ABI_GCC)
+if(MESHFEM_DISABLE_CXX11_ABI_GCC)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 
-if(ENABLE_BENCHMARKING)
+if(MESHFEM_ENABLE_BENCHMARKING)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
 endif()
 

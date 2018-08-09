@@ -14,8 +14,8 @@ meshfem_single_app(ExtractBMatrix MeshFEM meshfem::boost)
 meshfem_single_app(SimulateWithContact_cli MeshFEM meshfem::boost)
 
 if(TARGET ceres::ceres)
-    add_executable(MaterialOptimization_cli MaterialOptimization_cli.cc MaterialOptimization.cc)
-    target_link_libraries(MaterialOptimization_cli MeshFEM meshfem::boost ceres::ceres)
+    meshfem_single_app(MaterialOptimization_cli MeshFEM meshfem::boost ceres::ceres)
+    target_sources(MaterialOptimization_cli PRIVATE MaterialOptimization.cc)
 endif()
 
 ################################################################################
