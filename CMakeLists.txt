@@ -94,16 +94,8 @@ if(NOT MESHFEM_LIB_ONLY)
 endif()
 
 ################################################################################
-# Configure manual compiler flags based on options
+# Unit tests
 ################################################################################
-
-if(MESHFEM_DISABLE_CXX11_ABI_GCC)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-
-if(MESHFEM_ENABLE_BENCHMARKING)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
-endif()
 
 # Compile tests only if this is a top-level project
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)

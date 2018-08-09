@@ -136,3 +136,15 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
+
+################################################################################
+# Configure manual compiler flags based on CMake options
+################################################################################
+
+if(MESHFEM_DISABLE_CXX11_ABI_GCC)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
+
+if(MESHFEM_ENABLE_BENCHMARKING)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
+endif()
