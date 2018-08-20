@@ -18,8 +18,8 @@
 #include <algorithm>
 #include <type_traits>
 
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Polygon_2.h>
+//#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+//#include <CGAL/Polygon_2.h>
 
 template<typename _Vector>
 struct Region {
@@ -46,10 +46,6 @@ template<typename _Vector>
 struct PathRegion : Region<_Vector> {
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
-
-    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-    typedef K::Point_2 CGALPoint_2;
-    typedef CGAL::Polygon_2<K> CGALPolygon_2;
 
     // You can construct the polygonal region using a list of points which it is assumed to be in order of edges and
     PathRegion(std::vector<Vector> path) : m_path(path) {
@@ -109,7 +105,7 @@ private:
 };
 
 // General Polygonal region
-template<typename _Vector>
+/*template<typename _Vector>
 struct PolygonalRegion : Region<_Vector> {
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
@@ -149,7 +145,7 @@ struct PolygonalRegion : Region<_Vector> {
 private:
     std::vector<Vector> m_polygonPoints;
     CGALPolygon_2 m_polygon;
-};
+};*/
 
 // Warning: uninitialized/default bboxes are always a dimension-zero bbox around
 // the origin. This may lead to unintended behavior if unions are performed

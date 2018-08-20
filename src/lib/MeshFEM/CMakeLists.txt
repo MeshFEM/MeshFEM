@@ -135,7 +135,7 @@ target_link_libraries(${PROJECT_NAME}
         tinyexpr::tinyexpr
         cholmod::cholmod
         umfpack::umfpack
-		CGAL::CGAL
+#		CGAL::CGAL
     PRIVATE
         warnings::all
 )

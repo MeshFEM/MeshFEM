@@ -316,7 +316,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
 
                 region = std::make_shared< PathRegion<VectorND<_N>> >(path);
             }
-            else if (tcond.count("polygon")) {
+            /*else if (tcond.count("polygon")) {
                 std::vector<VectorND<_N>> polygon;
                 json jsonPolygon = tcond["polygon"];
                 for (auto jsonPoint : jsonPolygon) {
@@ -324,7 +324,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
                 }
 
                 region = std::make_shared< PolygonalRegion<VectorND<_N>> >(polygon);
-            }
+            }*/
             // Try to parse as plain vector first
             try {
                 value = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["value"]));
