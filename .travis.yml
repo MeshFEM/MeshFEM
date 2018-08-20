@@ -13,6 +13,7 @@ matrix:
         packages:
         - gcc-7
         - g++-7
+        - libmpfr-dev
         - libboost-filesystem-dev
         - libboost-program-options-dev
         - libboost-system-dev
@@ -23,6 +24,10 @@ matrix:
   - os: osx
     osx_image: xcode8.3
     compiler: clang
+    addons:
+      apt:
+        packages:
+        - libmpfr-dev
     env:
     - MATRIX_EVAL="export CONFIG=Debug"
 
