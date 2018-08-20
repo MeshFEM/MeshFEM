@@ -42,6 +42,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         ("dumpMatrix",           po::value<string>()->default_value(""), "dump system matrix in triplet format")
         ("degree,d",             po::value<int>()->default_value(2),     "FEM degree (1 or 2)")
         ("fullDegreeFieldOutput,D",                                      "Output full-degree nodal fields (don't do piecewise linear subsample)")
+        ("extraMesh,e",          po::value<string>(),                    "adds another independent input mesh to problem")
         ;
 
     po::options_description cli_opts;
@@ -257,14 +258,57 @@ int main(int argc, const char *argv[])
     vector<MeshIO::IOElement> inElements;
     string meshPath = args["mesh"].as<string>();
 
-    auto type = load(meshPath, inVertices, inElements, MeshIO::FMT_GUESS,
-                     MeshIO::MESH_GUESS);
+    auto type = load(meshPath, inVertices, inElements, MeshIO::FMT_GUESS, MeshIO::MESH_GUESS);
 
     // Infer dimension from mesh type.
     size_t dim;
     if      (type == MeshIO::MESH_TET) dim = 3;
     else if (type == MeshIO::MESH_TRI) dim = 2;
     else    throw std::runtime_error("Mesh must be pure triangle or tet.");
+
+
+    if (args.count("extraMesh") > 0) {
+        // loads second mesh
+        vector<MeshIO::IOVertex>  inExtraVertices;
+        vector<MeshIO::IOElement> inExtraElements;
+        string extraMeshPath = args["extraMesh"].as<string>();
+        auto typeExtra = load(extraMeshPath, inExtraVertices, inExtraElements, MeshIO::FMT_GUESS, MeshIO::MESH_GUESS);
+
+        if (type != typeExtra) {
+            std::cerr << "Extra mesh of different type." << std::endl;
+            throw std::runtime_error("Extra mesh of different type.");
+        }
+
+        //std::cout << "Original Vertices: " <<  inVertices.size() << std::endl;
+        //std::cout << "Original Elements: " <<  inElements.size() << std::endl << std::endl;
+
+        //save("misc/experiments/multiple_meshes/original.off", inVertices, inElements);
+        //save("misc/experiments/multiple_meshes/original.msh", inVertices, inElements);
+
+        //std::cout << "Extra Vertices: " <<  inExtraVertices.size() << std::endl;
+        //std::cout << "Extra Elements: " <<  inExtraElements.size() << std::endl << std::endl;
+
+        //save("misc/experiments/multiple_meshes/extra.off", inExtraVertices, inExtraElements);
+        //save("misc/experiments/multiple_meshes/extra.msh", inExtraVertices, inExtraElements);
+
+
+        // Adjust vertices indices for extra elements
+        for (size_t e=0; e<inExtraElements.size(); e++) {
+            for (size_t i=0; i<(dim+1); i++) {
+                inExtraElements[e][i] = inExtraElements[e][i] + inVertices.size();
+            }
+        }
+
+        // Add vertices and elements of second mesh to lists passed to simulator
+        inVertices.insert(inVertices.end(), inExtraVertices.begin(), inExtraVertices.end());
+        inElements.insert(inElements.end(), inExtraElements.begin(), inExtraElements.end());
+
+        //std::cout << "Total Vertices: " <<  inVertices.size() << std::endl;
+        //std::cout << "Total Elements: " <<  inElements.size() << std::endl << std::endl;
+
+        //save("misc/experiments/multiple_meshes/together.off", inVertices, inElements);
+        //save("misc/experiments/multiple_meshes/together.msh", inVertices, inElements);
+    }
 
     // Look up and run appropriate simulation instantiation.
     int deg = args["degree"].as<int>();
