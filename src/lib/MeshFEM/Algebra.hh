@@ -60,7 +60,7 @@ public:
     }
 
     Element inverse(void) const {
-        Element out=*(Element*)this;
+        Element out=*(const Element*)this;
         out.Invert();
         return out;
     }
@@ -138,13 +138,13 @@ public:
         return out;
     }
     Element additiveInverse(void) const {
-        Element out=*(Element*)this;
+        Element out=*(const Element*)this;
         out.Negate();
         return out;
     }
 
     Element multiplicativeInverse(void) const {
-        Element out=*(Element*)this;
+        Element out=*(const Element*)this;
         out.Invert();
         return out;
     }

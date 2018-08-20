@@ -24,7 +24,8 @@
 template<typename _Vector>
 struct Region {
     typedef _Vector                 Vector;
-    typedef typename Vector::Scalar Real;
+
+    virtual ~Region() = default;
 
     virtual bool containsPoint(const Vector &/*p*/) const {
         std::cerr << "containsPoint not implemented" << std::endl;
@@ -160,15 +161,16 @@ struct BBox : Region<_Vector> {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef _Vector                 Vector;
-    typedef typename Vector::Scalar Real;
+    typedef typename Vector::Scalar Real_;
 
     BBox() {
         this->minCorner = Vector::Zero();
         this->maxCorner = Vector::Zero();
     }
-    BBox(const Vector &minCorner, const Vector &maxCorner) {
-        this->minCorner = minCorner;
-        this->maxCorner = maxCorner;
+
+    BBox(const Vector &minC, const Vector &maxC) {
+        this->minCorner = minC;
+        this->maxCorner = maxC;
     }
 
     // Construct dimension-zero bbox around pt
@@ -253,9 +255,9 @@ struct BBox : Region<_Vector> {
         this->maxCorner += t;
     }
 
-    Real volume() const {
+    Real_ volume() const {
         Vector widths = this->maxCorner - this->minCorner;
-        Real result = 1.0;
+        Real_ result = 1.0;
         for (int i = 0; i < widths.rows(); ++i)
             result *= widths[i];
         return result;
@@ -275,7 +277,7 @@ struct BBox : Region<_Vector> {
     //  @param[in]  r   circle radius
     //  @return     true if this box overlaps the circle.
     *///////////////////////////////////////////////////////////////////////////
-    bool intersectsCircle(const Vector &c, Real r) const {
+    bool intersectsCircle(const Vector &c, Real_ r) const {
         // Transform so box center is at the origin and the circle is in the
         // first quadrant.
         Vector c_prime = (c - center()).cwiseAbs();
@@ -503,18 +505,18 @@ inline DataType BarycentricInterpolate(const BaryCoords &coords
 inline void Circumcircle(const Point2D &p0, const Point2D &p1,
          const Point2D &p2, Point2D &center, Point2D::Scalar &radius)
 {
-    typedef Point2D::Scalar Real;
+    typedef Point2D::Scalar Real_;
     Point2D e[3];
     e[0] = Point2D(p2 - p1);
     e[1] = Point2D(p0 - p2);
     e[2] = Point2D(p1 - p0);
-    Real a2 = e[0].dot(e[0]);
-    Real b2 = e[1].dot(e[1]);
-    Real c2 = e[2].dot(e[2]);
-    Real a = sqrt(a2);
-    Real b = sqrt(b2);
-    Real c = sqrt(c2);
-    Real doubleA = e[0][0] * e[1][1] - e[1][0] * e[0][1];
+    Real_ a2 = e[0].dot(e[0]);
+    Real_ b2 = e[1].dot(e[1]);
+    Real_ c2 = e[2].dot(e[2]);
+    Real_ a = sqrt(a2);
+    Real_ b = sqrt(b2);
+    Real_ c = sqrt(c2);
+    Real_ doubleA = e[0][0] * e[1][1] - e[1][0] * e[0][1];
     // Radius =  (a * b * c) / (4A)
     // (a, b, and c are edge lengths, A is area)
     radius = (a * b * c) / (2 * doubleA);
@@ -535,15 +537,15 @@ inline void Circumcircle(const Point2D &p0, const Point2D &p1,
 inline void Incircle(const Point2D &p0, const Point2D &p1,
          const Point2D &p2, Point2D &center, Point2D::Scalar &radius)
 {
-    typedef Point2D::Scalar Real;
+    using _Real = Point2D::Scalar;
     Point2D e[3];
     e[0] = Point2D(p2 - p1);
     e[1] = Point2D(p0 - p2);
     e[2] = Point2D(p1 - p0);
-    Real a = e[0].norm();
-    Real b = e[1].norm();
-    Real c = e[2].norm();
-    Real doubleA = e[0][0] * e[1][1] - e[1][0] * e[0][1];
+    _Real a = e[0].norm();
+    _Real b = e[1].norm();
+    _Real c = e[2].norm();
+    _Real doubleA = e[0][0] * e[1][1] - e[1][0] * e[0][1];
     // Radius =  (2A) / (a + b + c)
     // (a, b, and c are edge lengths, A is area)
     radius = doubleA / (a + b + c);

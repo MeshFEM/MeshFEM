@@ -4,7 +4,7 @@
 /*! @file
 //      Provides abstract, dynamic access to connectivity information from
 //      TetMesh/TriMesh.
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  02/22/2016 22:46:13
@@ -13,6 +13,8 @@
 #define MESHCONNECTIVITY_HH
 
 struct MeshConnectivity {
+    virtual ~MeshConnectivity() = default;
+
     // cells sharing faces with cell ei
     virtual size_t numElemNeighbors(size_t ei) const = 0;
     virtual size_t elemNeighbor(size_t ei, size_t j) const = 0;
@@ -31,7 +33,7 @@ struct MeshConnectivityImpl : public MeshConnectivity {
         assert(j < numElemNeighbors(ei));
         return m_mesh.simplex(ei).neighbor(j).index();
     }
-    
+
 private:
     const MeshDS &m_mesh;
 };

@@ -97,6 +97,8 @@ namespace MeshIO {
             static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Lines, Triangles, Quads, Tet, and Hex-sized elements");
         }
 
+        IOElement(const std::pair<size_t, size_t> &e) : Base{e.first, e.second} { }
+
         template<typename PType>
         IOElement &operator=(const PType &rhs) {
             Base::resize(rhs.size());

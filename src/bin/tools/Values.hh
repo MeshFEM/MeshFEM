@@ -60,11 +60,15 @@ using ESample = ElementSampler::Sample;
 // The rest is in the respective .inl files.
 ////////////////////////////////////////////////////////////////////////////////
 // Binary ops: applied componentwise to a pair of value
-struct BinaryOp  { virtual Real operator()(Real a, Real b) const = 0; };
+struct BinaryOp  {
+    virtual ~BinaryOp() = default;
+    virtual Real operator()(Real a, Real b) const = 0;
+};
 template<class T1> UVPtr dispatchCWiseBinaryOp(const BinaryOp &op, const T1 &a, CVPtr b);
 // Unary ops: applied to each component of a single value
 struct UnaryOp {
     UnaryOp(const std::string &arg = "") { setArg(arg); }
+    virtual ~UnaryOp() = default;
     virtual Real operator()(Real a) const = 0;
     virtual void setArg(const std::string &arg) { if (arg.size()) throw std::runtime_error("Did not expect unary op argument"); }
 };
@@ -77,7 +81,7 @@ struct Reduction {
     virtual void operator()(Real val) = 0;
     // Except in special cases, the accumulator usually holds the result.
     virtual Real result() const { return m_acc; }
-    virtual ~Reduction() { }
+    virtual ~Reduction() = default;
 protected:
     Real m_acc;
 };
@@ -107,7 +111,7 @@ public:
     virtual UVPtr smoothedElementField(const std::vector<MeshIO::IOElement> &elems, size_t meshDeg, size_t meshDim,
                                        const std::vector<Real> &volumes, const MeshConnectivity &connectivity) const = 0;
 
-    virtual ~Value() { }
+    virtual ~Value() = default;
 };
 
 // Value semantics, but without a copy assignment operator to make sure we

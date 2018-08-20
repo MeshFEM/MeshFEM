@@ -67,5 +67,18 @@ std::vector<std::string> split(const std::string &str, const std::string &delimi
     return tokens;
 }
 
+// Replace extension after the last "dot"
+std::string replace_ext(const std::string &filename, const std::string &newext) {
+    std::string ext = "";
+    if (!newext.empty()) {
+        ext = (newext[0] == '.' ? newext : "." + newext);
+    }
+    size_t lastdot = filename.find_last_of(".");
+    if (lastdot == std::string::npos) {
+        return filename + ext;
+    }
+    return filename.substr(0, lastdot) + ext;
+}
+
 } // namespace MeshFEM
 

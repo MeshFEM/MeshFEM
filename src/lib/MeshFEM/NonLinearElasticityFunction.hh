@@ -154,6 +154,8 @@ public:
 template<typename Real>
 class NonLinearElasticityFunction {
 public:
+    virtual ~NonLinearElasticityFunction() = default;
+
     // Non-reduced form: meaning that u corresponds to displacement in all nodes. Also, result is nonlinear term for
     // all nodes of the mesh
     virtual std::vector<Real> evaluate(std::vector<Real> u) const = 0;
