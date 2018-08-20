@@ -187,7 +187,12 @@ public:
         size_t it = 0;
 
         // Find initial solution as solution of linear elasticity, without considering contact areas
-        solveLinearSystem(m_AUpper, fReduced, uReduced, true);
+        try {
+            solveLinearSystem(m_AUpper, fReduced, uReduced, true);
+        }
+        catch (...) {
+            uReduced.assign(m_AUpper.m, 0.0);
+        }
 
         // Loop until solution is obtained with low error
         //MSHFieldWriter writer("newtonSolutions.msh", m_mesh);
@@ -197,7 +202,7 @@ public:
             Real error = computeError(negativeFunctionValue);
             std::cout << "Error: " << error << std::endl;
 
-            if (error < 1e-10) {
+            if (error < 1e-8) {
                 std::cout << "Finished successfully in " << (it + 1) << " iterations" << std::endl;
                 break;
             }
@@ -208,7 +213,13 @@ public:
 
             // Find next step
             std::vector<_Real> step(m_AUpper.m);
-            solveLinearSystem(jacobian, negativeFunctionValue, step, true);
+
+            try {
+                solveLinearSystem(jacobian, negativeFunctionValue, step, true);
+            }
+            catch (...) {
+                solveLinearSystem(jacobian, negativeFunctionValue, step, false);
+            }
 
             updateDisplacement(uReduced, step);
             it++;
