@@ -68,3 +68,11 @@ function(meshfem_download_triangle)
         GIT_TAG        d6761dd691e2e1318c83bf7773fea88d9437464a
     )
 endfunction()
+
+## CGAL
+function(meshfem_download_cgal)
+    meshfem_download_project(cgal
+        URL     https://github.com/CGAL/cgal/releases/download/releases%2FCGAL-4.12/CGAL-4.12.tar.xz
+        URL_MD5 b12fd24dedfa889a04abfaea565a88bd
+    )
+endfunction()

@@ -34,10 +34,10 @@
 
 template<size_t _N>
 struct BoundaryCondition {
-    BoundaryCondition() { }
-    BoundaryCondition(const BBox<VectorND<_N>> &r) : region(r) { }
-    BBox<VectorND<_N>> region;
-    bool containsPoint(const VectorND<_N> &p) const { return region.containsPoint(p); }
+    BoundaryCondition() : region(std::shared_ptr<Region<VectorND<_N>>>()) { }
+    BoundaryCondition(const std::shared_ptr<Region<VectorND<_N>>> r) : region(r) {}
+    const std::shared_ptr<Region<VectorND<_N>>> region;
+    bool containsPoint(const VectorND<_N> &p) const { return region->containsPoint(p); }
     virtual ~BoundaryCondition() { }
 };
 
@@ -110,10 +110,19 @@ using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_N> >;
 // some other parameters
 template<size_t _N>
 struct ContactCondition : public BoundaryCondition<_N> {
-    ContactCondition(const BBox<VectorND<_N>> &region) : BoundaryCondition<_N>(region) { }
+    ContactCondition(const std::shared_ptr<Region<VectorND<_N>>> &region) : BoundaryCondition<_N>(region) { }
 
 private:
     virtual ~ContactCondition() { }
+};
+
+// Fracture here represents contact between two regions of the object with same material
+template<size_t _N>
+struct FractureCondition : public BoundaryCondition<_N> {
+    FractureCondition(const std::shared_ptr<Region<VectorND<_N>>> &region) : BoundaryCondition<_N>(region) { }
+
+private:
+    virtual ~FractureCondition() { }
 };
 
 
@@ -122,16 +131,16 @@ enum class NeumannType { Pressure, Traction, Force };
 // field, and it is divided by the region's boundary area at application time.
 template<size_t _N>
 struct NeumannCondition : public BoundaryCondition<_N> {
-    NeumannCondition(const BBox<VectorND<_N>> &region, Real p)
+    NeumannCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, Real p)
         : BoundaryCondition<_N>(region), type(NeumannType::Pressure),
           m_isExpr(false) { m_vecValue[0] = p; }
 
-    NeumannCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &t,
+    NeumannCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const VectorND<_N> &t,
                      NeumannType _type)
         : BoundaryCondition<_N>(region), type(_type), m_vecValue(t),
           m_isExpr(false) { }
 
-    NeumannCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+    NeumannCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const ExpressionVector &ev,
                      NeumannType _type)
         : BoundaryCondition<_N>(region), type(_type), m_isExpr(true),
           m_exprVecValue(ev) {
@@ -164,10 +173,10 @@ private:
 
 template<size_t _N>
 struct DirichletCondition : public BoundaryCondition<_N> {
-    DirichletCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &d, const ComponentMask &m)
+    DirichletCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const VectorND<_N> &d, const ComponentMask &m)
         : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(false), m_displacement(d) { }
 
-    DirichletCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev,
+    DirichletCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const ExpressionVector &ev,
                        const ComponentMask &m)
         : BoundaryCondition<_N>(region), componentMask(m), m_isExpr(true),
           m_displacementExpr(ev) {
@@ -327,10 +336,10 @@ struct TargetNodesCondition : public DirichletNodesCondition<_N> {
 // Delta function applied to all volume/boundary nodes appearing in region.
 template<size_t _N>
 struct DeltaForceCondition : public BoundaryCondition<_N> {
-    DeltaForceCondition(const BBox<VectorND<_N>> &region, const VectorND<_N> &f)
+    DeltaForceCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const VectorND<_N> &f)
         : BoundaryCondition<_N>(region), m_isExpr(false), m_force(f) { }
 
-    DeltaForceCondition(const BBox<VectorND<_N>> &region, const ExpressionVector &ev)
+    DeltaForceCondition(const std::shared_ptr<Region<VectorND<_N>>> &region, const ExpressionVector &ev)
         : BoundaryCondition<_N>(region), m_isExpr(true), m_forceExpr(ev) {
         if (ev.size() != _N) throw std::runtime_error("Bad expression vector length");
     }

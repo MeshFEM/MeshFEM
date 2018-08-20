@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/BoundaryConditions.hh>
+#include <MeshFEM/Future.hh>
 #include <json.hpp>
 
 #include <fstream>
@@ -166,11 +167,11 @@ void writeBoundaryConditions(ostream &os,
         os << "\", \"value\": ["
            << value[0] << ", " << value[1] << ", " << ((_N == 2) ?  0 : value[2])
            << "], \"box\": { \"minCorner\": ["
-           << c->region.minCorner[0] << ", " << c->region.minCorner[1] << ", "
-           << ((_N == 2) ?  0 : c->region.minCorner[2])
+           << c->region->minCorner[0] << ", " << c->region->minCorner[1] << ", "
+           << ((_N == 2) ?  0 : c->region->minCorner[2])
            <<  "], \"maxCorner\": ["
-           << c->region.maxCorner[0] << ", " << c->region.maxCorner[1] << ", "
-           << ((_N == 2) ?  0 : c->region.maxCorner[2])
+           << c->region->maxCorner[0] << ", " << c->region->maxCorner[1] << ", "
+           << ((_N == 2) ?  0 : c->region->maxCorner[2])
            <<  "] } }";
     }
 
@@ -255,7 +256,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         vector<UnorderedTriplet> element_corners;
         vector<VectorND<_N>>     element_values;
 
-        BBox<VectorND<_N>> region;
+        std::shared_ptr<Region<VectorND<_N>>> region(new BBox<VectorND<_N>>());
         VectorND<_N> value(VectorND<_N>::Zero());
         ExpressionVector exprVec; // filled out if expression vector is provided
         // Regex doesn't work on g++4.8... :(
@@ -293,18 +294,36 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
         }
         else {
             if (tcond.count("box")) {
-                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["minCorner"]));
-                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["maxCorner"]));
+                region->minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["minCorner"]));
+                region->maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["maxCorner"]));
             }
             else if (tcond.count("box%")) {
-                region.minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["minCorner"]));
-                region.maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["maxCorner"]));
+                region->minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["minCorner"]));
+                region->maxCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box%"]["maxCorner"]));
                 // Convert relative coordinates to absolute coordinates
-                region.minCorner = bbox.interpolatePoint(region.minCorner);
-                region.maxCorner = bbox.interpolatePoint(region.maxCorner);
+                region->minCorner = bbox.interpolatePoint(region->minCorner);
+                region->maxCorner = bbox.interpolatePoint(region->maxCorner);
             }
             else if (tcond.count("element vertices")) {
                 parseElementVertices<_N>(tcond["element vertices"], element_vertices);
+            }
+            else if (tcond.count("path")) {
+                std::vector<VectorND<_N>> path;
+                json jsonPath = tcond["path"];
+                for (auto jsonPoint : jsonPath) {
+                    path.push_back(truncateFrom3D<VectorND<_N>>(parseVectorLenient(jsonPoint)));
+                }
+
+                region = std::make_shared< PathRegion<VectorND<_N>> >(path);
+            }
+            else if (tcond.count("polygon")) {
+                std::vector<VectorND<_N>> polygon;
+                json jsonPolygon = tcond["polygon"];
+                for (auto jsonPoint : jsonPolygon) {
+                    polygon.push_back(truncateFrom3D<VectorND<_N>>(parseVectorLenient(jsonPoint)));
+                }
+
+                region = std::make_shared< PolygonalRegion<VectorND<_N>> >(polygon);
             }
             // Try to parse as plain vector first
             try {
@@ -341,6 +360,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             else if (type == "dirichlet elements") c = new DirichletElementsCondition<_N>(element_vertices, value, cmask);
             else if (type == "target")    c = new    TargetCondition<_N>(region, value, cmask);
             else if (type == "contact")   c = new   ContactCondition<_N>(region);
+            else if (type == "fracture")   c = new   FractureCondition<_N>(region);
             else if (type == "dirichlet nodes") c =   new  DirichletNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "traction elements") c = new NeumannElementsCondition<_N>(NeumannType::Traction, element_corners, element_values);

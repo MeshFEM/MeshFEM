@@ -18,6 +18,9 @@
 #include <algorithm>
 #include <type_traits>
 
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Polygon_2.h>
+
 template<typename _Vector>
 struct Region {
     typedef _Vector                 Vector;
@@ -29,6 +32,122 @@ struct Region {
 
         return false;
     }
+
+    Vector dimensions() const {
+        return this->maxCorner - this->minCorner;
+    }
+
+    Vector minCorner, maxCorner;
+};
+
+// Extruded path region
+template<typename _Vector>
+struct PathRegion : Region<_Vector> {
+    typedef _Vector                 Vector;
+    typedef typename Vector::Scalar Real;
+
+    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+    typedef K::Point_2 CGALPoint_2;
+    typedef CGAL::Polygon_2<K> CGALPolygon_2;
+
+    // You can construct the polygonal region using a list of points which it is assumed to be in order of edges and
+    PathRegion(std::vector<Vector> path) : m_path(path) {
+        //std::cout << "Path composed by " << path.size() << " vertices" << std::endl;
+        //for (size_t i=0; i<m_path.size(); i++) {
+        //    std::cout << "Path " << i << ": " << m_path[i] << std::endl;
+        //}
+    }
+
+    virtual bool containsPoint(const Vector &p) const override {
+        bool result = false;
+
+        for (size_t i=1; i<m_path.size(); i++) {
+            Vector init = m_path[i-1];
+            Vector end = m_path[i];
+
+            Real distance = computeDistancePointEdge(init, end, p);
+
+            if (distance < 1e-10) {
+                result = true;
+            }
+        }
+
+        return result;
+    }
+
+private:
+    std::vector<Vector> m_path;
+
+    Real computeDistancePointEdge(Vector e1, Vector e2, Vector p) const {
+        Vector u = p - e1;  // e1 to p
+        Vector v = e2 - e1; // e1 to e2
+
+        Real dot = u.dot(v);
+
+        if (v.norm() < 1e-10) {
+            std::cerr << "Warning! edge on path region is to small" << std::endl;
+        }
+
+        // Term represents unitary projection component of u onto v
+        Real uOntoV = dot / v.squaredNorm();
+
+        Vector closest;
+        if (uOntoV < 0.0) {
+            closest = e1;
+        }
+        else if (uOntoV > 1.0) {
+            closest = e2;
+        }
+        else {
+            closest = e1 + uOntoV * v;
+        }
+
+        Vector d = p - closest;
+        return d.norm();
+    }
+};
+
+// General Polygonal region
+template<typename _Vector>
+struct PolygonalRegion : Region<_Vector> {
+    typedef _Vector                 Vector;
+    typedef typename Vector::Scalar Real;
+
+    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+    typedef K::Point_2 CGALPoint_2;
+    typedef CGAL::Polygon_2<K> CGALPolygon_2;
+
+    // You can construct the polygonal region using a list of points which it is assumed to be in order of edges and
+    //
+    PolygonalRegion(std::vector<Vector> points) : m_polygonPoints(points) {
+        for (size_t i=0; i<m_polygonPoints.size(); i++) {
+            CGALPoint_2 cgalNode(m_polygonPoints[i][0], m_polygonPoints[i][1]);
+            m_polygon.push_back(cgalNode);
+        }
+    }
+
+    virtual bool containsPoint(const Vector &p) const override {
+        bool result;
+        CGALPoint_2 cgalNode(p[0], p[1]);
+
+        switch(m_polygon.bounded_side(cgalNode)) {
+            case CGAL::ON_BOUNDED_SIDE :
+                result = true;
+                break;
+           case CGAL::ON_BOUNDARY:
+                result = true;
+                break;
+           case CGAL::ON_UNBOUNDED_SIDE:
+                result = false;
+                break;
+        }
+
+        return result;
+    }
+
+private:
+    std::vector<Vector> m_polygonPoints;
+    CGALPolygon_2 m_polygon;
 };
 
 // Warning: uninitialized/default bboxes are always a dimension-zero bbox around
@@ -43,20 +162,28 @@ struct BBox : Region<_Vector> {
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
-    BBox() : minCorner(Vector::Zero()), maxCorner(Vector::Zero()) { }
-    BBox(const Vector &minCorner, const Vector &maxCorner)
-        : minCorner(minCorner), maxCorner(maxCorner) { }
+    BBox() {
+        this->minCorner = Vector::Zero();
+        this->maxCorner = Vector::Zero();
+    }
+    BBox(const Vector &minCorner, const Vector &maxCorner) {
+        this->minCorner = minCorner;
+        this->maxCorner = maxCorner;
+    }
 
     // Construct dimension-zero bbox around pt
-    BBox(const Vector &pt) : minCorner(pt), maxCorner(pt) { }
+    BBox(const Vector &pt) {
+        this->minCorner = pt;
+        this->maxCorner = pt;
+    }
 
     // Construct bbox of a collection of points
     template<class _PointCollection>
     BBox(const _PointCollection &vectors) {
-        minCorner.setZero(), maxCorner.setZero();
+        this->minCorner.setZero(), this->maxCorner.setZero();
         size_t i = 0;
         for (const auto &v : vectors) {
-            if (i++ == 0) minCorner = maxCorner = truncateFromND<Vector>(v);
+            if (i++ == 0) this->minCorner = this->maxCorner = truncateFromND<Vector>(v);
             else          unionPoint(truncateFromND<Vector>(v));
         }
     }
@@ -66,72 +193,68 @@ struct BBox : Region<_Vector> {
     //  _IndexCollection = std::vector<MeshIO::IOElement>
     template<class _PointCollection, class _IndexCollection>
     BBox(const _PointCollection &pts, const _IndexCollection &subset) {
-        minCorner.setZero(), maxCorner.setZero();
+        this->minCorner.setZero(), this->maxCorner.setZero();
         size_t i = 0;
         for (size_t v : subset) {
-            if (i++ == 0) minCorner = maxCorner = truncateFromND<Vector>(pts[v]);
+            if (i++ == 0) this->minCorner = this->maxCorner = truncateFromND<Vector>(pts[v]);
             else          unionPoint(truncateFromND<Vector>(pts[v]));
         }
     }
 
-    Vector minCorner, maxCorner;
+    //Vector minCorner, maxCorner;
 
     void unionBox(const BBox &b) {
-        minCorner = minCorner.cwiseMin(b.minCorner);
-        maxCorner = maxCorner.cwiseMax(b.maxCorner);
+        this->minCorner = this->minCorner.cwiseMin(b.minCorner);
+        this->maxCorner = this->maxCorner.cwiseMax(b.maxCorner);
     }
 
     void unionPoint(const _Vector &p) {
-        minCorner = minCorner.cwiseMin(p);
-        maxCorner = maxCorner.cwiseMax(p);
+        this->minCorner = this->minCorner.cwiseMin(p);
+        this->maxCorner = this->maxCorner.cwiseMax(p);
     }
 
     void intersectBox(const BBox &b) {
-        minCorner = minCorner.cwiseMax(b.minCorner);
-        maxCorner = maxCorner.cwiseMin(b.maxCorner);
+        this->minCorner = this->minCorner.cwiseMax(b.minCorner);
+        this->maxCorner = this->maxCorner.cwiseMin(b.maxCorner);
     }
 
     Vector interpolatePoint(const Vector &v) const {
-        return minCorner +
-              (v.array() * (maxCorner - minCorner).array()).matrix();
+        return this->minCorner +
+              (v.array() * (this->maxCorner - this->minCorner).array()).matrix();
     }
 
-    Vector center() const { return 0.5 * (minCorner + maxCorner); }
+    Vector center() const { return 0.5 * (this->minCorner + this->maxCorner); }
     // Clamp a point to the coordinate-wise closest point in the box
     Vector clamp(const Vector &p) {
-        return p.cwiseMax(minCorner).cwiseMin(maxCorner);
+        return p.cwiseMax(this->minCorner).cwiseMin(this->maxCorner);
     }
 
     // Get the interpolation coordinates of a point.
     // These are inside [0, 1]^dim if the point is in the box.
     Vector interpolationCoordinates(const Vector &v) const {
-        return ((v - minCorner).array() / dimensions().array()).matrix();
+        return ((v - this->minCorner).array() / this->dimensions().array()).matrix();
     }
 
     virtual bool containsPoint(const Vector &p) const override {
-        return (p.array() >= minCorner.array()).all() &&
-               (p.array() <= maxCorner.array()).all();
-    }
-
-    Vector dimensions() const {
-        return maxCorner - minCorner;
+        return (p.array() >= this->minCorner.array()).all() &&
+               (p.array() <= this->maxCorner.array()).all();
     }
 
     // Expands the bounding box around its center so that dimension i is
     // increased by factors[i].
     void expand(const Vector &factors) {
-        Vector delta = .5 * (factors.array() * dimensions().array());
-        minCorner -= delta;
-        maxCorner += delta;
+        Vector delta = .5 * (factors.array() * this->dimensions().array());
+        this->minCorner -= delta;
+        this->maxCorner += delta;
     }
 
     void translate(const Vector &t) {
-        minCorner += t;
-        maxCorner += t;
+        this->minCorner += t;
+        this->maxCorner += t;
     }
 
     Real volume() const {
-        Vector widths = maxCorner - minCorner;
+        Vector widths = this->maxCorner - this->minCorner;
         Real result = 1.0;
         for (int i = 0; i < widths.rows(); ++i)
             result *= widths[i];
@@ -139,7 +262,7 @@ struct BBox : Region<_Vector> {
     }
 
     bool operator==(const BBox &b) const {
-        return ((minCorner == b.minCorner) && (maxCorner == b.maxCorner));
+        return ((this->minCorner == b.minCorner) && (this->maxCorner == b.maxCorner));
     }
     bool operator!=(const BBox &b) const { return !(*this == b); }
 
@@ -157,7 +280,7 @@ struct BBox : Region<_Vector> {
         // first quadrant.
         Vector c_prime = (c - center()).cwiseAbs();
 
-        Vector boxHalfDims = .5 * dimensions();
+        Vector boxHalfDims = .5 * this->dimensions();
         if ((c_prime.array() > (boxHalfDims.array() + r)).any())
             return false;
 

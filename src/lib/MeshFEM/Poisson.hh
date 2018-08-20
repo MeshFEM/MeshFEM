@@ -69,9 +69,9 @@ public:
         env.setVectorValue("mesh_max_", mbb.maxCorner);
 
         for (auto cond : conds) {
-            env.setVectorValue("region_size_", cond->region.dimensions());
-            env.setVectorValue("region_min_",  cond->region.minCorner);
-            env.setVectorValue("region_max_",  cond->region.maxCorner);
+            env.setVectorValue("region_size_", cond->region->dimensions());
+            env.setVectorValue("region_min_",  cond->region->minCorner);
+            env.setVectorValue("region_max_",  cond->region->maxCorner);
             std::runtime_error unimplemented("Unimplemented BC type");
             size_t numMatched = 0;
             if (auto dc = std::dynamic_pointer_cast<const DirichletCondition<_K> >(cond)) {
