@@ -70,6 +70,7 @@ namespace MeshIO {
                                                 b.point.data(), b.point.data() + 3);
         }
 
+        int attribute = 0;
     };
 
     template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const MeshIO::IOVertex &p) { return ::truncateFromND<EmbeddingSpace, Point3D>(p.point); }
@@ -96,7 +97,7 @@ namespace MeshIO {
             static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
             static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Lines, Triangles, Quads, Tet, and Hex-sized elements");
         }
-
+        
         IOElement(const std::pair<size_t, size_t> &e) : Base{e.first, e.second} { }
 
         template<typename PType>
@@ -113,6 +114,8 @@ namespace MeshIO {
             return std::lexicographical_compare(  begin(),   end(),
                                                 b.begin(), b.end());
         }
+
+        int attribute = 0;
     };
     // Ascii element input
     std::istream  &operator>>(std::istream &, IOElement &);

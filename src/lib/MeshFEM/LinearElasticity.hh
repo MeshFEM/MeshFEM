@@ -346,28 +346,28 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             return weight * neumannTraction;
         }
 
-        template<class CornerPerturbations>
-        Vector nodalDeltaNeumannLoad(size_t ni, const CornerPerturbations &delta_p, Real neumannArea, Real intNablaDotV) const {
-            Vector result;
+    template<class CornerPerturbations>
+    Vector nodalDeltaNeumannLoad(size_t ni, const CornerPerturbations &delta_p, Real neumannArea, Real intNablaDotV) const {
+        Vector result;
 
-            // prepare phi
-            Interpolant<Real, _K - 1, _Deg> phi;
-            phi = 0;
-            phi[ni] = 1.0;
+        // prepare phi
+        Interpolant<Real, _K - 1, _Deg> phi;
+        phi = 0;
+        phi[ni] = 1.0;
 
-            // prepare dvol, representing \nabla . v
-            Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
+        // prepare dvol, representing \nabla . v
+        Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
 
-            // compute weight
-            Real weight = phi.integrate(dvol);
+        // compute weight
+        Real weight = phi.integrate(dvol);
 
-            result = weight * neumannTraction;
+        result = weight * neumannTraction;
 
-            // Now, sum up the term related to how the area change
-            result -= intNablaDotV / neumannArea * phi.integrate(Base::volume()) * neumannTraction;
+        // Now, sum up the term related to how the area change
+        result -= intNablaDotV / neumannArea * phi.integrate(Base::volume()) * neumannTraction;
 
-            return result;
-        }
+        return result;
+    }
 
         Vector neumannTraction;
 
@@ -484,6 +484,10 @@ public:
         m_system.solve(f, x);
         BENCHMARK_STOP_TIMER_SECTION("Elasticity Solve");
         return dofToNodeField(x);
+    }
+
+    VField solveAdjoint(const VField &f, const VField &/*u*/) const {
+        return solve(f);
     }
 
     // Get strain on element i (interpolant)
@@ -1026,6 +1030,11 @@ public:
     void removeNeumanConditions() {
         for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
             m_mesh.boundaryElement(i)->neumannTraction = Point::Zero();
+    }
+
+    void removeContactConditions() {
+        for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
+            m_mesh.boundaryElement(i)->isInContactRegion = false;
     }
 
     void applyNoRigidMotionConstraint() {

@@ -64,10 +64,6 @@ public:
 
     }
 
-    const _Mesh &mesh() const { return m_linearElasticitySimulator.mesh(); }
-
-    _Mesh &mesh() { return m_linearElasticitySimulator.mesh(); }
-
     // Solve for equilibrium under DoF load f
     VField solve(const VField &f) {
         TMatrix K, C;
@@ -87,14 +83,10 @@ public:
         return solve(neumannLoad());
     }
 
-    // Compute the load on the DoFs from the Neumann boundary conditions.
-    // (And optional per-vertex delta function forces)
-    VField neumannLoad() const {
-        return m_linearElasticitySimulator.neumannLoad();
-    }
+    VField solveAdjoint(const VField &f, const VField &u) const {
+        std::vector<Real> result = m_system.solveAdjointSystem(f, u);
 
-    size_t numDoFs()  const {
-        return m_linearElasticitySimulator.numDoFs();
+        return m_linearElasticitySimulator.dofToNodeField(result);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -236,6 +228,40 @@ public:
         m_linearElasticitySimulator.applyBoundaryConditions(linearConditions);
     }
 
+
+    void dumpSystem(const std::string &path) const {
+        m_system->dumpLinearUpper(path);
+    }
+
+
+    //-------------------------------------------------------------------------------------------//
+    // SIMPLE FORWARDS TO LINEAR ELASTICITY SIMULATOR!
+    //-------------------------------------------------------------------------------------------//
+    void removeDirichletConditions() {
+        m_linearElasticitySimulator.removeDirichletConditions();
+    }
+
+    void removeNeumanConditions() {
+        m_linearElasticitySimulator.removeNeumanConditions();
+    }
+
+    void removeContactConditions() {
+        m_linearElasticitySimulator.removeContactConditions();
+    }
+
+    void setInternalElements(BBox<VectorND<N>> cell) {
+        m_linearElasticitySimulator.setInternalElements(cell);
+    }
+
+    template<class _StressField>
+    VField perElementStressFieldLoad(const _StressField &stress) const {
+        return m_linearElasticitySimulator.perElementStressFieldLoad(stress);
+    }
+
+    size_t DoF(int node) const {
+        return m_linearElasticitySimulator.DoF(node);
+    }
+
     // Strain field as a per-element interpolant
     std::vector<Strain> strainField(const VField &u) const {
         return m_linearElasticitySimulator.strainField(u);
@@ -266,9 +292,48 @@ public:
         return m_linearElasticitySimulator.dofToNodeField(x);
     }
 
-    void dumpSystem(const std::string &path) const {
-        m_system->dumpLinearUpper(path);
+    const _Mesh &mesh() const {
+        return m_linearElasticitySimulator.mesh();
     }
+
+    _Mesh &mesh() {
+        return m_linearElasticitySimulator.mesh();
+    }
+
+    // Compute the load on the DoFs from the Neumann boundary conditions.
+    // (And optional per-vertex delta function forces)
+    VField neumannLoad() const {
+        return m_linearElasticitySimulator.neumannLoad();
+    }
+
+    size_t numDoFs()  const {
+        return m_linearElasticitySimulator.numDoFs();
+    }
+
+    OForm deltaVolumeForm() const {
+        return m_linearElasticitySimulator.deltaVolumeForm();
+    }
+
+    VField deltaNeumannLoad(const VField &delta_p) const {
+        return m_linearElasticitySimulator.deltaNeumannLoad(delta_p);
+    }
+
+    Real neumannBoundaryArea() {
+        return m_linearElasticitySimulator.neumannBoundaryArea();
+    }
+
+    SMField deltaAverageStrainField(const VField &u, const VField &deltaU, const VField &deltaP) const {
+        return m_linearElasticitySimulator.deltaAverageStrainField(u, deltaU, deltaP);
+    }
+
+    VField applyDeltaStiffnessMatrix(const VField &u, const VField &deltaP) const {
+        return m_linearElasticitySimulator.applyDeltaStiffnessMatrix(u, deltaP);
+    }
+
+    template<class ElementHandle, typename PerVertexField, typename T>
+    void extractElementCornerValues(const ElementHandle &e, const PerVertexField &f, std::vector<T> &cornerValues) const {
+        return m_linearElasticitySimulator.extractElementCornerValues(e, f, cornerValues);
+    };
 
 private:
 

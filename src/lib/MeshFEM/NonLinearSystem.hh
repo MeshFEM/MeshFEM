@@ -11,6 +11,10 @@
 template<typename _Real, class _Mesh, class _LUFactorizer = UmfpackFactorizer,
         class _LLTFactorizer = CholmodFactorizer>
 class NonLinearSystem {
+    typedef _Mesh Mesh;
+    static constexpr size_t N = Mesh::FEMData::N;
+    typedef VectorField<Real, N> VField;
+
 public:
     typedef TripletMatrix<Triplet<_Real>> TMatrix;
 
@@ -81,7 +85,7 @@ public:
 
     // Solve linear system where matrix is symmetric
     template<class _Vec>
-    void solveLinearSystem(const TMatrix &S, const _Vec &rhs, std::vector<_Real> &x, bool isSPD = false) {
+    void solveLinearSystem(const TMatrix &S, const _Vec &rhs, std::vector<_Real> &x, bool isSPD = false) const {
         std::unique_ptr<_LUFactorizer>  LU;
         std::unique_ptr<_LLTFactorizer> LLT;
 
@@ -176,6 +180,23 @@ public:
         return sqrt(error);
     }
 
+    template<class _Vec>
+    std::vector<_Real> solveAdjointSystem(const _Vec &f, const _Vec &u) const {
+        std::vector<_Real> p;
+        std::vector<_Real> pReduced(m_AUpper.m, 0.0);
+        std::vector<_Real> uReduced = m_systemTransformations.originalToReducedVector(u);
+        std::vector<_Real> fReduced = m_systemTransformations.originalToReducedVector(f);
+
+        TMatrix adjointStiffnessMatrix = computeFullJacobian(m_AUpper, m_reducedNonLinearTerms, uReduced);
+
+        solveLinearSystem(adjointStiffnessMatrix, fReduced, pReduced, true);
+
+        p = m_systemTransformations.reducedDisplacementToOriginalVector(pReduced);
+
+        return p;
+    }
+
+
     // Solve K u - f + N(u) = 0 under any existing fixed variables.
     // Since we are dealing with nonlinear systems, we use here a simple Newton Method implementation
     template<class _Vec>
@@ -241,13 +262,6 @@ public:
         m_AUpper.dump(path);
     }
 
-    ~NonLinearSystem() { clear(); }
-private:
-
-    typedef _Mesh Mesh;
-    static constexpr size_t N = Mesh::FEMData::N;
-    typedef VectorField<Real, N> VField;
-
     template<class _Vec>
     VField dofToNodeField(const _Vec &x) const {
         // we expect that x corresponds to entire set of nodes (and coordinates)
@@ -261,6 +275,9 @@ private:
         return f;
     }
 
+    ~NonLinearSystem() { clear(); }
+
+private:
     bool m_isSPD = false;
 
     // Track fixed variables after fixVariables have been called.
