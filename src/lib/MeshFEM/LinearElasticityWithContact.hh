@@ -8,6 +8,7 @@
 #include "LinearElasticity.hh"
 #include "NonLinearSystem.hh"
 #include "NormalContactForceFunction.hh"
+#include "NormalFractureForceFunction.hh"
 
 namespace LinearElasticityWithContact {
 
@@ -38,9 +39,20 @@ public:
     typedef TripletMatrix<Triplet<Real> > TMatrix;
 
     template<class Elements, class Vertices>
-    Simulator(const Elements &elems, const Vertices &vertices, Real alpha = 1e-4) : m_linearElasticitySimulator(elems, vertices),
-                                                                 m_normalContactForceFunction(m_linearElasticitySimulator.mesh(), alpha),
-                                                                 m_system(m_normalContactForceFunction, m_linearElasticitySimulator.mesh().numNodes(), m_linearElasticitySimulator.mesh()) {
+    Simulator(const Elements &elems, const Vertices &vertices, Real alpha = 1e-4) : m_linearElasticitySimulator(elems, vertices) {
+
+        std::vector< std::shared_ptr<NonLinearElasticityFunction<Real>> > nonLinearTerms;
+
+        // Normal contact force function (, where the contact is with rigid body)
+        std::shared_ptr<NonLinearElasticityFunction<Real>> normalContactForceFunction = std::make_shared<NormalContactForceFunction<Real,_Mesh>>(m_linearElasticitySimulator.mesh(), alpha);
+        nonLinearTerms.push_back(normalContactForceFunction);
+
+        // Normal fracture force function (related to contact between parts of same object)
+        //std::shared_ptr<NonLinearElasticityFunction<Real>> normalFractureForceFunction = std::make_shared<NormalFractureForceFunction<Real,_Mesh>>(m_linearElasticitySimulator.mesh(), alpha);
+        //nonLinearTerms.push_back(normalFractureForceFunction);
+
+        m_system = std::make_shared<NonLinearSystem<Real, _Mesh>>(nonLinearTerms, m_linearElasticitySimulator.mesh().numNodes(), m_linearElasticitySimulator.mesh());
+
         size_t negativeElements = 0;
         for (auto e : mesh().elements())
             if (e->volume() < 0) ++negativeElements;
@@ -63,10 +75,10 @@ public:
         std::vector<Real>   fixedVarValues;
         assembleConstrainedSystem(K, fixedVars, fixedVarValues);
 
-        m_system.set(K);
-        m_system.fixVariables(fixedVars, fixedVarValues);
+        m_system->set(K);
+        m_system->fixVariables(fixedVars, fixedVarValues);
 
-        std::vector<Real> x = m_system.solve(f);
+        std::vector<Real> x = m_system->solve(f);
 
         return m_linearElasticitySimulator.dofToNodeField(x);
     }
@@ -108,6 +120,35 @@ public:
         m_linearElasticitySimulator.m_assembleStiffnessMatrix(K);
     }
 
+    bool areOppositeElements(typename _Mesh:: template BEHandle<_Mesh> e1, typename _Mesh:: template BEHandle<_Mesh> e2) {
+         bool found = false;
+
+        for (size_t c1 = 0; c1 < e1.numVertices(); c1++) {
+            found = false;
+            Point p1 = e1.vertex(c1).volumeVertex().node()->p;
+
+            for (size_t c2 = 0; c2 < e2.numVertices(); c2++) {
+                Point p2 = e2.vertex(c2).volumeVertex().node()->p;
+
+                // Verify if current points are the same
+                if ((p1-p2).norm() < 1e-10) {
+
+                    // If they are, set them as contact vertices
+                    //e1.vertex(c1).contactVertex = e2.vertex(c2).index();
+                    //e2.vertex(c2).contactVertex = e1.vertex(c1).index();
+
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                break;
+        }
+
+        return found;
+    }
+
     void applyBoundaryConditions(const std::vector<CondPtr<N>> &conds) {
 
         // Deal with contact regions, but leave other conditions to be analyzed by linear elasticity part
@@ -127,6 +168,65 @@ public:
                 }
                 if (!anyRegion)
                     throw std::runtime_error("Contact region unmatched");
+            }
+            else if (auto fc = dynamic_cast<const FractureCondition<N> *>(cond.get())) {
+                bool anyRegion = false;
+                std::vector<typename _Mesh::template BEHandle<_Mesh>> fractureElements;
+
+                // Collect all edges participating in the fracture region
+                for (typename _Mesh:: template BEHandle<_Mesh> be : mesh().boundaryElements()) {
+                    Point center(Point::Zero());
+                    for (size_t c = 0; c < be.numVertices(); ++c)
+                        center += be.vertex(c).volumeVertex().node()->p;
+                    center /= be.numVertices();
+                    if (fc->containsPoint(center)) {
+                        anyRegion = true;
+                        fractureElements.push_back(be);
+                    }
+                }
+
+                if (!anyRegion)
+                    throw std::runtime_error("Fracture region unmatched");
+
+                // Loop through edges in fracture region to find pairs
+                for (typename _Mesh:: template BEHandle<_Mesh> e1 : fractureElements) {
+                    // Skip if edge was already set
+                    if (e1->isInContactRegion)
+                        continue;
+
+                    //std::cout << "Element: " << e1.index() << std::endl;
+
+                    for (typename _Mesh:: template BEHandle<_Mesh> e2 : fractureElements) {
+
+                        // Discard same edge
+                        if (e2->isInContactRegion || e1.index() == e2.index())
+                            continue;
+
+                        if (areOppositeElements(e1, e2)) {
+
+                            //std::cout << " Found contact element: " << e2.index() << std::endl;
+
+                            // Mark as they are in contact
+                            e1->isInContactRegion = true;
+                            e2->isInContactRegion = true;
+
+                            // Set opposite/contact edge
+                            e1->contactElement = e2.index();
+                            e2->contactElement = e1.index();
+
+                            anyRegion = true;
+                            break;
+                        }
+                    }
+
+                    if (!e1->isInContactRegion) {
+                        std::cerr << "Warning! No opposite element found for element: " << std::endl;
+                        for (size_t c = 0; c < e1.numVertices(); ++c)
+                            std::cout <<"    " << e1.vertex(c).volumeVertex().node()->p << std::endl;
+                    }
+                }
+
+
             }
             else {
                 linearConditions.push_back(cond);
@@ -167,7 +267,7 @@ public:
     }
 
     void dumpSystem(const std::string &path) const {
-        m_system.dumpLinearUpper(path);
+        m_system->dumpLinearUpper(path);
     }
 
 private:
@@ -175,11 +275,11 @@ private:
     // Saves linear version of linear elasticity inside, to use necessary operations
     LinearElasticity::Simulator<_Mesh> m_linearElasticitySimulator;
 
-    // Normal contact force function
-    NormalContactForceFunction<Real,_Mesh> m_normalContactForceFunction;
-
-    // attribute containing solver for non linear system
-    NonLinearSystem<Real, _Mesh> m_system;
+    // Attribute containing solver for non linear system
+    // Two terms are currently implemented in our non linear system:
+    // Normal contact force function (, where the contact is with rigid body)
+    // Normal fracture force function (related to contact between parts of same object)
+    std::shared_ptr<NonLinearSystem<Real, _Mesh>> m_system;
 };
 
 

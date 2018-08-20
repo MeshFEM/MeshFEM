@@ -346,28 +346,28 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             return weight * neumannTraction;
         }
 
-    template<class CornerPerturbations>
-    Vector nodalDeltaNeumannLoad(size_t ni, const CornerPerturbations &delta_p, Real neumannArea, Real intNablaDotV) const {
-        Vector result;
+        template<class CornerPerturbations>
+        Vector nodalDeltaNeumannLoad(size_t ni, const CornerPerturbations &delta_p, Real neumannArea, Real intNablaDotV) const {
+            Vector result;
 
-        // prepare phi
-        Interpolant<Real, _K - 1, _Deg> phi;
-        phi = 0;
-        phi[ni] = 1.0;
+            // prepare phi
+            Interpolant<Real, _K - 1, _Deg> phi;
+            phi = 0;
+            phi[ni] = 1.0;
 
-        // prepare dvol, representing \nabla . v
-        Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
+            // prepare dvol, representing \nabla . v
+            Real dvol = Base::volume() * Base::relativeDeltaVolume(delta_p);
 
-        // compute weight
-        Real weight = phi.integrate(dvol);
+            // compute weight
+            Real weight = phi.integrate(dvol);
 
-        result = weight * neumannTraction;
+            result = weight * neumannTraction;
 
-        // Now, sum up the term related to how the area change
-        result -= intNablaDotV / neumannArea * phi.integrate(Base::volume()) * neumannTraction;
+            // Now, sum up the term related to how the area change
+            result -= intNablaDotV / neumannArea * phi.integrate(Base::volume()) * neumannTraction;
 
-        return result;
-    }
+            return result;
+        }
 
         Vector neumannTraction;
 
@@ -378,7 +378,9 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
         // stitched together.
         bool isInternal = false;
 
-        bool isInContactRegion = false;
+        bool isInContactRegion = false; // true only if edge is in contact with other object
+
+        int  contactElement = -1; // index to other element of the mesh with exact same vertices
     };
 
     struct BoundaryNode {
@@ -410,6 +412,8 @@ struct Data : public DefaultFEMData<_K, _Deg, EmbeddingSpace> {
             }
             dirichletRegionIdx = idx;
         }
+
+        int contactNode = -1; // index to other node of the mesh with exact same position
     };
 };
 };

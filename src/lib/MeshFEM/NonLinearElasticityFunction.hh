@@ -164,13 +164,15 @@ public:
 
     // Size. Number of vector positions
     virtual size_t size() const = 0;
+
+    virtual ~NonLinearElasticityFunction() {};
 };
 
 template<typename Real>
 class ReducedNonLinearElasticityFunction : NonLinearElasticityFunction<Real> {
 public:
 
-    ReducedNonLinearElasticityFunction(NonLinearElasticityFunction<Real> &originalFunction) :
+    ReducedNonLinearElasticityFunction(std::shared_ptr<NonLinearElasticityFunction<Real>> originalFunction) :
             m_function(originalFunction){
         m_size = 0;
     }
@@ -182,7 +184,7 @@ public:
     }
 
     void fixVariables(const std::vector<size_t> &fixedVars, const std::vector<Real>  &fixedVarValues) {
-        m_systemTransformations = SystemTransformations<Real>(m_function.size(), fixedVars, fixedVarValues);
+        m_systemTransformations = SystemTransformations<Real>(m_function->size(), fixedVars, fixedVarValues);
     }
 
     // Reduced form: meaning that u corresponds to displacement in nodes not fixed. Also, result is vector with same size
@@ -192,7 +194,7 @@ public:
         std::vector<Real> u = m_systemTransformations.reducedDisplacementToOriginalVector(uReduced);
 
         // Compute full result
-        std::vector<Real> originalResult = m_function.evaluate(u);
+        std::vector<Real> originalResult = m_function->evaluate(u);
 
         // Pass complete result to reduced result using reducedVarForVar
         std::vector<Real> reducedResult = m_systemTransformations.originalToReducedVector(originalResult);
@@ -207,7 +209,7 @@ public:
         std::vector<Real> u = m_systemTransformations.reducedDisplacementToOriginalVector(uReduced);
 
         // Compute full matrix result
-        TripletMatrix<Triplet<Real>> originalResult = m_function.jacobian(u);
+        TripletMatrix<Triplet<Real>> originalResult = m_function->jacobian(u);
 
         // Pass complete result to reduced result using reducedVarForVar, eliminating rows and columns to be reduced
         TripletMatrix<Triplet<Real>> reducedResult = m_systemTransformations.originalToReducedMatrix(originalResult);
@@ -221,7 +223,7 @@ public:
 
 
 private:
-    NonLinearElasticityFunction<Real> &m_function;
+    std::shared_ptr<NonLinearElasticityFunction<Real>> m_function;
     SystemTransformations<Real> m_systemTransformations;
     size_t m_size;
 };

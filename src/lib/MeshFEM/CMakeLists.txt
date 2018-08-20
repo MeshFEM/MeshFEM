@@ -35,6 +35,7 @@ add_library(MeshFEM
 		JSFieldWriter.hh
 		Laplacian.hh
 		LinearElasticity.hh
+		LinearElasticityWithContact.hh
 		LinearIndexer.hh
 		MassMatrix.hh
 		MaterialField.hh
@@ -47,6 +48,9 @@ add_library(MeshFEM
 		MSHFieldParser.cc
 		MSHFieldParser.hh
 		MSHFieldWriter.hh
+		NonLinearElasticityFunction.hh
+		NonLinearSystem.hh
+		NormalContactForceFunction.hh
 		NTuple.hh
 		OneForm.hh
 		OrthotropicHomogenization.hh

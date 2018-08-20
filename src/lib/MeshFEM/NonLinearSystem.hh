@@ -14,10 +14,16 @@ class NonLinearSystem {
 public:
     typedef TripletMatrix<Triplet<_Real>> TMatrix;
 
-    NonLinearSystem(NonLinearElasticityFunction<Real> &nonLinearTerm, size_t numVars, _Mesh &mesh) : m_reducedNonLinearTerm(nonLinearTerm), m_mesh(mesh)
+    NonLinearSystem(std::vector<std::shared_ptr<NonLinearElasticityFunction<Real>>> &nonLinearTerms,
+            size_t numVars, _Mesh &mesh) : m_mesh(mesh)
     {
         m_numVars = numVars;
         m_fixedVarRHSContribution.assign(m_numVars, 0.0);
+
+        // Add reduced version of non linear terms
+        for (size_t i=0; i<nonLinearTerms.size(); i++) {
+            m_reducedNonLinearTerms.push_back(ReducedNonLinearElasticityFunction<Real>(nonLinearTerms[i]));
+        }
     }
 
     // set the system
@@ -39,7 +45,11 @@ public:
 
         BENCHMARK_START_TIMER("fixVariables");
 
-        m_reducedNonLinearTerm.fixVariables(fixedVars, fixedVarValues);
+        // Fix variables in all non-linear terms
+        for (size_t i=0; i<m_reducedNonLinearTerms.size(); i++) {
+            m_reducedNonLinearTerms[i].fixVariables(fixedVars, fixedVarValues);
+        }
+
         m_systemTransformations = SystemTransformations<Real>(m_numVars, fixedVars, fixedVarValues);
 
         // Generate contribution of linear term to the RHS when eliminating fixed variables
@@ -93,27 +103,38 @@ public:
     }
 
     // Compute full function! Notice that all vectors and matrices are in reduced form (and already considering fixed terms)
-    std::vector<Real> computeFullFunction(const TMatrix &K, const std::vector<Real> &F_N, const std::vector<Real> &R, ReducedNonLinearElasticityFunction<Real> &N_C, const std::vector<Real> &u) {
+    // Here, NL_C means non linear contact
+    std::vector<Real> computeFullFunction(const TMatrix &K, const std::vector<Real> &F_N, const std::vector<Real> &R, std::vector<ReducedNonLinearElasticityFunction<Real>> &NL_C, const std::vector<Real> &u) {
         std::vector<Real> result(F_N.size());
         std::vector<Real> linearTerm = K.apply(u);
-        std::vector<Real> nonLinearTerm = N_C.evaluate(u);
+        std::vector<std::vector<Real>> nonLinearTerms;
+
+        // Evaluate all non linear terms
+        for (size_t t=0; t<NL_C.size(); t++) {
+            nonLinearTerms.push_back(NL_C[t].evaluate(u));
+        }
 
         // For each term, compute
         for (unsigned i = 0; i < linearTerm.size(); i++) {
             //std::cout << "Linear term: " << linearTerm[i] - F_N[i] + R[i] << std::endl;
-            //std::cout << "Nonlinear term: " << nonLinearTerm[i] << std::endl;
             //std::cout << "Computed : " << linearTerm[i] << std::endl;
             //std::cout << "Force: " << F_N[i] << std::endl;
 
-            result[i] = linearTerm[i] - F_N[i] + R[i] + nonLinearTerm[i];
+            result[i] = linearTerm[i] - F_N[i] + R[i];
+
+            for (size_t t=0; t<nonLinearTerms.size(); t++) {
+                //std::cout << "Nonlinear term: " << nonLinearTerms[t][i] << std::endl;
+                result[i] += nonLinearTerms[t][i];
+            }
         }
 
         return result;
     }
 
     // Compute negative of full function! Notice that all vectors and matrices are in reduced form (and already considering fixed terms)
-    std::vector<Real> computeNegativeFullFunction(const TMatrix &K, const std::vector<Real> &F_N, const std::vector<Real> &R, ReducedNonLinearElasticityFunction<Real> &N_C, const std::vector<Real> &u) {
-        std::vector<Real> result = computeFullFunction(K, F_N, R, N_C, u);
+    // Here, NL_C means non linear contact
+    std::vector<Real> computeNegativeFullFunction(const TMatrix &K, const std::vector<Real> &F_N, const std::vector<Real> &R, std::vector<ReducedNonLinearElasticityFunction<Real>> &NL_C, const std::vector<Real> &u) {
+        std::vector<Real> result = computeFullFunction(K, F_N, R, NL_C, u);
 
         // For each term, compute
         for (unsigned i = 0; i < result.size(); i++) {
@@ -124,11 +145,15 @@ public:
     }
 
     // Compute full jacobian
-    TMatrix computeFullJacobian(const TMatrix &K, ReducedNonLinearElasticityFunction<Real> &N_C, const std::vector<Real> &u) {
+    // Here, NL_C means non linear contact
+    TMatrix computeFullJacobian(const TMatrix &K, std::vector<ReducedNonLinearElasticityFunction<Real>> &NL_C, const std::vector<Real> &u) {
         TMatrix result = K;
-        TMatrix nonLinearJacobian = N_C.jacobian(u);
 
-        result.nz.insert(result.nz.end(), nonLinearJacobian.nz.begin(), nonLinearJacobian.nz.end());
+        for (size_t t=0; t<NL_C.size(); t++) {
+            TMatrix nonLinearJacobian = NL_C[t].jacobian(u);
+            result.nz.insert(result.nz.end(), nonLinearJacobian.nz.begin(), nonLinearJacobian.nz.end());
+        }
+
         result.sumRepeated();
 
         return result;
@@ -167,7 +192,7 @@ public:
         // Loop until solution is obtained with low error
         //MSHFieldWriter writer("newtonSolutions.msh", m_mesh);
         while (it < maxIt) {
-            std::vector<Real> negativeFunctionValue = computeNegativeFullFunction(m_AUpper, fReduced, m_fixedVarRHSContribution, m_reducedNonLinearTerm, uReduced);
+            std::vector<Real> negativeFunctionValue = computeNegativeFullFunction(m_AUpper, fReduced, m_fixedVarRHSContribution, m_reducedNonLinearTerms, uReduced);
 
             Real error = computeError(negativeFunctionValue);
             std::cout << "Error: " << error << std::endl;
@@ -179,7 +204,7 @@ public:
 
             //writer.addField("it" + std::to_string(it), dofToNodeField(m_systemTransformations.reducedToOriginalVector(negativeFunctionValue)), DomainType::PER_NODE);
 
-            TMatrix jacobian = computeFullJacobian(m_AUpper, m_reducedNonLinearTerm, uReduced);
+            TMatrix jacobian = computeFullJacobian(m_AUpper, m_reducedNonLinearTerms, uReduced);
 
             // Find next step
             std::vector<_Real> step(m_AUpper.m);
@@ -242,7 +267,7 @@ private:
     size_t m_numVars;
 
     // Structure holding function that computes contact forces and the jacobian
-    ReducedNonLinearElasticityFunction<Real> m_reducedNonLinearTerm;
+    std::vector<ReducedNonLinearElasticityFunction<Real>> m_reducedNonLinearTerms;
 
     //TODO: remove after debugging
     _Mesh &m_mesh;
