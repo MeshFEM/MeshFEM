@@ -881,9 +881,9 @@ public:
         size_t dirichletRegionIdx = 0;
         if (conds.size() > 0) m_system.clear();
         for (const auto &cond : conds) {
-            env.setVectorValue("region_size_", cond->region.dimensions());
-            env.setVectorValue("region_min_",  cond->region.minCorner);
-            env.setVectorValue("region_max_",  cond->region.maxCorner);
+            env.setVectorValue("region_size_", cond->region->dimensions());
+            env.setVectorValue("region_min_",  cond->region->minCorner);
+            env.setVectorValue("region_max_",  cond->region->maxCorner);
             std::runtime_error illegalCondition("Illegal BC type");
             std::runtime_error unimplemented("Unimplemented BC type");
             std::string nonbdryMsg("Condition applied to non-boundary node ");

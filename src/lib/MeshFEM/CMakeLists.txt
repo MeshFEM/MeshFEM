@@ -130,6 +130,7 @@ target_link_libraries(${PROJECT_NAME}
         tinyexpr::tinyexpr
         cholmod::cholmod
         umfpack::umfpack
+		CGAL::CGAL
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
