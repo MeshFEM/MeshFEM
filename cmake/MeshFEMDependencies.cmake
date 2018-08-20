@@ -110,13 +110,6 @@ find_package(Cholmod REQUIRED) # provides cholmod::cholmod
 # UmfPack solver
 find_package(Umfpack REQUIRED) # provides umfpack::umfpack
 
-# CGAL library
-if(NOT TARGET CGAL::CGAL)
-    meshfem_download_cgal()
-    set(CGAL_DIR ${MESHFEM_EXTERNAL}/cgal)
-    find_package(CGAL CONFIG REQUIRED COMPONENTS PATHS ${CGAL_DIR} NO_DEFAULT_PATH)
-endif()
-
 ################################################################################
 # Optional libraries
 ################################################################################

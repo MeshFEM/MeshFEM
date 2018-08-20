@@ -18,9 +18,6 @@
 #include <algorithm>
 #include <type_traits>
 
-//#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-//#include <CGAL/Polygon_2.h>
-
 template<typename _Vector>
 struct Region {
     typedef _Vector                 Vector;
@@ -48,12 +45,7 @@ struct PathRegion : Region<_Vector> {
     typedef typename Vector::Scalar Real;
 
     // You can construct the polygonal region using a list of points which it is assumed to be in order of edges and
-    PathRegion(std::vector<Vector> path) : m_path(path) {
-        //std::cout << "Path composed by " << path.size() << " vertices" << std::endl;
-        //for (size_t i=0; i<m_path.size(); i++) {
-        //    std::cout << "Path " << i << ": " << m_path[i] << std::endl;
-        //}
-    }
+    PathRegion(std::vector<Vector> path) : m_path(path) { }
 
     virtual bool containsPoint(const Vector &p) const override {
         bool result = false;
@@ -105,47 +97,70 @@ private:
 };
 
 // General Polygonal region
-/*template<typename _Vector>
+template<typename _Vector>
 struct PolygonalRegion : Region<_Vector> {
     typedef _Vector                 Vector;
     typedef typename Vector::Scalar Real;
 
-    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-    typedef K::Point_2 CGALPoint_2;
-    typedef CGAL::Polygon_2<K> CGALPolygon_2;
-
-    // You can construct the polygonal region using a list of points which it is assumed to be in order of edges and
-    //
+    // You can construct the polygonal region using a list of points which it is assumed to be in order
     PolygonalRegion(std::vector<Vector> points) : m_polygonPoints(points) {
-        for (size_t i=0; i<m_polygonPoints.size(); i++) {
-            CGALPoint_2 cgalNode(m_polygonPoints[i][0], m_polygonPoints[i][1]);
-            m_polygon.push_back(cgalNode);
+        Vector outsidePoint;
+
+        // Find point that I know for sure is outside polygon
+        Real smallestX = points[0][0];
+        for (unsigned i=1; i < points.size(); i++) {
+            if (smallestX > points[i][0]) {
+                smallestX = points[i][0];
+            }
         }
+
+        m_outsidePoint[0] = smallestX - 1.0;
+        m_outsidePoint[1] = 1.90588;
     }
 
     virtual bool containsPoint(const Vector &p) const override {
         bool result;
-        CGALPoint_2 cgalNode(p[0], p[1]);
+        int nIntersections = 0;
 
-        switch(m_polygon.bounded_side(cgalNode)) {
-            case CGAL::ON_BOUNDED_SIDE :
-                result = true;
-                break;
-           case CGAL::ON_BOUNDARY:
-                result = true;
-                break;
-           case CGAL::ON_UNBOUNDED_SIDE:
-                result = false;
-                break;
+        // A point is inside if and only if the edge connecting to an outside point intersect the
+        // polygon an odd number of times
+        for (size_t i = 0; i<m_polygonPoints.size(); i++) {
+
+            // Define edge we are verifying now
+            Vector init = m_polygonPoints[i];
+            Vector end = m_polygonPoints[(i+1) % m_polygonPoints.size()];
+
+            if (doesIntersect(init, end, m_outsidePoint, p)) {
+                nIntersections++;
+            }
         }
 
-        return result;
+        return (nIntersections % 2) == 1;
     }
 
 private:
+    // Computes determinant of 2x2 matrix
+    Real inline determinant(Vector u, Vector v) const {
+        return u[0]*v[1] - u[1]*v[0];
+    }
+
+    // Return true iff [a,b] intersects [c,d]
+    bool doesIntersect(const Vector &a, const Vector &b, const Vector &c, const Vector &d) const {
+        const Real eps = 1e-10; // small epsilon for numerical precision
+
+        Real x = determinant(c - a, d - c);
+        Real y = determinant(b - a, a - c);
+        Real z = determinant(b - a, d - c);
+
+        if (std::abs(z) < eps || x*z < 0 || x*z > z*z || y*z < 0 || y*z > z*z)
+            return false;
+
+        return true;
+    }
+
     std::vector<Vector> m_polygonPoints;
-    CGALPolygon_2 m_polygon;
-};*/
+    Vector m_outsidePoint;
+};
 
 // Warning: uninitialized/default bboxes are always a dimension-zero bbox around
 // the origin. This may lead to unintended behavior if unions are performed

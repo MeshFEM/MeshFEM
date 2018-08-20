@@ -136,31 +136,31 @@ void writeBoundaryConditions(ostream &os,
         if (i > 0) os << ", ";
         os << " { \"type\": \"";
         VectorND<_N> value = VectorND<_N>::Zero();
-        if (auto cc = dynamic_cast<const NeumannCondition<_N> *>(c.get())) {
-            switch (cc->type) {
+        if (auto nc = dynamic_cast<const NeumannCondition<_N> *>(c.get())) {
+            switch (nc->type) {
                 case NeumannType::Pressure:
-                    value[0] = cc->pressure();
+                    value[0] = nc->pressure();
                     os << "pressure";
                     break;
                 case NeumannType::Traction:
-                    value = cc->traction();
+                    value = nc->traction();
                     os << "traction";
                     break;
                 case NeumannType::Force:
-                    value = cc->traction();
+                    value = nc->traction();
                     os << "force";
                     break;
                 default:
                     throw runtime_error("Illegal NeumannType");
             }
         }
-        else if (auto cc = dynamic_cast<const DirichletCondition<_N> *>(c.get())) {
+        else if (auto dc = dynamic_cast<const DirichletCondition<_N> *>(c.get())) {
             os << "dirichlet";
-            value = cc->displacement();
+            value = dc->displacement();
         }
-        else if (auto cc = dynamic_cast<const TargetCondition<_N> *>(c.get())) {
+        else if (auto tc = dynamic_cast<const TargetCondition<_N> *>(c.get())) {
             os << "target";
-            value = cc->displacement();
+            value = tc->displacement();
         }
         else throw runtime_error("Unsupported condition type.");
 
@@ -316,7 +316,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
 
                 region = std::make_shared< PathRegion<VectorND<_N>> >(path);
             }
-            /*else if (tcond.count("polygon")) {
+            else if (tcond.count("polygon")) {
                 std::vector<VectorND<_N>> polygon;
                 json jsonPolygon = tcond["polygon"];
                 for (auto jsonPoint : jsonPolygon) {
@@ -324,7 +324,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
                 }
 
                 region = std::make_shared< PolygonalRegion<VectorND<_N>> >(polygon);
-            }*/
+            }
             // Try to parse as plain vector first
             try {
                 value = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["value"]));
