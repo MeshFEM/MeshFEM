@@ -19,6 +19,8 @@ public:
         m_alpha = alpha;
     }
 
+    virtual ~NormalFractureForceFunction() = default;
+
     virtual std::vector<Real> evaluate(std::vector<Real> u) const override {
         std::vector<Real> result(N * m_mesh.numNodes(), 0.0);
         VField uVectorField = dofToNodeField(u);

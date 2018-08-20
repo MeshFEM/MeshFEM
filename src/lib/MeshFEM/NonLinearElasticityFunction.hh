@@ -166,8 +166,6 @@ public:
 
     // Size. Number of vector positions
     virtual size_t size() const = 0;
-
-    virtual ~NonLinearElasticityFunction() {};
 };
 
 template<typename Real>
