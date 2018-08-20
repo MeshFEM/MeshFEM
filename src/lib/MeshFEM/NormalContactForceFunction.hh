@@ -67,7 +67,7 @@ public:
         //MSHFieldWriter writer("normalContactForce.msh", m_mesh);
 
         for (auto ce : m_mesh.boundaryElements()) {
-            if (!ce->isInContactRegion)
+            if (!ce->isInContactRegion || ce->contactElement > 0)
                 continue;
 
             VectorND<N> normal = ce->normal();
@@ -120,7 +120,7 @@ public:
         result.reserve(perElementSize * perElementSize * m_mesh.numBoundaryElements());
 
         for (auto ce : m_mesh.boundaryElements()) {
-            if (!ce->isInContactRegion)
+            if (!ce->isInContactRegion || ce->contactElement > 0)
                 continue;
 
             VectorND<N> normal = ce->normal();

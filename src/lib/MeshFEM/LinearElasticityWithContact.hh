@@ -48,8 +48,8 @@ public:
         nonLinearTerms.push_back(normalContactForceFunction);
 
         // Normal fracture force function (related to contact between parts of same object)
-        //std::shared_ptr<NonLinearElasticityFunction<Real>> normalFractureForceFunction = std::make_shared<NormalFractureForceFunction<Real,_Mesh>>(m_linearElasticitySimulator.mesh(), alpha);
-        //nonLinearTerms.push_back(normalFractureForceFunction);
+        std::shared_ptr<NonLinearElasticityFunction<Real>> normalFractureForceFunction = std::make_shared<NormalFractureForceFunction<Real,_Mesh>>(m_linearElasticitySimulator.mesh(), alpha);
+        nonLinearTerms.push_back(normalFractureForceFunction);
 
         m_system = std::make_shared<NonLinearSystem<Real, _Mesh>>(nonLinearTerms, m_linearElasticitySimulator.mesh().numNodes(), m_linearElasticitySimulator.mesh());
 
