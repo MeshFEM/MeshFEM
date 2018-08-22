@@ -259,16 +259,16 @@ def execute(in_path, out_path):
 
     # Build contact regions
     added_vertices = 0
+    visited = [False] * len(vertices)
     while added_vertices < number_of_contact_vertices:
         # Find end node of a path (only one incident edge)
         for i in range(0, len(vertices)):
-            if len(vertices_connections[i]) == 1:
+            if len(vertices_connections[i]) == 1 and not visited[i]:
                 endnode = i
                 break
 
         # Starting from endnode, find entire path
         current_vertex = endnode
-        visited = [False] * len(vertices)
         visited[endnode] = True
         contact_path = [final_vertices[current_vertex].tolist()]
         added_vertices += 1
