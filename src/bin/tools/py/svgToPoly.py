@@ -5,7 +5,7 @@ import numpy as np
 import json
 
 SVG_NS = "http://www.w3.org/2000/svg"
-Tolerance = 1e-10
+Tolerance = 1e-5
 
 
 class ParseSVGException(Exception):
@@ -169,6 +169,14 @@ def execute(in_path, out_path):
 
     print("Total vertices: " + str(len(vertices)))
 
+    # Find hole points
+    hole_points = []
+    for circle in root.iter('{%s}circle' % SVG_NS):
+        cx = float(circle.get('cx'))
+        cy = -float(circle.get('cy'))
+
+        hole_points.append(np.array([cx, cy]))
+
     # With list of vertices, find out how to translate objects to origin and scale then correctly so they always
     # fall into [-1,1]^2
     min_corner = compute_min_corner(vertices)
@@ -219,8 +227,15 @@ def execute(in_path, out_path):
         out_file.write('{} {} {} {}\n'.format(index, v1_index, v2_index, -1))
         index += 1
 
+    # Print holes
+    index = 0
     out_file.write("\n# holes list\n")
-    out_file.write("0")
+    out_file.write(str(len(hole_points)) + "\n")
+    for hole in hole_points:
+        hole = 2 * (hole - center) / max_dimension
+        out_file.write('{} {} {}\n'.format(index, hole[0], hole[1]))
+        index += 1
+
     out_file.close()
 
     # This script also searches for boundary conditions and generates a json with the information collected
