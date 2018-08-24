@@ -56,7 +56,7 @@ struct PathRegion : Region<_Vector> {
 
             Real distance = computeDistancePointEdge(init, end, p);
 
-            if (distance < 1e-10) {
+            if (distance < 1e-8) {
                 result = true;
             }
         }

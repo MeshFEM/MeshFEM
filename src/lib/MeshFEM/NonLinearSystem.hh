@@ -203,6 +203,7 @@ public:
     std::vector<_Real> solve(const _Vec &f) {
         std::vector<_Real> u;
         std::vector<_Real> uReduced(m_AUpper.m, 0.0);
+        std::vector<_Real> bestSolution(m_AUpper.m, 0.0);
         std::vector<_Real> fReduced = m_systemTransformations.originalToReducedVector(f);
         size_t maxIt = 100;
         size_t it = 0;
@@ -217,6 +218,8 @@ public:
 
         // Loop until solution is obtained with low error
         //MSHFieldWriter writer("newtonSolutions.msh", m_mesh);
+        Real error;
+        Real lowestError = std::numeric_limits<Real>::max();
         while (it < maxIt) {
             std::vector<Real> negativeFunctionValue = computeNegativeFullFunction(m_AUpper, fReduced, m_fixedVarRHSContribution, m_reducedNonLinearTerms, uReduced);
 
@@ -226,6 +229,11 @@ public:
             if (error < 1e-8) {
                 std::cout << "Finished successfully in " << (it + 1) << " iterations" << std::endl;
                 break;
+            }
+
+            if (error < lowestError) {
+                lowestError = error;
+                bestSolution = uReduced;
             }
 
             //writer.addField("it" + std::to_string(it), dofToNodeField(m_systemTransformations.reducedToOriginalVector(negativeFunctionValue)), DomainType::PER_NODE);
@@ -244,6 +252,10 @@ public:
 
             updateDisplacement(uReduced, step);
             it++;
+        }
+
+        if (error > 1e-8) {
+            uReduced = bestSolution;
         }
 
         // Transform reduced displacent into whole vector

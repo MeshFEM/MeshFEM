@@ -329,9 +329,10 @@ def execute(in_path, out_path):
         print json.dumps(boundary_conditions_json, indent=4, sort_keys=True)
 
 
-if len(sys.argv) != 3:
-    print "usage: ./svgToPoly.py <input .svg> <output .poly>"
-    print "example: ./svgToPoly.py contact.svg contact.poly"
-    sys.exit(-1)
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print "usage: ./svgToPoly.py <input .svg> <output .poly>"
+        print "example: ./svgToPoly.py contact.svg contact.poly"
+        sys.exit(-1)
 
-execute(sys.argv[1], sys.argv[2])
+    execute(sys.argv[1], sys.argv[2])
