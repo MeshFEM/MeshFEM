@@ -92,7 +92,7 @@ struct TripletMatrix {
     }
 
     void clear() { nz.clear(); }
-    void reserve(size_t n) { nz.reserve(n); }
+    void reserve(size_t nn) { nz.reserve(nn); }
     size_t nnz() const { return nz.size(); }
     void addNZ(size_t i, size_t j, Real v) {
         assert((i < m) && (j < n));

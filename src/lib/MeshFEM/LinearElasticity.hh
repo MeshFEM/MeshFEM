@@ -947,17 +947,17 @@ public:
                     }
                 }
             }
-            else if (auto dc = dynamic_cast<const DirichletElementsCondition<N> *>(cond.get())) {
+            else if (auto dec = dynamic_cast<const DirichletElementsCondition<N> *>(cond.get())) {
                 ++dirichletRegionIdx;
                 for (auto be : m_mesh.boundaryElements()) {
                     IVectorND<N> idx;
                     for (size_t c = 0; c < be.numVertices(); ++c) {
                         idx[c] = be.vertex(c).volumeVertex().index();
                     }
-                    if (dc->containsElement(idx)) {
+                    if (dec->containsElement(idx)) {
                         for (size_t n = 0; n < be.numNodes(); ++n) {
                             env.setXYZ(be.node(n).volumeNode()->p);
-                            be.node(n)->setDirichlet(dc->componentMask, dc->displacement(env));
+                            be.node(n)->setDirichlet(dec->componentMask, dec->displacement(env));
                             be.node(n)->setDirichletRegion(dirichletRegionIdx);
                         }
                     }

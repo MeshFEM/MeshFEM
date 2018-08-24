@@ -22,7 +22,7 @@
 namespace po = boost::program_options;
 using namespace std;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: NormalContactForceFunctionTest [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);

@@ -218,12 +218,12 @@ public:
 
         // Loop until solution is obtained with low error
         //MSHFieldWriter writer("newtonSolutions.msh", m_mesh);
-        Real error;
+        Real error = 0.0;
         Real lowestError = std::numeric_limits<Real>::max();
         while (it < maxIt) {
             std::vector<Real> negativeFunctionValue = computeNegativeFullFunction(m_AUpper, fReduced, m_fixedVarRHSContribution, m_reducedNonLinearTerms, uReduced);
 
-            Real error = computeError(negativeFunctionValue);
+            error = computeError(negativeFunctionValue);
             std::cout << "Error: " << error << std::endl;
 
             if (error < 1e-8) {
