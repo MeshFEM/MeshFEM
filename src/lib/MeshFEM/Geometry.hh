@@ -38,6 +38,31 @@ struct Region {
     Vector minCorner, maxCorner;
 };
 
+// Point region (corresponds to a very small disk centerd on constructor parameter)
+template<typename _Vector>
+struct PointRegion : Region<_Vector> {
+    typedef _Vector               Vector;
+    typedef typename Vector::Scalar Real;
+
+    PointRegion(Vector center) : m_center(center) { }
+
+    virtual bool containsPoint(const Vector &p) const override {
+        bool result = false;
+
+        Real distance = (p - m_center).norm();
+
+        if (distance < 1e-8) {
+            result = true;
+        }
+
+        return result;
+    }
+
+private:
+    Vector m_center;
+};
+
+
 // Extruded path region
 template<typename _Vector>
 struct PathRegion : Region<_Vector> {

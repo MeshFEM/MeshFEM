@@ -1032,9 +1032,9 @@ public:
             m_mesh.boundaryElement(i)->neumannTraction = Point::Zero();
     }
 
-    void removeContactConditions() {
-        for (size_t i = 0; i < m_mesh.numBoundaryElements(); ++i)
-            m_mesh.boundaryElement(i)->isInContactRegion = false;
+    void removeAllBoundaryConditions() {
+        removeNeumanConditions();
+        removeDirichletConditions();
     }
 
     void applyNoRigidMotionConstraint() {

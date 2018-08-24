@@ -5,6 +5,7 @@
 #ifndef NORMALFRACTUREFORCEFUNCTION_H
 #define NORMALFRACTUREFORCEFUNCTION_H
 
+#include "MSHFieldWriter.hh"
 #include "NormalContactForceFunction.hh"
 
 template<typename Real, class _Mesh>

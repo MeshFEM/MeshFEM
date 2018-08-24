@@ -84,7 +84,7 @@ public:
     }
 
     VField solveAdjoint(const VField &f, const VField &u) const {
-        std::vector<Real> result = m_system.solveAdjointSystem(f, u);
+        std::vector<Real> result = m_system->solveAdjointSystem(f, u);
 
         return m_linearElasticitySimulator.dofToNodeField(result);
     }
@@ -233,6 +233,34 @@ public:
         m_system->dumpLinearUpper(path);
     }
 
+    void removeContactConditions() {
+        for (size_t i = 0; i < m_linearElasticitySimulator.mesh().numBoundaryElements(); ++i) {
+            if (m_linearElasticitySimulator.mesh().boundaryElement(i)->isInContactRegion && m_linearElasticitySimulator.mesh().boundaryElement(i)->contactElement < 0)
+                m_linearElasticitySimulator.mesh().boundaryElement(i)->isInContactRegion = false;
+        }
+    }
+
+    void removeFractureConditions() {
+        for (size_t i = 0; i < m_linearElasticitySimulator.mesh().numBoundaryElements(); ++i)
+            if (m_linearElasticitySimulator.mesh().boundaryElement(i)->isInContactRegion && m_linearElasticitySimulator.mesh().boundaryElement(i)->contactElement >= 0) {
+                m_linearElasticitySimulator.mesh().boundaryElement(i)->isInContactRegion = false;
+                m_linearElasticitySimulator.mesh().boundaryElement(i)->contactElement = -1;
+            }
+    }
+
+    void removeAllBoundaryConditions() {
+        removeContactConditions();
+        removeFractureConditions();
+        m_linearElasticitySimulator.removeAllBoundaryConditions();
+    }
+
+    // (re-)embed the mesh elements.
+    template<typename Vertices>
+    void updateMeshNodePositions(const Vertices &vertices) {
+        m_linearElasticitySimulator.mesh().setNodePositions(vertices);
+        m_system->clear();
+    }
+
 
     //-------------------------------------------------------------------------------------------//
     // SIMPLE FORWARDS TO LINEAR ELASTICITY SIMULATOR!
@@ -243,10 +271,6 @@ public:
 
     void removeNeumanConditions() {
         m_linearElasticitySimulator.removeNeumanConditions();
-    }
-
-    void removeContactConditions() {
-        m_linearElasticitySimulator.removeContactConditions();
     }
 
     void setInternalElements(BBox<VectorND<N>> cell) {

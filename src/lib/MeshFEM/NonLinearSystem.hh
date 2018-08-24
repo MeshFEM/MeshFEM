@@ -150,7 +150,7 @@ public:
 
     // Compute full jacobian
     // Here, NL_C means non linear contact
-    TMatrix computeFullJacobian(const TMatrix &K, std::vector<ReducedNonLinearElasticityFunction<Real>> &NL_C, const std::vector<Real> &u) {
+    TMatrix computeFullJacobian(const TMatrix &K, const std::vector<ReducedNonLinearElasticityFunction<Real>> &NL_C, const std::vector<Real> &u) const {
         TMatrix result = K;
 
         for (size_t t=0; t<NL_C.size(); t++) {
