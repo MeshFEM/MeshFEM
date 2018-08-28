@@ -326,13 +326,13 @@ def execute(in_path, out_path):
 
     if len(regions):
         boundary_conditions_json['regions'] = regions
-        print json.dumps(boundary_conditions_json, indent=4, sort_keys=True)
+        print(json.dumps(boundary_conditions_json, indent=4, sort_keys=True))
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print "usage: ./svgToPoly.py <input .svg> <output .poly>"
-        print "example: ./svgToPoly.py contact.svg contact.poly"
+        print("usage: ./svgToPoly.py <input .svg> <output .poly>")
+        print("example: ./svgToPoly.py contact.svg contact.poly")
         sys.exit(-1)
 
     execute(sys.argv[1], sys.argv[2])
