@@ -965,6 +965,8 @@ public:
             }
             else if (auto nec = dynamic_cast<const NeumannElementsCondition<N> *>(cond.get())) {
                 size_t numSet = 0;
+                Real regionArea = 0.0;
+                std::vector<size_t> forceRegion;
                 for (auto be : m_mesh.boundaryElements()) {
                     UnorderedTriplet elem(
                                    be.vertex(0).volumeVertex().index(),
@@ -976,12 +978,22 @@ public:
                              be->neumannTraction = -val.pressure() * be->normal();
                         else if (val.type == NeumannType::Traction)
                             be->neumannTraction =  val.traction();
-                        else throw unimplemented;
+                        else if (val.type == NeumannType::Force) {
+                            be->neumannTraction =  val.force();
+                            regionArea += be->volume();
+                            forceRegion.push_back(be.index());
+                        }
                         ++numSet;
                     }
                 }
                 if (numSet != nec->numElements())
                     throw std::runtime_error("Some element boundary conditions weren't matched.");
+
+                // If force is described, it corresponds to the force applied to a group of
+                // elements in a common region.
+                for (size_t bei : forceRegion) {
+                    m_mesh.boundaryElement(bei)->neumannTraction /= regionArea;
+                }
             }
             else if (auto dnc = dynamic_cast<const DirichletNodesCondition<N> *>(cond.get())) {
                 std::cerr << "WARNING: dirichlet region index currently not set for DirichletNodesCondition;"

@@ -146,7 +146,28 @@ public:
         // Deal with contact regions, but leave other conditions to be analyzed by linear elasticity part
         std::vector<CondPtr<N>> linearConditions;
         for (auto cond : conds) {
-            if (auto cc = dynamic_cast<const ContactCondition<N> *>(cond.get())) {
+            if (auto cec = dynamic_cast<const ContactElementsCondition<N> *>(cond.get())) {
+                for (auto be : mesh().boundaryElements()) {
+                    if (cec->containElement(be.index())) {
+                        be->isInContactRegion = true;
+                    }
+                }
+            }
+            else if (auto fec = dynamic_cast<const FractureElementsCondition<N> *>(cond.get())) {
+                for (auto be1 : mesh().boundaryElements()) {
+                    for (auto be2 : mesh().boundaryElements()) {
+                        UnorderedPair pair(be1.index(), be2.index());
+                        if (fec->ContainPair(pair)) {
+                            be1->isInContactRegion = true;
+                            be2->isInContactRegion = true;
+
+                            be1->contactElement = be2.index();
+                            be2->contactElement = be1.index();
+                        }
+                    }
+                }
+            }
+            else if (auto cc = dynamic_cast<const ContactCondition<N> *>(cond.get())) {
                 bool anyRegion = false;
                 for (auto be : mesh().boundaryElements()) {
                     Point center(Point::Zero());
@@ -217,8 +238,6 @@ public:
                             std::cout <<"    " << e1.vertex(c).volumeVertex().node()->p << std::endl;
                     }
                 }
-
-
             }
             else {
                 linearConditions.push_back(cond);

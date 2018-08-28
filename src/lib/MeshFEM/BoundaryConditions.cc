@@ -292,6 +292,10 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             parseElementConditionValues<_N>(tcond["values"], element_corners, element_values);
             assert(element_corners.size() == element_values.size());
         }
+        else if (type == "force elements") {
+            parseElementConditionValues<_N>(tcond["values"], element_corners, element_values);
+            assert(element_corners.size() == element_values.size());
+        }
         else {
             if (tcond.count("box")) {
                 region->minCorner = truncateFrom3D<VectorND<_N>>(parseVectorLenient(tcond["box"]["minCorner"]));
@@ -365,6 +369,7 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
             else if (type == "target nodes")    c =   new     TargetNodesCondition<_N>(node_indices, node_values, cmask);
             else if (type == "traction elements") c = new NeumannElementsCondition<_N>(NeumannType::Traction, element_corners, element_values);
             else if (type == "pressure elements") c = new NeumannElementsCondition<_N>(NeumannType::Pressure, element_corners, element_values);
+            else if (type == "force elements")    c = new NeumannElementsCondition<_N>(NeumannType::Force, element_corners, element_values);
             else if (type == "delta force")       c = new DeltaForceCondition<_N>(region, value);
             else if (type == "delta force nodes") c = new DeltaForceNodesCondition<_N>(node_indices, node_values);
             else    throw runtime_error("Invalid type '" + type + "'");

@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <set>
 #include <array>
 #include <map>
 #include <list>
@@ -34,9 +35,13 @@
 
 template<size_t _N>
 struct BoundaryCondition {
-    BoundaryCondition() : region(std::shared_ptr<Region<VectorND<_N>>>()) { }
+    BoundaryCondition() {
+        region = std::make_shared<Region<VectorND<_N>>>();
+        region->minCorner = VectorND<_N>::Zero();
+        region->maxCorner = VectorND<_N>::Zero();
+    }
     BoundaryCondition(const std::shared_ptr<Region<VectorND<_N>>> r) : region(r) {}
-    const std::shared_ptr<Region<VectorND<_N>>> region;
+    std::shared_ptr<Region<VectorND<_N>>> region;
     bool containsPoint(const VectorND<_N> &p) const { return region->containsPoint(p); }
     virtual ~BoundaryCondition() { }
 };
@@ -116,6 +121,30 @@ private:
     virtual ~ContactCondition() { }
 };
 
+// Initially, only important thing is the contact region itself. In the future, a friction coefficient may be added and
+// some other parameters
+template<size_t _N>
+struct ContactElementsCondition : public BoundaryCondition<_N> {
+    ContactElementsCondition(std::set<int> indices) {
+        m_contactIndices = indices;
+    }
+
+    bool containElement(int index) const {
+        if (m_contactIndices.find(index) == m_contactIndices.end()) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+private:
+    virtual ~ContactElementsCondition() { }
+
+    std::set<int> m_contactIndices;
+};
+
+
 // Fracture here represents contact between two regions of the object with same material
 template<size_t _N>
 struct FractureCondition : public BoundaryCondition<_N> {
@@ -123,6 +152,30 @@ struct FractureCondition : public BoundaryCondition<_N> {
 
 private:
     virtual ~FractureCondition() { }
+};
+
+// Fracture here represents contact between two regions of the object with same material
+// In the FractureElementsCondition case, we don't have a region but explicitly the indices
+// of the touching boundaries
+template<size_t _N>
+struct FractureElementsCondition : public BoundaryCondition<_N> {
+    FractureElementsCondition(std::set<UnorderedPair> pairs) {
+        m_contactPairs = pairs;
+    }
+
+    bool ContainPair(UnorderedPair pair) const {
+        if (m_contactPairs.find(pair) == m_contactPairs.end()) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+private:
+    virtual ~FractureElementsCondition() { }
+
+    std::set<UnorderedPair> m_contactPairs;
 };
 
 
@@ -215,12 +268,13 @@ struct NeumannElementsCondition : public BoundaryCondition<_N> {
         for (size_t i = 0; i < element_corners.size(); ++i) {
             if      (t == NeumannType::Traction) m_vals[element_corners[i]] = Value(values[i]);
             else if (t == NeumannType::Pressure) m_vals[element_corners[i]] = Value(values[i][0]);
+            else if (t == NeumannType::Force)    m_vals[element_corners[i]] = Value(values[i], t);
         }
     }
 
     struct Value {
         Value(Real p = 0.0) : type(NeumannType::Pressure) { m_val[0] = p; }
-        Value(const VectorND<_N> &t) : type(NeumannType::Traction), m_val(t) { }
+        Value(const VectorND<_N> &t, NeumannType inputType = NeumannType::Traction) : type(inputType), m_val(t) { }
         NeumannType type;
 
         Real pressure() const {
@@ -232,6 +286,12 @@ struct NeumannElementsCondition : public BoundaryCondition<_N> {
         const VectorND<_N> &traction() const {
             if (type != NeumannType::Traction)
                 throw std::runtime_error("Neumann condition isn't traction.");
+            return m_val;
+        }
+
+        const VectorND<_N> &force() const {
+            if (type != NeumannType::Force)
+                throw std::runtime_error("Neumann condition isn't force.");
             return m_val;
         }
 
@@ -247,6 +307,12 @@ struct NeumannElementsCondition : public BoundaryCondition<_N> {
     void setValue(const VectorND<_N> &traction, size_t v0, size_t v1, size_t v2 = 0) {
         UnorderedTriplet elem(v0, v1, v2);
         m_vals[elem] = Value(traction);
+    }
+
+    void setValue(const VectorND<_N> &force) {
+        for (auto it = m_vals.begin(); it != m_vals.end(); it++) {
+            m_vals[it->first] = Value(force, NeumannType::Force);
+        }
     }
 
     const Value &getValue(const UnorderedTriplet &elem) const {
