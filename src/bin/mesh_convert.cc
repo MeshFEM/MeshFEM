@@ -85,6 +85,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[]) {
         ("sortVertices",                                                    "spatially sort the vertices")
         ("sortElementCorners",                                              "sort the indices appearing in an element (useful for comparisons when orientation doesn't matter, done after sortVertices, before sortElements)")
         ("sortElements",                                                    "sort elements lexicographically by their vertex indices (done after sortVertices and sortElementCorners, if called)")
+        ("extraMesh",             po::value<string>(),                      "merge another mesh to the original one in the output")
         ;
 
     po::options_description cli_opts;
@@ -161,6 +162,34 @@ int main(int argc, const char *argv[])
     auto type = load(inPath, inVertices, inElements);
     string outPath;
     if (args.count("outFile")) outPath = args["outFile"].as<string>();
+
+    if (args.count("extraMesh") > 0) {
+        // loads second mesh
+        vector<MeshIO::IOVertex>  inExtraVertices;
+        vector<MeshIO::IOElement> inExtraElements;
+        string extraMeshPath = args["extraMesh"].as<string>();
+        auto typeExtra = load(extraMeshPath, inExtraVertices, inExtraElements, MeshIO::FMT_GUESS, MeshIO::MESH_GUESS);
+
+        if (type != typeExtra) {
+            std::cerr << "Extra mesh of different type." << std::endl;
+            throw std::runtime_error("Extra mesh of different type.");
+        }
+
+        // Adjust vertices indices for extra elements
+        size_t dim;
+        if      (type == MeshIO::MESH_TET) dim = 3;
+        else if (type == MeshIO::MESH_TRI) dim = 2;
+
+        for (size_t e=0; e<inExtraElements.size(); e++) {
+            for (size_t i=0; i<(dim+1); i++) {
+                inExtraElements[e][i] = inExtraElements[e][i] + inVertices.size();
+            }
+        }
+
+        // Add vertices and elements of second mesh to lists passed to simulator
+        inVertices.insert(inVertices.end(), inExtraVertices.begin(), inExtraVertices.end());
+        inElements.insert(inElements.end(), inExtraElements.begin(), inExtraElements.end());
+    }
 
     size_t origSize = inVertices.size();
 
