@@ -51,7 +51,7 @@ struct PointRegion : Region<_Vector> {
 
         Real distance = (p - m_center).norm();
 
-        if (distance < 1e-8) {
+        if (distance < 1e-5) {
             result = true;
         }
 
@@ -81,7 +81,7 @@ struct PathRegion : Region<_Vector> {
 
             Real distance = computeDistancePointEdge(init, end, p);
 
-            if (distance < 1e-8) {
+            if (distance < 1e-5) {
                 result = true;
             }
         }
