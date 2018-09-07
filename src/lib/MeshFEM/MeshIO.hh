@@ -114,8 +114,6 @@ namespace MeshIO {
                                                 b.begin(), b.end());
         }
     };
-    // Ascii element input
-    std::istream  &operator>>(std::istream &, IOElement &);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! IOVertex ASCII input  (for implementing OFF I/O)

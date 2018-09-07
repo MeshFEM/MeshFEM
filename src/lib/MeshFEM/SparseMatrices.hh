@@ -725,7 +725,7 @@ private:
 class CholmodFactorizer {
 public:
     template<typename _Triplet>
-    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat)
+    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false)
         : m_A(NULL), m_L(NULL), m_b(NULL) {
         TripletMatrix<_Triplet> mat(tmat);
         mat.removeLowerTriangle();
@@ -737,6 +737,8 @@ public:
          // This can be slower for some matrices, so we make this an option.
         m_c.default_nesdis = 1.0;
 #endif
+
+        if (forceSupernodal) m_c.supernodal = CHOLMOD_SUPERNODAL;
 
         // Completely bypass Metis/NESDIS (for large matrices, this fails...)
         // Note: this shouldn't be done for smaller matrices because it results in slower solves.
@@ -1069,7 +1071,7 @@ public:
         if (m_isSPD) {
             if (!m_LLT) {
                 BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
-                m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper));
+                m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper, m_forceSupernodal));
                 if (m_economyMode) m_clearAUpperTriplets();
                 BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
             }
@@ -1130,6 +1132,8 @@ public:
         m_initReducedVariables();
     }
 
+    // Note: changes to forceSupernodal only take effect for the next factorization.
+    void setForceSupernodal(bool forceSupernodal) { m_forceSupernodal = forceSupernodal; }
     void setEconomyMode(bool emode) { m_economyMode = emode; }
     bool economyMode() const { return m_economyMode; }
 
@@ -1177,6 +1181,13 @@ private:
     // the system cannot be modified (e.g. fixing variables) after a
     // factorization call in this mode.
     bool m_economyMode = false;
+
+    // Whether to force a supernodal factorization when using a Cholesky
+    // factorization. This seems to be the only way to reliably detect
+    // an indefinite matrix with CHOLMOD (if its heuristics decide to use
+    // a simplicial factorization, then it typically succeeds in factorizing
+    // an indefinite matrix).
+    bool m_forceSupernodal = false;
 
     // Track fixed variables after fixVariables have been called.
     // >=  0: index of reduced variable corresponding to a variable
