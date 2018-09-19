@@ -22,4 +22,17 @@ inline void BENCHMARK_REPORT() { }
 inline void BENCHMARK_REPORT_NO_MESSAGES() { }
 #endif
 
+struct BENCHMARK_SCOPED_TIMER_SECTION {
+    BENCHMARK_SCOPED_TIMER_SECTION(const std::string &name) : m_name(name) {
+        BENCHMARK_START_TIMER_SECTION(name);
+    }
+
+    ~BENCHMARK_SCOPED_TIMER_SECTION() {
+        BENCHMARK_STOP_TIMER_SECTION(m_name);
+    }
+private:
+    std::string m_name;
+};
+
+
 #endif /* end of include guard: GLOBALBENCHMARK_HH */
