@@ -600,6 +600,15 @@ struct TripletMatrix {
             t.j = newIndex[t.j];
         }
     }
+
+    // Gets the maximum entry on the matrix's diagonal.
+    Real maxDiagEntry() const {
+        // Extract the diagonal (summing repeated entries)
+        std::vector<Real> diag(m);
+        for (const Triplet &t : nz)
+            if (t.i == t.j) diag[t.i] += t.v;
+        return *std::max_element(diag.begin(), diag.end());
+    }
 };
 
 // Matrix in Compressed Sparse Column format
@@ -724,12 +733,11 @@ private:
 
 class CholmodFactorizer {
 public:
+    // Warning: modifies the passed triplet matrix, tmat!
     template<typename _Triplet>
-    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false)
-        : m_A(NULL), m_L(NULL), m_b(NULL) {
-        TripletMatrix<_Triplet> mat(tmat);
-        mat.removeLowerTriangle();
-        mat.sumRepeated();
+    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false) {
+        tmat.removeLowerTriangle();
+        tmat.sumRepeated();
 
         cholmod_l_start(&m_c);
 #ifdef TOO_LARGE_FOR_METIS
@@ -754,9 +762,10 @@ public:
         // // used. This will be significantly slower than a supernodal LL'
         // // factorization, however.
         // m_c.supernodal = CHOLMOD_SIMPLICIAL;
-        // m_c.grow2 = 0; // We don't plan to use the modify routines
+        m_c.grow2 = 0; // We don't plan to use the modify routines
+        m_c.quick_return_if_not_posdef = true;
 
-        m_A = cholmod_l_allocate_sparse(mat.m, mat.n, mat.nnz(),
+        m_A = cholmod_l_allocate_sparse(tmat.m, tmat.n, tmat.nnz(),
                 true,           // Row indices in each column are sorted
                 true,           // packed
                 1,              // Symmetry type (0: full matrix stored,
@@ -765,12 +774,7 @@ public:
                 CHOLMOD_REAL,   // Keep it real
                 &m_c);
 
-        m_b = cholmod_l_allocate_dense(mat.n, 1,
-                mat.n,        // Leading dimension
-                CHOLMOD_REAL, // Keep it real
-                &m_c);
-
-        mat.getCompressedColumn((SuiteSparse_long *) m_A->p,
+        tmat.getCompressedColumn((SuiteSparse_long *) m_A->p,
                 (SuiteSparse_long *) m_A->i, (double *) m_A->x);
     }
 
@@ -800,20 +804,29 @@ public:
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
     void solveRaw(const Real *b, Real *x) {
         if (m_L == NULL) factorize();
+        static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
 
         const size_t m = m_A->nrow, n = m_A->ncol;
 
-        for (size_t i = 0; i < m; ++i)
-            ((double *) m_b->x)[i] = b[i];
+        // Wrap b values into a cholmod_dense struct
+        cholmod_dense cholb;
+        cholb.nrow = m;
+        cholb.ncol = 1;
+        cholb.nzmax = m;
+        cholb.d = m; // leading dimension
+        cholb.x = (void *)(b);
+        cholb.z = NULL;
+        cholb.xtype = CHOLMOD_REAL;
+        cholb.dtype = CHOLMOD_DOUBLE;
 
         BENCHMARK_START_TIMER("CHOLMOD Backsub");
-        cholmod_dense *chol_x = cholmod_l_solve(CHOLMOD_A, m_L, m_b, &m_c);
+        // Solve A x = b re-using the workspace vectors x, Y, and E
+        cholmod_l_solve2(CHOLMOD_A, m_L, &cholb, NULL, &m_x, NULL, &m_Y, &m_E, &m_c);
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
 
+        // Extract solution
         for (size_t i = 0; i < n; ++i)
-            x[i] = ((double *) chol_x->x)[i];
-
-        cholmod_l_free_dense(&chol_x, &m_c);
+            x[i] = ((double *) m_x->x)[i];
     }
 
     double peakMemoryMB() const {
@@ -827,7 +840,11 @@ public:
     ~CholmodFactorizer() {
         clearFactors();
         if (m_A) cholmod_l_free_sparse(&m_A, &m_c);
-        if (m_b) cholmod_l_free_dense(&m_b, &m_c);
+
+        if (m_x) cholmod_l_free_dense(&m_x, &m_c);
+        if (m_Y) cholmod_l_free_dense(&m_Y, &m_c);
+        if (m_E) cholmod_l_free_dense(&m_E, &m_c);
+
         cholmod_l_finish(&m_c);
     }
 
@@ -850,9 +867,10 @@ public:
 
 private:
     cholmod_common m_c;
-    cholmod_sparse *m_A;
-    cholmod_factor *m_L;
-    cholmod_dense  *m_b;
+    cholmod_sparse *m_A = NULL;
+    cholmod_factor *m_L = NULL;
+
+    cholmod_dense  *m_x = NULL, *m_Y = NULL, *m_E = NULL; // result/workspace for cholmod_l_solve2
 };
 
 ////////////////////////////////////////////////////////////////////////////////
