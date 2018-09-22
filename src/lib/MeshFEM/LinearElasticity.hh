@@ -1191,20 +1191,20 @@ public:
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Build up the components of the constrained system.
-    //  @param[out] K               unconstrained stiffness matrix
+    //  @param[out] Ktrip           unconstrained stiffness matrix
     //  @param[out] constraintRows  arbitrary linear constraints on variables
     //  @param[out] constraintRHS   RHS for those arbitrary constraints
     //  @param[out] fixedVars       indices of vars to fix at specified values
     //                              (i.e. for Dirichlet constraints).
     //  @param[out] fixedVarValues  the values variables are fixed to.
     *///////////////////////////////////////////////////////////////////////////
-    void assembleConstrainedSystem(TMatrix &K, TMatrix &constraintRows,
+    void assembleConstrainedSystem(TMatrix &Ktrip, TMatrix &constraintRows,
             std::vector<Real> &constraintRHS,
             std::vector<size_t> &fixedVars,
             std::vector<Real>   &fixedVarValues,
             bool allowIllPosed = false) const {
         BENCHMARK_START_TIMER("Assemble System");
-        m_assembleStiffnessMatrix(K);
+        m_assembleStiffnessMatrix(Ktrip);
 
         constraintRows.clear();
         constraintRHS.clear();
@@ -1375,11 +1375,11 @@ public:
 
 private:
     void m_buildConstrainedSystem() const {
-        TMatrix K, C;
+        TMatrix Ktrip, C;
         std::vector<Real> constraintRHS;
         std::vector<size_t> fixedVars;
         std::vector<Real>   fixedVarValues;
-        assembleConstrainedSystem(K, C, constraintRHS, fixedVars, fixedVarValues);
+        assembleConstrainedSystem(Ktrip, C, constraintRHS, fixedVars, fixedVarValues);
 #ifdef USE_LAGRANGE_MULTIPLIERS
             C.m += fixedVars.size();
             for (size_t i = 0; i < fixedVars.size(); ++i) {
@@ -1392,7 +1392,7 @@ private:
         }
 #endif // USE_LAGRANGE_MULTIPLIERS
         BENCHMARK_START_TIMER_SECTION("Set System");
-        m_system.setConstrained(K, C, constraintRHS);
+        m_system.setConstrained(Ktrip, C, constraintRHS);
         BENCHMARK_STOP_TIMER_SECTION("Set System");
         BENCHMARK_START_TIMER_SECTION("Fix Variables");
         m_system.fixVariables(fixedVars, fixedVarValues);
@@ -1405,7 +1405,7 @@ private:
 
 public:
     // Build *upper triangle* of stiffness matrix
-    void m_assembleStiffnessMatrix(TMatrix &K) const {
+    void m_assembleStiffnessMatrix(TMatrix &Ktrip) const {
         typedef typename _Mesh::ElementData::PerElementStiffness PerElementStiffness;
         constexpr size_t KeSize = PerElementStiffness::RowsAtCompileTime;
         const size_t nelem = m_mesh.numElements();
@@ -1439,8 +1439,8 @@ public:
         // precompute the size by using a loop similar to the accumulation loop
         // below.
         const size_t preallocSize = KeSize * KeSize * nelem;
-        K.init(n, n);
-        K.reserve(preallocSize);
+        Ktrip.init(n, n);
+        Ktrip.reserve(preallocSize);
 #if MESHFEM_WITH_TBB
         // Build all per-element matrices in parallel, then collect nonzeros
         std::vector<PerElementStiffness> elemMatrices(nelem);
@@ -1452,15 +1452,15 @@ public:
         );
 
         for (size_t i = 0; i < nelem; ++i)
-            accumToSparseMatrix(i, elemMatrices[i], K);
+            accumToSparseMatrix(i, elemMatrices[i], Ktrip);
 #else
         for (size_t i = 0; i < nelem; ++i) {
             PerElementStiffness Ke;
             m_mesh.element(i)->perElementStiffness(Ke);
-            accumToSparseMatrix(i, Ke, K);
+            accumToSparseMatrix(i, Ke, Ktrip);
         }
         // Make sure our upper bound was correct--reallocation is undesirable.
-        assert(K.nnz() <= preallocSize);
+        assert(Ktrip.nnz() <= preallocSize);
 #endif
 
     }

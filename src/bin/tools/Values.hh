@@ -152,10 +152,30 @@ struct TypedNamedValue : public NamedValue {
     template<typename... Args>
     TypedNamedValue(const std::string &n, Args&&... args) : NamedValue(n, std::make_unique<T>(std::forward<Args>(args)...)) { }
 
-    using NamedValue::operator=;
+    TypedNamedValue &operator=(NamedValue &&b) {
+        if (dynamic_cast<const T *>(CVPtr(b)) == nullptr)
+            throw std::runtime_error("Invalid argument");
+        NamedValue::operator=(b);
+        return this;
+    }
 
-    const T *operator->() const { return dynamic_cast<const T *>(m_valptr.get()); }
-          T *operator->()       { return dynamic_cast<      T *>(m_valptr.get()); }
+    // Work around the "potential null pointer dereference" warning.
+    // Technically this dereference *could* be null if a TypedNamedValue
+    // instance is assigned a value of a different type by using
+    // a reference/pointer to the base class NamedValue.
+    const T *guardedAccess() const {
+        const T *result = dynamic_cast<const T *>(m_valptr.get());
+        if (result) return result;
+        throw std::runtime_error("Null pointer.");
+    }
+    T *guardedAccess() {
+        T *result = dynamic_cast<T *>(m_valptr.get());
+        if (result) return result;
+        throw std::runtime_error("Null pointer.");
+    }
+
+    const T *operator->() const { return guardedAccess(); }
+          T *operator->()       { return guardedAccess(); }
 };
 
 ////////////////////////////////////////////////////////////////////////////////

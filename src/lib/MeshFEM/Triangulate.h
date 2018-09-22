@@ -153,13 +153,13 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     outTriangles.clear(), outTriangles.reserve(out.numberoftriangles);
 
     // Copy output point coordinates
-    for (size_t i = 0; i < size_t(out.numberofpoints); ++i) {
+    for (i = 0; i < size_t(out.numberofpoints); ++i) {
         outVertices.emplace_back(out.pointlist[2 * i + 0],
                                  out.pointlist[2 * i + 1]);
     }
 
     // Copy output triangles
-    for (size_t i = 0; i < size_t(out.numberoftriangles); ++i) {
+    for (i = 0; i < size_t(out.numberoftriangles); ++i) {
         outTriangles.emplace_back(out.trianglelist[3 * i + 0],
                                   out.trianglelist[3 * i + 1],
                                   out.trianglelist[3 * i + 2]);

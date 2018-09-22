@@ -66,12 +66,12 @@ public:
 
     // Solve for equilibrium under DoF load f
     VField solve(const VField &f) {
-        TMatrix K, C;
+        TMatrix Ktrip, C;
         std::vector<size_t> fixedVars;
         std::vector<Real>   fixedVarValues;
-        assembleConstrainedSystem(K, fixedVars, fixedVarValues);
+        assembleConstrainedSystem(Ktrip, fixedVars, fixedVarValues);
 
-        m_system->set(K);
+        m_system->set(Ktrip);
         m_system->fixVariables(fixedVars, fixedVarValues);
 
         std::vector<Real> x = m_system->solve(f);
@@ -91,15 +91,15 @@ public:
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Build up the components of the constrained system.
-    //  @param[out] K               unconstrained stiffness matrix
+    //  @param[out] Ktrip           unconstrained stiffness matrix
     //  @param[out] fixedVars       indices of vars to fix at specified values
     //                              (i.e. for Dirichlet constraints).
     //  @param[out] fixedVarValues  the values variables are fixed to.
     *///////////////////////////////////////////////////////////////////////////
-    void assembleConstrainedSystem(TMatrix &K,
+    void assembleConstrainedSystem(TMatrix &Ktrip,
                                    std::vector<size_t> &fixedVars,
                                    std::vector<Real>   &fixedVarValues) const {
-        m_linearElasticitySimulator.m_assembleStiffnessMatrix(K);
+        m_linearElasticitySimulator.m_assembleStiffnessMatrix(Ktrip);
 
         fixedVars.clear();
         fixedVarValues.clear();
@@ -108,8 +108,8 @@ public:
     }
 
     // Build *upper triangle* of stiffness matrix
-    void m_assembleStiffnessMatrix(TMatrix &K) const {
-        m_linearElasticitySimulator.m_assembleStiffnessMatrix(K);
+    void m_assembleStiffnessMatrix(TMatrix &Ktrip) const {
+        m_linearElasticitySimulator.m_assembleStiffnessMatrix(Ktrip);
     }
 
     bool areOppositeElements(typename _Mesh:: template BEHandle<_Mesh> e1, typename _Mesh:: template BEHandle<_Mesh> e2) {

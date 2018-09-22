@@ -5,7 +5,7 @@
 #include <MeshFEM/MSHFieldWriter.hh>
 #include <MeshFEM/LinearElasticityWithContact.hh>
 
-int main(int argc, char** argv) {
+int main(int /* argc */, char** /* argv */) {
     SmoothPositiveMax function(0.1);
 
     std::cout << "Verifying values for: " << std::endl;

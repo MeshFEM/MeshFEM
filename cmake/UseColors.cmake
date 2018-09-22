@@ -44,3 +44,10 @@ if(CMAKE_COMPILER_IS_GNUCXX)
         endif()
     endif()
 endif()
+
+# Actually, when using Ninja, Clang doesn't used colored diagnostics by default...
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    message(STATUS "Clang detected, enabling colored diagnostics")
+    add_definitions(-fdiagnostics-color=always)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
+endif()

@@ -97,7 +97,7 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
             size_t tmp = re[0];
             re[0] = globalVertexIndex.at(re[1]);
             re[1] = globalVertexIndex.at(tmp);
-            for (size_t d = 2; d < re.size(); ++d) re[d] = globalVertexIndex.at(re[d]);
+            for (size_t d2 = 2; d2 < re.size(); ++d2) re[d2] = globalVertexIndex.at(re[d2]);
             outElements.push_back(re);
             if (origElement) { origElement->push_back(origElement->at(ei)); }
             if (elmReflection) {

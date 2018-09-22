@@ -41,6 +41,12 @@ void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+
+// The monomials tested below generally don't include all integration
+// variables; silence the resuting warnings on GCC and Clang.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 TEST_CASE("quadrature routines", "[quadrature]" ) {
 
     // 1D functions up to degree 4
@@ -163,3 +169,5 @@ TEST_CASE("quadrature routines", "[quadrature]" ) {
     }
 
 }
+
+#pragma GCC diagnostic pop

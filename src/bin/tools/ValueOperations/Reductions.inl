@@ -133,6 +133,10 @@ std::unique_ptr<IRT<T>> applyInnerReduction(Reduction &r, const T &val) {
     return std::make_unique<IRT<T>>(InnerReductionImpl<T>::apply(r, val));
 }
 
+[[ noreturn ]] std::unique_ptr<IRT<SValue>> applyInnerReduction(Reduction &r, const SValue &val) {
+    throw std::runtime_error("Reduction of empty object");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Outer Reduction Implementation
 ////////////////////////////////////////////////////////////////////////////////

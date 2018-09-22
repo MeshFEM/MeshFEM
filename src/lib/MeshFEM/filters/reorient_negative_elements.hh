@@ -23,12 +23,12 @@ size_t reorient_negative_elements(std::vector<Vertex>  &vertices,
 
     for (Element &e : elements) {
         // Proper (positive) orientations:
-        //       3
-        //       *              2
-        //      / \`           / \
-        //     /   \ `* 2     /   \
-        //    / __--\ /      /     \
-        //  0*-------* 1    0-------1
+        // |       3         |              |
+        // |       *         |       2      |
+        // |      / \`       |      / \     |
+        // |     /   \ `* 2  |     /   \    |
+        // |    / __--\ /    |    /     \   |
+        // |  0*-------* 1   |   0-------1  |
         Real signedVolScaled = 0;
         if (e.size() == 3) {
             auto p0 = truncateFrom3D<Point2D>(vertices[e[0]].point),

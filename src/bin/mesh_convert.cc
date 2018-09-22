@@ -37,7 +37,7 @@ using namespace std;
 struct VertexData : public SubdivVertexData<3> { };
 struct HalfEdgeData : public SubdivHalfedgeData { };
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: mesh_convert inFile (-i | [-bs] outFile)" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
@@ -176,7 +176,7 @@ int main(int argc, const char *argv[])
         }
 
         // Adjust vertices indices for extra elements
-        size_t dim;
+        size_t dim = 0;
         if      (type == MeshIO::MESH_TET) dim = 3;
         else if (type == MeshIO::MESH_TRI) dim = 2;
 
@@ -483,20 +483,20 @@ int main(int argc, const char *argv[])
             if (args.count("propagateFields")) {
                 MSHFieldParser<2> fields(inPath);
                 std::vector<string> fnames = fields.vectorFieldNames();
-                DomainType type;
+                DomainType dtype;
                 for (const string &name: fnames) {
-                    auto vf = fields.vectorField(name, DomainType::ANY, type);
-                    transferField(quadIdx, vf, name, type, writer);
+                    auto vf = fields.vectorField(name, DomainType::ANY, dtype);
+                    transferField(quadIdx, vf, name, dtype, writer);
                 }
                 fnames = fields.scalarFieldNames();
                 for (const string &name: fnames) {
-                    auto sf = fields.scalarField(name, DomainType::ANY, type);
-                    transferField(quadIdx, sf, name, type, writer);
+                    auto sf = fields.scalarField(name, DomainType::ANY, dtype);
+                    transferField(quadIdx, sf, name, dtype, writer);
                 }
                 fnames = fields.symmetricMatrixFieldNames();
                 for (const string &name: fnames) {
-                    auto smf = fields.symmetricMatrixField(name, DomainType::ANY, type);
-                    transferField(quadIdx, smf, name, type, writer);
+                    auto smf = fields.symmetricMatrixField(name, DomainType::ANY, dtype);
+                    transferField(quadIdx, smf, name, dtype, writer);
                 }
             }
             exit(0);
@@ -523,23 +523,23 @@ int main(int argc, const char *argv[])
 
         if (!args.count("stripFields")) {
             MSHFieldParser<3> fields(inPath);
-            DomainType type;
+            DomainType dtype;
             MSHFieldWriter writer(outPath, outVertices, outElements);
 
             std::vector<string> fnames = fields.vectorFieldNames();
             for (const string &name: fnames) {
-                auto vf = fields.vectorField(name, DomainType::ANY, type);
-                transferField(hexIdx, vf, name, type, writer);
+                auto vf = fields.vectorField(name, DomainType::ANY, dtype);
+                transferField(hexIdx, vf, name, dtype, writer);
             }
             fnames = fields.scalarFieldNames();
             for (const string &name: fnames) {
-                auto sf = fields.scalarField(name, DomainType::ANY, type);
-                transferField(hexIdx, sf, name, type, writer);
+                auto sf = fields.scalarField(name, DomainType::ANY, dtype);
+                transferField(hexIdx, sf, name, dtype, writer);
             }
             fnames = fields.symmetricMatrixFieldNames();
             for (const string &name: fnames) {
-                auto smf = fields.symmetricMatrixField(name, DomainType::ANY, type);
-                transferField(hexIdx, smf, name, type, writer);
+                auto smf = fields.symmetricMatrixField(name, DomainType::ANY, dtype);
+                transferField(hexIdx, smf, name, dtype, writer);
             }
             exit(0);
         }

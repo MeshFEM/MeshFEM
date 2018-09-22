@@ -10,7 +10,7 @@
 namespace po = boost::program_options;
 using namespace std;
 
-void usage(int status, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int status, const po::options_description &visible_opts) {
     cout << "Usage: msh_processor in.msh [options]" << endl;
     cout << visible_opts << endl;
     exit(status);

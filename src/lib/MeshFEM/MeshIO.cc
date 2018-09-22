@@ -414,10 +414,9 @@ void MeshIO_STL::save(ostream &os, const vector<Vertex> &nodes,
     }
 }
 
-MeshType MeshIO_STL::load(istream &/* is */, vector<Vertex> &/* nodes */,
+[[ noreturn ]] MeshType MeshIO_STL::load(istream &/* is */, vector<Vertex> &/* nodes */,
                           vector<Element> &/* elements */, MeshType /* t */) {
     throw std::runtime_error("STL file import unsupported");
-    return MeshType::MESH_INVALID;
 }
 
 void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
@@ -453,10 +452,9 @@ void MeshIO_POLY::save(ostream &os, const vector<Vertex> &nodes,
     else throw typeError;
 }
 
-MeshType MeshIO_POLY::load(istream &/* is */, vector<Vertex> &/* nodes */,
+[[ noreturn ]] MeshType MeshIO_POLY::load(istream &/* is */, vector<Vertex> &/* nodes */,
                            vector<Element> &/* elements */, MeshType /* t */) {
     throw std::runtime_error(".poly load unsupported");
-    return MeshType::MESH_INVALID;
 }
 
 MeshType MeshIO_NodeEle::load(const string &nodePath, const string &elePath,

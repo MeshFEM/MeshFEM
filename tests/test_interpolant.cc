@@ -14,7 +14,7 @@ double randDouble() {
 
 template<size_t K, class F, typename... Args>
 typename std::enable_if<(sizeof...(Args) == K + 1), double>::type
-evalAt(const VectorND<K + 1> &samplePt, const F&f, Args&&... args) {
+evalAt(const VectorND<K + 1> &/* samplePt */, const F&f, Args&&... args) {
     return f(args...);
 }
 
@@ -64,6 +64,11 @@ void interpolant_test(const vector<vector<F>> &funcs) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+// The monomials systematically tested below generally don't include all
+// variables; silence the resuting warnings on GCC and Clang.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 TEST_CASE("interpolant functions", "[quadrature]" ) {
 
@@ -291,3 +296,5 @@ TEST_CASE("interpolant functions", "[quadrature]" ) {
       // interpolant_test<3, 4>(functions3D);
     }
 }
+
+#pragma GCC diagnostic pop

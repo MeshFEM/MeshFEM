@@ -37,9 +37,6 @@
 //
 //      TODO: store element *index* on interpolant: binary operations can only
 //      act on a pair of interpolants with matching element index.
-//
-//      TODO: Add "setNodePositions" operation that repositions the mesh nodes
-//      to the locations specified by the vector field at the top of the stack.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University

@@ -192,7 +192,7 @@ namespace MeshIO {
             typedef IOElement Element;
 
             void save(std::ostream &os, const std::vector<Vertex> &v, const std::vector<Element> &e, MeshType t);
-            MeshType load(std::istream &is, std::vector<Vertex> &v, std::vector<Element> &e, MeshType t);
+            [[ noreturn ]] MeshType load(std::istream &is, std::vector<Vertex> &v, std::vector<Element> &e, MeshType t);
     };
 
     class MeshIO_POLY : public MeshIO {
@@ -201,7 +201,7 @@ namespace MeshIO {
             typedef IOElement Element;
 
             void save(std::ostream &os, const std::vector<Vertex> &v, const std::vector<Element> &e, MeshType t);
-            MeshType load(std::istream &is, std::vector<Vertex> &v, std::vector<Element> &e, MeshType t);
+            [[ noreturn ]] MeshType load(std::istream &is, std::vector<Vertex> &v, std::vector<Element> &e, MeshType t);
     };
 
     class MeshIO_NodeEle  {
