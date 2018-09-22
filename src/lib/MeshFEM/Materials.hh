@@ -284,7 +284,6 @@ struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_
             //        small--this minimum should be set based on homogenization results
             //        Poisson ratios can't be less than -1, and for robustness we
             //        limit them to -0.75
-            typedef Bounds::Bound Bound;
             if (_N == 3) Base::setUpperBounds({ Bound(3, 0.45), Bound(4, 0.45), Bound(5, 0.45) });
             else         Base::setUpperBounds({ Bound(0,  384), Bound(1,  384), Bound(2, 0.45), Bound(3, 102) });
             if (_N == 3) {
