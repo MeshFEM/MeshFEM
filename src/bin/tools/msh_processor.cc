@@ -129,6 +129,7 @@ NamedValue &getValue(Stack &stack, size_t offset = 0) {
 }
 
 NamedValue popValue(Stack &stack) {
+    if (stack.empty()) throw std::runtime_error("Tried to pop from empty stack.");
     NamedValue val = std::move(getValue(stack));
     stack.pop_back();
     return val;
@@ -141,6 +142,7 @@ TypedNamedValue<T> &getTypedValue(Stack &stack, size_t offset = 0) {
 
 template<typename T>
 TypedNamedValue<T> popTypedValue(Stack &stack) {
+    if (stack.empty()) throw std::runtime_error("Tried to pop from empty stack.");
     NamedValue val = std::move(stack.back());
     stack.pop_back();
     return std::move(val);

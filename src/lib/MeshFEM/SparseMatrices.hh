@@ -77,7 +77,7 @@ struct TripletMatrix {
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
-    TripletMatrix(size_t m = 0, size_t n = 0) : m(m), n(n) { }
+    TripletMatrix(size_t mm = 0, size_t nn = 0) : m(mm), n(nn) { }
 
     typedef TripletMatrix<_Triplet>         TMatrix;
     typedef _Triplet                        Triplet;
@@ -733,50 +733,12 @@ private:
 
 class CholmodFactorizer {
 public:
+    template<typename _Triplet>
+    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false) { TripletMatrix<_Triplet> copy(tmat); m_init(copy, forceSupernodal); }
+
     // Warning: modifies the passed triplet matrix, tmat!
     template<typename _Triplet>
-    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false) {
-        tmat.removeLowerTriangle();
-        tmat.sumRepeated();
-
-        cholmod_l_start(&m_c);
-#ifdef TOO_LARGE_FOR_METIS
-         // Use NESDIS since plain Metis is failing on large matrices.
-         // This can be slower for some matrices, so we make this an option.
-        m_c.default_nesdis = 1.0;
-#endif
-
-        if (forceSupernodal) m_c.supernodal = CHOLMOD_SUPERNODAL;
-
-        // Completely bypass Metis/NESDIS (for large matrices, this fails...)
-        // Note: this shouldn't be done for smaller matrices because it results in slower solves.
-        //// This version avoids Metis, but fails for even more matrices due to fill-in.
-        //// m_c.nmethods = 1;
-        //// m_c.method[0].ordering = CHOLMOD_AMD;
-        //// m_c.postorder = 1; // TRUE
-        //// m_c.error_handler = error_handler;
-        //
-        // // This puts us in LDL' mode
-        // // "To factorize a large indefinite matrix, set Common->supernodal to
-        // // CHOLMOD_SIMPLICIAL, and the simplicial LDL' method will always be
-        // // used. This will be significantly slower than a supernodal LL'
-        // // factorization, however.
-        // m_c.supernodal = CHOLMOD_SIMPLICIAL;
-        m_c.grow2 = 0; // We don't plan to use the modify routines
-        m_c.quick_return_if_not_posdef = true;
-
-        m_A = cholmod_l_allocate_sparse(tmat.m, tmat.n, tmat.nnz(),
-                true,           // Row indices in each column are sorted
-                true,           // packed
-                1,              // Symmetry type (0: full matrix stored,
-                                //                1: upper triangle stored
-                                //                2: lower triangle stored)
-                CHOLMOD_REAL,   // Keep it real
-                &m_c);
-
-        tmat.getCompressedColumn((SuiteSparse_long *) m_A->p,
-                (SuiteSparse_long *) m_A->i, (double *) m_A->x);
-    }
+    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false) { m_init(tmat, forceSupernodal); }
 
     void factorize() {
         clearFactors();
@@ -871,6 +833,50 @@ private:
     cholmod_factor *m_L = NULL;
 
     cholmod_dense  *m_x = NULL, *m_Y = NULL, *m_E = NULL; // result/workspace for cholmod_l_solve2
+
+    template<typename _Triplet>
+    void m_init(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false) {
+        tmat.removeLowerTriangle();
+        tmat.sumRepeated();
+
+        cholmod_l_start(&m_c);
+#ifdef TOO_LARGE_FOR_METIS
+         // Use NESDIS since plain Metis is failing on large matrices.
+         // This can be slower for some matrices, so we make this an option.
+        m_c.default_nesdis = 1.0;
+#endif
+
+        if (forceSupernodal) m_c.supernodal = CHOLMOD_SUPERNODAL;
+
+        // Completely bypass Metis/NESDIS (for large matrices, this fails...)
+        // Note: this shouldn't be done for smaller matrices because it results in slower solves.
+        //// This version avoids Metis, but fails for even more matrices due to fill-in.
+        //// m_c.nmethods = 1;
+        //// m_c.method[0].ordering = CHOLMOD_AMD;
+        //// m_c.postorder = 1; // TRUE
+        //// m_c.error_handler = error_handler;
+        //
+        // // This puts us in LDL' mode
+        // // "To factorize a large indefinite matrix, set Common->supernodal to
+        // // CHOLMOD_SIMPLICIAL, and the simplicial LDL' method will always be
+        // // used. This will be significantly slower than a supernodal LL'
+        // // factorization, however.
+        // m_c.supernodal = CHOLMOD_SIMPLICIAL;
+        m_c.grow2 = 0; // We don't plan to use the modify routines
+        m_c.quick_return_if_not_posdef = true;
+
+        m_A = cholmod_l_allocate_sparse(tmat.m, tmat.n, tmat.nnz(),
+                true,           // Row indices in each column are sorted
+                true,           // packed
+                1,              // Symmetry type (0: full matrix stored,
+                                //                1: upper triangle stored
+                                //                2: lower triangle stored)
+                CHOLMOD_REAL,   // Keep it real
+                &m_c);
+
+        tmat.getCompressedColumn((SuiteSparse_long *) m_A->p,
+                (SuiteSparse_long *) m_A->i, (double *) m_A->x);
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////

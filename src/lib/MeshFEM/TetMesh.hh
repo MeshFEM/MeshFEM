@@ -535,9 +535,9 @@ protected:
 
         int halfFace() const { return hf1(); }
 
-        //  *   <-- lhf2
-        // / \
-        //+--->
+        //   *   <-- lhf2 //
+        //  / \           //
+        // +--->          //
         // Local corner indices in tet of tip/tail
         int ltail() const { return m_nextTetCornerInFace(lhf1, lhf2); }
         int  ltip() const { return m_prevTetCornerInFace(lhf1, lhf2); }
@@ -645,14 +645,14 @@ protected:
         return f(he);
     }
 
-    int    m_tetOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return                  u_tetOfHE(he); }); }
-    int    m_tipOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return V.at(_HERep(he). gTipCorner()); }); }
-    int   m_tailOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return V.at(_HERep(he).gTailCorner()); }); }
-    int   m_faceOfHE(int he) const { return m_guardFuncHE(he, [=](int he) { return          _HERep(he).halfFace(); }); }
-    int     m_nextHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).next().index(); }); }
-    int     m_prevHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).prev().index(); }); }
-    int     m_mateHE(int he) const { return m_guardFuncHE(he, [=](int he) { return      _HERep(he).mate().index(); }); }
-    int   m_radialHE(int he) const { return m_guardFuncHE(he, [=](int he) { return u_radialHE(_HERep(he)).index(); }); }
+    int    m_tetOfHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return                  u_tetOfHE(he2); }); }
+    int    m_tipOfHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return V.at(_HERep(he2). gTipCorner()); }); }
+    int   m_tailOfHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return V.at(_HERep(he2).gTailCorner()); }); }
+    int   m_faceOfHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return          _HERep(he2).halfFace(); }); }
+    int     m_nextHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return      _HERep(he2).next().index(); }); }
+    int     m_prevHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return      _HERep(he2).prev().index(); }); }
+    int     m_mateHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return      _HERep(he2).mate().index(); }); }
+    int   m_radialHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return u_radialHE(_HERep(he2)).index(); }); }
     int m_bdryHEOfHE(int he) const {
         if (he == -1) return -1;
         assert(size_t(he) < numHalfEdges());

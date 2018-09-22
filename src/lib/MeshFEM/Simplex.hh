@@ -30,11 +30,11 @@ namespace Simplex {
 
     // Node ordering is consistent with GMSH:
     //       3
-    //       *              0
-    //      / \`8          / \
-    //     7   9 `* 2     3   5
-    //    / _6--\ /5     /     \
-    //  0*---4---* 1    1---4---2
+    //       *          |       0       |
+    //      / \`8       |      / \      |
+    //     7   9 `* 2   |     3   5     |
+    //    / _6--\ /5    |    /     \    |
+    //  0*---4---* 1    |   1---4---2   |
     // For interpolation of values at the edge nodes, we need to know the nodes
     // indices at the endpoints of the corresponding edges. For 1- 2- and
     // 3-simplices, these are found using (prefixes of) the following lookup tables.
