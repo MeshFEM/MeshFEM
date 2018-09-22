@@ -18,7 +18,7 @@
 namespace po = boost::program_options;
 using namespace std;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: Simulate_cli [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
@@ -220,12 +220,12 @@ void execute(const po::variables_map &args,
         using Upsampled = SymmetricMatrixInterpolant<typename Simulator::SMatrix, _N, _Deg>;
         vector<Upsampled> upsampledField;
         upsampledField.reserve(linearField.size());
-        for (const auto s: linearField) upsampledField.emplace_back(s);
+        for (const auto ss: linearField) upsampledField.emplace_back(ss);
         writer.addField("strain", upsampledField, DomainType::PER_ELEMENT);
 
         linearField = sim.stressField(u);
         upsampledField.clear();
-        for (const auto s: linearField) upsampledField.emplace_back(s);
+        for (const auto ss: linearField) upsampledField.emplace_back(ss);
         writer.addField("stress", upsampledField, DomainType::PER_ELEMENT);
     }
 

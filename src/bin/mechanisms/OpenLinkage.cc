@@ -21,7 +21,7 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace PeriodicHomogenization;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: OpenLinkage output_name [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);

@@ -261,3 +261,7 @@ std::unique_ptr<ORT<T>> applyOuterReduction(Reduction &r, const T &val) {
     if (val.dim() == 0) throw std::runtime_error("Reduction of empty object");
     return std::make_unique<ORT<T>>(OuterReductionImpl<T>::apply(r, val));
 }
+
+[[ noreturn ]] std::unique_ptr<ORT<SValue>> applyOuterReduction(Reduction &r, const SValue &val) {
+    throw std::runtime_error("Reduction of empty object");
+}

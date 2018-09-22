@@ -31,7 +31,7 @@ using json = nlohmann::json;
 using namespace std;
 using namespace PeriodicHomogenization;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cerr << "Usage: DeformedCells_cli [options] in.msh -j 'u_x,x u_x,y ...' out.msh" << endl;
     cerr << visible_opts << endl;
     exit(exitVal);
@@ -262,8 +262,7 @@ void execute(const po::variables_map &args,
         if (args.count("displacedMesh")) {
             string out_mesh = args["displacedMesh"].as<string>();
             SymmetricMatrixValue<Real, _N> strain;
-            auto bbox = mesh.boundingBox();
-            VectorND<_N> center = bbox.center();
+            auto displaced_center = mesh.boundingBox().center();
 
             vector<VField> cstrainDisp_ij;
 
@@ -271,7 +270,7 @@ void execute(const po::variables_map &args,
                 VField cstrainDisp(mesh.numNodes());
                 strain = SMatrix::CanonicalBasis(index);
                 for (auto n : mesh.nodes())
-                    cstrainDisp(n.index()) = strain.contract(n->p - center);
+                    cstrainDisp(n.index()) = strain.contract(n->p - displaced_center);
 
                 cstrainDisp_ij.push_back(cstrainDisp);
             }

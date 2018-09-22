@@ -376,7 +376,7 @@ public:
     template<class ElementHandle, typename PerVertexField, typename T>
     void extractElementCornerValues(const ElementHandle &e, const PerVertexField &f, std::vector<T> &cornerValues) const {
         return m_linearElasticitySimulator.extractElementCornerValues(e, f, cornerValues);
-    };
+    }
 
 private:
 

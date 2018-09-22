@@ -776,7 +776,7 @@ public:
         cholb.ncol = 1;
         cholb.nzmax = m;
         cholb.d = m; // leading dimension
-        cholb.x = (void *)(b);
+        cholb.x = (void *) const_cast<Real *>(b); // Suitesparse won't actually modify the RHS data, so this const_cast should be safe.
         cholb.z = NULL;
         cholb.xtype = CHOLMOD_REAL;
         cholb.dtype = CHOLMOD_DOUBLE;

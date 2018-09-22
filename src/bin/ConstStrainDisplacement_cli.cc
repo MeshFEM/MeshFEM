@@ -41,7 +41,7 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace PeriodicHomogenization;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: ConstStrainDisplacement_cli [options] in.msh -s 'e_00 e_11 ...' out.msh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
@@ -189,9 +189,9 @@ void execute(const po::variables_map &args,
         squareElems.emplace_back(0, 1, 3);
         squareElems.emplace_back(0, 3, 2);
 
-        MSHFieldWriter writer(args["macroOut"].as<string>(), squareVertices, squareElems);
-        writer.addField("u_cstrain", uMacro, DomainType::PER_NODE);
-        writer.addField("stress", stressMacro, DomainType::PER_ELEMENT);
+        MSHFieldWriter mwriter(args["macroOut"].as<string>(), squareVertices, squareElems);
+        mwriter.addField("u_cstrain", uMacro, DomainType::PER_NODE);
+        mwriter.addField("stress", stressMacro, DomainType::PER_ELEMENT);
     }
 
     VField cstrainDisp(mesh.numNodes());

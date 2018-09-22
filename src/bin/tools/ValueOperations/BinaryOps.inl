@@ -173,7 +173,7 @@ struct BinaryOpImpl<SValue, SValue> {
 // need to implement this inner lookup.
 // Do this with a sequence of automatically generated dynamic cast type checks.
 template<class T1>
-UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &/* op */, const T1 &, CVPtr b) { throw std::runtime_error("Unknown dynamic type: " + std::string(typeid(*b).name())); }
+[[ noreturn ]] UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &/* op */, const T1 &, CVPtr b) { throw std::runtime_error("Unknown dynamic type: " + std::string(typeid(*b).name())); }
 template<class T1, class TCheck, class... Args>
 UVPtr dispatchCWiseBinaryOpImpl(const BinaryOp &op, const T1 &a, CVPtr b) {
     if (auto val = dynamic_cast<const TCheck *>(b)) return BinaryOpImpl<T1, TCheck>::apply(op, a, *val);

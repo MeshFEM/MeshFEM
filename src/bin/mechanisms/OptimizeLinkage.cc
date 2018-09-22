@@ -21,7 +21,7 @@ namespace po = boost::program_options;
 using namespace std;
 using namespace PeriodicHomogenization;
 
-void usage(int exitVal, const po::options_description &visible_opts) {
+[[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: OptimizeLinkage_cli [options] mesh" << endl;
     cout << visible_opts << endl;
     exit(exitVal);
@@ -246,9 +246,9 @@ void execute(const po::variables_map &args,
             for (size_t i = 0; i < w_ij.size(); ++i) {
                 auto &w = w_ij[i];
                 VectorND<_N> total(VectorND<_N>::Zero());
-                for (size_t i = 0; i < w.domainSize(); ++i) total += w(i);
+                for (size_t ii = 0; ii < w.domainSize(); ++ii) total += w(ii);
                 total *= 1.0 / w.domainSize();
-                for (size_t i = 0; i < w.domainSize(); ++i) w(i) -= total;
+                for (size_t ii = 0; ii < w.domainSize(); ++ii) w(ii) -= total;
             }
         }
         for (size_t i = 0; i < w_ij.size(); ++i) {
