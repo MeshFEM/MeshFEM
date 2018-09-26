@@ -547,7 +547,8 @@ struct TripletMatrix {
     // Matrix-vector multiply (not so efficient).
     template<typename _Vector>
     _Vector apply(const _Vector &x) const {
-        _Vector result(x.size());
+        if (size_t(x.size()) != n) throw std::runtime_error("Sparse matvec size mismatch.");
+        _Vector result(m);
         // Some _Vector types don't zero-initialize.
         for (size_t i = 0; i < size_t(result.size()); ++i) result[i] = 0.0;
         if (symmetry_mode == SymmetryMode::NONE) {
