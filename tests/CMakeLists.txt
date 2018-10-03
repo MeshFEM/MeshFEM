@@ -23,6 +23,7 @@ add_executable(unit_tests
 	test_quadrature.cc
 	test_interpolant.cc
 	test_materials.cc
+    test_sparse_matrices.cc
 )
 
 target_link_libraries(unit_tests PUBLIC
