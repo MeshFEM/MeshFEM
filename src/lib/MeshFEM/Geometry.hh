@@ -144,7 +144,6 @@ struct PolygonalRegion : Region<_Vector> {
     }
 
     virtual bool containsPoint(const Vector &p) const override {
-        bool result;
         int nIntersections = 0;
 
         // A point is inside if and only if the edge connecting to an outside point intersect the

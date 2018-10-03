@@ -27,6 +27,7 @@
 #include <cmath>
 #include "Parallelism.hh"
 
+#include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 
 extern "C" {
@@ -610,20 +611,50 @@ struct TripletMatrix {
             if (t.i == t.j) diag[t.i] += t.v;
         return *std::max_element(diag.begin(), diag.end());
     }
+
+    // Permit simpler range-for syntax for over triplets
+    auto begin() -> decltype(nz.begin()) const { return nz.begin(); }
+    auto   end() -> decltype(nz.  end()) const { return nz.  end(); }
 };
 
 // Matrix in Compressed Sparse Column format
 template<typename _Index, typename _Real>
 struct CSCMatrix {
     std::vector<_Index>  Ap, Ai; // Column pointer and row index arrays
+                                 // Note: the row index array must be sorted!
     std::vector<_Real>   Ax;     // Value array
     _Index m, n, nz;             // Number of rows, columns, and nonzeros
+
+    size_t nnz() const { return nz; }
 
     CSCMatrix()
         : m(0), n(0), nz(0) { }
 
     template<typename TMatrix>
     CSCMatrix(TMatrix &mat) { setFromTMatrix(mat); }
+
+    // Set each nonzero entry to a particular value, preserving the sparsity pattern.
+    void fill(_Real val) { Ax.assign(nz, val); }
+    void setZero() { fill(0.0); }
+
+    // Accumulate a value to (i, j)
+    // Note: (i, j) must exist in the sparsity pattern!
+    // Complexity: O(log(n_j)) where "n_j" is the number of nonzeros in column j
+    void addNZ(_Index i, _Index j, _Real v) {
+        assert((i < m) && (j < n) && "Index out of bounds");
+        // Find the entry in the sparsity pattern.
+        // Row indices are sorted, so we can use a binary search.
+        _Index beginIdx = Ap[j],
+                 endIdx = Ap[j + 1];
+        auto beginIt = Ai.begin() + beginIdx,
+               endIt = Ai.begin() + endIdx;
+        auto it = std::lower_bound(beginIt, endIt, v);
+        assert((it != endIt) && "Entry absent from sparsity pattern");
+        _Index idx = std::distance(Ai.begin(), it);
+        assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
+        // Accumulate value
+        Ax[idx] += v;
+    }
 
     // Set from a triplet matrix
     // Side effect: mat's triplets are sorted and compressed.
@@ -638,6 +669,69 @@ struct CSCMatrix {
         Ax.resize(nz);
 
         mat.getCompressedColumn(&Ap[0], &Ai[0], &Ax[0]);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Iteration over the nonzero entries stored in this matrix, as Triplet<>s.
+    ////////////////////////////////////////////////////////////////////////////
+    struct TripletIterator {
+        TripletIterator(const CSCMatrix &mat_, _Index idx_) : mat(mat_) {
+            idx = idx_;
+            if (idx < mat.nz) {
+                // Find the column immediately AFTER the one containing "idx"; this is the first holding a greater nnz index than "idx".
+                // This ensures that empty columns are skipped properly.
+                auto nextCol = std::upper_bound(mat.Ap.begin(), mat.Ap.end(), idx);
+                assert((nextCol != mat.Ap.begin()) && (nextCol != mat.Ap.end())); // We're guaranteed Ap[0] == 0 <= idx < mat.nz == Ap.back(), so upper_bound should have found a valid entry after the first.
+                j = std::distance(mat.Ap.begin(), --nextCol);
+            }
+            else if (idx == mat.nz) { j = mat.n; } // end iterator
+            else throw std::runtime_error("Index for constructing TripletIterator out of bounds.");
+        }
+
+        Triplet<_Real> operator*() const { return Triplet<_Real>(mat.Ai[idx], j, mat.Ax[idx]); }
+        bool operator==(const TripletIterator &b) const { return idx == b.idx; }
+        bool operator!=(const TripletIterator &b) const { return !(*this == b); }
+        // Preincrement
+        TripletIterator &operator++() {
+            ++idx;
+            while ((j < mat.n) && (idx >= mat.Ap[j + 1])) ++j; // Advance column index to the column containing this triplet.
+            assert((j < mat.n) || (idx == mat.nz)); // We should only run out of column pointers when we reach the end of the triplets.
+            return *this;
+        }
+    private:
+        _Index idx, j; // nonzero and column index
+                       // (column index is cached/updated for efficiency to avoid a search on each dereference)
+        const CSCMatrix &mat;
+    };
+
+    TripletIterator begin()  const{ return TripletIterator(*this,  0); }
+    TripletIterator   end()  const{ return TripletIterator(*this, nz); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Conversion to sparse triplet formats ((I, J, V) arrays or TripletMatrix)
+    ////////////////////////////////////////////////////////////////////////////
+    template<typename I_, typename R_>
+    void getIJV(const size_t n_, I_ *i, I_ *j, R_ *v) {
+        if (n_ != nz) throw std::runtime_error("Invalid output array sizes for getIJV");
+        size_t back = 0;
+        for (const auto &t : (*this)) {
+            i[back] = t.i;
+            j[back] = t.j;
+            v[back] = t.v;
+            ++back;
+        }
+    }
+
+    void getIJV(std::vector<_Index> &i, std::vector<_Index> &j, std::vector<_Real> &v) {
+        i.resize(nz), j.resize(nz), v.resize(nz);
+        getIJV(nz, i.data(), j.data(), v.data());
+    }
+
+    TripletMatrix<Triplet<_Real>> getTripletMatrix() const {
+        TripletMatrix<Triplet<_Real>> result(m, n);
+        result.reserve(nz);
+        for (const auto &t : (*this)) result.nz.emplace_back(t);
+        return result;
     }
 };
 
