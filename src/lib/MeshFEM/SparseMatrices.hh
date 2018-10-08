@@ -648,7 +648,7 @@ struct CSCMatrix {
                  endIdx = Ap[j + 1];
         auto beginIt = Ai.begin() + beginIdx,
                endIt = Ai.begin() + endIdx;
-        auto it = std::lower_bound(beginIt, endIt, v);
+        auto it = std::lower_bound(beginIt, endIt, i);
         assert((it != endIt) && "Entry absent from sparsity pattern");
         _Index idx = std::distance(Ai.begin(), it);
         assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
