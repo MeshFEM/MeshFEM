@@ -712,7 +712,7 @@ struct CSCMatrix {
     ////////////////////////////////////////////////////////////////////////////
     template<typename I_, typename R_>
     void getIJV(const size_t n_, I_ *i, I_ *j, R_ *v) {
-        if (n_ != nz) throw std::runtime_error("Invalid output array sizes for getIJV");
+        if (n_ != size_t(nz)) throw std::runtime_error("Invalid output array sizes for getIJV");
         size_t back = 0;
         for (const auto &t : (*this)) {
             i[back] = t.i;
@@ -722,7 +722,8 @@ struct CSCMatrix {
         }
     }
 
-    void getIJV(std::vector<_Index> &i, std::vector<_Index> &j, std::vector<_Real> &v) {
+    template<typename I_, typename R_>
+    void getIJV(std::vector<I_> &i, std::vector<I_> &j, std::vector<R_> &v) {
         i.resize(nz), j.resize(nz), v.resize(nz);
         getIJV(nz, i.data(), j.data(), v.data());
     }
