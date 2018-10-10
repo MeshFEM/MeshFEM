@@ -646,10 +646,8 @@ struct CSCMatrix {
 #if 1
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
-        _Index beginIdx = Ap[j],
-                 endIdx = Ap[j + 1];
-        auto beginIt = Ai.begin() + beginIdx,
-               endIt = Ai.begin() + endIdx;
+        auto beginIt = Ai.begin() + Ap[j],
+               endIt = Ai.begin() + Ap[j + 1];
         auto it = std::lower_bound(beginIt, endIt, i);
         assert((it != endIt) && "Entry absent from sparsity pattern");
         _Index idx = std::distance(Ai.begin(), it);
@@ -657,10 +655,10 @@ struct CSCMatrix {
         // Accumulate value
         Ax[idx] += v;
 #else
-        _Index k, kend = Ap[j + 1];
-        for (k = Ap[j]; k < kend; ++k)
-            if (Ai[k] == i) { Ax[k] += v; break; }
-        assert(k < kend);
+        _Index idx, idxend = Ap[j + 1];
+        for (idx = Ap[j]; idx < idxend; ++idx)
+            if (Ai[idx] == i) { Ax[idx] += v; break; }
+        assert(idx < idxend);
 #endif
         return idx + 1;
     }
@@ -681,10 +679,8 @@ struct CSCMatrix {
     _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values) {
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
-        _Index beginIdx = Ap[j],
-                 endIdx = Ap[j + 1];
-        auto beginIt = Ai.begin() + beginIdx,
-               endIt = Ai.begin() + endIdx;
+        auto beginIt = Ai.begin() + Ap[j],
+               endIt = Ai.begin() + Ap[j + 1];
         auto it = std::lower_bound(beginIt, endIt, i);
         assert((it != endIt) && "Entry absent from sparsity pattern");
         _Index idx = std::distance(Ai.begin(), it);
@@ -692,6 +688,7 @@ struct CSCMatrix {
         return addNZ(idx, values);
     }
 
+    // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
     _Index addNZ(_Index idx, const Eigen::EigenBase<Derived> &values) {
         static_assert(Derived::ColsAtCompileTime == 1, "Only row vectors can be added with addNZ");
@@ -965,6 +962,25 @@ public:
             std::cout << "Cholmod warning in " << file << ", line " << line
                       << ": " << message << "( status "
                       << std::to_string(status) << ")" << std::endl;
+    }
+
+    bool checkPosDef() const {
+        if (!m_L) throw std::runtime_error("Matrix wasn't factorized");
+        if (m_L->is_ll) return true; // LL^T factorization only succeeds if the matrix was positive definite
+        // We have an LDL^T factorization; we need to check that all entries of D are positive.
+        // Cholmod stores these entries on the diagonal of "L"
+        const size_t numCols = m_L->n;
+        assert(numCols == n());
+        SuiteSparse_long *colPointers = (SuiteSparse_long *) m_L->p;
+        double *values = (double *) m_L->x;
+        assert((colPointers != nullptr) && (values != nullptr));
+        for (size_t j = 0; j < numCols; ++j) {
+            auto colBegin = colPointers[j];
+            assert(colBegin < colPointers[j + 1]); // column better be nonempty!
+            // Diagonal entry is the first entry of this column
+            if (values[colBegin] <= 1e-16) return false;
+        }
+        return true;
     }
 
     // Size of the factorized matrix.
@@ -1282,6 +1298,11 @@ public:
         std::vector<_Real> u;
         solve(f, u);
         return u;
+    }
+
+    bool checkPosDef() const {
+        if (!m_LLT) throw std::runtime_error("Matrix wasn't factorized as LL or LDL.");
+        return m_LLT->checkPosDef();
     }
 
     bool factorized() const {
