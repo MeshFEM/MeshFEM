@@ -620,6 +620,7 @@ struct TripletMatrix {
 // Matrix in Compressed Sparse Column format
 template<typename _Index, typename _Real>
 struct CSCMatrix {
+    using index_type = _Index;
     std::vector<_Index>  Ap, Ai; // Column pointer and row index arrays
                                  // Note: the row index array must be sorted!
     std::vector<_Real>   Ax;     // Value array
@@ -640,9 +641,9 @@ struct CSCMatrix {
     // Accumulate a value to (i, j)
     // Note: (i, j) must exist in the sparsity pattern!
     // Complexity: O(log(n_j)) where "n_j" is the number of nonzeros in column j
-    void addNZ(_Index i, _Index j, _Real v) {
+    size_t addNZ(_Index i, _Index j, _Real v) {
         assert((i < m) && (j < n) && "Index out of bounds");
-#if 0
+#if 1
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
         _Index beginIdx = Ap[j],
@@ -661,6 +662,37 @@ struct CSCMatrix {
             if (Ai[k] == i) { Ax[k] += v; break; }
         assert(k < kend);
 #endif
+        return idx + 1;
+    }
+
+    // Add a vertical strip of contiguous nonzero values starting at (i, j),
+    // return the index of the next nonzero entry after the written strip.
+    // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
+    template<class Derived>
+    _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values) {
+        // Find the entry in the sparsity pattern.
+        // Row indices are sorted, so we can use a binary search.
+        _Index beginIdx = Ap[j],
+                 endIdx = Ap[j + 1];
+        auto beginIt = Ai.begin() + beginIdx,
+               endIt = Ai.begin() + endIdx;
+        auto it = std::lower_bound(beginIt, endIt, i);
+        assert((it != endIt) && "Entry absent from sparsity pattern");
+        _Index idx = std::distance(Ai.begin(), it);
+        assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
+        return addNZ(idx, values);
+    }
+
+    template<class Derived>
+    _Index addNZ(_Index idx, const Eigen::EigenBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only row vectors can be added with addNZ");
+        Eigen::Map<Eigen::VectorXd>(Ax.data() + idx, values.size()) += values;
+        return idx + values.size();
+    }
+
+    _Index addNZ(_Index idx, Real val) {
+        Ax[idx] += val;
+        return idx + 1;
     }
 
     // Set from a triplet matrix
