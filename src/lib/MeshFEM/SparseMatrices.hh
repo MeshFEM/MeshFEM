@@ -665,6 +665,15 @@ struct CSCMatrix {
         return idx + 1;
     }
 
+    // Insert (i, j, v), with a guess that it should go at location "hint"
+    size_t addNZ(_Index i, _Index j, _Real v, _Index hint) {
+        if ((hint < nz) && (Ai[hint] == i) && (hint < Ap[j + 1]) && (hint >= Ap[j])) {
+            Ax[hint] += v;
+            return hint + 1;
+        }
+        return addNZ(i, j, v);
+    }
+
     // Add a vertical strip of contiguous nonzero values starting at (i, j),
     // return the index of the next nonzero entry after the written strip.
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
