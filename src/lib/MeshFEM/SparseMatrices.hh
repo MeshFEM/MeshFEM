@@ -642,6 +642,7 @@ struct CSCMatrix {
     // Complexity: O(log(n_j)) where "n_j" is the number of nonzeros in column j
     void addNZ(_Index i, _Index j, _Real v) {
         assert((i < m) && (j < n) && "Index out of bounds");
+#if 0
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
         _Index beginIdx = Ap[j],
@@ -654,6 +655,12 @@ struct CSCMatrix {
         assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
         // Accumulate value
         Ax[idx] += v;
+#else
+        _Index k, kend = Ap[j + 1];
+        for (k = Ap[j]; k < kend; ++k)
+            if (Ai[k] == i) { Ax[k] += v; break; }
+        assert(k < kend);
+#endif
     }
 
     // Set from a triplet matrix
