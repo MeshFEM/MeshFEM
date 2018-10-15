@@ -20,6 +20,7 @@
 #include <sstream>
 #include <algorithm>
 #include <string>
+#include <cstring>
 #include <stdexcept>
 #include <cassert>
 #include <memory>
@@ -68,6 +69,18 @@ struct Triplet
     }
 };
 
+template<class TMat>
+bool tripletsSortedAndUnique(const TMat &mat) {
+    const auto  end = mat.end();
+          auto prev = mat.begin();
+          auto curr = mat.begin();
+    for (++curr; curr != end; ++curr, ++prev) {
+        if  ((*curr).j > (*prev).j) continue;
+        if (((*curr).j < (*prev).j) || ((*curr).i <= (*prev).i)) return false;
+    }
+    return true;
+}
+
 template<typename _Triplet = Triplet<Real>>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
@@ -86,6 +99,11 @@ struct TripletMatrix {
     typedef Real                            value_type;
     size_t m, n;
     std::vector<Triplet> nz;
+    // Set this to false for minor speed gains if you know that your matrix is
+    // already properly sorted and has its repeated entries summed.
+    // Warning: it is not automatically set back to true if the matrix is modified!
+    // Use at your own risk.
+    bool needs_sum_repeated = true;
 
     void init(size_t mm = 0, size_t nn = 0) {
         m = mm, n = nn;
@@ -102,25 +120,14 @@ struct TripletMatrix {
     }
 
     // Sort and sum of repeated entries
+    bool needsSumRepated() const { return needs_sum_repeated; }
     void sumRepeated() {
-        BENCHMARK_START_TIMER("Compress Matrix");
+        if (!needsSumRepated()) { return; }
+
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Compress Matrix");
+        if (tripletsSortedAndUnique(*this)) return;
+
         const size_t origNNZ = nz.size();
-        // Check if entries are already sorted and unique
-        {
-            if (origNNZ < 2) { BENCHMARK_STOP_TIMER("Compress Matrix"); return; }
-            bool preSummed = true;
-            for (size_t ti = 1; ti < origNNZ; ++ti) {
-                if  (nz[ti].j  > nz[ti - 1].j) continue;
-                if ((nz[ti].j  < nz[ti - 1].j) ||
-                    (nz[ti].i <= nz[ti - 1].i)) {
-                    preSummed = false; break;
-                }
-            }
-            if (preSummed) {
-                BENCHMARK_STOP_TIMER("Compress Matrix");
-                return;
-            }
-        }
 
 #define PARALLEL_BIN 0 // Parallel binning seems to actually slow things down...
 
@@ -223,13 +230,12 @@ struct TripletMatrix {
                 [](const Triplet &t) -> bool { return t.v == 0.0; });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
-
-        BENCHMARK_STOP_TIMER("Compress Matrix");
     }
 
     // Clear the current matrix and copy over only the upper triangle (including
     // diagonal) of B.
-    void setUpperTriangle(const TMatrix &B) {
+    template<class TMat> // note: TMat can be a CSCMatrix
+    void setUpperTriangle(const TMat &B) {
         clear();
         m = B.m;
         n = B.n;
@@ -237,7 +243,7 @@ struct TripletMatrix {
         //         [](const Triplet &t) -> bool { return t.i <= t.j; });
         // reserve(numUpper);
         reserve(B.nnz()); // faster and not too wasteful...
-        for (const Triplet &t : B.nz) {
+        for (const Triplet &t : B) {
             if (t.i <= t.j)
                 nz.push_back(t);
         }
@@ -613,14 +619,53 @@ struct TripletMatrix {
     }
 
     // Permit simpler range-for syntax for over triplets
-    auto begin() -> decltype(nz.begin()) const { return nz.begin(); }
-    auto   end() -> decltype(nz.  end()) const { return nz.  end(); }
+    auto begin() const -> decltype(nz.begin()) { return nz.begin(); }
+    auto   end() const -> decltype(nz.  end()) { return nz.  end(); }
 };
+
+// Free-standing implmentation for insertion/accumulation of triplet (i, j, v)
+// into a compressed column matrix. We assume that the entries
+// within each column are sorted by row index and that an entry
+// at (i, j) already exists in the matrix.
+// Pointers are used so that we can directly modify matrices
+// stored in Cholmod's internal arrays.
+template<typename _Index, typename _Real>
+size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, _Index j, _Real v) {
+#if 1
+    // Find the entry in the sparsity pattern.
+    // Row indices are sorted, so we can use a binary search.
+    auto beginIt = Ai + Ap[j],
+           endIt = Ai + Ap[j + 1];
+    auto it = std::lower_bound(beginIt, endIt, i);
+    assert((it != endIt) && "Entry absent from sparsity pattern");
+    _Index idx = std::distance(Ai, it);
+    if ((Ai[idx] != i)) throw std::runtime_error("Entry absent from sparsity pattern.");
+    assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
+    // Accumulate value
+    Ax[idx] += v;
+#else
+    _Index idx, idxend = Ap[j + 1];
+    for (idx = Ap[j]; idx < idxend; ++idx)
+        if (Ai[idx] == i) { Ax[idx] += v; break; }
+    assert(idx < idxend);
+#endif
+    return idx + 1;
+}
+
+template<typename _Index, typename _Real>
+size_t csc_add_nz(size_t nz, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, _Index j, _Real v, size_t hint) {
+    if ((hint < nz) && (Ai[hint] == i) && (hint < size_t(Ap[j + 1])) && (hint >= size_t(Ap[j]))) {
+        Ax[hint] += v;
+        return hint + 1;
+    }
+    return csc_add_nz(nz, Ai, Ap, Ax, i, j, v);
+}
 
 // Matrix in Compressed Sparse Column format
 template<typename _Index, typename _Real>
 struct CSCMatrix {
     using index_type = _Index;
+    using value_type = _Real;
     std::vector<_Index>  Ap, Ai; // Column pointer and row index arrays
                                  // Note: the row index array must be sorted!
     std::vector<_Real>   Ax;     // Value array
@@ -628,39 +673,31 @@ struct CSCMatrix {
 
     size_t nnz() const { return nz; }
 
-    CSCMatrix()
-        : m(0), n(0), nz(0) { }
+    CSCMatrix(_Index m = 0, _Index n = 0)
+        : m(m), n(n), nz(0) { }
 
-    template<typename TMatrix>
-    CSCMatrix(TMatrix &mat) { setFromTMatrix(mat); }
+    CSCMatrix(const CSCMatrix  &b) : Ap(b.Ap), Ai(b.Ai), Ax(b.Ax), m(b.m), n(b.n), nz(b.nz) { }
+    CSCMatrix(      CSCMatrix &&b) : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz) { }
+
+    template<typename T>
+    CSCMatrix(TripletMatrix<T> &mat) { setFromTMatrix(mat); }
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) { Ax.assign(nz, val); }
     void setZero() { fill(0.0); }
+    // Set this matrix to have the same sparsity pattern as b, but with zeros
+    void zeros_like(const CSCMatrix &b) {
+        m = b.m; n = b.n; nz = b.nz;
+        Ap = b.Ap; Ai = b.Ai;
+        Ax.assign(Ai.size(), 0.0);
+    }
 
     // Accumulate a value to (i, j)
     // Note: (i, j) must exist in the sparsity pattern!
     // Complexity: O(log(n_j)) where "n_j" is the number of nonzeros in column j
     size_t addNZ(_Index i, _Index j, _Real v) {
         assert((i < m) && (j < n) && "Index out of bounds");
-#if 1
-        // Find the entry in the sparsity pattern.
-        // Row indices are sorted, so we can use a binary search.
-        auto beginIt = Ai.begin() + Ap[j],
-               endIt = Ai.begin() + Ap[j + 1];
-        auto it = std::lower_bound(beginIt, endIt, i);
-        assert((it != endIt) && "Entry absent from sparsity pattern");
-        _Index idx = std::distance(Ai.begin(), it);
-        assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
-        // Accumulate value
-        Ax[idx] += v;
-#else
-        _Index idx, idxend = Ap[j + 1];
-        for (idx = Ap[j]; idx < idxend; ++idx)
-            if (Ai[idx] == i) { Ax[idx] += v; break; }
-        assert(idx < idxend);
-#endif
-        return idx + 1;
+        return csc_add_nz(nz, Ai.data(), Ap.data(), Ax.data(), i, j, v);
     }
 
     // Insert (i, j, v), with a guess that it should go at location "hint"
@@ -679,11 +716,11 @@ struct CSCMatrix {
     _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values) {
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
-        auto beginIt = Ai.begin() + Ap[j],
-               endIt = Ai.begin() + Ap[j + 1];
+        auto beginIt = &Ai[0] + Ap[j],
+               endIt = &Ai[0] + Ap[j + 1];
         auto it = std::lower_bound(beginIt, endIt, i);
         assert((it != endIt) && "Entry absent from sparsity pattern");
-        _Index idx = std::distance(Ai.begin(), it);
+        _Index idx = std::distance(&Ai[0], it);
         assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
         return addNZ(idx, values);
     }
@@ -701,6 +738,55 @@ struct CSCMatrix {
         return idx + 1;
     }
 
+    CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; return *this; }
+    CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; return *this; }
+
+    _Real max()    const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).maxCoeff(); }
+    _Real absMax() const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
+    _Real maxRelError(CSCMatrix &b) const {
+        CSCMatrix diff(*this);
+        diff.addWithIdenticalSparsity(b, -1.0);
+        diff.cwiseDivide(b);
+        return diff.absMax();
+    }
+
+    // (*this) = (*this) ./ b, assuming b's sparsity pattern is identical to ours.
+    // Entries that are zero in both matrices are left zero (even if they exist
+    // in the sparsity pattern).
+    void cwiseDivide(const CSCMatrix &b) {
+        if (nz != b.nz) throw std::runtime_error("Mismatched sparisty patterns");
+        for (_Index i = 0; i < nz; ++i) { if ((Ax[i] != 0) || (b.Ax[i] != 0)) Ax[i] /= b.Ax[i]; }
+    }
+
+    // (*this) += alpha * b, assuming b's sparsity pattern is identical to ours.
+    void addWithIdenticalSparsity(const CSCMatrix &b, Real alpha = 1.0) {
+        if (alpha == 1.0) { Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::VectorXd>(b.Ax.data(), b.Ax.size()); }
+        else              { Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::VectorXd>(b.Ax.data(), b.Ax.size()); }
+    }
+
+    // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
+    void addWithSubSparisty(const CSCMatrix &b, Real alpha = 1.0) {
+        auto it  = begin(), bit  = b.begin(),
+             ite = end(),   bite = b.end();
+        while ((it != ite) && (bit != bite)) {
+            if ((it.get_j() == bit.get_j())) {
+                if (it.get_i() == bit.get_i()) {
+                    Ax[it.get_idx()] += alpha * b.Ax[bit.get_idx()];
+                    ++it; ++bit;
+                }
+                else {
+                    assert(it.get_i() < bit.get_i() && "b's sparsity not a subset of ours");
+                    ++it;
+                }
+            }
+            else {
+                assert(it.get_j() < bit.get_j() && "b's sparsity not a subset of ours");
+                ++it;
+            }
+        }
+        assert(bit == bite && "b's sparsity not a subset of ours");
+    }
+
     // Set from a triplet matrix
     // Side effect: mat's triplets are sorted and compressed.
     template<typename TMatrix>
@@ -714,6 +800,18 @@ struct CSCMatrix {
         Ax.resize(nz);
 
         mat.getCompressedColumn(&Ap[0], &Ai[0], &Ax[0]);
+    }
+
+    void sumRepeated() { /* nothing to do; here for compatibility with TripletMatrix interface */ }
+    bool needsSumRepated() const { return false; }
+
+    void dump(const std::string &path) const {
+        std::ofstream cscout(path);
+        cscout.precision(19);
+        for (size_t i = 0; i < Ai.size(); ++i)
+            cscout << Ai[i] << "\t" << Ax[i] << "\n";
+        for (size_t i = 0; i < Ap.size(); ++i)
+            cscout << Ap[i] << "\n";
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -733,6 +831,10 @@ struct CSCMatrix {
             else throw std::runtime_error("Index for constructing TripletIterator out of bounds.");
         }
 
+        _Index get_idx() { return idx; }
+        _Index get_i  () { return mat.Ai[idx]; }
+        _Index get_j  () { return j; }
+
         Triplet<_Real> operator*() const { return Triplet<_Real>(mat.Ai[idx], j, mat.Ax[idx]); }
         bool operator==(const TripletIterator &b) const { return idx == b.idx; }
         bool operator!=(const TripletIterator &b) const { return !(*this == b); }
@@ -740,6 +842,9 @@ struct CSCMatrix {
         TripletIterator &operator++() {
             ++idx;
             while ((j < mat.n) && (idx >= mat.Ap[j + 1])) ++j; // Advance column index to the column containing this triplet.
+            if ((j >= mat.n) && (idx != mat.nz)) {
+                std::cerr << "Ran out of column pointers when searching for entry idx " << idx << std::endl;
+            }
             assert((j < mat.n) || (idx == mat.nz)); // We should only run out of column pointers when we reach the end of the triplets.
             return *this;
         }
@@ -749,8 +854,8 @@ struct CSCMatrix {
         const CSCMatrix &mat;
     };
 
-    TripletIterator begin()  const{ return TripletIterator(*this,  0); }
-    TripletIterator   end()  const{ return TripletIterator(*this, nz); }
+    TripletIterator begin() const{ return TripletIterator(*this,  0); }
+    TripletIterator   end() const{ return TripletIterator(*this, nz); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Conversion to sparse triplet formats ((I, J, V) arrays or TripletMatrix)
@@ -827,6 +932,21 @@ public:
                               std::to_string(m_factorizationMemoryBytes / (1 << 20)));
     }
 
+    // Perform only the symbolic factorization with the current system matrix
+    // (useful this matrix holds the sparsity pattern that will be used for
+    // many numeric factorizations).
+    void factorizeSymbolic(int /* nmethods */) {
+        throw std::runtime_error("Unimplemented");
+    }
+
+    // Recompute the numeric factorization using the new system matrix "tmat",
+    // resuing the symbolic factorization. For this to work, it must have the same
+    // sparsity pattern as the matrix for which the symbolic factorization was computed.
+    template<typename _Triplet>
+    void updateFactorization(const TripletMatrix<_Triplet> &/* tmat */) {
+        throw std::runtime_error("Unimplemented");
+    }
+
     template<typename _Vec1, typename _Vec2>
     void solve(const _Vec1 &b, _Vec2 &x) {
         if (numeric == NULL) factorize();
@@ -883,9 +1003,7 @@ public:
 
     void factorize() {
         clearFactors();
-        BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
-        m_L = cholmod_l_analyze(m_A, &m_c);
-        BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
+        factorizeSymbolic();
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
         int success = cholmod_l_factorize(m_A, m_L, &m_c);
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
@@ -895,6 +1013,62 @@ public:
             throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
         BENCHMARK_ADD_MESSAGE("Peak factorization memory (MB):\t" +
                               std::to_string(peakMemoryMB()));
+    }
+
+    // Perform only the symbolic factorization with the current system matrix
+    // (useful this matrix holds the sparsity pattern that will be used for
+    // many numeric factorizations).
+    void factorizeSymbolic(int nmethods = 0 /* Cholmod's default */) {
+        BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
+        m_c.nmethods = nmethods;
+        clearFactors();
+        m_L = cholmod_l_analyze(m_A, &m_c);
+        BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
+    }
+
+    // Recompute the numeric factorization using the new system matrix "tmat",
+    // resuing the symbolic factorization. For this to work, it must have the same
+    // sparsity pattern as the matrix for which the symbolic factorization was computed.
+    template<typename _Triplet>
+    void updateFactorization(TripletMatrix<_Triplet> &tmat) {
+        if (m_L == nullptr) return; // no factorization was computed...
+
+        tmat.sumRepeated();
+        if ((m_L->n != tmat.m) || (m_L->n != tmat.n)) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+        if (m_A == nullptr) throw std::runtime_error("Cholmod matrix wasn't allocated.");
+        if (tmat.nnz() > size_t(m_A->nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one used for symbolic factorization"); // again, necessary but not sufficient!
+
+        using _Idx = SuiteSparse_long;
+
+#if 0
+        {
+            static size_t idx = 0;
+            std::ofstream cscout("curr_A_csc_" + std::to_string(idx) + ".txt");
+            ++idx;
+            const _Idx nnz = m_A->nzmax;
+            for (_Idx i = 0; i < nnz; ++i) {
+                cscout << ((_Idx *)(m_A->i))[i] << "\t";
+                cscout << ((double *)(m_A->x))[i] << "\n";
+            }
+            for (size_t i = 0; i < tmat.n + 1; ++i) {
+                cscout << ((_Idx *)(m_A->p))[i] << "\n";
+            }
+            std::cout << "nzmax, tmat.nnz: " << m_A->nzmax << ", " << tmat.nnz() << std::endl;
+        }
+#endif
+        // Replace the entries in m_A with those from tmat
+        assert(m_A->x != nullptr);
+        assert(m_A->dtype == CHOLMOD_DOUBLE);
+
+        tmat.getCompressedColumn((_Idx *) m_A->p, (_Idx *) m_A->i, (double *) m_A->x);
+
+        BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
+        int success = cholmod_l_factorize(m_A, m_L, &m_c);
+        BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
+        if (!success)
+            throw std::runtime_error("Factor update failed");
+        if (m_c.status == CHOLMOD_NOT_POSDEF)
+            throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
     }
 
     template<typename _Vec1, typename _Vec2>
@@ -951,8 +1125,7 @@ public:
         cholmod_l_finish(&m_c);
     }
 
-    static void error_handler(int status, const char *file, int line,
-            const char *message) {
+    static void error_handler(int status, const char *file, int line, const char *message) {
         std::cout << "Caught error." << std::endl;
         if (status < 0)
             throw std::runtime_error("Cholmod error in " + std::string(file) + ", line " +
@@ -964,6 +1137,7 @@ public:
                       << std::to_string(status) << ")" << std::endl;
     }
 
+    // Check if the matrix for which factor "L" was computed is positive definite.
     bool checkPosDef() const {
         if (!m_L) throw std::runtime_error("Matrix wasn't factorized");
         if (m_L->is_ll) return true; // LL^T factorization only succeeds if the matrix was positive definite
@@ -1007,6 +1181,9 @@ private:
 #endif
 
         if (forceSupernodal) m_c.supernodal = CHOLMOD_SUPERNODAL;
+
+        // Try many different orderings searching for the best.
+        // m_c.nmethods = 9;
 
         // Completely bypass Metis/NESDIS (for large matrices, this fails...)
         // Note: this shouldn't be done for smaller matrices because it results in slower solves.
@@ -1091,14 +1268,26 @@ public:
         m_initReducedVariables();
     }
 
-    // set a SPSD system
-    void set(const TMatrix &K) {
-        clear();
+    // Set a SPSD system.
+    // Only use `keepFactorization = true` if K's sparsity pattern is a subset
+    // of the original matrix factorized--then we re-use the original symbolic
+    // factorization.
+    template<class TMat> // TMatrix or SuiteSparseMatrix
+    void set(const TMat &K, bool keepFactorization = false) {
+        clear(keepFactorization);
         m_AUpper.setUpperTriangle(K);
+        m_AUpper.needs_sum_repeated = K.needsSumRepated();
         m_isSPD = true;
         m_numVars = m_AUpper.m;
 
         m_initReducedVariables();
+    }
+
+    // Ensure the sparsity pattern is filled with 1 so that Cholmod knows where
+    // all nonzeros are.
+    void setSparsityPattern(SuiteSparseMatrix pat) {
+        pat.fill(1.0);
+        set(pat, false);
     }
 
     // The constraint RHS can be updated without refactoring.
@@ -1115,12 +1304,17 @@ public:
     // Eliminate DoFs in fixedVars from the system. The system matrix is shrunk,
     // and variables are re-indexed in a way that the original system's solution
     // can be returned from the solve() call.
+    // Only use `keepFactorization = true` if the resulting reduced matrix's
+    // sparsity pattern a subset of the original matrix factorized--then we
+    // re-use the original symbolic factorization.
     void fixVariables(const std::vector<size_t> &fixedVars,
-                      const std::vector<_Real>  &fixedVarValues) {
-        BENCHMARK_START_TIMER("fixVariables");
+                      const std::vector<_Real>  &fixedVarValues,
+                      bool keepFactorization = false) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("fixVariables");
         assert(fixedVars.size() == fixedVarValues.size());
         if (fixedVars.size() == 0) return;
-        clearFactorization();
+        if (!keepFactorization) clearFactorization();
+        else                    m_needsNumericFactorization = true;
         if (m_AUpper.nnz() == 0)
             throw std::runtime_error("Empty triplets--attempted to modify system post-solve in economy mode?");
 
@@ -1212,7 +1406,18 @@ public:
         }
         m_fixedVarRHSContribution.erase(back, m_fixedVarRHSContribution.end());
         assert(m_fixedVarRHSContribution.size() == m_AUpper.m);
-        BENCHMARK_STOP_TIMER("fixVariables");
+    }
+
+    void factorizeSymbolic(int nmethods = 0 /* Cholmod's default */) {
+        if (m_isSPD) {
+            BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
+            m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper, m_forceSupernodal));
+            BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
+
+            m_LLT->factorizeSymbolic(nmethods);
+            m_needsNumericFactorization = true;
+        }
+        else { throw std::runtime_error("Unimplemented"); }
     }
 
     // Solve K u = f under any existing constraints/fixed variables.
@@ -1256,8 +1461,14 @@ public:
             if (!m_LLT) {
                 BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
                 m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper, m_forceSupernodal));
+                m_needsNumericFactorization = false;
                 if (m_economyMode) m_clearAUpperTriplets();
                 BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
+            }
+
+            if (m_needsNumericFactorization) {
+                m_LLT->updateFactorization(m_AUpper);
+                m_needsNumericFactorization = false;
             }
 
             m_LLT->solve(bReduced, uReduced);
@@ -1272,7 +1483,12 @@ public:
                 if (m_economyMode) m_clearAUpperTriplets();
                 A.reflectUpperTriangle();
                 m_LU = std::unique_ptr<_LUFactorizer>(new _LUFactorizer(A));
+                m_needsNumericFactorization = false;
                 BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
+            }
+            if (m_needsNumericFactorization) {
+                m_LU->updateFactorization(m_AUpper);
+                m_needsNumericFactorization = false;
             }
             m_LU->solve(bReduced, uReduced);
         }
@@ -1314,8 +1530,9 @@ public:
         m_LLT = NULL;
     }
 
-    void clear() {
-        clearFactorization();
+    void clear(bool keepFactorization = false) {
+        if (!keepFactorization) clearFactorization();
+        m_needsNumericFactorization = true;
         m_AUpper.init(0, 0);
         m_numVars = 0;
         m_initReducedVariables();
@@ -1395,6 +1612,11 @@ private:
     size_t m_numVars;
     std::unique_ptr<_LUFactorizer>  m_LU;
     std::unique_ptr<_LLTFactorizer> m_LLT;
+
+    // If we update the matrix while requesting to `keepFactorization`, then
+    // the factorization object already exists but must be updated before
+    // solving.
+    bool m_needsNumericFactorization = false;
 };
 
 #endif /* end of include guard: SPARSEMATRICES_HH */
