@@ -765,7 +765,7 @@ struct CSCMatrix {
 
     // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
     // offset: offset to be applied to the row and column indices of b
-    void addWithSubSparisty(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
+    void addWithSubSparsity(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
         auto bi = [&]() { return offset + bit.get_i(); };
@@ -1310,15 +1310,17 @@ public:
     // sparsity pattern a subset of the original matrix factorized--then we
     // re-use the original symbolic factorization.
     void fixVariables(const std::vector<size_t> &fixedVars,
-                      const std::vector<_Real>  &fixedVarValues,
+                      const std::vector<_Real>  &fixedVarValues = std::vector<_Real>(), // variables fixed to zero if unspecified
                       bool keepFactorization = false) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("fixVariables");
-        assert(fixedVars.size() == fixedVarValues.size());
         if (fixedVars.size() == 0) return;
+        if ((fixedVarValues.size() != 0) && (fixedVarValues.size() != fixedVars.size())) throw std::runtime_error("Incorrect number of fixedVarValues");
         if (!keepFactorization) clearFactorization();
         else                    m_needsNumericFactorization = true;
         if (m_AUpper.nnz() == 0)
             throw std::runtime_error("Empty triplets--attempted to modify system post-solve in economy mode?");
+
+        const bool fixToZero = fixedVarValues.size() == 0;
 
         // replacementIndex tracks what the current reduced variable indices are
         // remapped to. Initially it is used to flag (reduced) variables for
@@ -1328,42 +1330,35 @@ public:
         // The value to which each (reduced) variable will be fixed, or zero if
         // the variable will not be fixed. Needed for efficiently computing RHS
         // contribution of fixedVarValues
-        std::vector<_Real> rvNewlyFixedValue(m_AUpper.m, 0.0);
-        for (size_t i = 0; i < fixedVars.size(); ++i) {
-            int rv = m_reducedVarForVar[fixedVars[i]];
-            if (rv < 0) continue;
-            assert(size_t(rv) < rvNewlyFixedValue.size());
-            rvNewlyFixedValue[rv] = fixedVarValues[i];
+        std::vector<_Real> rvNewlyFixedValue;
+        if (!fixToZero) {
+            rvNewlyFixedValue.assign(m_AUpper.m, 0.0);
+            for (size_t i = 0; i < fixedVars.size(); ++i) {
+                int rv = m_reducedVarForVar[fixedVars[i]];
+                if (rv < 0) continue;
+                assert(size_t(rv) < rvNewlyFixedValue.size());
+                rvNewlyFixedValue[rv] = fixedVarValues[i];
+            }
         }
 
-        // Mark fixed variables for elimination and store their values
+        // Mark fixed variables for elimination and store their values in
         // m_fixedVarValues for post-solve recovery.
-        // Also move fixedVarValues[i] over to m_reducedVarForVar
-        for (size_t i = 0; i < fixedVars.size(); ++i) {
-            size_t toFix = fixedVars[i];
-            assert(toFix < m_reducedVarForVar.size());
+        {
+            int fixedVarIdx = m_fixedVarValues.size(); // index in the full collection of fixed variables (not just the ones added in this call...)
+            m_fixedVarValues.resize(m_fixedVarValues.size() + fixedVars.size());
+            for (size_t i = 0; i < fixedVars.size(); ++i) {
+                size_t toFix = fixedVars[i];
+                assert(toFix < m_reducedVarForVar.size());
 
-            // Get the current reduced index of the variable.
-            int curr = m_reducedVarForVar[toFix];
-            if (curr < 0) throw std::runtime_error("Variable already fixed.");
-            assert(size_t(curr) < replacementIndex.size());
+                // Get the current reduced index of the variable.
+                int curr = m_reducedVarForVar[toFix];
+                if (curr < 0) throw std::runtime_error("Variable already fixed.");
+                assert(size_t(curr) < replacementIndex.size());
 
-            replacementIndex[curr] = -1;
-            m_reducedVarForVar[toFix] = -1 - int(m_fixedVarValues.size());
-            _Real val = fixedVarValues[i];
-            m_fixedVarValues.push_back(val);
-        }
-
-        // Move fixedVarValues[i]'s terms over to m_fixedVarRHSContribution
-        // (essentially "elimination", but triplets are left in m_AUpper for now)
-        for (const auto &t : m_AUpper.nz) {
-            // Move over the upper triangle term...
-            _Real val = rvNewlyFixedValue[t.j];
-            if (val != 0.0) m_fixedVarRHSContribution[t.i] -= t.v * val;
-            // and the strict lower triangle term.
-            if (t.i < t.j) {
-                val = rvNewlyFixedValue[t.i];
-                if (val != 0.0) m_fixedVarRHSContribution[t.j] -= t.v * val;
+                replacementIndex[curr] = -1;
+                m_reducedVarForVar[toFix] = -1 - fixedVarIdx;
+                if (!fixToZero) m_fixedVarValues[fixedVarIdx] = fixedVarValues[i];
+                ++fixedVarIdx;
             }
         }
 
@@ -1382,17 +1377,34 @@ public:
             m_reducedVarForVar[i] = replacementIndex[curr];
         }
 
-        // Remove entries (rows, cols) of A
-        auto newEnd = std::remove_if(m_AUpper.nz.begin(), m_AUpper.nz.end(),
-            [&](const Triplet<_Real> &t) -> bool {
-                return (replacementIndex[t.i] < 0) ||
-                       (replacementIndex[t.j] < 0); });
-        m_AUpper.nz.erase(newEnd, m_AUpper.nz.end());
+        if (!fixToZero) {
+            // Move fixedVarValues[i]'s terms over to m_fixedVarRHSContribution
+            // (essentially "elimination", but triplets are left in m_AUpper for now)
+            for (const auto &t : m_AUpper.nz) {
+                // Move over the upper triangle term...
+                _Real val = rvNewlyFixedValue[t.j];
+                if (val != 0.0) m_fixedVarRHSContribution[t.i] -= t.v * val;
+                // and the strict lower triangle term.
+                if (t.i < t.j) {
+                    val = rvNewlyFixedValue[t.i];
+                    if (val != 0.0) m_fixedVarRHSContribution[t.j] -= t.v * val;
+                }
+            }
+        }
 
-        // Apply replacement to A matrix.
-        for (Triplet<_Real> &t : m_AUpper.nz) {
-            t.i = replacementIndex[t.i];
-            t.j = replacementIndex[t.j];
+        // Remove entries in the newly fixed rows/columns of A
+        // and apply the reindexing to the remaining entries.
+        {
+            auto back = m_AUpper.nz.begin();
+            for (auto it = m_AUpper.nz.begin(); it != m_AUpper.nz.end(); ++it) {
+                const auto &t = *it;
+                int i = replacementIndex[t.i];
+                if (i < 0) continue;
+                int j = replacementIndex[t.j];
+                if (j < 0) continue;
+                *back++ = Triplet<_Real>(i, j, t.v);
+            }
+            m_AUpper.nz.erase(back, m_AUpper.nz.end());
         }
 
         // Shrink A matrix to account for removed rows/cols.
