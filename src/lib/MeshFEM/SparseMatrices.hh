@@ -672,8 +672,8 @@ struct CSCMatrix {
 
     size_t nnz() const { return nz; }
 
-    CSCMatrix(_Index m = 0, _Index n = 0)
-        : m(m), n(n), nz(0) { }
+    CSCMatrix(_Index mm = 0, _Index nn = 0)
+        : m(mm), n(nn), nz(0) { }
 
     CSCMatrix(const CSCMatrix  &b) : Ap(b.Ap), Ai(b.Ai), Ax(b.Ax), m(b.m), n(b.n), nz(b.nz) { }
     CSCMatrix(      CSCMatrix &&b) : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz) { }
@@ -934,7 +934,7 @@ public:
     // Perform only the symbolic factorization with the current system matrix
     // (useful this matrix holds the sparsity pattern that will be used for
     // many numeric factorizations).
-    void factorizeSymbolic(int /* nmethods */) {
+    [[ noreturn ]] void factorizeSymbolic(int /* nmethods */) {
         throw std::runtime_error("Unimplemented");
     }
 
@@ -942,7 +942,7 @@ public:
     // resuing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
     template<typename _Triplet>
-    void updateFactorization(const TripletMatrix<_Triplet> &/* tmat */) {
+    [[ noreturn ]] void updateFactorization(const TripletMatrix<_Triplet> &/* tmat */) {
         throw std::runtime_error("Unimplemented");
     }
 
