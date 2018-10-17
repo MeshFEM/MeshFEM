@@ -764,22 +764,25 @@ struct CSCMatrix {
     }
 
     // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
-    void addWithSubSparisty(const CSCMatrix &b, Real alpha = 1.0) {
+    // offset: offset to be applied to the row and column indices of b
+    void addWithSubSparisty(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
+        auto bi = [&]() { return offset + bit.get_i(); };
+        auto bj = [&]() { return offset + bit.get_j(); };
         while ((it != ite) && (bit != bite)) {
-            if ((it.get_j() == bit.get_j())) {
-                if (it.get_i() == bit.get_i()) {
+            if ((it.get_j() == bj())) {
+                if (it.get_i() == bi()) {
                     Ax[it.get_idx()] += alpha * b.Ax[bit.get_idx()];
                     ++it; ++bit;
                 }
                 else {
-                    assert(it.get_i() < bit.get_i() && "b's sparsity not a subset of ours");
+                    assert(it.get_i() < bi() && "b's sparsity not a subset of ours");
                     ++it;
                 }
             }
             else {
-                assert(it.get_j() < bit.get_j() && "b's sparsity not a subset of ours");
+                assert(it.get_j() < bj() && "b's sparsity not a subset of ours");
                 ++it;
             }
         }
