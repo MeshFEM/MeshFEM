@@ -333,7 +333,7 @@ public:
         // Validate symmetry by checking lower triangle
         for (size_t i = 0; i < t_N; ++i)
             for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-16)
+                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
     }
 

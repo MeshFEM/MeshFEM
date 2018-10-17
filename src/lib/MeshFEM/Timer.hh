@@ -118,10 +118,7 @@ private:
     }
 
 public:
-    Timer() {
-        // Start global section
-        m_sections.insert(std::make_pair("", _Section()));
-    }
+    Timer() { reset(); }
 
     void startSection(std::string name) {
         if (!m_sectionStack.empty())
@@ -170,6 +167,14 @@ public:
         }
 
         m_sections.at(sectionName).stop(timer);
+    }
+
+    // Remove all timers and restart the global section
+    void reset() {
+        m_sections.clear();
+        m_sectionStack.clear();
+        // (re)start global section
+        m_sections.insert(std::make_pair("", _Section()));
     }
 
     void report(std::ostream &os) {

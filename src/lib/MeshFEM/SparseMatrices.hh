@@ -639,7 +639,6 @@ size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, 
     auto it = std::lower_bound(beginIt, endIt, i);
     assert((it != endIt) && "Entry absent from sparsity pattern");
     _Index idx = std::distance(Ai, it);
-    if ((Ai[idx] != i)) throw std::runtime_error("Entry absent from sparsity pattern.");
     assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
     // Accumulate value
     Ax[idx] += v;

@@ -37,6 +37,7 @@ public:
     bool valid() const { return size_t(m_idx) < m_mesh.numVertices(); }
     bool isBoundary() const { return m_mesh.m_bdryVertexIdx(m_idx) >= 0; }
     BVH boundaryVertex() const { return BVH(   m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
+    // Half-edge incident on this vertex; guaranteed to be opposite the boundary if v is on the boundary.
     HEH       halfEdge() const { return HEH(m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
 
     // Identity operation for unified writing of surface and volume meshes
