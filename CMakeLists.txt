@@ -89,6 +89,7 @@ include(MeshFEMDependencies)
 ################################################################################
 
 add_subdirectory(src/lib)
+
 if(NOT MESHFEM_LIB_ONLY)
     add_subdirectory(src/bin)
 endif()
