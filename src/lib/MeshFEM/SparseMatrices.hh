@@ -19,6 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <numeric>
 #include <string>
 #include <cstring>
 #include <stdexcept>
@@ -694,6 +695,14 @@ struct CSCMatrix {
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) { Ax.assign(nz, val); }
     void setZero() { fill(0.0); }
+
+    void setIdentity() {
+        setZero();
+        if (m != n) throw std::runtime_error("Only square matrices are supported");
+        for (_Index i = 0; i < m; ++i)
+            addNZ(i, i, 1.0);
+    }
+
     // Set this matrix to have the same sparsity pattern as b, but with zeros
     void zeros_like(const CSCMatrix &b) {
         m = b.m; n = b.n; nz = b.nz;
@@ -758,8 +767,8 @@ struct CSCMatrix {
         return idx + 1;
     }
 
-    CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; return *this; }
-    CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; return *this; }
+    CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
+    CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
 
     _Real max()    const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).maxCoeff(); }
     _Real absMax() const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
@@ -826,6 +835,26 @@ struct CSCMatrix {
         mat.getCompressedColumn(&Ap[0], &Ai[0], &Ax[0]);
     }
 
+    // A sparse matrix holding "diag" on the diagonal.
+    void setDiag(const Eigen::Ref<const Eigen::VectorXd> &diag, bool preserveSparsity = false) {
+        if (preserveSparsity) {
+            if ((size_t(m) != size_t(diag.size())) ||
+                (size_t(n) != size_t(diag.size()))) throw std::runtime_error("Size mismatch");
+            setZero();
+            for (_Index i = 0; i < _Index(diag.size()); ++i)
+                addNZ(i, i, diag[i]);
+        }
+        else {
+            m = n = nz = diag.size();
+            Ap.resize(n + 1);
+            Ai.resize(nz);
+            Ax.resize(nz);
+            std::iota(Ap.begin(), Ap.end(), 0);
+            std::iota(Ai.begin(), Ai.end(), 0);
+            Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) = diag;
+        }
+    }
+
     void sumRepeated() { /* nothing to do; here for compatibility with TripletMatrix interface */ }
     bool needsSumRepated() const { return false; }
 
@@ -887,9 +916,12 @@ struct CSCMatrix {
     _Vector apply(const _Vector &x) const {
         if (size_t(x.size()) != size_t(n)) throw std::runtime_error("Sparse matvec size mismatch.");
         _Vector result(m);
+        applyRaw(x.data(), result.data());
+        return result;
+    }
 
-        // Some _Vector types don't zero-initialize.
-        for (size_t i = 0; i < size_t(result.size()); ++i) result[i] = 0.0;
+    void applyRaw(const _Real *x, _Real *result) const {
+        std::fill(result, result + m, 0.0);
 
         const auto ende = end();
         for (auto it = begin(); it != ende; ++it) {
@@ -899,8 +931,6 @@ struct CSCMatrix {
                 result[j] += it.get_val() * x[i];
             }
         }
-
-        return result;
     }
 
     // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively
@@ -969,7 +999,9 @@ struct CSCMatrix {
     }
 
     TripletMatrix<Triplet<_Real>> getTripletMatrix() const {
-        TripletMatrix<Triplet<_Real>> result(m, n);
+        using TM = TripletMatrix<Triplet<_Real>>;
+        TM result(m, n);
+        result.symmetry_mode = static_cast<typename TM::SymmetryMode>(symmetry_mode);
         result.reserve(nz);
         for (const auto &t : (*this)) result.nz.emplace_back(t);
         return result;
