@@ -696,11 +696,21 @@ struct CSCMatrix {
     void fill(_Real val) { Ax.assign(nz, val); }
     void setZero() { fill(0.0); }
 
-    void setIdentity() {
-        setZero();
+    void setIdentity(bool preserveSparsity = false) {
         if (m != n) throw std::runtime_error("Only square matrices are supported");
-        for (_Index i = 0; i < m; ++i)
-            addNZ(i, i, 1.0);
+        if (preserveSparsity) {
+            setZero();
+            for (_Index i = 0; i < m; ++i)
+                Ax[findDiagEntry(i)] = 1.0;
+        }
+        else {
+            nz = m;
+            Ap.resize(n + 1);
+            Ai.resize(nz);
+            Ax.assign(nz, 1.0);
+            std::iota(Ap.begin(), Ap.end(), 0);
+            std::iota(Ai.begin(), Ai.end(), 0);
+        }
     }
 
     // Set this matrix to have the same sparsity pattern as b, but with zeros
@@ -708,6 +718,16 @@ struct CSCMatrix {
         m = b.m; n = b.n; nz = b.nz;
         Ap = b.Ap; Ai = b.Ai;
         Ax.assign(Ai.size(), 0.0);
+    }
+
+    _Index findDiagEntry(_Index i) const {
+        if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
+            _Index idx = Ap[i + 1] - 1; // Diagonal element is the last entry in the column "i"
+            assert(idx >= Ap[i]);
+            assert(Ai[idx] == i);
+            return idx;
+        }
+        return findEntry(i, i);
     }
 
     _Index findEntry(_Index i, _Index j) const {
@@ -841,8 +861,8 @@ struct CSCMatrix {
             if ((size_t(m) != size_t(diag.size())) ||
                 (size_t(n) != size_t(diag.size()))) throw std::runtime_error("Size mismatch");
             setZero();
-            for (_Index i = 0; i < _Index(diag.size()); ++i)
-                addNZ(i, i, diag[i]);
+            for (_Index i = 0; i < m; ++i)
+                Ax[findDiagEntry(i)] = diag[i];
         }
         else {
             m = n = nz = diag.size();
@@ -937,7 +957,6 @@ struct CSCMatrix {
     template<class Predicate>
     void rowColRemoval(const Predicate &shouldRemove) {
         if (m != n) throw std::runtime_error("rowColRemoval only implemented for square matrices");
-        size_t entry_back = 0, colptr_back = 0;
 
         // Determine the mapping from old row indices to new (reduced) row indices.
         constexpr _Index NONE = std::numeric_limits<_Index>::max();
@@ -947,24 +966,23 @@ struct CSCMatrix {
             replacementRowIdx[i] = reducedIdx++;
         }
 
-        _Index j = 0; // current column
-        for (decltype(nz) idx = 0; idx < nz; ++idx) {
+        const _Index nconst = n;
+        size_t entry_back = 0, colptr_back = 0;
+        for (_Index j = 0; j < nconst; ++j) {
             // Generate/filter column pointers
-            while ((j < n) && (idx == Ap[j + 1])) {                   // When we've reached the end of a (possibly empty) column
-                if (!shouldRemove(j)) Ap[++colptr_back] = entry_back; // Output a new column end pointer if the column is to be kept
-                ++j;                                                  // Advance to the next column
-                if (shouldRemove(j)) { idx = Ap[j + 1]; }             // Skip the next column's entries if it is marked for removal.
-                if (idx >= nz) break;
-            }
-            // Filter entries from each column by row index, apply row index replacement.
-            if (!shouldRemove(Ai[idx])) {
-                Ai[entry_back] = replacementRowIdx[Ai[idx]];
+            if (shouldRemove(j)) continue;  // Skip removed columns
+
+            // Filter entries by row index
+            const _Index idxend = Ap[j + 1]; // Actually gives a measurable performance boost!
+            for (_Index idx = Ap[j]; idx < idxend; ++idx) {
+                const _Index i = Ai[idx];
+                if (shouldRemove(i)) continue;
+                Ai[entry_back] = replacementRowIdx[i];
                 Ax[entry_back] = Ax[idx];
                 ++entry_back;
             }
+            Ap[++colptr_back] = entry_back; // Write the new column end pointer for the kept columns
         }
-        // The final column pointer still needs to be written
-        Ap[++colptr_back] = entry_back;
 
         assert(colptr_back <= size_t(m));
         assert(entry_back <= size_t(nz));
@@ -1160,7 +1178,7 @@ public:
         if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
         if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
 
-        m_AStorage = SuiteSparseMatrix(std::forward<Mat>(mat));
+        m_AStorage = std::forward<Mat>(mat);
         m_matrixUpdated();
 
         if (m_L == nullptr) return; // no symbolic factorization was computed yet; nothing needs to be updated.
