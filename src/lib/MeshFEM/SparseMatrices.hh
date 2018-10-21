@@ -28,7 +28,6 @@
 #include <cstdint>
 #include <cmath>
 #include "Parallelism.hh"
-#include "Future.hh"
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
@@ -1209,7 +1208,7 @@ struct CholmodSparseWrapper {
 
     CholmodSparseWrapper &operator=(const CholmodSparseWrapper  &b) = delete;
     CholmodSparseWrapper &operator=(      CholmodSparseWrapper &&b) {
-        n = b.n; m_mat = b.m_mat; m_c = b.m_c;
+        n = b.n; m_mat = b.m_mat; m_c = std::move(b.m_c);
         b.m_mat = nullptr;
         return *this;
     }
@@ -1317,14 +1316,14 @@ public:
 
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
     // to a vector.
-    std::unique_ptr<CholmodSparseWrapper> getL() {
+    CholmodSparseWrapper getL() {
         // According to the documentation, cholmod_copy_factor will convert our numeric
         // factorization m_L back into a symbolic one, which will break future solves.
         // So we operate on a copy of m_L.
         if (m_L == nullptr) throw std::runtime_error("Factorization doesn't exist");
         cholmod_factor *factorCopy = cholmod_l_copy_factor(m_L, m_c.get());
         if (factorCopy == nullptr) throw std::runtime_error("Factor copy failed");
-        auto result = Future::make_unique<CholmodSparseWrapper>(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
+        auto result = CholmodSparseWrapper(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
         cholmod_l_free_factor(&factorCopy, m_c.get());
         return result;
     }
