@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cmath>
 #include "Parallelism.hh"
+#include "Future.hh"
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
@@ -1200,6 +1201,9 @@ struct CholmodSparseWrapper {
         cholmod_l_sdmult(m_mat, transpose, alpha, beta, &cholx, &choly, &m_c);
     }
 
+    CholmodSparseWrapper &operator=(const CholmodSparseWrapper  &b) = delete;
+    CholmodSparseWrapper &operator=(      CholmodSparseWrapper &&b) = delete;
+
     ~CholmodSparseWrapper() { if (m_mat != nullptr) cholmod_l_free_sparse(&m_mat, &m_c); }
 private:
     size_t n;
@@ -1310,7 +1314,7 @@ public:
         if (m_L == nullptr) throw std::runtime_error("Factorization doesn't exist");
         cholmod_factor *factorCopy = cholmod_l_copy_factor(m_L, &m_c);
         if (factorCopy == nullptr) throw std::runtime_error("Factor copy failed");
-        auto result = std::make_unique<CholmodSparseWrapper>(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, &m_c), m_c);
+        auto result = Future::make_unique<CholmodSparseWrapper>(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, &m_c), m_c);
         cholmod_l_free_factor(&factorCopy, &m_c);
         return result;
     }
