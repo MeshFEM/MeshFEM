@@ -933,23 +933,27 @@ struct CSCMatrix {
 
     // Matrix-vector multiply
     template<typename _Vector>
-    _Vector apply(const _Vector &x) const {
-        if (size_t(x.size()) != size_t(n)) throw std::runtime_error("Sparse matvec size mismatch.");
-        _Vector result(m);
-        applyRaw(x.data(), result.data());
+    _Vector apply(const _Vector &x, const bool transpose = false) const {
+        const size_t local_m = transpose ? n : m;
+        const size_t local_n = transpose ? m : n;
+        if (size_t(x.size()) != size_t(local_n)) throw std::runtime_error("Sparse matvec size mismatch.");
+        _Vector result(local_m);
+        applyRaw(x.data(), result.data(), transpose);
         return result;
     }
 
-    void applyRaw(const _Real *x, _Real *result) const {
+    void applyRaw(const _Real *x, _Real *result, const bool transpose = false) const {
         std::fill(result, result + m, 0.0);
+
+        const bool swapIndices = transpose && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE);
 
         const auto ende = end();
         for (auto it = begin(); it != ende; ++it) {
             _Index i = it.get_i(), j = it.get_j();
+            if (swapIndices) std::swap(i, j);
             result[i] += it.get_val() * x[j];
-            if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (it.get_i() < it.get_j())) {
+            if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i != j))
                 result[j] += it.get_val() * x[i];
-            }
         }
     }
 
