@@ -943,9 +943,9 @@ struct CSCMatrix {
     }
 
     void applyRaw(const _Real *x, _Real *result, const bool transpose = false) const {
-        std::fill(result, result + m, 0.0);
-
         const bool swapIndices = transpose && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE);
+
+        std::fill(result, result + (transpose ? n : m), 0.0);
 
         const auto ende = end();
         for (auto it = begin(); it != ende; ++it) {
