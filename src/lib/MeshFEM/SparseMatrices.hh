@@ -629,7 +629,24 @@ struct TripletMatrix {
     auto   end() const -> decltype(nz.  end()) { return nz.  end(); }
 };
 
-// Free-standing implmentation for insertion/accumulation of triplet (i, j, v)
+// Search for "i" in "Ai" at indices in the range "[lb, ub)"
+template<typename _Index>
+_Index binary_search(_Index i, _Index *Ai, _Index lb, _Index ub) {
+    return std::distance(Ai, std::lower_bound(Ai + lb, Ai + ub, i));
+#if 0
+    while (ub - lb > 6) {
+        _Index mid = (ub + lb) / 2;
+        _Index row = Ai[mid];
+        if (row == i) { return mid; }
+        if (row <  i) { lb = mid; }
+        if (row >  i) { ub = mid; }
+    }
+    for (; (Ai[lb] != i) && (lb != ub); ++lb);
+    return lb;
+#endif
+}
+
+// Free-standing implementation for insertion/accumulation of triplet (i, j, v)
 // into a compressed column matrix. We assume that the entries
 // within each column are sorted by row index and that an entry
 // at (i, j) already exists in the matrix.
@@ -638,23 +655,20 @@ struct TripletMatrix {
 template<typename _Index, typename _Real>
 size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, _Index j, _Real v) {
 #if 1
-    // Find the entry in the sparsity pattern.
-    // Row indices are sorted, so we can use a binary search.
-    auto beginIt = Ai + Ap[j],
-           endIt = Ai + Ap[j + 1];
-    auto it = std::lower_bound(beginIt, endIt, i);
-    assert((it != endIt) && "Entry absent from sparsity pattern");
-    _Index idx = std::distance(Ai, it);
-    assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
+    const _Index colend = Ap[j + 1];
+    _Index idx = binary_search(i, Ai, Ap[j], colend);
+    assert((idx != colend) && "Entry absent from sparsity pattern");
+
     // Accumulate value
     Ax[idx] += v;
+    return idx + 1;
 #else
     _Index idx, idxend = Ap[j + 1];
     for (idx = Ap[j]; idx < idxend; ++idx)
         if (Ai[idx] == i) { Ax[idx] += v; break; }
     assert(idx < idxend);
-#endif
     return idx + 1;
+#endif
 }
 
 template<typename _Index, typename _Real>
@@ -751,11 +765,36 @@ struct CSCMatrix {
     }
 
     // Insert (i, j, v), with a guess that it should go at location "hint"
-    size_t addNZ(_Index i, _Index j, _Real v, _Index hint) {
-        if ((hint < nz) && (Ai[hint] == i) && (hint < Ap[j + 1]) && (hint >= Ap[j])) {
+    size_t addNZ(const _Index i, const _Index j, const _Real v, _Index hint) {
+        if ((hint < Ap[j + 1]) && (Ai[hint] == i) && (hint >= Ap[j])) {
             Ax[hint] += v;
             return hint + 1;
         }
+#if 0
+        const _Index lb = Ap[j], ub = Ap[j + 1];
+        if ((hint < ub) && (hint >= lb)) {
+            _Index row = Ai[hint];
+            if (row <  i) { hint = binary_search(i, Ai.data(), hint, ub); }
+            if (row >  i) { hint = binary_search(i, Ai.data(), lb, hint); }
+            Ax[hint] += v;
+            return hint + 1;
+        }
+#endif
+#if 0
+        const _Index lb = Ap[j], ub = Ap[j + 1];
+        if ((hint >= lb) && (hint < ub)) {
+            long dist = long(i) - long(Ai[hint]);
+            if (dist == 0) { Ax[hint] += v; return hint + 1; }
+            // Still use the hint if it gets us close to row i.
+            if (std::abs(dist) <= 5) {
+                _Index step = std::copysign(1, dist);
+                for (hint = hint + step; hint < ub; hint += step)
+                    if (Ai[hint] == i) { Ax[hint] += v; return hint + 1; }
+                throw std::runtime_error("fail");
+            }
+            return addNZ(i, j, v);
+        }
+#endif
         return addNZ(i, j, v);
     }
 
