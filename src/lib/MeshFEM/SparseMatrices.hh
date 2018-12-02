@@ -116,8 +116,8 @@ struct TripletMatrix {
     size_t nnz() const { return nz.size(); }
     void addNZ(size_t i, size_t j, Real v) {
         assert((i < m) && (j < n));
-        if (std::abs(v) > 0) // Possibly give this a tolerance...
-            nz.push_back(Triplet(i, j, v));
+        if (v == Real(0.0)) return; // Possibly give this a tolerance...
+        nz.push_back(Triplet(i, j, v));
     }
 
     // Sort and sum of repeated entries
@@ -817,11 +817,11 @@ struct CSCMatrix {
     template<class Derived>
     _Index addNZ(_Index idx, const Eigen::EigenBase<Derived> &values) {
         static_assert(Derived::ColsAtCompileTime == 1, "Only row vectors can be added with addNZ");
-        Eigen::Map<Eigen::VectorXd>(Ax.data() + idx, values.size()) += values;
+        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.size()) += values;
         return idx + values.size();
     }
 
-    _Index addNZ(_Index idx, Real val) {
+    _Index addNZ(_Index idx, _Real val) {
         Ax[idx] += val;
         return idx + 1;
     }
@@ -829,8 +829,8 @@ struct CSCMatrix {
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
     CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
 
-    _Real max()    const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).maxCoeff(); }
-    _Real absMax() const { return Eigen::Map<const Eigen::VectorXd>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
+    _Real max()    const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).maxCoeff(); }
+    _Real absMax() const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
     _Real maxRelError(CSCMatrix &b) const {
         CSCMatrix diff(*this);
         diff.addWithIdenticalSparsity(b, -1.0);
@@ -847,10 +847,12 @@ struct CSCMatrix {
     }
 
     // (*this) += alpha * b, assuming b's sparsity pattern is identical to ours.
-    void addWithIdenticalSparsity(const CSCMatrix &b, Real alpha = 1.0) {
-        if (alpha == 1.0) { Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::VectorXd>(b.Ax.data(), b.Ax.size()); }
-        else              { Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::VectorXd>(b.Ax.data(), b.Ax.size()); }
+    void addWithIdenticalSparsity(const CSCMatrix &b, _Real alpha = 1.0) {
+        if (alpha == 1.0) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
+        else              { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
     }
+
+    void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
 
     // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
     // offset: offset to be applied to the row and column indices of b
@@ -895,7 +897,7 @@ struct CSCMatrix {
     }
 
     // A sparse matrix holding "diag" on the diagonal.
-    void setDiag(const Eigen::Ref<const Eigen::VectorXd> &diag, bool preserveSparsity = false) {
+    void setDiag(const Eigen::Ref<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>> &diag, bool preserveSparsity = false) {
         if (preserveSparsity) {
             if ((size_t(m) != size_t(diag.size())) ||
                 (size_t(n) != size_t(diag.size()))) throw std::runtime_error("Size mismatch");
@@ -910,7 +912,7 @@ struct CSCMatrix {
             Ax.resize(nz);
             std::iota(Ap.begin(), Ap.end(), 0);
             std::iota(Ai.begin(), Ai.end(), 0);
-            Eigen::Map<Eigen::VectorXd>(Ax.data(), Ax.size()) = diag;
+            Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) = diag;
         }
     }
 
