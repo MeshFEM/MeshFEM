@@ -44,6 +44,4 @@ void merge_duplicate_vertices(
     }
 }
 
-
 #endif /* end of include guard: MERGE_DUPLICATE_VERTICES_HH */
-

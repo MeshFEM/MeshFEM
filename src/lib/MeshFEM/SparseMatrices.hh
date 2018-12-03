@@ -828,6 +828,15 @@ struct CSCMatrix {
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
     CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
+    template<typename _Real2>
+    CSCMatrix &operator=(const CSCMatrix<_Index, _Real2> &b) {
+        Ap = b.Ap; Ai = b.Ai;
+        Ax.clear();
+        Ax.reserve(b.Ax.size());
+        for (const auto &v : b.Ax) Ax.emplace_back(v);
+        m = b.m; n = b.n; nz = b.nz; symmetry_mode = SymmetryMode(b.symmetry_mode);
+        return *this;
+    }
 
     _Real max()    const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).maxCoeff(); }
     _Real absMax() const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
