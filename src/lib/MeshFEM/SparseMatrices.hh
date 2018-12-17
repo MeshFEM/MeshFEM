@@ -1162,7 +1162,7 @@ public:
     }
 
     // Recompute the numeric factorization using the new system matrix "tmat",
-    // resuing the symbolic factorization. For this to work, it must have the same
+    // reusing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
     template<typename _Triplet>
     [[ noreturn ]] void updateFactorization(const TripletMatrix<_Triplet> &/* tmat */) {
@@ -1345,6 +1345,14 @@ public:
         assert(size_t(b.size()) == size_t(m_A.nrow));
         x.resize(m_A.ncol);
         solveRaw(&b[0], &x[0], sys);
+    }
+
+    template<typename _Vec>
+    _Vec solve(const _Vec &b, int sys = CHOLMOD_A) {
+        assert(size_t(b.size()) == size_t(m_A.nrow));
+        _Vec x(m_A.ncol);
+        solveRaw(&b[0], &x[0], sys);
+        return x;
     }
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
