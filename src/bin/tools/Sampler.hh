@@ -59,16 +59,27 @@ struct ElementSampler {
             typename AESimplex::BaryCoords l;
 
             // Run the collision-grid-accelerated query if we can
+            // First look for points inside a simplex.
+            // If none are found, allow a small tolerance in the query.
+            const double eps = 1e-7;
             if (m_collisionGrid) {
                 std::vector<size_t> candidates = m_collisionGrid->enclosingBoxes(p);
                 for (size_t i : candidates) {
                     if (m_embeddedSimplices[i].contains(p, l))
                         return Sample(i, m_elements.at(i), l);
                 }
+                for (size_t i : candidates) {
+                    if (m_embeddedSimplices[i].contains(p, l, eps))
+                        return Sample(i, m_elements.at(i), l);
+                }
             }
             else {
                 for (size_t i = 0; i < m_embeddedSimplices.size(); ++i) {
                     if (m_embeddedSimplices[i].contains(p, l))
+                        return Sample(i, m_elements.at(i), l);
+                }
+                for (size_t i = 0; i < m_embeddedSimplices.size(); ++i) {
+                    if (m_embeddedSimplices[i].contains(p, l, eps))
                         return Sample(i, m_elements.at(i), l);
                 }
             }

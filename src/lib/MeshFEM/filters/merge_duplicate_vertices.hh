@@ -12,7 +12,7 @@
 #include <limits>
 #include <MeshFEM/CollisionGrid.hh>
 
-void merge_duplicate_vertices(
+inline void merge_duplicate_vertices(
     const std::vector<MeshIO::IOVertex > &inVertices,
     const std::vector<MeshIO::IOElement> &inElements,
           std::vector<MeshIO::IOVertex > &outVertices,

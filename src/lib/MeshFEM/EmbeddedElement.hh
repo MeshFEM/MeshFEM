@@ -337,15 +337,18 @@ public:
         return lambda;
     }
 
-    // Query if a point is inside and get its barycentric coordinates
-    bool contains(const Point2D &p, BaryCoords &l) const {
+    // Query if a point is inside and get its barycentric coordinates.
+    // If eps is a positive nonzero constant points slightly outside the
+    // triangle are considered inside. If eps is a negative constant, interior
+    // points within a small margin of the boundary are are considered outside.
+    bool contains(const Point2D &p, BaryCoords &l, const Real eps = 0) const {
         l = barycentricCoords(p);
-        return ((l[0] >= 0) && (l[1] >= 0) && (l[2] >= 0));
+        return ((l[0] >= -eps) && (l[1] >= -eps) && (l[2] >= -eps));
     }
 
-    bool contains(const Point2D &p) const {
+    bool contains(const Point2D &p, const Real eps = 0) const {
         BaryCoords l;
-        return contains(p, l);
+        return contains(p, l, eps);
     }
 
 protected:
@@ -371,15 +374,18 @@ public:
         return lambda;
     }
 
-    // Query if a point is inside and get its barycentric coordinates
-    bool contains(const Point3D &p, BaryCoords &l) const {
+    // Query if a point is inside and get its barycentric coordinates.
+    // If eps is a positive nonzero constant points slightly outside the tet
+    // are considered inside. If eps is a negative constant, interior points
+    // within a small margin of the boundary are are considered outside.
+    bool contains(const Point3D &p, BaryCoords &l, const Real eps = 0) const {
         l = barycentricCoords(p);
-        return ((l[0] >= 0) && (l[1] >= 0) && (l[2] >= 0) && (l[3] >= 0));
+        return ((l[0] >= -eps) && (l[1] >= -eps) && (l[2] >= -eps) && (l[3] >= -eps));
     }
 
-    bool contains(const Point3D &p) const {
+    bool contains(const Point3D &p, const Real eps = 0) const {
         BaryCoords l;
-        return contains(p, l);
+        return contains(p, l, eps);
     }
 
 protected:

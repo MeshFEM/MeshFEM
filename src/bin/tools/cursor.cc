@@ -13,16 +13,16 @@
 #include <cstdlib>
 
 #include <boost/algorithm/string.hpp>
-#include "../filters/gen_cursor.hh"
+#include <MeshFEM/filters/gen_cursor.hh>
 
-#include "../MeshIO.hh"
+#include <MeshFEM/MeshIO.hh>
 
-double CURSOR_RADIUS = 1e-2;
+double CURSOR_RADIUS = 1;
 
 using namespace std;
 using namespace MeshIO;
 
-void usage() {
+[[noreturn]] void usage() {
     cerr << "usage: cursor \"x1 y1 z1\" ..." << endl;
     exit(EXIT_FAILURE);
 }
@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     if (argc < 2) usage();
     std::vector<IOVertex> pts;
 
-    for (size_t i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i) {
         string ptString(argv[i]);
         boost::trim(ptString);
         std::vector<string> componentStrings;
