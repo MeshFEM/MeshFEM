@@ -1376,6 +1376,18 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
     }
 
+    // Store a copy of the current factorization so that it can be applied again
+    // even after updateFactorization is called.
+    void stashFactorization() {
+        if (m_L_stashed != nullptr) cholmod_l_free_factor(&m_L_stashed, m_c.get());
+        m_L_stashed = cholmod_l_copy_factor(m_L, m_c.get());
+    }
+
+    bool hasStashedFactorization() { return m_L_stashed != nullptr; }
+
+    // Exchange the roles of m_L and m_L_stashed, making the stash the active factorization.
+    void swapStashedFactorization() { std::swap(m_L, m_L_stashed); }
+
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
     // to a vector.
     CholmodSparseWrapper getL() {
@@ -1395,7 +1407,8 @@ public:
     }
 
     void clearFactors() {
-        if (m_L) cholmod_l_free_factor(&m_L, m_c.get());
+        if (m_L)         { cholmod_l_free_factor(&m_L,         m_c.get()); m_L         = nullptr; }
+        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
     }
 
     ~CholmodFactorizer() {
@@ -1446,9 +1459,9 @@ public:
 private:
     std::shared_ptr<cholmod_common> m_c;
     cholmod_sparse m_A;
-    cholmod_factor *m_L = NULL;
+    cholmod_factor *m_L = nullptr, *m_L_stashed = nullptr;
 
-    cholmod_dense *m_Y = NULL, *m_E = NULL; // result/workspace for cholmod_l_solve2
+    cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
 
     SuiteSparseMatrix m_AStorage;
 
