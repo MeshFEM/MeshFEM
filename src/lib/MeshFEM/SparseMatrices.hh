@@ -657,7 +657,7 @@ size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, 
 #if 1
     const _Index colend = Ap[j + 1];
     _Index idx = binary_search(i, Ai, Ap[j], colend);
-    assert((idx != colend) && "Entry absent from sparsity pattern");
+    assert((idx != colend) && (Ai[idx] == i) && "Entry absent from sparsity pattern");
 
     // Accumulate value
     Ax[idx] += v;
