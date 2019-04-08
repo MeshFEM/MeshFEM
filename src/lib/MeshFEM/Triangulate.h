@@ -85,7 +85,8 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
-        const std::string additionalFlags = "")
+        const std::string additionalFlags = "",
+        std::vector<int> *outPointMarkers = nullptr)
 {
     // create in and out structs for triangle
     triangulateio in, out;
@@ -165,6 +166,14 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
                                   out.trianglelist[3 * i + 2]);
     }
 
+    if (outPointMarkers != nullptr) {
+        auto &opm = *outPointMarkers;
+        opm.reserve(out.numberofpoints);
+        std::cout << "Outputting " << size_t(out.numberofpoints) << " point markers" << std::endl;
+        for (i = 0; i < size_t(out.numberofpoints); ++i)
+            opm.push_back(out.pointmarkerlist[i]);
+    }
+
     freeIO(in, out);
 }
 
@@ -176,10 +185,12 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
-        const std::string additionalFlags = "") {
+        const std::string additionalFlags = "",
+        std::vector<int> *outPointMarkers = nullptr) {
     triangulatePSLC(
             EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
-            holes, outVertices, outTriangles, area, additionalFlags);
+            holes, outVertices, outTriangles, area, additionalFlags,
+            outPointMarkers);
 }
 
 // Convenience function for list of closed polygons representation
@@ -189,9 +200,10 @@ void triangulatePSLC(const std::list<std::list<Point>> &polygons,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
-        const std::string additionalFlags = "") {
+        const std::string additionalFlags = "",
+        std::vector<int> *outPointMarkers = nullptr) {
     triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
-            holes, outVertices, outTriangles, area, additionalFlags);
+            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers);
 }
 
 inline void refineTriangulation(
