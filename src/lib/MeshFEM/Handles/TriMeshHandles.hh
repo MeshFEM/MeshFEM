@@ -1,5 +1,6 @@
-#include <MeshFEM/Handles/Handle.hh>
 #include <MeshFEM/MeshDataTraits.hh>
+#include "Handle.hh"
+#include "Circulator.hh"
 
 namespace _TriMeshHandles {
 
@@ -39,6 +40,7 @@ public:
     BVH boundaryVertex() const { return BVH(   m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
     // Half-edge incident on this vertex; guaranteed to be opposite the boundary if v is on the boundary.
     HEH       halfEdge() const { return HEH(m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
+    CirculatorRange<HEH> incidentHalfEdges() const { return CirculatorRange<HEH>(halfEdge()); }
 
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)

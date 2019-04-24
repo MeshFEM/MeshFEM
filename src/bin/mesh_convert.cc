@@ -282,6 +282,7 @@ int main(int argc, const char *argv[])
                     edgeLengths.push_back((hf.vertex(i)->p - hf.vertex((i + 1) % 3)->p).norm());
             }
             reportArrayStats("edge length", edgeLengths);
+            std::cout << "Bounding box:\t" << BBox<Vector3D>(inVertices) << std::endl;
         }
         if (args.count("boundary")) {
             if (args.count("subdivide")) {
@@ -374,6 +375,8 @@ int main(int argc, const char *argv[])
 
             for (size_t i = 0; i < componentSizes.size(); ++i)
                 std::cout << "component " << i << " size:\t" << componentSizes[i] << std::endl;
+
+            std::cout << "Bounding box:\t" << BBox<Vector3D>(inVertices) << std::endl;
         }
 
         if (args.count("subdivide")) {

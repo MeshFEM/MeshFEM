@@ -17,7 +17,7 @@
 #include <cassert>
 #include <vector>
 
-// Collection of the handle types for a paricular mesh (to be specialized).
+// Collection of the handle types for a particular mesh (to be specialized).
 // Should provide, e.g:
 //      template<class _Mesh> class VHandle;
 //      template<class _Mesh> class VRangeTraits;
@@ -145,8 +145,6 @@ public:
 
 // Class representing a range of handles [0..entityCount) to be used in a
 // range-based for.
-// Template param RangeTraits should be a struct templated on mesh type with the
-// following types/memebers:
 template<class _Mesh, template<class> class _HType>
 struct HandleRange {
     using HType = _HType<_Mesh>;
