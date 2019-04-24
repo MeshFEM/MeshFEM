@@ -137,7 +137,9 @@ int main(int argc, const char *argv[])
         writer.addField("cell_index", cell_index, DomainType::PER_ELEMENT);
     }
     else {
-        MeshIO::save(outPath, gridVertices, gridElements);
+        // MeshIO will incorrectly guess the output is a tet mesh in the 2D case...
+        MeshIO::MeshType type = (sizes.size() == 2) ? MeshIO::MESH_QUAD : MeshIO::MESH_HEX;
+        MeshIO::save(outPath, gridVertices, gridElements, MeshIO::FMT_GUESS, type);
     }
 
     return 0;

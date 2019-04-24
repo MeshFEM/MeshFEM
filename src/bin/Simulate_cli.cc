@@ -65,7 +65,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
         fail = true;
     }
 
-    if (vm.count("dumpMatrix") == 0) {
+    if (vm["dumpMatrix"].as<string>().size() == 0) {
         if (vm.count("outputMSH") == 0) {
             cout << "Error: must specify output msh file (unless dumping a stiffness matrix)" << endl;
             fail = true;
@@ -93,9 +93,9 @@ void execute(const po::variables_map &args,
     Simulator sim(inElements, inVertices);
 
     typedef ScalarField<Real> SField;
-    const string &materialPath = args[          "material"].as<string>(),
-                 &matFieldName = args[      "matFieldName"].as<string>(),
-                 &matrixPath   = args[        "dumpMatrix"].as<string>();
+    const string &materialPath = args[    "material"].as<string>(),
+                 &matFieldName = args["matFieldName"].as<string>(),
+                 &matrixPath   = args[  "dumpMatrix"].as<string>();
 
     string bcPath, outMSH;
     if (args.count("boundaryConditions")) bcPath = args["boundaryConditions"].as<string>();
