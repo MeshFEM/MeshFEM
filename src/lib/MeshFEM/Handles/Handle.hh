@@ -135,12 +135,12 @@ protected:
 //      }
 // actually iterates over the vertex *data* not the vertex handles themselves
 // since range-based for loops apply the "*" operator.
-template<class Handle>
-class HandleIteratorWrapper : public Handle {
+template<class DerivedHandle>
+class HandleIteratorWrapper : public DerivedHandle {
 public:
-    HandleIteratorWrapper(const Handle &h) : Handle(h) { }
+    HandleIteratorWrapper(const DerivedHandle &h) : DerivedHandle(h) { }
     // Dereference operator just strips away this wrapper
-    Handle operator*() const { return Handle(this->m_idx, this->m_mesh); }
+    DerivedHandle operator*() const { return DerivedHandle(this->m_idx, this->m_mesh); }
 };
 
 // Class representing a range of handles [0..entityCount) to be used in a
