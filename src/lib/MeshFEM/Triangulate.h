@@ -177,6 +177,51 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     freeIO(in, out);
 }
 
+template<class Points>
+void triangulatePoints(
+        const Points &pts,
+        std::vector<MeshIO::IOVertex> &outVertices,
+        std::vector<MeshIO::IOElement> &outTriangles,
+        const std::string &additionalFlags = "")
+{
+    // create in and out structs for triangle
+    triangulateio in, out;
+    memset(&in , 0, sizeof(triangulateio));
+    memset(&out, 0, sizeof(triangulateio));
+
+    // initialize lists
+    in.numberofpoints = pts.size();
+    in.pointlist      = (MESHFEM_REAL *) malloc(in.numberofpoints   * 2 * sizeof(MESHFEM_REAL));
+
+    size_t i = 0;
+    for (const auto &p : pts) {
+        in.pointlist[i++] = p[0];
+        in.pointlist[i++] = p[1];
+    }
+
+    std::string flags = "z" + additionalFlags;
+    triangulate(const_cast<char *>(flags.c_str()), &in, &out, NULL);
+
+    // convert to MeshIO format
+    outVertices. clear(), outVertices. reserve(out.numberofpoints);
+    outTriangles.clear(), outTriangles.reserve(out.numberoftriangles);
+
+    // Copy output point coordinates
+    for (i = 0; i < size_t(out.numberofpoints); ++i) {
+        outVertices.emplace_back(out.pointlist[2 * i + 0],
+                                 out.pointlist[2 * i + 1]);
+    }
+
+    // Copy output triangles
+    for (i = 0; i < size_t(out.numberoftriangles); ++i) {
+        outTriangles.emplace_back(out.trianglelist[3 * i + 0],
+                                  out.trianglelist[3 * i + 1],
+                                  out.trianglelist[3 * i + 2]);
+    }
+
+    freeIO(in, out);
+}
+
 // Convenience function for point/edge collections representation
 template<class Point, class HolePoint, class Edge, class PtAllocator>
 void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
