@@ -478,8 +478,10 @@ struct InterpolantConvertConstructImpl<IV, Interpolant<T, K, 2, NSP>> {
     static void run(IV &a, const Interpolant<T, K, 2, NSP> &b) {
         a.setSimplexDimension(K);
         assert(a.dim() == b.size());
-        for (size_t i = 0; i < b.size(); ++i)
-            a.value[i] = b[i];
+        for (size_t i = 0; i < b.size(); ++i) {
+            using value_type = typename std::remove_cv<typename std::remove_reference<decltype(a.value[i])>::type>::type; // hack around bug in Visual Studio...
+            a.value[i] = value_type(b[i]);
+        }
     }
 };
 
