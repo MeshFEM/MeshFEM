@@ -9,7 +9,7 @@ using namespace Degree;
 using namespace std;
 
 double randDouble() {
-    return double(random()) / 2147483647.0;
+    return ((double)rand() / (double)RAND_MAX);
 }
 
 template<size_t K, class F, typename... Args>

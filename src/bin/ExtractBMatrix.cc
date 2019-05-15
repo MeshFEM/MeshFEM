@@ -21,7 +21,7 @@ void execute(const std::vector<MeshIO::IOVertex > &vertices,
     using Strain = typename Simulator::Strain;
 
     Simulator sim(elements, vertices);
-    const auto &mesh = sim.mesh();
+    const Mesh &mesh = sim.mesh();
 
     const size_t stressesPerElement = (Deg == 1) ? 1 : N + 1;
     const size_t nStressComponents = flatLen(N);

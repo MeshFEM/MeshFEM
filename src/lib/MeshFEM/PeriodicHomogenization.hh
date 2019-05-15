@@ -384,8 +384,8 @@ template<class _Sim>
 OneForm<typename _Sim::ETensor, _Sim::N>
 homogenizedElasticityTensorDiscreteDifferential(const std::vector<typename _Sim::VField> &w,
         const _Sim &sim) {
-    constexpr size_t N = _Sim::N;
-    constexpr size_t Deg = _Sim::Degree;
+    static constexpr size_t N = _Sim::N;
+    static constexpr size_t Deg = _Sim::Degree;
     using ETensor = typename _Sim::ETensor;
     using SMatrix = typename _Sim::SMatrix;
     using SFGradient = Interpolant<VectorND<_Sim::N>, _Sim::N, _Sim::Degree - 1>; // Shape fn grad

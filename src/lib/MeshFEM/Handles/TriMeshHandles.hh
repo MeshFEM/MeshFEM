@@ -2,6 +2,8 @@
 #include "Handle.hh"
 #include "Circulator.hh"
 
+#undef interface
+
 namespace _TriMeshHandles {
 
 // We need to expliclty reference this enclosing scope to hack around an old

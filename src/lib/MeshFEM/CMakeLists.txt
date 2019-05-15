@@ -140,7 +140,7 @@ target_link_libraries(${PROJECT_NAME}
         warnings::all
 )
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
 
 ################################################################################
 # Configure manual compiler flags based on CMake options
