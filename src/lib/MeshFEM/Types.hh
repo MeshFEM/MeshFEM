@@ -6,9 +6,9 @@
 typedef double Real;
 
 template<size_t N>
-using PointND = Eigen::Matrix<Real, N, 1>;
+using VectorND = Eigen::Matrix<Real, N, 1, Eigen::ColMajor, N, 1>;
 template<size_t N>
-using VectorND = Eigen::Matrix<Real, N, 1>;
+using PointND = VectorND<N>;
 template<size_t N>
 using IVectorND = std::array<int, N>;
 

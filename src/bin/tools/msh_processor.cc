@@ -67,7 +67,7 @@
 #include <limits>
 #include <sstream>
 
-using namespace MeshIO;
+//using namespace MeshIO;
 using namespace std;
 
 // Global parsers used for 2 and 3D cases.
@@ -844,9 +844,9 @@ void execute(vector<FilterInvocation> &filters) {
 int main(int argc, char *argv[])
 {
     cout << std::scientific << std::setprecision(16);
-    MeshIO_MSH io;
-    vector<IOVertex>  v;
-    vector<IOElement> e;
+    MeshIO::MeshIO_MSH io;
+    vector<MeshIO::IOVertex>  v;
+    vector<MeshIO::IOElement> e;
 
     string mshFile;
     vector<FilterInvocation> filters;
@@ -855,7 +855,7 @@ int main(int argc, char *argv[])
 
     ifstream infile(mshFile);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshFile);
-    MeshType type = io.load(infile, v, e, MESH_GUESS);
+	MeshIO::MeshType type = io.load(infile, v, e, MeshIO::MESH_GUESS);
     size_t meshDim = ::MeshIO::meshDimension(type);
 
     size_t dim = forcedDim ? *forcedDim : meshDim;

@@ -7,7 +7,7 @@
 #include <map>
 
 using namespace std;
-using namespace MeshIO;
+//using namespace MeshIO;
 
 int readIntLine(istream &is) {
     string tmp;
@@ -26,8 +26,8 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath, bool permitDimMismatch)
     ifstream infile(mshPath);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshPath);
 
-    MeshIO_MSH io;
-    m_type = io.load(infile, m_vertices, m_elements, MESH_GUESS);
+    MeshIO::MeshIO_MSH io;
+    m_type = io.load(infile, m_vertices, m_elements, MeshIO::MESH_GUESS);
     if (!permitDimMismatch && (meshDimension() != N))
         throw runtime_error("Illegal mesh type for " + to_string(N) + "D MSHFieldParser");
     m_parseFields(infile, io.binary());
