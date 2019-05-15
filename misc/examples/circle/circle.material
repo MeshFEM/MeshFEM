@@ -1,6 +1,0 @@
-{
-    "type": "isotropic_material",
-    "dim": 3,
-    "young": 200.0,
-    "poisson": 0.35
-}
