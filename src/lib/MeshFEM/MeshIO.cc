@@ -229,7 +229,7 @@ MeshType load(const std::string &path, std::vector<IOVertex> &nodes,
                            elements);
     }
     else {
-        std::ifstream is(path);
+        std::ifstream is(path, std::ifstream::in | std::ifstream::binary);
         if (!is.is_open()) throw std::runtime_error("Couldn't open input file");
         return load(is, nodes, elements, format, type);
     }
