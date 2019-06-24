@@ -9,6 +9,10 @@ project(MeshFEM)
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
+if(POLICY CMP0074)
+    cmake_policy(SET CMP0074 NEW)
+endif()
+
 
 ################################################################################
 

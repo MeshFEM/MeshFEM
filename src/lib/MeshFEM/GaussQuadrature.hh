@@ -22,6 +22,13 @@
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/function_traits.hh>
 
+template<size_t _K, size_t _Deg>
+class QuadraturePoints { 
+public:
+	static std::vector<EvalPt<_K>> getPoints();
+	static size_t getNumPoints();
+};
+
 // Edge function (1D)
 // 1 point quadrature for const and linear, 2 point for quadratic and cubic, 3 for quartic and quintic
 template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::arity == 2) && (_Deg <= 5), int>::type = 0>
@@ -47,6 +54,71 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
     }
     assert(false);
 }
+
+template< >
+class QuadraturePoints<Simplex::Edge, 0> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		std::vector<EvalPt<Simplex::Edge>> pts;
+		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Edge, 1> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		std::vector<EvalPt<Simplex::Edge>> pts;
+		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Edge, 2> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		std::vector<EvalPt<Simplex::Edge>> pts;
+		pts.push_back(EvalPt<Simplex::Edge>(0.78867513459481288225, 0.21132486540518711775));
+		pts.push_back(EvalPt<Simplex::Edge>(0.21132486540518711775, 0.78867513459481288225));
+		return pts;
+	};
+	static size_t getNumPoints() { return 2; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Edge, 3> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		return QuadraturePoints<Simplex::Edge, 2>::getPoints();
+	};
+	static size_t getNumPoints() { return 2; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Edge, 4> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		std::vector<EvalPt<Simplex::Edge>> pts;
+		pts.push_back(EvalPt<Simplex::Edge>(0.11270166537925831148, 0.88729833462074168852));
+		pts.push_back(EvalPt<Simplex::Edge>(0.88729833462074168852, 0.11270166537925831148));
+		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
+		return pts;
+	};
+	static size_t getNumPoints() { return 3; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Edge, 5> {
+public:
+	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
+		return QuadraturePoints<Simplex::Edge, 4>::getPoints();
+	};
+	static size_t getNumPoints() { return 3; };
+};
 
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
@@ -143,6 +215,103 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
     return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); }, vol);
 }
 
+template< >
+class QuadraturePoints<Simplex::Triangle, 0> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Triangle, 1> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Triangle, 2> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0, c1, c1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1, c0, c1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1, c1, c0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 3; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Triangle, 3> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		constexpr double c0 = 3 / 5.0;
+		constexpr double c1 = 1 / 5.0;
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0, c1, c1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1, c0, c1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1, c1, c0));
+		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 4; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Triangle, 4> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		constexpr double c0_0 = 0.10810301816807022736;
+		constexpr double c1_0 = 0.44594849091596488632;
+
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0_0, c1_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c0_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c1_0, c0_0));
+
+		constexpr double c0_1 = 0.81684757298045851308;
+		constexpr double c1_1 = 0.09157621350977074346;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0_1, c1_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c0_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c1_1, c0_1));
+		return pts;
+	};
+	static size_t getNumPoints() { return 6; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Triangle, 5> {
+public:
+	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
+		constexpr double c0_0 = 0.79742698535308732240;
+		constexpr double c1_0 = 0.10128650732345633880;
+		std::vector<EvalPt<Simplex::Triangle>> pts;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0_0, c1_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c0_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c1_0, c0_0));
+
+		constexpr double c0_1 = 0.059715871789769820459;
+		constexpr double c1_1 = 0.47014206410511508977;
+		pts.push_back(EvalPt<Simplex::Triangle>(c0_1, c1_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c0_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c1_1, c0_1));
+
+		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 7; };
+};
+
 // Tet function (3D)
 // 1 point quadrature for const and linear, 4 point for quadratic, 5 for cubic,
 // and 11 for quartic.
@@ -214,14 +383,111 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
     return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); }, vol);
 }
 
+template< >
+class QuadraturePoints<Simplex::Tetrahedron, 0> {
+public:
+	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
+		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Tetrahedron, 1> {
+public:
+	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
+		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 1; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Tetrahedron, 2> {
+public:
+	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
+		constexpr double c0 = 0.58541019662496845446; // (5 + 3 sqrt(5)) / 20
+		constexpr double c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
+		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0, c1, c1, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c0, c1, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c0, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c1, c0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 4; };
+};
+
+
+
+template< >
+class QuadraturePoints<Simplex::Tetrahedron, 3> {
+public:
+	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
+		constexpr double c0 = 0.5;
+		constexpr double c1 = 1 / 6.0;
+		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0, c1, c1, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c0, c1, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c0, c1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c1, c0));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
+		return pts;
+	};
+	static size_t getNumPoints() { return 5; };
+};
+
+template< >
+class QuadraturePoints<Simplex::Tetrahedron, 4> {
+public:
+	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
+		constexpr double c0_0 = 11.0 / 14.0;
+		constexpr double c1_0 = 1.0 / 14.0;
+		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
+
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_0, c1_0, c1_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c0_0, c1_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c1_0, c0_0, c1_0));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c1_0, c1_0, c0_0));
+
+		constexpr double c0_1 = 0.39940357616679920500; // (14 + sqrt(70)) / 56
+		constexpr double c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c0_1, c1_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c1_1, c0_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c1_1, c1_1, c0_1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c0_1, c0_1, c1_1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c0_1, c1_1, c0_1));
+		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c1_1, c0_1, c0_1));
+
+		return pts;
+	};
+	static size_t getNumPoints() { return 11; };
+};
+
 // Integration on a _K simplex (runs the implementations above).
 // Usage:
 // Quadrature<Simplex::{Edge,Triangle,Tetrahedron}, Degree>::integrate(f);
 template<size_t _K, size_t _Deg>
 class Quadrature { };
 
-template<size_t _Deg> class Quadrature<Simplex::Edge,        _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); } };
-template<size_t _Deg> class Quadrature<Simplex::Triangle,    _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); } };
-template<size_t _Deg> class Quadrature<Simplex::Tetrahedron, _Deg> { public: template<typename F> static auto integrate(const F &f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); } };
+template<size_t _Deg> class Quadrature<Simplex::Edge,        _Deg> { 
+public: 
+	template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); };
+	static QuadraturePoints<Simplex::Edge, _Deg> quadraturePoints;
+};
+template<size_t _Deg> class Quadrature<Simplex::Triangle,    _Deg> {
+public: 
+	template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); };
+	static QuadraturePoints<Simplex::Triangle, _Deg> quadraturePoints;
+};
+template<size_t _Deg> class Quadrature<Simplex::Tetrahedron, _Deg> { 
+public: 
+	template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); };
+	static QuadraturePoints<Simplex::Tetrahedron, _Deg> quadraturePoints;
+};
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */

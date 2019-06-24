@@ -25,6 +25,7 @@ find_package(Boost 1.54 REQUIRED COMPONENTS filesystem system program_options QU
 if(NOT TARGET meshfem::boost)
     add_library(meshfem_boost INTERFACE)
     if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
+		#target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
         target_link_libraries(meshfem_boost INTERFACE
             Boost::filesystem
             Boost::system
