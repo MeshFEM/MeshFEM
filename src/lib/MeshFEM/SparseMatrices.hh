@@ -1287,6 +1287,11 @@ public:
     CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll); }
     CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll); }
 
+    // Delete unsafe copy constructors/assignment.
+    // This will also suppress creation of default move constructors/assignment.
+    CholmodFactorizer(const CholmodFactorizer  &b) = delete;
+    CholmodFactorizer &operator=(const CholmodFactorizer  &b) = delete;
+
     void factorize() {
         clearFactors();
         factorizeSymbolic();
