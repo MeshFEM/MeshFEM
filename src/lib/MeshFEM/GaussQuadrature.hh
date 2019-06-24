@@ -21,11 +21,13 @@
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/function_traits.hh>
+#include <array>
 
 template<size_t _K, size_t _Deg>
-struct QuadraturePoints {
-	static std::vector<EvalPt<_K>> getPoints();
-	static size_t getNumPoints();
+struct QuadratureTable {
+    static constexpr size_t numPoints = 0;
+    static constexpr std::array<EvalPt<_K>, numPoints> points{};
+    // TODO: weights!
 };
 
 // Edge function (1D)
@@ -54,64 +56,47 @@ typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1
     assert(false);
 }
 
-template< >
-struct QuadraturePoints<Simplex::Edge, 0> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		std::vector<EvalPt<Simplex::Edge>> pts;
-		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+template<size_t _K, size_t _Deg>
+using QPArray = std::array<EvalPt<_K>, QuadratureTable<_K, _Deg>::numPoints>;
+
+template<>
+struct QuadratureTable<Simplex::Edge, 0> {
+    static constexpr size_t numPoints = 1;
+    static constexpr QPArray<Simplex::Edge, 0> points{{
+        {0.5, 0.5}
+    }};
 };
 
-template< >
-struct QuadraturePoints<Simplex::Edge, 1> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		std::vector<EvalPt<Simplex::Edge>> pts;
-		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+// Linear rule is the same as constant
+template<>
+struct QuadratureTable<Simplex::Edge, 1> : public QuadratureTable<Simplex::Edge, 0> { };
+
+template<>
+struct QuadratureTable<Simplex::Edge, 2> {
+    static constexpr size_t numPoints = 2;
+    static constexpr QPArray<Simplex::Edge, 2> points{{
+        {0.78867513459481288225, 0.21132486540518711775},
+        {0.21132486540518711775, 0.78867513459481288225}
+    }};
 };
 
-template< >
-struct QuadraturePoints<Simplex::Edge, 2> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		std::vector<EvalPt<Simplex::Edge>> pts;
-		pts.push_back(EvalPt<Simplex::Edge>(0.78867513459481288225, 0.21132486540518711775));
-		pts.push_back(EvalPt<Simplex::Edge>(0.21132486540518711775, 0.78867513459481288225));
-		return pts;
-	};
-	static size_t getNumPoints() { return 2; };
+// Cubic rule is the same as quadratic
+template<>
+struct QuadratureTable<Simplex::Edge, 3> : public QuadratureTable<Simplex::Edge, 2> { };
+
+template<>
+struct QuadratureTable<Simplex::Edge, 4> {
+    static constexpr size_t numPoints = 3;
+    static constexpr QPArray<Simplex::Edge, 4> points{{
+        {0.11270166537925831148, 0.88729833462074168852},
+        {0.88729833462074168852, 0.11270166537925831148},
+        {0.5, 0.5}
+    }};
 };
 
-template< >
-struct QuadraturePoints<Simplex::Edge, 3> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		return QuadraturePoints<Simplex::Edge, 2>::getPoints();
-	};
-	static size_t getNumPoints() { return 2; };
-};
-
-template< >
-struct QuadraturePoints<Simplex::Edge, 4> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		std::vector<EvalPt<Simplex::Edge>> pts;
-		pts.push_back(EvalPt<Simplex::Edge>(0.11270166537925831148, 0.88729833462074168852));
-		pts.push_back(EvalPt<Simplex::Edge>(0.88729833462074168852, 0.11270166537925831148));
-		pts.push_back(EvalPt<Simplex::Edge>(0.5, 0.5));
-		return pts;
-	};
-	static size_t getNumPoints() { return 3; };
-};
-
-template< >
-struct QuadraturePoints<Simplex::Edge, 5> {
-	static std::vector<EvalPt<Simplex::Edge>> getPoints() {
-		return QuadraturePoints<Simplex::Edge, 4>::getPoints();
-	};
-	static size_t getNumPoints() { return 3; };
-};
+// Degree 5 rule is the same as degree 4
+template<>
+struct QuadratureTable<Simplex::Edge, 5> : public QuadratureTable<Simplex::Edge, 4> { };
 
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
@@ -209,94 +194,79 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 }
 
 template< >
-struct QuadraturePoints<Simplex::Triangle, 0> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+struct QuadratureTable<Simplex::Triangle, 0> {
+    static constexpr size_t numPoints = 1;
+    static constexpr QPArray<Simplex::Triangle, 0> points{{
+        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+    }};
+};
+
+// Linear rule is the same as constant
+template<>
+struct QuadratureTable<Simplex::Triangle, 1> : public QuadratureTable<Simplex::Triangle, 0> { };
+
+template< >
+struct QuadratureTable<Simplex::Triangle, 2> {
+    static constexpr size_t numPoints = 3;
+
+    static constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
+    static constexpr QPArray<Simplex::Triangle, 2> points{{
+        {c0, c1, c1},
+        {c1, c0, c1},
+        {c1, c1, c0}
+    }};
 };
 
 template< >
-struct QuadraturePoints<Simplex::Triangle, 1> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+struct QuadratureTable<Simplex::Triangle, 3> {
+    static constexpr size_t numPoints = 4;
+    static constexpr double c0 = 3 / 5.0,
+                            c1 = 1 / 5.0;
+    static constexpr QPArray<Simplex::Triangle, 3> points{{
+        {c0, c1, c1},
+        {c1, c0, c1},
+        {c1, c1, c0},
+        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+    }};
 };
 
 template< >
-struct QuadraturePoints<Simplex::Triangle, 2> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0, c1, c1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1, c0, c1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1, c1, c0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 3; };
+struct QuadratureTable<Simplex::Triangle, 4> {
+    static constexpr size_t numPoints = 6;
+
+    static constexpr double c0_0 = 0.10810301816807022736,
+                            c1_0 = 0.44594849091596488632,
+                            c0_1 = 0.81684757298045851308,
+                            c1_1 = 0.09157621350977074346;
+
+    static constexpr QPArray<Simplex::Triangle, 4> points{{
+        {c0_0, c1_0, c1_0},
+        {c1_0, c0_0, c1_0},
+        {c1_0, c1_0, c0_0},
+        {c0_1, c1_1, c1_1},
+        {c1_1, c0_1, c1_1},
+        {c1_1, c1_1, c0_1}
+    }};
 };
 
 template< >
-struct QuadraturePoints<Simplex::Triangle, 3> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		constexpr double c0 = 3 / 5.0;
-		constexpr double c1 = 1 / 5.0;
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0, c1, c1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1, c0, c1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1, c1, c0));
-		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 4; };
-};
+struct QuadratureTable<Simplex::Triangle, 5> {
+    static constexpr size_t numPoints = 7;
 
-template< >
-struct QuadraturePoints<Simplex::Triangle, 4> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		constexpr double c0_0 = 0.10810301816807022736;
-		constexpr double c1_0 = 0.44594849091596488632;
+    static constexpr double c0_0 = 0.79742698535308732240,
+                            c1_0 = 0.10128650732345633880,
+                            c0_1 = 0.059715871789769820459,
+                            c1_1 = 0.47014206410511508977;
 
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0_0, c1_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c0_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c1_0, c0_0));
-
-		constexpr double c0_1 = 0.81684757298045851308;
-		constexpr double c1_1 = 0.09157621350977074346;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0_1, c1_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c0_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c1_1, c0_1));
-		return pts;
-	};
-	static size_t getNumPoints() { return 6; };
-};
-
-template< >
-struct QuadraturePoints<Simplex::Triangle, 5> {
-	static std::vector<EvalPt<Simplex::Triangle>> getPoints() {
-		constexpr double c0_0 = 0.79742698535308732240;
-		constexpr double c1_0 = 0.10128650732345633880;
-		std::vector<EvalPt<Simplex::Triangle>> pts;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0_0, c1_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c0_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_0, c1_0, c0_0));
-
-		constexpr double c0_1 = 0.059715871789769820459;
-		constexpr double c1_1 = 0.47014206410511508977;
-		pts.push_back(EvalPt<Simplex::Triangle>(c0_1, c1_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c0_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Triangle>(c1_1, c1_1, c0_1));
-
-		pts.push_back(EvalPt<Simplex::Triangle>(1 / 3.0, 1 / 3.0, 1 / 3.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 7; };
+    static constexpr QPArray<Simplex::Triangle, 5> points{{
+        {c0_0, c1_0, c1_0},
+        {c1_0, c0_0, c1_0},
+        {c1_0, c1_0, c0_0},
+        {c0_1, c1_1, c1_1},
+        {c1_1, c0_1, c1_1},
+        {c1_1, c1_1, c0_1},
+        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+    }};
 };
 
 // Tet function (3D)
@@ -371,84 +341,89 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
 }
 
 template< >
-struct QuadraturePoints<Simplex::Tetrahedron, 0> {
-	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
-		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+struct QuadratureTable<Simplex::Tetrahedron, 0> {
+    static constexpr size_t numPoints = 1;
+    static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
+        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}
+    }};
 };
+
+// Linear rule is the same as constant
+template<>
+struct QuadratureTable<Simplex::Tetrahedron, 1> : public QuadratureTable<Simplex::Tetrahedron, 0> { };
 
 template< >
-struct QuadraturePoints<Simplex::Tetrahedron, 1> {
-	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
-		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 1; };
+struct QuadratureTable<Simplex::Tetrahedron, 2> {
+    static constexpr size_t numPoints = 4;
+    static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
+                            c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
+    static constexpr QPArray<Simplex::Tetrahedron, 2> points{{
+        {c0, c1, c1, c1},
+        {c1, c0, c1, c1},
+        {c1, c1, c0, c1},
+        {c1, c1, c1, c0}
+    }};
 };
 
-template< >
-struct QuadraturePoints<Simplex::Tetrahedron, 2> {
-	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
-		constexpr double c0 = 0.58541019662496845446; // (5 + 3 sqrt(5)) / 20
-		constexpr double c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
-		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0, c1, c1, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c0, c1, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c0, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c1, c0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 4; };
+template<>
+struct QuadratureTable<Simplex::Tetrahedron, 3> {
+    static constexpr size_t numPoints = 5;
+    static constexpr double c0 = 0.5,
+                            c1 = 1 / 6.0;
+    static constexpr QPArray<Simplex::Tetrahedron, 3> points{{
+        {c0, c1, c1, c1},
+        {c1, c0, c1, c1},
+        {c1, c1, c0, c1},
+        {c1, c1, c1, c0},
+        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}
+    }};
 };
 
+template<>
+struct QuadratureTable<Simplex::Tetrahedron, 4> {
+    static constexpr size_t numPoints = 11;
 
+    static constexpr double c0_0 = 11.0 / 14.0,
+                            c1_0 = 1.0 / 14.0,
+                            c0_1 = 0.39940357616679920500, // (14 + sqrt(70)) / 56
+                            c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
 
-template< >
-struct QuadraturePoints<Simplex::Tetrahedron, 3> {
-	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
-		constexpr double c0 = 0.5;
-		constexpr double c1 = 1 / 6.0;
-		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0, c1, c1, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c0, c1, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c0, c1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1, c1, c1, c0));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
-		return pts;
-	};
-	static size_t getNumPoints() { return 5; };
+    static constexpr QPArray<Simplex::Tetrahedron, 4> points{{
+        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0},
+        {c0_0, c1_0, c1_0, c1_0},
+        {c1_0, c0_0, c1_0, c1_0},
+        {c1_0, c1_0, c0_0, c1_0},
+        {c1_0, c1_0, c1_0, c0_0},
+        {c0_1, c0_1, c1_1, c1_1},
+        {c0_1, c1_1, c0_1, c1_1},
+        {c0_1, c1_1, c1_1, c0_1},
+        {c1_1, c0_1, c0_1, c1_1},
+        {c1_1, c0_1, c1_1, c0_1},
+        {c1_1, c1_1, c0_1, c0_1}
+    }};
 };
 
-template< >
-struct QuadraturePoints<Simplex::Tetrahedron, 4> {
-	static std::vector<EvalPt<Simplex::Tetrahedron>> getPoints() {
-		constexpr double c0_0 = 11.0 / 14.0;
-		constexpr double c1_0 = 1.0 / 14.0;
-		std::vector<EvalPt<Simplex::Tetrahedron>> pts;
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0));
+// We need to provide definitions for the static constexpr `points` memebers to avoid undefined reference linker errors.
+// The commented out definitions are for the rules that simply inherit from a lower degree.
+   constexpr QPArray<Simplex::Edge,        0> QuadratureTable<Simplex::Edge,        0>::points;
+// constexpr QPArray<Simplex::Edge,        1> QuadratureTable<Simplex::Edge,        1>::points;
+   constexpr QPArray<Simplex::Edge,        2> QuadratureTable<Simplex::Edge,        2>::points;
+// constexpr QPArray<Simplex::Edge,        3> QuadratureTable<Simplex::Edge,        3>::points;
+   constexpr QPArray<Simplex::Edge,        4> QuadratureTable<Simplex::Edge,        4>::points;
+// constexpr QPArray<Simplex::Edge,        5> QuadratureTable<Simplex::Edge,        5>::points;
 
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_0, c1_0, c1_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c0_0, c1_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c1_0, c0_0, c1_0));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_0, c1_0, c1_0, c0_0));
+   constexpr QPArray<Simplex::Triangle,    0> QuadratureTable<Simplex::Triangle,    0>::points;
+// constexpr QPArray<Simplex::Triangle,    1> QuadratureTable<Simplex::Triangle,    1>::points;
+   constexpr QPArray<Simplex::Triangle,    2> QuadratureTable<Simplex::Triangle,    2>::points;
+   constexpr QPArray<Simplex::Triangle,    3> QuadratureTable<Simplex::Triangle,    3>::points;
+   constexpr QPArray<Simplex::Triangle,    4> QuadratureTable<Simplex::Triangle,    4>::points;
+   constexpr QPArray<Simplex::Triangle,    5> QuadratureTable<Simplex::Triangle,    5>::points;
 
-		constexpr double c0_1 = 0.39940357616679920500; // (14 + sqrt(70)) / 56
-		constexpr double c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c0_1, c1_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c1_1, c0_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c0_1, c1_1, c1_1, c0_1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c0_1, c0_1, c1_1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c0_1, c1_1, c0_1));
-		pts.push_back(EvalPt<Simplex::Tetrahedron>(c1_1, c1_1, c0_1, c0_1));
-
-		return pts;
-	};
-	static size_t getNumPoints() { return 11; };
-};
+   constexpr QPArray<Simplex::Tetrahedron, 0> QuadratureTable<Simplex::Tetrahedron, 0>::points;
+// constexpr QPArray<Simplex::Tetrahedron, 1> QuadratureTable<Simplex::Tetrahedron, 1>::points;
+   constexpr QPArray<Simplex::Tetrahedron, 2> QuadratureTable<Simplex::Tetrahedron, 2>::points;
+   constexpr QPArray<Simplex::Tetrahedron, 3> QuadratureTable<Simplex::Tetrahedron, 3>::points;
+   constexpr QPArray<Simplex::Tetrahedron, 4> QuadratureTable<Simplex::Tetrahedron, 4>::points;
 
 // Integration on a _K simplex (runs the implementations above).
 // Usage:
@@ -456,8 +431,8 @@ struct QuadraturePoints<Simplex::Tetrahedron, 4> {
 template<size_t _K, size_t _Deg>
 struct Quadrature { };
 
-template<size_t _Deg> struct Quadrature<Simplex::Edge,        _Deg> : public QuadraturePoints<Simplex::Edge,        _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); }; };
-template<size_t _Deg> struct Quadrature<Simplex::Triangle,    _Deg> : public QuadraturePoints<Simplex::Triangle,    _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); }; };
-template<size_t _Deg> struct Quadrature<Simplex::Tetrahedron, _Deg> : public QuadraturePoints<Simplex::Tetrahedron, _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); }; };
+template<size_t _Deg> struct Quadrature<Simplex::Edge,        _Deg> : public QuadratureTable<Simplex::Edge,        _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); }; };
+template<size_t _Deg> struct Quadrature<Simplex::Triangle,    _Deg> : public QuadratureTable<Simplex::Triangle,    _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); }; };
+template<size_t _Deg> struct Quadrature<Simplex::Tetrahedron, _Deg> : public QuadratureTable<Simplex::Tetrahedron, _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); }; };
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */
