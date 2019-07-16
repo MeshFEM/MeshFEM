@@ -29,6 +29,11 @@
 inline std::istream &getDataLine(std::istream &is, std::string &line) {
     do  {
         std::getline(is >> std::ws, line);
+
+		// Allow windows line endings:
+		if (!line.empty() && *line.rbegin() == '\r') {
+			line.erase(line.length() - 1, 1);
+		}
     } while (is && (line[0] == '#'));
     return is;
 }
