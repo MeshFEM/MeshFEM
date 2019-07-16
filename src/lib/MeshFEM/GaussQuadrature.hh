@@ -431,8 +431,8 @@ struct QuadratureTable<Simplex::Tetrahedron, 4> {
 template<size_t _K, size_t _Deg>
 struct Quadrature { };
 
-template<size_t _Deg> struct Quadrature<Simplex::Edge,        _Deg> : public QuadratureTable<Simplex::Edge,        _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); }; };
-template<size_t _Deg> struct Quadrature<Simplex::Triangle,    _Deg> : public QuadratureTable<Simplex::Triangle,    _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); }; };
-template<size_t _Deg> struct Quadrature<Simplex::Tetrahedron, _Deg> : public QuadratureTable<Simplex::Tetrahedron, _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); }; };
+template<size_t _Deg> struct Quadrature<Simplex::Edge,        _Deg> : public QuadratureTable<Simplex::Edge,        _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); } };
+template<size_t _Deg> struct Quadrature<Simplex::Triangle,    _Deg> : public QuadratureTable<Simplex::Triangle,    _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); } };
+template<size_t _Deg> struct Quadrature<Simplex::Tetrahedron, _Deg> : public QuadratureTable<Simplex::Tetrahedron, _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); } };
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */
