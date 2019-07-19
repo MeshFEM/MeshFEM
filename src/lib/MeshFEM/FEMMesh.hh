@@ -210,6 +210,11 @@ public:
         m_computeBBox();
     }
 
+	const UnorderedPair& edgeForEdgeNode(size_t edgeNodeIndex) const {
+		assert(edgeNodeIndex >= 0 && edgeNodeIndex < m_edgeForEdgeNode.size());
+		return m_edgeForEdgeNode.at(edgeNodeIndex);
+	}
+
     // Also support reading from Luigi/Nico's vertex format
     void setNodePositions(const std::vector<std::array<double,
             EmbeddingSpace::RowsAtCompileTime>> &vertices) {
