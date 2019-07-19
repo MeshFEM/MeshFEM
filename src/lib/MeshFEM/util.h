@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //        Miscellaneous utilities
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  05/10/2012 19:41:45
@@ -15,8 +15,8 @@
 #include <string>
 #include <sstream>
 #include <iostream>
-#include <algorithm> 
-#include <functional> 
+#include <algorithm>
+#include <functional>
 #include <cctype>
 #include <locale>
 
@@ -30,10 +30,10 @@ inline std::istream &getDataLine(std::istream &is, std::string &line) {
     do  {
         std::getline(is >> std::ws, line);
 
-		// Allow windows line endings:
-		if (!line.empty() && *line.rbegin() == '\r') {
-			line.erase(line.length() - 1, 1);
-		}
+        // Allow windows line endings:
+        if (!line.empty() && *line.rbegin() == '\r') {
+            line.erase(line.length() - 1, 1);
+        }
     } while (is && (line[0] == '#'));
     return is;
 }

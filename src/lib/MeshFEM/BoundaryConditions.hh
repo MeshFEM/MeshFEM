@@ -453,11 +453,11 @@ public:
     static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
 
-	template<typename Mesh>
-	PeriodicCondition(const Mesh& mesh, int ignoreDim)
-		: PeriodicCondition(mesh, 1e-7, false, ignoreDim)
-	{
-	}
+    template<typename Mesh>
+    PeriodicCondition(const Mesh& mesh, int ignoreDim)
+        : PeriodicCondition(mesh, 1e-7, false, ignoreDim)
+    {
+    }
 
     template<typename Mesh>
     PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, int ignoreDim = -1) {
@@ -466,37 +466,37 @@ public:
         std::vector<VectorND<_N>> bdryPts;
         bdryPts.reserve(mesh.numBoundaryNodes());
         for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
-			   
+
         PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
                 cell, m_periodicBoundariesForBoundaryNode, epsilon);
 
-		// Remove boundary vertices on ignored cell sides by removing their membership
-		// from all cell faces.
-		if (ignoreDim >= 0) {
-			std::vector<size_t> periodicDims;
-			for (int d = 0; d < _N; d++) {
-				if (d != ignoreDim) periodicDims.push_back(d);
-			}
+        // Remove boundary vertices on ignored cell sides by removing their membership
+        // from all cell faces.
+        if (ignoreDim >= 0) {
+            std::vector<size_t> periodicDims;
+            for (int d = 0; d < _N; d++) {
+                if (d != ignoreDim) periodicDims.push_back(d);
+            }
 
-			assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
-			std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
-			for (int i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
-				for (size_t dim : periodicDims) {
-					onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMinFace(dim);
-					onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
-				}
-				if (onSignificantDim[i]) {
-					m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim] = false;
-					m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim + _N] = false;
-				}
-				else {
-					for (int d = 0; d < _N; d++) {
-						m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-						m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-					}
-				}
-			}
-		}
+            assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
+            std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
+            for (int i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
+                for (size_t dim : periodicDims) {
+                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMinFace(dim);
+                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
+                }
+                if (onSignificantDim[i]) {
+                    m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim] = false;
+                    m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim + _N] = false;
+                }
+                else {
+                    for (int d = 0; d < _N; d++) {
+                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
+                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
+                    }
+                }
+            }
+        }
 
         // Determine identified boundary nodes.
         std::vector<std::vector<size_t> > bdryNodeSets;
