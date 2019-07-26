@@ -1320,6 +1320,10 @@ public:
     // Recompute the numeric factorization using the new system matrix "tmat",
     // resuing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
+    // NOTE: The check of positive definite inside this function is not sufficient,
+    //       since it just uses CHOLMOD's return status. If the diagonal entry of L 
+    //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to 
+    //       further ensure it is sdf.
     template<typename Mat>
     void updateFactorization(Mat &&mat) {
         if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's
@@ -1336,6 +1340,7 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
         if (!success)
             throw std::runtime_error("Factor update failed");
+        // NOTE: Be careful. This check is not sufficient for ensuring positive definite.
         if (m_c->status == CHOLMOD_NOT_POSDEF)
             throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
     }
