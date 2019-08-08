@@ -454,13 +454,7 @@ public:
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
 
     template<typename Mesh>
-    PeriodicCondition(const Mesh& mesh, int ignoreDim)
-        : PeriodicCondition(mesh, 1e-7, false, ignoreDim)
-    {
-    }
-
-    template<typename Mesh>
-    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, int ignoreDim = -1) {
+    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, std::vector<size_t> ignoreDims = std::vector<size_t>()) {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
 
         std::vector<VectorND<_N>> bdryPts;
@@ -470,13 +464,18 @@ public:
         PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
                 cell, m_periodicBoundariesForBoundaryNode, epsilon);
 
-        // Remove boundary vertices on ignored cell sides by removing their membership
-        // from all cell faces.
-        if (ignoreDim >= 0) {
+        std::cout << "All dimensions periodic" << std::endl;
+        // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
+        if (ignoreDims.size() > 0) {
             std::vector<size_t> periodicDims;
+            std::cout << "Periodic Dimensions: ";
             for (int d = 0; d < _N; d++) {
-                if (d != ignoreDim) periodicDims.push_back(d);
+                if (std::find(ignoreDims.begin(), ignoreDims.end(), d) == ignoreDims.end()) {
+                    periodicDims.push_back(d);
+                    std::cout << d << " ";
+                }
             }
+            std::cout << std::endl;
 
             assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
             std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
@@ -486,10 +485,14 @@ public:
                     onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
                 }
                 if (onSignificantDim[i]) {
-                    m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim] = false;
-                    m_periodicBoundariesForBoundaryNode[i].membership[ignoreDim + _N] = false;
+                    // Only remove membership from ignored faces
+                    for (size_t d : ignoreDims) {
+                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
+                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
+                    }
                 }
                 else {
+                    // Remove membership from all faces
                     for (int d = 0; d < _N; d++) {
                         m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
                         m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
