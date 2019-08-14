@@ -1325,7 +1325,7 @@ public:
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to 
     //       further ensure it is sdf.
     template<typename Mat>
-    void updateFactorization(Mat &&mat) {
+    void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
         if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's
         if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
         if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
@@ -1336,7 +1336,10 @@ public:
         if (m_L == nullptr) return; // no symbolic factorization was computed yet; nothing needs to be updated.
 
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
+        bool oldTryCatch = m_c->try_catch;
+        m_c->try_catch = isInTryCatch;
         int success = cholmod_l_factorize(&m_A, m_L, m_c.get());
+        m_c->try_catch = oldTryCatch;
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
         if (!success)
             throw std::runtime_error("Factor update failed");
@@ -1457,7 +1460,10 @@ public:
             auto colBegin = colPointers[j];
             assert(colBegin < colPointers[j + 1]); // column better be nonempty!
             // Diagonal entry is the first entry of this column
-            if (values[colBegin] <= 1e-16) return false;
+            if (values[colBegin] <= 1e-16) {
+                std::cout<<values[colBegin]<<std::endl;
+                return false;
+            }
         }
         return true;
     }
