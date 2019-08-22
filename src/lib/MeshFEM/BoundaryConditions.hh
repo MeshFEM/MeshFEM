@@ -464,18 +464,14 @@ public:
         PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
                 cell, m_periodicBoundariesForBoundaryNode, epsilon);
 
-        std::cout << "All dimensions periodic" << std::endl;
         // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
         if (ignoreDims.size() > 0) {
             std::vector<size_t> periodicDims;
-            std::cout << "Periodic Dimensions: ";
             for (int d = 0; d < _N; d++) {
                 if (std::find(ignoreDims.begin(), ignoreDims.end(), d) == ignoreDims.end()) {
                     periodicDims.push_back(d);
-                    std::cout << d << " ";
                 }
             }
-            std::cout << std::endl;
 
             assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
             std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);

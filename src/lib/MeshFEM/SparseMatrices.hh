@@ -1461,7 +1461,6 @@ public:
             assert(colBegin < colPointers[j + 1]); // column better be nonempty!
             // Diagonal entry is the first entry of this column
             if (values[colBegin] <= 1e-16) {
-                std::cout<<values[colBegin]<<std::endl;
                 return false;
             }
         }
