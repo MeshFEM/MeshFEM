@@ -16,7 +16,6 @@
 
 #ifndef PARALLEL_ASSEMBLY
     #define PARALLEL_ASSEMBLY true
-    static constexpr Real MIN_MASS = 1e-9;
 #endif
 
 template<typename _EStructure>
@@ -107,6 +106,7 @@ struct ElasticStructureTraits;
 template<typename Derived>
 class ElasticStructureBase {
     static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
+    static constexpr Real MIN_MASS = 1e-9;
 public:
     using EStructure = Derived;
     using Real = typename ElasticStructureTraits<Derived>::Real;
@@ -247,13 +247,12 @@ public:
     VectorX gradient() const {
         VectorX gradient(VectorX::Zero(getThis()->numVars()));
         static constexpr size_t nlv = numInfluencedVarsPerElements();
-
         auto f = [&](size_t element_index, Matrix& delta_grad, Energy& energy){
             return [&, element_index](const EvalPt<Dimension>& x) {
                 energy.setDeformationGradient(getThis()->getDeformationGradient(element_index, x));
 
                 Eigen::Matrix<Real, nlv, 1> quadrature_point_gradient;
-                for (const auto& variable : getThis()->getInfluencedVariableRange(element_index)) {
+                for (const auto& variable : getInfluencedVariableRange(element_index)) {
                     variable.setDeltaGrad(delta_grad, x);
                     quadrature_point_gradient[variable.getLocalIndex()] =
                     energy.denergy(delta_grad) / getVolume();
@@ -269,7 +268,7 @@ public:
         for (const auto& element : m_mesh.elements()) {
             Eigen::Matrix<Real, nlv, 1> gradient_contribution = QuadratureRule::integrate(
                 f(element.index(), delta_grad, m_energy), element->volume());
-            for (const auto& variable : getThis()->getInfluencedVariableRange(element.index())) {
+            for (const auto& variable : getInfluencedVariableRange(element.index())) {
                 gradient[variable.getIndex()] += gradient_contribution[variable.getLocalIndex()];
             }
         }
@@ -280,7 +279,7 @@ public:
             const auto& element = m_mesh.element(element_index);
             Eigen::Matrix<Real, nlv, 1> gradient_contribution = QuadratureRule::integrate(
                 f(element_index, delta_grad, m_elementEnergies[element_index]), element->volume());
-            for (const auto& variable : getThis()->getInfluencedVariableRange(element.index())) {
+            for (const auto& variable : getInfluencedVariableRange(element.index())) {
                 g_out[variable.getIndex()] += gradient_contribution[variable.getLocalIndex()];
             }
         };
@@ -291,11 +290,10 @@ public:
     }
 
     /**
-     *  Returns a matrix that maps a vector containing nodal displacements and
-     *  average deformation gradient entries, with variable indexing following
-     *  that given by fluctuationDisplacementVarIdx and maps it to a list of 
-     *  per-element deformation gradient matrices, represented as flattened 
-     *  vectors, column by column.
+     *  Returns a matrix that maps a vector containing nodal displacements 
+     *  entries, with variable indexing following that given by 
+     *  fluctuationDisplacementVarIdx and maps it to a list of per-element 
+     *  deformation gradient matrices, represented as flattened vectors, column by column.
      *
      *  One flattened matrix per element, PER QUADRATURE POINT is returned,
      *  the ordering is by elements (as in m_mesh.elements()) and then by
@@ -460,16 +458,16 @@ public:
             VectorX hessian_contribution = QuadratureRule::integrate(
                 [&element_index, this](const EvalPt<Dimension>& x) {
                     std::vector<Matrix> delta_grads(numInfluencedVarsPerElements(), Matrix::Zero());
-                    for (const auto& variable : getThis()->getInfluencedVariableRange(element_index)) {
+                    for (const auto& variable : getInfluencedVariableRange(element_index)) {
                         variable.setDeltaGrad(delta_grads[variable.getLocalIndex()], x);
                     }
 
                     m_elementEnergies[element_index].setDeformationGradient(getThis()->getDeformationGradient(element_index, x));
 
                     Eigen::Matrix<Real, contribution_dimension, 1> contribution;
-                    for (const auto& variable_b : getThis()->getInfluencedVariableRange(element_index)) {
+                    for (const auto& variable_b : getInfluencedVariableRange(element_index)) {
                         Matrix delta_denergy = m_elementEnergies[element_index].delta_denergy(delta_grads[variable_b.getLocalIndex()]);
-                        for (const auto& variable_a : getThis()->getInfluencedVariableRange(element_index)) {
+                        for (const auto& variable_a : getInfluencedVariableRange(element_index)) {
                             if (variable_a.getLocalIndex() > variable_b.getLocalIndex())
                                 continue;
 
@@ -484,8 +482,8 @@ public:
                 m_mesh.element(element_index)->volume());
 
             size_t hint = 0;
-            for (const auto& variable_b : getThis()->getInfluencedVariableRange(element_index)) {
-                for (const auto& variable_a : getThis()->getInfluencedVariableRange(element_index)) {
+            for (const auto& variable_b : getInfluencedVariableRange(element_index)) {
+                for (const auto& variable_a : getInfluencedVariableRange(element_index)) {
                     if (variable_a.getIndex() > variable_b.getIndex())
                         continue;
 
@@ -521,7 +519,7 @@ public:
             VectorX hessian_contribution = QuadratureRule::integrate(
                 [&element_index, &vars, this](const EvalPt<Dimension>& x) {
                     std::vector<Matrix> delta_grads(numInfluencedVarsPerElements(), Matrix::Zero());
-                    for (const auto& variable : getThis()->getInfluencedVariableRange(element_index)) {
+                    for (const auto& variable : getInfluencedVariableRange(element_index)) {
                         variable.setDeltaGrad(delta_grads[variable.getLocalIndex()], x);
                     }
 
@@ -531,11 +529,11 @@ public:
                     static constexpr size_t contribution_dimension =
                         numInfluencedVarsPerElements() * (numInfluencedVarsPerElements() + 1) / 2;
                     Eigen::Matrix<Real, contribution_dimension, 1> contribution;
-                    for (const auto& variable_b : getThis()->getInfluencedVariableRange(element_index))
+                    for (const auto& variable_b : getInfluencedVariableRange(element_index))
                     {
                         Matrix delta_denergy = m_elementEnergies[element_index].delta_denergy(
                             delta_grads[variable_b.getLocalIndex()]);
-                        for (const auto& variable_a : getThis()->getInfluencedVariableRange(element_index))
+                        for (const auto& variable_a : getInfluencedVariableRange(element_index))
                         {
                             if (variable_a.getLocalIndex() > variable_b.getLocalIndex())
                                 continue;
@@ -554,8 +552,8 @@ public:
               m_mesh.element(element_index)->volume());
 
             size_t hint = 0;
-            for (const auto& variable_b : getThis()->getInfluencedVariableRange(element_index)) {
-                for (const auto& variable_a : getThis()->getInfluencedVariableRange(element_index)) {
+            for (const auto& variable_b : getInfluencedVariableRange(element_index)) {
+                for (const auto& variable_a : getInfluencedVariableRange(element_index)) {
                     if (variable_a.getIndex() > variable_b.getIndex())
                         continue;
 
@@ -588,8 +586,8 @@ public:
 
         // Since the Hessian is symmetric only compute the upper triangle
         for (const auto& element : m_mesh.elements()) {
-            for (const auto& variable_a : getThis()->getInfluencedVariableRange(element.index())) {
-                for (const auto& variable_b : getThis()->getInfluencedVariableRange(element.index())) {
+            for (const auto& variable_a : getInfluencedVariableRange(element.index())) {
+                for (const auto& variable_b : getInfluencedVariableRange(element.index())) {
                     if (variable_a.getIndex() > variable_b.getIndex())
                         continue;
                     triplet_result.addNZ(variable_a.getIndex(), variable_b.getIndex(), 1.);
@@ -605,7 +603,7 @@ public:
     Vector getNodePosition(size_t node_index) const { return m_mesh.node(node_index)->p + getNodeFluctuationDisplacement(node_index); }
 
     auto getNodeFluctuationDisplacement(size_t node_index) const {
-        return getVariablesNodeFluctuationDisplacement(m_fluctuation_displacements, node_index);
+        return m_fluctuation_displacements.template segment<Dimension>(fluctuationDisplacementLocalVarIdx(node_index, 0));
     }
 
     auto getVariablesNodeFluctuationDisplacement(const VectorX& vars, size_t node_index) const {
