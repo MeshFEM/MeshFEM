@@ -1323,7 +1323,7 @@ public:
     // NOTE: The check of positive definite inside this function is not sufficient,
     //       since it just uses CHOLMOD's return status. If the diagonal entry of L 
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to 
-    //       further ensure it is sdf.
+    //       further ensure it is spd.
     template<typename Mat>
     void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
         if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's

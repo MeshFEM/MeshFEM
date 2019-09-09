@@ -44,6 +44,7 @@ class EmbeddedElement : public _SimplexEmbedding<_K, EmbeddingSpace> {
 public:
     using SFGradient      = Interpolant<EmbeddingSpace, _K, _Deg - 1>;
     using GradBarycentric = typename Base::GradBarycentric;
+    using Real = typename EmbeddingSpace::Scalar;
     constexpr static size_t numVertices = _K + 1;
     constexpr static size_t Deg = _Deg;
     constexpr static size_t   K = _K;
@@ -141,20 +142,21 @@ using   AffineEmbeddedElement = EmbeddedElement<  AffineEmbeddedSimplex, _K, _De
 // Edges in 3D do not store normals, since the normal is ambiguous.
 // In the future, the normal could be defined to be in the plane of the
 // incident triangle (if there is one).
-template<>
-class LinearlyEmbeddedSimplex<Simplex::Edge, Point3D> {
+template<typename Real>
+class LinearlyEmbeddedSimplex<Simplex::Edge, Eigen::Matrix<Real, 3, 1>> {
 public:
+    using Vec = Eigen::Matrix<Real, 3, 1>;
     // (i, j) entry: d phi_j / d x_i
     // (columns are gradient vectors)
     typedef Eigen::Matrix<Real, 3, 2> GradBarycentric;
 
-    void embed(const Point3D &p0, const Point3D &p1) {
+    void embed(const Vec &p0, const Vec &p1) {
         // Barycentric coordinate i interpolates from 1 on vertex i to 0 on
         // the opposite vertex.
         // up from the opposite face, b, and has magnitude 1 / h.
         // Since vol = b * h / 3, this magnitude is b / (3 vol).
         //  0*-------* 1       +----->x
-        Point3D e(p1 - p0);
+        Vec e(p1 - p0);
         m_volume = e.norm();
         e /= (m_volume * m_volume);
         m_gradBarycentric.col(0) = -e;
@@ -170,16 +172,17 @@ protected:
 // Edges embedded in 2D store normals. The normal is chosen based on the edge
 // orientation as passed to embed(): it is the counterclockwise-rotated edge
 // vector.
-template<>
-class LinearlyEmbeddedSimplex<Simplex::Edge, Point2D> {
+template<typename Real>
+class LinearlyEmbeddedSimplex<Simplex::Edge, Eigen::Matrix<Real, 2, 1>> {
 public:
+    using Vec = Eigen::Matrix<Real, 2, 1>;
     // (i, j) entry: d phi_j / d x_i
     // (columns are gradient vectors)
     typedef Eigen::Matrix<Real, 2, 2> GradBarycentric;
 
-    const Vector2D &normal() const { return m_normal; }
+    const Vec &normal() const { return m_normal; }
 
-    void embed(const Point2D &p0, const Point2D &p1) {
+    void embed(const Vec &p0, const Vec &p1) {
         // Barycentric coordinate i interpolates from 1 on vertex i to 0 on
         // the opposite vertex.
         // up from the opposite face, b, and has magnitude 1 / h.
@@ -187,10 +190,10 @@ public:
         //       ^ n
         //       |
         //  0*---+--->* 1       +----->x
-        Point2D e(p1 - p0);
+        Vec e(p1 - p0);
         m_volume = e.norm();
 
-        m_normal = Point2D(-e[1], e[0]);
+        m_normal = Vec(-e[1], e[0]);
         m_normal /= m_volume;
 
         e /= (m_volume * m_volume);
@@ -202,19 +205,20 @@ public:
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
-    Point2D m_normal;
+    Vec m_normal;
 };
 
-template<>
-class LinearlyEmbeddedSimplex<Simplex::Triangle, Point3D> {
+template<typename Real>
+class LinearlyEmbeddedSimplex<Simplex::Triangle, Eigen::Matrix<Real, 3, 1>> {
 public:
+    using Vec = Eigen::Matrix<Real, 3, 1>;
     // (i, j) entry: d phi_j / d x_i
     // (columns are gradient vectors)
     typedef Eigen::Matrix<Real, 3, 3> GradBarycentric;
 
-    const Vector3D &normal() const { return m_normal; }
+    const Vec &normal() const { return m_normal; }
 
-    void embed(const Point3D &p0, const Point3D &p1, const Point3D &p2) {
+    void embed(const Vec &p0, const Vec &p1, const Vec &p2) {
         // Linear shape function i interpolates from 1 on vertex i to 0 on
         // the opposite edge. This means the gradient points perpendicularly
         // up from the opposite edge, b, and has magnitude 1 / h.
@@ -226,7 +230,7 @@ public:
         //    /  n  \         /
         //  0*---2---* 1     v z
         // Inward-pointing edge perpendiculars
-        Vector3D e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);
+        Vec e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);
         m_normal = e1.cross(e2);
         Real doubleA = m_normal.norm();
         m_normal /= doubleA;
@@ -241,16 +245,18 @@ public:
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
-    Vector3D m_normal;
+    Vec m_normal;
 };
 
-template<>
-class LinearlyEmbeddedSimplex<Simplex::Triangle, Point2D> {
+template<typename Real>
+class LinearlyEmbeddedSimplex<Simplex::Triangle, Eigen::Matrix<Real, 2, 1>> {
 public:
+    using Vec = Eigen::Matrix<Real, 2, 1>;
+
     // (i, j) entry: d phi_j / d x_i
     // (columns are gradient vectors)
     typedef Eigen::Matrix<Real, 2, 3> GradBarycentric;
-    void embed(const Point2D &p0, const Point2D &p1, const Point2D &p2) {
+    void embed(const Vec &p0, const Vec &p1, const Vec &p2) {
         // Linear shape function i interpolates from 1 on vertex i to 0 on
         // the opposite edge. This means the gradient points perpendicularly
         // up from the opposite edge, b, and has magnitude 1 / h.
@@ -262,14 +268,14 @@ public:
         //    /     \        +-----> x
         //  0*---2---* 1
         // Inward-pointing edge perpendiculars
-        Vector2D e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);
+        Vec e0(p2 - p1), e1(p0 - p2), e2(p1 - p0);
 
         Real doubleA = e1[0] * e2[1] - e1[1] * e2[0];
         m_volume = doubleA / 2.0;
 
-        m_gradBarycentric.col(0) = Vector2D(-e0[1], e0[0]) / doubleA;
-        m_gradBarycentric.col(1) = Vector2D(-e1[1], e1[0]) / doubleA;
-        m_gradBarycentric.col(2) = Vector2D(-e2[1], e2[0]) / doubleA;
+        m_gradBarycentric.col(0) = Vec(-e0[1], e0[0]) / doubleA;
+        m_gradBarycentric.col(1) = Vec(-e1[1], e1[0]) / doubleA;
+        m_gradBarycentric.col(2) = Vec(-e2[1], e2[0]) / doubleA;
     }
 
     Real volume() const { return m_volume; }
@@ -278,14 +284,16 @@ protected:
     GradBarycentric m_gradBarycentric;
 };
 
-template<>
-class LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Point3D> {
+template<typename Real>
+class LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Eigen::Matrix<Real, 3, 1>> {
 public:
+    using Vec = Eigen::Matrix<Real, 3, 1>;
+
     // (i, j) entry: d phi_j / d x_i
     // (columns are gradient vectors)
     typedef Eigen::Matrix<Real, 3, 4> GradBarycentric;
-    void embed(const Point3D &p0, const Point3D &p1,
-               const Point3D &p2, const Point3D &p3) {
+    void embed(const Vec &p0, const Vec &p1,
+               const Vec &p2, const Vec &p3) {
         // Barycentric coordinate i interpolates from 1 on vertex i to 0 on
         // the opposite face. This means the gradient points perpendicularly
         // up from the opposite face, b, and has magnitude 1 / h.
@@ -296,7 +304,7 @@ public:
         //     /   \ `* 2      | ^ y
         //    / __--\ /        |/
         //  0*-------* 1       +----->x
-        Point3D n0_doubleA = (p3 - p1).cross(p2 - p1);
+        Vec n0_doubleA = (p3 - p1).cross(p2 - p1);
         Real vol_6 = (p0 - p1).dot(n0_doubleA);
         m_volume = vol_6 / 6.0;
 
@@ -318,19 +326,20 @@ protected:
 // This requires the storage of an additional point: one of the vertices.
 // This is only supported for full-dimension simplices.
 ////////////////////////////////////////////////////////////////////////////////
-template<>
-class AffineEmbeddedSimplex<Simplex::Triangle, Point2D> : public LinearlyEmbeddedSimplex<Simplex::Triangle, Point2D> {
-    using Base = LinearlyEmbeddedSimplex<Simplex::Triangle, Point2D>;
+template<typename Real>
+class AffineEmbeddedSimplex<Simplex::Triangle, Eigen::Matrix<Real, 2, 1>> : public LinearlyEmbeddedSimplex<Simplex::Triangle, Eigen::Matrix<Real, 2, 1>> {
+    using Vec = Eigen::Matrix<Real, 2, 1>;
+    using Base = LinearlyEmbeddedSimplex<Simplex::Triangle, Vec>;
     using Base::m_gradBarycentric;
 public:
-    using BaryCoords = VectorND<3>;
+    using BaryCoords = Eigen::Matrix<Real, 3, 1>;
 
-    void embed(const Point2D &p0, const Point2D &p1, const Point2D &p2) {
+    void embed(const Vec &p0, const Vec &p1, const Vec &p2) {
         Base::embed(p0, p1, p2);
         m_p0 = p0;
     }
 
-    BaryCoords barycentricCoords(const Point2D &p) const {
+    BaryCoords barycentricCoords(const Vec &p) const {
         // Integrate barycentric coordinate function gradients from p0
         BaryCoords lambda = m_gradBarycentric.transpose() * (p - m_p0);
         lambda[0] = 1.0 - lambda[1] - lambda[2]; // equivalent to lambda[0] += 1.0, but more robust?
@@ -341,33 +350,34 @@ public:
     // If eps is a positive nonzero constant points slightly outside the
     // triangle are considered inside. If eps is a negative constant, interior
     // points within a small margin of the boundary are are considered outside.
-    bool contains(const Point2D &p, BaryCoords &l, const Real eps = 0) const {
+    bool contains(const Vec &p, BaryCoords &l, const Real eps = 0) const {
         l = barycentricCoords(p);
         return ((l[0] >= -eps) && (l[1] >= -eps) && (l[2] >= -eps));
     }
 
-    bool contains(const Point2D &p, const Real eps = 0) const {
+    bool contains(const Vec &p, const Real eps = 0) const {
         BaryCoords l;
         return contains(p, l, eps);
     }
 
 protected:
-    Point2D m_p0;
+    Vec m_p0;
 };
 
-template<>
-class AffineEmbeddedSimplex<Simplex::Tetrahedron, Point3D> : public LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Point3D> {
-    using Base = LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Point3D>;
+template<typename Real>
+class AffineEmbeddedSimplex<Simplex::Tetrahedron, Eigen::Matrix<Real, 3, 1>> : public LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Eigen::Matrix<Real, 3, 1>> {
+    using Vec = Eigen::Matrix<Real, 3, 1>;
+    using Base = LinearlyEmbeddedSimplex<Simplex::Tetrahedron, Vec>;
     using Base::m_gradBarycentric;
 public:
-    using BaryCoords = VectorND<4>;
-    void embed(const Point3D &p0, const Point3D &p1,
-               const Point3D &p2, const Point3D &p3) {
+    using BaryCoords = Eigen::Matrix<Real, 4, 1>;
+    void embed(const Vec &p0, const Vec &p1,
+               const Vec &p2, const Vec &p3) {
         Base::embed(p0, p1, p2, p3);
         m_p0 = p0;
     }
 
-    BaryCoords barycentricCoords(const Point3D &p) const {
+    BaryCoords barycentricCoords(const Vec &p) const {
         // Integrate barycentric coordinate function gradients from p0
         BaryCoords lambda = m_gradBarycentric.transpose() * (p - m_p0);
         lambda[0] = 1.0 - lambda[1] - lambda[2] - lambda[3]; // equivalent to lambda[0] += 1.0, but more robust?
@@ -378,18 +388,18 @@ public:
     // If eps is a positive nonzero constant points slightly outside the tet
     // are considered inside. If eps is a negative constant, interior points
     // within a small margin of the boundary are are considered outside.
-    bool contains(const Point3D &p, BaryCoords &l, const Real eps = 0) const {
+    bool contains(const Vec &p, BaryCoords &l, const Real eps = 0) const {
         l = barycentricCoords(p);
         return ((l[0] >= -eps) && (l[1] >= -eps) && (l[2] >= -eps) && (l[3] >= -eps));
     }
 
-    bool contains(const Point3D &p, const Real eps = 0) const {
+    bool contains(const Vec &p, const Real eps = 0) const {
         BaryCoords l;
         return contains(p, l, eps);
     }
 
 protected:
-    Point3D m_p0;
+    Vec m_p0;
 };
 
 #endif /* end of include guard: EMBEDDEDELEMENT_HH */

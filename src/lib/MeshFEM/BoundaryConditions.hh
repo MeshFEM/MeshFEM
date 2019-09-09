@@ -467,7 +467,7 @@ public:
         // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
         if (ignoreDims.size() > 0) {
             std::vector<size_t> periodicDims;
-            for (int d = 0; d < _N; d++) {
+            for (size_t d = 0; d < _N; d++) {
                 if (std::find(ignoreDims.begin(), ignoreDims.end(), d) == ignoreDims.end()) {
                     periodicDims.push_back(d);
                 }
@@ -475,7 +475,7 @@ public:
 
             assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
             std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
-            for (int i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
+            for (size_t i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
                 for (size_t dim : periodicDims) {
                     onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMinFace(dim);
                     onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
@@ -489,7 +489,7 @@ public:
                 }
                 else {
                     // Remove membership from all faces
-                    for (int d = 0; d < _N; d++) {
+                    for (size_t d = 0; d < _N; d++) {
                         m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
                         m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
                     }
