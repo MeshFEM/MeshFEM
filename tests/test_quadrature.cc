@@ -167,7 +167,6 @@ TEST_CASE("quadrature routines", "[quadrature]" ) {
     SECTION("Degree 5 tests") {
       test<2, 5>(functions2D, integrals2D);
     }
-
 }
 
 #pragma GCC diagnostic pop

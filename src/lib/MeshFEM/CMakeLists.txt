@@ -23,6 +23,7 @@ add_library(MeshFEM
         function_traits.hh
         Functions.hh
         Future.hh
+        GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
         GlobalBenchmark.cc

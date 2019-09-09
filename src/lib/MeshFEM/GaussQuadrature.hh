@@ -193,7 +193,7 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
     return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); }, vol);
 }
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Triangle, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Triangle, 0> points{{
@@ -205,7 +205,7 @@ struct QuadratureTable<Simplex::Triangle, 0> {
 template<>
 struct QuadratureTable<Simplex::Triangle, 1> : public QuadratureTable<Simplex::Triangle, 0> { };
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Triangle, 2> {
     static constexpr size_t numPoints = 3;
 
@@ -217,7 +217,7 @@ struct QuadratureTable<Simplex::Triangle, 2> {
     }};
 };
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Triangle, 3> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 3 / 5.0,
@@ -230,7 +230,7 @@ struct QuadratureTable<Simplex::Triangle, 3> {
     }};
 };
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Triangle, 4> {
     static constexpr size_t numPoints = 6;
 
@@ -249,7 +249,7 @@ struct QuadratureTable<Simplex::Triangle, 4> {
     }};
 };
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Triangle, 5> {
     static constexpr size_t numPoints = 7;
 
@@ -340,7 +340,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
     return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); }, vol);
 }
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Tetrahedron, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
@@ -352,7 +352,7 @@ struct QuadratureTable<Simplex::Tetrahedron, 0> {
 template<>
 struct QuadratureTable<Simplex::Tetrahedron, 1> : public QuadratureTable<Simplex::Tetrahedron, 0> { };
 
-template< >
+template<>
 struct QuadratureTable<Simplex::Tetrahedron, 2> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
@@ -402,28 +402,6 @@ struct QuadratureTable<Simplex::Tetrahedron, 4> {
         {c1_1, c1_1, c0_1, c0_1}
     }};
 };
-
-// We need to provide definitions for the static constexpr `points` memebers to avoid undefined reference linker errors.
-// The commented out definitions are for the rules that simply inherit from a lower degree.
-   constexpr QPArray<Simplex::Edge,        0> QuadratureTable<Simplex::Edge,        0>::points;
-// constexpr QPArray<Simplex::Edge,        1> QuadratureTable<Simplex::Edge,        1>::points;
-   constexpr QPArray<Simplex::Edge,        2> QuadratureTable<Simplex::Edge,        2>::points;
-// constexpr QPArray<Simplex::Edge,        3> QuadratureTable<Simplex::Edge,        3>::points;
-   constexpr QPArray<Simplex::Edge,        4> QuadratureTable<Simplex::Edge,        4>::points;
-// constexpr QPArray<Simplex::Edge,        5> QuadratureTable<Simplex::Edge,        5>::points;
-
-   constexpr QPArray<Simplex::Triangle,    0> QuadratureTable<Simplex::Triangle,    0>::points;
-// constexpr QPArray<Simplex::Triangle,    1> QuadratureTable<Simplex::Triangle,    1>::points;
-   constexpr QPArray<Simplex::Triangle,    2> QuadratureTable<Simplex::Triangle,    2>::points;
-   constexpr QPArray<Simplex::Triangle,    3> QuadratureTable<Simplex::Triangle,    3>::points;
-   constexpr QPArray<Simplex::Triangle,    4> QuadratureTable<Simplex::Triangle,    4>::points;
-   constexpr QPArray<Simplex::Triangle,    5> QuadratureTable<Simplex::Triangle,    5>::points;
-
-   constexpr QPArray<Simplex::Tetrahedron, 0> QuadratureTable<Simplex::Tetrahedron, 0>::points;
-// constexpr QPArray<Simplex::Tetrahedron, 1> QuadratureTable<Simplex::Tetrahedron, 1>::points;
-   constexpr QPArray<Simplex::Tetrahedron, 2> QuadratureTable<Simplex::Tetrahedron, 2>::points;
-   constexpr QPArray<Simplex::Tetrahedron, 3> QuadratureTable<Simplex::Tetrahedron, 3>::points;
-   constexpr QPArray<Simplex::Tetrahedron, 4> QuadratureTable<Simplex::Tetrahedron, 4>::points;
 
 // Integration on a _K simplex (runs the implementations above).
 // Usage:

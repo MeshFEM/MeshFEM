@@ -92,7 +92,7 @@ void MSHFieldParser<N>::m_parseFields(istream &is, const bool binary) {
         else if (!isElementNodeData && (fieldData.rows() == 3)) {
             VectorField<Real, N> field(numEntries);
             for (size_t i = 0; i < numEntries; ++i)
-                field(i) = truncateFrom3D<VectorND<N> >(fieldData.col(i));
+                field(i) = truncateFromND<VectorND<N> >(fieldData.col(i));
             m_vectorFields.emplace(make_pair(fieldName,
                         make_pair(ftype, std::move(field))));
         }
