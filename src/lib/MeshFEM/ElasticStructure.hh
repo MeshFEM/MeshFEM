@@ -105,11 +105,13 @@ struct ElasticStructureTraits;
 
 template<typename Derived>
 class ElasticStructureBase {
+public:
+    using Real = typename ElasticStructureTraits<Derived>::Real;
+private:
     static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
     static constexpr Real MIN_MASS = 1e-9;
 public:
     using EStructure = Derived;
-    using Real = typename ElasticStructureTraits<Derived>::Real;
     using Energy = typename ElasticStructureTraits<Derived>::Energy;
     static constexpr size_t Dimension = ElasticStructureTraits<Derived>::Dimension;
     static constexpr size_t Degree = ElasticStructureTraits<Derived>::Degree;
