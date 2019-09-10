@@ -25,6 +25,8 @@
 #include <MeshFEM/BoundaryMesh.hh>
 #include <MeshFEM/Handles/FEMMeshHandles.hh>
 
+#include <MeshFEM/Utilities/VertexArrayAdaptor.hh>
+
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
 ////////////////////////////////////////////////////////////////////////////////
@@ -197,7 +199,7 @@ public:
         for (auto n : nodes()) {
             assert(n.isVertexNode() || n.isEdgeNode());
             if (n.isVertexNode())
-                n->p = truncateFrom3D<EmbeddingSpace>(vertices.at(n.vertex().index()));
+                n->p = truncateFrom3D<EmbeddingSpace>(VertexArrayAdaptor<Vertices>::get(vertices, n.vertex().index()));
         }
         for (auto n : nodes()) {
             if (n.isEdgeNode()) {
@@ -218,7 +220,7 @@ public:
     // Also support reading from Luigi/Nico's vertex format
     void setNodePositions(const std::vector<std::array<double,
             EmbeddingSpace::RowsAtCompileTime>> &vertices) {
-        std::vector<Vector3D> convertedVertices(vertices.size());
+        std::vector<V3MatchingScalarType<EmbeddingSpace>> convertedVertices(vertices.size());
         for (size_t i = 0; i < vertices.size(); ++i) {
             convertedVertices[i][0] = vertices[i][0];
             convertedVertices[i][1] = vertices[i][1];

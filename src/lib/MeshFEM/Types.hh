@@ -23,25 +23,36 @@ extern Eigen::IOFormat pointFormatter;
 template<class EmbeddingSpace, class Enable = void> struct Padder;
 template<class EmbeddingSpace, class Enable = void> struct Truncator;
 
-template<class EigenType, int VectorSize>
-using IsVectorOfSize = typename std::enable_if<(EigenType::RowsAtCompileTime == VectorSize) && (EigenType::ColsAtCompileTime == 1), void>::type;
+template<class EigenType, int RowSize, int ColSize, class Enable = void>
+struct isMatrixOfSize : std::false_type { };
+
+template<class EigenType, int RowSize, int ColSize>
+struct isMatrixOfSize<EigenType, RowSize, ColSize, typename std::enable_if<(EigenType::RowsAtCompileTime == RowSize) &&
+                                                                           (EigenType::ColsAtCompileTime == ColSize), void>::type> : std::true_type {};
+
+template<class EigenType, int RowSize, int ColSize, typename T = void>
+using EnableIfMatrixOfSize = typename std::enable_if<isMatrixOfSize<EigenType, RowSize, ColSize>::value, T>::type;
+
+template<class EigenType, int VectorSize, typename T = void>
+using EnableIfVectorOfSize = EnableIfMatrixOfSize<EigenType, VectorSize, 1, T>;
 
 template<class EigenType> using V3MatchingScalarType = Eigen::Matrix<typename EigenType::Scalar, 3, 1>;
 template<class EigenType> using V2MatchingScalarType = Eigen::Matrix<typename EigenType::Scalar, 2, 1>;
 
 // Padding, truncation of 2D, 3D vectors
-template<class EigenType> struct    Padder<EigenType, IsVectorOfSize<EigenType, 2>> { static V3MatchingScalarType<EigenType> run(const EigenType &p) { return V3MatchingScalarType<EigenType>(p[0], p[1], 0.0); } };
-template<class EigenType> struct    Padder<EigenType, IsVectorOfSize<EigenType, 3>> { static EigenType                       run(const EigenType &p) { return p; } }; // pass-through
-template<class EigenType> struct Truncator<EigenType, IsVectorOfSize<EigenType, 2>> { template<typename Derived, typename = IsVectorOfSize<Derived, 3>> static EigenType                  run(const Eigen::MatrixBase<Derived> &pt3D) { if (std::abs(pt3D[2]) > 1e-6) throw std::runtime_error("Nonzero z component in embedded Point2D"); return V2MatchingScalarType<EigenType>(pt3D[0], pt3D[1]); } };
-template<class EigenType> struct Truncator<EigenType, IsVectorOfSize<EigenType, 3>> { template<typename Derived, typename = IsVectorOfSize<Derived, 3>> static Eigen::MatrixBase<Derived> run(const Eigen::MatrixBase<Derived> &pt3D) { return pt3D; } }; // pass-through
+template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 2>> { static V3MatchingScalarType<EigenType> run(const EigenType &p) { return V3MatchingScalarType<EigenType>(p[0], p[1], 0.0); } };
+template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 3>> { static EigenType                       run(const EigenType &p) { return p; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 2>> { template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 3, V2MatchingScalarType<EigenType>> run(const InEigenType &pt3D) { if (std::abs(pt3D[2]) > 1e-6) throw std::runtime_error("Nonzero z component in embedded Point2D"); return V2MatchingScalarType<EigenType>(pt3D[0], pt3D[1]); }
+                                                                                            template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 2,                     InEigenType> run(const InEigenType &pt2D) { return pt2D; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 3>> { template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 3,                     InEigenType> run(const InEigenType &pt3D) { return pt3D; } }; // pass-through
 
 // Provide padding/truncation for points of eigen type.
-template<                       class InPointDerived> V3MatchingScalarType<InPointDerived> padTo3D(const Eigen::MatrixBase<InPointDerived> &p) { return    Padder<Eigen::MatrixBase<InPointDerived>>::run(p.derived()); }
-template<class OutPointDerived, class InPointDerived> OutPointDerived               truncateFrom3D(const Eigen::MatrixBase<InPointDerived> &p) { return Truncator<Eigen::MatrixBase<OutPointDerived>>::run(p.derived()); }
+template<                       class InPointDerived> V3MatchingScalarType<InPointDerived> padTo3D(const Eigen::MatrixBase<InPointDerived> &p) { return    Padder<Eigen::MatrixBase< InPointDerived>>::run(p); }
+template<class OutPointDerived, class InPointDerived> OutPointDerived               truncateFrom3D(const Eigen::MatrixBase<InPointDerived> &p) { return Truncator<Eigen::MatrixBase<OutPointDerived>>::run(p).template cast<typename OutPointDerived::Scalar>(); }
 
 // Also provide padding/truncation for points of eigen type nested inside, e.g., a MeshIO::IOVertex instance.
-template<class InVertex                             , class NestedPointType = decltype(InVertex().point)> V3MatchingScalarType<NestedPointType> padTo3D(const InVertex &v) { return    Padder<NestedPointType                         >::run(v.point); }
-template<class EmbeddingSpaceDerived, class InVertex, class NestedPointType = decltype(InVertex().point)> EmbeddingSpaceDerived          truncateFrom3D(const InVertex &v) { return Truncator<Eigen::MatrixBase<EmbeddingSpaceDerived>>::run(v.point); }
+template<class InVertex                       , class NestedPointType = decltype(InVertex().point)> V3MatchingScalarType<NestedPointType> padTo3D(const InVertex &v) { return    Padder<NestedPointType                   >::run(v.point); }
+template<class OutPointDerived, class InVertex, class NestedPointType = decltype(InVertex().point)> OutPointDerived                truncateFrom3D(const InVertex &v) { return Truncator<Eigen::MatrixBase<OutPointDerived>>::run(v.point).template cast<typename OutPointDerived::Scalar>(); }
 
 template<class EmbeddingSpace, class InputDerived>
 EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {

@@ -377,7 +377,7 @@ namespace MeshIO {
         // Note: requires vertex-node index to coincide with vertex index!
         // This is the case for our FEMMesh.
         for (size_t vi = 0; vi < mesh.numVertices(); ++vi)
-            outVertices.push_back(mesh.node(vi)->p);
+            outVertices.push_back(mesh.node(vi)->p.template cast<double>().eval());
 
         save(path, outVertices, outElements, format, type);
     }

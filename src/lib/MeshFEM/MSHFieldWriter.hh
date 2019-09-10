@@ -100,7 +100,7 @@ public:
             m_numOutputNodesPerElement.reserve(m_numElements);
             if (m_linearSubsample) {
                 for (auto v : mesh.vertices())
-                    outNodes.emplace_back(v.node()->p);
+                    outNodes.emplace_back(v.node()->p.template cast<double>().eval());
                 for (auto e : mesh.elements()) {
                     outElements.emplace_back(e.numVertices());
                     m_numOutputNodesPerElement.push_back(e.numVertices());
@@ -110,7 +110,7 @@ public:
             }
             else  {
                 for (auto n : mesh.nodes())
-                    outNodes.emplace_back(n->p);
+                    outNodes.emplace_back(n->p.template cast<double>().eval());
                 for (auto e : mesh.elements()) {
                     outElements.emplace_back(e.numNodes());
                     m_numOutputNodesPerElement.push_back(e.numNodes());
