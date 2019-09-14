@@ -1333,7 +1333,7 @@ public:
         m_AStorage = std::forward<Mat>(mat);
         m_matrixUpdated();
 
-        if (m_L == nullptr) return; // no symbolic factorization was computed yet; nothing needs to be updated.
+        if (!hasFactorization()) return; // no symbolic factorization was computed yet; nothing needs to be updated.
 
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
         bool oldTryCatch = m_c->try_catch;
@@ -1368,9 +1368,23 @@ public:
         return x;
     }
 
-    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRaw(const Real *b, Real *x, int sys = CHOLMOD_A) {
-        if (m_L == NULL) factorize();
+    template<typename _Vec1, typename _Vec2>
+    void solveExistingFactorization(const _Vec1 &b, _Vec2 &x, int sys = CHOLMOD_A) const {
+        assert(size_t(b.size()) == size_t(m_A.nrow));
+        x.resize(m_A.ncol);
+        solveRawExistingFactorization(&b[0], &x[0], sys);
+    }
+
+    template<typename _Vec>
+    _Vec solveExistingFactorization(const _Vec &b, int sys = CHOLMOD_A) const {
+        assert(size_t(b.size()) == size_t(m_A.nrow));
+        _Vec x(m_A.ncol);
+        solveRawExistingFactorization(&b[0], &x[0], sys);
+        return x;
+    }
+
+    void solveRawExistingFactorization(const Real *b, Real *x, int sys = CHOLMOD_A) const {
+        if (!hasFactorization()) throw std::runtime_error("Factorization doesn't exist");
         static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
 
         const size_t m = m_A.nrow, n = m_A.ncol;
@@ -1389,6 +1403,14 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
     }
 
+    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
+    void solveRaw(const Real *b, Real *x, int sys = CHOLMOD_A) {
+        if (!hasFactorization()) factorize();
+        solveRawExistingFactorization(b, x, sys);
+    }
+
+    bool hasFactorization() const { return m_L != nullptr; }
+
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.
     void stashFactorization() {
@@ -1396,7 +1418,7 @@ public:
         m_L_stashed = cholmod_l_copy_factor(m_L, m_c.get());
     }
 
-    bool hasStashedFactorization() { return m_L_stashed != nullptr; }
+    bool hasStashedFactorization() const { return m_L_stashed != nullptr; }
 
     // Exchange the roles of m_L and m_L_stashed, making the stash the active factorization.
     void swapStashedFactorization() { std::swap(m_L, m_L_stashed); }
@@ -1407,7 +1429,7 @@ public:
         // According to the documentation, cholmod_copy_factor will convert our numeric
         // factorization m_L back into a symbolic one, which will break future solves.
         // So we operate on a copy of m_L.
-        if (m_L == nullptr) throw std::runtime_error("Factorization doesn't exist");
+        if (!hasFactorization()) throw std::runtime_error("Factorization doesn't exist");
         cholmod_factor *factorCopy = cholmod_l_copy_factor(m_L, m_c.get());
         if (factorCopy == nullptr) throw std::runtime_error("Factor copy failed");
         auto result = CholmodSparseWrapper(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
@@ -1476,7 +1498,7 @@ private:
     cholmod_sparse m_A;
     cholmod_factor *m_L = nullptr, *m_L_stashed = nullptr;
 
-    cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
+    mutable cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
 
     SuiteSparseMatrix m_AStorage;
 
