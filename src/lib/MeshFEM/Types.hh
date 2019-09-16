@@ -41,10 +41,10 @@ template<class EigenType> using V2MatchingScalarType = Eigen::Matrix<typename Ei
 
 // Padding, truncation of 2D, 3D vectors
 template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 2>> { static V3MatchingScalarType<EigenType> run(const EigenType &p) { return V3MatchingScalarType<EigenType>(p[0], p[1], 0.0); } };
-template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 3>> { static EigenType                       run(const EigenType &p) { return p; } }; // pass-through
+template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 3>> { static const EigenType &               run(const EigenType &p) { return p; } }; // pass-through
 template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 2>> { template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 3, V2MatchingScalarType<EigenType>> run(const InEigenType &pt3D) { if (std::abs(pt3D[2]) > 1e-6) throw std::runtime_error("Nonzero z component in embedded Point2D"); return V2MatchingScalarType<EigenType>(pt3D[0], pt3D[1]); }
-                                                                                            template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 2,                     InEigenType> run(const InEigenType &pt2D) { return pt2D; } }; // pass-through
-template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 3>> { template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 3,                     InEigenType> run(const InEigenType &pt3D) { return pt3D; } }; // pass-through
+                                                                                            template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 2, InEigenType> &run(const InEigenType &pt2D) { return pt2D; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 3>> { template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 3, InEigenType> &run(const InEigenType &pt3D) { return pt3D; } }; // pass-through
 
 // Provide padding/truncation for points of eigen type.
 template<                       class InPointDerived> V3MatchingScalarType<InPointDerived> padTo3D(const Eigen::MatrixBase<InPointDerived> &p) { return    Padder<Eigen::MatrixBase< InPointDerived>>::run(p); }
