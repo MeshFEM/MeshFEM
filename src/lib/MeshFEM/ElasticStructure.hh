@@ -247,48 +247,42 @@ public:
      *  to the cell fluctuation displacement.
      */
     VectorX gradient() const {
-        VectorX gradient(VectorX::Zero(getThis()->numVars()));
-        static constexpr size_t nlv = numInfluencedVarsPerElements();
-        auto f = [&](size_t element_index, Matrix& delta_grad, Energy& energy){
-            return [&, element_index](const EvalPt<Dimension>& x) {
-                energy.setDeformationGradient(getThis()->getDeformationGradient(element_index, x));
+        VectorX g(VectorX::Zero(getThis()->numVars()));
 
-                Eigen::Matrix<Real, nlv, 1> quadrature_point_gradient;
-                for (const auto& variable : getInfluencedVariableRange(element_index)) {
-                    variable.setDeltaGrad(delta_grad, x);
-                    quadrature_point_gradient[variable.getLocalIndex()] =
-                    energy.denergy(delta_grad) / getVolume();
-                    variable.unsetDeltaGrad(delta_grad);
-                }
+        auto accumulate_per_element_contrib = [&](size_t ei, VectorX& g_out) {
+            Matrix delta_grad(Matrix::Zero());
 
-                return quadrature_point_gradient;
-            };
+            using LocalGradient = Eigen::Matrix<Real, numInfluencedVarsPerElements(), 1>;
+
+            auto contrib = QuadratureRule::integrate(
+                [ei, &delta_grad, this](const EvalPt<Dimension>& x) {
+                      LocalGradient integrand;
+                      auto &psi = m_elementEnergies[ei];
+                      psi.setDeformationGradient(getThis()->getDeformationGradient(ei, x));
+
+                      for (const auto &var : getInfluencedVariableRange(ei)) {
+                          var.setDeltaGrad(delta_grad, x);
+                          integrand[var.getLocalIndex()] = psi.denergy(delta_grad);
+                          var.unsetDeltaGrad(delta_grad);
+                      }
+                      integrand /= getVolume();
+
+                  return integrand;
+              },
+              m_mesh.element(ei)->volume());
+            for (const auto &var : getInfluencedVariableRange(ei))
+                g_out[var.getIndex()] += contrib[var.getLocalIndex()];
         };
 
-#if !PARALLEL_ASSEMBLY // Sequential
-        Matrix delta_grad(Matrix::Zero());
-        for (const auto& element : m_mesh.elements()) {
-            Eigen::Matrix<Real, nlv, 1> gradient_contribution = QuadratureRule::integrate(
-                f(element.index(), delta_grad, m_energy), element->volume());
-            for (const auto& variable : getInfluencedVariableRange(element.index())) {
-                gradient[variable.getIndex()] += gradient_contribution[variable.getLocalIndex()];
-            }
+        if (PARALLEL_ASSEMBLY) {
+            assemble_parallel(accumulate_per_element_contrib, g, numElements());
+        }
+        else {
+            for (const auto &e : m_mesh.elements())
+                accumulate_per_element_contrib(e.index(), g);
         }
 
-#else // Parallel
-        auto assembler_per_element_contrib = [&](size_t element_index, VectorX& g_out) {
-            Matrix delta_grad(Matrix::Zero());
-            const auto& element = m_mesh.element(element_index);
-            Eigen::Matrix<Real, nlv, 1> gradient_contribution = QuadratureRule::integrate(
-                f(element_index, delta_grad, m_elementEnergies[element_index]), element->volume());
-            for (const auto& variable : getInfluencedVariableRange(element.index())) {
-                g_out[variable.getIndex()] += gradient_contribution[variable.getLocalIndex()];
-            }
-        };
-
-        assemble_parallel(assembler_per_element_contrib, gradient, numElements());
-#endif
-        return gradient;
+        return g;
     }
 
     /**
