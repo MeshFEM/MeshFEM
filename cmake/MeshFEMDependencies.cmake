@@ -115,12 +115,12 @@ find_package(Umfpack REQUIRED) # provides umfpack::umfpack
 # Optional libraries
 ################################################################################
 
-# find_package(Ceres)
-# if(CERES_FOUND)
-#     add_library(ceres_lib INTERFACE)
-#     target_include_directories(ceres_lib SYSTEM PUBLIC ${CERES_INCLUDE_DIRS})
-#     target_link_libraries(ceres_lib MeshFEM ${CERES_LIBRARIES})
-#     add_library(ceres::ceres ALIAS ceres_lib)
-# else()
-#     message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
-# endif()
+find_package(Ceres)
+if(CERES_FOUND)
+    add_library(ceres_lib INTERFACE)
+    target_include_directories(ceres_lib SYSTEM INTERFACE  ${CERES_INCLUDE_DIRS})
+    target_link_libraries(ceres_lib INTERFACE MeshFEM ${CERES_LIBRARIES})
+    add_library(ceres::ceres ALIAS ceres_lib)
+else()
+    message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+endif()

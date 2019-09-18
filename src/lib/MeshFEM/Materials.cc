@@ -362,7 +362,7 @@ namespace {
 
 void Bounds::setFromJson(const nlohmann::json &config) {
     parseVariableBounds(config["lower"], m_lower);
-    parseVariableBounds(config["upper"], m_lower);
+    parseVariableBounds(config["upper"], m_upper);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
