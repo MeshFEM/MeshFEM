@@ -1,7 +1,3 @@
-// Note: This file is a copy of the sparse_matrices.cc in
-// Inflatable/python_bindings. It might be a good idea to have repository
-// that centralized the python bindings for at least MeshFEM.
-
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
@@ -89,5 +85,13 @@ PYBIND11_MODULE(sparse_matrices, m) {
                         result.Ax = t[5].cast<std::vector<double>>();
                         return result;
                         }))
+        .def("solve", [&](SuiteSparseMatrix &smat, const Eigen::VectorXd &b) {
+                if (smat.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
+                    throw std::runtime_error("Only symmetric matrices are currently supported");
+                CholmodFactorizer factors(smat);
+                Eigen::VectorXd x;
+                factors.solve(b, x);
+                return x;
+            })
         ;
 }

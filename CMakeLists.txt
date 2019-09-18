@@ -109,7 +109,7 @@ endif()
 
 
 # Download pybind dependency when MeshFEM is master project
-if(MeshFEM_MASTER_PROJECT) 
+if(NOT TARGET pybind11)
     include(MeshFEMDownloadExternal)
     meshfem_download_project(pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
@@ -118,7 +118,7 @@ if(MeshFEM_MASTER_PROJECT)
     add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
 endif()
 
-add_subdirectory(python_binding)
+add_subdirectory(python_bindings)
 
 ################################################################################
 # Unit tests

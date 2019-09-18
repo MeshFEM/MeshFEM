@@ -1,7 +1,3 @@
-if(NOT TARGET pybind11)
-    message(FATAL_ERROR "pybind11 must be included in the parent project")
-endif()
-
 pybind11_add_module(mesh mesh.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh PUBLIC MeshFEM)
