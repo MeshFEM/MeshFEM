@@ -2,8 +2,12 @@ import sparse_matrices
 import energy
 import mesh
 
+from mesh_building import *
+from energy_building import *
+
 # may not have elastic_structure build if Boost is not presented
 try:
     import elastic_structure
+    from elastic_structure_building import *
 except:
     pass
