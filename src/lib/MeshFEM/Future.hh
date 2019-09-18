@@ -23,7 +23,9 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Apply a function to tuple of arguments
+// Apply a function to std::tuple or std::array of arguments
+// (Note that std::tuple and std::array both support the std::tuple_size and
+//  std::get interface!)
 ////////////////////////////////////////////////////////////////////////////////
 namespace detail {
     // N: number of indices left to generate in the range 0..N

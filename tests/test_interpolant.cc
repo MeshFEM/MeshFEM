@@ -77,7 +77,7 @@ TEST_CASE("interpolant functions", "[quadrature]" ) {
     Interpolant<Real, Triangle, Linear> f(0.5, 2.0, 3.0);
     cout << f(1/3., 1/3., 1/3.) << endl;
 
-    EvalPt<2> center{1/3., 1/3., 1/3.};
+    EvalPt<2> center{{1/3., 1/3., 1/3.}};
     cout << f(center) << endl;
 
     Interpolant<Real, Triangle, Constant> fConst(1.0);

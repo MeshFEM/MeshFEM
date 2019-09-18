@@ -63,7 +63,7 @@ template<>
 struct QuadratureTable<Simplex::Edge, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Edge, 0> points{{
-        {0.5, 0.5}
+        {{0.5, 0.5}}
     }};
 };
 
@@ -75,8 +75,8 @@ template<>
 struct QuadratureTable<Simplex::Edge, 2> {
     static constexpr size_t numPoints = 2;
     static constexpr QPArray<Simplex::Edge, 2> points{{
-        {0.78867513459481288225, 0.21132486540518711775},
-        {0.21132486540518711775, 0.78867513459481288225}
+        {{0.78867513459481288225, 0.21132486540518711775}},
+        {{0.21132486540518711775, 0.78867513459481288225}}
     }};
 };
 
@@ -88,9 +88,9 @@ template<>
 struct QuadratureTable<Simplex::Edge, 4> {
     static constexpr size_t numPoints = 3;
     static constexpr QPArray<Simplex::Edge, 4> points{{
-        {0.11270166537925831148, 0.88729833462074168852},
-        {0.88729833462074168852, 0.11270166537925831148},
-        {0.5, 0.5}
+        {{0.11270166537925831148, 0.88729833462074168852}},
+        {{0.88729833462074168852, 0.11270166537925831148}},
+        {{0.5, 0.5}}
     }};
 };
 
@@ -100,7 +100,7 @@ struct QuadratureTable<Simplex::Edge, 5> : public QuadratureTable<Simplex::Edge,
 
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
-    return integrate_edge<_Deg>([&](Real p0, Real p1) { return f(std::make_tuple(p0, p1)); }, vol); }
+    return integrate_edge<_Deg>([&](Real p0, Real p1) { return f(EvalPt<1>{{p0, p1}}); }, vol); }
 
 // Triangle function (2D)
 // 1 point quadrature for const and linear, 3 for quadratic, 4 for cubic, and 6
@@ -190,14 +190,14 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 }
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.0) {
-    return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); }, vol);
+    return integrate_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(EvalPt<2>{{p0, p1, p2}}); }, vol);
 }
 
 template<>
 struct QuadratureTable<Simplex::Triangle, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Triangle, 0> points{{
-        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+        {{1 / 3.0, 1 / 3.0, 1 / 3.0}}
     }};
 };
 
@@ -211,9 +211,9 @@ struct QuadratureTable<Simplex::Triangle, 2> {
 
     static constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
     static constexpr QPArray<Simplex::Triangle, 2> points{{
-        {c0, c1, c1},
-        {c1, c0, c1},
-        {c1, c1, c0}
+        {{c0, c1, c1}},
+        {{c1, c0, c1}},
+        {{c1, c1, c0}}
     }};
 };
 
@@ -223,10 +223,10 @@ struct QuadratureTable<Simplex::Triangle, 3> {
     static constexpr double c0 = 3 / 5.0,
                             c1 = 1 / 5.0;
     static constexpr QPArray<Simplex::Triangle, 3> points{{
-        {c0, c1, c1},
-        {c1, c0, c1},
-        {c1, c1, c0},
-        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+        {{c0, c1, c1}},
+        {{c1, c0, c1}},
+        {{c1, c1, c0}},
+        {{1 / 3.0, 1 / 3.0, 1 / 3.0}}
     }};
 };
 
@@ -240,12 +240,12 @@ struct QuadratureTable<Simplex::Triangle, 4> {
                             c1_1 = 0.09157621350977074346;
 
     static constexpr QPArray<Simplex::Triangle, 4> points{{
-        {c0_0, c1_0, c1_0},
-        {c1_0, c0_0, c1_0},
-        {c1_0, c1_0, c0_0},
-        {c0_1, c1_1, c1_1},
-        {c1_1, c0_1, c1_1},
-        {c1_1, c1_1, c0_1}
+        {{c0_0, c1_0, c1_0}},
+        {{c1_0, c0_0, c1_0}},
+        {{c1_0, c1_0, c0_0}},
+        {{c0_1, c1_1, c1_1}},
+        {{c1_1, c0_1, c1_1}},
+        {{c1_1, c1_1, c0_1}}
     }};
 };
 
@@ -259,13 +259,13 @@ struct QuadratureTable<Simplex::Triangle, 5> {
                             c1_1 = 0.47014206410511508977;
 
     static constexpr QPArray<Simplex::Triangle, 5> points{{
-        {c0_0, c1_0, c1_0},
-        {c1_0, c0_0, c1_0},
-        {c1_0, c1_0, c0_0},
-        {c0_1, c1_1, c1_1},
-        {c1_1, c0_1, c1_1},
-        {c1_1, c1_1, c0_1},
-        {1 / 3.0, 1 / 3.0, 1 / 3.0}
+        {{c0_0, c1_0, c1_0}},
+        {{c1_0, c0_0, c1_0}},
+        {{c1_0, c1_0, c0_0}},
+        {{c0_1, c1_1, c1_1}},
+        {{c1_1, c0_1, c1_1}},
+        {{c1_1, c1_1, c0_1}},
+        {{1 / 3.0, 1 / 3.0, 1 / 3.0}}
     }};
 };
 
@@ -337,14 +337,14 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
 }
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.0) {
-    return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); }, vol);
+    return integrate_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(EvalPt<3>{{p0, p1, p2, p3}}); }, vol);
 }
 
 template<>
 struct QuadratureTable<Simplex::Tetrahedron, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
-        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}
+        {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}}
     }};
 };
 
@@ -358,10 +358,10 @@ struct QuadratureTable<Simplex::Tetrahedron, 2> {
     static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
                             c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
     static constexpr QPArray<Simplex::Tetrahedron, 2> points{{
-        {c0, c1, c1, c1},
-        {c1, c0, c1, c1},
-        {c1, c1, c0, c1},
-        {c1, c1, c1, c0}
+        {{c0, c1, c1, c1}},
+        {{c1, c0, c1, c1}},
+        {{c1, c1, c0, c1}},
+        {{c1, c1, c1, c0}}
     }};
 };
 
@@ -371,11 +371,11 @@ struct QuadratureTable<Simplex::Tetrahedron, 3> {
     static constexpr double c0 = 0.5,
                             c1 = 1 / 6.0;
     static constexpr QPArray<Simplex::Tetrahedron, 3> points{{
-        {c0, c1, c1, c1},
-        {c1, c0, c1, c1},
-        {c1, c1, c0, c1},
-        {c1, c1, c1, c0},
-        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}
+        {{c0, c1, c1, c1}},
+        {{c1, c0, c1, c1}},
+        {{c1, c1, c0, c1}},
+        {{c1, c1, c1, c0}},
+        {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}}
     }};
 };
 
@@ -389,17 +389,17 @@ struct QuadratureTable<Simplex::Tetrahedron, 4> {
                             c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
 
     static constexpr QPArray<Simplex::Tetrahedron, 4> points{{
-        {1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0},
-        {c0_0, c1_0, c1_0, c1_0},
-        {c1_0, c0_0, c1_0, c1_0},
-        {c1_0, c1_0, c0_0, c1_0},
-        {c1_0, c1_0, c1_0, c0_0},
-        {c0_1, c0_1, c1_1, c1_1},
-        {c0_1, c1_1, c0_1, c1_1},
-        {c0_1, c1_1, c1_1, c0_1},
-        {c1_1, c0_1, c0_1, c1_1},
-        {c1_1, c0_1, c1_1, c0_1},
-        {c1_1, c1_1, c0_1, c0_1}
+        {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}},
+        {{c0_0, c1_0, c1_0, c1_0}},
+        {{c1_0, c0_0, c1_0, c1_0}},
+        {{c1_0, c1_0, c0_0, c1_0}},
+        {{c1_0, c1_0, c1_0, c0_0}},
+        {{c0_1, c0_1, c1_1, c1_1}},
+        {{c0_1, c1_1, c0_1, c1_1}},
+        {{c0_1, c1_1, c1_1, c0_1}},
+        {{c1_1, c0_1, c0_1, c1_1}},
+        {{c1_1, c0_1, c1_1, c0_1}},
+        {{c1_1, c1_1, c0_1, c0_1}}
     }};
 };
 

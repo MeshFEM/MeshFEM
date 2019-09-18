@@ -50,7 +50,7 @@
 #include <MeshFEM/function_traits.hh>
 #include <MeshFEM/TemplateHacks.hh>
 #include <MeshFEM/Future.hh>
-#include <MeshFEM/NTuple.hh>
+// #include <MeshFEM/NTuple.hh>
 #include <vector>
 #include <array>
 #include <functional>
@@ -68,9 +68,9 @@ template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy = DefaultNodalStoragePolicy>
 class Interpolant;
 
-// Function evaluation point type (barycentric coordinate tuple)
+// Function evaluation point type (barycentric coordinate array)
 template<size_t _K>
-using EvalPt = typename NTuple<Real, Simplex::numVertices(_K)>::type;
+using EvalPt = std::array<Real, Simplex::numVertices(_K)>; // typename NTuple<Real, Simplex::numVertices(_K)>::type;
 // Evaluation point as an Eigen vector type
 template<size_t _K>
 using EigenEvalPt = VectorND<Simplex::numVertices(_K)>;
@@ -282,7 +282,7 @@ namespace detail {
     // Interpolants can be built by sampling functions that accept barycentric
     // coordinates as:
     // 1) K + 1 distinct floating point arguments
-    // 2) An EvalPt<K> (a tuple of K + 1 Real values)
+    // 2) An EvalPt<K> (an array of K + 1 Real values)
     // 3) An EigenEvalPt<K> (an Eigen vector type holding K + 1 Real values)
     template<class F, size_t... Idxs>
     constexpr bool args_all_floats(Future::index_sequence<Idxs...>) {
@@ -325,7 +325,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEvalPt<F, 1>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
     _interpolant_edge(const F &f) {
-        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(std::make_tuple(p0, p1)); });
+        return _interpolant_edge<_Deg>([&](Real p0, Real p1) { return f(EvalPt<1>{{p0, p1}}); });
     }
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEigenEvalPt<F, 1>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Edge, _Deg, DefaultNodalStoragePolicy>
@@ -365,7 +365,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEvalPt<F, 2>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
     _interpolant_tri(const F &f) {
-        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(std::make_tuple(p0, p1, p2)); });
+        return _interpolant_tri<_Deg>([&](Real p0, Real p1, Real p2) { return f(EvalPt<2>{{p0, p1, p2}}); });
     }
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEigenEvalPt<F, 2>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Triangle, _Deg, DefaultNodalStoragePolicy>
@@ -394,7 +394,7 @@ namespace detail {
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEvalPt<F, 3>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
     _interpolant_tet(const F &f) {
-        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(std::make_tuple(p0, p1, p2, p3)); });
+        return _interpolant_tet<_Deg>([&](Real p0, Real p1, Real p2, Real p3) { return f(EvalPt<3>{{p0, p1, p2, p3}}); });
     }
     template<size_t _Deg, typename F, typename std::enable_if<AcceptsEigenEvalPt<F, 3>::value, int>::type = 0>
     Interpolant<typename function_traits<F>::result_type, Simplex::Tetrahedron, _Deg, DefaultNodalStoragePolicy>
@@ -482,9 +482,9 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Evaluation (function call operator)
     ////////////////////////////////////////////////////////////////////////////
-    // Pass in a tuple of barycentric coordinates...
+    // Pass in an array of barycentric coordinates...
     _T operator()(const EvalPt<_K> &baryCoords) const {
-        return Future::apply(*this, baryCoords); // call operator() on expanded tuple
+        return Future::apply(*this, baryCoords); // call operator() on expanded array
     }
     // ... or an argument list of them.
     // This list must be either of length 0 or 2+, so we use enable_if to ensure
