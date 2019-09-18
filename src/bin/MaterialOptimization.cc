@@ -5,8 +5,8 @@
 #include <stdexcept>
 
 #include <MeshFEM/Types.hh>
-#include <CSGFEM/Flattening.hh>
-#include <CSGFEM/ElasticityTensor.hh>
+#include <MeshFEM/Flattening.hh>
+#include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/MaterialOptimization.hh>
 
 using namespace std;

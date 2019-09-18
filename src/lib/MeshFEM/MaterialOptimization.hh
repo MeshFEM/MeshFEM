@@ -84,9 +84,9 @@ public:
         std::vector<CondPtr<N> > filteredConditions;
         std::string nonbdryMsg("Condition applied to non-boundary node ");
         for (const auto &c : conds) {
-            env.setVectorValue("region_size_", c->region.dimensions());
-            env.setVectorValue("region_min_",  c->region.minCorner);
-            env.setVectorValue("region_max_",  c->region.maxCorner);
+            env.setVectorValue("region_size_", c->region->dimensions());
+            env.setVectorValue("region_min_",  c->region->minCorner);
+            env.setVectorValue("region_max_",  c->region->maxCorner);
             if (auto tc = dynamic_cast<const TargetCondition<N> *>(c.get())) {
                 for (size_t i = 0; i < m_mesh.numBoundaryNodes(); ++i) {
                     auto bn = m_mesh.boundaryNode(i);
