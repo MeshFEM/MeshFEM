@@ -4,6 +4,7 @@ import mesh
 
 from mesh_building import *
 from energy_building import *
+import tri_mesh_viewer
 
 # may not have elastic_structure build if Boost is not presented
 try:
