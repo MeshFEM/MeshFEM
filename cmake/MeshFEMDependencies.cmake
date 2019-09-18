@@ -115,7 +115,7 @@ find_package(Umfpack REQUIRED) # provides umfpack::umfpack
 # Optional libraries
 ################################################################################
 
-find_package(Ceres)
+find_package(Ceres QUIET)
 if(CERES_FOUND)
     add_library(ceres_lib INTERFACE)
     target_include_directories(ceres_lib SYSTEM INTERFACE  ${CERES_INCLUDE_DIRS})
