@@ -1,0 +1,9 @@
+import sparse_matrices
+import energy
+import mesh
+
+# may not have elastic_structure build if Boost is not presented
+try:
+    import elastic_structure
+except:
+    pass

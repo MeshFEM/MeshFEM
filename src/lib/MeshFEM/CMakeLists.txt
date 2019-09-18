@@ -14,6 +14,7 @@ add_library(MeshFEM
         EdgeFields.cc
         EdgeFields.hh
         ElasticityTensor.hh
+        ElasticStructure.hh
         EmbeddedElement.hh
         ExpressionVector.hh
         FEMMesh.hh
@@ -44,6 +45,7 @@ add_library(MeshFEM
         Materials.cc
         Materials.hh
         MeshDataTraits.hh
+        Meshing.hh
         MeshIO.cc
         MeshIO.hh
         MSHFieldParser.cc
@@ -116,7 +118,13 @@ add_library(MeshFEM
         Utilities/IteratorMap.hh
         Utilities/NDArray.hh
         Utilities/RandomAccessIndexSet.hh
+        Utilities/DifferentialOperations.hh
+        Utilities/TemplateName.hh
+        Utilities/Tensor.hh
         wrappers/meshfem_triangle.h
+
+        EnergyDensities/LinearElasticEnergy.hh
+        EnergyDensities/NeoHookeanEnergy.hh
 )
 
 # Include directories

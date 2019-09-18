@@ -93,6 +93,7 @@ include(MeshFEMDependencies)
 ################################################################################
 
 add_subdirectory(src/lib)
+add_subdirectory(python_binding)    # MESH_MODULES is defined
 
 if(NOT MESHFEM_LIB_ONLY)
     add_subdirectory(src/bin)
