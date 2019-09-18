@@ -13,6 +13,15 @@ if(POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
 endif()
 
+# Check if MeshFEM is being used directly or via add_subdirectory
+set(MeshFEM_MASTER_PROJECT OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+  set(MeshFEM_MASTER_PROJECT ON)
+endif()
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 ################################################################################
 
@@ -71,7 +80,7 @@ else()
 endif()
 
 # By default, compile binaries only for toplevel projects
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+if(MeshFEM_MASTER_PROJECT)
     set(MESHFEM_LIB_ONLY_DEFAULT OFF)
 else()
     set(MESHFEM_LIB_ONLY_DEFAULT ON)
@@ -93,18 +102,30 @@ include(MeshFEMDependencies)
 ################################################################################
 
 add_subdirectory(src/lib)
-add_subdirectory(python_binding)    # MESH_MODULES is defined
 
 if(NOT MESHFEM_LIB_ONLY)
     add_subdirectory(src/bin)
 endif()
+
+
+# Download pybind dependency when MeshFEM is master project
+if(MeshFEM_MASTER_PROJECT) 
+    include(MeshFEMDownloadExternal)
+    meshfem_download_project(pybind11
+        GIT_REPOSITORY https://github.com/pybind/pybind11.git
+        GIT_TAG 97784dad3e518ccb415d5db57ff9b933495d9024
+    )
+    add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
+endif()
+
+add_subdirectory(python_binding)
 
 ################################################################################
 # Unit tests
 ################################################################################
 
 # Compile tests only if this is a top-level project
-if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+if(MeshFEM_MASTER_PROJECT)
     # Unit tests
     include(CTest)
     enable_testing()

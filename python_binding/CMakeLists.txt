@@ -1,4 +1,6 @@
-# assume parent project already includes and builds pybind11 library
+if(NOT TARGET pybind11)
+    message(FATAL_ERROR "pybind11 must be included in the parent project")
+endif()
 
 pybind11_add_module(mesh mesh.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
@@ -22,7 +24,7 @@ if(Boost_FOUND)
 endif()
 
 # If it is used as submodule, deploy python scripts and libs
-if(NOT CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+if(NOT MeshFEM_MASTER_PROJECT)
     include(PyModuleHelper)
     set(pyTemplatePath "${PROJECT_SOURCE_DIR}/python/py_module_init.template")
     if(EXISTS ${pyTemplatePath})
@@ -33,5 +35,4 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     else()
         message("Cannot find file [py_module_init.template], the module will not be deployed in parent project.")
     endif()
-    
 endif()
