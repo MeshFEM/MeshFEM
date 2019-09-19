@@ -229,7 +229,7 @@ struct Indices<_Dimension, Eigen::ColMajor>
         return std::make_tuple(row, col);
     }
 
-    static bool arePastEnd(size_t row, size_t col) { return col >= _Dimension; }
+    static bool arePastEnd(size_t /* row */, size_t col) { return col >= _Dimension; }
 };
 
 template<size_t _Dimension>
@@ -255,7 +255,7 @@ struct Indices<_Dimension, Eigen::RowMajor>
         return std::make_tuple(row, col);
     }
 
-    static bool arePastEnd(size_t row, size_t col) { return row >= _Dimension; }
+    static bool arePastEnd(size_t row, size_t /* col */) { return row >= _Dimension; }
 };
 
 template<size_t _Dimension, size_t _StoragePolicy = Eigen::ColMajor>

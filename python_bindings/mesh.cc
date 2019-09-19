@@ -24,7 +24,7 @@ template<size_t _Dimension, size_t _Degree>
 struct ParameterSpecificMeshBinding
 {
     using Mesh = FEMMesh<_Dimension, _Degree, Eigen::Matrix<double, _Dimension, 1>>;
-    static void bind(py::module& module, py::class_<Mesh>& mesh_bindings) {}
+    // static void bind(py::module& module, py::class_<Mesh>& mesh_bindings) {}
 };
 
 template<size_t _Degree>
@@ -65,7 +65,7 @@ struct ParameterSpecificMeshBinding<3, _Degree>
     static constexpr size_t Dimension = 3;
     using Mesh = FEMMesh<Dimension, _Degree, Eigen::Matrix<double, Dimension, 1>>;
     using Vector = typename Mesh::EmbeddingSpace;
-    static void bind(py::module& module, py::class_<Mesh>& mesh_bindings)
+    static void bind(py::module& /* module */, py::class_<Mesh>& mesh_bindings)
     {
         mesh_bindings.def("rotate", [&](Mesh& mesh, double angle, const Vector& axis) {
             Eigen::AngleAxis<double> rotation(angle, axis);
