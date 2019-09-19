@@ -7,16 +7,6 @@
 #include "../SymmetricMatrix.hh"
 #include "../Utilities/Tensor.hh"
 
-// template<typename Energy>
-// concept bool EnergyType = 
-//     require(Energy e) {
-//         {energy()} -> Energy::Real;
-//         {denergy()} -> Energy::Matrix;
-//         {denergy(Energy::Matrix)} -> Energy::Real;
-//         {d2energy(Energy::Matrix, Energy::Matrix)} -> Energy::Real;
-//         {delta_denergy(Energy::Matrix)} -> Energy::Matrix;
-//     };
-
 template <typename _Real, size_t _Dimension>
 struct LinearElasticEnergy {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;

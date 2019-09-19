@@ -19,20 +19,45 @@
 #endif
 static constexpr Real MIN_MASS = 1e-9;
 
-template<typename _EStructure>
-class InfluencedVariableBase {
-public:
-    using EStructure = _EStructure;
-    using Mesh = typename EStructure::Mesh;
-    static constexpr size_t Dimension = EStructure::Dimension;
-    using Matrix = typename EStructure::Matrix;
-    using Vector = typename EStructure::Vector;
 
-    InfluencedVariableBase(size_t local_index, size_t element_index, const EStructure& elastic_structure)
+// template<typename Energy>
+// concept bool EnergyType = 
+//     require(Energy e) {
+//         {energy()} -> Energy::Real;
+//         {denergy()} -> Energy::Matrix;
+//         {denergy(Energy::Matrix)} -> Energy::Real;
+//         {d2energy(Energy::Matrix, Energy::Matrix)} -> Energy::Real;
+//         {delta_denergy(Energy::Matrix)} -> Energy::Matrix;
+//     };
+
+// template<typename InfluencedVariable>
+// concept bool InfluencedVariableType = 
+//     require(InfluencedVariable IV) {
+//         // interfaces for InfluencedVariableIterator
+//         {setNext()} -> void;
+//         {getLocalIndex()} -> size_t;
+//         // interfaces for structure impl (e.g. gradient computation)
+//         {getIndex()} -> size_t;
+//         {setDeltaGrad(Eigen::Matrix, const EvalPt<Dimension>&)} -> void;
+//         {unsetDeltaGrad(Eigen::Matrix)} -> void;
+//     };
+
+// For more interface specification, please refer to document (elastic_structure.pdf)
+
+template<typename _EStructure>
+class EInfluencedVariable {
+public:
+    using Structure = _EStructure;
+    using Mesh = typename Structure::Mesh;
+    static constexpr size_t Dimension = Structure::Dimension;
+    using Matrix = typename Structure::Matrix;
+    using Vector = typename Structure::Vector;
+
+    EInfluencedVariable(size_t local_index, size_t element_index, const Structure& elastic_structure)
         : m_local_index(local_index), m_element_index(element_index), m_elastic_structure(elastic_structure)
     {}
 
-    InfluencedVariableBase(const InfluencedVariableBase& other)
+    EInfluencedVariable(const EInfluencedVariable& other)
         : m_local_index(other.m_local_index), m_element_index(other.m_element_index), m_elastic_structure(other.m_elastic_structure)
     {}
 
@@ -65,7 +90,7 @@ public:
      */
     void unsetDeltaGrad(Matrix& delta_grad) const { delta_grad.row(getCurrentNodeComponent()) = Vector::Zero(); }
 
-protected:
+private:
     auto element() const { return m_elastic_structure.mesh().element(m_element_index); }
     size_t getCurrentNodeElementLocalIndex() const { return (m_local_index) / Dimension; }
     size_t getCurrentNodeComponent() const { return (m_local_index) % Dimension; }
@@ -73,29 +98,29 @@ protected:
     size_t m_local_index;
     size_t m_node_element_local_index;
     size_t m_element_index;
-    const EStructure& m_elastic_structure;
+    const Structure& m_elastic_structure;
 };
 
 template<typename IV>
-class InfluencedVariableIteratorBase
-    : public boost::iterator_facade<InfluencedVariableIteratorBase<IV>,
+class InfluencedVariableIterator
+    : public boost::iterator_facade<InfluencedVariableIterator<IV>,
                                     const IV, boost::single_pass_traversal_tag,
                                     const IV&, size_t>
 {
 public:
-    InfluencedVariableIteratorBase(size_t local_index, size_t element_index,
-                                const typename IV::EStructure& m_elastic_structure)
+    InfluencedVariableIterator(size_t local_index, size_t element_index,
+                                const typename IV::Structure& m_elastic_structure)
         : m_variable(local_index, element_index, m_elastic_structure)
     {}
 
-    InfluencedVariableIteratorBase(const InfluencedVariableIteratorBase&) = default;
-    InfluencedVariableIteratorBase& operator=(const InfluencedVariableIteratorBase&) = default;
+    InfluencedVariableIterator(const InfluencedVariableIterator&) = default;
+    InfluencedVariableIterator& operator=(const InfluencedVariableIterator&) = default;
 
 private:
     friend class boost::iterator_core_access;
 
     void increment() { m_variable.setNext(); }
-    bool equal(const InfluencedVariableIteratorBase& other) const { return other.m_variable.getLocalIndex() == m_variable.getLocalIndex(); }
+    bool equal(const InfluencedVariableIterator& other) const { return other.m_variable.getLocalIndex() == m_variable.getLocalIndex(); }
     const IV& dereference() const { return m_variable; }
 
     IV m_variable;
@@ -728,8 +753,8 @@ struct ElasticStructureTraits<ElasticStructure<_Real, _Energy, _Dimension, _Degr
     static constexpr size_t Dimension = _Dimension;
     static constexpr size_t Degree = _Degree;
     static constexpr size_t NUM_INFLUENCED_VARS_PER_ELEMENTS = Dimension * Simplex::numNodes(Dimension, Degree);
-    using InfluencedVariable = InfluencedVariableBase<ElasticStructure<_Real, _Energy, _Dimension, _Degree>>;
-    using InfluencedVariableIterator = InfluencedVariableIteratorBase<InfluencedVariable>;
+    using InfluencedVariable = EInfluencedVariable<ElasticStructure<_Real, _Energy, _Dimension, _Degree>>;
+    using InfluencedVariableIterator = InfluencedVariableIterator<InfluencedVariable>;
 };
 
 #endif
