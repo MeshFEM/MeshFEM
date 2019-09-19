@@ -28,11 +28,11 @@ public:
     using Vector = typename EStructure::Vector;
 
     InfluencedVariableBase(size_t local_index, size_t element_index, const EStructure& elastic_structure)
-        : m_local_index(local_index), m_elastic_structure(elastic_structure), m_element_index(element_index)
+        : m_local_index(local_index), m_element_index(element_index), m_elastic_structure(elastic_structure)
     {}
 
     InfluencedVariableBase(const InfluencedVariableBase& other)
-        : m_elastic_structure(other.m_elastic_structure), m_element_index(other.m_element_index), m_local_index(other.m_local_index)
+        : m_local_index(other.m_local_index), m_element_index(other.m_element_index), m_elastic_structure(other.m_elastic_structure)
     {}
 
     /**
@@ -145,7 +145,7 @@ public:
     void initialize() {
         getThis()->setIdentityDeformationGradient();
         m_elementEnergies.clear();
-        for (int eIdx = 0; eIdx < m_mesh.numElements(); eIdx++)
+        for (size_t eIdx = 0; eIdx < m_mesh.numElements(); eIdx++)
             m_elementEnergies.push_back(Energy(m_energy));
     }
 
@@ -171,7 +171,7 @@ public:
 
     VectorX getVars() const { return fluctuationDisplacements(); }
     void setVars(const VectorX& vars) {
-        if (vars.rows() != getThis()->numVars()) { throw std::invalid_argument("Invalid variable size"); }
+        if (size_t(vars.rows()) != getThis()->numVars()) { throw std::invalid_argument("Invalid variable size"); }
         m_fluctuation_displacements = vars;
     }
     size_t numVars() const { return numNodeFluctuationDisplacementVars(); }
@@ -297,7 +297,6 @@ public:
      */
     TripletMatrix<Triplet<Real>> deformationGradientMapTriplets() const {
         const auto& quadPoints = QuadratureRule::points;
-        size_t numqps = quadPoints.size();
 
         TripletMatrix<Triplet<Real>> triplets(getThis()->defGradVecSize(), getThis()->numVars());
         triplets.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::NONE;
@@ -308,9 +307,9 @@ public:
             for (const auto& x : quadPoints) {
                 for (const auto& node : element.nodes()) {
                     Vector gradPhi = element->gradPhi(node.localIndex())(x);
-                    for (SuiteSparse_long defGradCol = 0; defGradCol < Dimension; defGradCol++) {
+                    for (size_t defGradCol = 0; defGradCol < Dimension; defGradCol++) {
                         Real entry = gradPhi(defGradCol);
-                        for (SuiteSparse_long defGradRow = 0; defGradRow < Dimension; defGradRow++) {
+                        for (size_t defGradRow = 0; defGradRow < Dimension; defGradRow++) {
                             size_t defGradIdx = defGradsQPIdx(eIdx, qpIdx, defGradRow, defGradCol);
                             size_t nodeFlucIdx = getThis()->fluctuationDisplacementVarIdx(node.index(), defGradRow);
                             triplets.addNZ(defGradIdx, nodeFlucIdx, entry);
@@ -356,9 +355,9 @@ public:
         SuiteSparse_long elIdx = 0;
         for (const auto& element : m_mesh.elements()) {
             Real curMassPerQP = std::max(MIN_MASS, (element->volume() * density) / (Real)numqps);
-            for (SuiteSparse_long qpIdx = 0; qpIdx < numqps; qpIdx++) {
-                for (SuiteSparse_long row = 0; row < Dimension; row++) {
-                    for (SuiteSparse_long col = 0; col < Dimension; col++) {
+            for (size_t qpIdx = 0; qpIdx < numqps; qpIdx++) {
+                for (size_t row = 0; row < Dimension; row++) {
+                    for (size_t col = 0; col < Dimension; col++) {
                         SuiteSparse_long curIdx = defGradsQPIdx(elIdx, qpIdx, row, col);
                         masses(curIdx) += curMassPerQP;
                     }
@@ -389,7 +388,7 @@ public:
             Real curMassPerNode = (element->volume() * density) / (Real)element.nodes().size();
             curMassPerNode = std::max(MIN_MASS, curMassPerNode);
             for (const auto& node : element.nodes()) {
-                for (SuiteSparse_long d = 0; d < Dimension; d++) {
+                for (size_t d = 0; d < Dimension; d++) {
                     SuiteSparse_long curIdx = getThis()->fluctuationDisplacementVarIdx(node.index(), d);
                     masses(curIdx) += curMassPerNode;
                 }
@@ -725,9 +724,9 @@ struct ElasticStructureTraits<ElasticStructure<_Real, _Energy, _Dimension, _Degr
 {
     using Energy = _Energy;
     using Real = _Real;
-	static constexpr size_t Dimension = _Dimension;
-	static constexpr size_t Degree = _Degree;
-	static constexpr size_t NUM_INFLUENCED_VARS_PER_ELEMENTS = Dimension * Simplex::numNodes(Dimension, Degree);
+    static constexpr size_t Dimension = _Dimension;
+    static constexpr size_t Degree = _Degree;
+    static constexpr size_t NUM_INFLUENCED_VARS_PER_ELEMENTS = Dimension * Simplex::numNodes(Dimension, Degree);
     using InfluencedVariable = InfluencedVariableBase<ElasticStructure<_Real, _Energy, _Dimension, _Degree>>;
     using InfluencedVariableIterator = InfluencedVariableIteratorBase<InfluencedVariable>;
 };

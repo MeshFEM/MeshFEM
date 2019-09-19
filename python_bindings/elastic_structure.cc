@@ -19,11 +19,10 @@ getElasticStructureClassName()
 
 template<template<typename, size_t> class _Energy, size_t _Dimension, size_t _Degree>
 void
-bindElasticStructure(py::module& module, py::module& detail_module)
+bindElasticStructure(py::module& /* module */, py::module& detail_module)
 {
     using Energy = _Energy<double, _Dimension>;
     using EStructure = ElasticStructure<double, Energy, _Dimension, _Degree>;
-    using VectorX = typename EStructure::VectorX;
 
     // We are using shared pointer as holder instead of unique pointers since some function takes
     // shared pointer as arguments

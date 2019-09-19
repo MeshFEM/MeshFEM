@@ -217,7 +217,7 @@ protected:
     }
 
     Matrix m_deformation_gradient;
-    Real m_shear_modulus, m_lame_first_parameter;
+    Real m_lame_first_parameter, m_shear_modulus;
     Real m_finite_continuation_start;
     Real m_deformation_gradient_determinant;
 };
