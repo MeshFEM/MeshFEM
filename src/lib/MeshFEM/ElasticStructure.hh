@@ -17,6 +17,7 @@
 #ifndef PARALLEL_ASSEMBLY
     #define PARALLEL_ASSEMBLY true
 #endif
+static constexpr Real MIN_MASS = 1e-9;
 
 template<typename _EStructure>
 class InfluencedVariableBase {
@@ -40,7 +41,7 @@ public:
      *  Watchout, the local index is not necessarily increasing with each call to setNext().
      */
     size_t getLocalIndex() const { return m_local_index; }
-    virtual size_t getIndex() const {
+    size_t getIndex() const {
         return m_elastic_structure.fluctuationDisplacementVarIdx(
             element().node(getCurrentNodeElementLocalIndex()).index(), getCurrentNodeComponent());
     }
@@ -55,19 +56,19 @@ public:
      * the energy density with respect to the variable. The input matrix is supposed to be
      * the null matrix.
      */
-    virtual void setDeltaGrad(Matrix& delta_grad, const EvalPt<Dimension>& x) const {
+    void setDeltaGrad(Matrix& delta_grad, const EvalPt<Dimension>& x) const {
         delta_grad.row(getCurrentNodeComponent()) = element()->gradPhi(getCurrentNodeElementLocalIndex())(x);
     }
 
     /**
      *  Set the entries of delta_grad changed by setDeltaGrad to 0..
      */
-    virtual void unsetDeltaGrad(Matrix& delta_grad) const { delta_grad.row(getCurrentNodeComponent()) = Vector::Zero(); }
+    void unsetDeltaGrad(Matrix& delta_grad) const { delta_grad.row(getCurrentNodeComponent()) = Vector::Zero(); }
 
 protected:
     auto element() const { return m_elastic_structure.mesh().element(m_element_index); }
-    virtual size_t getCurrentNodeElementLocalIndex() const { return (m_local_index) / Dimension; }
-    virtual size_t getCurrentNodeComponent() const { return (m_local_index) % Dimension; }
+    size_t getCurrentNodeElementLocalIndex() const { return (m_local_index) / Dimension; }
+    size_t getCurrentNodeComponent() const { return (m_local_index) % Dimension; }
 
     size_t m_local_index;
     size_t m_node_element_local_index;
@@ -109,7 +110,6 @@ public:
     using Real = typename ElasticStructureTraits<Derived>::Real;
 private:
     static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
-    static constexpr Real MIN_MASS = 1e-9;
 public:
     using EStructure = Derived;
     using Energy = typename ElasticStructureTraits<Derived>::Energy;
@@ -650,6 +650,9 @@ public:
     const Mesh& mesh() const { return m_mesh; }
     Energy getEnergyDensity() const { return m_energy; }
 
+    static constexpr size_t numNodesPerElements() { return Simplex::numNodes(Dimension, Degree); }
+    static constexpr size_t numNodesPerFaces() { return Simplex::numNodes(Dimension - 1, Degree); }
+
 protected:
 
     boost::iterator_range<InfluencedVariableIterator> getInfluencedVariableRange(size_t element_index) const
@@ -686,8 +689,6 @@ protected:
     VectorX& fluctuationDisplacements() { return m_fluctuation_displacements; }
 
     static constexpr size_t numInfluencedVarsPerElements() { return NUM_INFLUENCED_VARS_PER_ELEMENTS; }
-    static constexpr size_t numNodesPerElements() { return Simplex::numNodes(Dimension, Degree); }
-    static constexpr size_t numNodesPerFaces() { return Simplex::numNodes(Dimension - 1, Degree); }
 
     Mesh m_mesh;
     // This is mutable because the change of the deformation gradient stored

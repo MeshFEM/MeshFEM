@@ -119,7 +119,7 @@ public:
      *  Return the right cauchy-green deformation tensor's third invariant.
      */
     Real getI3() const { return static_cast<const Derived*>(this)->getI3(m_deformation_gradient); }
-    virtual Real getI3(const Matrix&) const = 0;
+    Real getI3(const Matrix&) const { return static_cast<const Derived*>(this)->getI3(m_deformation_gradient); };
 
     /**
      *  Return the right cauchy-green deformation tensor's first invariant.
@@ -247,7 +247,7 @@ public:
     /**
      *  Return the right cauchy-green deformation tensor's third invariant.
      */
-    virtual Real getI3(const Matrix& F) const override { return getF2DeterminantSquared(F) * getC33(F); }
+    Real getI3(const Matrix& F) const { return getF2DeterminantSquared(F) * getC33(F); }
 
     /**
      *  Return the right cauchy-green deformation tensor's third invariant differantiated with
@@ -374,7 +374,7 @@ public:
 
     using Base::Base;
 
-    virtual Real getI3(const Matrix& F) const override { return getDeterminantSquared(F); }
+    Real getI3(const Matrix& F) const { return getDeterminantSquared(F); }
 
     Matrix getDI3() const { return this->getDifferentiatedDeformationGradientDeterminantSquared(); }
 

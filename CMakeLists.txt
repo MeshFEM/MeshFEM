@@ -107,8 +107,7 @@ if(NOT MESHFEM_LIB_ONLY)
     add_subdirectory(src/bin)
 endif()
 
-
-# Download pybind dependency when MeshFEM is master project
+# Download pybind dependency when pybind11 is missing
 if(NOT TARGET pybind11)
     include(MeshFEMDownloadExternal)
     meshfem_download_project(pybind11
