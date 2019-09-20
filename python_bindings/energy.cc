@@ -8,7 +8,7 @@ namespace py = pybind11;
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
-#include <MeshFEM/Utilities/TemplateName.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
 
 template<size_t _Dimension>
 std::string

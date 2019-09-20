@@ -93,6 +93,7 @@ public:
     static constexpr size_t K   = _K;
     static constexpr size_t Deg = _Deg;
     using EmbeddingSpace = _EmbeddingSpace;
+    using Real = typename EmbeddingSpace::Scalar;
 
     // Unpack entity data types.
     using FEMData = _FEMData<_K, _Deg, EmbeddingSpace>;

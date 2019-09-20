@@ -7,35 +7,29 @@ namespace py = pybind11;
 #include <MeshFEM/ElasticStructure.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
-#include <MeshFEM/Utilities/TemplateName.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
 
-
-template<typename _Energy, size_t _Dimension, size_t _Degree>
-std::string
-getElasticStructureClassName()
-{
-    return getElasticStructureTypeName<_Energy, _Dimension, _Degree>() + "ElasticStructure";
-}
-
-template<template<typename, size_t> class _Energy, size_t _Dimension, size_t _Degree>
+template<template<typename, size_t> class _Energy_T, size_t _K, size_t _Degree>
 void
 bindElasticStructure(py::module& /* module */, py::module& detail_module)
 {
-    using Energy = _Energy<double, _Dimension>;
-    using EStructure = ElasticStructure<double, Energy, _Dimension, _Degree>;
+    static constexpr size_t Dimension = _K; // Volumetric elasticity means embedding space equals the simplex dimension
+    using Energy = _Energy_T<double, Dimension>;
+    using EStructure = ElasticStructure<double, Energy, Dimension, _Degree>;
+    using EmbeddingSpace = Eigen::Matrix<Real, Dimension, 1>;
 
     // We are using shared pointer as holder instead of unique pointers since some function takes
     // shared pointer as arguments
     py::class_<EStructure, std::shared_ptr<EStructure>>(
-      detail_module, getElasticStructureClassName<Energy, _Dimension, _Degree>().c_str())
-      .def_property_readonly_static("dimension", [](py::object /* self */) { return _Dimension; })
+      detail_module, getElasticStructureClassName<Energy, Dimension, _Degree, EmbeddingSpace>().c_str())
+      .def_property_readonly_static("dimension", [](py::object /* self */) { return Dimension; })
       .def_property_readonly_static("degree", [](py::object /* self */) { return _Degree; })
       .def_property_readonly_static("energy_name",
                                     [](py::object /* self */) { return getEnergyName<Energy>(); })
       .def_property_readonly_static(
         "class_name",
         [](py::object /* self */) {
-            return getElasticStructureClassName<Energy, _Dimension, _Degree>();
+            return getElasticStructureClassName<Energy, Dimension, _Degree, EmbeddingSpace>();
         })
       .def(py::init<const Energy&, const typename EStructure::Mesh&>(),
            py::arg("energy"),
@@ -72,16 +66,16 @@ bindElasticStructure(py::module& /* module */, py::module& detail_module)
       .def("hessianSparsityPattern", &EStructure::hessianSparsityPattern)
       .def("vertices",
            [&](const EStructure& m) {
-               Eigen::Matrix<double, Eigen::Dynamic, _Dimension> V(m.numVertices(), _Dimension);
+               Eigen::Matrix<double, Eigen::Dynamic, Dimension> V(m.numVertices(), Dimension);
                for (const auto& v : m.mesh().vertices())
                    V.row(v.index()) = m.getNodePosition(v.node().index());
                return V;
            })
       .def("elements",
            [&](const EStructure& elastic_structure) {
-               std::vector<std::array<size_t, _Dimension + 1>> elements;
+               std::vector<std::array<size_t, Dimension + 1>> elements;
                elements.reserve(elastic_structure.numElements());
-               std::array<size_t, _Dimension + 1> current_element;
+               std::array<size_t, Dimension + 1> current_element;
                for (const auto& e : elastic_structure.mesh().elements())
                {
                    for (const auto& v : e.vertices())
@@ -94,9 +88,9 @@ bindElasticStructure(py::module& /* module */, py::module& detail_module)
            })
       .def("boundary_elements",
            [&](const EStructure& elastic_structure) {
-               std::vector<std::array<size_t, _Dimension>> elements;
+               std::vector<std::array<size_t, Dimension>> elements;
                elements.reserve(elastic_structure.mesh().numBoundaryElements());
-               std::array<size_t, _Dimension> current_element;
+               std::array<size_t, Dimension> current_element;
                for (const auto& e : elastic_structure.mesh().boundaryElements())
                {
                    for (const auto& v : e.vertices())

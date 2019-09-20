@@ -119,7 +119,7 @@ add_library(MeshFEM
         Utilities/NDArray.hh
         Utilities/RandomAccessIndexSet.hh
         Utilities/DifferentialOperations.hh
-        Utilities/TemplateName.hh
+        Utilities/NameMangling.hh
         Utilities/Tensor.hh
         wrappers/meshfem_triangle.h
 

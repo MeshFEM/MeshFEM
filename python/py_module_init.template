@@ -1,8 +1,8 @@
 import sparse_matrices
 import energy
 import mesh
+from mesh import Mesh, PeriodicCondition
 
-from mesh_building import *
 from energy_building import *
 import tri_mesh_viewer
 

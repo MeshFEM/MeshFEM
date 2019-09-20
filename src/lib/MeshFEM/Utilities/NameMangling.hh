@@ -1,0 +1,60 @@
+////////////////////////////////////////////////////////////////////////////////
+// NameMangling.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//  Provides mangled names needed, e.g., for generating python bindings for
+//  template instantiations
+*/
+////////////////////////////////////////////////////////////////////////////////
+#ifndef NAME_MANGLING_HH
+#define NAME_MANGLING_HH
+
+#include <MeshFEM/Utilities/EnergyTraits.hh>
+
+template<typename _Real>
+std::string floatingPointTypeSuffix() {
+    if (std::is_same<_Real,      double>::value) return "";
+    if (std::is_same<_Real, long double>::value) return "_long_double";
+    if (std::is_same<_Real,       float>::value) return "_float";
+    throw std::runtime_error("Unrecognized floating point type");
+}
+
+template<size_t _K, size_t _Degree, class _EmbeddingSpace>
+std::string getFEMName() {
+    std::array<std::string, 2>  degreeNames{"Linear", "Quadratic"};
+    std::array<std::string, 2> simplexNames{"Tri", "Tet"};
+
+    std::string dimName = std::to_string(_EmbeddingSpace::RowsAtCompileTime);
+
+    return degreeNames.at(_Degree - 1) + dimName + "D" + simplexNames.at(_K - 2);
+}
+
+template<class _Mesh>
+std::string getMeshName() {
+    using Real = typename _Mesh::Real;
+    return getFEMName<_Mesh::K, _Mesh::Deg, typename _Mesh::EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<Real>();
+}
+
+template<typename _Energy>
+std::string getEnergyName() {
+    if (isLinearElastic<_Energy>::value) {
+        return "LinearElastic";
+    }
+    if (isNeoHookean<_Energy>::value) {
+        return "NeoHookean";
+    }
+    return "NotImplemented";
+}
+
+template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
+std::string getElasticStructureTypeName() {
+    return getFEMName<_K, _Degree, _EmbeddingSpace>() + getEnergyName<_Energy>();
+}
+
+
+template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
+std::string getElasticStructureClassName() {
+    return getElasticStructureTypeName<_Energy, _K, _Degree, _EmbeddingSpace>() + "ElasticStructure";
+}
+
+#endif /* end of include guard: NAME_MANGLING_HH */

@@ -7,85 +7,21 @@ namespace py = pybind11;
 #include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/Utilities/TemplateName.hh>
 #include <MeshFEM/Meshing.hh>
 
-template<size_t _Dimension, size_t _Degree>
-std::string
-getMeshName()
-{
-    return (getFEMName<_Degree>() + "FEM" + std::to_string(_Dimension) + "DMesh").c_str();
-}
+#include <MeshFEM/Utilities/NameMangling.hh>
+#include "MeshFactory.hh"
 
-/**
- *  Helper struct to allow partial specialization of template function.
- */
-template<size_t _Dimension, size_t _Degree>
-struct ParameterSpecificMeshBinding
-{
-    using Mesh = FEMMesh<_Dimension, _Degree, Eigen::Matrix<double, _Dimension, 1>>;
-    // static void bind(py::module& module, py::class_<Mesh>& mesh_bindings) {}
-};
-
-template<size_t _Degree>
-struct ParameterSpecificMeshBinding<2, _Degree>
-{
-    static constexpr size_t Dimension = 2;
-    using Mesh = FEMMesh<Dimension, _Degree, Eigen::Matrix<double, Dimension, 1>>;
-    static void bind(py::module& module, py::class_<Mesh>& mesh_bindings)
-    {
-        module.def(
-          ("triangularizePolygonSet" + getFEMName<_Degree>() + "FEM").c_str(),
-          [](const std::vector<Eigen::Vector2d>& points,
-             const std::vector<std::vector<std::pair<size_t, size_t>>>& polygons,
-             const std::vector<Eigen::Vector2d>& holes,
-             Real target_area,
-             Real strong_connections) {
-              using Triangulation =
-                PolygonSetTriangulation<double, Eigen::Vector2d, std::pair<size_t, size_t>>;
-              Triangulation triangulation = Triangulation(points, polygons, holes, target_area, strong_connections);
-              return Mesh(triangulation.getElements(), triangulation.getVertices());
-          });
-
-        mesh_bindings.def("rotate", [&](Mesh& mesh, double angle) {
-            Eigen::Rotation2D<double> rotation(angle);
-            std::vector<Eigen::Vector3d> new_positions(mesh.numNodes());
-            for (const auto& node : mesh.nodes())
-            {
-                new_positions[node.index()] = padTo3D(rotation * node->p);
-            }
-            mesh.setNodePositions(new_positions);
-        });
-    }
-};
-
-template<size_t _Degree>
-struct ParameterSpecificMeshBinding<3, _Degree>
-{
-    static constexpr size_t Dimension = 3;
-    using Mesh = FEMMesh<Dimension, _Degree, Eigen::Matrix<double, Dimension, 1>>;
-    using Vector = typename Mesh::EmbeddingSpace;
-    static void bind(py::module& /* module */, py::class_<Mesh>& mesh_bindings)
-    {
-        mesh_bindings.def("rotate", [&](Mesh& mesh, double angle, const Vector& axis) {
-            Eigen::AngleAxis<double> rotation(angle, axis);
-            std::vector<Vector> new_positions(mesh.numNodes());
-            for (const auto& node : mesh.nodes())
-            {
-                new_positions[node.index()] = rotation * node->p;
-            }
-            mesh.setNodePositions(new_positions);
-        });
-    }
-};
-
-template<size_t _Dimension, size_t _Degree>
+template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 void
 bindMesh(py::module& module)
 {
-    using Mesh = FEMMesh<_Dimension, _Degree, Eigen::Matrix<double, _Dimension, 1>>;
+    using Mesh = FEMMesh<_K, _Degree, _EmbeddingSpace>;
+    using Real = typename _EmbeddingSpace::Scalar;
+    constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
+    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
 
-    py::class_<Mesh> mesh_bindings(module, getMeshName<_Dimension, _Degree>().c_str());
+    py::class_<Mesh> mesh_bindings(module, getMeshName<Mesh>().c_str());
     mesh_bindings
       .def(py::init([](const std::string& path) {
                std::vector<MeshIO::IOVertex> vertices;
@@ -96,82 +32,122 @@ bindMesh(py::module& module)
            py::arg("path"))
       .def("vertices",
            [&](const Mesh& m) {
-               Eigen::Matrix<double, Eigen::Dynamic, _Dimension> V(m.numVertices(), _Dimension);
+               MXNd V(m.numVertices(), _K);
                for (const auto& v : m.vertices())
                    V.row(v.index()) = v.node()->p;
                return V;
            })
+      .def("setVertices", [](Mesh &m, MXNd &V) {
+              const size_t nv = m.numVertices();
+              if (size_t(V.rows()) != nv) throw std::runtime_error("Incorrect vertex count");
+              m.setNodePositions(V);
+           })
       .def("elements",
            [&](const Mesh& m) {
-               std::vector<std::array<size_t, _Dimension + 1>> elements;
+               std::vector<std::array<size_t, _K + 1>> elements;
                elements.reserve(m.numElements());
-               std::array<size_t, _Dimension + 1> current_element;
-               for (const auto& e : m.elements())
-               {
+               std::array<size_t, _K + 1> current_element;
+               for (const auto& e : m.elements()) {
                    for (const auto& v : e.vertices())
-                   {
                        current_element[v.localIndex()] = v.index();
-                   }
                    elements.push_back(current_element);
                }
                return elements;
            })
-      .def("boundary_elements",
+      .def("boundaryElements",
            [&](const Mesh& m) {
-               std::vector<std::array<size_t, _Dimension>> elements;
+               std::vector<std::array<size_t, _K>> elements;
                elements.reserve(m.numBoundaryElements());
-               std::array<size_t, _Dimension> current_element;
-               for (const auto& e : m.boundaryElements())
-               {
-                   for (const auto& v : e.vertices())
-                   {
-                       current_element[v.localIndex()] = v.volumeVertex().index();
-                   }
+               std::array<size_t, _K> current_element;
+               for (const auto& be : m.boundaryElements()) {
+                   for (const auto& bv : be.vertices())
+                       current_element[bv.localIndex()] = bv.volumeVertex().index();
                    elements.push_back(current_element);
                }
                return elements;
+           })
+      .def("boundaryVertices", [](const Mesh &m) {
+                    std::vector<size_t> result;
+                    for (const auto &bv : m.boundaryVertices())
+                        result.push_back(bv.volumeVertex().index());
+                    return result;
            })
       .def("numVertices", &Mesh::numVertices)
       .def("numElements", &Mesh::numElements)
       .def("numNodes",    &Mesh::numNodes)
       .def("save", [&](const Mesh& m, const std::string& path) { return MeshIO::save(path, m); })
-      .def("is_tet_mesh", [&](const Mesh& m) { return (m.element(0).vertices().size() == 4); })
-      .def_property_readonly("volume", [](const Mesh& m) { return m.boundingBox().volume(); })
+      .def("is_tet_mesh", [&](const Mesh& m) { return _K == 3; })
+      .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
+      .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
       .def_property_readonly_static("degree", [](py::object) { return _Degree; })
-      .def_property_readonly_static("dimension", [](py::object) { return _Dimension; });
-
-    ParameterSpecificMeshBinding<_Dimension, _Degree>::bind(module, mesh_bindings);
+      .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
+      .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
+      ;
 }
 
 template<size_t _Dimension>
 void
 bindPeriodicCondition(py::module& module)
 {
-    using LinearMesh = FEMMesh<_Dimension, 1, Eigen::Matrix<double, _Dimension, 1>>;
+    using PC = PeriodicCondition<_Dimension>;
+    using LinearMesh    = FEMMesh<_Dimension, 1, Eigen::Matrix<double, _Dimension, 1>>;
     using QuadraticMesh = FEMMesh<_Dimension, 2, Eigen::Matrix<double, _Dimension, 1>>;
 
-    py::class_<PeriodicCondition<_Dimension>>(
+    module.def("PeriodicCondition", [](const LinearMesh    &m, double eps, bool ignore_mismatch, const std::vector<size_t> &ignore_dims) { return std::make_shared<PC>(m, eps, ignore_mismatch, ignore_dims); }, py::arg("mesh"), py::arg("eps") = 1e-7, py::arg("ignore_mismatch") = false, py::arg("ignore_dims") = std::vector<size_t>());
+    module.def("PeriodicCondition", [](const QuadraticMesh &m, double eps, bool ignore_mismatch, const std::vector<size_t> &ignore_dims) { return std::make_shared<PC>(m, eps, ignore_mismatch, ignore_dims); }, py::arg("mesh"), py::arg("eps") = 1e-7, py::arg("ignore_mismatch") = false, py::arg("ignore_dims") = std::vector<size_t>());
+
+    module.def("PeriodicCondition", [](const LinearMesh    &m, const std::string &path) { return std::make_shared<PC>(m, path); }, py::arg("mesh"), py::arg("periodic_condition_file"));
+    module.def("PeriodicCondition", [](const QuadraticMesh &m, const std::string &path) { return std::make_shared<PC>(m, path); }, py::arg("mesh"), py::arg("periodic_condition_file"));
+
+    // We use a shared_ptr holder to support using PeriodicCondition instances
+    // as optionally "None" arguments
+    py::class_<PeriodicCondition<_Dimension>, std::shared_ptr<PeriodicCondition<_Dimension>>>(
       module, ("PeriodicCondition" + std::to_string(_Dimension) + "D").c_str())
-      .def(py::init<const LinearMesh&, double, bool, std::vector<size_t>>(), py::arg("mesh"), py::arg("eps") = 1e-7, py::arg("ignore_mismatch") = false, py::arg("ignore_dims") = std::vector<size_t>())
-      .def(py::init<const QuadraticMesh&, double, bool, std::vector<size_t>>(), py::arg("mesh"), py::arg("eps") = 1e-7, py::arg("ignore_mismatch") = false, py::arg("ignore_dims") = std::vector<size_t>())
-      .def(py::init<const LinearMesh&, const std::string&>(),
-           py::arg("mesh"),
-           py::arg("periodic_condition_file"))
-      .def(py::init<const QuadraticMesh&, const std::string&>(),
-           py::arg("mesh"),
-           py::arg("periodic_condition_file"))
       .def("periodicDoFsForNodes", &PeriodicCondition<_Dimension>::periodicDoFsForNodes);
+}
+
+template<typename _Real>
+void addMeshBindings(py::module &m) {
+    using V3d = Eigen::Matrix<_Real, 3, 1>;
+    using V2d = Eigen::Matrix<_Real, 2, 1>;
+
+    bindMesh<3, 1, V3d>(m); // linear    tet mesh in 3d
+    bindMesh<3, 2, V3d>(m); // quadratic tet mesh in 3d
+
+    bindMesh<2, 1, V2d>(m); // linear    tri mesh in 2d
+    bindMesh<2, 2, V2d>(m); // quadratic tri mesh in 2d
+    bindMesh<2, 1, V3d>(m); // linear    tri mesh in 3d
+    bindMesh<2, 2, V3d>(m); // quadratic tri mesh in 3d
 }
 
 PYBIND11_MODULE(mesh, m)
 {
-    bindMesh<3, 1>(m);
-    bindMesh<2, 1>(m);
-    bindMesh<3, 2>(m);
-    bindMesh<2, 2>(m);
+    addMeshBindings<double>(m);
+#if MESHFEM_BIND_LONG_DOUBLE
+    addMeshBindings<long double>(m);
+#endif
 
     bindPeriodicCondition<2>(m);
     bindPeriodicCondition<3>(m);
+
+    // Mesh "Factory" function for dynamically creating an instance of the appropriate FEMMesh instantiation.
+    m.def("Mesh", [](const std::string &path, size_t degree, size_t embeddingDimension) {
+            std::vector<MeshIO::IOVertex > vertices;
+            std::vector<MeshIO::IOElement> elements;
+            auto type = MeshIO::load(path, vertices, elements, MeshIO::FMT_GUESS, MeshIO::MESH_GUESS);
+
+            // Infer simplex dimension from mesh type.
+            size_t K;
+            if      (type == MeshIO::MESH_TET) K = 3;
+            else if (type == MeshIO::MESH_TRI) K = 2;
+            else    throw std::runtime_error("Mesh must be pure triangle or tet.");
+
+            // Default to 2D embedding for triangle meshes, 3D embedding for tet meshes if unspecified
+            if (embeddingDimension == 0)
+                embeddingDimension = K;
+            py::object result = MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
+            return result;
+        }, py::arg("path"), py::arg("degree"), py::arg("embeddingDimension") = 0);
 
     using PSetTriangulation = PolygonSetTriangulation<
         double, Eigen::Vector2d, std::pair<size_t, size_t>>;

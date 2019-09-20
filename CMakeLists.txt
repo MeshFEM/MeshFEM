@@ -64,6 +64,10 @@ include(CMakeToolsHelpers OPTIONAL)
 # Enable more warnings
 include(Warnings)
 
+# We need -fPIC when compiling our libraries and our dependencies for
+# the python bindings (shared libraries) to link.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Helper function
 include(MeshFEMSingleApp)
 
