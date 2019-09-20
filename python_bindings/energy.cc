@@ -11,39 +11,20 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/NameMangling.hh>
 
 template<size_t _Dimension>
-std::string
-getLinearElasticEnergyName()
-{
-    return "LinearElasticEnergy" + std::to_string(_Dimension) + "D";
-}
-
-template<size_t _Dimension>
-std::string
-getNeoHookeanEnergyName()
-{
-    return "NeoHookeanEnergy" + std::to_string(_Dimension) + "D";
-}
-
-template<size_t _Dimension>
-std::string
-getElasticityTensorName()
-{
-    return "ElasticityTensor" + std::to_string(_Dimension) + "D";
-}
-
-template<size_t _Dimension>
 void
 bindElasticityTensor(py::module& module)
 {
     using ETensor = ElasticityTensor<double, _Dimension>;
 
-    py::class_<ETensor>(module, getElasticityTensorName<_Dimension>().c_str())
+    auto py_et = py::class_<ETensor>(module, getElasticityTensorName<_Dimension>().c_str())
         .def(py::init<>())
         .def(py::init([](const std::string& material_file) {
         return Materials::Constant<_Dimension>(material_file).getTensor();
     }))
         .def("setIsotropic", &ETensor::setIsotropic, py::arg("E"), py::arg("nu"))
-        .def("setOrthotropic3D",
+        ;
+    if (_Dimension == 3) {
+        py_et.def("setOrthotropic",
             &ETensor::setOrthotropic3D,
             py::arg("Ex"),
             py::arg("Ey"),
@@ -53,13 +34,16 @@ bindElasticityTensor(py::module& module)
             py::arg("nuZY"),
             py::arg("muYZ"),
             py::arg("myZX"),
-            py::arg("muXY"))
-        .def("setOrthotropic2D",
+            py::arg("muXY"));
+    }
+    if (_Dimension == 2) {
+        py_et.def("setOrthotropic",
             &ETensor::setOrthotropic2D,
             py::arg("Ex"),
             py::arg("Ey"),
             py::arg("nuYX"),
             py::arg("muXY"));
+    }
 }
 
 template<typename Energy>
@@ -80,12 +64,11 @@ bindEnergy(py::class_<Energy>& energy_binding)
 
 template<size_t _Dimension>
 void
-bindLinearElasticEnergy(py::module& module)
+bindLinearElasticEnergy(py::module& detail_module)
 {
     using LEEnergy = LinearElasticEnergy<double, _Dimension>;
 
-    py::class_<LEEnergy> linear_elastic_energy(module,
-        getLinearElasticEnergyName<_Dimension>().c_str());
+    py::class_<LEEnergy> linear_elastic_energy(detail_module, getLinearElasticEnergyName<_Dimension>().c_str());
     linear_elastic_energy.def(py::init<const typename LEEnergy::ETensor&>(),
         py::arg("elasticity_tensor"));
 
@@ -94,10 +77,10 @@ bindLinearElasticEnergy(py::module& module)
 
 template<size_t _Dimension>
 void
-bindNeoHookeanEnergy(py::module& module)
+bindNeoHookeanEnergy(py::module& detail_module)
 {
     py::class_<NeoHookeanEnergy<double, _Dimension>> neo_hookean_energy(
-        module, getNeoHookeanEnergyName<_Dimension>().c_str());
+        detail_module, getNeoHookeanEnergyName<_Dimension>().c_str());
     neo_hookean_energy.def(
         py::init<double, double, double>(),
         py::arg("first_lame_parameter"),
@@ -107,16 +90,32 @@ bindNeoHookeanEnergy(py::module& module)
     bindEnergy(neo_hookean_energy);
 }
 
+py::object constructNeoHookean(size_t dimension, double lambda, double mu, double finiteContinuationStart) {
+    if (dimension == 2) return py::cast(new NeoHookeanEnergy<double, 2>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+    if (dimension == 3) return py::cast(new NeoHookeanEnergy<double, 3>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+    throw std::runtime_error("Argument 'dimension' must be 2 or 3");
+}
+
 PYBIND11_MODULE(energy, m)
 {
     py::enum_<EnergyType>(m, "EnergyType")
         .value("LINEAR", EnergyType::LINEAR)
         .value("NEO_HOOKEAN", EnergyType::NEO_HOOKEAN);
 
-    bindElasticityTensor<2>(m);
-    bindElasticityTensor<3>(m);
-    bindLinearElasticEnergy<2>(m);
-    bindLinearElasticEnergy<3>(m);
-    bindNeoHookeanEnergy<2>(m);
-    bindNeoHookeanEnergy<3>(m);
+    py::module detail_module = m.def_submodule("detail");
+
+    bindElasticityTensor<2>   (m);
+    bindElasticityTensor<3>   (m);
+    bindLinearElasticEnergy<2>(detail_module);
+    bindLinearElasticEnergy<3>(detail_module);
+    bindNeoHookeanEnergy<2>   (detail_module);
+    bindNeoHookeanEnergy<3>   (detail_module);
+
+    m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
+
+    m.def("LinearElastic", [](const ElasticityTensor<double, 3> &etensor) { return LinearElasticEnergy<double, 3>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("LinearElastic", [](const ElasticityTensor<double, 2> &etensor) { return LinearElasticEnergy<double, 2>(etensor); }, py::arg("elasticity_tensor"));
+
+    // Isotropic linear elastic versions...
 }

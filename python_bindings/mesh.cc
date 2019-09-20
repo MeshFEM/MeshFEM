@@ -145,8 +145,7 @@ PYBIND11_MODULE(mesh, m)
             // Default to 2D embedding for triangle meshes, 3D embedding for tet meshes if unspecified
             if (embeddingDimension == 0)
                 embeddingDimension = K;
-            py::object result = MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
-            return result;
+            return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
         }, py::arg("path"), py::arg("degree"), py::arg("embeddingDimension") = 0);
 
     using PSetTriangulation = PolygonSetTriangulation<

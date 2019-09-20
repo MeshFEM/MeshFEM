@@ -57,4 +57,26 @@ std::string getElasticStructureClassName() {
     return getElasticStructureTypeName<_Energy, _K, _Degree, _EmbeddingSpace>() + "ElasticStructure";
 }
 
+template<size_t _Dimension>
+std::string
+getLinearElasticEnergyName()
+{
+    return "LinearElasticEnergy" + std::to_string(_Dimension) + "D";
+}
+
+template<size_t _Dimension>
+std::string
+getNeoHookeanEnergyName()
+{
+    return "NeoHookeanEnergy" + std::to_string(_Dimension) + "D";
+}
+
+template<size_t _Dimension>
+std::string
+getElasticityTensorName()
+{
+    return "ElasticityTensor" + std::to_string(_Dimension) + "D";
+}
+
+
 #endif /* end of include guard: NAME_MANGLING_HH */
