@@ -121,7 +121,7 @@ if(NOT TARGET pybind11)
     add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
 endif()
 
-add_subdirectory(python_bindings)
+add_subdirectory(src/python_bindings)
 
 ################################################################################
 # Unit tests
