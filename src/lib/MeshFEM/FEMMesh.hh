@@ -17,6 +17,7 @@
 #include <map>
 #include <cassert>
 #include <type_traits>
+#include <memory>
 
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/EmbeddedElement.hh>
@@ -115,6 +116,7 @@ public:
 
     template<typename Elements, typename Vertices>
     FEMMesh(const Elements &elems, const Vertices &vertices);
+    static std::unique_ptr<FEMMesh> load(const std::string &path);
 
     // Entity handles (declared in Handles/FEMMeshHandles.hh).
     template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex

@@ -93,6 +93,7 @@ endif()
 option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
 option(MESHFEM_LIB_ONLY              "Compile only the MeshFEM library (not the binary applications)" ${MESHFEM_LIB_ONLY_DEFAULT})
+option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 
 ################################################################################
 # Dependencies

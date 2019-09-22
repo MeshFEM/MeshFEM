@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
+#include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -13,14 +14,16 @@ template<class VertexData, class HalfEdgeData, class TriData,
 template<typename Tris>
 TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
 TriMesh(const Tris &tris, size_t nVertices) {
+    using EAA = ElementArrayAdaptor<Tris>;
+    const size_t nt = EAA::numElements(tris);
     // Corner Creation
-    V.resize(3 * tris.size());
-    for (size_t t = 0; t < tris.size(); ++t) {
-        if (tris[t].size() != 3)
+    V.resize(3 * nt);
+    for (size_t t = 0; t < nt; ++t) {
+        if (EAA::elementSize(tris, t) != 3)
             throw std::runtime_error("Mesh must be pure triangle");
-        V[3 * t + 0] = tris[t][0];
-        V[3 * t + 1] = tris[t][1];
-        V[3 * t + 2] = tris[t][2];
+        V[3 * t + 0] = EAA::get(tris, t, 0);
+        V[3 * t + 1] = EAA::get(tris, t, 1);
+        V[3 * t + 2] = EAA::get(tris, t, 2);
     }
 
     // Validate vertex indices
@@ -36,7 +39,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // Half-edge Adjacency
     EdgeMap halfEdgeForEdge;
     // std::runtime_error nonManifold("Non-manifold input detected.");
-    O.assign(3 * tris.size(), -1);
+    O.assign(3 * nt, -1);
     const size_t nHalfEdges = O.size();
     {
         EdgeMap incidentTris;
@@ -132,7 +135,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
     // Allocate data arrays unless the special TMEmptyData type is passed
     m_vertexData        .resize(nVertices);
     m_halfEdgeData      .resize(nHalfEdges);
-    m_triData           .resize(tris.size());
+    m_triData           .resize(nt);
     m_boundaryVertexData.resize(bV.size());
     m_boundaryEdgeData  .resize(nBoundaryEdges);
 }

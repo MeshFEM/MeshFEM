@@ -45,15 +45,9 @@ __pycache__
 .vscode/
 .idea/
 build/
+build_debug/
 cmake-build-*/
 data
 
 # Dependencies
-/3rdparty/.cache
-/3rdparty/Catch2
-/3rdparty/eigen
-/3rdparty/json
-/3rdparty/tbb
-/3rdparty/tinyexpr
-/3rdparty/triangle
-/3rdparty/optional
+/3rdparty

@@ -2,6 +2,10 @@ pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh PUBLIC MeshFEM)
 
+if(MESHFEM_BIND_LONG_DOUBLE)
+    target_compile_definitions(mesh PUBLIC -DMESHFEM_BIND_LONG_DOUBLE)
+endif()
+
 pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(sparse_matrices PUBLIC MeshFEM)

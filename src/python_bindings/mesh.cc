@@ -40,18 +40,19 @@ struct MeshBindingsBase {
     using Mesh = FEMMesh<_K, _Degree, _EmbeddingSpace>;
     using Real = typename _EmbeddingSpace::Scalar;
     static constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
-    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
+    using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
+    using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,                  3>;
+    using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, _K + 1>;
 
     static py::class_<Mesh> bind(py::module& module) {
-        return py::class_<Mesh>(module, getMeshName<Mesh>().c_str())
-          .def(py::init([](const std::string& path) {
-                   std::vector<MeshIO::IOVertex> vertices;
-                   std::vector<MeshIO::IOElement> elements;
-                   MeshIO::load(path, vertices, elements);
-                   return Mesh(elements, vertices);
-               }),
-               py::arg("path"))
-          .def("vertices",
+        py::class_<Mesh> mb(module, getMeshName<Mesh>().c_str());
+        mb.def(py::init([](       const std::string &path) { return Mesh::load(path); }), py::arg("path"))
+          .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_unique<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
+        if (EmbeddingDimension != 3) {
+            // Also add a truncating constructor for 3D vertex arrays (if the mesh isn't embedded in 3D)
+           mb.def(py::init([](const MX3d &V, const MXKp1i &F) { return std::make_unique<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
+        }
+        mb.def("vertices",
                [](const Mesh& m) {
                    MXNd V(m.numVertices(), EmbeddingDimension);
                    for (const auto& v : m.vertices())
@@ -83,6 +84,7 @@ struct MeshBindingsBase {
           .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
           ;
+          return mb;
     }
 };
 

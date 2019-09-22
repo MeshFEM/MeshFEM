@@ -1,4 +1,6 @@
 #include <MeshFEM/Simplex.hh>
+#include <MeshFEM/MeshIO.hh>
+#include <MeshFEM/Future.hh>
 #include <iostream>
 
 ////////////////////////////////////////////////////////////////////////////
@@ -65,4 +67,16 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
     m_boundaryNodeData.resize(numBoundaryNodes());
 
     setNodePositions(vertices);
+}
+
+////////////////////////////////////////////////////////////////////////////
+/*! "Named constructor" for initializing a mesh from a file.
+*///////////////////////////////////////////////////////////////////////////
+template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
+auto
+FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
+load(const std::string &path) -> std::unique_ptr<FEMMesh> {
+    std::vector<MeshIO::IOVertex > vertices;
+    std::vector<MeshIO::IOElement> elements;
+    return Future::make_unique<FEMMesh>(elements, vertices);
 }

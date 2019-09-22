@@ -5,20 +5,24 @@
 // Build index tables from tetrahedron soup
 ////////////////////////////////////////////////////////////////////////////////
 #include <map>
+#include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
+
 template<class VertexData, class HalfFaceData, class HalfEdgeData, class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
 template<typename Tets>
 TetMesh<VertexData, HalfFaceData, HalfEdgeData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
 TetMesh(const Tets &tets, const size_t nVertices) {
     // Corner Creation
-    V.resize(4 * tets.size());
-    for (size_t t = 0; t < tets.size(); ++t) {
-        if (tets[t].size() != 4)
+    using EAA = ElementArrayAdaptor<Tets>;
+    const size_t nt = EAA::numElements(tets);
+    V.resize(4 * nt);
+    for (size_t t = 0; t < nt; ++t) {
+        if (EAA::elementSize(tets, t) != 4)
             throw std::runtime_error("Mesh must be pure tet");
-        V[4 * t + 0] = tets[t][0];
-        V[4 * t + 1] = tets[t][1];
-        V[4 * t + 2] = tets[t][2];
-        V[4 * t + 3] = tets[t][3];
+        V[4 * t + 0] = EAA::get(tets, t, 0);
+        V[4 * t + 1] = EAA::get(tets, t, 1);
+        V[4 * t + 2] = EAA::get(tets, t, 2);
+        V[4 * t + 3] = EAA::get(tets, t, 3);
     }
 
     // Validate vertex indices
@@ -31,9 +35,9 @@ TetMesh(const Tets &tets, const size_t nVertices) {
     typedef std::map<UnorderedTriplet, int> FaceMap;
     FaceMap halfFaceForFace;
     std::runtime_error nonManifold("Non-manifold input detected.");
-    O.assign(4 * tets.size(), -1);
+    O.assign(4 * nt, -1);
     const size_t nHalfFaces = O.size();
-    for (size_t hf = 0; hf < 4 * tets.size(); ++hf) {
+    for (size_t hf = 0; hf < 4 * nt; ++hf) {
         UnorderedTriplet face(m_vertexOfHalfFace(0, hf),
                               m_vertexOfHalfFace(1, hf),
                               m_vertexOfHalfFace(2, hf));
@@ -107,7 +111,7 @@ TetMesh(const Tets &tets, const size_t nVertices) {
     // Allocate data arrays unless the special TMEmptyData type is passed
     m_vertexData          .resize(nVertices);
     m_halfFaceData        .resize(nHalfFaces);
-    m_tetData             .resize(tets.size());
+    m_tetData             .resize(nt);
     m_boundaryVertexData  .resize(nBoundaryVertices);
     m_boundaryHalfEdgeData.resize(nBoundaryHalfEdges);
     m_boundaryFaceData    .resize(nBoundaryFaces);
