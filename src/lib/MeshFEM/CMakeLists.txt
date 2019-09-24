@@ -118,9 +118,9 @@ add_library(MeshFEM
         Utilities/IteratorMap.hh
         Utilities/NDArray.hh
         Utilities/RandomAccessIndexSet.hh
-        Utilities/DifferentialOperations.hh
+        EnergyDensities/DifferentialOperations.hh
+        EnergyDensities/Tensor.hh
         Utilities/NameMangling.hh
-        Utilities/Tensor.hh
         wrappers/meshfem_triangle.h
 
         EnergyDensities/LinearElasticEnergy.hh

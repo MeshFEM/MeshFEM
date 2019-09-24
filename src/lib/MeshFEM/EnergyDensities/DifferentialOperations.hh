@@ -2,7 +2,7 @@
 #define DIFFERENTIALOPERATIONS_HH
 
 #include <Eigen/Dense>
-#include "Tensor.hh"
+#include <MeshFEM/EnergyDensities/Tensor.hh>
 
 template<typename _Derived>
 typename _Derived::Scalar getDeterminantSquared(const Eigen::MatrixBase<_Derived>& matrix)

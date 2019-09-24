@@ -50,11 +50,12 @@ struct MeshBindingsBase {
 
     static MeshBindingsType<Mesh> bind(py::module& module) {
         MeshBindingsType<Mesh> mb(module, getMeshName<Mesh>().c_str());
-        mb.def(py::init([](       const std::string &path) { return Mesh::load(path); }), py::arg("path"))
-          .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_unique<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
+        // WARNING: Mesh's holder type is a shared_ptr; returning a unique_ptr will lead to a dangling pointer in the current version of Pybind11
+        mb.def(py::init([](       const std::string &path) { return std::shared_ptr<Mesh>(Mesh::load(path)); }), py::arg("path"))
+          .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
         if (EmbeddingDimension != 3) {
             // Also add a truncating constructor for 3D vertex arrays (if the mesh isn't embedded in 3D)
-           mb.def(py::init([](const MX3d &V, const MXKp1i &F) { return std::make_unique<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
+           mb.def(py::init([](const MX3d &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
         }
         mb.def("vertices",
                [](const Mesh& m) {
@@ -260,13 +261,13 @@ PYBIND11_MODULE(mesh, m)
                 double, double>())
         .def("getLinearMesh", [](const PSetTriangulation& triangulation)
                 {
-                    return std::make_unique<FEMMesh<2, 1, Eigen::Vector2d>>(
+                    return std::make_shared<FEMMesh<2, 1, Eigen::Vector2d>>(
                             triangulation.getElements(),
                             triangulation.getVertices());
                 })
         .def("getQuadraticMesh", [](const PSetTriangulation& triangulation)
                 {
-                    return std::make_unique<FEMMesh<2, 2, Eigen::Vector2d>>(
+                    return std::make_shared<FEMMesh<2, 2, Eigen::Vector2d>>(
                             triangulation.getElements(),
                             triangulation.getVertices());
                 });

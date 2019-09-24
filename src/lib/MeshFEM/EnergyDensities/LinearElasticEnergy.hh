@@ -5,7 +5,7 @@
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
-#include <MeshFEM/Utilities/Tensor.hh>
+#include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template <typename _Real, size_t _Dimension>

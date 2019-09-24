@@ -4,9 +4,9 @@
 #include <Eigen/Dense>
 #include <cstdlib>
 
-#include <MeshFEM/Utilities/DifferentialOperations.hh>
-#include <MeshFEM/Utilities/Tensor.hh>
+#include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/DifferentialOperations.hh>
 
 template<typename _Derived>
 struct NeoHookeanEnergyTraits;
