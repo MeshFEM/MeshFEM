@@ -16,7 +16,7 @@
 template<size_t K, size_t Degree, class EmbeddingSpace>
 typename std::enable_if<(K <= EmbeddingSpace::RowsAtCompileTime), py::object>::type
 MeshFactory(const std::vector<MeshIO::IOElement> &elements,
-                       const std::vector<MeshIO::IOVertex > &vertices) {
+            const std::vector<MeshIO::IOVertex > &vertices) {
     // Note: while py::cast is not yet documented in the official documentation,
     // it accepts the return_value_policy as discussed in:
     //      https://github.com/pybind/pybind11/issues/1201
@@ -24,14 +24,14 @@ MeshFactory(const std::vector<MeshIO::IOElement> &elements,
     // memory leaks and double frees regardless of the holder type for FEMMesh.
     return py::cast(new FEMMesh<K, Degree, EmbeddingSpace>(elements, vertices),
                     py::return_value_policy::take_ownership);
-};
+}
 
 template<size_t K, size_t Degree, class EmbeddingSpace>
 typename std::enable_if<(K > EmbeddingSpace::RowsAtCompileTime), py::object>::type
-MeshFactory(const std::vector<MeshIO::IOElement> &elements,
-                       const std::vector<MeshIO::IOVertex > &vertices) {
+MeshFactory(const std::vector<MeshIO::IOElement> &/* elements */,
+            const std::vector<MeshIO::IOVertex > &/* vertices */) {
     throw std::runtime_error("Embedding dimension must be >= simplex dimension.");
-};
+}
 
 template<size_t Degree, class EmbeddingSpace>
 py::object MeshFactory(const std::vector<MeshIO::IOElement> &elements,

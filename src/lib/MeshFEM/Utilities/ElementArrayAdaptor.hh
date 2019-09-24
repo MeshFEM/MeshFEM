@@ -18,7 +18,7 @@ template<class ElementArray, class Enable = void>
 struct ElementArrayAdaptor {
     static size_t numElements(const ElementArray &E)            { return E.size(); }
     static size_t elementSize(const ElementArray &E, size_t ei) { return E[ei].size(); }
-    static auto get(const ElementArray &E, size_t ei, size_t c) -> decltype(E[ei][c]) {
+    static size_t get(const ElementArray &E, size_t ei, size_t c) {
         return E[ei][c];
     }
 };
@@ -27,20 +27,20 @@ struct ElementArrayAdaptor {
 template<class EigenType>
 struct ElementArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, Eigen::Dynamic, 3>::value ||
                                                               isMatrixOfSize<EigenType, Eigen::Dynamic, 4>::value, void>::type> {
-    using Real = typename EigenType::Scalar;
+    using IndexType = typename EigenType::Scalar;
     static size_t numElements(const EigenType &E)                      { return E.rows(); }
     static size_t elementSize(const EigenType &/*E*/, size_t /*ei*/)   { return EigenType::ColsAtCompileTime; }
-    static Real           get(const EigenType &E, size_t ei, size_t c) { return E(ei, c); }
+    static IndexType      get(const EigenType &E, size_t ei, size_t c) { return E(ei, c); }
 };
 
 // Version for N by X Eigen types
 template<class EigenType>
 struct ElementArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, 3, Eigen::Dynamic>::value ||
                                                               isMatrixOfSize<EigenType, 4, Eigen::Dynamic>::value, void>::type> {
-    using Real = typename EigenType::Scalar;
+    using IndexType = typename EigenType::Scalar;
     static size_t numElements(const EigenType &E)                      { return E.cols(); }
     static size_t elementSize(const EigenType &/*E*/, size_t /*ei*/)   { return EigenType::RowsAtCompileTime; }
-    static Real           get(const EigenType &E, size_t ei, size_t c) { return E(c, ei); }
+    static IndexType      get(const EigenType &E, size_t ei, size_t c) { return E(c, ei); }
 };
 
 #endif /* end of include guard: ELEMENTARRAYADAPTOR_HH */

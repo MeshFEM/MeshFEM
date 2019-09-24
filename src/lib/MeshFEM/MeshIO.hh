@@ -403,7 +403,6 @@ namespace MeshIO {
         save(path, vertices, elements, format, type);
     }
 
-
     // TODO: higher order mesh output.
 
     ////////////////////////////////////////////////////////////////////////////

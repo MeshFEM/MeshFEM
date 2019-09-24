@@ -11,7 +11,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t,
 template<typename Elements, typename Vertices>
 FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 FEMMesh(const Elements &elems, const Vertices &vertices)
-    : BaseMesh(elems, vertices.size()) {
+    : BaseMesh(elems, VertexArrayAdaptor<Vertices>::numVertices(vertices)) {
     if (_Deg == 2) {
         std::map<UnorderedPair, size_t> edgeNodes;
         // Construct an edge node for each volume edge.
@@ -78,5 +78,6 @@ FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 load(const std::string &path) -> std::unique_ptr<FEMMesh> {
     std::vector<MeshIO::IOVertex > vertices;
     std::vector<MeshIO::IOElement> elements;
+    MeshIO::load(path, vertices, elements);
     return Future::make_unique<FEMMesh>(elements, vertices);
 }

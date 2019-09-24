@@ -9,6 +9,7 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
+#include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template<size_t _Dimension>
 void
@@ -58,8 +59,7 @@ bindEnergy(py::class_<Energy>& energy_binding)
             py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_),
             py::arg("dF"))
         .def("d2energy", &Energy::d2energy, py::arg("dF_lhs"), py::arg("dF_rhs"))
-        .def_property_readonly_static("type",
-            [](py::object) { return EnergyTraits<Energy>::type_v; });
+        ;
 }
 
 template<size_t _Dimension>
@@ -98,10 +98,6 @@ py::object constructNeoHookean(size_t dimension, double lambda, double mu, doubl
 
 PYBIND11_MODULE(energy, m)
 {
-    py::enum_<EnergyType>(m, "EnergyType")
-        .value("LINEAR", EnergyType::LINEAR)
-        .value("NEO_HOOKEAN", EnergyType::NEO_HOOKEAN);
-
     py::module detail_module = m.def_submodule("detail");
 
     bindElasticityTensor<2>   (m);

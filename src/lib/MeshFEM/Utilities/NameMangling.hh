@@ -9,7 +9,7 @@
 #ifndef NAME_MANGLING_HH
 #define NAME_MANGLING_HH
 
-#include <MeshFEM/Utilities/EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template<typename _Real>
 std::string floatingPointTypeSuffix() {
@@ -31,8 +31,8 @@ std::string getFEMName() {
 
 template<class _Mesh>
 std::string getMeshName() {
-    using Real = typename _Mesh::Real;
-    return getFEMName<_Mesh::K, _Mesh::Deg, typename _Mesh::EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<Real>();
+    using _Real = typename _Mesh::Real;
+    return getFEMName<_Mesh::K, _Mesh::Deg, typename _Mesh::EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<_Real>();
 }
 
 template<typename _Energy>

@@ -2,13 +2,14 @@
 #define LINEARELASTICENERGY_HH
 
 #include <Eigen/Dense>
-#include "../ElasticityTensor.hh"
-#include "../GlobalBenchmark.hh"
-#include "../SymmetricMatrix.hh"
-#include "../Utilities/Tensor.hh"
+#include <MeshFEM/ElasticityTensor.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/SymmetricMatrix.hh>
+#include <MeshFEM/Utilities/Tensor.hh>
+#include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template <typename _Real, size_t _Dimension>
-struct LinearElasticEnergy {
+struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
     using FlatSymmetricMatrix = Eigen::Matrix<_Real, SMatrix::flatSize(), 1>;
 

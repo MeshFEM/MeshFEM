@@ -16,8 +16,9 @@
 // Version for types conforming to std::vector interface.
 template<class VertexArray, class Enable = void>
 struct VertexArrayAdaptor {
-    static auto get(const VertexArray &array, size_t idx) -> decltype(array[0]) {
-        return array.at(idx);
+    static size_t numVertices(const VertexArray &V) { return V.size(); }
+    static auto get(const VertexArray &V, size_t idx) -> decltype(V[0]) {
+        return V.at(idx);
     }
 };
 
@@ -25,6 +26,7 @@ struct VertexArrayAdaptor {
 template<class EigenType>
 struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, Eigen::Dynamic, 2>::value ||
                                                              isMatrixOfSize<EigenType, Eigen::Dynamic, 3>::value, void>::type> {
+    static size_t numVertices(const EigenType &V) { return V.rows(); }
     static auto get(const EigenType &V, size_t idx) -> decltype(V.row(0).transpose()) {
         return V.row(idx).transpose();
     }
@@ -34,6 +36,7 @@ struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<Eige
 template<class EigenType>
 struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, 2, Eigen::Dynamic>::value ||
                                                              isMatrixOfSize<EigenType, 3, Eigen::Dynamic>::value, void>::type> {
+    static size_t numVertices(const EigenType &V) { return V.cols(); }
     static auto get(const EigenType &V, size_t idx) -> decltype(V.col(0)) {
         return V.col(idx);
     }

@@ -28,12 +28,16 @@ std::array<size_t, sizeof...(I)> getElementCorners(const _EHandle &e, Future::in
 
 template<class _Mesh, template<class> class _HType>
 std::vector<std::array<size_t, _HType<_Mesh>::numVertices()>> getElementCorners(const HandleRange<_Mesh, _HType> &range) {
-    std::vector<std::array<size_t, _HType<_Mesh>::numVertices()>> elements;
+    constexpr size_t nv = _HType<_Mesh>::numVertices();
+    std::vector<std::array<size_t, nv>> elements;
     elements.reserve(range.size());
     for (const auto& e : range)
-        elements.emplace_back(getElementCorners(e, Future::make_index_sequence<e.numVertices()>()));
+        elements.emplace_back(getElementCorners(e, Future::make_index_sequence<nv>()));
     return elements;
 }
+
+template<class Mesh>
+using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
 
 template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct MeshBindingsBase {
@@ -44,8 +48,8 @@ struct MeshBindingsBase {
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,                  3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, _K + 1>;
 
-    static py::class_<Mesh> bind(py::module& module) {
-        py::class_<Mesh> mb(module, getMeshName<Mesh>().c_str());
+    static MeshBindingsType<Mesh> bind(py::module& module) {
+        MeshBindingsType<Mesh> mb(module, getMeshName<Mesh>().c_str());
         mb.def(py::init([](       const std::string &path) { return Mesh::load(path); }), py::arg("path"))
           .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_unique<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
         if (EmbeddingDimension != 3) {
@@ -54,7 +58,7 @@ struct MeshBindingsBase {
         }
         mb.def("vertices",
                [](const Mesh& m) {
-                   MXNd V(m.numVertices(), EmbeddingDimension);
+                   MXNd V(m.numVertices(), size_t(EmbeddingDimension)); // size_t to prevent undefined symbol due to ODR-use
                    for (const auto& v : m.vertices())
                        V.row(v.index()) = v.node()->p;
                    return V;
@@ -77,7 +81,7 @@ struct MeshBindingsBase {
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
           .def("field_writer", [&](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh", [&](const Mesh &m) { return _K == 3; })
+          .def("is_tet_mesh", [&](const Mesh &/* m */) { return _K == 3; })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
           .def_property_readonly_static("degree", [](py::object) { return _Degree; })
@@ -92,7 +96,7 @@ template<size_t _Degree, class _EmbeddingSpace>
 struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingSpace> {
     using Base = MeshBindingsBase<2, _Degree, _EmbeddingSpace>;
     using Mesh = typename Base::Mesh;
-    static py::class_<Mesh> bind(py::module& module) {
+    static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTris",     &Mesh::numTris)
@@ -130,7 +134,7 @@ template<size_t _Degree, class _EmbeddingSpace>
 struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingSpace> {
     using Base = MeshBindingsBase<3, _Degree, _EmbeddingSpace>;
     using Mesh = typename Base::Mesh;
-    static py::class_<Mesh> bind(py::module& module) {
+    static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTets",     &Mesh::numTets)
@@ -151,10 +155,10 @@ struct MeshBindings<3, _Degree, _EmbeddingSpace> : public TetMeshSpecificBinding
 // Triangle meshes in 3D also provide normals.
 template<size_t _Degree, class _Real>
 struct MeshBindings<2, _Degree, Eigen::Matrix<_Real, 3, 1>> : public TriMeshSpecificBindings<_Degree, Eigen::Matrix<_Real, 3, 1>> {
-    using Base = MeshBindingsBase<2, _Degree, Eigen::Matrix<_Real, 3, 1>>;
+    using Base = TriMeshSpecificBindings<_Degree, Eigen::Matrix<_Real, 3, 1>>;
     using Mesh = typename Base::Mesh;
     using V3d = Eigen::Matrix<_Real, 3, 1>;
-    static py::class_<Mesh> bind(py::module& module) {
+    static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("vertexNormals", [](const Mesh &m) {

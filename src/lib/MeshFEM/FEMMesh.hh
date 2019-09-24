@@ -36,6 +36,8 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData = DefaultFEMData>
 class FEMMesh;
 
+#include <MeshFEM/Utilities/NameMangling.hh>
+
 // The EmbeddedElement interface depends on which simplex type we were
 // embedding--we use this class to wrap it.
 template<size_t _K>
@@ -117,6 +119,8 @@ public:
     template<typename Elements, typename Vertices>
     FEMMesh(const Elements &elems, const Vertices &vertices);
     static std::unique_ptr<FEMMesh> load(const std::string &path);
+
+    // ~FEMMesh() { std::cout << "FEMMesh (" << getMeshName<FEMMesh>() << ") destructor called" << std::endl; }
 
     // Entity handles (declared in Handles/FEMMeshHandles.hh).
     template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex
