@@ -3,8 +3,51 @@ import pythreejs
 import ipywidgets
 import ipywidgets.embed
 
+from vis.fields import DomainType, VisualizationField, ScalarField
+
+# Threejs apparently only supports square textures, so we need to add padding to rectangular textures.
+# The input UVs are assumed to take values in [0, 1]^2 where (0, 0) and (1, 1) are the lower left and upper right
+# corner of the original rectangular texture. We then adjust these texture
+# coordinates to map to the padded, square texture.
+class TextureMap:
+    # "uv"  should be a 2D numpy array of shape (#V, 2)
+    # "tex" should be a 3D numpy array of shape (h, w, 4)
+    def __init__(self, uv, tex, normalizeUV = False, powerOfTwo = False):
+        self.uv = uv.copy()
+
+        # Make the parametric domain stretch from (0, 0) to (1, 1)
+        if (normalizeUV):
+            self.uv -= np.min(self.uv, axis=0)
+            dim = np.max(self.uv, axis=0)
+            self.uv /= dim
+
+        h, w = tex.shape[0:2]
+        s = max(w, h)
+        if (powerOfTwo): s = int(np.exp2(np.ceil(np.log2(s))))
+        padded = np.pad(tex, [(s - h, 0), (0, s - w), (0, 0)], 'constant', constant_values=128) # pad top, right
+
+        self.dataTex = pythreejs.DataTexture(data=padded, format='RGBAFormat', type='UnsignedByteType')
+        self.dataTex.wrapS     = 'ClampToEdgeWrapping'
+        self.dataTex.magFilter = 'LinearFilter'
+        self.dataTex.minFilter = 'LinearMipMapLinearFilter'
+        self.dataTex.generateMipmaps = True
+        self.dataTex.flipY = True
+
+        self.uv *= np.array([float(w) / s, float(h) / s])
+
+# Replicate per-vertex attributes to per-tri-corner attributes (as indicated by the index array).
+# Input colors may be expressed instead as per-triangle, in which case, these
+# are replicated 3x (once for each corner).
+def replicateAttributesPerTriCorner(attr, perTriColor = True):
+    idxs = attr.pop('index') # we no longer need the index array after replication
+    for key in attr:
+        if (perTriColor and key == 'color'):
+            attr['color'] = np.repeat(attr['color'], 3, axis=0)
+            continue
+        attr[key] = attr[key][idxs]
+
 class TriMeshViewer:
-    def __init__(self, trimesh, width=512, height=512, scalarField=None, vectorField=None):
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
         self.cam = pythreejs.PerspectiveCamera(position = [0, 0, 5], up = [0, 1, 0], aspect=width / height,
                 children=[pythreejs.DirectionalLight(color='white', position=[3, 5, 1], intensity=0.6)])
 
@@ -32,48 +75,52 @@ class TriMeshViewer:
 
         self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
 
-        self.update(True, trimesh, updateModelMatrix=True, initalizeIndices=True, scalarField=scalarField, vectorField=vectorField)
+        self.update(True, trimesh, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False,
-            initalizeIndices=False, scalarField=None, vectorField=None):
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
         if (mesh != None):   self.mesh = mesh
         if (scalarField != None): self.scalarField = scalarField
         if (vectorField != None): self.vectorField = vectorField
-        if initalizeIndices:
-            if (self.mesh.is_tet_mesh()):
-                self.indices = np.array(self.mesh.boundary_elements(), dtype=np.uint32).ravel()
-            else:
-                self.indices = np.array(self.mesh.elements(), dtype=np.uint32).ravel()
 
-        vertices = self.mesh.vertices()
-        if vertices.shape[1] == 2:
-            positions = np.pad(self.mesh.vertices(), [(0, 0), (0, 1)], 'constant',
-                    constant_values=0)
-        else:
-            positions = vertices
-        attrRaw = {'position': np.array(positions, dtype=np.float32),
-                   'index': self.indices}
+        vertices = self.mesh.visualizationVertices()
+        if vertices.shape[1] == 2: vertices = np.pad(vertices, [(0, 0), (0, 1)], 'constant', constant_values=0)
+        attrRaw = {'position': np.array(vertices,                           dtype=np.float32),
+                   'index':    np.array(self.mesh.visualizationTriangles(), dtype=np. uint32).ravel(),
+                   'normal':   np.array(self.mesh.vertexNormals(),          dtype=np.float32)}
 
-        mat = None
         materialArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
-        materialArgs['color'] = 'lightgray'
+        if (textureMap is None): materialArgs['color'] = 'lightgray'
+        else:                    materialArgs[  'map'] = textureMap.dataTex
+
+        if (self.scalarField is not None):
+            self.scalarField.validateSize(self.mesh.numVisualizationVertices(), self.mesh.numVisualizationTriangles())
+            materialArgs.pop('color') # we must remove the full mesh color or else the vertex colors are multiplied by it
+            attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
+            if (self.scalarField.domainType == DomainType.PER_TRI):
+                # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
+                # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
+                # since apparently indexed geometry doesn't support the 'FaceColors' option.
+                replicateAttributesPerTriCorner(attrRaw)
+            materialArgs['vertexColors'] = 'VertexColors'
 
         geom = pythreejs.BufferGeometry(attributes={k: pythreejs.BufferAttribute(v) for k, v in attrRaw.items()})
         m = pythreejs.Mesh(geometry=geom, material=pythreejs.MeshLambertMaterial(**materialArgs))
         self.currMesh = m
 
         if (preserveExisting):
-            for m2 in self.meshes.children:
-                m2.material.color = 'white'
-                m2.material.transparent = True
-                m2.material.opacity = 0.25
+            for oldMesh in self.meshes.children:
+                oldMesh.material.color = 'red'
+                oldMesh.material.transparent = True
+                oldMesh.material.opacity = 0.25
             self.meshes.add(m)
         else:
+            oldMeshes = list(self.meshes.children)
             self.meshes.children = [m]
+            self.__cleanMeshes(oldMeshes)
 
         if (updateModelMatrix):
-            translate = -np.mean(positions, axis=0)
-            self.bbSize = np.max(np.abs(positions + translate))
+            translate = -np.mean(vertices, axis=0)
+            self.bbSize = np.max(np.abs(vertices + translate))
             scaleFactor = 2.0 / self.bbSize
             self.objects.scale = [scaleFactor, scaleFactor, scaleFactor]
             self.objects.position = tuple(scaleFactor * translate)
@@ -81,16 +128,16 @@ class TriMeshViewer:
         if (self.shouldShowWireframe):
             wirem = pythreejs.Mesh(geometry=m.geometry, material=pythreejs.MeshLambertMaterial(color='black', side='DoubleSide', wireframe=True))
             self.meshes.add(wirem)
-        
+
         if (self.vectorField is not None):
-            self.arrows = self.vectorField.getArrows(self.mesh, material=self.arrowMaterial)
-            self.arrowMaterial = self.arrows.material
+            arrows = self.vectorField.getArrows(self.mesh, material=self.arrowMaterial)
+            self.arrowMaterial = arrows.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
                                               rendererWidth  = self.renderer.width,
                                               targetDepth    = np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
                                               arrowAlignment = self.vectorField.align.getRelativeOffset())
             self.controls.shaderMaterial = self.arrowMaterial
-            self.meshes.add(self.arrows)
+            self.meshes.add(arrows)
 
     @property
     def arrowSize(self):
@@ -123,3 +170,73 @@ class TriMeshViewer:
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)
+
+    def __cleanMeshes(self, oldMeshes = None):
+        if (oldMeshes is None): oldMeshes = list(self.meshes.children)
+        for oldMesh in oldMeshes:
+            if (oldMesh in self.meshes.children):
+                self.meshes.remove(oldMesh)
+            oldMesh.geometry.exec_three_obj_method('dispose')
+            for k, attr in oldMesh.geometry.attributes.items():
+                attr.close()
+            oldMesh.geometry.close()
+            if (oldMesh.material != self.arrowMaterial): # arrow shader material is intended to be reused...
+                oldMesh.material.close()
+            oldMesh.close()
+
+    def __del__(self):
+        # Clean up resources
+        self.__cleanMeshes()
+        # We need to explicitly close the widgets we generated or they will
+        # remain open in the frontend and backend, leaking memory (due to the
+        # global widget registry).
+        # https://github.com/jupyter-widgets/ipywidgets/issues/1345
+        import ipywidget_embedder
+        ds = ipywidget_embedder.dependency_state(self.renderer)
+        keys = list(ds.keys())
+        for k in keys:
+            ipywidgets.Widget.widgets[k].close()
+
+        self.renderer.close()
+
+# Visualize a parametrization by animating the flattening and unflattening of the mesh to the plane.
+class FlatteningAnimation:
+    # Duration in seconds
+    def __init__(self, trimesh, uvs, width=512, height=512, duration=5, textureMap = None):
+        self.viewer = TriMeshViewer(trimesh, width, height, textureMap)
+
+        flatPosArray = None
+        if (uvs.shape[1] == 2): flatPosArray = np.array(np.pad(uvs, [(0, 0), (0, 1)], 'constant'), dtype=np.float32)
+        else:                   flatPosArray = np.array(uvs, dtype=np.float32)
+        flatPos     = pythreejs.BufferAttribute(array=flatPosArray, normalized=False)
+        flatNormals = pythreejs.BufferAttribute(array=np.repeat(np.array([[0, 0, 1]], dtype=np.float32), uvs.shape[0], axis=0), normalized=False)
+
+        geom = self.viewer.currMesh.geometry
+        mat  = self.viewer.currMesh.material
+        geom.morphAttributes = {'position': [flatPos,], 'normal': [flatNormals,]}
+
+        # Both of these material settings are needed or else our target positions/normals are ignored!
+        mat.morphTargets, mat.morphNormals = True, True
+
+        flatteningMesh = pythreejs.Mesh(geometry=geom, material=mat)
+
+        amplitude = np.linspace(-1, 1, 20, dtype=np.float32)
+        times = (np.arcsin(amplitude) / np.pi + 0.5) * duration
+        blendWeights = 0.5 * (amplitude + 1)
+        track = pythreejs.NumberKeyframeTrack('name=.morphTargetInfluences[0]', times = times, values = blendWeights, interpolation='InterpolateSmooth')
+
+        self.action = pythreejs.AnimationAction(pythreejs.AnimationMixer(flatteningMesh),
+                                                pythreejs.AnimationClip(tracks=[track]),
+                                                flatteningMesh, loop='LoopPingPong')
+
+        self.viewer.meshes.children = [flatteningMesh]
+
+        self.layout = ipywidgets.VBox()
+        self.layout.children = [self.viewer.renderer, self.action]
+
+    def show(self):
+        return self.layout
+
+    def exportHTML(self, path):
+        import ipywidget_embedder
+        ipywidget_embedder.embed(path, self.layout)
