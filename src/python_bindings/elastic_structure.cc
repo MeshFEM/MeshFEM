@@ -11,12 +11,20 @@ namespace py = pybind11;
 
 template<template<typename, size_t> class _Energy_T, size_t _K, size_t _Degree>
 void
-bindElasticStructure(py::module& /* module */, py::module& detail_module)
+bindElasticStructure(py::module& module, py::module& detail_module)
 {
     static constexpr size_t Dimension = _K; // Volumetric elasticity means embedding space equals the simplex dimension
     using Energy = _Energy_T<double, Dimension>;
     using EStructure = ElasticStructure<double, Energy, Dimension, _Degree>;
+    using Mesh       = typename EStructure::Mesh;
     using EmbeddingSpace = Eigen::Matrix<Real, Dimension, 1>;
+
+
+    module.def("ElasticStructure", [](const Mesh &m, const Energy &e, Real vol) {
+                if (vol <= 0.0) vol = m.boundingBox().volume();
+                return std::make_shared<EStructure>(e, m, vol);
+            }, py::arg("mesh"), py::arg("energy"), py::arg("volume") = 0.0);
+
 
     // We are using shared pointer as holder instead of unique pointers since some function takes
     // shared pointer as arguments
