@@ -1,6 +1,6 @@
 import numpy as np
 
-def arrow(headHeight, headRadius, shaftRadius, ns=12):
+def arrow(headHeight, headRadius, shaftRadius, ns=8):
     profile = np.array([[0, 0, 0], [0, shaftRadius, 0], [1 - headHeight, shaftRadius, 0], [1 - headHeight, headRadius, 0], [1, 0, 0]], dtype=np.float32)
     coneNormal = np.array([headRadius, headHeight, 0])
     coneNormal /= np.linalg.norm(coneNormal)

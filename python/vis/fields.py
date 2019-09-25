@@ -10,6 +10,7 @@ class DomainType(Enum):
     GUESS   = 0
     PER_TRI = 1
     PER_VTX = 2
+    PER_CORNER = 3
 
 class VectorAlignment(Enum):
     TAIL   = 0
@@ -41,10 +42,15 @@ class VisualizationField:
 
     def validateSize(self, numVertices, numFaces):
         domainSize = len(self.data)
+        numCorners = 3 * numFaces
         if (self.domainType == DomainType.GUESS):
-            self.domainType = DomainType.PER_VTX if (domainSize == numVertices) else DomainType.PER_TRI
-        if ((self.domainType == DomainType.PER_TRI) and (domainSize != numFaces)):    raise Exception('Invalid array size')
-        if ((self.domainType == DomainType.PER_VTX) and (domainSize != numVertices)): raise Exception('Invalid array size')
+            if   (domainSize == numVertices): self.domainType = DomainType.PER_VTX
+            elif (domainSize == numFaces)   : self.domainType = DomainType.PER_TRI
+            else                            : self.domainType = DomainType.PER_CORNER
+        e = Exception('Invalid array size')
+        if ((self.domainType == DomainType.PER_TRI   ) and (domainSize != numFaces)):    raise e
+        if ((self.domainType == DomainType.PER_VTX   ) and (domainSize != numVertices)): raise e
+        if ((self.domainType == DomainType.PER_CORNER) and (domainSize != numCorners)):  raise e
 
 class ScalarField(VisualizationField):
     def __init__(self, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):

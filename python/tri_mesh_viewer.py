@@ -82,11 +82,10 @@ class TriMeshViewer:
         if (scalarField != None): self.scalarField = scalarField
         if (vectorField != None): self.vectorField = vectorField
 
-        vertices = self.mesh.visualizationVertices()
-        if vertices.shape[1] == 2: vertices = np.pad(vertices, [(0, 0), (0, 1)], 'constant', constant_values=0)
-        attrRaw = {'position': np.array(vertices,                           dtype=np.float32),
-                   'index':    np.array(self.mesh.visualizationTriangles(), dtype=np. uint32).ravel(),
-                   'normal':   np.array(self.mesh.vertexNormals(),          dtype=np.float32)}
+        vertices, indices, normals = self.mesh.visualizationGeometry()
+        attrRaw = {'position': vertices,
+                   'index':    indices.ravel(),
+                   'normal':   normals}
 
         materialArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
         if (textureMap is None): materialArgs['color'] = 'lightgray'

@@ -47,7 +47,8 @@ getVertices(const HandleRange<_Mesh, _HType> &vrange) {
 }
 
 template<class _Mesh, template<class> class _HType>
-Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>
+typename std::enable_if<_Mesh::EmbeddingDimension == 3,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(vrange.size(), 3);
     using V3d = Eigen::Matrix<typename _Mesh::Real, 3, 1>;
@@ -63,8 +64,59 @@ getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     return N;
 }
 
+// Vertex normals for meshes embedded in 2D are defined to be 3D vectors in the
+// +z direction (this is needed for visualization).
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 2,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
+    size_t nv = vrange.size();
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(nv, 3);
+    N.block(0, 0, nv, 2).setZero();
+    N.block(0, 2, nv, 1).setOnes();
+    return N;
+}
+
+// Normals for tri meshes
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.vertices()); }
+
+// Surface normals for tet meshes
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }
+
 template<class Mesh>
 using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
+
+// Geometry in the form expected by our triangle mesh viewer.
+// Always a triangle mesh in 3D; this is either the boundary of a tet mesh or
+// the original triangle mesh padded to when needed
+using VisualizationGeometry = std::tuple<Eigen::Matrix<float,    Eigen::Dynamic, 3>,  // Pts
+                                         Eigen::Matrix<uint32_t, Eigen::Dynamic, 3>,  // Tris
+                                         Eigen::Matrix<float,    Eigen::Dynamic, 3>>; // Normals
+
+template<class Mesh> typename std::enable_if<Mesh::K == 2, Eigen::Matrix<int, Eigen::Dynamic, 3>>::type getVisualizationTriangles(const Mesh &m) { return getElementCorners(m.elements()); }
+template<class Mesh> typename std::enable_if<Mesh::K == 3, Eigen::Matrix<int, Eigen::Dynamic, 3>>::type getVisualizationTriangles(const Mesh &m) { return getElementCorners(m.boundaryElements(), false); }
+
+template<class Mesh>
+Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, 3> getVisualizationVertices(const Mesh &m) {
+    Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, Eigen::Dynamic> dynamicResult;
+    if (Mesh::K == 3) dynamicResult = getVertices(m.boundaryVertices());
+    else              dynamicResult = getVertices(m.vertices());
+    Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, 3> result(dynamicResult.rows(), 3);
+    result. leftCols(    dynamicResult.cols()) = dynamicResult;
+    result.rightCols(3 - dynamicResult.cols()).setZero();
+    return result;
+}
+
+template<class Mesh>
+VisualizationGeometry getVisualizationGeometry(const Mesh &m) {
+    return VisualizationGeometry{getVisualizationVertices (m).template cast<float>(),
+                                 getVisualizationTriangles(m).template cast<uint32_t>(),
+                                 getAreaWeightedNormals   (m).template cast<float>()};
+}
 
 template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct MeshBindingsBase {
@@ -99,17 +151,14 @@ struct MeshBindingsBase {
                     return result;
                })
 
-           // We visualize only the boundary vertices/triangles of tet meshes...
-          .def("visualizationTriangles", [](const Mesh &m) -> Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> {
-                  if (_K == 3) return getElementCorners(m.boundaryElements(), false);
-                  else         return getElementCorners(m.elements());
-              })
-          .def("visualizationVertices", [](const Mesh& m) {
-                  if (_K == 3) return getVertices(m.boundaryVertices());
-                  else         return getVertices(m.vertices());
-              })
+          .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
+          .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
+          .def("visualizationGeometry",  &getVisualizationGeometry <Mesh>)
           .def("numVisualizationTriangles", [](const Mesh& m) { return (_K == 3) ? m.numBoundaryElements() : m.numElements(); })
           .def("numVisualizationVertices",  [](const Mesh& m) { return (_K == 3) ? m.numBoundaryVertices() : m.numVertices(); })
+
+          .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
+                                                                         : "Boundary vertex normals (triangle area weighted)")
 
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
@@ -123,7 +172,7 @@ struct MeshBindingsBase {
           .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
           ;
-          return mb;
+      return mb;
     }
 };
 
@@ -175,7 +224,6 @@ struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingS
         mesh_bindings
             .def("numTets",     &Mesh::numTets)
             .def("tets", [](const Mesh &m) { return getElementCorners(m.elements()); })
-            .def("vertexNormals", [](const Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }, "Boundary vertex normals (triangle area weighted)")
             .def("boundaryMesh", [](const Mesh &m) {
                         return std::make_shared<BoundaryMesh>(getElementCorners(m.boundaryElements(), false), getVertices(m.boundaryVertices()));
                 }, "Get a triangle mesh of the boundary (copy)")
@@ -192,19 +240,6 @@ struct MeshBindings<2, _Degree, _EmbeddingSpace> : public TriMeshSpecificBinding
 
 template<size_t _Degree, class _EmbeddingSpace>
 struct MeshBindings<3, _Degree, _EmbeddingSpace> : public TetMeshSpecificBindings<_Degree, _EmbeddingSpace> { };
-
-// Triangle meshes in 3D also provide normals.
-template<size_t _Degree, class _Real>
-struct MeshBindings<2, _Degree, Eigen::Matrix<_Real, 3, 1>> : public TriMeshSpecificBindings<_Degree, Eigen::Matrix<_Real, 3, 1>> {
-    using Base = TriMeshSpecificBindings<_Degree, Eigen::Matrix<_Real, 3, 1>>;
-    using Mesh = typename Base::Mesh;
-    using V3d = Eigen::Matrix<_Real, 3, 1>;
-    static MeshBindingsType<Mesh> bind(py::module& module) {
-        auto mesh_bindings = Base::bind(module);
-        mesh_bindings.def("vertexNormals", [](const Mesh &m) { return getAreaWeightedNormals(m.vertices()); }, "Vertex normals (triangle area weighted)");
-        return mesh_bindings;
-    }
-};
 
 template<size_t _Dimension>
 void bindPeriodicCondition(py::module& module)
@@ -274,7 +309,7 @@ PYBIND11_MODULE(mesh, m)
                     if (std::abs(v[2]) > 1e-10) embeddingDimension = 3;
             }
             return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
-        }, py::arg("path"), py::arg("degree"), py::arg("embeddingDimension") = 0);
+        }, py::arg("path"), py::arg("degree") = 1, py::arg("embeddingDimension") = 0);
     m.def("Mesh", [](const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, size_t degree, size_t embeddingDimension) {
             size_t K = F.cols() - 1;
             if ((K < 2) || (K > 3)) throw std::runtime_error("Mesh must be triangle or tet.");
@@ -287,7 +322,7 @@ PYBIND11_MODULE(mesh, m)
             std::tie(vertices, elements) = getMeshIO(V, F);
 
             return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
-        }, py::arg("V"), py::arg("F"), py::arg("degree"), py::arg("embeddingDimension") = 0);
+        }, py::arg("V"), py::arg("F"), py::arg("degree") = 1, py::arg("embeddingDimension") = 0);
 
     using PSetTriangulation = PolygonSetTriangulation<
         double, Eigen::Vector2d, std::pair<size_t, size_t>>;
