@@ -189,6 +189,8 @@ public:
      BFH        face() const { assert(valid()); BFH bf = volumeVertex().halfFace().boundaryFace(); assert(bf); return bf; }
     BHEH    halfEdge() const { return BHEH(m_mesh.m_bdryHEOfBdryVertex(m_idx), m_mesh); }
 
+    CirculatorRange<BHEH> incidentHalfEdges() const { return CirculatorRange<BHEH>(halfEdge()); }
+
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return m_mesh.m_boundaryVertexData.getPtr(m_idx); }
 };
@@ -223,7 +225,9 @@ public:
     // Circulation around tip
     BHEH  ccw() const { return opposite().prev(); }
     BHEH   cw() const { return next().opposite(); }
+
      BFH face() const { return BFH(m_mesh.m_bdryFaceOfBdryHE(m_idx), m_mesh); }
+     BFH  tri() const { return face(); } // for compatibility with TriMesh's HEHandle
 
     HEH volumeHalfEdge() const { return HEH(m_mesh.m_volHEOfBdryHE(m_idx).index(), m_mesh); }
 

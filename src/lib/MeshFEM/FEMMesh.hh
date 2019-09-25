@@ -95,6 +95,7 @@ class FEMMesh : public Concepts::ElementMesh,
 public:
     static constexpr size_t K   = _K;
     static constexpr size_t Deg = _Deg;
+    static constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
     using EmbeddingSpace = _EmbeddingSpace;
     using Real = typename EmbeddingSpace::Scalar;
 

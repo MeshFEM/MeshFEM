@@ -11,29 +11,57 @@ namespace py = pybind11;
 #include <MeshFEM/MSHFieldWriter.hh>
 
 #include <MeshFEM/Utilities/NameMangling.hh>
+#include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshFactory.hh"
 
 #include "MSHFieldWriter_bindings.hh"
 
-template<size_t _K, class Mesh>
-void addDimensionSpecificBindings(py::class_<Mesh> &mesh_bindings);
-
+////////////////////////////////////////////////////////////////////////////////
+// Helper functions for extracting mesh quantities
+////////////////////////////////////////////////////////////////////////////////
 // Gets the *volume* vertex indices making up a volume or boundary element.
 template<class _EHandle, size_t... I>
-std::array<size_t, sizeof...(I)> getElementCorners(const _EHandle &e, Future::index_sequence<I...>) {
-    static constexpr size_t nv = _EHandle::numVertices();
+Eigen::Matrix<int, sizeof...(I), 1> getElementCorners(const _EHandle &e, bool volumeIndices, Future::index_sequence<I...>) {
+    constexpr size_t nv = _EHandle::numVertices();
     static_assert(sizeof...(I) == nv, "Incorrect index sequence length.");
-    return std::array<size_t, _EHandle::numVertices()>{{size_t(e.vertex(I).volumeVertex().index())...}};
+    if (volumeIndices) return Eigen::Matrix<int, nv, 1>{e.vertex(I).volumeVertex().index()...};
+    else               return Eigen::Matrix<int, nv, 1>{e.vertex(I).index()...};
 }
 
 template<class _Mesh, template<class> class _HType>
-std::vector<std::array<size_t, _HType<_Mesh>::numVertices()>> getElementCorners(const HandleRange<_Mesh, _HType> &range) {
-    constexpr size_t nv = _HType<_Mesh>::numVertices();
-    std::vector<std::array<size_t, nv>> elements;
-    elements.reserve(range.size());
+Eigen::Matrix<int, Eigen::Dynamic, _HType<_Mesh>::numVertices()> getElementCorners(const HandleRange<_Mesh, _HType> &range, bool volumeIndices = true) {
+    constexpr size_t nvPerElem = _HType<_Mesh>::numVertices();
+    Eigen::Matrix<int, Eigen::Dynamic, nvPerElem> elements(range.size(), nvPerElem);
     for (const auto& e : range)
-        elements.emplace_back(getElementCorners(e, Future::make_index_sequence<nv>()));
+        elements.row(e.index()) = getElementCorners(e, volumeIndices, Future::make_index_sequence<nvPerElem>());
     return elements;
+}
+
+template<class _Mesh, template<class> class _HType>
+Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension>
+getVertices(const HandleRange<_Mesh, _HType> &vrange) {
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(vrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t to prevent undefined symbol due to ODR-use
+    for (const auto& v : vrange)
+        V.row(v.index()) = v.volumeVertex().node()->p;
+    return V;
+}
+
+
+template<class _Mesh, template<class> class _HType>
+Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>
+getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(vrange.size(), 3);
+    using V3d = Eigen::Matrix<typename _Mesh::Real, 3, 1>;
+    for (auto v : vrange) {
+        V3d n(V3d::Zero());
+        for (auto he : v.incidentHalfEdges()) {
+            auto t = he.tri();
+            if (!t) continue;
+            n += t->volume() * t->normal();
+        }
+        N.row(v.index()) = n.normalized();
+    }
+    return N;
 }
 
 template<class Mesh>
@@ -43,7 +71,7 @@ template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct MeshBindingsBase {
     using Mesh = FEMMesh<_K, _Degree, _EmbeddingSpace>;
     using Real = typename _EmbeddingSpace::Scalar;
-    static constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
+    static constexpr size_t EmbeddingDimension = Mesh::EmbeddingDimension;
     using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,                  3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, _K + 1>;
@@ -57,13 +85,7 @@ struct MeshBindingsBase {
             // Also add a truncating constructor for 3D vertex arrays (if the mesh isn't embedded in 3D)
            mb.def(py::init([](const MX3d &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
         }
-        mb.def("vertices",
-               [](const Mesh& m) {
-                   MXNd V(m.numVertices(), size_t(EmbeddingDimension)); // size_t to prevent undefined symbol due to ODR-use
-                   for (const auto& v : m.vertices())
-                       V.row(v.index()) = v.node()->p;
-                   return V;
-               })
+        mb.def("vertices", [](const Mesh& m) { return getVertices(m.vertices()); })
           .def("setVertices", [](Mesh &m, MXNd &V) {
                   const size_t nv = m.numVertices();
                   if (size_t(V.rows()) != nv) throw std::runtime_error("Incorrect vertex count");
@@ -72,11 +94,23 @@ struct MeshBindingsBase {
           .def("elements",         [](const Mesh &m) { return getElementCorners(m.elements()); })
           .def("boundaryElements", [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
           .def("boundaryVertices", [](const Mesh &m) {
-                    std::vector<size_t> result;
+                    Eigen::VectorXi result(m.numBoundaryVertices());
                     for (const auto &bv : m.boundaryVertices())
-                        result.push_back(bv.volumeVertex().index());
+                        result(bv.index()) = bv.volumeVertex().index();
                     return result;
                })
+
+           // We visualize only the boundary triangles of tet meshes...
+          .def("visualizationTriangles", [](const Mesh &m) -> Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> {
+                  if (_K == 3) return getElementCorners(m.boundaryElements(), false);
+                  else         return getElementCorners(m.elements());
+              })
+           // We visualize only the boundary vertices of tet meshes...
+          .def("visualizationVertices", [](const Mesh& m) {
+                  if (_K == 3) return getVertices(m.boundaryVertices());
+                  else         return getVertices(m.vertices());
+              })
+
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
           .def("numNodes",    &Mesh::numNodes)
@@ -139,7 +173,9 @@ struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingS
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTets",     &Mesh::numTets)
-            .def("tets", [](const Mesh &m) { return getElementCorners(m.elements()); });
+            .def("tets", [](const Mesh &m) { return getElementCorners(m.elements()); })
+            .def("vertexNormals", [](const Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }, "Boundary vertex normals (triangle area weighted)")
+        ;
         return mesh_bindings;
     }
 };
@@ -161,21 +197,7 @@ struct MeshBindings<2, _Degree, Eigen::Matrix<_Real, 3, 1>> : public TriMeshSpec
     using V3d = Eigen::Matrix<_Real, 3, 1>;
     static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
-        mesh_bindings
-            .def("vertexNormals", [](const Mesh &m) {
-                    Eigen::Matrix<_Real, Eigen::Dynamic, 3> N(m.numVertices(), 3);
-                    for (auto v : m.vertices()) {
-                        V3d n(V3d::Zero());
-                        for (auto he : v.incidentHalfEdges()) {
-                            auto t = he.tri();
-                            if (!t) continue;
-                            n += t->volume() * t->normal();
-                        }
-                        N.row(v.index()) = n.normalized();
-                    }
-                    return N;
-                }, "Vertex normals (triangle area weighted average)")
-            ;
+        mesh_bindings.def("vertexNormals", [](const Mesh &m) { return getAreaWeightedNormals(m.vertices()); }, "Vertex normals (triangle area weighted)");
         return mesh_bindings;
     }
 };
@@ -249,6 +271,19 @@ PYBIND11_MODULE(mesh, m)
             }
             return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
         }, py::arg("path"), py::arg("degree"), py::arg("embeddingDimension") = 0);
+    m.def("Mesh", [](const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, size_t degree, size_t embeddingDimension) {
+            size_t K = F.cols() - 1;
+            if ((K < 2) || (K > 3)) throw std::runtime_error("Mesh must be triangle or tet.");
+
+            if (embeddingDimension == 0)
+                embeddingDimension = V.cols();
+
+            std::vector<MeshIO::IOVertex > vertices;
+            std::vector<MeshIO::IOElement> elements;
+            std::tie(vertices, elements) = getMeshIO(V, F);
+
+            return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
+        }, py::arg("V"), py::arg("F"), py::arg("degree"), py::arg("embeddingDimension") = 0);
 
     using PSetTriangulation = PolygonSetTriangulation<
         double, Eigen::Vector2d, std::pair<size_t, size_t>>;
