@@ -17,7 +17,7 @@ namespace py = pybind11;
 #include "MSHFieldWriter_bindings.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
-// Helper functions for extracting mesh quantities
+// Helper functions for extracting mesh entities
 ////////////////////////////////////////////////////////////////////////////////
 // Gets the *volume* vertex indices making up a volume or boundary element.
 template<class _EHandle, size_t... I>
@@ -40,12 +40,11 @@ Eigen::Matrix<int, Eigen::Dynamic, _HType<_Mesh>::numVertices()> getElementCorne
 template<class _Mesh, template<class> class _HType>
 Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension>
 getVertices(const HandleRange<_Mesh, _HType> &vrange) {
-    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(vrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t to prevent undefined symbol due to ODR-use
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(vrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t cast to prevent undefined symbol due to ODR-use
     for (const auto& v : vrange)
         V.row(v.index()) = v.volumeVertex().node()->p;
     return V;
 }
-
 
 template<class _Mesh, template<class> class _HType>
 Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>
@@ -100,16 +99,17 @@ struct MeshBindingsBase {
                     return result;
                })
 
-           // We visualize only the boundary triangles of tet meshes...
+           // We visualize only the boundary vertices/triangles of tet meshes...
           .def("visualizationTriangles", [](const Mesh &m) -> Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> {
                   if (_K == 3) return getElementCorners(m.boundaryElements(), false);
                   else         return getElementCorners(m.elements());
               })
-           // We visualize only the boundary vertices of tet meshes...
           .def("visualizationVertices", [](const Mesh& m) {
                   if (_K == 3) return getVertices(m.boundaryVertices());
                   else         return getVertices(m.vertices());
               })
+          .def("numVisualizationTriangles", [](const Mesh& m) { return (_K == 3) ? m.numBoundaryElements() : m.numElements(); })
+          .def("numVisualizationVertices",  [](const Mesh& m) { return (_K == 3) ? m.numBoundaryVertices() : m.numVertices(); })
 
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
@@ -169,12 +169,16 @@ template<size_t _Degree, class _EmbeddingSpace>
 struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingSpace> {
     using Base = MeshBindingsBase<3, _Degree, _EmbeddingSpace>;
     using Mesh = typename Base::Mesh;
+    using BoundaryMesh = FEMMesh<2, _Degree, _EmbeddingSpace>;
     static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTets",     &Mesh::numTets)
             .def("tets", [](const Mesh &m) { return getElementCorners(m.elements()); })
             .def("vertexNormals", [](const Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }, "Boundary vertex normals (triangle area weighted)")
+            .def("boundaryMesh", [](const Mesh &m) {
+                        return std::make_shared<BoundaryMesh>(getElementCorners(m.boundaryElements(), false), getVertices(m.boundaryVertices()));
+                }, "Get a triangle mesh of the boundary (copy)")
         ;
         return mesh_bindings;
     }
