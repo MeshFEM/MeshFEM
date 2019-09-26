@@ -3,7 +3,7 @@ import pythreejs
 import ipywidgets
 import ipywidgets.embed
 
-from vis.fields import DomainType, VisualizationField, ScalarField
+from vis.fields import DomainType, VisualizationField, ScalarField, VectorField
 
 # Threejs apparently only supports square textures, so we need to add padding to rectangular textures.
 # The input UVs are assumed to take values in [0, 1]^2 where (0, 0) and (1, 1) are the lower left and upper right
@@ -137,7 +137,7 @@ class TriMeshViewer:
             if (not isinstance(self.vectorField, VectorField)):
                 self.vectorField = VectorField(self.mesh, self.vectorField)
             self.vectorField.validateSize(vertices.shape[0], tris.shape[0])
-            arrows = self.vectorField.getArrows(self.mesh, material=self.arrowMaterial)
+            arrows = self.vectorField.getArrows(material=self.arrowMaterial)
             self.arrowMaterial = arrows.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
                                               rendererWidth  = self.renderer.width,

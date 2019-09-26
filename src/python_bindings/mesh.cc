@@ -118,6 +118,30 @@ VisualizationGeometry getVisualizationGeometry(const Mesh &m) {
                                  getAreaWeightedNormals   (m).template cast<float>()};
 }
 
+// Convert the field data to per-visualization-tri or per-visualization-vtx
+// (NOP for triangle meshes, extract boundary data for tet meshes).
+template<class Mesh, class FieldType>
+Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic>
+getVisualizationField(const Mesh &m, const FieldType &field) {
+    if (Mesh::K == 2) { return field; }
+    if (Mesh::K == 3) {
+        Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result;
+        if (size_t(field.rows()) == m.numVertices()) {
+            result.resize(m.numBoundaryVertices(), field.cols());
+            for (const auto &bv : m.boundaryVertices())
+                result.row(bv.index()) = field.row(bv.volumeVertex().index());
+        }
+        else if (size_t(field.rows()) == m.numElements()) {
+            result.resize(m.numBoundaryElements(), field.cols());
+            for (const auto &be : m.boundaryElements())
+                result.row(be.index()) = field.row(be.opposite().index());
+        }
+        else throw std::runtime_error("Unexpected field size " + std::to_string(field.rows()));
+        return result;
+    }
+    throw std::runtime_error("Unimplemented");
+}
+
 template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct MeshBindingsBase {
     using Mesh = FEMMesh<_K, _Degree, _EmbeddingSpace>;
@@ -154,6 +178,8 @@ struct MeshBindingsBase {
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
           .def("visualizationGeometry",  &getVisualizationGeometry <Mesh>)
+          .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd  &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const Mesh &m, const Eigen::MatrixX3d &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
 
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")

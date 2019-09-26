@@ -259,6 +259,8 @@ public:
      BFH neighbor(size_t i) const { return  BFH(m_mesh. m_bdryFaceAdjBdryFace(i, m_idx), m_mesh); }
     BHEH halfEdge(size_t i) const { return BHEH(m_mesh.    m_bdryHEOfBdryFace(i, m_idx), m_mesh); }
 
+     HFH opposite() const { return volumeHalfFace(); }
+
     // Support range-based for over boundary vertices, neighboring boundary triangles, and half-edges
     struct   VRangeTraits { using SEHType =  BVH; using EHType = BFHandle; static constexpr size_t count = numVertices() ;  static constexpr auto get = &EHType::vertex  ; };
     struct  NTRangeTraits { using SEHType =  BFH; using EHType = BFHandle; static constexpr size_t count = numNeighbors();  static constexpr auto get = &EHType::neighbor; };

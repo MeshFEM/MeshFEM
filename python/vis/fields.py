@@ -74,10 +74,10 @@ class ScalarField(VisualizationField):
         return self.colormap(self.rescaledData(vmin, vmax))[:, 0:3] # strip alpha
 
 class VectorField(VisualizationField):
-    def __init__(self, align=VectorAlignment.TAIL, glyph = VectorGlyph.ARROW, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        self.align = kwargs.pop('align', VectorAlignment.TAIL)
+        self.glyph = kwargs.pop('glyph', VectorGlyph.ARROW)
         VisualizationField.__init__(self, *args, **kwargs)
-        self.align = align
-        self.glyph = glyph
         if (self.data.shape[1] != 3): raise Exception('data is not a 3D vector field (Nx3 array)')
 
     def arrowData(self, vmin = None, vmax = None, alpha = 1.0):
