@@ -33,8 +33,12 @@ class VectorGlyph(Enum):
         raise Exception('Unknown VectorGlyph type')
 
 class VisualizationField:
-    def __init__(self, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):
-        self.data = data
+    # The "mesh" (or rod linkage, or ...) object is used to decode a per-entity field on the original object into a
+    # field on the visualization mesh via the visualizationField call.
+    # It is also used to validate the sizes of the data field.
+    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):
+        self.mesh = mesh
+        self.data = mesh.visualizationField(data)
         self.domainType = domainType
         self.colormap = colormap
         self.vmin = vmin
@@ -53,10 +57,10 @@ class VisualizationField:
         if ((self.domainType == DomainType.PER_CORNER) and (domainSize != numCorners)):  raise e
 
 class ScalarField(VisualizationField):
-    def __init__(self, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):
-        VisualizationField.__init__(self, data, domainType, colormap, vmin, vmax)
+    def __init__(self, *args, **kwargs):
+        VisualizationField.__init__(self, *args, **kwargs)
 
-    def colors(self, vmin=None, vmax=None):
+    def rescaledData(self, vmin, vmax):
         # fall back to self.vmin/self.vmax if vmin/vmax are not specified
         if (vmin == None): vmin = self.vmin
         if (vmax == None): vmax = self.vmax
@@ -64,16 +68,17 @@ class ScalarField(VisualizationField):
         # fall back to data range if vmin/vmax are not specified
         if (vmin == None): vmin = np.min(self.data)
         if (vmax == None): vmax = np.max(self.data)
-        rescaledData = np.clip((self.data - vmin) / (vmax - vmin), 0, 1)
+        return np.clip((self.data - vmin) / (vmax - vmin), 0, 1)
 
-        return self.colormap(rescaledData)[:, 0:3] # strip alpha
+    def colors(self, vmin=None, vmax=None):
+        return self.colormap(self.rescaledData(vmin, vmax))[:, 0:3] # strip alpha
 
 class VectorField(VisualizationField):
-    def __init__(self, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None, align=VectorAlignment.TAIL, glyph = VectorGlyph.ARROW):
-        VisualizationField.__init__(self, data, domainType, colormap, vmin, vmax)
+    def __init__(self, align=VectorAlignment.TAIL, glyph = VectorGlyph.ARROW, *args, **kwargs):
+        VisualizationField.__init__(self, *args, **kwargs)
         self.align = align
         self.glyph = glyph
-        if (data.shape[1] != 3): raise Exception('data is not a 3D vector field (Nx3 array)')
+        if (self.data.shape[1] != 3): raise Exception('data is not a 3D vector field (Nx3 array)')
 
     def arrowData(self, vmin = None, vmax = None, alpha = 1.0):
         # fall back to self.vmin/self.vmax if vmin/vmax are not specified
@@ -97,15 +102,14 @@ class VectorField(VisualizationField):
     def arrowGeometry(self):
         return self.glyph.getGeometry()
 
-    def getArrows(self, mesh, vmin = None, vmax = None, alpha = 1.0, material=None):
-        self.validateSize(mesh.numVisualizationVertices(), mesh.numVisualizationTriangles())
+    def getArrows(self, vmin = None, vmax = None, alpha = 1.0, material=None):
         vectors, colors = self.arrowData(vmin, vmax, alpha)
         V, N, F = self.arrowGeometry()
         pos = None
-        if (self.domainType == DomainType.PER_VTX): pos = mesh.visualizationVertices()
+        if (self.domainType == DomainType.PER_VTX): pos = self.mesh.visualizationVertices()
         if (self.domainType == DomainType.PER_TRI):
             # triangle barycenter
-            pos = np.mean(mesh.visualizationVertices()[mesh.visualizationTriangles()], axis=1)
+            pos = np.mean(self.mesh.visualizationVertices()[self.mesh.visualizationTriangles()], axis=1)
 
         if (pos is None): raise Exception('Unhandled domainType')
         arrowAttr = {'arrowColor': pythreejs.InstancedBufferAttribute(array=np.array(colors, dtype=np.float32)),

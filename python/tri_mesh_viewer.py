@@ -79,12 +79,12 @@ class TriMeshViewer:
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
         if (mesh != None):   self.mesh = mesh
-        if (scalarField != None): self.scalarField = scalarField
-        if (vectorField != None): self.vectorField = vectorField
+        self.scalarField = scalarField
+        self.vectorField = vectorField
 
-        vertices, indices, normals = self.mesh.visualizationGeometry()
+        vertices, tris, normals = self.getVisualizationGeometry()
         attrRaw = {'position': vertices,
-                   'index':    indices.ravel(),
+                   'index':    tris.ravel(),
                    'normal':   normals}
 
         materialArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
@@ -92,7 +92,11 @@ class TriMeshViewer:
         else:                    materialArgs[  'map'] = textureMap.dataTex
 
         if (self.scalarField is not None):
-            self.scalarField.validateSize(self.mesh.numVisualizationVertices(), self.mesh.numVisualizationTriangles())
+            # Construct scalar field from raw data array if necessary
+            if (not isinstance(self.scalarField, ScalarField)):
+                self.scalarField = ScalarField(self.mesh, self.scalarField)
+            self.scalarField.validateSize(vertices.shape[0], tris.shape[0])
+
             materialArgs.pop('color') # we must remove the full mesh color or else the vertex colors are multiplied by it
             attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
             if (self.scalarField.domainType == DomainType.PER_TRI):
@@ -129,6 +133,10 @@ class TriMeshViewer:
             self.meshes.add(wirem)
 
         if (self.vectorField is not None):
+            # Construct vector field from raw data array if necessary
+            if (not isinstance(self.vectorField, VectorField)):
+                self.vectorField = VectorField(self.mesh, self.vectorField)
+            self.vectorField.validateSize(vertices.shape[0], tris.shape[0])
             arrows = self.vectorField.getArrows(self.mesh, material=self.arrowMaterial)
             self.arrowMaterial = arrows.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
@@ -169,6 +177,10 @@ class TriMeshViewer:
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)
+
+    # Implemented here to give subclasses a chance to customize
+    def getVisualizationGeometry(self):
+        return self.mesh.visualizationGeometry()
 
     def __cleanMeshes(self, oldMeshes = None):
         if (oldMeshes is None): oldMeshes = list(self.meshes.children)

@@ -154,8 +154,6 @@ struct MeshBindingsBase {
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
           .def("visualizationGeometry",  &getVisualizationGeometry <Mesh>)
-          .def("numVisualizationTriangles", [](const Mesh& m) { return (_K == 3) ? m.numBoundaryElements() : m.numElements(); })
-          .def("numVisualizationVertices",  [](const Mesh& m) { return (_K == 3) ? m.numBoundaryVertices() : m.numVertices(); })
 
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")
