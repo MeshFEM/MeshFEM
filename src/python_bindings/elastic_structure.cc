@@ -48,6 +48,7 @@ bindElasticStructure(py::module& module, py::module& detail_module)
            py::arg("energy"),
            py::arg("mesh"),
            py::arg("volume"))
+      .def("mesh",    &EStructure::mesh)
       .def("numVars", &EStructure::numVars)
       .def("numElements", &EStructure::numElements)
       .def("setIdentityDeformationGradient", &EStructure::setIdentityDeformationGradient)
@@ -72,46 +73,14 @@ bindElasticStructure(py::module& module, py::module& detail_module)
       .def("hessian", py::overload_cast<SuiteSparseMatrix&>(&EStructure::hessian, py::const_))
       .def("laplacian", &EStructure::laplacian, py::arg("addM") = 0)
       .def("hessianSparsityPattern", &EStructure::hessianSparsityPattern)
-      .def("vertices",
+      .def("deformedVertices",
            [&](const EStructure& m) {
                Eigen::Matrix<double, Eigen::Dynamic, Dimension> V(m.numVertices(), Dimension);
                for (const auto& v : m.mesh().vertices())
                    V.row(v.index()) = m.getNodePosition(v.node().index());
                return V;
            })
-      .def("elements",
-           [&](const EStructure& elastic_structure) {
-               std::vector<std::array<size_t, Dimension + 1>> elements;
-               elements.reserve(elastic_structure.numElements());
-               std::array<size_t, Dimension + 1> current_element;
-               for (const auto& e : elastic_structure.mesh().elements())
-               {
-                   for (const auto& v : e.vertices())
-                   {
-                       current_element[v.localIndex()] = v.index();
-                   }
-                   elements.push_back(current_element);
-               }
-               return elements;
-           })
-      .def("boundary_elements",
-           [&](const EStructure& elastic_structure) {
-               std::vector<std::array<size_t, Dimension>> elements;
-               elements.reserve(elastic_structure.mesh().numBoundaryElements());
-               std::array<size_t, Dimension> current_element;
-               for (const auto& e : elastic_structure.mesh().boundaryElements())
-               {
-                   for (const auto& v : e.vertices())
-                   {
-                       current_element[v.localIndex()] = v.volumeVertex().index();
-                   }
-                   elements.push_back(current_element);
-               }
-               return elements;
-           })
-      .def("is_tet_mesh", [&](const EStructure& elastic_structure) {
-          return (elastic_structure.mesh().element(0).vertices().size() == 4);
-      });
+       ;
 }
 
 
