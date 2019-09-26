@@ -66,6 +66,7 @@ public:
     static constexpr size_t numVertices() { return 3; }
     VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
     TH            tet() const { return TH(m_mesh.m_tetOfHF(m_idx), m_mesh); }
+    TH        simplex() const { return tet(); }
 
     // Support range-based for over vertices
     struct  VRangeTraits { using SEHType = VH; using EHType = HFHandle; static constexpr size_t count = numVertices(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex; };

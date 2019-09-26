@@ -133,8 +133,11 @@ getVisualizationField(const Mesh &m, const FieldType &field) {
         }
         else if (size_t(field.rows()) == m.numElements()) {
             result.resize(m.numBoundaryElements(), field.cols());
-            for (const auto &be : m.boundaryElements())
-                result.row(be.index()) = field.row(be.opposite().index());
+            for (const auto &be : m.boundaryElements()) {
+                if (size_t(be.opposite().simplex().index()) >= size_t(field.rows())) throw std::runtime_error("out of bounds field");
+                if (size_t(be.                     index()) >= size_t(result.rows())) throw std::runtime_error("out of bounds result");
+                result.row(be.index()) = field.row(be.opposite().simplex().index());
+            }
         }
         else throw std::runtime_error("Unexpected field size " + std::to_string(field.rows()));
         return result;

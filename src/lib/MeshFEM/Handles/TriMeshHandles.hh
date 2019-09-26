@@ -90,7 +90,8 @@ public:
     // Dimension-independent terminology:
     BEH boundaryEntity() const { return boundaryEdge(); }
 
-     TH tri() const { return TH(m_mesh.m_triOfHE(m_idx), m_mesh); }
+     TH     tri() const { return TH(m_mesh.m_triOfHE(m_idx), m_mesh); }
+     TH simplex() const { return tri(); }
     HEH next() const {
         if (m_idx < 0) return boundaryEdge().next().m_volumeCast();
         return HEH(m_mesh.template m_HE<_Mesh::Direction::NEXT>(m_idx), m_mesh);
