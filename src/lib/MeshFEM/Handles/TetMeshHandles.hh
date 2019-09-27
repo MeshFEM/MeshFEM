@@ -1,5 +1,6 @@
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
+#include "Circulator.hh"
 
 namespace _TetMeshHandles {
 

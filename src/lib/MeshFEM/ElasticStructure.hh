@@ -83,13 +83,15 @@ struct ElasticStructureTraits;
 
 template<typename Derived>
 class ElasticStructureBase {
-    static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
-    static constexpr Real MIN_MASS = 1e-9;
 public:
     using EStructure = Derived;
     using EST        = ElasticStructureTraits<Derived>;
     using Real       = typename EST::Real;
     using Energy     = typename EST::Energy;
+
+    static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
+    static constexpr Real MIN_MASS = 1e-9;
+
     static_assert(std::is_convertible<typename Energy::Real, Real>::value, "");
 
     static constexpr size_t Dimension                       = EST::Dimension;

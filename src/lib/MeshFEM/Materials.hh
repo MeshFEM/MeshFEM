@@ -27,6 +27,12 @@
 #include <string>
 #include <vector>
 
+#define BOOST_PARSER 1
+#if BOOST_PARSER
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#endif
+
 namespace Materials {
 
 // Material parameter bounds
@@ -403,6 +409,9 @@ struct Constant {
 
     void setFromFile(const std::string &materialFile);
     void setFromJson(const nlohmann::json &config);
+#if BOOST_PARSER
+    void setFromPTree(const boost::property_tree::ptree &pt);
+#endif
 
     // Used for adjoint method gradient-based optimization
     void getETensorDerivative(size_t /* p */, ETensor &/* d */) const {

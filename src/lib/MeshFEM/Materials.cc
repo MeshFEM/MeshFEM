@@ -1,9 +1,13 @@
-#include <MeshFEM/Materials.hh>
+#include "Materials.hh"
 #include <cmath>
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
 #include <map>
+
+#if BOOST_PARSER
+using boost::property_tree::ptree;
+#endif
 
 namespace Materials {
 
@@ -101,10 +105,10 @@ void Orthotropic<_N>::getETensorDerivative(size_t p, Orthotropic<_N>::ETensor &d
 
 namespace {
 
-#if 0
-    void parseNVector(size_t N, const ptree &pt, std::vector<Real> &v) {
+#if BOOST_PARSER
+    void parseNVector_ptree(size_t N, const ptree &pt, std::vector<Real> &v) {
         v.clear();
-        runtime_error err("Failed to parse vector of size " + to_string(N));
+        std::runtime_error err("Failed to parse vector of size " + std::to_string(N));
         for (const auto &val : pt) {
             if (!val.first.empty()) throw err;
             v.push_back(val.second.get_value<Real>());
@@ -113,19 +117,19 @@ namespace {
     }
 
     template<size_t _N>
-    void parseIsotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+    void parseIsotropic_ptree(const ptree &pt, ElasticityTensor<Real, _N> &E) {
         Real young = pt.get<Real>("young");
         Real poisson = pt.get<Real>("poisson");
         E.setIsotropic(young, poisson);
     }
 
     template<size_t _N>
-    void parseOrthotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+    void parseOrthotropic_ptree(const ptree &pt, ElasticityTensor<Real, _N> &E) {
         std::vector<Real> poisson, young, shear;
         if (_N == 2) {
-            parseNVector(2, pt.get_child("young")  , young);
-            parseNVector(2, pt.get_child("poisson"), poisson);
-            parseNVector(1, pt.get_child("shear")  , shear);
+            parseNVector_ptree(2, pt.get_child("young")  , young);
+            parseNVector_ptree(2, pt.get_child("poisson"), poisson);
+            parseNVector_ptree(1, pt.get_child("shear")  , shear);
             // Ex, Ey, nuYX, muXY
             Real   E_x(  young[0]),   E_y(  young[1]),
                  nu_xy(poisson[0]), nu_yx(poisson[1]), mu(shear[0]);
@@ -135,9 +139,9 @@ namespace {
                 throw std::runtime_error("Orthotopic parameters violate symmetry");
         }
         else {
-            parseNVector(3, pt.get_child("young")  , young);
-            parseNVector(6, pt.get_child("poisson"), poisson);
-            parseNVector(3, pt.get_child("shear")  , shear);
+            parseNVector_ptree(3, pt.get_child("young")  , young);
+            parseNVector_ptree(6, pt.get_child("poisson"), poisson);
+            parseNVector_ptree(3, pt.get_child("shear")  , shear);
             Real   E_x(  young[0]),   E_y(  young[1]), E_z(young[2]),
                  nu_yz(poisson[0]), nu_zy(poisson[1]),
                  nu_zx(poisson[2]), nu_xz(poisson[3]),
@@ -156,8 +160,8 @@ namespace {
     }
 
     template<size_t _N>
-    void parseAnisotropic(const ptree &pt, ElasticityTensor<Real, _N> &E) {
-        runtime_error err("Failed to parse material_matrix");
+    void parseAnisotropic_ptree(const ptree &pt, ElasticityTensor<Real, _N> &E) {
+        std::runtime_error err("Failed to parse material_matrix");
         size_t row = 0;
         for (const auto &rpt : pt.get_child("material_matrix")) {
             if (!rpt.first.empty()) throw err;
@@ -168,7 +172,7 @@ namespace {
                 if (row <= col)
                     E.D(row, col) = val;
                 else if (std::abs(E.D(row, col) - val) > 1e-10) {
-                    throw runtime_error("Asymmetric material_matrix");
+                    throw std::runtime_error("Asymmetric material_matrix");
                 }
                 ++col;
             }
@@ -269,16 +273,16 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if 0
+#if BOOST_PARSER
 template<size_t _N>
 void Constant<_N>::setFromPTree(const ptree &pt) {
     std::string type = pt.get<std::string>("type");
-    if (type == "isotropic_material")        { parseIsotropic<_N>(pt, m_E);   }
-    else if (type == "isotropic")            { parseIsotropic<_N>(pt, m_E);   }
-    else if (type == "orthotropic_material") { parseOrthotropic<_N>(pt, m_E); }
-    else if (type == "orthotropic")          { parseOrthotropic<_N>(pt, m_E); }
-    else if (type == "symmetric_material")   { parseAnisotropic<_N>(pt, m_E); }
-    else if (type == "anisotropic")          { parseAnisotropic<_N>(pt, m_E); }
+    if (type == "isotropic_material")        { parseIsotropic_ptree<_N>(pt, m_E);   }
+    else if (type == "isotropic")            { parseIsotropic_ptree<_N>(pt, m_E);   }
+    else if (type == "orthotropic_material") { parseOrthotropic_ptree<_N>(pt, m_E); }
+    else if (type == "orthotropic")          { parseOrthotropic_ptree<_N>(pt, m_E); }
+    else if (type == "symmetric_material")   { parseAnisotropic_ptree<_N>(pt, m_E); }
+    else if (type == "anisotropic")          { parseAnisotropic_ptree<_N>(pt, m_E); }
     else { throw std::runtime_error("Invalid type."); }
 }
 #endif
@@ -328,16 +332,16 @@ nlohmann::json Constant<_N>::getJson() const {
 namespace {
 
 #if 0
-    void parseVariableBounds(const ptree &pt, vector<Bounds::Bound> &bounds) {
+    void parseVariableBounds_ptree(const ptree &pt, std::vector<Bounds::Bound> &bounds) {
         bounds.clear();
-        runtime_error err("Failed to parse variable bounds.");
-        vector<Real> tmp;
+        std::runtime_error err("Failed to parse variable bounds.");
+        std::vector<Real> tmp;
         for (const auto &bd : pt) {
             if (!bd.first.empty()) throw err;
             parseNVector(2, bd.second, tmp);
             size_t var = tmp[0];
             if ((double) var != tmp[0])
-                throw runtime_error("Bound on non-integer variable index.");
+                throw std::runtime_error("Bound on non-integer variable index.");
             bounds.push_back(Bounds::Bound(var, tmp[1]));
         }
     }

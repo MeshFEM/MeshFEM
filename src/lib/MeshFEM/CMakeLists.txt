@@ -144,6 +144,7 @@ target_link_libraries(${PROJECT_NAME}
         tinyexpr::tinyexpr
         cholmod::cholmod
         umfpack::umfpack
+        meshfem::boost
 #		CGAL::CGAL
     PRIVATE
         warnings::all
