@@ -137,7 +137,7 @@ class TriMeshViewer:
             if (not isinstance(self.vectorField, VectorField)):
                 self.vectorField = VectorField(self.mesh, self.vectorField)
             self.vectorField.validateSize(vertices.shape[0], tris.shape[0])
-            arrows = self.vectorField.getArrows(material=self.arrowMaterial)
+            arrows = self.vectorField.getArrows(vertices, tris, material=self.arrowMaterial)
             self.arrowMaterial = arrows.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
                                               rendererWidth  = self.renderer.width,

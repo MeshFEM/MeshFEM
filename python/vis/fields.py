@@ -102,14 +102,12 @@ class VectorField(VisualizationField):
     def arrowGeometry(self):
         return self.glyph.getGeometry()
 
-    def getArrows(self, vmin = None, vmax = None, alpha = 1.0, material=None):
+    def getArrows(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None):
         vectors, colors = self.arrowData(vmin, vmax, alpha)
         V, N, F = self.arrowGeometry()
         pos = None
-        if (self.domainType == DomainType.PER_VTX): pos = self.mesh.visualizationVertices()
-        if (self.domainType == DomainType.PER_TRI):
-            # triangle barycenter
-            pos = np.mean(self.mesh.visualizationVertices()[self.mesh.visualizationTriangles()], axis=1)
+        if (self.domainType == DomainType.PER_VTX): pos = visVertices
+        if (self.domainType == DomainType.PER_TRI): pos = np.mean(visVertices[visTris], axis=1) # triangle barycenters
 
         if (pos is None): raise Exception('Unhandled domainType')
         arrowAttr = {'arrowColor': pythreejs.InstancedBufferAttribute(array=np.array(colors, dtype=np.float32)),
