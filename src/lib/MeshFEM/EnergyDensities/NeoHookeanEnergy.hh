@@ -369,7 +369,7 @@ class NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<NeoHookeanEnergy<
     using Base = NeoHookeanEnergyBase<NeoHookeanEnergy>;
 
 public:
-    static constexpr size_t Dimension = 2;
+    static constexpr size_t Dimension = 3;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
 
