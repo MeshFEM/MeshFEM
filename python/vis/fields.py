@@ -57,9 +57,6 @@ class VisualizationField:
         if ((self.domainType == DomainType.PER_CORNER) and (domainSize != numCorners)):  raise e
 
 class ScalarField(VisualizationField):
-    def __init__(self, *args, **kwargs):
-        VisualizationField.__init__(self, *args, **kwargs)
-
     def rescaledData(self, vmin, vmax):
         # fall back to self.vmin/self.vmax if vmin/vmax are not specified
         if (vmin == None): vmin = self.vmin
@@ -74,10 +71,12 @@ class ScalarField(VisualizationField):
         return self.colormap(self.rescaledData(vmin, vmax))[:, 0:3] # strip alpha
 
 class VectorField(VisualizationField):
-    def __init__(self, *args, **kwargs):
-        self.align = kwargs.pop('align', VectorAlignment.TAIL)
-        self.glyph = kwargs.pop('glyph', VectorGlyph.ARROW)
-        VisualizationField.__init__(self, *args, **kwargs)
+    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet,
+                 vmin=None, vmax=None,
+                 align=VectorAlignment.TAIL, glyph=VectorGlyph.ARROW):
+        self.align = align
+        self.glyph = glyph
+        VisualizationField.__init__(self, mesh, data, domainType, colormap, vmin, vmax)
         if (self.data.shape[1] != 3): raise Exception('data is not a 3D vector field (Nx3 array)')
 
     def arrowData(self, vmin = None, vmax = None, alpha = 1.0):
