@@ -251,3 +251,21 @@ class FlatteningAnimation:
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.layout)
+
+
+
+# Render a elastic tructure
+class ElasticStructureViewer(TriMeshViewer):
+    def __init__(self, elasticStructure, *args, **kwargs):
+        from MeshFEM import Mesh
+        self.elasticStructure = elasticStructure
+        mm = elasticStructure.mesh();
+        # Make a copy of the elasticStructure mesh that we can use
+        # to construct the deformed elasticStructure visualization geometry.
+        self.mesh = Mesh(mm.vertices(),
+                              mm.elements(), 1, mm.embeddingDimension)
+        super().__init__(self.mesh, *args, **kwargs)
+
+    def getVisualizationGeometry(self):
+        self.mesh.setVertices(self.elasticStructure.deformedVertices())
+        return self.mesh.visualizationGeometry()

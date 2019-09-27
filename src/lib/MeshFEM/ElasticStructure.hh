@@ -17,7 +17,6 @@
 #ifndef PARALLEL_ASSEMBLY
     #define PARALLEL_ASSEMBLY true
 #endif
-static constexpr Real MIN_MASS = 1e-9;
 
 
 // template<typename Energy>
@@ -85,6 +84,7 @@ struct ElasticStructureTraits;
 template<typename Derived>
 class ElasticStructureBase {
     static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
+    static constexpr Real MIN_MASS = 1e-9;
 public:
     using EStructure = Derived;
     using EST        = ElasticStructureTraits<Derived>;

@@ -15,7 +15,7 @@ struct NeoHookeanEnergyTraits;
  *  Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
  */
 template<typename _Derived>
-class NeoHookeanEnergyBase
+class NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
 {
 public:
     using Derived = _Derived;
