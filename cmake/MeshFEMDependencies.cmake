@@ -74,7 +74,7 @@ endif()
 if(NOT TARGET tbb::tbb)
     set(TBB_BUILD_STATIC ON CACHE BOOL " " FORCE)
     set(TBB_BUILD_SHARED OFF CACHE BOOL " " FORCE)
-    set(TBB_BUILD_TBBMALLOC OFF CACHE BOOL " " FORCE)
+    set(TBB_BUILD_TBBMALLOC ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
     set(TBB_BUILD_TBBMALLOC_PROXY OFF CACHE BOOL " " FORCE)
     set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 
@@ -85,7 +85,7 @@ if(NOT TARGET tbb::tbb)
 
     add_library(meshfem_tbb INTERFACE)
     target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
-    target_link_libraries(meshfem_tbb INTERFACE tbb_static)
+    target_link_libraries(meshfem_tbb INTERFACE tbb_static tbbmalloc_static)
     add_library(tbb::tbb ALIAS meshfem_tbb)
 endif()
 

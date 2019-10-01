@@ -28,6 +28,27 @@ Eigen::MatrixX3i getF(const Mesh &m) {
     return F;
 }
 
+inline Eigen::MatrixX3d getV(const std::vector<MeshIO::IOVertex> &vertices) {
+    const size_t nv = vertices.size();
+    Eigen::MatrixX3d V(nv, 3);
+    for (size_t i = 0; i < nv; ++i)
+        V.row(i) = vertices[i].point.transpose();
+    return V;
+}
+
+inline Eigen::MatrixXi getF(const std::vector<MeshIO::IOElement> &elements) {
+    const size_t K = elements.at(0).size();
+    const size_t ne = elements.size();
+    Eigen::MatrixXi F(ne, K);
+    for (size_t i = 0; i < ne; ++i) {
+        const auto &e = elements[i];
+        if (e.size() != K) throw std::runtime_error("Element size mismatch");
+        for (size_t j = 0; j < K; ++j)
+            F(i, j) = e[j];
+    }
+    return F;
+}
+
 // We assume libigl's  |V|x3 or |V|x2 vertex array format, but
 // if the number of columns is not 2 or 3, we try to interpret it as
 // a 3x|V| or 2x|V| array.
