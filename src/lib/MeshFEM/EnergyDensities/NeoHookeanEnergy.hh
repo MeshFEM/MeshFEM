@@ -49,7 +49,7 @@ public:
         Real detF = getDeformationGradientDeterminant();
 
         // Standard behavior: return inf for inverted elements
-        if (m_finite_continuation_start < 0 && detF < 0) {
+        if (m_finite_continuation_start <= 0 && detF < 0) {
             return std::numeric_limits<Real>::max();
         }
 
