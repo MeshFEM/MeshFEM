@@ -20,8 +20,8 @@ class ModeViewer(TriMeshViewer):
         # `setVertices` FEMMeshes.
         self.meshMethods = dir(self.mesh)
         self.numVars, self.varGetter, self.varSetter = None, None, None
-        if   ("getVars"     in self.meshMethods): self.numVars, self.varGetter, self.varSetter = self.mesh.numVars(),                 self.mesh.getVars,  self.mesh.setVars
-        elif ("getDoFs"     in self.meshMethods): self.numVars, self.varGetter, self.varSetter = self.mesh.numDoFs(),                 self.mesh.getDoFs,  self.mesh.setDoFs
+        if   ("getVars"     in self.meshMethods): self.numVars, self.varGetter, self.varSetter = self.mesh.numVars(), self.mesh.getVars, self.mesh.setVars
+        elif ("getDoFs"     in self.meshMethods): self.numVars, self.varGetter, self.varSetter = self.mesh.numDoF (), self.mesh.getDoFs, self.mesh.setDoFs
         elif ("setVertices" in self.meshMethods): # Mesh version
             self.numVars   = self.mesh.numNodes() * self.mesh.embeddingDimension
             self.varGetter = lambda: self.mesh.nodes().ravel()

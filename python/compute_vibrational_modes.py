@@ -1,7 +1,8 @@
 import scipy
 from scipy.sparse import csc_matrix, save_npz
 from scipy.sparse.linalg import eigsh
-import numpy as np
+import numpy as np, enum
+import sparse_matrices
 
 class MassMatrixType(enum.Enum):
     IDENTITY = 1
@@ -9,7 +10,9 @@ class MassMatrixType(enum.Enum):
     LUMPED = 3
 
 def compute_vibrational_modes(r, fixedVars, mtype = MassMatrixType.FULL, n = 7, sigma=-0.001):
-    Htrip = r.hessian().getTripletMatrix()
+    H = r.hessian()
+    Htrip = H if isinstance(H, sparse_matrices.TripletMatrix) else H.getTripletMatrix()
+
     M_scipy = None
 
     if (mtype != MassMatrixType.IDENTITY):
@@ -32,18 +35,17 @@ def compute_vibrational_modes(r, fixedVars, mtype = MassMatrixType.FULL, n = 7, 
     return compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, M_scipy)
 
 def compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, M_scipy = None):
+    numVars = Htrip.m
     Htrip.rowColRemoval(fixedVars)
     Htrip.reflectUpperTriangle()
     H = csc_matrix(Htrip.compressedColumn())
 
-    lambdas, modes = None, None
     print("m:", Htrip.m, " nnz:", Htrip.nnz)
+    if (M_scipy is None): lambdas, modes = eigsh(H, n,            sigma=sigma, which='LM')
+    else:                 lambdas, modes = eigsh(H, n, M=M_scipy, sigma=sigma, which='LM')
 
-    if (M is None): lambdas, modes = eigsh(H, n,            sigma=sigma, which='LM')
-    else:           lambdas, modes = eigsh(H, n, M=M_scipy, sigma=sigma, which='LM')
-
-    full_modes = np.zeros((modes.shape[0] + len(fixedVars), modes.shape[1]))
-    full_modes[np.delete(np.arange(r.numVars()), fixedVars), :] = modes
+    full_modes = np.zeros((numVars, modes.shape[1]))
+    full_modes[np.delete(np.arange(numVars), fixedVars), :] = modes
 
     return lambdas, full_modes
 
