@@ -59,8 +59,11 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
 
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
-        .def("setZero", &SuiteSparseMatrix::setZero)
-        .def("fill", &SuiteSparseMatrix::fill)
+        .def(py::init<TMatrix>(), py::arg("tripletMatrix"))
+        .def("setZero",     &SuiteSparseMatrix::setZero)
+        .def("fill",        &SuiteSparseMatrix::fill)
+        .def("setIdentity", &SuiteSparseMatrix::setIdentity)
+        .def("trace",       &SuiteSparseMatrix::trace)
         .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, double))(&SuiteSparseMatrix::addNZ), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
         .def("setFromTMatrix", [&](SuiteSparseMatrix &smat, TMatrix &tmat) { smat.setFromTMatrix(tmat); } /* work around pybind11 error */ )
         .def("getTripletMatrix", &SuiteSparseMatrix::getTripletMatrix)

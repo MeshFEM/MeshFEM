@@ -694,6 +694,7 @@ struct CSCMatrix {
     // effects, e.g., the interpretation of matrix multiplication.
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
+    static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
 
@@ -727,6 +728,17 @@ struct CSCMatrix {
         }
     }
 
+    _Real trace() const {
+        if (m != n) throw std::runtime_error("Trace called on non-square matrix!");
+        _Real result = 0.0;
+        for (_Index i = 0; i < m; ++i) {
+            _Index idx = findDiagEntry<true>(i);
+            if (idx == INDEX_NONE) continue;
+            result += Ax[idx];
+        }
+        return result;
+    }
+
     // Set this matrix to have the same sparsity pattern as b, but with zeros
     void zeros_like(const CSCMatrix &b) {
         m = b.m; n = b.n; nz = b.nz;
@@ -734,24 +746,28 @@ struct CSCMatrix {
         Ax.assign(Ai.size(), 0.0);
     }
 
+    template<bool _detectMissing = false>
     _Index findDiagEntry(_Index i) const {
         if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
             _Index idx = Ap[i + 1] - 1; // Diagonal element is the last entry in the column "i"
-            assert(idx >= Ap[i]);
-            assert(Ai[idx] == i);
+            if (_detectMissing && ((idx < Ap[i]) || (Ai[idx] != i))) return INDEX_NONE;
+            assert((idx >= Ap[i]) && (Ai[idx] == i));
             return idx;
         }
-        return findEntry(i, i);
+        return findEntry<_detectMissing>(i, i);
     }
 
+    template<bool _detectMissing = false>
     _Index findEntry(_Index i, _Index j) const {
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
         auto beginIt = &Ai[0] + Ap[j],
                endIt = &Ai[0] + Ap[j + 1];
         auto it = std::lower_bound(beginIt, endIt, i);
+        if (_detectMissing && (it == endIt)) return INDEX_NONE;
         assert((it != endIt) && "Entry absent from sparsity pattern");
         _Index idx = std::distance(&Ai[0], it);
+        if (_detectMissing && (Ai[idx] != i)) return INDEX_NONE;
         assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
         return idx;
     }
