@@ -174,7 +174,7 @@ Real fluctuationDisplacementSign(size_t ij, size_t r) {
     if (N == 3) {
         // Don't care about reflections orthogonal to shear plane in 3D
         size_t sPlane = ij - N;
-        isReflected.reset(sPlane); 
+        isReflected.reset(sPlane);
     }
 
     return (isReflected.count() == 1) ? -1.0 : 1.0;

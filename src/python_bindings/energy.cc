@@ -11,42 +11,6 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
-template<size_t _Dimension>
-void
-bindElasticityTensor(py::module& module)
-{
-    using ETensor = ElasticityTensor<double, _Dimension>;
-
-    auto py_et = py::class_<ETensor>(module, getElasticityTensorName<_Dimension>().c_str())
-        .def(py::init<>())
-        .def(py::init([](const std::string& material_file) {
-        return Materials::Constant<_Dimension>(material_file).getTensor();
-    }))
-        .def("setIsotropic", &ETensor::setIsotropic, py::arg("E"), py::arg("nu"))
-        ;
-    if (_Dimension == 3) {
-        py_et.def("setOrthotropic",
-            &ETensor::setOrthotropic3D,
-            py::arg("Ex"),
-            py::arg("Ey"),
-            py::arg("Ez"),
-            py::arg("nuYX"),
-            py::arg("nuZX"),
-            py::arg("nuZY"),
-            py::arg("muYZ"),
-            py::arg("myZX"),
-            py::arg("muXY"));
-    }
-    if (_Dimension == 2) {
-        py_et.def("setOrthotropic",
-            &ETensor::setOrthotropic2D,
-            py::arg("Ex"),
-            py::arg("Ey"),
-            py::arg("nuYX"),
-            py::arg("muXY"));
-    }
-}
-
 template<typename Energy>
 void
 bindEnergy(py::class_<Energy>& energy_binding)
@@ -96,12 +60,17 @@ py::object constructNeoHookean(size_t dimension, double lambda, double mu, doubl
     throw std::runtime_error("Argument 'dimension' must be 2 or 3");
 }
 
+py::object constructIsotropicLinear(size_t dimension, double young, double poisson) {
+    if (dimension == 2) return py::cast(new LinearElasticEnergy<double, 2>(ElasticityTensor<double, 2>(young, poisson)), py::return_value_policy::take_ownership);
+    if (dimension == 3) return py::cast(new LinearElasticEnergy<double, 3>(ElasticityTensor<double, 3>(young, poisson)), py::return_value_policy::take_ownership);
+    throw std::runtime_error("Argument 'dimension' must be 2 or 3");
+}
+
 PYBIND11_MODULE(energy, m)
 {
     py::module detail_module = m.def_submodule("detail");
+    py::module::import("tensors");
 
-    bindElasticityTensor<2>   (m);
-    bindElasticityTensor<3>   (m);
     bindLinearElasticEnergy<2>(detail_module);
     bindLinearElasticEnergy<3>(detail_module);
     bindNeoHookeanEnergy<2>   (detail_module);
@@ -113,5 +82,6 @@ PYBIND11_MODULE(energy, m)
     m.def("LinearElastic", [](const ElasticityTensor<double, 3> &etensor) { return LinearElasticEnergy<double, 3>(etensor); }, py::arg("elasticity_tensor"));
     m.def("LinearElastic", [](const ElasticityTensor<double, 2> &etensor) { return LinearElasticEnergy<double, 2>(etensor); }, py::arg("elasticity_tensor"));
 
-    // Isotropic linear elastic versions...
+    m.def("IsotropicLinearElastic",    [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicLinear(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
+    m.def("IsotropicLinearElastic",    [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicLinear(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
 }

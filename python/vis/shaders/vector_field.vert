@@ -2,6 +2,13 @@ uniform float arrowSizePx_x;  // desired arrow length in pixels
 uniform float rendererWidth;  // screen width in pixels
 uniform float arrowAlignment; // offset of tail from "arrowPos" in units of arrowVec (for aligning the arrow center or tip at "arrowPos")
 uniform float targetDepth;
+
+struct PointLight {
+    vec3 position;
+    vec3 color;
+};
+
+uniform PointLight pointLights[ NUM_POINT_LIGHTS ];
 uniform vec3 ambientLightColor;
 
 attribute vec3 arrowPos;
@@ -9,13 +16,14 @@ attribute vec3 arrowVec;
 attribute vec4 arrowColor;
 
 varying vec4 v2f_color;
-varying vec3 v2f_normal;
+// varying vec3 v2f_normal;
+// varying vec3 v2f_pos;
 
 void main() {
     mat3 rotmag; // rotation matrix scaled by the vector magnitude
 
     float len = length(arrowVec);
-    float invscale = (len > 0.0) ? (1.0 / len) : 0.0;
+    float invscale = (len > 1e-8) ? (1.0 / len) : 0.0;
     rotmag[0] = arrowVec;
     // cross([0, 0, 1], dir) or cross([0, 1, 0], dir depending which entry of dir is smaller
     rotmag[1] = (abs(arrowVec[2]) < abs(arrowVec[1])) ? vec3(-arrowVec[1], arrowVec[0], 0) : vec3(arrowVec[2], 0, -arrowVec[0]);
@@ -28,10 +36,12 @@ void main() {
     // Then determine the length of the final reference vector segment [s, 0, objectOriginDepth, 1] - [0, 0, objectOriginDepth, 1] in NDC
     float referenceArrowLen = s * length(projectionMatrix[0].xyz) / targetDepth;
     float scale = 2.0 * arrowSizePx_x / (referenceArrowLen * rendererWidth);
-    // scale = 1.0;
-// #endif
 
-    v2f_color = arrowColor;
-    v2f_normal = normalMatrix * (rotmag * normal); // note: the normal vector is scaled here, but it is normalized in the fragment shader...
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(arrowPos + scale * (arrowAlignment * arrowVec + rotmag * position), 1.0);
+    // Do Gouraud shading lighting in object space
+    vec3 n = normalize(rotmag * normal);
+    vec3 pos = arrowPos + scale * (arrowAlignment * arrowVec + rotmag * position);
+    vec3 l = normalize(pointLights[0].position - pos);
+    v2f_color.xyz = (ambientLightColor + pointLights[0].color * dot(n, l)) * arrowColor.xyz;
+    v2f_color.w   = arrowColor.w;
+    gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
 }

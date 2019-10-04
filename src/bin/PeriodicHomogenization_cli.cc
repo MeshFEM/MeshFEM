@@ -37,7 +37,7 @@ po::variables_map parseCmdLine(int argc, const char *argv[])
 
     po::options_description visible_opts;
     visible_opts.add_options()("help", "Produce this help message")
-        ("material,m", po::value<string>(),                 "base material")
+        ("material,m", po::value<string>(),                "base material")
         ("degree,d",   po::value<int>()->default_value(2), "degree of finite elements")
         ("m2mstress,M",po::value<string>(),                "Dump macroscopic to microscopic stress tensors to specified file")
         ("fieldOutput,o",po::value<string>(),              "Dump fluctuation stress and strain fields to specified msh file")

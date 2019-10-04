@@ -47,6 +47,15 @@ getVertices(const HandleRange<_Mesh, _HType> &vrange) {
 }
 
 template<class _Mesh, template<class> class _HType>
+Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension>
+getNodes(const HandleRange<_Mesh, _HType> &nrange) {
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(nrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t cast to prevent undefined symbol due to ODR-use
+    for (const auto& n : nrange)
+        V.row(n.index()) = n.volumeNode()->p;
+    return V;
+}
+
+template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 3,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
@@ -123,10 +132,23 @@ VisualizationGeometry getVisualizationGeometry(const Mesh &m) {
 template<class Mesh, class FieldType>
 Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic>
 getVisualizationField(const Mesh &m, const FieldType &field) {
-    if (Mesh::K == 2) { return field; }
+    Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result;
+    if (Mesh::K == 2) {
+        size_t numValues = field.rows();
+        // per-node fields are visualized as per-vertex fields
+        if (numValues == m.numNodes())
+            numValues = m.numVertices();
+        size_t numComponents = field.cols();
+        if (numComponents == 2)
+            numComponents = 3; // pad 2D vectors to 3D
+        result.resize(numValues, numComponents);
+        result.leftCols(field.cols()) = field.topRows(numValues);
+        int colsToPad = numComponents - field.cols();
+        if (colsToPad > 0) result.rightCols(colsToPad).setZero();
+        return result;
+    }
     if (Mesh::K == 3) {
-        Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result;
-        if (size_t(field.rows()) == m.numVertices()) {
+        if (size_t(field.rows()) == m.numVertices() || (field.rows() == m.numNodes())) {
             result.resize(m.numBoundaryVertices(), field.cols());
             for (const auto &bv : m.boundaryVertices())
                 result.row(bv.index()) = field.row(bv.volumeVertex().index());
@@ -164,9 +186,10 @@ struct MeshBindingsBase {
            mb.def(py::init([](const MX3d &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
         }
         mb.def("vertices", [](const Mesh& m) { return getVertices(m.vertices()); })
+          .def("nodes",    [](const Mesh& m) { return    getNodes(m.nodes()); })
           .def("setVertices", [](Mesh &m, MXNd &V) {
-                  const size_t nv = m.numVertices();
-                  if (size_t(V.rows()) != nv) throw std::runtime_error("Incorrect vertex count");
+                  const size_t nv = V.rows();
+                  if ((nv != m.numVertices()) && (nv != m.numNodes())) throw std::runtime_error("Incorrect vertex count");
                   m.setNodePositions(V);
                })
           .def("elements",         [](const Mesh &m) { return getElementCorners(m.elements()); })
@@ -181,9 +204,8 @@ struct MeshBindingsBase {
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
           .def("visualizationGeometry",  &getVisualizationGeometry <Mesh>)
-          .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd  &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
-          .def("visualizationField", [](const Mesh &m, const Eigen::MatrixX3d &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
-
+          .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")
 

@@ -43,6 +43,10 @@ class SymmetricMatrixType { };
 template<class T>
 struct is_symmetric_matrix : public std::is_base_of<SymmetricMatrixType, T> { };
 
+template<typename _Real, size_t N> using SMEigenvaluesType  = Eigen::Matrix<_Real, N, 1>;
+template<typename _Real, size_t N> using SMEigenvectorsType = Eigen::Matrix<_Real, N, N>;
+template<typename _Real, size_t N> using SMEigenDecompositionType = std::pair<SMEigenvaluesType<_Real, N>, SMEigenvectorsType<_Real, N>>;
+
 // All symmetric matrix classes currently inherit from ConstSymmetricMatrixBase,
 // which in turn inherits from SymmetricMatrixType to support the
 // identification mechanism above
@@ -63,9 +67,18 @@ public:
         return operator[](flattenIndices<N>(i, j));
     }
 
-    using EigenvaluesType  = Eigen::Matrix<_Real, N, 1>;
-    using EigenvectorsType = Eigen::Matrix<_Real, N, N>;
-    using EigenDecompositionType = std::pair<EigenvaluesType, EigenvectorsType>;
+    using EigenvaluesType        = SMEigenvaluesType<_Real, N>;
+    using EigenvectorsType       = SMEigenvectorsType<_Real, N>;
+    using EigenDecompositionType = SMEigenDecompositionType<_Real, N>;
+
+    Eigen::Matrix<_Real, N, N> toMatrix() const {
+        Eigen::Matrix<_Real, N, N> mat;
+        for (size_t j = 0; j < N; ++j)
+            for (size_t i = 0; i <= N; ++i)
+                mat(i, j) = operator()(i, j);
+        return mat;
+    }
+
     EigenvaluesType eigenvalues() const {
         Eigen::Matrix<_Real, N, N> mat;
         for (size_t j = 0; j < N; ++j)

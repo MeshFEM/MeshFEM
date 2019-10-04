@@ -91,22 +91,22 @@ class VectorField(VisualizationField):
         vectorNorms   = np.linalg.norm(self.data, axis=1)
         rescaledNorms = np.clip((vectorNorms - vmin) / (vmax - vmin), 0, 1)
         mask = vectorNorms > 1e-10
-        vectors = self.data.copy()
-        vectors[mask] *= rescaledNorms[mask, None] / vectorNorms[mask, None]
+        vectors = self.data.copy()[mask]
+        vectors *= rescaledNorms[mask, None] / vectorNorms[mask, None]
 
-        vectorNorms[mask] = rescaledNorms[mask]
-        colors = self.colormap(rescaledNorms, alpha=alpha)
-        return vectors, colors
+        colors = self.colormap(rescaledNorms[mask], alpha=alpha)
+        return vectors, colors, mask
 
     def arrowGeometry(self):
         return self.glyph.getGeometry()
 
     def getArrows(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None):
-        vectors, colors = self.arrowData(vmin, vmax, alpha)
+        vectors, colors, mask = self.arrowData(vmin, vmax, alpha)
         V, N, F = self.arrowGeometry()
         pos = None
         if (self.domainType == DomainType.PER_VTX): pos = visVertices
         if (self.domainType == DomainType.PER_TRI): pos = np.mean(visVertices[visTris], axis=1) # triangle barycenters
+        pos = pos[mask]
 
         if (pos is None): raise Exception('Unhandled domainType')
         arrowAttr = {'arrowColor': pythreejs.InstancedBufferAttribute(array=np.array(colors, dtype=np.float32)),

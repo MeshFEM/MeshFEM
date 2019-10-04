@@ -48,8 +48,10 @@ def replicateAttributesPerTriCorner(attr, perTriColor = True):
 
 class TriMeshViewer:
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+        light = pythreejs.PointLight(color='white', position=[0, 0, 5])
+        light.intensity = 0.6
         self.cam = pythreejs.PerspectiveCamera(position = [0, 0, 5], up = [0, 1, 0], aspect=width / height,
-                children=[pythreejs.DirectionalLight(color='white', position=[3, 5, 1], intensity=0.6)])
+                children=[light])
 
         self.objects = pythreejs.Group()
         self.meshes  = pythreejs.Group()

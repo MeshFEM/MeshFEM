@@ -8,23 +8,17 @@
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/EnergyDensities/DifferentialOperations.hh>
 
-template<typename _Derived>
-struct NeoHookeanEnergyTraits;
-
 /**
  *  Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
  */
-template<typename _Derived>
+template<typename _Real, size_t _Dim, template<typename, size_t> class _Derived_T>
 class NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
 {
 public:
-    using Derived = _Derived;
-    static constexpr size_t Dimension = NeoHookeanEnergyTraits<_Derived>::Dimension;
-    /**
-     *  Used to avoid access to incomplete type member.
-     */
-    using Real = typename NeoHookeanEnergyTraits<Derived>::Real;
-    using Matrix = Eigen::Matrix<Real, Dimension, Dimension>;
+    static constexpr size_t Dim = _Dim;
+    using Real = _Real;
+    using Derived = _Derived_T<Real, Dim>;
+    using Matrix = Eigen::Matrix<Real, Dim, Dim>;
 
     /**
      *  Copy constructor. Does not copy the deformation gradient, only parameters.
@@ -223,26 +217,16 @@ protected:
     Real m_deformation_gradient_determinant;
 };
 
-template<typename _Real, size_t _Dimension>
+template<typename _Real, size_t _Dim>
 class NeoHookeanEnergy;
 
-template<typename _Real, size_t _Dimension>
-struct NeoHookeanEnergyTraits<NeoHookeanEnergy<_Real, _Dimension>>
-{
-    using Real = _Real;
-    static constexpr size_t Dimension = _Dimension;
-};
-
 template<typename _Real>
-class NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<NeoHookeanEnergy<_Real, 2>>
+class NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHookeanEnergy>
 {
-    using Base = NeoHookeanEnergyBase<NeoHookeanEnergy<_Real, 2>>;
-
+    using Base = NeoHookeanEnergyBase<_Real, 2, ::NeoHookeanEnergy>;
 public:
-    static constexpr size_t Dimension = 2;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
-
     using Base::Base;
 
     /**
@@ -364,28 +348,23 @@ private:
 };
 
 template<typename _Real>
-class NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<NeoHookeanEnergy<_Real, 3>>
+class NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHookeanEnergy>
 {
-    using Base = NeoHookeanEnergyBase<NeoHookeanEnergy>;
-
+    using Base = NeoHookeanEnergyBase<_Real, 3, ::NeoHookeanEnergy>;
 public:
-    static constexpr size_t Dimension = 3;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
-
     using Base::Base;
 
     Real getI3(const Matrix& F) const { return getDeterminantSquared(F); }
 
     Matrix getDI3() const { return this->getDifferentiatedDeformationGradientDeterminantSquared(); }
 
-    Matrix getDDI3(const Matrix& dF) const
-    {
+    Matrix getDDI3(const Matrix& dF) const {
         return this->getDifferentiatedTwiceDeformationGradientDeterminantSquared(dF);
     }
 
-    Real getI1() const
-    {
+    Real getI1() const {
         return (m_deformation_gradient * m_deformation_gradient.transpose()).trace();
     }
 

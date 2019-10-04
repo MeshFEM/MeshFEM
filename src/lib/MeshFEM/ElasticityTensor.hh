@@ -39,6 +39,12 @@
 
 #include "Algebra.hh"
 
+// Eigenvalues/vectors are sorted in order of increasing eigenvalue.
+struct ETensorEigenDecomposition {
+    Eigen::MatrixXd strains;
+    Eigen::VectorXd lambdas;
+};
+
 template<typename Real, size_t _Dim, bool _MajorSymmetry = true>
 class ElasticityTensor : public VectorSpace<Real, ElasticityTensor<Real, _Dim, _MajorSymmetry>> {
     // We need access to other major symmetry types' members (for double
@@ -546,12 +552,7 @@ public:
     // find the (s, lambda) pairs satisfying:
     //      E : s = lambda s
     // Should only be used on major-symmetric tensors.
-    // Eigenvalues/vectors are sorted in order of increasing eigenvalue.
-    struct EigenDecomposition {
-        Eigen::MatrixXd strains;
-        Eigen::VectorXd lambdas;
-    };
-    EigenDecomposition computeEigenstrains() const {
+    ETensorEigenDecomposition computeEigenstrains() const {
         assert(hasMajorSymmetry());
 
         // We are solving the problem:
@@ -574,7 +575,7 @@ public:
         Eigen::MatrixXd Q = solver.eigenvectors();
         Eigen::VectorXd Lambda = solver.eigenvalues();
         leftApplySqrtShearDoublerInverse(Q);
-        return EigenDecomposition{Q, Lambda};
+        return ETensorEigenDecomposition{Q, Lambda};
     }
 
     // Computes the eigenstrains with maximum eigenvalue (and this eigenvalue).

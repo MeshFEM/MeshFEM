@@ -11,7 +11,6 @@ using VType = Eigen::Matrix<typename Mesh::EmbeddingSpace::Scalar,
 template<class Mesh>
 VType<Mesh> getV(const Mesh &m) {
     VType<Mesh> V(Eigen::Index(m.numVertices()), Eigen::Index(VType<Mesh>::ColsAtCompileTime));
-    // V.resize(m.numVertices(), VType<Mesh>::RowsAtCompileTime);
     for (auto v : m.vertices())
         V.row(v.index()) = v.node()->p;
 
@@ -19,11 +18,11 @@ VType<Mesh> getV(const Mesh &m) {
 }
 
 template<class Mesh>
-Eigen::MatrixX3i getF(const Mesh &m) {
-    Eigen::MatrixX3i F(m.numElements(), 3);
-    for (auto tri : m.elements()) {
-        for (auto v : tri.vertices())
-            F(tri.index(), v.localIndex()) = v.index();
+Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> getF(const Mesh &m) {
+    Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> F(m.numElements(), Mesh::K + 1);
+    for (auto e : m.elements()) {
+        for (auto v : e.vertices())
+            F(e.index(), v.localIndex()) = v.index();
     }
     return F;
 }

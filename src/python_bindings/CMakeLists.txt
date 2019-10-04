@@ -14,6 +14,14 @@ pybind11_add_module(energy energy.cc)
 set_target_properties(energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(energy PUBLIC MeshFEM)
 
+pybind11_add_module(tensors tensors.cc)
+set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(tensors PUBLIC MeshFEM)
+
+pybind11_add_module(periodic_homogenization periodic_homogenization.cc)
+set_target_properties(periodic_homogenization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(periodic_homogenization PUBLIC MeshFEM)
+
 find_package(Boost REQUIRED)
 if(Boost_FOUND)
 	pybind11_add_module(elastic_structure elastic_structure.cc)
