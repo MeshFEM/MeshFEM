@@ -38,7 +38,6 @@ HomogenizationResult<_Mesh> runHomogenization(
         bool ignorePeriodicMismatch) {
     using Real = typename _Mesh::Real;
     static constexpr size_t N = _Mesh::EmbeddingDimension;
-    using SMValue = SymmetricMatrixValue<Real, N>;
     using LEMesh = LinearElasticity::Mesh<N, _Mesh::Deg, HMG>;
     HMG<N>::material.setTensor(Cbase);
     LinearElasticity::Simulator<LEMesh> sim(getF(mesh), getV(mesh));
@@ -82,7 +81,6 @@ HomogenizationResult<_Mesh> runHomogenization(
 
     // Compute fluctuation strains
     result.strain_w_ij.resize(numCellProblems);
-    const size_t ne = mesh.numElements();
     for (size_t i = 0; i < numCellProblems; ++i)
         result.strain_w_ij[i] = sim.averageStrainField(w_ij[i]);
 
@@ -94,7 +92,6 @@ std::tuple<typename HR::VField, typename HR::SMField>
 getProbeResult(const _Mesh &mesh, const HR &homogenizationResult, const SMValue &macroStrain) {
     const HR &hr = homogenizationResult;
     const size_t numCellProblems = hr.w_ij.size();
-    const size_t wsize = hr.w_ij[0].rows();
     constexpr size_t N = SMValue::N;
     using Vec = VectorND<N>;
 

@@ -21,8 +21,8 @@ std::string floatingPointTypeSuffix() {
 
 template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 std::string getFEMName() {
-    std::array<std::string, 2>  degreeNames{"Linear", "Quadratic"};
-    std::array<std::string, 2> simplexNames{"Tri", "Tet"};
+    std::array<std::string, 2>  degreeNames{{"Linear", "Quadratic"}};
+    std::array<std::string, 2> simplexNames{{"Tri", "Tet"}};
 
     std::string dimName = std::to_string(_EmbeddingSpace::RowsAtCompileTime);
 

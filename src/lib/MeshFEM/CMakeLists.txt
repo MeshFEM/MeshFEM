@@ -151,6 +151,7 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
+target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
 
 ################################################################################
 # Configure manual compiler flags based on CMake options

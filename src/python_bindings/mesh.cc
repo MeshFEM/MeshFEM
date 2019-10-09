@@ -148,7 +148,7 @@ getVisualizationField(const Mesh &m, const FieldType &field) {
         return result;
     }
     if (Mesh::K == 3) {
-        if (size_t(field.rows()) == m.numVertices() || (field.rows() == m.numNodes())) {
+        if (size_t(field.rows()) == m.numVertices() || (size_t(field.rows()) == m.numNodes())) {
             result.resize(m.numBoundaryVertices(), field.cols());
             for (const auto &bv : m.boundaryVertices())
                 result.row(bv.index()) = field.row(bv.volumeVertex().index());
