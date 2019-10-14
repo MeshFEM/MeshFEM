@@ -18,6 +18,10 @@
     #define PARALLEL_ASSEMBLY true
 #endif
 
+#ifndef MESHFEM_WITH_TBB
+#define PARALLEL_ASSEMBLY false
+#endif
+
 
 // template<typename Energy>
 // concept bool EnergyType = 
@@ -255,13 +259,12 @@ public:
                 g_out[var.getIndex()] += contrib[var.getLocalIndex()];
         };
 
-        if (PARALLEL_ASSEMBLY) {
+#if PARALLEL_ASSEMBLY
             assemble_parallel(accumulate_per_element_contrib, g, numElements());
-        }
-        else {
+#else
             for (const auto &e : m_mesh.elements())
                 accumulate_per_element_contrib(e.index(), g);
-        }
+#endif
 
         return g;
     }
@@ -470,12 +473,12 @@ public:
             }
         };
 
-#if !PARALLEL_ASSEMBLY  // Sequential
+#if PARALLEL_ASSEMBLY
+        assemble_parallel(assembler_per_element_contrib, H, numElements());
+#else
         for (size_t e = 0; e < numElements(); ++e) {
             assembler_per_element_contrib(e, H);
         }
-#else   // Parallel
-        assemble_parallel(assembler_per_element_contrib, H, numElements());
 #endif
 
         BENCHMARK_STOP_TIMER("Hessian");
@@ -544,13 +547,13 @@ public:
             }
         };
 
-        if (!PARALLEL_ASSEMBLY) {
+#if!PARALLEL_ASSEMBLY
+            assemble_parallel(assembler_per_element_contrib, H, numElements());
+#else
             for (size_t e = 0; e < numElements(); ++e) {
                 assembler_per_element_contrib(e, H);
             }
-        } else {
-            assemble_parallel(assembler_per_element_contrib, H, numElements());
-        }
+#endif
 
         BENCHMARK_STOP_TIMER("Hessian");
     }
