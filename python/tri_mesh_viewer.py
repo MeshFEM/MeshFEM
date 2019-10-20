@@ -39,12 +39,77 @@ class TextureMap:
 # Input colors may be expressed instead as per-triangle, in which case, these
 # are replicated 3x (once for each corner).
 def replicateAttributesPerTriCorner(attr, perTriColor = True):
-    idxs = attr.pop('index') # we no longer need the index array after replication
+    idxs = attr['index']
     for key in attr:
         if (perTriColor and key == 'color'):
             attr['color'] = np.repeat(attr['color'], 3, axis=0)
             continue
         attr[key] = attr[key][idxs]
+    # We unfortunately still need to use an index array after replication because of this commit in three.js
+    # breaking the update of wireframe index buffers when not using index buffers for our mesh:
+    #   https://github.com/mrdoob/three.js/pull/15198/commits/ea0db1988cd908167b1a24967cfbad5099bf644f
+    attr['index'] = np.arange(len(idxs), dtype=np.uint32)
+
+# According to the documentation (and experience...) the use of textures and vertex colors
+# "can't be easily changed at runtime (once the material is rendered at least once)",
+# apparently because these options change the shader program that is generated for the material
+# (which happens only once, upon first render).
+# Therefore, we will need different materials for all the combinations of
+# settings used in our viewer. We do that here, on demand.
+class MaterialLibrary:
+    def __init__(self):
+        self.materials = {}
+        self.commonArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
+
+    def material(self, useVertexColors, textureMapDataTex = None):
+        name = self._mangledMaterialName(False, useVertexColors, textureMapDataTex)
+        if name not in self.materials:
+            args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
+            self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
+        return self.materials[name]
+
+    def ghostMaterial(self, origMaterial):
+        name = self._mangledNameForMaterial(True, origMaterial)
+        if name not in self.materials:
+            args = {'transparent': True, 'opacity': 0.25}
+            args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), 'red'))
+            self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs) 
+        return self.materials[name]
+
+    def freeMaterial(self, material):
+        '''Release the specified material from the library, destroying its comm'''
+        name = self._mangledNameForMaterial(False, material)
+        if (name not in self.materials): raise Exception('Material to be freed is not found (is it a ghost?)')
+        mat = self.materials.pop(name)
+        mat.close()
+
+    def _colorTexArgs(self, useVertexColors, textureMapDataTex, solidColor):
+        args = {}
+        if useVertexColors:
+            args['vertexColors'] = 'VertexColors'
+        if textureMapDataTex is not None:
+            args['map'] = textureMapDataTex
+        if (useVertexColors == False) and (textureMapDataTex is None):
+            args['color'] = solidColor
+        return args
+
+    def _mangledMaterialName(self, isGhost, useVertexColors, textureMapDataTex):
+        # Since texture map data is stored in the material, we need a separate
+        # material for each distinct texture map.
+        category = 'ghost' if isGhost else 'solid'
+        return f'{category}_vc{useVertexColors}' if textureMapDataTex is None else f'solid_vc{useVertexColors}_tex{textureMap.model_id}'
+
+    def _extractMaterialDescriptors(self, material):
+        '''Get the (useVertexColors, textureMapDataTex) descriptors for a non-ghost material'''
+        return material.vertexColors == 'VertexColors', material.map
+
+    def _mangledNameForMaterial(self, isGhost, material):
+        useVertexColors, textureMapDataTex = self._extractMaterialDescriptors(material)
+        return self._mangledMaterialName(isGhost, useVertexColors, textureMapDataTex)
+
+    def __del__(self):
+        for k, mat in self.materials.items():
+            mat.close()
 
 class TriMeshViewer:
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
@@ -53,10 +118,27 @@ class TriMeshViewer:
         self.cam = pythreejs.PerspectiveCamera(position = [0, 0, 5], up = [0, 1, 0], aspect=width / height,
                 children=[light])
 
-        self.objects = pythreejs.Group()
-        self.meshes  = pythreejs.Group()
+        self.objects      = pythreejs.Group()
+        self.meshes       = pythreejs.Group()
+        self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
 
-        self.objects.add(self.meshes)
+        self.materialLibrary = MaterialLibrary()
+
+        # Sometimes we do not use a particular attribute buffer, e.g. the index buffer when displaying
+        # per-face scalar fields. But to avoid reallocating these buffers when
+        # switching away from these cases, we need to preserve the buffers
+        # that may have previously been allocated. This is done with the bufferAttributeStash.
+        # A buffer attribute, if it exists, must always be attached to the
+        # current BufferGeometry or in this stash (but not both!).
+        self.bufferAttributeStash = {}
+
+        self.currMesh        = None # The main mesh being viewed
+        self.wireframeMesh   = None # Wireframe for the main visualization mesh
+        self.vectorFieldMesh = None
+
+        self.cachedWireframeMaterial = None
+
+        self.objects.add([self.meshes, self.ghostMeshes])
         self.shouldShowWireframe = False
         self.scalarField = None
         self.vectorField = None
@@ -76,7 +158,6 @@ class TriMeshViewer:
         self.controls.panSpeed     = 1.0
 
         self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
-
         self.update(True, trimesh, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
@@ -85,43 +166,9 @@ class TriMeshViewer:
         self.vectorField = vectorField
 
         vertices, tris, normals = self.getVisualizationGeometry()
-        attrRaw = {'position': vertices,
-                   'index':    tris.ravel(),
-                   'normal':   normals}
 
-        materialArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
-        if (textureMap is None): materialArgs['color'] = 'lightgray'
-        else:                    materialArgs[  'map'] = textureMap.dataTex
-
-        if (self.scalarField is not None):
-            # Construct scalar field from raw data array if necessary
-            if (not isinstance(self.scalarField, ScalarField)):
-                self.scalarField = ScalarField(self.mesh, self.scalarField)
-            self.scalarField.validateSize(vertices.shape[0], tris.shape[0])
-
-            materialArgs.pop('color') # we must remove the full mesh color or else the vertex colors are multiplied by it
-            attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
-            if (self.scalarField.domainType == DomainType.PER_TRI):
-                # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
-                # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
-                # since apparently indexed geometry doesn't support the 'FaceColors' option.
-                replicateAttributesPerTriCorner(attrRaw)
-            materialArgs['vertexColors'] = 'VertexColors'
-
-        geom = pythreejs.BufferGeometry(attributes={k: pythreejs.BufferAttribute(v) for k, v in attrRaw.items()})
-        m = pythreejs.Mesh(geometry=geom, material=pythreejs.MeshLambertMaterial(**materialArgs))
-        self.currMesh = m
-
-        if (preserveExisting):
-            for oldMesh in self.meshes.children:
-                oldMesh.material.color = 'red'
-                oldMesh.material.transparent = True
-                oldMesh.material.opacity = 0.25
-            self.meshes.add(m)
-        else:
-            oldMeshes = list(self.meshes.children)
-            self.meshes.children = [m]
-            self.__cleanMeshes(oldMeshes)
+        # Avoid flicker/partial redraws during updates
+        self.renderer.pauseRendering()
 
         if (updateModelMatrix):
             translate = -np.mean(vertices, axis=0)
@@ -130,23 +177,135 @@ class TriMeshViewer:
             self.objects.scale = [scaleFactor, scaleFactor, scaleFactor]
             self.objects.position = tuple(scaleFactor * translate)
 
-        if (self.shouldShowWireframe):
-            wirem = pythreejs.Mesh(geometry=m.geometry, material=pythreejs.MeshLambertMaterial(color='black', side='DoubleSide', wireframe=True))
-            self.meshes.add(wirem)
+        ########################################################################
+        # Construct the raw attributes describing the new mesh.
+        ########################################################################
+        attrRaw = {'position': vertices,
+                   'index':    tris.ravel(),
+                   'normal':   normals}
 
+        if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
+
+        useVertexColors = False
+        if (self.scalarField is not None):
+            # Construct scalar field from raw data array if necessary
+            if (not isinstance(self.scalarField, ScalarField)):
+                self.scalarField = ScalarField(self.mesh, self.scalarField)
+            self.scalarField.validateSize(vertices.shape[0], tris.shape[0])
+
+            attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
+            if (self.scalarField.domainType == DomainType.PER_TRI):
+                # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
+                # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
+                # since apparently indexed geometry doesn't support the 'FaceColors' option.
+                replicateAttributesPerTriCorner(attrRaw)
+            useVertexColors = True
+
+        # Turn the current mesh into a ghost if preserveExisting
+        if (preserveExisting and (self.currMesh is not None)):
+            oldMesh = self.currMesh
+            self.currMesh = None
+            oldMesh.material = self.materialLibrary.ghostMaterial(oldMesh.material)
+            self.meshes.remove(oldMesh)
+            self.ghostMeshes.add(oldMesh)
+
+            # Also convert the current vector field into a ghost (if one is displayed)
+            if (self.vectorFieldMesh in self.meshes.children):
+                oldVFMesh = self.vectorFieldMesh
+                self.vectorFieldMesh = None
+                oldVFMesh.material.transparent = True
+                colors = oldVFMesh.geometry.attributes['arrowColor'].array
+                colors[:, 3] = 0.25
+                oldVFMesh.geometry.attributes['arrowColor'].array = colors
+                self.meshes.remove(oldVFMesh)
+                self.ghostMeshes.add(oldVFMesh)
+        else:
+            self.__cleanMeshes(self.ghostMeshes)
+
+        material = self.materialLibrary.material(useVertexColors, None if textureMap is None else textureMap.dataTex)
+
+        ########################################################################
+        # Build or update mesh from the raw attributes.
+        ########################################################################
+        stashableKeys = ['index', 'color', 'uv']
+        def allocateUpdateOrStashBufferAttribute(attr, key):
+            # Verify invariant that attributes, if they exist, must either be
+            # attached to the current geometry or in the stash (but not both)
+            assert((key not in attr) or (key not in self.bufferAttributeStash))
+
+            if key in attrRaw:
+                if key in self.bufferAttributeStash:
+                    # Reuse the stashed index buffer
+                    attr[key] = self.bufferAttributeStash[key]
+                    self.bufferAttributeStash.pop(key)
+
+                # Update existing attribute or allocate it for the first time
+                if key in attr:
+                    attr[key].array = attrRaw[key]
+                else:
+                    attr[key] = pythreejs.BufferAttribute(attrRaw[key])
+            else:
+                if key in attr:
+                    # Stash the existing, unneeded attribute
+                    self.bufferAttributeStash[key] = attr[key]
+                    attr.pop(key)
+
+        if (self.currMesh is None):
+            attr = {}
+
+            presentKeys = list(attrRaw.keys())
+            for key in presentKeys:
+                if key in stashableKeys:
+                    allocateUpdateOrStashBufferAttribute(attr, key)
+                    attrRaw.pop(key)
+            attr.update({k: pythreejs.BufferAttribute(v) for k, v in attrRaw.items()})
+
+            geom = pythreejs.BufferGeometry(attributes=attr)
+            m = pythreejs.Mesh(geometry=geom, material=material)
+            self.currMesh = m
+            self.meshes.add(m)
+        else:
+            # Update the current mesh...
+            attr = self.currMesh.geometry.attributes.copy()
+            attr['position'].array = attrRaw['position']
+            attr['normal'  ].array = attrRaw['normal']
+
+            for key in stashableKeys:
+                allocateUpdateOrStashBufferAttribute(attr, key)
+
+            self.currMesh.geometry.attributes = attr
+            self.currMesh.material = material
+
+        # If we reallocated the current mesh (preserveExisting), we need to point
+        # the wireframe mesh at the new geometry.
+        if self.wireframeMesh is not None:
+            self.wireframeMesh.geometry = self.currMesh.geometry
+
+        ########################################################################
+        # Build/update the vector field mesh if requested (otherwise hide it).
+        ########################################################################
         if (self.vectorField is not None):
             # Construct vector field from raw data array if necessary
             if (not isinstance(self.vectorField, VectorField)):
                 self.vectorField = VectorField(self.mesh, self.vectorField)
             self.vectorField.validateSize(vertices.shape[0], tris.shape[0])
-            arrows = self.vectorField.getArrows(vertices, tris, material=self.arrowMaterial)
-            self.arrowMaterial = arrows.material
+
+            self.vectorFieldMesh = self.vectorField.getArrows(vertices, tris, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
+
+            self.arrowMaterial = self.vectorFieldMesh.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
                                               rendererWidth  = self.renderer.width,
                                               targetDepth    = np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
                                               arrowAlignment = self.vectorField.align.getRelativeOffset())
             self.controls.shaderMaterial = self.arrowMaterial
-            self.meshes.add(arrows)
+            if (self.vectorFieldMesh not in self.meshes.children):
+                self.meshes.add(self.vectorFieldMesh)
+        else:
+            if (self.vectorFieldMesh in self.meshes.children):
+                self.meshes.remove(self.vectorFieldMesh)
+
+        # The scene is now complete; redraw
+        self.renderer.resumeRendering()
 
     @property
     def arrowSize(self):
@@ -159,8 +318,26 @@ class TriMeshViewer:
             self.arrowMaterial.updateUniforms(arrowSizePx_x = self.arrowSize)
 
     def showWireframe(self, shouldShow = True):
-        self.shouldShowWireframe = shouldShow;
-        self.update(False, None, False);
+        if shouldShow:
+            if self.wireframeMesh is None:
+                # The wireframe shares geometry with the current mesh, and should automatically be updated when the current mesh is...
+                self.wireframeMesh = pythreejs.Mesh(geometry=self.currMesh.geometry, material=self.wireframeMaterial())
+            if self.wireframeMesh not in self.meshes.children:
+                self.meshes.add(self.wireframeMesh)
+        else: # hide
+            if self.wireframeMesh in self.meshes.children:
+                self.meshes.remove(self.wireframeMesh)
+        self.shouldShowWireframe = shouldShow
+
+    def wireframeMaterial(self):
+        if (self.cachedWireframeMaterial is None):
+            self.cachedWireframeMaterial = self.allocateWireframeMaterial()
+        return self.cachedWireframeMaterial
+
+    # Allocate a wireframe material for the mesh; this can be overrided by, e.g., mode_viewer
+    # to apply different settings.
+    def allocateWireframeMaterial(self):
+        return pythreejs.MeshBasicMaterial(color='black', side='DoubleSide', wireframe=True)
 
     def getCameraParams(self):
         return (self.cam.position, self.cam.up, self.controls.target)
@@ -184,22 +361,36 @@ class TriMeshViewer:
     def getVisualizationGeometry(self):
         return self.mesh.visualizationGeometry()
 
-    def __cleanMeshes(self, oldMeshes = None):
-        if (oldMeshes is None): oldMeshes = list(self.meshes.children)
-        for oldMesh in oldMeshes:
-            if (oldMesh in self.meshes.children):
-                self.meshes.remove(oldMesh)
-            oldMesh.geometry.exec_three_obj_method('dispose')
-            for k, attr in oldMesh.geometry.attributes.items():
-                attr.close()
-            oldMesh.geometry.close()
-            if (oldMesh.material != self.arrowMaterial): # arrow shader material is intended to be reused...
-                oldMesh.material.close()
+    def __cleanMeshes(self, meshGroup):
+        meshes = list(meshGroup.children)
+        for oldMesh in meshes:
+            meshGroup.remove(oldMesh)
+
+            # Note: the wireframe mesh shares geometry with the current mesh;
+            # avoid a double close.
+            if (oldMesh != self.wireframeMesh):
+                oldMesh.geometry.exec_three_obj_method('dispose')
+                for k, attr in oldMesh.geometry.attributes.items():
+                    attr.close()
+                oldMesh.geometry.close()
+
             oldMesh.close()
 
     def __del__(self):
         # Clean up resources
-        self.__cleanMeshes()
+        self.__cleanMeshes(self.ghostMeshes)
+        # If vectorFieldMesh or wireframeMesh exist but are hidden, add them to the meshes group for cleanup
+        if (self.vectorFieldMesh is not None) and (self.vectorFieldMesh not in self.meshes.children):
+            self.meshes.add(self.vectorFieldMesh)
+        if (self.wireframeMesh is not None) and (self.wireframeMesh not in self.meshes.children):
+            self.meshes.add(self.wireframeMesh)
+        self.__cleanMeshes(self.meshes)
+
+        # Also clean up our stashed buffer attributes (these are guaranteed not
+        # to be attached to the geometry that was already cleaned up).
+        for k, v in self.bufferAttributeStash.items():
+            v.close()
+
         # We need to explicitly close the widgets we generated or they will
         # remain open in the frontend and backend, leaking memory (due to the
         # global widget registry).
@@ -255,8 +446,7 @@ class FlatteningAnimation:
         ipywidget_embedder.embed(path, self.layout)
 
 
-
-# Render a elastic tructure
+# Render a elastic structure
 class ElasticStructureViewer(TriMeshViewer):
     def __init__(self, elasticStructure, *args, **kwargs):
         from MeshFEM import Mesh

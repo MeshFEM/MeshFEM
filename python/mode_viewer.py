@@ -12,7 +12,12 @@ class ModeViewer(TriMeshViewer):
         self.layout = ipywidgets.VBox()
         self.controls_layout = ipywidgets.HBox()
         self.action = None
+        # Note: numSteps cannot be changed because this requires changing the number of morph attributes
         self.numSteps = numSteps
+
+        self.morphMaterial = pythreejs.MeshLambertMaterial(color='lightgray', side='DoubleSide', morphTargets = True)
+        self.modeMesh = None
+        self.wireframeAction = None
 
         # Infer the methods for getting/setting the object's deformed
         # configuration. This involves, e.g., `setVars` for
@@ -58,6 +63,9 @@ class ModeViewer(TriMeshViewer):
         self.selectMode(0, play = False)
 
     def selectMode(self, modeNum, play = True):
+        # Avoid flicker/partial redraws during updates
+        self.renderer.pauseRendering()
+
         modeVector = None
         if (len(self.modeDoF.shape) == 1):
             if (modeNum != 0): raise Exception('modeNum should be zero; only a single mode was given.')
@@ -74,8 +82,8 @@ class ModeViewer(TriMeshViewer):
         else:
             normalizedOffset = modeVector * self.amplitude
 
-        morphTargetPositions = []
-        morphTargetNormals = []
+        morphTargetPositionsRaw = []
+        morphTargetNormalsRaw = []
         modulations = np.linspace(-1, 1, self.numSteps, dtype=np.float32)
 
         # Animate the structure oscillating around its current degrees of freedom
@@ -84,34 +92,64 @@ class ModeViewer(TriMeshViewer):
         for modulation in modulations:
             self.varSetter(currVars + modulation * normalizedOffset)
             pts, tris, normals = self.mesh.visualizationGeometry()
-            morphTargetPositions.append(pythreejs.BufferAttribute(array = pts,     normalized = False))
-            morphTargetNormals  .append(pythreejs.BufferAttribute(array = normals, normalized = False))
+            morphTargetPositionsRaw.append(pts)
+            morphTargetNormalsRaw  .append(normals)
         self.varSetter(currVars)
 
-        # We need to create a new mesh to add our morph targets
-        # Note: morphTargets = True must be added to the new mesh's material!!!
-        geom = self.meshes.children[0].geometry
-        geom.morphAttributes = {'position': tuple(morphTargetPositions), 'normal': tuple(morphTargetNormals)}
-        modeMesh = pythreejs.Mesh(geometry=geom, material=pythreejs.MeshLambertMaterial(color='lightgray', side='DoubleSide', morphTargets = True))
+        if self.modeMesh is None:
+            # We apparently need to create a new mesh to add our morph targets
+            # (instead of reusing the viewer's mesh object, otherwise the mesh
+            # does not display).
+            geom = self.currMesh.geometry
+            geom.morphAttributes = {'position': tuple(map(pythreejs.BufferAttribute, morphTargetPositionsRaw)),
+                                    'normal':   tuple(map(pythreejs.BufferAttribute, morphTargetNormalsRaw))}
+            self.modeMesh = pythreejs.Mesh(geometry=geom, material=self.morphMaterial)
+            self.meshes.remove(self.currMesh)
+            self.currMesh.close()
+            self.currMesh = self.modeMesh
+            self.meshes.add(self.currMesh)
+        else:
+            # Update the exisitng morph position/normal attribute arrays
+            geom = self.currMesh.geometry
+            assert(len(geom.morphAttributes['position']) == self.numSteps)
+            assert(len(geom.morphAttributes['normal'  ]) == self.numSteps)
+            for rawArray, attrArray in zip(morphTargetPositionsRaw, geom.morphAttributes['position']):
+                attrArray.array = rawArray
+            for rawArray, attrArray in zip(morphTargetNormalsRaw, geom.morphAttributes['normal']):
+                attrArray.array = rawArray
 
         t = np.arcsin(modulations) / np.pi + 0.5
         I = np.identity(self.numSteps, dtype=np.float32)
         tracks = [pythreejs.NumberKeyframeTrack(f'name=.morphTargetInfluences[{i}]', times=t, values=I[:, i].ravel(), interpolation='InterpolateSmooth') for i in range(self.numSteps)]
 
         # Stop the old action (if it exists) so that the new animation is not superimposed atop it
-        if (self.action is not None):
-            self.action.stop()
+        if (self.action is None):
+            self.action = pythreejs.AnimationAction(pythreejs.AnimationMixer(self.modeMesh),
+                                                    pythreejs.AnimationClip(tracks=tracks), self.modeMesh, loop='LoopPingPong')
 
-        self.action = pythreejs.AnimationAction(pythreejs.AnimationMixer(modeMesh), pythreejs.AnimationClip(tracks=tracks), modeMesh, loop='LoopPingPong')
+        # Currently it doesn't seem possible to animate both the wireframe and solid mesh synchronously without
+        # nontrivial changes to pythreejs or three.js.
+        # There are some ideas discussed in "https://github.com/jupyter-widgets/pythreejs/issues/262" but
+        # I can't seem t get them to work...
+        # if ((self.wireframeAction is None) and (self.wireframeMesh is not None)):
+        #     self.wireframeAction = pythreejs.AnimationAction(pythreejs.AnimationMixer(self.wireframeMesh),
+        #                                                      pythreejs.AnimationClip(tracks=tracks), self.wireframeMesh, loop='LoopPingPong')
+        #     # self.wireframeAction.syncWith(self.action)
+        #     self.wireframeAction.play()
 
-        self.meshes.children = [modeMesh]
         controls = [self.action]
         if (self.mode_selector is not None): controls.append(self.mode_selector)
         self.controls_layout.children = controls
         self.layout.children = [self.renderer, self.controls_layout]
 
-        # Start the animation if the one we just replaced was running.
+        # Start the animation if requested
         if (play): self.action.play()
+
+        self.renderer.resumeRendering()
+
+    # Override the default wireframe material to apply morphTargets
+    def allocateWireframeMaterial(self):
+        return pythreejs.MeshBasicMaterial(color='black', side='DoubleSide', wireframe=True, morphTargets=True)
 
     def setAmplitude(self, amplitude):
         self.setModes(self.modeDoF, self.eigenvalues, amplitude)
@@ -122,3 +160,9 @@ class ModeViewer(TriMeshViewer):
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, ipywidgets.VBox([self.renderer, self.action]))
+
+    def __del__(self):
+        if (self.modeMesh is not None):
+            self.modeMesh.close()
+        if (self.morphMaterial is not None):
+            self.morphMaterial.close()

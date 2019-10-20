@@ -5,6 +5,7 @@ from enum import Enum
 from .primitives import arrow, cylinder
 import vis.shaders
 import pythreejs
+import itertools
 
 class DomainType(Enum):
     GUESS   = 0
@@ -68,7 +69,7 @@ class ScalarField(VisualizationField):
         return np.clip((self.data - vmin) / (vmax - vmin), 0, 1)
 
     def colors(self, vmin=None, vmax=None):
-        return self.colormap(self.rescaledData(vmin, vmax))[:, 0:3] # strip alpha
+        return self.colormap(self.rescaledData(vmin, vmax).ravel())[:, 0:3] # strip alpha
 
 class VectorField(VisualizationField):
     def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet,
@@ -100,7 +101,9 @@ class VectorField(VisualizationField):
     def arrowGeometry(self):
         return self.glyph.getGeometry()
 
-    def getArrows(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None):
+    # Get a pythreejs Mesh of the arrow geometry, either allocating a new mesh object or
+    # updating existingMesh.
+    def getArrows(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None, existingMesh=None):
         vectors, colors, mask = self.arrowData(vmin, vmax, alpha)
         V, N, F = self.arrowGeometry()
         pos = None
@@ -109,12 +112,26 @@ class VectorField(VisualizationField):
         pos = pos[mask]
 
         if (pos is None): raise Exception('Unhandled domainType')
-        arrowAttr = {'arrowColor': pythreejs.InstancedBufferAttribute(array=np.array(colors, dtype=np.float32)),
-                     'arrowVec':   pythreejs.InstancedBufferAttribute(array=np.array(vectors, dtype=np.float32)),
-                     'arrowPos':   pythreejs.InstancedBufferAttribute(array=np.array(pos, dtype=np.float32))}
-        ibg = pythreejs.InstancedBufferGeometry(attributes=dict(position=pythreejs.BufferAttribute(V),
-                                                index=pythreejs.BufferAttribute(F.ravel()),
-                                                normal=pythreejs.BufferAttribute(N),
-                                                **arrowAttr))
+
         if (material is None): material = vis.shaders.loadShaderMaterial('vector_field')
-        return pythreejs.Mesh(geometry=ibg, material=material, frustumCulled=False) # disable frustum culling since arrow vertex shader moves things around.
+
+        rawInstancedAttr = {'arrowColor': np.array(colors,  dtype=np.float32),
+                            'arrowVec':   np.array(vectors, dtype=np.float32),
+                            'arrowPos':   np.array(pos,     dtype=np.float32)}
+        rawAttr = {'position': V,
+                   'index':    F.ravel(),
+                   'normal':   N}
+
+        arrowMesh = None
+        if (existingMesh is None):
+            attr =      {k: pythreejs.InstancedBufferAttribute(v) for k, v in rawInstancedAttr.items()}
+            attr.update({k: pythreejs.         BufferAttribute(v) for k, v in         rawAttr.items()})
+            ibg = pythreejs.InstancedBufferGeometry(attributes=attr)
+            arrowMesh = pythreejs.Mesh(geometry=ibg, material=material, frustumCulled=False) # disable frustum culling since our vertex shader moves arrows around.
+        else:
+            for k, v in rawInstancedAttr.items(): # position/index/normal should be constant...
+                existingMesh.geometry.attributes[k].array = v
+            arrowMesh = existingMesh
+            existingMesh.geometry.maxInstancedCount = pos.shape[0] # threejs does not automatically update maxInstancedCount after it is initialized to the full count of the original arrays by the renderer
+
+        return arrowMesh
