@@ -118,6 +118,8 @@ class TriMeshViewer:
         self.cam = pythreejs.PerspectiveCamera(position = [0, 0, 5], up = [0, 1, 0], aspect=width / height,
                 children=[light])
 
+        self.avoidRedrawFlicker = True
+
         self.objects      = pythreejs.Group()
         self.meshes       = pythreejs.Group()
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
@@ -166,9 +168,6 @@ class TriMeshViewer:
         self.vectorField = vectorField
 
         vertices, tris, normals = self.getVisualizationGeometry()
-
-        # Avoid flicker/partial redraws during updates
-        self.renderer.pauseRendering()
 
         if (updateModelMatrix):
             translate = -np.mean(vertices, axis=0)
@@ -250,6 +249,10 @@ class TriMeshViewer:
                     self.bufferAttributeStash[key] = attr[key]
                     attr.pop(key)
 
+        # Avoid flicker/partial redraws during updates
+        if self.avoidRedrawFlicker:
+            self.renderer.pauseRendering()
+
         if (self.currMesh is None):
             attr = {}
 
@@ -304,8 +307,9 @@ class TriMeshViewer:
             if (self.vectorFieldMesh in self.meshes.children):
                 self.meshes.remove(self.vectorFieldMesh)
 
-        # The scene is now complete; redraw
-        self.renderer.resumeRendering()
+        if self.avoidRedrawFlicker:
+            # The scene is now complete; reenable rendering and redraw immediatley.
+            self.renderer.resumeRendering()
 
     @property
     def arrowSize(self):
