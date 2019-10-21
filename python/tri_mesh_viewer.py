@@ -97,7 +97,7 @@ class MaterialLibrary:
         # Since texture map data is stored in the material, we need a separate
         # material for each distinct texture map.
         category = 'ghost' if isGhost else 'solid'
-        return f'{category}_vc{useVertexColors}' if textureMapDataTex is None else f'solid_vc{useVertexColors}_tex{textureMap.model_id}'
+        return f'{category}_vc{useVertexColors}' if textureMapDataTex is None else f'solid_vc{useVertexColors}_tex{textureMapDataTex.model_id}'
 
     def _extractMaterialDescriptors(self, material):
         '''Get the (useVertexColors, textureMapDataTex) descriptors for a non-ghost material'''
