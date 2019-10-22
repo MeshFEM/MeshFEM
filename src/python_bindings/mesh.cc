@@ -28,9 +28,9 @@ Eigen::Matrix<int, sizeof...(I), 1> getElementCorners(const _EHandle &e, bool vo
     else               return Eigen::Matrix<int, nv, 1>{e.vertex(I).index()...};
 }
 
-template<class _Mesh, template<class> class _HType>
-Eigen::Matrix<int, Eigen::Dynamic, _HType<_Mesh>::numVertices()> getElementCorners(const HandleRange<_Mesh, _HType> &range, bool volumeIndices = true) {
-    constexpr size_t nvPerElem = _HType<_Mesh>::numVertices();
+template<class _HandleRange>
+Eigen::Matrix<int, Eigen::Dynamic, _HandleRange::HType::numVertices()> getElementCorners(const _HandleRange &range, bool volumeIndices = true) {
+    constexpr size_t nvPerElem = _HandleRange::HType::numVertices();
     Eigen::Matrix<int, Eigen::Dynamic, nvPerElem> elements(range.size(), nvPerElem);
     for (const auto& e : range)
         elements.row(e.index()) = getElementCorners(e, volumeIndices, Future::make_index_sequence<nvPerElem>());

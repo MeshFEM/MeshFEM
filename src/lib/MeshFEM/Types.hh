@@ -28,7 +28,14 @@ struct isMatrixOfSize : std::false_type { };
 
 template<class EigenType, int RowSize, int ColSize>
 struct isMatrixOfSize<EigenType, RowSize, ColSize, typename std::enable_if<(EigenType::RowsAtCompileTime == RowSize) &&
-                                                                           (EigenType::ColsAtCompileTime == ColSize), void>::type> : std::true_type {};
+                                                                           (EigenType::ColsAtCompileTime == ColSize), void>::type> : std::true_type { };
+
+template<class EigenType, class Enable = void>
+struct isCompileTimeSizedEigen : std::false_type { };
+
+template<class EigenType>
+struct isCompileTimeSizedEigen<EigenType, typename std::enable_if<(EigenType::RowsAtCompileTime > 0) &&
+                                                                  (EigenType::ColsAtCompileTime > 0), void>::type> : std::true_type { };
 
 template<class EigenType, int RowSize, int ColSize, typename T = void>
 using EnableIfMatrixOfSize = typename std::enable_if<isMatrixOfSize<EigenType, RowSize, ColSize>::value, T>::type;
@@ -54,13 +61,40 @@ template<class OutPointDerived, class InPointDerived> OutPointDerived           
 template<class InVertex                       , class NestedPointType = decltype(InVertex().point)> V3MatchingScalarType<NestedPointType> padTo3D(const InVertex &v) { return    Padder<NestedPointType                   >::run(v.point); }
 template<class OutPointDerived, class InVertex, class NestedPointType = decltype(InVertex().point)> OutPointDerived                truncateFrom3D(const InVertex &v) { return Truncator<Eigen::MatrixBase<OutPointDerived>>::run(v.point).template cast<typename OutPointDerived::Scalar>(); }
 
-template<class EmbeddingSpace, class InputDerived>
+// Compile-time sizes with compile-time checking
+template<class EmbeddingSpace, class InputDerived, typename std::enable_if<isCompileTimeSizedEigen<  InputDerived>::value &&
+                                                                           isCompileTimeSizedEigen<EmbeddingSpace>::value, int>::type = 0>
 EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
-    const size_t  inRows = InputDerived::RowsAtCompileTime,
-                 outRows = EmbeddingSpace::RowsAtCompileTime;
+    constexpr int  inRows =   InputDerived::RowsAtCompileTime,
+                   inCols =   InputDerived::ColsAtCompileTime,
+                  outRows = EmbeddingSpace::RowsAtCompileTime,
+                  outCols = EmbeddingSpace::ColsAtCompileTime;
+    static_assert((inRows > 0) && (outRows > 0));
+    static_assert((inCols == 1) && (outCols == 1), "We operate only on vectors");
     static_assert(inRows >= outRows, "Truncation cannot upsize");
-    EmbeddingSpace result = p.template head<EmbeddingSpace::RowsAtCompileTime>();
-    for (size_t i = outRows; i < inRows; ++i) {
+    EmbeddingSpace result = p.template head<outRows>();
+    for (int i = outRows; i < inRows; ++i) {
+        if (std::abs(p[i]) > 1e-6)
+            throw std::runtime_error("Nonzero component truncated.");
+    }
+    return result;
+}
+
+// Dynamic input size, compile-time output size with partial compile-time checking.
+template<class EmbeddingSpace, class InputDerived, typename std::enable_if<!isCompileTimeSizedEigen<  InputDerived>::value &&
+                                                                            isCompileTimeSizedEigen<EmbeddingSpace>::value, int>::type = 0>
+EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
+    constexpr int outRows = EmbeddingSpace::RowsAtCompileTime,
+                  outCols = EmbeddingSpace::ColsAtCompileTime;
+    const     int  inRows = p.rows(),
+                   inCols = p.cols();
+    static_assert(outRows > 0);
+    static_assert(outCols == 1, "Output must be a vector");
+
+    assert((inRows >= outRows) && "Truncation cannot upsize");
+    assert((inCols == outCols) && "Input must be a vector");
+    EmbeddingSpace result = p.template head<outRows>();
+    for (int i = outRows; i < inRows; ++i) {
         if (std::abs(p[i]) > 1e-6)
             throw std::runtime_error("Nonzero component truncated.");
     }

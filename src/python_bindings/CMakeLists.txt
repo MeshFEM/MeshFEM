@@ -1,3 +1,9 @@
+# Pybind11 currently doesn't detect Intel's compilers' support of C++14.
+# We hack around this by definingDPYBIND11_CPP14 ourselves for the
+# modules using py::overload_cast.
+add_library(intel_pybind_14_hack INTERFACE)
+target_compile_definitions(intel_pybind_14_hack INTERFACE -DPYBIND11_CPP14)
+
 pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh PUBLIC MeshFEM)
@@ -8,15 +14,17 @@ endif()
 
 pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(sparse_matrices PUBLIC MeshFEM)
+target_link_libraries(sparse_matrices PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(energy energy.cc)
 set_target_properties(energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(energy PUBLIC MeshFEM)
+target_compile_definitions(energy PRIVATE)
+target_link_libraries(energy PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(tensors tensors.cc)
 set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(tensors PUBLIC MeshFEM)
+target_compile_definitions(tensors PRIVATE)
+target_link_libraries(tensors PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(periodic_homogenization periodic_homogenization.cc)
 set_target_properties(periodic_homogenization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
@@ -27,7 +35,7 @@ if(Boost_FOUND)
 	pybind11_add_module(elastic_structure elastic_structure.cc)
     target_include_directories(elastic_structure PUBLIC ${Boost_INCLUDE_DIRS}) 
 	set_target_properties(elastic_structure PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-	target_link_libraries(elastic_structure PUBLIC MeshFEM ${Boost_LIBRARIES})
+	target_link_libraries(elastic_structure PUBLIC MeshFEM ${Boost_LIBRARIES} intel_pybind_14_hack)
 	set(MESH_MODULES ${MESH_MODULES} "elastic_structure")
 endif()
 
