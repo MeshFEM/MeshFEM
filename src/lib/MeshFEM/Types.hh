@@ -69,7 +69,7 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
                    inCols =   InputDerived::ColsAtCompileTime,
                   outRows = EmbeddingSpace::RowsAtCompileTime,
                   outCols = EmbeddingSpace::ColsAtCompileTime;
-    static_assert((inRows > 0) && (outRows > 0));
+    static_assert((inRows > 0) && (outRows > 0), "Vectors must be statically sized, nonempty");
     static_assert((inCols == 1) && (outCols == 1), "We operate only on vectors");
     static_assert(inRows >= outRows, "Truncation cannot upsize");
     EmbeddingSpace result = p.template head<outRows>();
@@ -88,7 +88,7 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
                   outCols = EmbeddingSpace::ColsAtCompileTime;
     const     int  inRows = p.rows(),
                    inCols = p.cols();
-    static_assert(outRows > 0);
+    static_assert(outRows > 0, "Output vector must be statically sized, nonempty");
     static_assert(outCols == 1, "Output must be a vector");
 
     assert((inRows >= outRows) && "Truncation cannot upsize");

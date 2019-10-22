@@ -2,7 +2,9 @@
 # We hack around this by definingDPYBIND11_CPP14 ourselves for the
 # modules using py::overload_cast.
 add_library(intel_pybind_14_hack INTERFACE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 target_compile_definitions(intel_pybind_14_hack INTERFACE -DPYBIND11_CPP14)
+endif()
 
 pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
