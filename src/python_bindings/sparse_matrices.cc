@@ -28,18 +28,16 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("entries", [](const TMatrix &A) { return py::make_iterator(A.nz.cbegin(), A.nz.cend()); })
         .def("addNZ", &TMatrix::addNZ, "Add a triplet to the matrix")
         .def("reflectUpperTriangle", &TMatrix::reflectUpperTriangle, "Replace the (strict) lower triangle with a copy of the upper triangle")
+        .def("diag", &TMatrix::diag, "Get the diagonal")
 
         .def("rowColRemoval", (void (TMatrix::*)(const std::vector<size_t> &))(&TMatrix::rowColRemoval), "Remove the rows and columns corresponding to particular variables (intended to be called on symmetric matrices)") // py::overload_cast fails
 
         .def("sumRepeated", &TMatrix::sumRepeated, "Compress the matrix by summing together all the entries with the same row, column index")
         .def("apply", &TMatrix::apply<Eigen::VectorXd>, "Apply the sparse matrix to a vector")
-        .def("compressedColumn", [](TMatrix &A) {
-            A.sumRepeated();
-            using IdxArray = Eigen::Matrix<size_t, Eigen::Dynamic, 1>;
-            IdxArray col_ptr(A.n + 1), row_idx(A.nnz());
-            Eigen::Matrix<double, Eigen::Dynamic, 1> values(A.nnz());
-            A.getCompressedColumn<size_t, double>(col_ptr.data(), row_idx.data(), values.data());
-            return std::make_tuple(values, row_idx, col_ptr); // Return tuple in the order accepted by scipy.sparse.csc_matrix
+        .def("compressedColumn", [](TMatrix &Atrip) {
+            Eigen::SparseMatrix<double, Eigen::ColMajor> A(Atrip.m, Atrip.n);
+            A.setFromTriplets(Atrip.nz.begin(), Atrip.nz.end());
+            return A;
         })
         .def("dump",       &TMatrix::dump)
         .def("dumpBinary", &TMatrix::dumpBinary)

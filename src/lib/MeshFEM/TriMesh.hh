@@ -182,7 +182,7 @@ protected:
         return m_bdryEdgeTail(be);
     }
 
-    // Arbitrary half-edge incident on v (but guaranteed to be the boundary face
+    // Arbitrary half-edge incident on v (but guaranteed to be the boundary half edge
     // if v is on the boundary).
     int m_halfEdgeOfVertex(int v) const {
         assert(size_t(v) < VH.size());

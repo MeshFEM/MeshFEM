@@ -615,14 +615,17 @@ struct TripletMatrix {
         }
     }
 
-    // Gets the maximum entry on the matrix's diagonal.
-    Real maxDiagEntry() const {
-        // Extract the diagonal (summing repeated entries)
-        std::vector<Real> diag(m);
+    using VXd = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+    // Extract the diagonal (summing repeated entries)
+    VXd diag() const {
+        VXd result = VXd::Zero(m);
         for (const Triplet &t : nz)
-            if (t.i == t.j) diag[t.i] += t.v;
-        return *std::max_element(diag.begin(), diag.end());
+            if (t.i == t.j) result[t.i] += t.v;
+        return result;
     }
+
+    // Gets the maximum entry on the matrix's diagonal.
+    Real maxDiagEntry() const { return diag().max(); }
 
     // Permit simpler range-for syntax for over triplets
     auto begin() const -> decltype(nz.begin()) { return nz.begin(); }

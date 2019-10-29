@@ -22,7 +22,7 @@ def compute_vibrational_modes(r, fixedVars, mtype = MassMatrixType.FULL, n = 7, 
                 Mtrip = r.massMatrix()
                 Mtrip.reflectUpperTriangle()
                 Mtrip.rowColRemoval(fixedVars)
-                M_scipy = csc_matrix(Mtrip.compressedColumn())
+                M_scipy = Mtrip.compressedColumn()
             else:
                 print("WARNING: object does not implement `massMatrix`; falling back to identity metric")
         elif (mtype == MassMatrixType.LUMPED):
@@ -38,7 +38,7 @@ def compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, 
     numVars = Htrip.m
     Htrip.rowColRemoval(fixedVars)
     Htrip.reflectUpperTriangle()
-    H = csc_matrix(Htrip.compressedColumn())
+    H = Htrip.compressedColumn()
 
     print("m:", Htrip.m, " nnz:", Htrip.nnz)
     if (M_scipy is None): lambdas, modes = eigsh(H, n,            sigma=sigma, which='LM')
@@ -56,7 +56,7 @@ def save_triplet(Htrip, filename, fixedVars = None):
     if fixedVars is not None:
         Htrip.rowColRemoval(fixedVars)
     Htrip.dumpBinary(filename+".mat")
-    H = csc_matrix(Htrip.compressedColumn())
+    H = Htrip.compressedColumn()
     save_npz(filename, H)
 
 def load_triplet(filename):

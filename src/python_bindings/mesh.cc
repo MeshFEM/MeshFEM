@@ -200,6 +200,12 @@ struct MeshBindingsBase {
                         result(bv.index()) = bv.volumeVertex().index();
                     return result;
                })
+          .def("elementsAdjacentBoundary", [](const Mesh &m) {
+                  Eigen::VectorXi result(m.numBoundaryElements());
+                  for (const auto &be : m.boundaryElements())
+                      result[be.index()] = be.opposite().simplex().index();
+                  return result;
+              })
 
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)

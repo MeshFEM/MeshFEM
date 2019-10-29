@@ -32,6 +32,14 @@ pybind11_add_module(periodic_homogenization periodic_homogenization.cc)
 set_target_properties(periodic_homogenization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(periodic_homogenization PUBLIC MeshFEM)
 
+pybind11_add_module(triangulation triangulation.cc)
+set_target_properties(triangulation PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(triangulation PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(differential_operators differential_operators.cc)
+set_target_properties(differential_operators PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack)
+
 find_package(Boost REQUIRED)
 if(Boost_FOUND)
 	pybind11_add_module(elastic_structure elastic_structure.cc)

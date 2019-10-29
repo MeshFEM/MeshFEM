@@ -57,15 +57,23 @@ def replicateAttributesPerTriCorner(attr, perTriColor = True):
 # Therefore, we will need different materials for all the combinations of
 # settings used in our viewer. We do that here, on demand.
 class MaterialLibrary:
-    def __init__(self):
+    def __init__(self, isLineMesh):
         self.materials = {}
-        self.commonArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
+        self.isLineMesh = isLineMesh
+        if (not isLineMesh):
+            self.commonArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
+        else:
+            self.commonArgs = {}
 
     def material(self, useVertexColors, textureMapDataTex = None):
         name = self._mangledMaterialName(False, useVertexColors, textureMapDataTex)
         if name not in self.materials:
-            args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
-            self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
+            if (self.isLineMesh):
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
+                self.materials[name] = pythreejs.LineBasicMaterial(**args, **self.commonArgs)
+            else:
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
+                self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         return self.materials[name]
 
     def ghostMaterial(self, origMaterial):
@@ -73,7 +81,8 @@ class MaterialLibrary:
         if name not in self.materials:
             args = {'transparent': True, 'opacity': 0.25}
             args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), 'red'))
-            self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs) 
+            if (self.isLineMesh): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
+            else:                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         return self.materials[name]
 
     def freeMaterial(self, material):
@@ -101,7 +110,8 @@ class MaterialLibrary:
 
     def _extractMaterialDescriptors(self, material):
         '''Get the (useVertexColors, textureMapDataTex) descriptors for a non-ghost material'''
-        return material.vertexColors == 'VertexColors', material.map
+        return (material.vertexColors == 'VertexColors',
+                material.map if hasattr(material, 'map') else None)
 
     def _mangledNameForMaterial(self, isGhost, material):
         useVertexColors, textureMapDataTex = self._extractMaterialDescriptors(material)
@@ -111,20 +121,28 @@ class MaterialLibrary:
         for k, mat in self.materials.items():
             mat.close()
 
-class TriMeshViewer:
-    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+class ViewerBase:
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+        # Note: subclass's constructor should define
+        # self.MeshConstructor and self.isLineMesh, which will
+        # determine how the geometry is interpreted.
+        if (self.isLineMesh is None):
+            self.isLineMesh = False
+        if (self.MeshConstructor is None):
+            self.MeshConstructor = pythreejs.Mesh
+
         light = pythreejs.PointLight(color='white', position=[0, 0, 5])
         light.intensity = 0.6
         self.cam = pythreejs.PerspectiveCamera(position = [0, 0, 5], up = [0, 1, 0], aspect=width / height,
-                children=[light])
+                                               children=[light])
 
-        self.avoidRedrawFlicker = True
+        self.avoidRedrawFlicker = False
 
         self.objects      = pythreejs.Group()
         self.meshes       = pythreejs.Group()
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
 
-        self.materialLibrary = MaterialLibrary()
+        self.materialLibrary = MaterialLibrary(self.isLineMesh)
 
         # Sometimes we do not use a particular attribute buffer, e.g. the index buffer when displaying
         # per-face scalar fields. But to avoid reallocating these buffers when
@@ -136,9 +154,11 @@ class TriMeshViewer:
 
         self.currMesh        = None # The main mesh being viewed
         self.wireframeMesh   = None # Wireframe for the main visualization mesh
+        self.pointsMesh      = None # Points for the main visualization mesh
         self.vectorFieldMesh = None
 
         self.cachedWireframeMaterial = None
+        self.cachedPointsMaterial    = None
 
         self.objects.add([self.meshes, self.ghostMeshes])
         self.shouldShowWireframe = False
@@ -160,14 +180,20 @@ class TriMeshViewer:
         self.controls.panSpeed     = 1.0
 
         self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
-        self.update(True, trimesh, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
+        self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
         if (mesh != None):   self.mesh = mesh
+        self.setGeometry(*self.getVisualizationGeometry(),
+                          preserveExisting=preserveExisting,
+                          updateModelMatrix=updateModelMatrix,
+                          textureMap=textureMap,
+                          scalarField=scalarField,
+                          vectorField=vectorField)
+
+    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
         self.scalarField = scalarField
         self.vectorField = vectorField
-
-        vertices, tris, normals = self.getVisualizationGeometry()
 
         if (updateModelMatrix):
             translate = -np.mean(vertices, axis=0)
@@ -180,7 +206,7 @@ class TriMeshViewer:
         # Construct the raw attributes describing the new mesh.
         ########################################################################
         attrRaw = {'position': vertices,
-                   'index':    tris.ravel(),
+                   'index':    idxs.ravel(),
                    'normal':   normals}
 
         if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
@@ -190,7 +216,7 @@ class TriMeshViewer:
             # Construct scalar field from raw data array if necessary
             if (not isinstance(self.scalarField, ScalarField)):
                 self.scalarField = ScalarField(self.mesh, self.scalarField)
-            self.scalarField.validateSize(vertices.shape[0], tris.shape[0])
+            self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
 
             attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
             if (self.scalarField.domainType == DomainType.PER_TRI):
@@ -264,7 +290,7 @@ class TriMeshViewer:
             attr.update({k: pythreejs.BufferAttribute(v) for k, v in attrRaw.items()})
 
             geom = pythreejs.BufferGeometry(attributes=attr)
-            m = pythreejs.Mesh(geometry=geom, material=material)
+            m = self.MeshConstructor(geometry=geom, material=material)
             self.currMesh = m
             self.meshes.add(m)
         else:
@@ -280,9 +306,11 @@ class TriMeshViewer:
             self.currMesh.material = material
 
         # If we reallocated the current mesh (preserveExisting), we need to point
-        # the wireframe mesh at the new geometry.
+        # the wireframe/points mesh at the new geometry.
         if self.wireframeMesh is not None:
             self.wireframeMesh.geometry = self.currMesh.geometry
+        if self.pointsMesh is not None:
+            self.pointsMesh.geometry = self.currMesh.geometry
 
         ########################################################################
         # Build/update the vector field mesh if requested (otherwise hide it).
@@ -291,9 +319,9 @@ class TriMeshViewer:
             # Construct vector field from raw data array if necessary
             if (not isinstance(self.vectorField, VectorField)):
                 self.vectorField = VectorField(self.mesh, self.vectorField)
-            self.vectorField.validateSize(vertices.shape[0], tris.shape[0])
+            self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
 
-            self.vectorFieldMesh = self.vectorField.getArrows(vertices, tris, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
+            self.vectorFieldMesh = self.vectorField.getArrows(vertices, idxs, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
 
             self.arrowMaterial = self.vectorFieldMesh.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
@@ -333,15 +361,38 @@ class TriMeshViewer:
                 self.meshes.remove(self.wireframeMesh)
         self.shouldShowWireframe = shouldShow
 
+    def showPoints(self, shouldShow=True, size=5):
+        if shouldShow:
+            if self.pointsMesh is None:
+                # The points "mesh" shares geometry with the current mesh, and should automatically be updated when the current mesh is...
+                self.pointsMesh = pythreejs.Points(geometry=self.currMesh.geometry, material=self.pointsMaterial())
+            if self.pointsMesh not in self.meshes.children:
+                self.meshes.add(self.pointsMesh)
+        else: # hide
+            if self.pointsMesh in self.meshes.children:
+                self.meshes.remove(self.pointsMesh)
+        if (self.cachedPointsMaterial is not None):
+            self.cachedPointsMaterial.size = size
+
     def wireframeMaterial(self):
         if (self.cachedWireframeMaterial is None):
             self.cachedWireframeMaterial = self.allocateWireframeMaterial()
         return self.cachedWireframeMaterial
 
+    def pointsMaterial(self):
+        if (self.cachedPointsMaterial is None):
+            self.cachedPointsMaterial = self.allocatePointsMaterial()
+        return self.cachedPointsMaterial
+
     # Allocate a wireframe material for the mesh; this can be overrided by, e.g., mode_viewer
     # to apply different settings.
     def allocateWireframeMaterial(self):
         return pythreejs.MeshBasicMaterial(color='black', side='DoubleSide', wireframe=True)
+
+    # Allocate a wireframe material for the mesh; this can be overrided by, e.g., mode_viewer
+    # to apply different settings.
+    def allocatePointsMaterial(self):
+        return pythreejs.PointsMaterial(color='black', size=5, sizeAttenuation=False)
 
     def getCameraParams(self):
         return (self.cam.position, self.cam.up, self.controls.target)
@@ -372,7 +423,7 @@ class TriMeshViewer:
 
             # Note: the wireframe mesh shares geometry with the current mesh;
             # avoid a double close.
-            if (oldMesh != self.wireframeMesh):
+            if ((oldMesh != self.wireframeMesh) and (oldMesh != self.pointsMesh)):
                 oldMesh.geometry.exec_three_obj_method('dispose')
                 for k, attr in oldMesh.geometry.attributes.items():
                     attr.close()
@@ -383,12 +434,15 @@ class TriMeshViewer:
     def __del__(self):
         # Clean up resources
         self.__cleanMeshes(self.ghostMeshes)
-        # If vectorFieldMesh or wireframeMesh exist but are hidden, add them to the meshes group for cleanup
-        if (self.vectorFieldMesh is not None) and (self.vectorFieldMesh not in self.meshes.children):
-            self.meshes.add(self.vectorFieldMesh)
-        if (self.wireframeMesh is not None) and (self.wireframeMesh not in self.meshes.children):
-            self.meshes.add(self.wireframeMesh)
+
+        # If vectorFieldMesh, wireframeMesh, or pointsMesh exist but are hidden, add them to the meshes group for cleanup
+        for m in [self.vectorFieldMesh, self.wireframeMesh, self.pointsMesh]:
+            if (m is not None) and (m not in self.meshes.children):
+                self.meshes.add(m)
         self.__cleanMeshes(self.meshes)
+
+        if (self.cachedWireframeMaterial is not None): self.cachedWireframeMaterial.close()
+        if (self.cachedPointsMaterial    is not None): self.cachedPointsMaterial.close()
 
         # Also clean up our stashed buffer attributes (these are guaranteed not
         # to be attached to the geometry that was already cleaned up).
@@ -406,6 +460,34 @@ class TriMeshViewer:
             ipywidgets.Widget.widgets[k].close()
 
         self.renderer.close()
+
+class RawMesh():
+    def __init__(self, vertices, faces, normals):
+        self.updateGeometry(vertices, faces, normals)
+
+    def visualizationGeometry(self):
+        return self.vertices, self.faces, self.normals
+
+    def updateGeometry(self, vertices, faces, normals):
+        self.vertices = np.array(vertices, dtype = np.float32)
+        self.faces    = np.array(faces,    dtype = np. uint32)
+        self.normals  = np.array(normals,  dtype = np.float32)
+
+    # No decoding needed for per-entity fields on raw meshes.
+    def visualizationField(self, data):
+        return data
+
+class TriMeshViewer(ViewerBase):
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+        self.isLineMesh = False
+        self.MeshConstructor = pythreejs.Mesh
+        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField)
+
+class LineMeshViewer(ViewerBase):
+    def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+        self.isLineMesh = True
+        self.MeshConstructor = pythreejs.LineSegments
+        super().__init__(linemesh, width, height, textureMap, scalarField, vectorField)
 
 # Visualize a parametrization by animating the flattening and unflattening of the mesh to the plane.
 class FlatteningAnimation:

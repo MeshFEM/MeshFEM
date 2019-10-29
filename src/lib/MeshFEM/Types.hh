@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <array>
 #include <type_traits>
+#include "unused.hh"
 typedef double Real;
 
 template<size_t N>
@@ -86,13 +87,12 @@ template<class EmbeddingSpace, class InputDerived, typename std::enable_if<!isCo
 EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
     constexpr int outRows = EmbeddingSpace::RowsAtCompileTime,
                   outCols = EmbeddingSpace::ColsAtCompileTime;
-    const     int  inRows = p.rows(),
-                   inCols = p.cols();
+    const     int  inRows = p.rows();
     static_assert(outRows > 0, "Output vector must be statically sized, nonempty");
     static_assert(outCols == 1, "Output must be a vector");
 
     assert((inRows >= outRows) && "Truncation cannot upsize");
-    assert((inCols == outCols) && "Input must be a vector");
+    assert((p.cols() == outCols) && "Input must be a vector");
     EmbeddingSpace result = p.template head<outRows>();
     for (int i = outRows; i < inRows; ++i) {
         if (std::abs(p[i]) > 1e-6)
