@@ -326,6 +326,8 @@ public:
     typedef ConstSymmetricMatrixRef<t_N,
             typename ArrayType::ConstColXpr> ConstValueType;
 
+    SymmetricMatrixField(const SymmetricMatrixField &b) : m_values(b.m_values) { }
+
     SymmetricMatrixField(size_t domainSize, const FlattenedType &values) {
         assert(dim() * domainSize == values.rows());
         m_values = Eigen::Map<const ArrayType>(values.data(), dim(),
