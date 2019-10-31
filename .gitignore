@@ -51,3 +51,6 @@ data
 
 # Dependencies
 /3rdparty
+
+# Mac garbage
+.DS_Store
