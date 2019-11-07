@@ -101,4 +101,10 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
     return result;
 }
 
+// Work around alignment issues for C++ versions before C++17:
+// http://eigen.tuxfamily.org/dox-devel/group__TopicStlContainers.html
+#include <vector>
+template<typename T>
+using aligned_std_vector = std::vector<T, Eigen::aligned_allocator<T>>;
+
 #endif /* end of include guard: TYPES_HH */
