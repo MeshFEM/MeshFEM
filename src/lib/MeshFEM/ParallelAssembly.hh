@@ -40,45 +40,47 @@ Real_ summation_parallel(const PerElemSummand& summand, const size_t numElems, b
     return summands.sum();
 }
 
-// Gradient assembly
+// Dense vector/matrix assembly (e.g., for gradient)
 
-template<typename Real_>
-struct GradientAssemblerData {
-    VecX_T<Real_> g;
+template<class DenseMatrixType>
+struct DenseAssemblerData {
+    DenseMatrixType A;
     bool constructed = false;
 };
 
-template<typename Real_>
-using GALocalData = tbb::enumerable_thread_specific<GradientAssemblerData<Real_>>;
+template<class DenseMatrixType>
+using DALocalData = tbb::enumerable_thread_specific<DenseAssemblerData<DenseMatrixType>>;
 
-template<typename F, typename Real_>
-struct GradientAssembler {
-    GradientAssembler(F& f, const size_t nvars, GALocalData<Real_>& locals) : m_f(f), m_nvars(nvars), m_locals(locals) { }
+template<typename F, class DenseMatrixType>
+struct DenseAssembler {
+    DenseAssembler(F &f, const size_t nrows, const size_t ncols, DALocalData<DenseMatrixType>& locals)
+        : m_f(f), m_nrows(nrows), m_ncols(ncols), m_locals(locals) { }
 
-    void operator()(const tbb::blocked_range<size_t>& r) const {
-        GradientAssemblerData<Real_>& data = m_locals.local();
-        if (!data.constructed) { data.g.setZero(m_nvars); data.constructed = true; }
-        for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.g); }
+    void operator()(const tbb::blocked_range<size_t> &r) const {
+        DenseAssemblerData<DenseMatrixType> &data = m_locals.local();
+        if (!data.constructed) { data.A.setZero(m_nrows, m_ncols); data.constructed = true; }
+        for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.A); }
     }
 private:
-    F& m_f;
-    size_t m_nvars;
-    GALocalData<Real_>& m_locals;
+    F &m_f;
+    size_t m_nrows, m_ncols;
+    DALocalData<DenseMatrixType> &m_locals;
 };
 
-template<typename F, typename Real_>
-GradientAssembler<F, Real_> make_gradient_assembler(F& f, size_t nvars, GALocalData<Real_>& locals) {
-    return GradientAssembler<F, Real_>(f, nvars, locals);
+template<typename F, class DenseMatrixType>
+DenseAssembler<F, DenseMatrixType> make_dense_assembler(F &f, size_t nrows, size_t ncols, DALocalData<DenseMatrixType> &locals) {
+    return DenseAssembler<F, DenseMatrixType>(f, nrows, ncols, locals);
 }
 
-template<typename PerElemAssembler, typename Real_>
-void assemble_parallel(const PerElemAssembler& assembler, VecX_T<Real_>& g, const size_t numElems) {
-    GALocalData<Real_> gaLocalData;
+template<typename PerElemAssembler, class Derived>
+void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
+    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>;
+    DALocalData<DenseMatrixType> daLocalData;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-        make_gradient_assembler(assembler, g.size(), gaLocalData));
+                      make_dense_assembler(assembler, A.rows(), A.cols(), daLocalData));
 
-    for (auto& data : gaLocalData)
-        g += data.g;
+    for (const auto &data : daLocalData)
+        A += data.A;
 }
 
 // Hessian assembly
@@ -121,7 +123,7 @@ void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
                       make_hessian_assembler(assembler, H, haLocalData));
 
-    for (HessianAssemblerData<Real> &data : haLocalData)
+    for (const HessianAssemblerData<Real> &data : haLocalData)
         H.addWithIdenticalSparsity(data.H);
 }
 
