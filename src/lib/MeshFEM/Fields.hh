@@ -280,7 +280,6 @@ public:
 
     const typename VectorField<Real, 1>::ArrayType &values() const { return m_values; }
 
-
     void minRelax(const ScalarField<Real> &b) { m_values = m_values.cwiseMin(b.m_values); }
     void maxRelax(const ScalarField<Real> &b) { m_values = m_values.cwiseMax(b.m_values); }
     void minRelax(Real b) { m_values = m_values.cwiseMin(b); }

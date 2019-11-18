@@ -6,7 +6,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 target_compile_definitions(intel_pybind_14_hack INTERFACE -DPYBIND11_CPP14)
 endif()
 
-pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc)
+pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc MSHFieldParser_bindings.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh PUBLIC MeshFEM)
 

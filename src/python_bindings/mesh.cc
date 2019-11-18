@@ -15,6 +15,7 @@ namespace py = pybind11;
 #include "MeshFactory.hh"
 
 #include "MSHFieldWriter_bindings.hh"
+#include "MSHFieldParser_bindings.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions for extracting mesh entities
@@ -219,13 +220,15 @@ struct MeshBindingsBase {
           .def("numElements", &Mesh::numElements)
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
-          .def("field_writer", [&](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh", [&](const Mesh &/* m */) { return _K == 3; })
+          .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
+          .def("is_tet_mesh",  [](const Mesh &) { return _K == 3; })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
           .def_property_readonly_static("degree", [](py::object) { return _Degree; })
           .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
+
+          .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })
           ;
       return mb;
     }
@@ -239,7 +242,7 @@ struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingS
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTris",     &Mesh::numTris)
-            .def("triangles", [](const Mesh &m) { return getElementCorners(m.elements()); })
+            .def("triangles",  [](const Mesh &m) { return getElementCorners(m.elements()); })
             .def("trisAdjTri", [](const Mesh &m, size_t ti) {
                     std::vector<int> result;
                     if (ti >= m.numTris()) throw std::runtime_error("Triangle index out of bounds");
@@ -335,6 +338,7 @@ PYBIND11_MODULE(mesh, m)
     m.doc() = "MeshFEM finite element mesh data structure bindings";
 
     bindMSHFieldWriter(m);
+    bindMSHFieldParser(m);
 
     addMeshBindings<double>(m);
 #if MESHFEM_BIND_LONG_DOUBLE
