@@ -8,7 +8,7 @@ void bindMSHFieldParserDimSpecific(py::module &m) {
     using MFP = MSHFieldParser<N>;
 
     py::class_<MFP>(m, ("MSHFieldParser" + std::to_string(N)).c_str())
-        .def(py::init<const std::string &, bool>(), py::arg("mshPath"), py::arg("permitDimMismatch") = false)
+        .def(py::init<const std::string &, bool>(), py::arg("mshPath"), py::arg("permitDimMismatch") = true)
         .def("vertices", [](const MFP &mfp) { return getV(mfp.vertices()); })
         .def("elements", [](const MFP &mfp) { return getF(mfp.elements()); })
         .def("meshDegree",    &MFP::meshDegree)
@@ -31,7 +31,29 @@ void bindMSHFieldParserDimSpecific(py::module &m) {
 
 }
 
+py::object mshFieldParserFactory(const std::string &path, bool permitDimMismatch) {
+    std::vector<MeshIO::IOVertex > vertices;
+    std::vector<MeshIO::IOElement> elements;
+    std::ifstream mshFile(path);
+    if (!mshFile.is_open()) throw std::runtime_error(std::string("Couldn't open input file ") + path);
+
+    auto mio = dynamic_cast<MeshIO::MeshIO_MSH *>(getMeshIO(MeshIO::FMT_MSH));
+    auto mtype = mio->load(mshFile, vertices, elements, MeshIO::MESH_GUESS);
+    const size_t elem_size = elements.at(0).size();
+    if (mtype == MeshIO::MESH_TRI) {
+        return py::cast(new MSHFieldParser<2>(mshFile, mtype, std::move(elements), std::move(vertices), mio->binary(), permitDimMismatch),
+                        py::return_value_policy::take_ownership);
+    }
+    if (mtype == MeshIO::MESH_TET) {
+        return py::cast(new MSHFieldParser<3>(mshFile, mtype, std::move(elements), std::move(vertices), mio->binary(), permitDimMismatch),
+                        py::return_value_policy::take_ownership);
+    }
+    throw std::runtime_error("Unexpected element size " + std::to_string(elem_size));
+}
+
 void bindMSHFieldParser(py::module &m) {
     bindMSHFieldParserDimSpecific<2>(m);
     bindMSHFieldParserDimSpecific<3>(m);
+
+    m.def("MSHFieldParser", &mshFieldParserFactory, py::arg("path"), py::arg("permitDimMismatch") = true);
 }
