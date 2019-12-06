@@ -74,7 +74,7 @@ public:
     Eigen::Matrix<_Real, N, N> toMatrix() const {
         Eigen::Matrix<_Real, N, N> mat;
         for (size_t j = 0; j < N; ++j)
-            for (size_t i = 0; i <= N; ++i)
+            for (size_t i = 0; i < N; ++i)
                 mat(i, j) = operator()(i, j);
         return mat;
     }
