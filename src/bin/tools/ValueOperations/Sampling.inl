@@ -52,6 +52,6 @@ struct MultipointSampleImpl {
         auto result = std::make_unique<ResultType>(dt, ss.size());
         for (size_t i = 0; i < ss.size(); ++i)
             (*result)[i] = std::move(*SampleImpl<T>::run(val, ss[i], meshDim, meshDim));
-        return std::move(result);
+        return result;
     }
 };
