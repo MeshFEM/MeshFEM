@@ -1,0 +1,26 @@
+# expected variables to be set:
+#   run_dir, sample_pt, fluctuation, component, png_path
+# eg: run_dir='results/skip_0'; sample_pt=0; fluctuation=0; component=0; png_path=0
+fluctuationNames = "w_00 w_11 w_01"
+fname = word(fluctuationNames, fluctuation + 1);
+
+componentNames = "x y"
+cname = word(componentNames, component + 1);
+col = 13 + sample_pt * 6 + fluctuation * 2 + component;
+samplePtName=word('0.5,0.5 0.38,0.38', sample_pt + 1);
+
+deg1_data = run_dir . "/deg_1.txt";
+deg2_data = run_dir . "/deg_2.txt";
+
+set title 'Fluctuation displacement ' . fname . ' component ' . component . ' at sample point ' . samplePtName noenhanced;
+set xlabel 'Median edge length (mm)';
+set ylabel 'Sampled displacement (mm)';
+
+set logscale x 2;
+set xrange [:0.25];
+
+set term pngcairo size 1024,768;
+set output png_path;
+
+plot '< sort -g ' . deg1_data using 4:(column(col)) with lp title 'linear elements', \
+     '< sort -g ' . deg2_data using 4:(column(col)) with lp title 'quadratic elements';

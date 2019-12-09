@@ -1,0 +1,7 @@
+build
+build_*
+.DS_Store
+*.so
+__pycache__
+.ipynb_checkpoints
+3rdparty

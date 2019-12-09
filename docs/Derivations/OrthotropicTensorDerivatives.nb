@@ -1,0 +1,356 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     15906,        347]
+NotebookOptionsPosition[     15232,        320]
+NotebookOutlinePosition[     15587,        336]
+CellTagsIndexPosition[     15544,        333]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"DOrthoInv3D", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"1", " ", "/", " ", "Ex"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzx"}], " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", 
+       "0", ",", " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzy"}], " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", 
+       "0", ",", " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vzx"}], " ", "/", " ", "Ez"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vzy"}], " ", "/", " ", "Ez"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ez"}], ",", " ", "0", ",", " ", "0", ",", 
+       " ", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muyz"}], ",", " ", "0", ",", " ", "0"}], "}"}], ",",
+      "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muzx"}], ",", " ", "0"}], "}"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+      "0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", " ", "0", ",", 
+       " ", 
+       RowBox[{"1", "/", "muxy"}]}], "}"}]}], "\[IndentingNewLine]", "}"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DOrthoInv2D", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"1", " ", "/", " ", "Ex"}], ",", " ", 
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", "0"}], "}"}], 
+     ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "vyx"}], " ", "/", " ", "Ey"}], ",", " ", 
+       RowBox[{"1", " ", "/", " ", "Ey"}], ",", " ", "0"}], "}"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", 
+       RowBox[{"1", "/", "muxy"}]}], "}"}]}], "\[IndentingNewLine]", "}"}]}], 
+  ";"}]}], "Input",
+ CellChangeTimes->{{3.616257139792561*^9, 3.616257319356694*^9}, {
+  3.6162607972521963`*^9, 3.616260797689762*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"DOrtho3D", " ", "=", " ", 
+   RowBox[{"Inverse", "[", "DOrthoInv3D", "]"}]}], ";"}]], "Input",
+ CellChangeTimes->{{3.616260760963759*^9, 3.6162607850099077`*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"DOrtho2D", " ", "=", " ", 
+   RowBox[{"Inverse", "[", "DOrthoInv2D", "]"}]}], ";"}]], "Input",
+ CellChangeTimes->{{3.616260801494706*^9, 3.6162608117056437`*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"dE", "[", 
+    RowBox[{"tensor_", ",", " ", "dvar_"}], "]"}], " ", ":=", " ", 
+   RowBox[{
+    RowBox[{"MapIndexed", "[", 
+     RowBox[{
+      RowBox[{"Function", "[", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"expr", ",", " ", "index"}], "}"}], ",", " ", 
+        RowBox[{"If", "[", 
+         RowBox[{
+          RowBox[{"And", "[", 
+           RowBox[{
+            RowBox[{
+             RowBox[{"index", "[", 
+              RowBox[{"[", "1", "]"}], "]"}], " ", "\[LessEqual]", " ", 
+             RowBox[{"index", "[", 
+              RowBox[{"[", "2", "]"}], "]"}]}], ",", " ", 
+            RowBox[{"Not", "[", 
+             RowBox[{"expr", " ", "===", " ", "0"}], "]"}]}], "]"}], " ", ",", 
+          RowBox[{"\"\<d.D(\>\"", "<>", 
+           RowBox[{"ToString", "[", 
+            RowBox[{
+             RowBox[{"index", "[", 
+              RowBox[{"[", "1", "]"}], "]"}], "-", "1"}], "]"}], "<>", 
+           "\"\<, \>\"", "<>", 
+           RowBox[{"ToString", "[", 
+            RowBox[{
+             RowBox[{"index", "[", 
+              RowBox[{"[", "2", "]"}], "]"}], "-", "1"}], "]"}], "<>", 
+           "\"\<) = \>\"", "<>", 
+           RowBox[{"ToString", "[", 
+            RowBox[{
+             RowBox[{"CForm", "[", "expr", "]"}], "/.", 
+             RowBox[{"Power", "\[Rule]", "pow"}]}], "]"}], "<>", 
+           "\"\<;\\n\>\""}], ",", " ", "\"\<\>\""}], "]"}]}], "]"}], ",", " ", 
+      RowBox[{"Simplify", "[", 
+       RowBox[{"D", "[", 
+        RowBox[{"tensor", ",", " ", "dvar"}], "]"}], "]"}], ",", " ", 
+      RowBox[{"{", "2", "}"}]}], "]"}], " ", "//", " ", "StringJoin"}]}], 
+  ";"}]], "Input",
+ CellChangeTimes->{{3.616257603747303*^9, 3.6162577013523607`*^9}, {
+  3.6162583999768047`*^9, 3.616258413632351*^9}, {3.6162584438266487`*^9, 
+  3.61625844683897*^9}, {3.6162584979150257`*^9, 3.616258545155621*^9}, {
+  3.616259014396583*^9, 3.616259064294714*^9}, {3.61625943772701*^9, 
+  3.6162594843244658`*^9}, {3.616259518381847*^9, 3.616259588441225*^9}, {
+  3.616260043971459*^9, 3.616260044074152*^9}, {3.6162605557568607`*^9, 
+  3.6162605662566767`*^9}, {3.6162606249922028`*^9, 3.616260672960331*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"genCode", "[", 
+    RowBox[{"tensor_", ",", " ", "dvars_"}], "]"}], " ", ":=", " ", 
+   RowBox[{
+    RowBox[{"MapIndexed", "[", 
+     RowBox[{
+      RowBox[{"Function", "[", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"dvar", ",", " ", "index"}], "}"}], ",", " ", 
+        RowBox[{"\"\<if (p == \>\"", "<>", 
+         RowBox[{"ToString", "[", 
+          RowBox[{
+           RowBox[{"index", "[", 
+            RowBox[{"[", "1", "]"}], "]"}], "-", "1"}], "]"}], "<>", 
+         "\"\<) {\\n\>\"", "<>", 
+         RowBox[{"dE", "[", 
+          RowBox[{"tensor", ",", " ", "dvar"}], "]"}], "<>", 
+         "\"\<};\\n\>\""}]}], "]"}], ",", "dvars"}], "]"}], " ", "//", 
+    "StringJoin"}]}], ";"}]], "Input",
+ CellChangeTimes->{{3.616259590656114*^9, 3.616259672748651*^9}, {
+  3.6162597286907597`*^9, 3.616259844124867*^9}, {3.6162599077588987`*^9, 
+  3.6162599186579647`*^9}, {3.616260571088361*^9, 3.6162605738173027`*^9}, {
+  3.616260648040072*^9, 3.6162607243163347`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"genCode", "[", 
+  RowBox[{"DOrtho3D", ",", " ", 
+   RowBox[{"{", 
+    RowBox[{
+    "Ex", ",", " ", "Ey", ",", " ", "Ez", ",", " ", "vyx", ",", " ", "vzx", 
+     ",", " ", "vzy", ",", " ", "muyz", ",", " ", "muzx", ",", " ", "muxy"}], 
+    "}"}]}], "]"}]], "Input",
+ CellChangeTimes->{{3.616260727929937*^9, 3.616260754586986*^9}}],
+
+Cell[BoxData["\<\"if (p == 0) {\\nd.D(0, 0) = pow(Ey,2)*pow(Ez - \
+Ey*pow(vzy,2),2)*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 1) = -((Ez*vyx + \
+Ey*vzx*vzy)*pow(Ey,2)*(-Ez + Ey*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2));\\nd.D(0, 2) = \
+-(Ez*(vzx + vyx*vzy)*pow(Ey,2)*(-Ez + Ey*pow(vzy,2))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\nd.D(1, 1) = pow(Ey,2)*pow(Ez*vyx + \
+Ey*vzx*vzy,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 2) = Ez*(vzx + vyx*vzy)*(Ez*vyx + \
+Ey*vzx*vzy)*pow(Ey,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(2, 2) = \
+pow(Ey,2)*pow(Ez,2)*pow(vzx + vyx*vzy,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\n};\\nif (p == 1) \
+{\\nd.D(0, 0) = pow(Ex,2)*(-(pow(Ez,2)*pow(vyx,2)) + vzx*(vzx + \
+2*vyx*vzy)*pow(Ey,2)*pow(vzy,2) + 2*Ey*Ez*pow(vyx,2)*pow(vzy,2))*pow(Ey*(-Ez \
++ Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 1) = -(Ex*(-(Ez*vzy*(vzx + \
+vyx*vzy)*pow(Ey,2)) + Ex*(2*Ey*Ez*vzx*vzy*pow(vyx,2) + pow(Ez,2)*pow(vyx,3) + \
+vzy*(vzx + 2*vyx*vzy)*pow(Ey,2)*pow(vzx,2)))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2));\\nd.D(0, 2) = \
+Ex*Ez*(vzx + vyx*vzy)*(-(Ex*Ez*pow(vyx,2)) + \
+pow(Ey,2)*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 1) = Ey*(Ey*(Ez - \
+Ex*vzx*(vzx + 2*vyx*vzy)) - 2*Ex*Ez*pow(vyx,2))*(Ez - \
+Ex*pow(vzx,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 2) = -(Ez*(-(Ez*vzy*pow(Ey,2)) + \
+Ex*Ey*vzy*(Ey*vzx*(vzx + vyx*vzy) + 2*Ez*pow(vyx,2)) + \
+Ez*vzx*pow(Ex,2)*pow(vyx,3))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2));\\nd.D(2, 2) = \
+-(pow(Ez,2)*(vzx*(vzx + 2*vyx*vzy)*pow(Ex,2)*pow(vyx,2) - \
+pow(Ey,2)*pow(vzy,2) + 2*Ex*Ey*pow(vyx,2)*pow(vzy,2))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\n};\\nif (p == 2) {\\nd.D(0, 0) = \
+-(pow(Ex,2)*pow(Ey,2)*pow(vzx + vyx*vzy,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2));\\nd.D(0, 1) = \
+-(Ex*(Ex*vyx*vzx + Ey*vzy)*(vzx + vyx*vzy)*pow(Ey,2)*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\nd.D(0, 2) = -(Ex*(vzx + \
+vyx*vzy)*pow(Ey,2)*(Ex*vzx*(vzx + 2*vyx*vzy) + Ey*pow(vzy,2))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\nd.D(1, 1) = -(pow(Ey,2)*pow(Ex*vyx*vzx + \
+Ey*vzy,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\nd.D(1, 2) = -((Ex*vyx*vzx + \
+Ey*vzy)*pow(Ey,2)*(Ex*vzx*(vzx + 2*vyx*vzy) + Ey*pow(vzy,2))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2));\\nd.D(2, 2) = Ez*(Ey - Ex*pow(vyx,2))*(Ey*(Ez - \
+2*Ex*vzx*(vzx + 2*vyx*vzy)) - Ex*Ez*pow(vyx,2) - \
+2*pow(Ey,2)*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\n};\\nif (p == 3) {\\nd.D(0, 0) \
+= -2*Ey*(Ez*vyx + Ey*vzx*vzy)*pow(Ex,2)*(-Ez + Ey*pow(vzy,2))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 1) = Ex*Ey*(Ey*Ez*(Ez - Ex*vzx*(vzx - \
+2*vyx*vzy)) + Ex*pow(Ez,2)*pow(vyx,2) - pow(Ey,2)*(Ez - \
+2*Ex*pow(vzx,2))*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 2) = \
+Ex*Ey*Ez*(Ex*(Ez*vyx*(2*vzx + vyx*vzy) + Ey*vzy*pow(vzx,2)) + Ey*vzy*(Ez - \
+Ey*pow(vzy,2)))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 1) = -2*Ex*(Ez*vyx + \
+Ey*vzx*vzy)*pow(Ey,2)*(-Ez + Ex*pow(vzx,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 2) = \
+Ex*Ey*Ez*(Ex*Ez*vzx*pow(vyx,2) + Ey*(Ez*(vzx + 2*vyx*vzy) - Ex*pow(vzx,3)) + \
+vzx*pow(Ey,2)*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(2, 2) = \
+2*Ex*Ey*(Ex*vyx*vzx + Ey*vzy)*(vzx + vyx*vzy)*pow(Ez,2)*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\n};\
+\\nif (p == 4) {\\nd.D(0, 0) = -2*(vzx + vyx*vzy)*pow(Ex,2)*pow(Ey,2)*(-Ez + \
+Ey*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 1) = Ex*pow(Ey,2)*(Ex*(Ez*vyx*(2*vzx + \
+vyx*vzy) + Ey*vzy*pow(vzx,2)) + Ey*vzy*(Ez - Ey*pow(vzy,2)))*pow(Ey*(-Ez + \
+Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 2) = Ex*Ey*Ez*(-(Ex*Ez*pow(vyx,2)) - \
+pow(Ey,2)*pow(vzy,2) + Ey*(Ez + Ex*(2*vyx*vzx*vzy + pow(vzx,2) + \
+2*pow(vyx,2)*pow(vzy,2))))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 1) = 2*Ex*(Ex*vyx*vzx + \
+Ey*vzy)*(Ez*vyx + Ey*vzx*vzy)*pow(Ey,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 2) = \
+Ex*Ey*Ez*(vzy*(2*vzx + vyx*vzy)*pow(Ey,2) - Ex*Ez*pow(vyx,3) + Ey*vyx*(Ez + \
+Ex*pow(vzx,2)))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(2, 2) = -2*Ex*Ey*(vzx + \
+vyx*vzy)*pow(Ez,2)*(-Ey + Ex*pow(vyx,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\n};\\nif (p == 5) \
+{\\nd.D(0, 0) = 2*(vzx + vyx*vzy)*(Ez*vyx + \
+Ey*vzx*vzy)*pow(Ex,2)*pow(Ey,2)*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 1) = \
+Ex*pow(Ey,2)*(Ex*Ez*vzx*pow(vyx,2) + Ey*(Ez*(vzx + 2*vyx*vzy) - \
+Ex*pow(vzx,3)) + vzx*pow(Ey,2)*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(0, 2) = \
+Ex*Ey*Ez*(vzy*(2*vzx + vyx*vzy)*pow(Ey,2) - Ex*Ez*pow(vyx,3) + Ey*vyx*(Ez + \
+Ex*pow(vzx,2)))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 1) = 2*(Ex*vyx*vzx + Ey*vzy)*pow(Ey,3)*(Ez \
+- Ex*pow(vzx,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + \
+pow(Ey,2)*pow(vzy,2),-2);\\nd.D(1, 2) = Ez*pow(Ey,2)*(Ey*(Ez - Ex*vzx*(vzx - \
+2*vyx*vzy)) + Ex*pow(vyx,2)*(-Ez + 2*Ex*pow(vzx,2)) + \
+pow(Ey,2)*pow(vzy,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + 2*vyx*vzy)) + \
+Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\nd.D(2, 2) = 2*Ey*(Ex*vyx*vzx + \
+Ey*vzy)*pow(Ez,2)*(Ey - Ex*pow(vyx,2))*pow(Ey*(-Ez + Ex*vzx*(vzx + \
+2*vyx*vzy)) + Ex*Ez*pow(vyx,2) + pow(Ey,2)*pow(vzy,2),-2);\\n};\\nif (p == 6) \
+{\\nd.D(3, 3) = 1;\\n};\\nif (p == 7) {\\nd.D(4, 4) = 1;\\n};\\nif (p == 8) {\
+\\nd.D(5, 5) = 1;\\n};\\n\"\>"], "Output",
+ CellChangeTimes->{{3.616260755107471*^9, 3.61626078100357*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"genCode", "[", 
+  RowBox[{"DOrtho2D", ",", " ", 
+   RowBox[{"{", 
+    RowBox[{"Ex", ",", " ", "Ey", ",", " ", "vyx", ",", " ", "muxy"}], 
+    "}"}]}], "]"}]], "Input",
+ CellChangeTimes->{{3.6162608472876043`*^9, 3.616260864302761*^9}}],
+
+Cell[BoxData["\<\"if (p == 0) {\\nd.D(0, 0) = pow(Ey,2)*pow(Ey - \
+Ex*pow(vyx,2),-2);\\nd.D(0, 1) = vyx*pow(Ey,2)*pow(Ey - \
+Ex*pow(vyx,2),-2);\\nd.D(1, 1) = pow(Ey,2)*pow(vyx,2)*pow(Ey - \
+Ex*pow(vyx,2),-2);\\n};\\nif (p == 1) {\\nd.D(0, 0) = \
+-(pow(Ex,2)*pow(vyx,2)*pow(Ey - Ex*pow(vyx,2),-2));\\nd.D(0, 1) = \
+-(pow(Ex,2)*pow(vyx,3)*pow(Ey - Ex*pow(vyx,2),-2));\\nd.D(1, 1) = Ey*(Ey - \
+2*Ex*pow(vyx,2))*pow(Ey - Ex*pow(vyx,2),-2);\\n};\\nif (p == 2) {\\nd.D(0, 0) \
+= 2*Ey*vyx*pow(Ex,2)*pow(Ey - Ex*pow(vyx,2),-2);\\nd.D(0, 1) = Ex*Ey*(Ey + \
+Ex*pow(vyx,2))*pow(Ey - Ex*pow(vyx,2),-2);\\nd.D(1, 1) = \
+2*Ex*vyx*pow(Ey,2)*pow(Ey - Ex*pow(vyx,2),-2);\\n};\\nif (p == 3) {\\nd.D(2, \
+2) = 1;\\n};\\n\"\>"], "Output",
+ CellChangeTimes->{3.616260866454958*^9}]
+}, Open  ]],
+
+Cell[BoxData[""], "Input",
+ CellChangeTimes->{{3.616260485804432*^9, 3.616260536482583*^9}, 
+   3.616260793957694*^9}]
+},
+WindowSize->{1920, 1152},
+WindowMargins->{{14, Automatic}, {Automatic, 0}},
+FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (June 27, \
+2014)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 2530, 64, 233, "Input"],
+Cell[3091, 86, 197, 4, 28, "Input"],
+Cell[3291, 92, 197, 4, 28, "Input"],
+Cell[3491, 98, 2187, 50, 63, "Input"],
+Cell[5681, 150, 1030, 25, 28, "Input"],
+Cell[CellGroupData[{
+Cell[6736, 179, 354, 8, 28, "Input"],
+Cell[7093, 189, 6943, 100, 1015, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[14073, 294, 259, 6, 28, "Input"],
+Cell[14335, 302, 760, 11, 369, "Output"]
+}, Open  ]],
+Cell[15110, 316, 118, 2, 28, "Input"]
+}
+]
+*)
+
+(* End of internal cache information *)
