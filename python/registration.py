@@ -1,9 +1,23 @@
 import numpy as np
 import scipy.linalg
 
-# Find the best-fit transformation mapping points in Q to points in P
-# min_(R, t) ||P - (R Q + t)||^2
 def register_points(P, Q, allowReflection = False):
+    '''
+    Find the best-fit transformation aligning points in Q to points in P:
+            min_(R, t) sum_i ||P_i - (R Q_i + t)||^2
+
+    Parameters
+    ----------
+    P : (N, D) array_like
+        Collection of N points to align with (one D-dimensional point per row)
+    Q : (N, D) array_like
+        Collection of N points to align      (one D-dimensional point per row)
+
+    Returns
+    -------
+    (R, t)
+        The rigid transformation best aligning Q to P
+    '''
     Pcm = np.mean(P, axis=0)
     Pcentered = P - Pcm
     Qcm = np.mean(Q, axis=0)

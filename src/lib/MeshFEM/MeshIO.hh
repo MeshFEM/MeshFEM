@@ -327,7 +327,7 @@ namespace MeshIO {
     //  @param[in]  format  file format
     //  @return     format parser object
     *///////////////////////////////////////////////////////////////////////////
-    MeshIO *getMeshIO(Format &format);
+    MeshIO *getMeshIO(const Format &format);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes an element soup to an output stream

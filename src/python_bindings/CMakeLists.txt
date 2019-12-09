@@ -6,7 +6,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 target_compile_definitions(intel_pybind_14_hack INTERFACE -DPYBIND11_CPP14)
 endif()
 
-pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc)
+pybind11_add_module(mesh mesh.cc MSHFieldWriter_bindings.cc MSHFieldParser_bindings.cc)
 set_target_properties(mesh PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh PUBLIC MeshFEM)
 
@@ -37,14 +37,7 @@ target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack
 
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)
-    include(PyModuleHelper)
-    set(pyTemplatePath "${PROJECT_SOURCE_DIR}/python/py_module_init.template")
-    if(EXISTS ${pyTemplatePath})
-        set(MODULE_DIR_NAME "MeshFEM")
-        DEPLOY_MODULE(${MODULE_DIR_NAME} "${PROJECT_SOURCE_DIR}/python/"
-            "${CMAKE_SOURCE_DIR}/python/${MODULE_DIR_NAME}"
-            ${pyTemplatePath})
-    else()
-        message("Cannot find file [py_module_init.template], the module will not be deployed in parent project.")
-    endif()
+    set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
+    file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
+    configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
 endif()

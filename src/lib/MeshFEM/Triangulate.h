@@ -86,8 +86,11 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
-        std::vector<int> *outPointMarkers = nullptr)
+        std::vector<int> *outPointMarkers = nullptr,
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr)
 {
+    const bool markedEdgesRequested = outMarkedEdges != nullptr;
+
     // create in and out structs for triangle
     triangulateio in, out;
     memset(&in , 0, sizeof(triangulateio));
@@ -133,6 +136,8 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
 
     std::stringstream flags_stream;
     flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
+    if (markedEdgesRequested)
+        flags_stream << "e"; // Make triangle output edges too...
     std::string flags = flags_stream.str();
 #if 0
     std::cout << "Running triangulate with flags " << flags << std::endl;
@@ -167,11 +172,17 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     }
 
     if (outPointMarkers != nullptr) {
-        auto &opm = *outPointMarkers;
-        opm.reserve(out.numberofpoints);
         std::cout << "Outputting " << size_t(out.numberofpoints) << " point markers" << std::endl;
-        for (i = 0; i < size_t(out.numberofpoints); ++i)
-            opm.push_back(out.pointmarkerlist[i]);
+        outPointMarkers->assign(&(out.pointmarkerlist[0]), &(out.pointmarkerlist[out.numberofpoints]));
+    }
+
+    if (markedEdgesRequested) {
+        int ne = out.numberofedges;
+        outMarkedEdges->clear();
+        for (int ei = 0; ei < ne; ++ei) {
+            if (out.edgemarkerlist[ei] != 0)
+                outMarkedEdges->emplace_back(std::array<int, 2>{{out.edgelist[2 * ei], out.edgelist[2 * ei + 1]}});
+        }
     }
 
     freeIO(in, out);
@@ -231,11 +242,12 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
-        std::vector<int> *outPointMarkers = nullptr) {
+        std::vector<int> *outPointMarkers = nullptr,
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
     triangulatePSLC(
             EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
             holes, outVertices, outTriangles, area, additionalFlags,
-            outPointMarkers);
+            outPointMarkers, outMarkedEdges);
 }
 
 // Convenience function for list of closed polygons representation
@@ -246,9 +258,10 @@ void triangulatePSLC(const std::list<std::list<Point>> &polygons,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
-        std::vector<int> *outPointMarkers = nullptr) {
+        std::vector<int> *outPointMarkers = nullptr,
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
     triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
-            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers);
+            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges);
 }
 
 inline void refineTriangulation(

@@ -60,7 +60,7 @@ struct DiffOpBindings {
         m.def("gradient", [](const Mesh &mesh, const Eigen::VectorXd &scalarField) {
                 if (_Degree > 1) throw std::runtime_error("Interpolant type bindings unimplemented...");
                 if (scalarField.size() != mesh.numNodes()) throw std::runtime_error("Incorrect scalar field size");
-                Eigen::MatrixXd g(mesh.numElements(), int(N)); // the cast to int prevents an ODR-use-induced linking error.
+                MXNd g(mesh.numElements(), int(N)); // the cast to int prevents an ODR-use-induced linking error.
                 g.setZero();
                 for (const auto &e : mesh.elements())
                     for (const auto &n : e.nodes())
