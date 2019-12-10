@@ -1,8 +1,7 @@
-<!-- MarkdownTOC autolink="true" bracket="round" depth=3 -->
-<!-- /MarkdownTOC -->
-
 MeshFEM
 =======
+<img src='http://julianpanetta.com/MeshFEMIcon.png' width='229px' height='220px' />
+
 MeshFEM is a C++ finite element library supporting linear and quadratic
 triangle/tetrahedral elements. MeshFEM aims to make it easy to write generic
 but efficient code supporting multiple problem dimensions (2D, 3D), basis
