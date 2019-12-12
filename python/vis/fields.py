@@ -85,12 +85,15 @@ class VectorField(VisualizationField):
         if (vmin == None): vmin = self.vmin
         if (vmax == None): vmax = self.vmax
 
+        vectorNorms   = np.linalg.norm(self.data, axis=1)
+
         # fall back to data range if vmin/vmax are not specified
         if (vmin == None): vmin = 0
-        if (vmax == None): vmax = np.max(self.data)
+        if (vmax == None): vmax = np.max(vectorNorms)
 
-        vectorNorms   = np.linalg.norm(self.data, axis=1)
-        rescaledNorms = np.clip((vectorNorms - vmin) / (vmax - vmin), 0, 1)
+        den = vmax - vmin
+        if (den < 1e-10): den = 1
+        rescaledNorms = np.clip((vectorNorms - vmin) / den, 0, 1)
         mask = vectorNorms > 1e-10
         vectors = self.data.copy()[mask]
         vectors *= rescaledNorms[mask, None] / vectorNorms[mask, None]

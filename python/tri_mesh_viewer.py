@@ -76,13 +76,19 @@ class MaterialLibrary:
                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         return self.materials[name]
 
-    def ghostMaterial(self, origMaterial):
+    def ghostMaterial(self, origMaterial, solidColor):
         name = self._mangledNameForMaterial(True, origMaterial)
         if name not in self.materials:
             args = {'transparent': True, 'opacity': 0.25}
-            args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), 'red'))
+            args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), solidColor))
             if (self.isLineMesh): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
             else:                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
+        else:
+            # Update the existing ghost material's color (if a solid color is used)
+            useVertexColors, textureMapDataTex = self._extractMaterialDescriptors(origMaterial)
+            if (useVertexColors == False) and (textureMapDataTex is None):
+                self.materials[name].color = solidColor
+
         return self.materials[name]
 
     def freeMaterial(self, material):
@@ -121,8 +127,9 @@ class MaterialLibrary:
         for k, mat in self.materials.items():
             mat.close()
 
+# superView allows this viewer to add geometry to an existing viewer.
 class ViewerBase:
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
         # Note: subclass's constructor should define
         # self.MeshConstructor and self.isLineMesh, which will
         # determine how the geometry is interpreted.
@@ -141,6 +148,7 @@ class ViewerBase:
         self.objects      = pythreejs.Group()
         self.meshes       = pythreejs.Group()
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
+        self.ghostColor = 'red'
 
         self.materialLibrary = MaterialLibrary(self.isLineMesh)
 
@@ -160,38 +168,53 @@ class ViewerBase:
         self.cachedWireframeMaterial = None
         self.cachedPointsMaterial    = None
 
-        self.objects.add([self.meshes, self.ghostMeshes])
         self.shouldShowWireframe = False
         self.scalarField = None
         self.vectorField = None
 
-        self.arrowMaterial = None # Will hold this viewer's instance of the special vector field shader
+        self.superView = superView
+        if (superView is None):
+            self.objects.add([self.meshes, self.ghostMeshes])
+        else:
+            superView.objects.add([self.meshes, self.ghostMeshes])
+
+        self._arrowMaterial = None # Will hold this viewer's instance of the special vector field shader (shared/overridden by superView)
         self._arrowSize    = 60
 
         # Camera needs to be part of the scene because the scene light is its child
         # (so that it follows the camera).
         self.scene = pythreejs.Scene(children=[self.objects, self.cam, pythreejs.AmbientLight(intensity=0.5)])
 
-        # Sane trackball controls.
-        self.controls = pythreejs.TrackballControls(controlling=self.cam)
-        self.controls.staticMoving = True
-        self.controls.rotateSpeed  = 2.0
-        self.controls.zoomSpeed    = 2.0
-        self.controls.panSpeed     = 1.0
+        if (superView is None):
+            # Sane trackball controls.
+            self.controls = pythreejs.TrackballControls(controlling=self.cam)
+            self.controls.staticMoving = True
+            self.controls.rotateSpeed  = 2.0
+            self.controls.zoomSpeed    = 2.0
+            self.controls.panSpeed     = 1.0
+            self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
+        else:
+            self.controls = superView.controls
+            self.renderer = superView.renderer
 
-        self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         if (mesh != None):   self.mesh = mesh
         self.setGeometry(*self.getVisualizationGeometry(),
                           preserveExisting=preserveExisting,
                           updateModelMatrix=updateModelMatrix,
                           textureMap=textureMap,
                           scalarField=scalarField,
-                          vectorField=vectorField)
+                          vectorField=vectorField,
+                          transparent=transparent)
 
-    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None):
+    def makeTransparent(self, color=None):
+        if color is not None:
+            self.ghostColor = color
+        self.currMesh.material = self.materialLibrary.ghostMaterial(self.currMesh.material, self.ghostColor)
+
+    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         self.scalarField = scalarField
         self.vectorField = vectorField
 
@@ -230,7 +253,7 @@ class ViewerBase:
         if (preserveExisting and (self.currMesh is not None)):
             oldMesh = self.currMesh
             self.currMesh = None
-            oldMesh.material = self.materialLibrary.ghostMaterial(oldMesh.material)
+            oldMesh.material = self.materialLibrary.ghostMaterial(oldMesh.material, self.ghostColor)
             self.meshes.remove(oldMesh)
             self.ghostMeshes.add(oldMesh)
 
@@ -248,6 +271,9 @@ class ViewerBase:
             self.__cleanMeshes(self.ghostMeshes)
 
         material = self.materialLibrary.material(useVertexColors, None if textureMap is None else textureMap.dataTex)
+
+        if transparent:
+            material = self.materialLibrary.ghostMaterial(material, self.ghostColor)
 
         ########################################################################
         # Build or update mesh from the raw attributes.
@@ -325,9 +351,9 @@ class ViewerBase:
 
             self.arrowMaterial = self.vectorFieldMesh.material
             self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
-                                              rendererWidth  = self.renderer.width,
-                                              targetDepth    = np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
-                                              arrowAlignment = self.vectorField.align.getRelativeOffset())
+                                            rendererWidth  = self.renderer.width,
+                                            targetDepth    = np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
+                                            arrowAlignment = self.vectorField.align.getRelativeOffset())
             self.controls.shaderMaterial = self.arrowMaterial
             if (self.vectorFieldMesh not in self.meshes.children):
                 self.meshes.add(self.vectorFieldMesh)
@@ -348,6 +374,16 @@ class ViewerBase:
         self._arrowSize = value
         if (self.arrowMaterial is not None):
             self.arrowMaterial.updateUniforms(arrowSizePx_x = self.arrowSize)
+
+    @property
+    def arrowMaterial(self):
+        if (self.superView is None): return self._arrowMaterial
+        else:                        return self.superView.arrowMaterial
+
+    @arrowMaterial.setter
+    def arrowMaterial(self, arrowMat):
+        if (self.superView is None): self._arrowMaterial = arrowMat
+        else:                        self.superView.arrowMaterial = arrowMat
 
     def showWireframe(self, shouldShow = True):
         if shouldShow:
@@ -449,17 +485,18 @@ class ViewerBase:
         for k, v in self.bufferAttributeStash.items():
             v.close()
 
-        # We need to explicitly close the widgets we generated or they will
-        # remain open in the frontend and backend, leaking memory (due to the
-        # global widget registry).
-        # https://github.com/jupyter-widgets/ipywidgets/issues/1345
-        import ipywidget_embedder
-        ds = ipywidget_embedder.dependency_state(self.renderer)
-        keys = list(ds.keys())
-        for k in keys:
-            ipywidgets.Widget.widgets[k].close()
+        if self.superView is None:
+            # We need to explicitly close the widgets we generated or they will
+            # remain open in the frontend and backend, leaking memory (due to the
+            # global widget registry).
+            # https://github.com/jupyter-widgets/ipywidgets/issues/1345
+            import ipywidget_embedder
+            ds = ipywidget_embedder.dependency_state(self.renderer)
+            keys = list(ds.keys())
+            for k in keys:
+                ipywidgets.Widget.widgets[k].close()
 
-        self.renderer.close()
+            self.renderer.close()
 
 class RawMesh():
     def __init__(self, vertices, faces, normals):
@@ -478,16 +515,16 @@ class RawMesh():
         return data
 
 class TriMeshViewer(ViewerBase):
-    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
         self.isLineMesh = False
         self.MeshConstructor = pythreejs.Mesh
-        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField)
+        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView)
 
 class LineMeshViewer(ViewerBase):
-    def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None):
+    def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
-        super().__init__(linemesh, width, height, textureMap, scalarField, vectorField)
+        super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
 
 # Visualize a parametrization by animating the flattening and unflattening of the mesh to the plane.
 class FlatteningAnimation:
