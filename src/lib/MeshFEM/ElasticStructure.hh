@@ -690,8 +690,8 @@ class ElasticStructure:
 public:
     using Base = ElasticStructureBase<ElasticStructure>;
     using Energy = typename Base::Energy;
-    using Mesh = typename Base::Mesh;
-    using Real       = typename EST::Real;
+    using Mesh   = typename Base::Mesh;
+    using Real   = typename Base::Real;
 
     ElasticStructure(const Energy& energy, const Mesh& mesh) 
         : ElasticStructure(energy, mesh, mesh.boundingBox().volume())
