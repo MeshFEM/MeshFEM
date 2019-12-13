@@ -404,4 +404,15 @@ PYBIND11_MODULE(mesh, m)
                             triangulation.getElements(),
                             triangulation.getVertices());
                 });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Free-standing utility functions
+    ////////////////////////////////////////////////////////////////////////////
+    m.def("save", [&](const std::string& path, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+            std::vector<MeshIO::IOVertex > vertices;
+            std::vector<MeshIO::IOElement> elements;
+            std::tie(vertices, elements) = getMeshIO(V, F);
+
+            MeshIO::save(path, vertices, elements); }, py::arg("path"), py::arg("V"), py::arg("F"))
+        ;
 }

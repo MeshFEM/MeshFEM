@@ -91,6 +91,7 @@ public:
     using EStructure = Derived;
     using EST        = ElasticStructureTraits<Derived>;
     using Energy     = typename EST::Energy;
+    using Real       = typename EST::Real;
 
     static constexpr int MATRIX_STORAGE_POLICY = Eigen::ColMajor;
     static constexpr Real MIN_MASS = 1e-9;
@@ -690,6 +691,7 @@ public:
     using Base = ElasticStructureBase<ElasticStructure>;
     using Energy = typename Base::Energy;
     using Mesh = typename Base::Mesh;
+    using Real       = typename EST::Real;
 
     ElasticStructure(const Energy& energy, const Mesh& mesh) 
         : ElasticStructure(energy, mesh, mesh.boundingBox().volume())
