@@ -67,6 +67,7 @@ template<> struct Embedder<3> {
 template<class EmbeddingSpace>
 struct NodeData {
     EmbeddingSpace p;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF((sizeof(EmbeddingSpace) % 16) == 0)
 };
 
 // Wrapper for all the data types to be included in the FEMMesh.
