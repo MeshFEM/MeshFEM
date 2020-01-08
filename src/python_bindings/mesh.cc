@@ -215,6 +215,11 @@ struct MeshBindingsBase {
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")
+          .def("elementVolumes", [](const Mesh &m) {
+                      Eigen::VectorXd result(m.numElements());
+                      for (const auto &e : m.elements()) result[e.index()] = e->volume();
+                      return result;
+                  })
 
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
@@ -238,6 +243,8 @@ template<size_t _Degree, class _EmbeddingSpace>
 struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingSpace> {
     using Base = MeshBindingsBase<2, _Degree, _EmbeddingSpace>;
     using Mesh = typename Base::Mesh;
+    using Real = typename Mesh::Real;
+    using V3d  = Eigen::Matrix<Real, 3, 1>;
     static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
@@ -267,6 +274,22 @@ struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingS
                     }
                     return result;
                 })
+            .def("angleDeficits", [](const Mesh &m) {
+                        Eigen::VectorXd result(m.numVertices());
+                        for (const auto &v : m.vertices()) {
+                            Real deficit = 2 * M_PI;
+                            if (v.isBoundary()) { result[v.index()] = 0.0; continue; }
+                            for (const auto &he : v.incidentHalfEdges()) {
+                                if (!he.tri()) continue;
+                                V3d  p = padTo3D(he.tip().node()->p);
+                                V3d e1 = padTo3D(he.next().tip().node()->p) - p,
+                                    e2 = padTo3D(he.tail().node()->p) - p;
+                                deficit -= atan2(e1.cross(e2).norm(), e1.dot(e2));
+                            }
+                            result[v.index()] = deficit;
+                        }
+                        return result;
+                    })
         ;
         return mesh_bindings;
     }
