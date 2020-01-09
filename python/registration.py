@@ -29,3 +29,13 @@ def register_points(P, Q, allowReflection = False):
         U[:, 0] = -U[:, 0]
         R = U @ Vh
     return R, Pcm - R @ Qcm
+
+def align_points_with_axes(V):
+    '''
+    Center the object at the origin and orient its longest axis along X, medium along y and shortest along Z.
+    '''
+    c = np.mean(V, axis=0)
+    Vcentered = V - c
+    R = np.linalg.eig(Vcentered.transpose() @ Vcentered)[1]
+    if (np.linalg.det(R) < 0): R[:, 2] *= -1
+    return Vcentered @ R

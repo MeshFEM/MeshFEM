@@ -34,3 +34,23 @@ def mergedMesh(meshes):
             V, F = mesh.vertices(), mesh.triangles()
         mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
     return vm.vertices(), np.vstack(mergedTris)
+
+def removeDanglingVertices(V, F):
+    """
+    Remove vertices unreferenced by `F` and renumber the remaining vertices.
+
+    Parameters
+    ----------
+    V
+        NVxD matrix of vertex positions
+    F
+        NFxK matrix of indices into V, where NF is the number of elements and K is the number of element corners
+    """
+    nv = V.shape[0]
+    Vkeep = np.zeros(nv, dtype=np.bool)
+    Vkeep[F.ravel()] = True
+    Vkept = V[Vkeep]
+    renumber = np.zeros(nv, dtype=np.int)
+    renumber[Vkeep] = np.arange(Vkept.shape[0])
+    Frenumbered = renumber[F]
+    return Vkept, Frenumbered
