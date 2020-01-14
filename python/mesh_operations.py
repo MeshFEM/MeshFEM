@@ -54,3 +54,27 @@ def removeDanglingVertices(V, F):
     renumber[Vkeep] = np.arange(Vkept.shape[0])
     Frenumbered = renumber[F]
     return Vkept, Frenumbered
+
+def boundaryLoops(m):
+    """
+    Get the oriented boundary loops of a mesh `m` as a sequence of consecutive
+    points (with the first/last point repeated)
+    """
+    V, BE = m.vertices(), m.boundaryElements()
+    nv = V.shape[0]
+    visited = np.ones(nv, dtype=np.bool) # mark internal vertices as visited so they are skipped
+    next_bv = np.empty(nv, dtype=np.int)
+    for be in BE:
+        visited[be[0]] = False
+        next_bv[be[0]] = be[1]
+    bdryLoops = []
+    for bvi in range(nv):
+        if visited[bvi]: continue
+        bdryLoop = []
+        while not visited[bvi]:
+            visited[bvi] = True
+            bdryLoop.append(V[bvi])
+            bvi = next_bv[bvi]
+        bdryLoop.append(V[bvi]) # close the loop
+        bdryLoops.append(np.array(bdryLoop))
+    return bdryLoops
