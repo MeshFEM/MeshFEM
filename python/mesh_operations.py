@@ -78,3 +78,22 @@ def boundaryLoops(m):
         bdryLoop.append(V[bvi]) # close the loop
         bdryLoops.append(np.array(bdryLoop))
     return bdryLoops
+
+import numpy as np
+import io
+
+def saveOBJWithNormals(file, V, F, N):
+    if isinstance(file, str):
+        file = open(file, 'wb')
+    if (len(V) != len(N)):
+        raise Exception('Normals must be per-vertex')
+    file.write(b'v ')
+    np.savetxt(file, V, fmt='%s', delimiter=' ', newline='\nv ')
+    file.seek(-2, 2)
+    file.write(b'vn ')
+    np.savetxt(file, N, fmt='%s', delimiter=' ', newline='\nvn ')
+    file.seek(-3, 2)
+    for f in F:
+        f = f + 1
+        file.write(f'f {f[0]}//{f[0]} {f[1]}//{f[1]} {f[2]}//{f[2]}\n'.encode())
+    file.close()

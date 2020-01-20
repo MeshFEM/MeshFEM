@@ -213,17 +213,24 @@ class ViewerBase:
 
         useVertexColors = False
         if (self.scalarField is not None):
-            # Construct scalar field from raw data array if necessary
-            if (not isinstance(self.scalarField, ScalarField)):
-                self.scalarField = ScalarField(self.mesh, self.scalarField)
-            self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
+            # First, handle the case of directly specifying per-vertex colors:
+            if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
+                if (np.array(self.scalarField.shape) != np.array([len(vertices), 3])).any():
+                    raise Exception('Incorrect number of per-vertex colors')
+                attrRaw['color'] = np.array(self.scalarField, dtype=np.float32)
+            else:
+                # Handle input in the form of a ScalarField or a raw scalar data array.
+                # Construct scalar field from raw scalar data array if necessary.
+                if (not isinstance(self.scalarField, ScalarField)):
+                    self.scalarField = ScalarField(self.mesh, self.scalarField)
+                self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
 
-            attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
-            if (self.scalarField.domainType == DomainType.PER_TRI):
-                # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
-                # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
-                # since apparently indexed geometry doesn't support the 'FaceColors' option.
-                replicateAttributesPerTriCorner(attrRaw)
+                attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
+                if (self.scalarField.domainType == DomainType.PER_TRI):
+                    # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
+                    # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
+                    # since apparently indexed geometry doesn't support the 'FaceColors' option.
+                    replicateAttributesPerTriCorner(attrRaw)
             useVertexColors = True
 
         # Turn the current mesh into a ghost if preserveExisting

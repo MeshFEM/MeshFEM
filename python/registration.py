@@ -3,7 +3,7 @@ import scipy.linalg
 
 def register_points(P, Q, allowReflection = False):
     '''
-    Find the best-fit transformation aligning points in Q to points in P:
+    Find the best-fit rigid transformation aligning points in Q to points in P:
             min_(R, t) sum_i ||P_i - (R Q_i + t)||^2
 
     Parameters
@@ -30,12 +30,29 @@ def register_points(P, Q, allowReflection = False):
         R = U @ Vh
     return R, Pcm - R @ Qcm
 
-def align_points_with_axes(V):
+def align_points_with_axes_xform(V):
     '''
-    Center the object at the origin and orient its longest axis along X, medium along y and shortest along Z.
+    Get the rigid transformation (R, t) point cloud `V` at the origin and
+    orient its longest axis along X, medium along y and shortest along Z.
+
+    Returns
+    -------
+    (R, t)
+        The rigid transformation V ==> R * (V + t) reorienting V
     '''
     c = np.mean(V, axis=0)
     Vcentered = V - c
     R = np.linalg.eig(Vcentered.transpose() @ Vcentered)[1]
     if (np.linalg.det(R) < 0): R[:, 2] *= -1
-    return Vcentered @ R
+    return R, -c
+
+def align_points_with_axes(V):
+    '''
+    Center the point cloud `V` at the origin and orient its longest axis along X, medium along y and shortest along Z.
+
+    Returns
+    -------
+    The rigidly transformed point cloud.
+    '''
+    R, t = align_points_with_axes_xform(V)
+    return (V + t) @ R

@@ -87,7 +87,8 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr)
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false)
 {
     const bool markedEdgesRequested = outMarkedEdges != nullptr;
 
@@ -135,7 +136,9 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     // write_poly("out.poly", edgeSoup.points(), edgeSoup.edges());
 
     std::stringstream flags_stream;
-    flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
+    flags_stream << "zp";
+    if (!omitQualityFlag) flags_stream << "q";
+    flags_stream << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
     if (markedEdgesRequested)
         flags_stream << "e"; // Make triangle output edges too...
     std::string flags = flags_stream.str();
@@ -243,11 +246,12 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false) {
     triangulatePSLC(
             EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
             holes, outVertices, outTriangles, area, additionalFlags,
-            outPointMarkers, outMarkedEdges);
+            outPointMarkers, outMarkedEdges, omitQualityFlag);
 }
 
 // Convenience function for list of closed polygons representation
@@ -259,9 +263,10 @@ void triangulatePSLC(const std::list<std::list<Point>> &polygons,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false) {
     triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
-            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges);
+            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges, omitQualityFlag);
 }
 
 inline void refineTriangulation(
