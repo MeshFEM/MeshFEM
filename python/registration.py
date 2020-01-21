@@ -22,11 +22,11 @@ def register_points(P, Q, allowReflection = False):
     Pcentered = P - Pcm
     Qcm = np.mean(Q, axis=0)
     Qcentered = Q - Qcm
-    A = Pcentered.transpose() @ Qcentered
+    A = Pcentered.T @ Qcentered
     U, s, Vh = scipy.linalg.svd(A) 
     R = U @ Vh
     if (not allowReflection and (np.linalg.det(R) < 0)):
-        U[:, 0] = -U[:, 0]
+        U[:, -1] = -U[:, -1]
         R = U @ Vh
     return R, Pcm - R @ Qcm
 
@@ -42,7 +42,7 @@ def align_points_with_axes_xform(V):
     '''
     c = np.mean(V, axis=0)
     Vcentered = V - c
-    R = np.linalg.eig(Vcentered.transpose() @ Vcentered)[1]
+    R = np.linalg.eig(Vcentered.T @ Vcentered)[1]
     if (np.linalg.det(R) < 0): R[:, 2] *= -1
     return R, -c
 
