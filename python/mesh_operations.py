@@ -97,3 +97,15 @@ def saveOBJWithNormals(file, V, F, N):
         f = f + 1
         file.write(f'f {f[0]}//{f[0]} {f[1]}//{f[1]} {f[2]}//{f[2]}\n'.encode())
     file.close()
+
+# Compute area-weighted vertex normals in a way that still works for
+# non-manifold meshes (i.e., that doesn't circulate around vertices like the
+# bound C++ implementation).
+def getVertexNormals(m):
+    ANface = m.normals() * m.elementVolumes()[:, np.newaxis]
+    Nvert = np.zeros((m.numVertices(), 3))
+    F = m.triangles()
+    for f, an in zip(F, ANface):
+        Nvert[f] += an
+    Nvert /= np.linalg.norm(Nvert, axis=1)[:, np.newaxis]
+    return Nvert

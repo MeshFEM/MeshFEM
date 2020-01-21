@@ -59,6 +59,29 @@ getNodes(const HandleRange<_Mesh, _HType> &nrange) {
 template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 3,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const HandleRange<_Mesh, _HType> &erange) {
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(erange.size(), 3);
+    for (auto e : erange)
+        N.row(e.index()) = e->normal();
+    return N;
+}
+
+// Normals for meshes embedded in 2D are defined to be 3D vectors in the
+// +z direction (this is needed for visualization).
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 2,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const HandleRange<_Mesh, _HType> &range) {
+    size_t n = range.size();
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(n, 3);
+    N.block(0, 0, n, 2).setZero();
+    N.block(0, 2, n, 1).setOnes();
+    return N;
+}
+
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 3,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(vrange.size(), 3);
     using V3d = Eigen::Matrix<typename _Mesh::Real, 3, 1>;
@@ -74,28 +97,27 @@ getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     return N;
 }
 
-// Vertex normals for meshes embedded in 2D are defined to be 3D vectors in the
-// +z direction (this is needed for visualization).
 template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 2,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
-getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
-    size_t nv = vrange.size();
-    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(nv, 3);
-    N.block(0, 0, nv, 2).setZero();
-    N.block(0, 2, nv, 1).setOnes();
-    return N;
-}
+getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) { return getNormals(vrange); }
 
 // Normals for tri meshes
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.vertices()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const _Mesh &m) { return getNormals(m.elements()); }
+
 
 // Surface normals for tet meshes
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const _Mesh &m) { return getNormals(m.boundaryElements()); }
 
 template<class Mesh>
 using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
@@ -215,6 +237,8 @@ struct MeshBindingsBase {
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")
+          .def("normals", &getNormals<Mesh>, (_K == 2) ? "Triangle normals"
+                                                       : "Boundary triangle normals")
           .def("elementVolumes", [](const Mesh &m) {
                       Eigen::VectorXd result(m.numElements());
                       for (const auto &e : m.elements()) result[e.index()] = e->volume();
