@@ -42,6 +42,7 @@ public:
     BVH boundaryVertex() const { return BVH(   m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
     // Half-edge incident on this vertex; guaranteed to be opposite the boundary if v is on the boundary.
     HEH       halfEdge() const { return HEH(m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
+    // Range circulating counter-clockwise around this vertex.
     CirculatorRange<HEH> incidentHalfEdges() const { return CirculatorRange<HEH>(halfEdge()); }
 
     // Identity operation for unified writing of surface and volume meshes

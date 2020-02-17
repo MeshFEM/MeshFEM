@@ -103,7 +103,7 @@ Format guessFormat(const std::string &path) {
 //  @param[in]  format  file format
 //  @return     format parser object
 *///////////////////////////////////////////////////////////////////////////////
-MeshIO *getMeshIO(Format &format) {
+MeshIO *getMeshIO(const Format &format) {
     static MeshIO_OFF   s_offIO;
     static MeshIO_OBJ   s_objIO;
     static MeshIO_MSH   s_mshIO;

@@ -15,6 +15,7 @@ namespace py = pybind11;
 #include "MeshFactory.hh"
 
 #include "MSHFieldWriter_bindings.hh"
+#include "MSHFieldParser_bindings.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions for extracting mesh entities
@@ -58,6 +59,29 @@ getNodes(const HandleRange<_Mesh, _HType> &nrange) {
 template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 3,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const HandleRange<_Mesh, _HType> &erange) {
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(erange.size(), 3);
+    for (auto e : erange)
+        N.row(e.index()) = e->normal();
+    return N;
+}
+
+// Normals for meshes embedded in 2D are defined to be 3D vectors in the
+// +z direction (this is needed for visualization).
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 2,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const HandleRange<_Mesh, _HType> &range) {
+    size_t n = range.size();
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(n, 3);
+    N.block(0, 0, n, 2).setZero();
+    N.block(0, 2, n, 1).setOnes();
+    return N;
+}
+
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 3,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(vrange.size(), 3);
     using V3d = Eigen::Matrix<typename _Mesh::Real, 3, 1>;
@@ -73,28 +97,27 @@ getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
     return N;
 }
 
-// Vertex normals for meshes embedded in 2D are defined to be 3D vectors in the
-// +z direction (this is needed for visualization).
 template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 2,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
-getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
-    size_t nv = vrange.size();
-    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(nv, 3);
-    N.block(0, 0, nv, 2).setZero();
-    N.block(0, 2, nv, 1).setOnes();
-    return N;
-}
+getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) { return getNormals(vrange); }
 
 // Normals for tri meshes
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.vertices()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const _Mesh &m) { return getNormals(m.elements()); }
+
 
 // Surface normals for tet meshes
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.boundaryVertices()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getNormals(const _Mesh &m) { return getNormals(m.boundaryElements()); }
 
 template<class Mesh>
 using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
@@ -214,18 +237,27 @@ struct MeshBindingsBase {
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
                                                                          : "Boundary vertex normals (triangle area weighted)")
+          .def("normals", &getNormals<Mesh>, (_K == 2) ? "Triangle normals"
+                                                       : "Boundary triangle normals")
+          .def("elementVolumes", [](const Mesh &m) {
+                      Eigen::VectorXd result(m.numElements());
+                      for (const auto &e : m.elements()) result[e.index()] = e->volume();
+                      return result;
+                  })
 
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
-          .def("field_writer", [&](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh", [&](const Mesh &/* m */) { return _K == 3; })
+          .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
+          .def("is_tet_mesh",  [](const Mesh &) { return _K == 3; })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
           .def_property_readonly_static("degree", [](py::object) { return _Degree; })
           .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
+
+          .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })
           ;
       return mb;
     }
@@ -235,11 +267,13 @@ template<size_t _Degree, class _EmbeddingSpace>
 struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingSpace> {
     using Base = MeshBindingsBase<2, _Degree, _EmbeddingSpace>;
     using Mesh = typename Base::Mesh;
+    using Real = typename Mesh::Real;
+    using V3d  = Eigen::Matrix<Real, 3, 1>;
     static MeshBindingsType<Mesh> bind(py::module& module) {
         auto mesh_bindings = Base::bind(module);
         mesh_bindings
             .def("numTris",     &Mesh::numTris)
-            .def("triangles", [](const Mesh &m) { return getElementCorners(m.elements()); })
+            .def("triangles",  [](const Mesh &m) { return getElementCorners(m.elements()); })
             .def("trisAdjTri", [](const Mesh &m, size_t ti) {
                     std::vector<int> result;
                     if (ti >= m.numTris()) throw std::runtime_error("Triangle index out of bounds");
@@ -264,6 +298,22 @@ struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingS
                     }
                     return result;
                 })
+            .def("angleDeficits", [](const Mesh &m) {
+                        Eigen::VectorXd result(m.numVertices());
+                        for (const auto &v : m.vertices()) {
+                            Real deficit = 2 * M_PI;
+                            if (v.isBoundary()) { result[v.index()] = 0.0; continue; }
+                            for (const auto &he : v.incidentHalfEdges()) {
+                                if (!he.tri()) continue;
+                                V3d  p = padTo3D(he.tip().node()->p);
+                                V3d e1 = padTo3D(he.next().tip().node()->p) - p,
+                                    e2 = padTo3D(he.tail().node()->p) - p;
+                                deficit -= atan2(e1.cross(e2).norm(), e1.dot(e2));
+                            }
+                            result[v.index()] = deficit;
+                        }
+                        return result;
+                    })
         ;
         return mesh_bindings;
     }
@@ -335,6 +385,7 @@ PYBIND11_MODULE(mesh, m)
     m.doc() = "MeshFEM finite element mesh data structure bindings";
 
     bindMSHFieldWriter(m);
+    bindMSHFieldParser(m);
 
     addMeshBindings<double>(m);
 #if MESHFEM_BIND_LONG_DOUBLE
@@ -400,4 +451,15 @@ PYBIND11_MODULE(mesh, m)
                             triangulation.getElements(),
                             triangulation.getVertices());
                 });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Free-standing utility functions
+    ////////////////////////////////////////////////////////////////////////////
+    m.def("save", [&](const std::string& path, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+            std::vector<MeshIO::IOVertex > vertices;
+            std::vector<MeshIO::IOElement> elements;
+            std::tie(vertices, elements) = getMeshIO(V, F);
+
+            MeshIO::save(path, vertices, elements); }, py::arg("path"), py::arg("V"), py::arg("F"))
+        ;
 }

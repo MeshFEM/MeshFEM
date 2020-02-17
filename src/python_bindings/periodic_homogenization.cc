@@ -13,6 +13,7 @@ namespace py = pybind11;
 #include <MeshFEM/OrthotropicHomogenization.hh>
 #include <MeshFEM/LinearElasticity.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 #include <MeshFEM/GlobalBenchmark.hh>
 
