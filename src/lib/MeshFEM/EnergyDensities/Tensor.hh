@@ -51,31 +51,6 @@ doubleContract(const Eigen::MatrixBase<_Derived>& lhs,
     return doubleContract(rhs, lhs);
 }
 
-template<size_t _Dimension>
-std::array<std::tuple<size_t, size_t>, flatLen(_Dimension)>
-getBackwardFlatteningTable()
-{
-    std::array<std::tuple<size_t, size_t>, flatLen(_Dimension)> table;
-    for (size_t row = 0; row < _Dimension; ++row)
-    {
-        for (size_t col = row; col < _Dimension; ++col)
-        {
-            table[flattenIndices<_Dimension>(row, col)] = std::make_tuple(row, col);
-        }
-    }
-    return table;
-}
-
-template<size_t _Dimension>
-std::tuple<size_t, size_t>
-backwardFlatten(size_t index)
-{
-    static const std::array<std::tuple<size_t, size_t>, flatLen(_Dimension)> table =
-      getBackwardFlatteningTable<_Dimension>();
-
-    return table[index];
-}
-
 /**
  *  Apply the Symm operator on the matrix.
  */

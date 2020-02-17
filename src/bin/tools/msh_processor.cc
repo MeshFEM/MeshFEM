@@ -142,7 +142,7 @@ TypedNamedValue<T> popTypedValue(Stack &stack) {
     if (stack.empty()) throw std::runtime_error("Tried to pop from empty stack.");
     NamedValue val = std::move(stack.back());
     stack.pop_back();
-    return std::move(val);
+    return val;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

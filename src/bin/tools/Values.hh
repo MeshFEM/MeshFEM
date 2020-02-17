@@ -120,7 +120,7 @@ struct NamedValue {
     // Copy constructor clones the underlying value
     NamedValue(const NamedValue &v) : name(v.name), m_valptr(v->clone()) { }
     // Moving values moves the underlying pointer.
-    NamedValue(NamedValue &&v) : name(std::move(v.name)), m_valptr(std::move(v.m_valptr)) { }
+    NamedValue(NamedValue &&v) noexcept : name(std::move(v.name)), m_valptr(std::move(v.m_valptr)) { }
     // Creation from value pointer.
     NamedValue(const std::string &n, UVPtr &&ptr) : name(n), m_valptr(std::move(ptr)) { }
 

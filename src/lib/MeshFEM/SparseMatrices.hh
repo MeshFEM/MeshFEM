@@ -1818,17 +1818,21 @@ public:
         // Allocate space for solution + Lagrange multipliers
         std::vector<_Real> uReduced(m_AUpper.m);
 
-        // {
-        //     m_AUpper.dump("A.txt");
-        //     static int solve = 0;
-        //     std::ofstream rhsOut("rhs_" + std::to_string(solve));
-        //     rhsOut << std::scientific << std::setprecision(16);
-        //     for (_Real val : bReduced) {
-        //         rhsOut << val << std::endl;
-        //     }
-        //     ++solve;
-        //     // exit(-1);
-        // }
+#if 0
+        {
+            std::cout << "Dumping " << m_AUpper.m << " x " << m_AUpper.n << " matrix" << std::endl;
+            std::cout << "rhs size " << bReduced.size() << std::endl;
+            m_AUpper.dump("A.txt");
+            static int solve = 0;
+            std::ofstream rhsOut("rhs_" + std::to_string(solve) + ".txt");
+            rhsOut << std::scientific << std::setprecision(19);
+            for (_Real val : bReduced) {
+                rhsOut << val << "\n";
+            }
+            ++solve;
+        }
+        exit(-1);
+#endif
 
         if (m_isSPD) {
             if (!m_LLT) {

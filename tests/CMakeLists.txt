@@ -19,18 +19,23 @@ set_target_properties(NormalContactForceFunctionTest PROPERTIES CXX_STANDARD 11)
 ################################################################################
 
 add_executable(unit_tests
-	main.cc
-	test_quadrature.cc
-	test_interpolant.cc
-	test_materials.cc
+    main.cc
+    test_quadrature.cc
+    test_interpolant.cc
+    test_materials.cc
     test_sparse_matrices.cc
-)
+    test_tensors.cc
+    )
 
 target_link_libraries(unit_tests PUBLIC
 	Catch2::Catch2
 	MeshFEM
 	warnings::all
 )
+
+add_executable(solve_system solve_system.cc)
+
+target_link_libraries(solve_system MeshFEM)
 
 if (MSVC)
 else ()

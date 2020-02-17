@@ -16,7 +16,7 @@ public:
     static constexpr size_t Degree = Mesh::FEMData::Degree;
     typedef VectorField<Real, N> VField;
 
-    NormalFractureForceFunction(_Mesh &mesh, Real alpha) : m_mesh(mesh) {
+    NormalFractureForceFunction(_Mesh &mesh, Real alpha) noexcept : m_mesh(mesh) {
         m_alpha = alpha;
     }
 

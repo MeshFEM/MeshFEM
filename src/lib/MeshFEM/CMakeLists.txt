@@ -142,8 +142,8 @@ target_link_libraries(${PROJECT_NAME}
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
-        cholmod::cholmod
         umfpack::umfpack
+        cholmod::cholmod
         meshfem::boost
 #		CGAL::CGAL
     PRIVATE

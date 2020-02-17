@@ -1,6 +1,7 @@
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/iostream.h>
 namespace py = pybind11;
 
 #include <Eigen/Dense>
@@ -12,6 +13,8 @@ namespace py = pybind11;
 #include <MeshFEM/OrthotropicHomogenization.hh>
 #include <MeshFEM/LinearElasticity.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+
+#include <MeshFEM/GlobalBenchmark.hh>
 
 template<typename Mesh>
 using ETensor = ElasticityTensor<typename Mesh::Real, Mesh::EmbeddingDimension>;
@@ -192,4 +195,19 @@ PYBIND11_MODULE(periodic_homogenization, m) {
 // #if MESHFEM_BIND_LONG_DOUBLE
 //     addBindings<long double>(m, detail_module);
 // #endif
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Benchmarking
+    ////////////////////////////////////////////////////////////////////////////////
+    m.def("benchmark_reset", &BENCHMARK_RESET);
+    m.def("benchmark_start_timer_section", &BENCHMARK_START_TIMER_SECTION, py::arg("name"));
+    m.def("benchmark_stop_timer_section",  &BENCHMARK_STOP_TIMER_SECTION,  py::arg("name"));
+    m.def("benchmark_start_timer",         &BENCHMARK_START_TIMER,         py::arg("name"));
+    m.def("benchmark_stop_timer",          &BENCHMARK_STOP_TIMER,          py::arg("name"));
+    m.def("benchmark_report", [](bool includeMessages) {
+            py::scoped_ostream_redirect stream(std::cout, py::module::import("sys").attr("stdout"));
+            if (includeMessages) BENCHMARK_REPORT(); else BENCHMARK_REPORT_NO_MESSAGES();
+        },
+        py::arg("include_messages") = false)
+        ;
 }

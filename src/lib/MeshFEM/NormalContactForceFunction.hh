@@ -56,7 +56,7 @@ public:
     static constexpr size_t Degree = Mesh::FEMData::Degree;
     typedef VectorField<Real, N> VField;
 
-    NormalContactForceFunction(_Mesh &mesh, Real alpha) : m_mesh(mesh) {
+    NormalContactForceFunction(_Mesh &mesh, Real alpha) noexcept : m_mesh(mesh) {
         m_alpha = alpha;
     }
 
