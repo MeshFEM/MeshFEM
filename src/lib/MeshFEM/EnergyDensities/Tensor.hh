@@ -119,60 +119,6 @@ setUnitMatrix(size_t row, size_t col, Eigen::MatrixBase<Derived>& out)
     out(row, col) = 1.;
 }
 
-/**
- * Ease the initialization and access to a static array of unit square matrices
- *  of the given dimension.
- */
-template<typename _Real, size_t _Dimension, int _Major = Eigen::ColMajor>
-struct UnitMatrices
-{
-    static constexpr size_t Dimension = _Dimension;
-    static constexpr size_t Major = _Major;
-    using Real = _Real;
-    using Matrix = Eigen::Matrix<Real, Dimension, Dimension>;
-    using Storage = std::array<Eigen::Matrix<Real, Dimension, Dimension>, Dimension * Dimension>;
-
-    static const Storage unit_matrices;
-
-    static const Matrix& get(size_t row, size_t col) { return unit_matrices[getIndex(row, col)]; }
-
-    static size_t getIndex(size_t row, size_t col)
-    {
-        if (Major == Eigen::ColMajor)
-            return col * Dimension + row;
-        else
-            return row * Dimension + col;
-    }
-
-  private:
-    static Storage construct()
-    {
-        Storage matrices;
-        for (size_t col = 0; col < Dimension; ++col)
-        {
-            for (size_t row = 0; row < Dimension; ++row)
-            {
-                setUnitMatrix(row, col, matrices[getIndex(row, col)]);
-            }
-        }
-        return matrices;
-    }
-};
-
-template<typename _Real, size_t _Dimension, int _Major>
-const typename UnitMatrices<_Real, _Dimension, _Major>::Storage
-  UnitMatrices<_Real, _Dimension, _Major>::unit_matrices =
-    UnitMatrices<_Real, _Dimension, _Major>::construct();
-
-template<typename _Real, size_t _Dimension, int _Major = Eigen::ColMajor>
-const auto&
-getUnitMatrix(size_t row, size_t col)
-{
-    using UMatrices = UnitMatrices<_Real, _Dimension, _Major>;
-
-    return UMatrices::get(row, col);
-}
-
 // Note: This could be factored by having a function that returnes the major index and another
 // function that returnes the non-major index.
 /**
