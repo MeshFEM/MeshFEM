@@ -19,10 +19,9 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
     using Matrix = Eigen::Matrix<Real, Dim, Dim>;
 
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
-    NeoHookeanEnergyBase(Real lame_first_parameter, Real shear_modulus,
-                         Real finite_continuation_start = -1)
-        : m_lame_first_parameter(lame_first_parameter), m_shear_modulus(shear_modulus),
-          m_finite_continuation_start(finite_continuation_start)
+    // Construct from Lame's first parameter (lambda) and shear modulus (mu).
+    NeoHookeanEnergyBase(Real lambda, Real mu, Real finite_continuation_start = -1)
+        : m_lambda(lambda), m_mu(mu), m_finite_continuation_start(finite_continuation_start)
     { };
 
     void setDeformationGradient(const Matrix& deformation_gradient) {
@@ -44,25 +43,22 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
         // if det F < eps, we replace the log(I3) term by a constant + exp(- (det (F) - eps) )
         // where the constant is chosen such that the energy remains continuous
         if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
-            Derived tmp(m_lame_first_parameter, m_shear_modulus, m_finite_continuation_start);
+            Derived tmp(m_lambda, m_mu, m_finite_continuation_start);
             Matrix tmp_F = Matrix::Identity();
             tmp_F(0, 0) = m_finite_continuation_start;
             tmp.setDeformationGradient(tmp_F);
-            Real continuation_constant = - std::log(tmp.getI3()) * (m_lame_first_parameter / 2 + m_shear_modulus) / 2;
+            Real continuation_constant = - std::log(tmp.getI3()) * (m_lambda / 2 + m_mu) / 2;
 
-            return m_lame_first_parameter * (I3 - 1) / 4 + m_shear_modulus * (I1 - 3) / 2
+            return m_lambda * (I3 - 1) / 4 + m_mu * (I1 - 3) / 2
                 + continuation_constant + std::exp(-(m_detF - m_finite_continuation_start)) - 1;
         }
 
-        const Real mu = m_shear_modulus, lambda = m_lame_first_parameter;
-        return (mu / 2) * (I1 - 3)
-             + (lambda / 4) * (I3 - 1)
-             - std::log(I3) * (mu / 2 + lambda / 4);
+        return (m_mu / 2) * (I1 - 3) + (m_lambda / 4) * (I3 - 1) - std::log(I3) * (m_mu / 2 + m_lambda / 4);
     }
 
     Matrix denergy() const {
         if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
-            Real dPsi3 = m_lame_first_parameter / 4;
+            Real dPsi3 = m_lambda / 4;
             return (-std::exp(-(m_detF - m_finite_continuation_start))) * m_detF * m_Finv.transpose()
                 + dPsi3 * d_I3_d_F()
                 + d_psi_d_I1() * d_I1_d_F();
@@ -82,7 +78,7 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
     Matrix delta_denergy(const Matrix& dF) const {
         if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
             // ln I3 term is constant, but exp(-(detF)) got added
-            Real dPsi3 = m_lame_first_parameter / 4;
+            Real dPsi3 = m_lambda / 4;
             Real exp_term = -std::exp(-(m_detF - m_finite_continuation_start));
 
             Matrix d_det_dF = m_detF * m_Finv.transpose();
@@ -133,15 +129,15 @@ protected:
     // Derivatives of the energy density with respect to the tensor invariants.
     ////////////////////////////////////////////////////////////////////////////
     // Derivative of the energy density with respect to I1
-    Real d_psi_d_I1() const { return m_shear_modulus / 2; }
+    Real d_psi_d_I1() const { return m_mu / 2; }
 
     // Derivative of the energy density with respect to I3
-    Real d_psi_d_I3() const { return (m_lame_first_parameter - (2 * m_shear_modulus + m_lame_first_parameter) / getI3()) / 4; }
+    Real d_psi_d_I3() const { return (m_lambda - (2 * m_mu + m_lambda) / getI3()) / 4; }
 
     // Second derivative of the energy density with respect to I3
     Real d2_psi_d2_I3() const {
         Real I3 = getI3();
-        return (2 * m_shear_modulus + m_lame_first_parameter) / (4 * I3 * I3);
+        return (2 * m_mu + m_lambda) / (4 * I3 * I3);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -159,7 +155,8 @@ protected:
     }
 
     Matrix m_F, m_Finv;
-    Real m_lame_first_parameter, m_shear_modulus;
+    Real m_lambda; // Lame's first parameter
+    Real m_mu;     // Shear modulus
     Real m_finite_continuation_start;
     Real m_detF;
 };
@@ -177,8 +174,7 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
 
     void setDeformationGradient(const Matrix &F) {
         Base::setDeformationGradient(F);
-        m_C33 = (m_lame_first_parameter + 2 * m_shear_modulus) /
-            (m_lame_first_parameter * m_detF * m_detF + 2 * m_shear_modulus);
+        m_C33 = (m_lambda + 2 * m_mu) / (m_lambda * unpaddedI3() + 2 * m_mu);
     }
 
     // Trace of full (padded) Cauchy-Green deformation tensor.
@@ -219,20 +215,20 @@ protected:
 
     // Derivative of normal component C33 with respect to the unpadded I3 invariant.
     Real d_C33_d_unpaddedI3() const {
-        return - m_C33 * m_C33 * (m_lame_first_parameter / (m_lame_first_parameter + 2 * m_shear_modulus));
+        return - m_C33 * m_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }
 
     // Directional derivative of d_C33_d_unpaddedI3 along dF
     Real delta_d_C33_d_unpaddedI3(const Matrix& dF) const {
         Real delta_C33 = doubleContract(d_C33_d_F(), dF);
-        return - 2 * m_C33 * delta_C33 * (m_lame_first_parameter / (m_lame_first_parameter + 2 * m_shear_modulus));
+        return - 2 * m_C33 * delta_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }
 
 private:
     using Base::m_F;
     using Base::m_detF;
-    using Base::m_lame_first_parameter;
-    using Base::m_shear_modulus;
+    using Base::m_lambda;
+    using Base::m_mu;
     using Base::unpaddedI3;
     using Base::d_unpaddedI3_d_F;
     using Base::delta_d_unpaddedI3_d_F;
@@ -258,8 +254,8 @@ struct NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHoo
 private:
     using Base::m_F;
     using Base::m_detF;
-    using Base::m_lame_first_parameter;
-    using Base::m_shear_modulus;
+    using Base::m_lambda;
+    using Base::m_mu;
 };
 
 #endif
