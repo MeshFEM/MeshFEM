@@ -80,8 +80,8 @@ isSymmetric(const Eigen::MatrixBase<_Derived>& matrix)
     return true;
 }
 
-template<typename _Derived>
-typename _Derived::Scalar doubleContract(const Eigen::MatrixBase<_Derived>& lhs, const Eigen::MatrixBase<_Derived>& rhs)
+template<typename _Derived1, typename _Derived2>
+typename _Derived1::Scalar doubleContract(const Eigen::MatrixBase<_Derived1>& lhs, const Eigen::MatrixBase<_Derived2>& rhs)
 {
     return (lhs.transpose() * rhs).trace();
 }
