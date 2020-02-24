@@ -20,8 +20,11 @@ bindEnergy(py::class_<Energy>& energy_binding)
             "setDeformationGradient", &Energy::setDeformationGradient, py::arg("deformation_gradient"))
         .def("energy", &Energy::energy)
         .def("denergy",
+            py::overload_cast<>(&Energy::denergy, py::const_))
+        .def("denergy",
             py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_),
             py::arg("dF"))
+        .def("delta_denergy",  &Energy::delta_denergy,  py::arg("dF_a"))
         .def("d2energy",       &Energy::d2energy,       py::arg("dF_a"), py::arg("dF_b"))
         .def("delta2_denergy", &Energy::delta2_denergy, py::arg("dF_a"), py::arg("dF_b"))
         ;

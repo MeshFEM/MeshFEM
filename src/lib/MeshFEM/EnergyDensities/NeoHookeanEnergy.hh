@@ -183,13 +183,13 @@ protected:
     }
 
     Matrix delta2_d_unpaddedI3_d_F(const Matrix &dF_a, const Matrix &dF_b) const {
-        Real delta2_unpaddedI3 = doubleContract(delta_d_unpaddedI3_d_F(dF_a), dF_b);
+        Real delta2_unpaddedI3_ab = doubleContract(delta_d_unpaddedI3_d_F(dF_a), dF_b);
         Matrix delta_Finv_a = -(m_Finv * dF_a * m_Finv),
                delta_Finv_b = -(m_Finv * dF_b * m_Finv);
 
-        return (2 * delta2_unpaddedI3) *  m_Finv.transpose()
+        return (2 * delta2_unpaddedI3_ab)   *       m_Finv.transpose()
              + (2 * delta_unpaddedI3(dF_a)) * delta_Finv_b.transpose()
-             + (2 * delta_unpaddedI3(dF_b)) * delta_Finv_b.transpose()
+             + (2 * delta_unpaddedI3(dF_b)) * delta_Finv_a.transpose()
              - (2 *       unpaddedI3()  ) * (delta_Finv_b * dF_a * m_Finv).transpose()
              - (2 *       unpaddedI3()  ) * (m_Finv * dF_a * delta_Finv_b).transpose();
     }
@@ -255,7 +255,7 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
              delta_C33_b   = doubleContract(dC33, dF_b);
         Real delta2_C33_ab = doubleContract(delta_d_C33_d_F(dF_a), dF_b);
         Matrix delta_d_unpaddedI3_a  = delta_d_unpaddedI3_d_F(dF_a),
-               delta_d_unpaddedI3_b  = delta_d_unpaddedI3_d_F(dF_a);
+               delta_d_unpaddedI3_b  = delta_d_unpaddedI3_d_F(dF_b);
         Real    delta2_unpaddedI3_ab = doubleContract(delta_d_unpaddedI3_a, dF_b);
 
         Matrix d_unpaddedI3 = d_unpaddedI3_d_F();
