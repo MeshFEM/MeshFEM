@@ -118,7 +118,6 @@ add_library(MeshFEM
         Utilities/IteratorMap.hh
         Utilities/NDArray.hh
         Utilities/RandomAccessIndexSet.hh
-        EnergyDensities/DifferentialOperations.hh
         EnergyDensities/Tensor.hh
         Utilities/NameMangling.hh
         wrappers/meshfem_triangle.h

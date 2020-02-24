@@ -20,7 +20,7 @@ struct SubdivVertexData {
 };
 
 struct SubdivHalfedgeData {
-    SubdivHalfedgeData() : newVertexIndex(-1) { }
+    SubdivHalfedgeData() noexcept : newVertexIndex(-1) { }
     int newVertexIndex;
 };
 
