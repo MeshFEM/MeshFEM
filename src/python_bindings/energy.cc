@@ -22,7 +22,8 @@ bindEnergy(py::class_<Energy>& energy_binding)
         .def("denergy",
             py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_),
             py::arg("dF"))
-        .def("d2energy", &Energy::d2energy, py::arg("dF_lhs"), py::arg("dF_rhs"))
+        .def("d2energy",       &Energy::d2energy,       py::arg("dF_a"), py::arg("dF_b"))
+        .def("delta2_denergy", &Energy::delta2_denergy, py::arg("dF_a"), py::arg("dF_b"))
         ;
 }
 

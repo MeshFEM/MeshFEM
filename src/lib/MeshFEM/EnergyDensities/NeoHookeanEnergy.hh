@@ -73,8 +73,8 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
         return doubleContract(dF_a, delta_denergy(dF_b));
     }
 
-    // (H : dF) where H is the hessian of the energy density with respect to F.
-    // (directional derivative of "denergy" along dF)
+    // Directional derivative of "denergy" along dF:
+    //      (d^2 psi / dF^3) : dF
     Matrix delta_denergy(const Matrix& dF) const {
         if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
             // ln I3 term is constant, but exp(-(detF)) got added
@@ -96,8 +96,26 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
         return d_psi_d_I1() * delta_d_I1_d_F(dF) + (d2_psi_d2_I3() * delta_I3) * dI3 + d_psi_d_I3() * delta_d_I3_d_F(dF);
     }
 
-    Real delta_d2energy(const Matrix &dF_a, const Matrix &dF_b, const Matrix &dF_c) {
+    // (d^3 psi / dF^3) :: (dF_a \otimes dF_b)
+    // Second variation of "denergy" along (dF_a, dF_b)
+    Matrix delta2_denergy(const Matrix &dF_a, const Matrix &dF_b) const {
         if (m_finite_continuation_start > 0) throw std::runtime_error("Finite continuation energy variant is not supported");
+
+        Matrix dI3 = d_I3_d_F();
+        Real delta_I3_a = doubleContract(dI3, dF_a),
+             delta_I3_b = doubleContract(dI3, dF_b);
+        Matrix delta_dI3_a = delta_d_I3_d_F(dF_a),
+               delta_dI3_b = delta_d_I3_d_F(dF_b);
+        // d2_psi_d_I1 = 0
+        return // Derivative of (d_psi_d_I1() * delta_d_I1_d_F(dF):                      (Note d2_psi_d_I1 = 0)
+               d_psi_d_I1() * delta2_d_I1_d_F(dF_a, dF_b)                                // Symmetric
+               // Derivative of (d2_psi_d2_I3() * delta_I3) * dI3:
+             + (d3_psi_d3_I3() * delta_I3_b * delta_I3_a) * dI3                          // Symmetric
+             + (d2_psi_d2_I3() *              doubleContract(delta_dI3_b, dF_a)) * dI3   // Symmetric
+             + (d2_psi_d2_I3() *              delta_I3_a) * delta_dI3_b                  // Symmetric pair (*)
+               // Derivative of d_psi_d_I3() * delta_d_I3_d_F(dF):
+             + (d2_psi_d2_I3() *              delta_I3_b) * delta_dI3_a                  // Symmetric pair (*)
+             + (  d_psi_d_I3()                          ) * delta2_d_I3_d_F(dF_a, dF_b); // Symmetric
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -107,23 +125,30 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
     // 2D plane stress and 3D volumetric cases.
     ////////////////////////////////////////////////////////////////////////////
     // Trace of Cauchy-Green deformation tensor.
-    Real getI1() const { return static_cast<const Derived*>(this)->getI1(); }
+    Real getI1() const { return derived().getI1(); }
 
     // Determinant of Cauchy-Green deformation tensor.
-    Real getI3() const { return static_cast<const Derived*>(this)->getI3(); }
+    Real getI3() const { return derived().getI3(); }
 
     // dI1/dF
-    Matrix d_I1_d_F() const { return static_cast<const Derived*>(this)->d_I1_d_F(); }
+    Matrix d_I1_d_F() const { return derived().d_I1_d_F(); }
 
     // dI3/dF
-    Matrix d_I3_d_F() const { return static_cast<const Derived*>(this)->d_I3_d_F(); }
+    Matrix d_I3_d_F() const { return derived().d_I3_d_F(); }
 
     // (d^2 I1 / dF^2) : dF
-    Matrix delta_d_I1_d_F(const Matrix& dF) const { return static_cast<const Derived*>(this)->delta_d_I1_d_F(dF); }
+    Matrix delta_d_I1_d_F(const Matrix& dF) const { return derived().delta_d_I1_d_F(dF); }
 
     // (d^2 I1 / dF^2) : dF
-    Matrix delta_d_I3_d_F(const Matrix& dF) const { return static_cast<const Derived*>(this)->delta_d_I3_d_F(dF); }
+    Matrix delta_d_I3_d_F(const Matrix& dF) const { return derived().delta_d_I3_d_F(dF); }
 
+    // (d^3 I1 / dF^3) :: (dF_a \otimes dF_b)
+    Matrix delta2_d_I1_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return derived().delta2_d_I1_d_F(dF_a, dF_b); }
+
+    // (d^3 I3 / dF^3) :: (dF_a \otimes dF_b)
+    Matrix delta2_d_I3_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return derived().delta2_d_I3_d_F(dF_a, dF_b); }
+
+    const Derived &derived() const { return *static_cast<const Derived *>(this); }
 protected:
     ////////////////////////////////////////////////////////////////////////////
     // Derivatives of the energy density with respect to the tensor invariants.
@@ -140,25 +165,42 @@ protected:
         return (2 * m_mu + m_lambda) / (4 * I3 * I3);
     }
 
+    // Third derivative of the energy density with respect to I3
+    Real d3_psi_d3_I3() const {
+        Real I3 = getI3();
+        return - (m_mu + 0.5 * m_lambda) / (I3 * I3 * I3);
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Derivatives of the "unpadded" invariants
     // (i.e., the 2x2 invariants for 2D, not including the C33 component)
     ////////////////////////////////////////////////////////////////////////////
-    Real unpaddedI3() const { return m_detF * m_detF; }
-    // d_I3_d_F for the "unpadded" I3 invariant
-    Matrix d_unpaddedI3_d_F() const { return (2 * m_detF * m_detF) * m_Finv.transpose(); }
-
-    // delta_d_I3_d_F for the "unpadded" I3 invariant
+    Real           unpaddedI3()                     const { return m_detF * m_detF; }
+    Matrix       d_unpaddedI3_d_F()                 const { return (2 * unpaddedI3()) * m_Finv.transpose(); }
+    Real     delta_unpaddedI3    (const Matrix &dF) const { return (2 * unpaddedI3()) * doubleContract(m_Finv.transpose(), dF); }
     Matrix delta_d_unpaddedI3_d_F(const Matrix& dF) const {
-        return (4 * m_detF * m_detF * doubleContract(m_Finv.transpose(), dF)) * m_Finv.transpose()
-             - (2 * m_detF * m_detF                                         ) * (m_Finv * dF * m_Finv).transpose();
+        return (2 * delta_unpaddedI3(dF)) *  m_Finv.transpose()
+             - (2 *       unpaddedI3()  ) * (m_Finv * dF * m_Finv).transpose();
     }
 
-    Matrix m_F, m_Finv;
-    Real m_lambda; // Lame's first parameter
-    Real m_mu;     // Shear modulus
-    Real m_finite_continuation_start;
-    Real m_detF;
+    Matrix delta2_d_unpaddedI3_d_F(const Matrix &dF_a, const Matrix &dF_b) const {
+        Real delta2_unpaddedI3 = doubleContract(delta_d_unpaddedI3_d_F(dF_a), dF_b);
+        Matrix delta_Finv_a = -(m_Finv * dF_a * m_Finv),
+               delta_Finv_b = -(m_Finv * dF_b * m_Finv);
+
+        return (2 * delta2_unpaddedI3) *  m_Finv.transpose()
+             + (2 * delta_unpaddedI3(dF_a)) * delta_Finv_b.transpose()
+             + (2 * delta_unpaddedI3(dF_b)) * delta_Finv_b.transpose()
+             - (2 *       unpaddedI3()  ) * (delta_Finv_b * dF_a * m_Finv).transpose()
+             - (2 *       unpaddedI3()  ) * (m_Finv * dF_a * delta_Finv_b).transpose();
+    }
+
+    Matrix m_F    = Matrix::Identity(),
+           m_Finv = Matrix::Identity();
+    Real m_lambda = 0.0; // Lame's first parameter
+    Real m_mu = 0.0;     // Shear modulus
+    Real m_finite_continuation_start = -1;
+    Real m_detF = 1.0;
 };
 
 template<typename _Real, size_t _Dim>
@@ -204,6 +246,30 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
                unpaddedI3()               * delta_d_C33_d_F(dF);
     }
 
+    // (d^3 I1 / dF^3) :: (dF_a \otimes dF_b)
+    Matrix delta2_d_I1_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return delta2_d_C33_d_F(dF_a, dF_b); }
+
+    // (d^3 I3 / dF^3) :: (dF_a \otimes dF_b)
+    Matrix delta2_d_I3_d_F(const Matrix &dF_a, const Matrix &dF_b) const {
+        Matrix dC33 = d_C33_d_F();
+        Real delta_C33_a   = doubleContract(dC33, dF_a),
+             delta_C33_b   = doubleContract(dC33, dF_b);
+        Real delta2_C33_ab = doubleContract(delta_d_C33_d_F(dF_a), dF_b);
+        Matrix delta_d_unpaddedI3_a  = delta_d_unpaddedI3_d_F(dF_a),
+               delta_d_unpaddedI3_b  = delta_d_unpaddedI3_d_F(dF_a);
+        Real    delta2_unpaddedI3_ab = doubleContract(delta_d_unpaddedI3_a, dF_b);
+
+        Matrix d_unpaddedI3 = d_unpaddedI3_d_F();
+        return // Derivative of delta_d_unpaddedI3_d_F(dF) * m_C33:
+               delta2_d_unpaddedI3_d_F(dF_a, dF_b) * m_C33 + delta_d_unpaddedI3_a * delta_C33_b
+               // Derivative of d_unpaddedI3 * doubleContract(dC33, dF):
+             + delta_d_unpaddedI3_b * delta_C33_a + d_unpaddedI3 * delta2_C33_ab
+               // Derivative of delta_unpaddedI3 * dC33:
+             + delta2_unpaddedI3_ab * dC33 + doubleContract(d_unpaddedI3, dF_a) * delta_d_C33_d_F(dF_b)
+               // Derivative of unpaddedI3() * delta_d_C33_d_F(dF):
+             + doubleContract(d_unpaddedI3, dF_b) * delta_d_C33_d_F(dF_a) + unpaddedI3() * delta2_d_C33_d_F(dF_a, dF_b);
+    }
+
 protected:
     // Derivative of normal component C33 with respect to the 2D deformation gradient.
     Matrix d_C33_d_F() const { return d_C33_d_unpaddedI3() * d_unpaddedI3_d_F(); }
@@ -213,15 +279,33 @@ protected:
                d_C33_d_unpaddedI3()         * delta_d_unpaddedI3_d_F(dF);
     }
 
+    Matrix delta2_d_C33_d_F(const Matrix &dF_a, const Matrix &dF_b) const {
+        Matrix dC33 = d_C33_d_F();
+        Real delta_C33_a   = doubleContract(dC33, dF_a),
+             delta_C33_b   = doubleContract(dC33, dF_b);
+        Real delta2_C33_ab = doubleContract(delta_d_C33_d_F(dF_a), dF_b);
+
+        Real coeff = -2 * m_lambda / (m_lambda + 2 * m_mu);
+        // Second variation of d_C33_d_unpaddedI3 along (dF_a, dF_b)
+        Real delta2_d_C33_d_unpaddedI3_ab = coeff * (delta_C33_a * delta_C33_b + m_C33 * delta2_C33_ab);
+        Real delta_d_C33_d_unpaddedI3_a   = coeff * m_C33 * delta_C33_a;
+        Real delta_d_C33_d_unpaddedI3_b   = coeff * m_C33 * delta_C33_b;
+
+        return delta2_d_C33_d_unpaddedI3_ab *        d_unpaddedI3_d_F()
+             + delta_d_C33_d_unpaddedI3_a   *  delta_d_unpaddedI3_d_F(dF_b)
+             + delta_d_C33_d_unpaddedI3_b   *  delta_d_unpaddedI3_d_F(dF_a)
+             + d_C33_d_unpaddedI3()         * delta2_d_unpaddedI3_d_F(dF_a, dF_b);
+    }
+
     // Derivative of normal component C33 with respect to the unpadded I3 invariant.
     Real d_C33_d_unpaddedI3() const {
-        return - m_C33 * m_C33 * (m_lambda / (m_lambda + 2 * m_mu));
+        return -m_C33 * m_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }
 
     // Directional derivative of d_C33_d_unpaddedI3 along dF
-    Real delta_d_C33_d_unpaddedI3(const Matrix& dF) const {
+    Real delta_d_C33_d_unpaddedI3(const Matrix &dF) const {
         Real delta_C33 = doubleContract(d_C33_d_F(), dF);
-        return - 2 * m_C33 * delta_C33 * (m_lambda / (m_lambda + 2 * m_mu));
+        return -2 * m_C33 * delta_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }
 
 private:
@@ -232,6 +316,7 @@ private:
     using Base::unpaddedI3;
     using Base::d_unpaddedI3_d_F;
     using Base::delta_d_unpaddedI3_d_F;
+    using Base::delta2_d_unpaddedI3_d_F;
     Real m_C33;
 };
 
@@ -243,14 +328,18 @@ struct NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHoo
     using Matrix = typename Base::Matrix;
     using Base::Base;
 
-    Real    getI3() const { return m_detF * m_detF; }
-    Real    getI1() const { return m_F.squaredNorm(); }
+    Real getI3() const { return m_detF * m_detF; }
+    Real getI1() const { return m_F.squaredNorm(); }
 
     Matrix d_I1_d_F() const { return 2 * m_F; }
     Matrix d_I3_d_F() const { return this->d_unpaddedI3_d_F(); }
 
     Matrix delta_d_I1_d_F(const Matrix& dF) const { return 2 * dF; }
     Matrix delta_d_I3_d_F(const Matrix& dF) const { return this->delta_d_unpaddedI3_d_F(dF); }
+
+    Matrix delta2_d_I1_d_F(const Matrix &/* dF_a */, const Matrix /* &dF_b */) const { return Matrix::Zero(); }
+    Matrix delta2_d_I3_d_F(const Matrix    &dF_a   , const Matrix    &dF_b   ) const { return this->delta2_d_unpaddedI3_d_F(dF_a, dF_b); }
+
 private:
     using Base::m_F;
     using Base::m_detF;
