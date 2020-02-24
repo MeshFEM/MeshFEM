@@ -74,7 +74,7 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
     }
 
     // Directional derivative of "denergy" along dF:
-    //      (d^2 psi / dF^3) : dF
+    //      (d^2 psi / dF^2) : dF
     Matrix delta_denergy(const Matrix& dF) const {
         if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
             // ln I3 term is constant, but exp(-(detF)) got added
@@ -106,7 +106,6 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
              delta_I3_b = doubleContract(dI3, dF_b);
         Matrix delta_dI3_a = delta_d_I3_d_F(dF_a),
                delta_dI3_b = delta_d_I3_d_F(dF_b);
-        // d2_psi_d_I1 = 0
         return // Derivative of (d_psi_d_I1() * delta_d_I1_d_F(dF):                      (Note d2_psi_d_I1 = 0)
                d_psi_d_I1() * delta2_d_I1_d_F(dF_a, dF_b)                                // Symmetric
                // Derivative of (d2_psi_d2_I3() * delta_I3) * dI3:
