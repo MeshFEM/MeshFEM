@@ -65,6 +65,12 @@ public:
     const T &getCenter() const { return std::get<Idx::centerIndex()>(m_data); }
           T &getCenter()       { return std::get<Idx::centerIndex()>(m_data); }
 
+
+    // Flattened 1D accessors to the ND Array
+    static constexpr size_t size() { return Idx::size(); }
+    const T &get1D(size_t i) const { return m_data[i]; }
+          T &get1D(size_t i)       { return m_data[i]; }
+
     void fill(const T &value) { m_data.fill(value); }
 private:
     template<size_t... I> const T &accessImpl(const NDArrayIndex<N> &idx, Future::index_sequence<I...>) const { return m_data.at(Idx::index(idx.template get<I>()...)); }
