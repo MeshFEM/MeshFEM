@@ -129,7 +129,7 @@ class MaterialLibrary:
 
 # superView allows this viewer to add geometry to an existing viewer.
 class ViewerBase:
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
         # Note: subclass's constructor should define
         # self.MeshConstructor and self.isLineMesh, which will
         # determine how the geometry is interpreted.
@@ -197,7 +197,7 @@ class ViewerBase:
             self.controls = superView.controls
             self.renderer = superView.renderer
 
-        self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
+        self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         if (mesh != None):   self.mesh = mesh
@@ -213,6 +213,11 @@ class ViewerBase:
         if color is not None:
             self.ghostColor = color
         self.currMesh.material = self.materialLibrary.ghostMaterial(self.currMesh.material, self.ghostColor)
+
+    def makeOpaque(self, color=None):
+        self.currMesh.material = self.materialLibrary.material(False)
+        if (color is not None):
+            self.currMesh.material.color = color
 
     def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         self.scalarField = scalarField
@@ -522,10 +527,10 @@ class RawMesh():
         return data
 
 class TriMeshViewer(ViewerBase):
-    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
         self.isLineMesh = False
         self.MeshConstructor = pythreejs.Mesh
-        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView)
+        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView, transparent)
 
 class LineMeshViewer(ViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
