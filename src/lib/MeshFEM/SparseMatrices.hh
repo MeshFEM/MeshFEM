@@ -1297,14 +1297,14 @@ class CholmodFactorizer {
 public:
     // Assumes matrix is stored in the upper triangle!
     template<typename _Triplet>
-    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll); }
+    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
 
     // Warning: modifies the passed triplet matrix, tmat!
     template<typename _Triplet>
-    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false) : m_AStorage(tmat)           { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(const SuiteSparseMatrix &mat,  bool forceSupernodal = false, bool force_ll = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll); }
+    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(tmat)           { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(const SuiteSparseMatrix &mat,  bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
 
     // Delete unsafe copy constructors/assignment.
     // This will also suppress creation of default move constructors/assignment.
@@ -1512,6 +1512,10 @@ public:
     size_t m() const { return m_A.nrow; }
     size_t n() const { return m_A.ncol; }
 
+    void setSuppressWarnings(bool suppressWarnings) {
+        m_c->print = suppressWarnings ? 0 : 2;
+    }
+
 private:
     std::shared_ptr<cholmod_common> m_c;
     cholmod_sparse m_A;
@@ -1527,7 +1531,7 @@ private:
         m_A.x = m_AStorage.Ax.data();
     }
 
-    void m_init(bool forceSupernodal, bool force_ll) {
+    void m_init(bool forceSupernodal, bool force_ll, bool suppressWarnings = false) {
         if (m_c) { cholmod_l_finish(m_c.get()); }
         m_c = std::make_shared<cholmod_common>();
         cholmod_l_start(m_c.get());
@@ -1540,6 +1544,8 @@ private:
 
         if (forceSupernodal) m_c->supernodal = CHOLMOD_SUPERNODAL;
         m_c->final_ll = force_ll;
+
+        m_c->print = suppressWarnings ? 0 : 2;
 
         // Try many different orderings searching for the best.
         // m_c->nmethods = 9;
