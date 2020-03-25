@@ -213,7 +213,7 @@ namespace detail {
     struct InterpolateImpl<_ContribNode, 0> {
         static_assert(_ContribNode == 0, "Only one node on constant elements...");
         template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
-        static _T run(const Interpolant<_T, _K, 0, _NS> &f, Args... baryCoords) {
+        static _T run(const Interpolant<_T, _K, 0, _NS> &f, Args... /* baryCoords */) {
             return f[0];
         }
     };
