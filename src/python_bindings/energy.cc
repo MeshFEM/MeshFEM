@@ -82,10 +82,16 @@ PYBIND11_MODULE(energy, m)
 
     m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
-
     m.def("LinearElastic", [](const ElasticityTensor<double, 3> &etensor) { return LinearElasticEnergy<double, 3>(etensor); }, py::arg("elasticity_tensor"));
     m.def("LinearElastic", [](const ElasticityTensor<double, 2> &etensor) { return LinearElasticEnergy<double, 2>(etensor); }, py::arg("elasticity_tensor"));
 
-    m.def("IsotropicLinearElastic",    [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicLinear(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
-    m.def("IsotropicLinearElastic",    [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicLinear(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+    m.def("IsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicLinear(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
+    m.def("IsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicLinear(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+
+    auto lambdaFromENu = [](double E, double nu) { return E * nu / ((1 + nu) * (1 - 2 * nu)); };
+    auto     muFromENu = [](double E, double nu) { return E / (2 * (1 + nu)); };
+
+    // Convenience method for constructing a neo-Hookean material from a Young's modulus Poisson's ratio
+    m.def("NeoHookeanYoungPoisson", [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoisson", [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
 }

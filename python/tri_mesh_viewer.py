@@ -527,10 +527,11 @@ class RawMesh():
         return data
 
 class TriMeshViewer(ViewerBase):
-    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
         self.isLineMesh = False
         self.MeshConstructor = pythreejs.Mesh
         super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView, transparent)
+        if wireframe: self.showWireframe(True)
 
 class LineMeshViewer(ViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
