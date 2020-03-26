@@ -462,4 +462,15 @@ PYBIND11_MODULE(mesh, m)
 
             MeshIO::save(path, vertices, elements); }, py::arg("path"), py::arg("V"), py::arg("F"))
         ;
+
+    m.def("load_raw", [&](const std::string& path) {
+        std::vector<MeshIO::IOVertex > vertices;
+        std::vector<MeshIO::IOElement> elements;
+        auto type = MeshIO::load(path, vertices, elements, MeshIO::FMT_GUESS, MeshIO::MESH_GUESS);
+
+        std::pair<Eigen::MatrixXd, Eigen::MatrixXi> result;
+        result.first = getV(vertices);
+        result.second = getF(elements);
+        return result;
+    });
 }

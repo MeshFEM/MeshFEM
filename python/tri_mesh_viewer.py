@@ -596,3 +596,75 @@ class ElasticStructureViewer(TriMeshViewer):
     def getVisualizationGeometry(self):
         self.mesh.setVertices(self.elasticStructure.deformedVertices())
         return self.mesh.visualizationGeometry()
+
+# Render a quad/hex mesh
+# TODO: we should really implement flat shading; this requires creating copies
+# for verties for each incident element.
+class QuadHexMeshWrapper:
+    def __init__(self, V, F):
+        V = np.array(V, dtype=np.float32)
+        F = np.array(F, dtype=np.uint32)
+
+        outwardFaces = None
+
+        if (F.shape[1] == 4):
+            # 2 triangles per quad
+            outwardFaces = [[0, 1, 2, 3]]
+        elif (F.shape[1] == 8):
+            # 2 triangles for each of the 6 cube faces
+            # outward oriented faces:
+            outwardFaces = [[0, 3, 2, 1],
+                            [0, 4, 7, 3],
+                            [0, 1, 5, 4],
+                            [4, 5, 6, 7],
+                            [1, 2, 6, 5],
+                            [3, 7, 6, 2]]
+        else:
+            raise Exception('Only quads and hexahedra are supported')
+
+        FT = None # triangulated quads/hex faces
+        trisPerElem = 2 * len(outwardFaces)
+        FT = np.empty((trisPerElem * F.shape[0], 3), dtype=F.dtype)
+
+        outwardFaces = np.array(outwardFaces)
+        for i, q in enumerate(outwardFaces):
+            FT[2 * i    ::trisPerElem] = F[:, q[[0, 1, 2]]]
+            FT[2 * i + 1::trisPerElem] = F[:, q[[2, 3, 0]]]
+
+        # compute face normals per triangle
+        FN = np.cross(V[FT[:, 1]] - V[FT[:, 0]], V[FT[:, 2]] - V[FT[:, 0]])
+        FN /= np.linalg.norm(FN, axis=1)[:, np.newaxis]
+
+        # Average onto the vertices with uniform weights for now...
+        N = np.zeros_like(V)
+        np.add.at(N, FT, FN[:, np.newaxis, :]) # todo: incorporate weights?
+        # Normalize, guarding for zero-vector normals which occur for interior hex mesh vertices
+        # (assuming we do not replicate them per-face)
+        norms = np.linalg.norm(N, axis=1)
+        norms = np.where(norms > 1e-5, norms, 1.0)
+        N /= norms[:, np.newaxis]
+
+        self.numElems = F.shape[0]
+        self.numVerts = V.shape[0]
+
+        # Lookup table maping visualization vertices, triangles back to their originating vertex/element
+        # currently we do not replicate vertices...
+        self.origVertForVert = np.arange(V.shape[0])
+        self.elementForTri = np.empty(FT.shape[0], dtype=np.int)
+        eft = np.reshape(self.elementForTri, (F.shape[0], -1), order='C')
+        eft[:, :] = np.arange(F.shape[0])[:, np.newaxis]
+
+        self.V, self.F, self.N = V, FT, N
+
+    def visualizationGeometry(self):
+        return self.V, self.F, self.N
+
+    def visualizationField(self, data):
+        domainSize = data.shape[0]
+        if (domainSize == self.numVerts): return data[self.origVertForVert]
+        if (domainSize == self.numElems): return data[self.elementForTri]
+        raise Exception('Unrecognized data size')
+
+class QuadHexViewer(TriMeshViewer):
+    def __init__(self, V, F, *args, **kwargs):
+        super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
