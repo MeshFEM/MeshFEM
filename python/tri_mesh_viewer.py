@@ -511,7 +511,10 @@ class ViewerBase:
             self.renderer.close()
 
 class RawMesh():
-    def __init__(self, vertices, faces, normals):
+    def __init__(self, vertices, faces, normals = None):
+        if (normals is None):
+            normals = np.zeros_like(vertices)
+            normals[:, -1] = 1.0
         self.updateGeometry(vertices, faces, normals)
 
     def visualizationGeometry(self):
@@ -535,6 +538,8 @@ class TriMeshViewer(ViewerBase):
 
 class LineMeshViewer(ViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+        if (isinstance(linemesh, tuple)):
+            linemesh = RawMesh(*linemesh)
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)

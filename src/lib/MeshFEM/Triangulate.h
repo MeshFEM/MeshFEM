@@ -79,9 +79,9 @@ void write_poly(const std::string &filename, const Vertices &v, const Edges &e) 
 }
 
 // Largely taken from Luigi/Nico's tessellator2d.h
-template<class _EdgeSoup, class HolePoint>
+template<class _EdgeSoup, class HolePoint, class HolePtAllocator>
 void triangulatePSLC(const _EdgeSoup &edgeSoup,
-        const std::vector<HolePoint> &holes,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
@@ -237,10 +237,10 @@ void triangulatePoints(
 }
 
 // Convenience function for point/edge collections representation
-template<class Point, class HolePoint, class Edge, class PtAllocator>
+template<class Point, class HolePoint, class Edge, class PtAllocator, class HolePtAllocator>
 void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         const std::vector<Edge> &inEdges,
-        const std::vector<HolePoint> &holes,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
@@ -255,9 +255,9 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
 }
 
 // Convenience function for list of closed polygons representation
-template<class Point, class HolePoint>
+template<class Point, class HolePoint, class HolePtAllocator>
 void triangulatePSLC(const std::list<std::list<Point>> &polygons,
-        const std::vector<HolePoint> &holes,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
