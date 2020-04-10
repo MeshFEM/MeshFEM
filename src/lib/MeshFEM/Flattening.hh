@@ -36,6 +36,12 @@ using IdxPair = std::pair<size_t, size_t>;
 template<size_t _Dim>
 inline const IdxPair unflattenIndex(size_t i);
 
+// 0
+template<>
+inline constexpr size_t flattenIndices<1>(size_t /* i */, size_t /* j */) {
+    return 0;
+}
+
 // 02
 //  1
 template<>
@@ -51,6 +57,12 @@ inline constexpr size_t flattenIndices<3>(size_t i, size_t j) {
     return (i == j) ? i :
             ((i < j) ? ((j == 2) ? 4 - i : 5)
                      : ((i == 2) ? 4 - j : 5));
+}
+
+// 0
+template<>
+inline const IdxPair unflattenIndex<1>(size_t /* i */) {
+    return IdxPair{0, 0};
 }
 
 // 02
