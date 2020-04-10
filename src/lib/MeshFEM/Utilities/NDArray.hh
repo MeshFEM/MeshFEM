@@ -65,7 +65,6 @@ public:
     const T &getCenter() const { return std::get<Idx::centerIndex()>(m_data); }
           T &getCenter()       { return std::get<Idx::centerIndex()>(m_data); }
 
-
     // Flattened 1D accessors to the ND Array
     static constexpr size_t size() { return Idx::size(); }
     const T &get1D(size_t i) const { return m_data[i]; }
