@@ -108,6 +108,17 @@ struct NDArrayIndexer<N, Dim, Dims...> {
                NDArrayIndexer<N - 1, Dims...>::template index<I...>();
     }
 
+    template<size_t... ISeq>
+    constexpr static std::array<size_t, sizeof...(ISeq) + 1> prependToArray(size_t i, const std::array<size_t, sizeof...(ISeq)> &a, Future::index_sequence<ISeq...>) {
+        return std::array<size_t, N>{{i, a[ISeq]...}};
+    }
+
+    constexpr static std::array<size_t, N> unflattenIndex(size_t i) {
+        return prependToArray(i / NDArrayIndexer<N - 1, Dims...>::size(),
+                              NDArrayIndexer<N - 1, Dims...>::unflattenIndex(i % NDArrayIndexer<N - 1, Dims...>::size()),
+                              Future::make_index_sequence<N - 1>());
+    }
+
     // Center index generation
     static constexpr size_t centerIndex() {
         static_assert((Dim % 2) == 1, "Center index exists only on odd-sized arrays");
@@ -124,6 +135,7 @@ struct NDArrayIndexer<0> {
     static constexpr size_t       index() { static_assert(sizeof...(I) == 0, "Invalid number of indices"); return 0; }
     static constexpr size_t        size() { return 1; }
     static constexpr size_t centerIndex() { return 0; }
+    constexpr static std::array<size_t, 0> unflattenIndex(size_t i) { return std::array<size_t, 0>(); }
 };
 
 // Special index type for dimension-independent code.
