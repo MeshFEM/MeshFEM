@@ -80,6 +80,14 @@ bindElasticStructure(py::module& module, py::module& detail_module)
                    V.row(v.index()) = m.getNodePosition(v.node().index());
                return V;
            })
+      .def("getNodePositions",
+           [&](const EStructure& m) {
+               size_t num_nodes = m.mesh().numNodes();
+               Eigen::Matrix<double, Eigen::Dynamic, Dimension> V(num_nodes, Dimension);
+               for (size_t i = 0; i < num_nodes; i++)
+                   V.row(i) = m.getNodePosition(i);
+               return V;
+           })
        ;
 }
 
