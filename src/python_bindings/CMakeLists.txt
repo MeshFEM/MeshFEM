@@ -40,6 +40,10 @@ pybind11_add_module(differential_operators differential_operators.cc)
 set_target_properties(differential_operators PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(curvature curvature.cc)
+set_target_properties(curvature PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(curvature PUBLIC MeshFEM intel_pybind_14_hack)
+
 find_package(Boost REQUIRED)
 if(Boost_FOUND)
 	pybind11_add_module(elastic_structure elastic_structure.cc)
