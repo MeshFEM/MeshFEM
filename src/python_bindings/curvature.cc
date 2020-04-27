@@ -18,11 +18,14 @@ void bindCurvature(py::module &m, py::module &detail_module) {
 
     py::class_<GCS>(detail_module, ("GaussianCurvatureSensitivity" + std::to_string(_Degree)).c_str())
         .def(py::init<const Mesh &>(), py::arg("mesh"))
-        .def("mesh",         &GCS::mesh,         py::return_value_policy::reference)
+        .def("mesh",              &GCS::mesh, py::return_value_policy::reference)
         .def("voronoiAreas",      &GCS::voronoiAreas)
         .def("mixedVoronoiAreas", &GCS::mixedVoronoiAreas)
         .def("integratedK",       &GCS::integratedK)
         .def("K",                 &GCS::K)
+        .def("deltaVoronoiAreas", &GCS::deltaVoronoiAreas, py::arg("deltaP"), py::arg("mixed") = false)
+        .def("deltaIntegratedK",  &GCS::deltaIntegratedK,  py::arg("deltaP"))
+        .def("deltaK",            &GCS::deltaK,            py::arg("deltaP"))
         ;
 
     m.def("GaussianCurvatureSensitivity", [](const Mesh &m) { return std::make_unique<GCS>(m); });
