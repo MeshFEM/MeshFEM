@@ -805,12 +805,18 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
 
     runtime_error badFMT("Bad Medit format.");
     getDataLine(is, line);
-    if (line != "MeshVersionFormatted 1") throw badFMT;
+    if (line.substr(0, 20)  != "MeshVersionFormatted") throw badFMT;
 
     getDataLine(is, line);
     auto tokens = tokenize(line);
     if (tokens.at(0) != "Dimension") throw badFMT;
-    size_t dim = stoi(tokens.at(1));
+    size_t dim;
+    if (tokens.size() == 2) dim = stoi(tokens.at(1));
+    else {
+        // Dimension could be on a subsequent line...
+        getDataLine(is, line);
+        dim = stoi(line);
+    }
     if ((dim != 2) && (dim != 3)) throw runtime_error("Only dimension 2 and 3 supported");
 
     vector<Element> triangles;
@@ -849,7 +855,7 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
             tetrahedra.reserve(numTetrahedra);
             for (size_t i = 0; i < numTetrahedra && getDataLine(is, line); ++i) {
                 tokens = tokenize(line);
-                // Each triangle entry has 4 indices plus a reference field
+                // Each tetrahedron entry has 4 indices plus a reference field
                 if (tokens.size() != 5) throw badFMT;
                 tetrahedra.emplace_back(4);
                 for (size_t c = 0; c < 4; ++c)
