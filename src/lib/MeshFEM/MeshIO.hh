@@ -97,7 +97,7 @@ namespace MeshIO {
             static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
             static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Lines, Triangles, Quads, Tet, and Hex-sized elements");
         }
-        
+
         IOElement(const std::pair<size_t, size_t> &e) : Base{e.first, e.second} { }
 
         template<typename PType>
