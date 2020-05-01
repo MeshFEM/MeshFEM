@@ -229,15 +229,15 @@ private:
 
         Eigen::Matrix<Real_, 3, 3> grad_inv_32A = -e.gradBarycentric() / (32 * e.volume());
 
-        std::array<M3d_, 3> grad_lSq_cot_div_8{
+        std::array<M3d_, 3> grad_lSq_cot_div_8{{
             grad_inv_32A * lSq[0] * (lSq[1] + lSq[2] - lSq[0]) + inv_32A * grad_lSq[0] * (lSq[1] + lSq[2] - lSq[0]) + inv_32A * lSq[0] * (grad_lSq[1] + grad_lSq[2] - grad_lSq[0]),
             grad_inv_32A * lSq[1] * (lSq[2] + lSq[0] - lSq[1]) + inv_32A * grad_lSq[1] * (lSq[2] + lSq[0] - lSq[1]) + inv_32A * lSq[1] * (grad_lSq[2] + grad_lSq[0] - grad_lSq[1]),
             grad_inv_32A * lSq[2] * (lSq[0] + lSq[1] - lSq[2]) + inv_32A * grad_lSq[2] * (lSq[0] + lSq[1] - lSq[2]) + inv_32A * lSq[2] * (grad_lSq[0] + grad_lSq[1] - grad_lSq[2])
-        };
+        }};
 
-        return std::array<M3d_, 3>{grad_lSq_cot_div_8[1] + grad_lSq_cot_div_8[2],
-                                   grad_lSq_cot_div_8[2] + grad_lSq_cot_div_8[0],
-                                   grad_lSq_cot_div_8[0] + grad_lSq_cot_div_8[1]};
+        return std::array<M3d_, 3>{{grad_lSq_cot_div_8[1] + grad_lSq_cot_div_8[2],
+                                    grad_lSq_cot_div_8[2] + grad_lSq_cot_div_8[0],
+                                    grad_lSq_cot_div_8[0] + grad_lSq_cot_div_8[1]}};
     }
 
     template<class M3d_, class EmbeddedElement_>
