@@ -10,6 +10,7 @@ import itertools
 class DomainType(Enum):
     GUESS   = 0
     PER_TRI = 1
+    PER_ELEM = 1
     PER_VTX = 2
     PER_CORNER = 3
 
