@@ -76,7 +76,7 @@ bindElasticStructure(py::module& module, py::module& detail_module)
       .def("laplacian", &EStructure::laplacian, py::arg("addM") = 0)
       .def("hessianSparsityPattern", &EStructure::hessianSparsityPattern)
       .def("massMatrix", [](const EStructure &e, bool lumped) {
-                    return MassMatrix::construct_vector_valued<1>(e.mesh(), lumped);
+                    return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
               }, py::arg("lumped") = false)
       .def("deformedVertices",
            [&](const EStructure& m) {
