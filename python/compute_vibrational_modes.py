@@ -3,23 +3,27 @@ from scipy.sparse import csc_matrix, save_npz
 from scipy.sparse.linalg import eigsh
 import numpy as np, enum
 import sparse_matrices
+import differential_operators
 
 class MassMatrixType(enum.Enum):
     IDENTITY = 1
     FULL = 2
     LUMPED = 3
 
-def compute_vibrational_modes(r, fixedVars, mtype = MassMatrixType.FULL, n = 7, sigma=-0.001):
-    H = r.hessian()
+def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, n = 7, sigma=-0.001):
+    """
+    Compute the vibrational modes of an elastic object `obj`
+    """
+    H = obj.hessian()
     Htrip = H if isinstance(H, sparse_matrices.TripletMatrix) else H.getTripletMatrix()
 
     M_scipy = None
 
     if (mtype != MassMatrixType.IDENTITY):
-        objectMethods = dir(r)
+        objectMethods = dir(obj)
         if (mtype == MassMatrixType.FULL):
             if ("massMatrix" in objectMethods):
-                Mtrip = r.massMatrix()
+                Mtrip = obj.massMatrix()
                 Mtrip.reflectUpperTriangle()
                 Mtrip.rowColRemoval(fixedVars)
                 M_scipy = Mtrip.compressedColumn()
@@ -27,7 +31,7 @@ def compute_vibrational_modes(r, fixedVars, mtype = MassMatrixType.FULL, n = 7, 
                 print("WARNING: object does not implement `massMatrix`; falling back to identity metric")
         elif (mtype == MassMatrixType.LUMPED):
             if ("lumpedMassMatrix" in objectMethods):
-                M_scipy = scipy.sparse.diags(np.delete(r.lumpedMassMatrix(), fixedVars))
+                M_scipy = scipy.sparse.diags(np.delete(obj.lumpedMassMatrix(), fixedVars))
             else:
                 print("WARNING: object does not implement `lumpedMassMatrix`; falling back to identity metric")
         else: raise Exception('Unknown mass matrix type.')
@@ -40,7 +44,7 @@ def compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, 
     Htrip.reflectUpperTriangle()
     H = Htrip.compressedColumn()
 
-    print("m:", Htrip.m, " nnz:", Htrip.nnz)
+    # print("m:", Htrip.m, " nnz:", Htrip.nnz)
     if (M_scipy is None): lambdas, modes = eigsh(H, n,            sigma=sigma, which='LM')
     else:                 lambdas, modes = eigsh(H, n, M=M_scipy, sigma=sigma, which='LM')
 

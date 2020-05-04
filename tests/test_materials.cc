@@ -29,7 +29,7 @@ TEST_CASE("reading material json files", "[materials]" ) {
 	std::string config2d;
 	std::string config3d;
 
-	SECTION("Isotropic mateiral") {
+	SECTION("Isotropic material") {
 		config2d = config3d = R"({
 			"type": "isotropic",
 			"young": 200,
@@ -37,7 +37,7 @@ TEST_CASE("reading material json files", "[materials]" ) {
 		})";
 	}
 
-	SECTION("Othrotropic mateiral") {
+	SECTION("Othrotropic material") {
 		// 2D: "young": [young_x, young_y],
 		//     "poisson": [poisson_xy, poisson_yx],
 		//     "shear": [shear_xy],
@@ -62,7 +62,7 @@ TEST_CASE("reading material json files", "[materials]" ) {
 		})";
 	}
 
-	SECTION("Anisotropic mateiral") {
+	SECTION("Anisotropic material") {
 		// "material_matrix": [[C_00, C_01, C02, C03, C04, C05],
 		//                     [C_10, C_11, C12, C13, C14, C15],
 		//                     [C_20, C_21, C22, C23, C24, C25],

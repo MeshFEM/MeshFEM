@@ -35,6 +35,14 @@ struct DiffOpBindings {
             return M;
         }, py::arg("mesh"), py::arg("lumped") = false, py::arg("forceP1") = false, py::arg("upperTriOnly") = false);
 
+        m.def("mass_elasticity", [](const Mesh &mesh, bool lumped, bool forceP1, bool upperTriOnly) {
+            TripletMatrix<> M;
+            if (forceP1) M = MassMatrix::construct_vector_valued<1>(mesh, lumped);
+            else         M = MassMatrix::construct_vector_valued   (mesh, lumped);
+            if (!upperTriOnly) M.reflectUpperTriangle();
+            return M;
+        }, py::arg("mesh"), py::arg("lumped") = false, py::arg("forceP1") = false, py::arg("upperTriOnly") = false, "Mass matrix for vector-valued shape functions");
+
         m.def("bilaplacian", [](const Mesh &mesh, bool forceP1) {
                 TripletMatrix<> Ltrip;
                 using VXd = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
