@@ -3,7 +3,6 @@ from scipy.sparse import csc_matrix, save_npz
 from scipy.sparse.linalg import eigsh
 import numpy as np, enum
 import sparse_matrices
-import differential_operators
 
 class MassMatrixType(enum.Enum):
     IDENTITY = 1
