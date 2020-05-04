@@ -315,7 +315,9 @@ class ViewerBase:
 
         # Avoid flicker/partial redraws during updates
         if self.avoidRedrawFlicker:
-            self.renderer.pauseRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.pauseRendering()
+            except: pass
 
         if (self.currMesh is None):
             attr = {}
@@ -375,7 +377,9 @@ class ViewerBase:
 
         if self.avoidRedrawFlicker:
             # The scene is now complete; reenable rendering and redraw immediatley.
-            self.renderer.resumeRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.resumeRendering()
+            except: pass
 
     @property
     def arrowSize(self):
