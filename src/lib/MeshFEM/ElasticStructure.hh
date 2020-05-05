@@ -135,11 +135,32 @@ public:
     }
 
 
-    Matrix getDeformationGradient(size_t element_index, const EvalPt<Dimension>& x) const {
+    using EvalPtN = EvalPt<Dimension>;
+    Matrix getDeformationGradient(size_t element_index, const EvalPtN& x) const {
         return Matrix::Identity() + getFluctuationDisplacementGradient(element_index, x);
     }
     void setIdentityDeformationGradient() { m_fluctuation_displacements = VectorX::Zero(getThis()->numNodeFluctuationDisplacementVars()); }
-    
+
+    std::vector<Matrix> getDeformationGradientsAtBarycenter() const {
+        const size_t ne = m_mesh.numElements();
+        std::vector<Matrix> F(ne);
+        EvalPtN barycenter;
+        barycenter.fill(1.0 / (Dimension + 1));
+        for (const auto &e : m_mesh.elements())
+        for (size_t ei = 0; ei < ne; ++ei)
+            F[ei] = Matrix::Identity() + getFluctuationDisplacementGradient(ei, barycenter);
+        return F;
+    }
+
+    VectorX getDeformationGradientDeterminantsAtBarycenter() const {
+        const size_t ne = m_mesh.numElements();
+        VectorX result(ne);
+        EvalPtN barycenter;
+        barycenter.fill(1.0 / (Dimension + 1));
+        for (size_t ei = 0; ei < ne; ++ei)
+            result[ei] = (Matrix::Identity() + getFluctuationDisplacementGradient(ei, barycenter)).determinant();
+        return result;
+    }
     
     Matrix getVariablesDeformationGradient(const VectorX& vars, size_t element_index, const EvalPt<Dimension>& x) const {
         return Matrix::Identity() + getVariablesFluctuationDisplacementGradient(vars, element_index, x);
