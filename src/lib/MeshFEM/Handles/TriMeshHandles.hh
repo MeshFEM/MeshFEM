@@ -93,6 +93,7 @@ public:
 
      TH     tri() const { return TH(m_mesh.m_triOfHE(m_idx), m_mesh); }
      TH simplex() const { return tri(); }
+     TH element() const { return tri(); }
     HEH next() const {
         if (m_idx < 0) return boundaryEdge().next().m_volumeCast();
         return HEH(m_mesh.template m_HE<_Mesh::Direction::NEXT>(m_idx), m_mesh);
@@ -256,7 +257,7 @@ private:
     friend class HEHandle<_Mesh>;
 };
 
-}
+} // namespace _TriMeshHandles
 
 template<class _VertexData, class _HalfEdgeData, class _TriData, class _BoundaryVertexData, class _BoundaryEdgeData>
 struct HandleTraits<TriMesh<_VertexData, _HalfEdgeData, _TriData, _BoundaryVertexData, _BoundaryEdgeData>> {

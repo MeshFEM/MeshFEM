@@ -131,8 +131,13 @@ public:
     template<class _Mesh> using BVHandle = typename HandleTraits<FEMMesh>::template BVHandle<_Mesh>; // Boundary vertex
     template<class _Mesh> using BNHandle = typename HandleTraits<FEMMesh>::template BNHandle<_Mesh>; // Boundary node
     template<class _Mesh> using BEHandle = typename HandleTraits<FEMMesh>::template BEHandle<_Mesh>; // Boundary element
+                                                                                                     // Note: for triangle meshes, boundary edge handles
+                                                                                                     //       are automatically replaced with derived
+                                                                                                     //       boundary element handles because of the shared name!
+    template<class _Mesh> using THandle  =  EHandle<_Mesh>; // Reinterpret tri/tets of base mesh as derived elements
+    template<class _Mesh> using BFHandle = BEHandle<_Mesh>; // Reinterpret boundary faces of tet meshes as derived boundary elements.
 
-    // We also want to allow traversal of this derived mesh starting from hafledges,
+    // We also want to allow traversal of this derived mesh starting from halfedges,
     // so we need to override the halfEdge(i)/halfEdges() methods.
     template<class _Mesh> using HEHandle = typename BaseMesh::template HEHandle<_Mesh>; // Halfedge (tri or tet)
 

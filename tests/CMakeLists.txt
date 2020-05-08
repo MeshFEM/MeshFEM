@@ -2,10 +2,6 @@
 # Independent binaries
 ################################################################################
 
-# add_executable(Functions Functions.cc)
-# target_link_libraries(Functions MeshFEM)
-# target_compile_options(Functions PRIVATE -Wno-unused-parameter)
-
 add_executable(       SmoothMaxPositiveTest SmoothMaxPositiveTest.cc)
 target_link_libraries(SmoothMaxPositiveTest MeshFEM meshfem::boost warnings::all)
 #target_compile_options(SmoothMaxPositiveTest PRIVATE -Wno-unused-parameter)
@@ -15,6 +11,10 @@ add_executable(       NormalContactForceFunctionTest NormalContactForceFunctionT
 target_link_libraries(NormalContactForceFunctionTest MeshFEM meshfem::boost warnings::all)
 #target_compile_options(NormalContactForceFunctionTest PRIVATE -Wno-unused-parameter)
 set_target_properties(NormalContactForceFunctionTest PROPERTIES CXX_STANDARD 11)
+
+add_executable(TestFEMMesh TestFEMMesh.cc)
+target_link_libraries(TestFEMMesh MeshFEM meshfem::boost warnings::all)
+set_target_properties(TestFEMMesh PROPERTIES CXX_STANDARD 11)
 
 ################################################################################
 

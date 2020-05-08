@@ -54,7 +54,7 @@ protected:
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using HFH = typename _Mesh::template HFHandle<_Mesh>;
-    using  TH = typename _Mesh::template HFHandle<_Mesh>;
+    using  TH = typename _Mesh::template  THandle<_Mesh>;
     using BFH = typename _Mesh::template BFHandle<_Mesh>;
 public:
     bool         valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
@@ -68,6 +68,7 @@ public:
     VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
     TH            tet() const { return TH(m_mesh.m_tetOfHF(m_idx), m_mesh); }
     TH        simplex() const { return tet(); }
+    TH        element() const { return tet(); }
 
     // Support range-based for over vertices
     struct  VRangeTraits { using SEHType = VH; using EHType = HFHandle; static constexpr size_t count = numVertices(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex; };

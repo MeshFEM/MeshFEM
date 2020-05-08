@@ -13,7 +13,7 @@
 //
 //  We support levels 0 and 1, the vertex->half-face part of level 2, and an
 //  improved level 3 (boundary representation) where triangles' corner vertex
-//  indices aren't explicitly stored. Instead, we store an indices of the
+//  indices aren't explicitly stored. Instead, we store a indices of the
 //  opposite half-faces from which the vertex indices can be retrieved.
 //  Also, instead of using "O[hf] = -1" as the opposite to internal half-faces
 //  hf on the boundary, we store an encoded boundary half-face index, -1 - bhf,
