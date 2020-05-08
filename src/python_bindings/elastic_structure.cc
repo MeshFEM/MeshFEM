@@ -9,6 +9,9 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
+#include "MeshFEM/MassMatrix.hh"
+#include "MeshEntities.hh"
+
 template<template<typename, size_t> class _Energy_T, size_t _K, size_t _Degree>
 void
 bindElasticStructure(py::module& module, py::module& detail_module)
@@ -18,7 +21,6 @@ bindElasticStructure(py::module& module, py::module& detail_module)
     using EStructure = ElasticStructure<double, Energy, Dimension, _Degree>;
     using Mesh       = typename EStructure::Mesh;
     using EmbeddingSpace = Eigen::Matrix<Real, Dimension, 1>;
-
 
     module.def("ElasticStructure", [](const Mesh &m, const Energy &e, Real vol) {
                 if (vol <= 0.0) vol = m.boundingBox().volume();
@@ -66,13 +68,17 @@ bindElasticStructure(py::module& module, py::module& detail_module)
       .def("getVars", &EStructure::getVars)
       .def("setVars", &EStructure::setVars, py::arg("vars"))
       .def("energy", &EStructure::energy)
-      .def("getStressTensor", &EStructure::getStressTensor)
+      .def("getDeformationGradientsAtBarycenter", &EStructure::getDeformationGradientsAtBarycenter)
+      .def("getDeformationGradientDeterminantsAtBarycenter", &EStructure::getDeformationGradientDeterminantsAtBarycenter)
       .def("gradient", &EStructure::gradient)
     //   .def("gradient", py::overload_cast<Eigen::VectorXd&>(&EStructure::gradient, py::const_))
       .def("hessian", py::overload_cast<>(&EStructure::hessian, py::const_))
       .def("hessian", py::overload_cast<SuiteSparseMatrix&>(&EStructure::hessian, py::const_))
       .def("laplacian", &EStructure::laplacian, py::arg("addM") = 0)
       .def("hessianSparsityPattern", &EStructure::hessianSparsityPattern)
+      .def("massMatrix", [](const EStructure &e, bool lumped) {
+                    return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
+              }, py::arg("lumped") = false)
       .def("deformedVertices",
            [&](const EStructure& m) {
                Eigen::Matrix<double, Eigen::Dynamic, Dimension> V(m.numVertices(), Dimension);
@@ -80,7 +86,31 @@ bindElasticStructure(py::module& module, py::module& detail_module)
                    V.row(v.index()) = m.getNodePosition(v.node().index());
                return V;
            })
-       ;
+      .def("getNodePositions",
+           [&](const EStructure& m) {
+               size_t num_nodes = m.mesh().numNodes();
+               Eigen::Matrix<double, Eigen::Dynamic, Dimension> V(num_nodes, Dimension);
+               for (size_t i = 0; i < num_nodes; i++)
+                   V.row(i) = m.getNodePosition(i);
+               return V;
+           })
+     .def("visualizationGeometry", [](const EStructure &e) {
+            std::vector<MeshIO::IOVertex > vertices;
+            std::vector<MeshIO::IOElement> elements;
+
+            const auto &m = e.mesh();
+            for (const auto &v : m.vertices())
+                vertices.emplace_back(e.getNodePosition(v.index()));
+            for (const auto &ee : m.elements()) {
+                elements.emplace_back();
+                for (const auto &v : ee.vertices())
+                    elements.back().push_back(v.index());
+            }
+
+            FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(elements, vertices);
+            return getVisualizationGeometry(visMesh);
+         })
+     ;
 }
 
 

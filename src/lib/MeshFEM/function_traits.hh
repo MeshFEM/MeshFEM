@@ -73,4 +73,12 @@ struct AcceptsRealNTuple {
                 typename FT::template arg<0>::type>::type>::value;
 };
 
+template<class F, size_t N>
+struct AcceptsVectorND {
+    using FT = function_traits<F>;
+    static constexpr bool value = (FT::arity == 1) &&
+            std::is_same<VectorND<N>, typename std::decay<
+                typename FT::template arg<0>::type>::type>::value;
+};
+
 #endif /* end of include guard: FUNCTION_TRAITS_HH */

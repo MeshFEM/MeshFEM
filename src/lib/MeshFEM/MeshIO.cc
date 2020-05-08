@@ -637,9 +637,9 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
     is >> version >> file_type >> data_size;
     if ((size_t(file_type) > 1) ||
         (data_size != sizeof(double))) throw unsFmt;
-    m_binary = file_type == 1;
+    bool binary = file_type == 1;
 
-    if (m_binary) {
+    if (binary) {
         skipNewline(is);
         int one;
         is.read((char *) &one, sizeof(int));
@@ -659,7 +659,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
 
     // We only support the case where nodes are consecutively numbered
     // and 1-indexed (this is the default for gmsh).
-    if (m_binary) {
+    if (binary) {
         skipNewline(is);
         int idx = 0;
         for (size_t i = 0; i < numNodes; ++i) {
@@ -695,7 +695,7 @@ MeshType MeshIO_MSH::load(istream &is, vector<Vertex> &nodes,
 
     elements.resize(numElements);
 
-    if (m_binary) {
+    if (binary) {
         skipNewline(is);
         size_t readElements = 0;
         std::vector<int> data;
@@ -806,12 +806,18 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
 
     runtime_error badFMT("Bad Medit format.");
     getDataLine(is, line);
-    if (line != "MeshVersionFormatted 1") throw badFMT;
+    if (line.substr(0, 20)  != "MeshVersionFormatted") throw badFMT;
 
     getDataLine(is, line);
     auto tokens = tokenize(line);
     if (tokens.at(0) != "Dimension") throw badFMT;
-    size_t dim = stoi(tokens.at(1));
+    size_t dim;
+    if (tokens.size() == 2) dim = stoi(tokens.at(1));
+    else {
+        // Dimension could be on a subsequent line...
+        getDataLine(is, line);
+        dim = stoi(line);
+    }
     if ((dim != 2) && (dim != 3)) throw runtime_error("Only dimension 2 and 3 supported");
 
     vector<Element> triangles;
@@ -850,7 +856,7 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
             tetrahedra.reserve(numTetrahedra);
             for (size_t i = 0; i < numTetrahedra && getDataLine(is, line); ++i) {
                 tokens = tokenize(line);
-                // Each triangle entry has 4 indices plus a reference field
+                // Each tetrahedron entry has 4 indices plus a reference field
                 if (tokens.size() != 5) throw badFMT;
                 tetrahedra.emplace_back(4);
                 for (size_t c = 0; c < 4; ++c)
@@ -864,19 +870,21 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
                 // Skip line
             }
         } else if (line == "End") {
-            if (!tetrahedra.empty()) {
-                // If tetrahedrons are present, it's a tetrahedral mesh (no joke)
-                elements.swap(tetrahedra);
-                return MESH_TET;
-            } else {
-                // If only triangles are present, it's a triangle mesh
-                elements.swap(triangles);
-                return MESH_TRI;
-            }
+            break;
         } else {
             // Element not supported
             throw badFMT;
         }
+    }
+
+    if (!tetrahedra.empty()) {
+        // If tetrahedrons are present, it's a tetrahedral mesh (no joke)
+        elements.swap(tetrahedra);
+        return MESH_TET;
+    } else {
+        // If only triangles are present, it's a triangle mesh
+        elements.swap(triangles);
+        return MESH_TRI;
     }
 
     throw badFMT;

@@ -315,7 +315,9 @@ class ViewerBase:
 
         # Avoid flicker/partial redraws during updates
         if self.avoidRedrawFlicker:
-            self.renderer.pauseRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.pauseRendering()
+            except: pass
 
         if (self.currMesh is None):
             attr = {}
@@ -375,7 +377,9 @@ class ViewerBase:
 
         if self.avoidRedrawFlicker:
             # The scene is now complete; reenable rendering and redraw immediatley.
-            self.renderer.resumeRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.resumeRendering()
+            except: pass
 
     @property
     def arrowSize(self):
@@ -511,7 +515,10 @@ class ViewerBase:
             self.renderer.close()
 
 class RawMesh():
-    def __init__(self, vertices, faces, normals):
+    def __init__(self, vertices, faces, normals = None):
+        if (normals is None):
+            normals = np.zeros_like(vertices)
+            normals[:, -1] = 1.0
         self.updateGeometry(vertices, faces, normals)
 
     def visualizationGeometry(self):
@@ -535,6 +542,8 @@ class TriMeshViewer(ViewerBase):
 
 class LineMeshViewer(ViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+        if (isinstance(linemesh, tuple)):
+            linemesh = RawMesh(*linemesh)
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
@@ -580,23 +589,6 @@ class FlatteningAnimation:
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.layout)
-
-
-# Render a elastic structure
-class ElasticStructureViewer(TriMeshViewer):
-    def __init__(self, elasticStructure, *args, **kwargs):
-        from MeshFEM import Mesh
-        self.elasticStructure = elasticStructure
-        mm = elasticStructure.mesh();
-        # Make a copy of the elasticStructure mesh that we can use
-        # to construct the deformed elasticStructure visualization geometry.
-        self.mesh = Mesh(mm.vertices(),
-                              mm.elements(), 1, mm.embeddingDimension)
-        super().__init__(self.mesh, *args, **kwargs)
-
-    def getVisualizationGeometry(self):
-        self.mesh.setVertices(self.elasticStructure.deformedVertices())
-        return self.mesh.visualizationGeometry()
 
 # Render a quad/hex mesh
 # TODO: we should really implement flat shading; this requires creating copies

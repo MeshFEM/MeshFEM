@@ -135,11 +135,32 @@ public:
     }
 
 
-    Matrix getDeformationGradient(size_t element_index, const EvalPt<Dimension>& x) const {
+    using EvalPtN = EvalPt<Dimension>;
+    Matrix getDeformationGradient(size_t element_index, const EvalPtN& x) const {
         return Matrix::Identity() + getFluctuationDisplacementGradient(element_index, x);
     }
     void setIdentityDeformationGradient() { m_fluctuation_displacements = VectorX::Zero(getThis()->numNodeFluctuationDisplacementVars()); }
-    
+
+    std::vector<Matrix> getDeformationGradientsAtBarycenter() const {
+        const size_t ne = m_mesh.numElements();
+        std::vector<Matrix> F(ne);
+        EvalPtN barycenter;
+        barycenter.fill(1.0 / (Dimension + 1));
+        for (const auto &e : m_mesh.elements())
+        for (size_t ei = 0; ei < ne; ++ei)
+            F[ei] = Matrix::Identity() + getFluctuationDisplacementGradient(ei, barycenter);
+        return F;
+    }
+
+    VectorX getDeformationGradientDeterminantsAtBarycenter() const {
+        const size_t ne = m_mesh.numElements();
+        VectorX result(ne);
+        EvalPtN barycenter;
+        barycenter.fill(1.0 / (Dimension + 1));
+        for (size_t ei = 0; ei < ne; ++ei)
+            result[ei] = (Matrix::Identity() + getFluctuationDisplacementGradient(ei, barycenter)).determinant();
+        return result;
+    }
     
     Matrix getVariablesDeformationGradient(const VectorX& vars, size_t element_index, const EvalPt<Dimension>& x) const {
         return Matrix::Identity() + getVariablesFluctuationDisplacementGradient(vars, element_index, x);
@@ -338,7 +359,7 @@ public:
         // Fluctuation displacement masses
         SuiteSparse_long elIdx = 0;
         for (const auto& element : m_mesh.elements()) {
-            Real curMassPerQP = std::max(MIN_MASS, (element->volume() * density) / (Real)numqps);
+            Real curMassPerQP = std::max(Real(MIN_MASS), (element->volume() * density) / (Real)numqps); // cast of MIN_MASS to prevent ODR-use linking problem
             for (size_t qpIdx = 0; qpIdx < numqps; qpIdx++) {
                 for (size_t row = 0; row < Dimension; row++) {
                     for (size_t col = 0; col < Dimension; col++) {
@@ -370,7 +391,7 @@ public:
         // Fluctuation displacement masses
         for (const auto& element : m_mesh.elements()) {
             Real curMassPerNode = (element->volume() * density) / (Real)element.nodes().size();
-            curMassPerNode = std::max(MIN_MASS, curMassPerNode);
+            curMassPerNode = std::max(Real(MIN_MASS), curMassPerNode); // cast of MIN_MASS to prevent ODR-use linking problem
             for (const auto& node : element.nodes()) {
                 for (size_t d = 0; d < Dimension; d++) {
                     SuiteSparse_long curIdx = getThis()->fluctuationDisplacementVarIdx(node.index(), d);

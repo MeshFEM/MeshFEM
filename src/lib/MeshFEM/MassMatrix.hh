@@ -16,6 +16,8 @@
 #define MASSMATRIX_HH
 
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/FEMMesh.hh>
+#include <MeshFEM/GaussQuadrature.hh>
 #include <limits>
 #include <stdexcept>
 
@@ -125,6 +127,23 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
         return M_lumped;
     }
 
+    M.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
+    return M;
+}
+
+// Construct the mass matrix for vector-valued shape functions
+template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, typename... Args>
+TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
+    TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);
+    Mscalar.sumRepeated();
+
+    constexpr size_t N = _FEMMesh::EmbeddingDimension;
+    TripletMatrix<> M(Mscalar.n * N, Mscalar.m * N);
+    M.reserve(N * Mscalar.nnz());
+
+    for (const auto &t : Mscalar)
+        for (size_t c = 0; c < N; ++c)
+            M.addNZ(N * t.i + c, N * t.j + c, t.v);
     M.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
     return M;
 }

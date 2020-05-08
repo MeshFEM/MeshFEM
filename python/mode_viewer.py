@@ -5,8 +5,8 @@ import ipywidgets.embed
 from tri_mesh_viewer import TriMeshViewer
 
 class ModeViewer(TriMeshViewer):
-    def __init__(self, structure, modeDoF = None, eigenvalues = None, width=512, height=512, numSteps=8, amplitude = 0.05, normalize = True):
-        super().__init__(structure, width, height)
+    def __init__(self, structure, modeDoF = None, eigenvalues = None, width=512, height=512, numSteps=8, amplitude = 0.05, normalize = True, wireframe = False):
+        super().__init__(structure, width, height, wireframe=wireframe)
         self.normalize = normalize
         self.amplitude = amplitude
         self.layout = ipywidgets.VBox()

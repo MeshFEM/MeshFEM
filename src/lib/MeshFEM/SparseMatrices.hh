@@ -882,14 +882,18 @@ struct CSCMatrix {
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
 
-    // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
+    // Perform the operation:
+    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    // Assumes RHS sparsity pattern is a subset of LHS.
     // offset: offset to be applied to the row and column indices of b
-    void addWithSubSparsity(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
+    void addWithSubSparsity(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
+        auto inRange = [&](_Index i) { return (i >= blockStart) && (i < blockEnd); };
         auto bi = [&]() { return offset + bit.get_i(); };
         auto bj = [&]() { return offset + bit.get_j(); };
         while ((it != ite) && (bit != bite)) {
+            if (!inRange(bit.get_i()) || !inRange(bit.get_j())) { ++bit; continue; }
             if ((it.get_j() == bj())) {
                 if (it.get_i() == bi()) {
                     Ax[it.get_idx()] += alpha * b.Ax[bit.get_idx()];
@@ -906,6 +910,69 @@ struct CSCMatrix {
             }
         }
         assert(bit == bite && "b's sparsity not a subset of ours");
+    }
+
+    // Perform the operation:
+    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    // Sparsity pattern of RHS can be arbitrary.
+    void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        _Index inputSize = std::min(b.m, blockEnd) - blockStart;
+        if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
+        if ((m != inputSize + offset) || (n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+
+        auto it  = begin(), bit  = b.begin(),
+             ite = end(),   bite = b.end();
+        auto inRange = [&](_Index i) { return (i >= blockStart) && (i < blockEnd); };
+        auto bi   = [&]() { return offset + bit.get_i();   };
+        auto bj   = [&]() { return offset + bit.get_j();   };
+        auto bval = [&]() { return  alpha * bit.get_val(); };
+        std::vector<_Index> newAp, newAi;
+        std::vector<_Real>  newAx;
+        newAp.reserve(Ap.size());
+        newAi.reserve(Ai.size());
+        newAx.reserve(Ax.size());
+
+        // Merge sorted triplets into the new result
+        _Index currCol = 0;
+        newAp.push_back(0);
+        auto insertEntry = [&](_Index row, _Index col, _Real val) {
+            assert(col >= currCol);
+            // End all columns up to `col - 1`, begin column `col`
+            for (_Index c = currCol + 1; c <= col; ++c)
+                newAp.push_back(newAi.size());
+            currCol = col;
+            newAi.push_back(row);
+            newAx.push_back(val);
+        };
+
+        while ((it != ite) || (bit != bite)) {
+            if ((bit != bite) && (!inRange(bit.get_i()) || !inRange(bit.get_j()))) { ++bit; continue; } // filter entries outside the input block
+            bool takeA = ( it !=  ite);
+            bool takeB = (bit != bite);
+
+            // If both A and B entries are available, pick the first one in sorted order (or pick both and sum if they are at the same location).
+            if (takeA && takeB) {
+                std::pair<_Index, _Index> a_colrow{it.get_j(), it.get_i()}, b_colrow{bj(), bi()};
+                takeA = a_colrow <= b_colrow; // (col, row) lexicographic ordering
+                takeB = b_colrow <= a_colrow;
+            }
+
+            if ( takeA && !takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val()         ); ++it;        }
+            if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val() + bval()); ++it; ++bit; }
+            if (!takeA &&  takeB) { insertEntry(      bi(),       bj(),                bval());       ++bit; }
+        }
+        if (currCol >= n) throw std::runtime_error("Column index out of bounds");
+
+        // Terminate all remaining columns
+        for (_Index c = currCol; c < n; ++c)
+            newAp.push_back(newAi.size());
+
+        assert(newAp.size() == size_t(n + 1));
+
+        Ai = std::move(newAi);
+        Ap = std::move(newAp);
+        Ax = std::move(newAx);
+        nz = Ai.size();
     }
 
     // Set from a triplet matrix
@@ -1339,9 +1406,9 @@ public:
     // Recompute the numeric factorization using the new system matrix "tmat",
     // resuing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
-    // NOTE: The check of positive definite inside this function is not sufficient,
-    //       since it just uses CHOLMOD's return status. If the diagonal entry of L 
-    //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to 
+    // NOTE: The positive definiteness check inside this function is not sufficient,
+    //       since it just uses CHOLMOD's return status. If the diagonal entry of L
+    //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
     template<typename Mat>
     void updateFactorization(Mat &&mat, bool isInTryCatch=false) {

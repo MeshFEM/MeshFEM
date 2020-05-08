@@ -101,7 +101,7 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     }
 
     // Hessian is constant, third derivatives are zero.
-    Matrix delta2_denergy(const Matrix &dF_a, const Matrix &dF_b) { return Matrix::Zero(); }
+    Matrix delta2_denergy(const Matrix &/* dF_a */, const Matrix &/* dF_b */) { return Matrix::Zero(); }
 
    private:
     ETensor m_elastic_tensor;

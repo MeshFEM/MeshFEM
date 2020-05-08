@@ -203,7 +203,7 @@ protected:
 };
 
 template<typename _Real, size_t _Dim>
-class NeoHookeanEnergy;
+struct NeoHookeanEnergy;
 
 template<typename _Real>
 struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHookeanEnergy>
