@@ -1,5 +1,7 @@
-#include <catch2/catch.hpp>
 #include <MeshFEM/MassMatrix.hh>
+// WARNING: catch2/catch.hpp sets a BENCHMARK macro, so we must include it
+// after MeshFEM.
+#include <catch2/catch.hpp>
 
 template<size_t _Dim, size_t _Deg>
 static void test() {
