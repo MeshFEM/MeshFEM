@@ -7,6 +7,7 @@ _sys.path.insert(0, '@PROJECT_SOURCE_DIR@/python')
 import sparse_matrices
 import energy
 import mesh
+import parallelism
 from mesh import Mesh, PeriodicCondition
 
 from energy_building import *

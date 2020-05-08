@@ -1,5 +1,5 @@
 # Pybind11 currently doesn't detect Intel's compilers' support of C++14.
-# We hack around this by definingDPYBIND11_CPP14 ourselves for the
+# We hack around this by defining PYBIND11_CPP14 ourselves for the
 # modules using py::overload_cast.
 add_library(intel_pybind_14_hack INTERFACE)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
@@ -17,6 +17,14 @@ endif()
 pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(sparse_matrices PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(parallelism parallelism.cc)
+set_target_properties(parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(parallelism PUBLIC MeshFEM)
+
+pybind11_add_module(benchmark benchmark.cc)
+set_target_properties(benchmark PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(benchmark PUBLIC MeshFEM)
 
 pybind11_add_module(energy energy.cc)
 set_target_properties(energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)

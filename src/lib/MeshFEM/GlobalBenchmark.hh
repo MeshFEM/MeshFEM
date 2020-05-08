@@ -2,19 +2,20 @@
 #define GLOBALBENCHMARK_HH
 #include <vector>
 #include <string>
+#include <MeshFEM_export.h>
 
 #ifdef BENCHMARK
 #include <MeshFEM/Timer.hh>
-void BENCHMARK_START_TIMER_SECTION(const std::string &name);
-void  BENCHMARK_STOP_TIMER_SECTION(const std::string &name);
-void         BENCHMARK_START_TIMER(const std::string &name);
-void          BENCHMARK_STOP_TIMER(const std::string &name);
-void               BENCHMARK_RESET();
+MESHFEM_EXPORT void BENCHMARK_START_TIMER_SECTION(const std::string &name);
+MESHFEM_EXPORT void  BENCHMARK_STOP_TIMER_SECTION(const std::string &name);
+MESHFEM_EXPORT void         BENCHMARK_START_TIMER(const std::string &name);
+MESHFEM_EXPORT void          BENCHMARK_STOP_TIMER(const std::string &name);
+MESHFEM_EXPORT void               BENCHMARK_RESET();
 
-void BENCHMARK_ADD_MESSAGE(const std::string &msg);
-void BENCHMARK_CLEAR_MESSAGES();
-void BENCHMARK_REPORT();
-void BENCHMARK_REPORT_NO_MESSAGES();
+MESHFEM_EXPORT void BENCHMARK_ADD_MESSAGE(const std::string &msg);
+MESHFEM_EXPORT void BENCHMARK_CLEAR_MESSAGES();
+MESHFEM_EXPORT void BENCHMARK_REPORT();
+MESHFEM_EXPORT void BENCHMARK_REPORT_NO_MESSAGES();
 #else
 inline void BENCHMARK_START_TIMER_SECTION(const std::string &/* name */) { }
 inline void  BENCHMARK_STOP_TIMER_SECTION(const std::string &/* name */) { }

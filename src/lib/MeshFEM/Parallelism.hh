@@ -5,6 +5,20 @@
 #include <tbb/tbb.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_scheduler_init.h>
-#endif
 
+#include <memory>
+
+#include <MeshFEM_export.h>
+
+MESHFEM_EXPORT void set_max_num_tbb_threads(int num_threads);
+
+// We may want to use different numbers of threads to assemble the Hessian/gradient because of the
+// overhead of the reduction operation used to combine the results.
+MESHFEM_EXPORT void set_hessian_assembly_num_threads(int num_threads);
+MESHFEM_EXPORT void set_gradient_assembly_num_threads(int num_threads);
+
+MESHFEM_EXPORT tbb::task_arena &get_hessian_assembly_arena();
+MESHFEM_EXPORT tbb::task_arena &get_gradient_assembly_arena();
+
+#endif
 #endif /* end of include guard: PARALLELISM_HH */

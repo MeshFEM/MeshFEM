@@ -5,19 +5,17 @@
 #include "Eigen/Dense"
 template<typename Real_> using VecX_T = Eigen::Matrix<Real_, -1, 1>;
 
-#if MESHFEM_WITH_TBB
-#include <tbb/tbb.h>
-#include <tbb/parallel_for.h>
-#include <tbb/enumerable_thread_specific.h>
+#include <MeshFEM/Parallelism.hh>
 
+#if MESHFEM_WITH_TBB
 // Energy summation
 
 template<typename F, typename Real_>
-struct SummationComputer {
-    SummationComputer(F& f, const size_t nvars, VecX_T<Real_>& summands) : m_f(f), m_nvars(nvars), m_summands(summands) { }
+struct SummandEvaluator {
+    SummandEvaluator(F& f, const size_t nvars, VecX_T<Real_>& summands) : m_f(f), m_nvars(nvars), m_summands(summands) { }
 
     void operator()(const tbb::blocked_range<size_t>& r) const {
-        for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, m_summands); }
+        for (size_t i = r.begin(); i < r.end(); ++i) { m_summands[i] = m_f(i); }
     }
 private:
     F& m_f;
@@ -26,16 +24,15 @@ private:
 };
 
 template<typename F, typename Real_>
-SummationComputer<F, Real_> make_summation_computer(F& f, size_t nvars, VecX_T<Real_>& summands) {
-    return SummationComputer<F, Real_>(f, nvars, summands);
+SummandEvaluator<F, Real_> make_summand_evaluator(F& f, size_t nvars, VecX_T<Real_>& summands) {
+    return SummandEvaluator<F, Real_>(f, nvars, summands);
 }
 
 template<typename Real_, typename PerElemSummand>
-Real_ summation_parallel(const PerElemSummand& summand, const size_t numElems, bool dontSetZero = false) {
+Real_ summation_parallel(const PerElemSummand& summand, const size_t numElems) {
     VecX_T<Real_> summands(numElems);
-    if (!dontSetZero) summands.setZero();
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-        make_summation_computer(summand, numElems, summands));
+        make_summand_evaluator(summand, numElems, summands));
 
     return summands.sum();
 }

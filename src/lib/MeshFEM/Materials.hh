@@ -33,10 +33,12 @@
 #include <boost/property_tree/json_parser.hpp>
 #endif
 
+#include <MeshFEM_export.h>
+
 namespace Materials {
 
 // Material parameter bounds
-struct Bounds {
+struct MESHFEM_EXPORT Bounds {
     struct Bound {
         Bound(size_t _var, Real _val) : var(_var), value(_val) { }
         size_t var; Real value;
@@ -59,7 +61,7 @@ private:
 
 // Base class for variable materials
 template<size_t _N, template<size_t> class _Mat, size_t _NVars>
-struct VariableMaterial {
+struct MESHFEM_EXPORT VariableMaterial {
     typedef ElasticityTensor<Real, _N> ETensor;
     static constexpr size_t numVars = _NVars;
 
@@ -398,7 +400,7 @@ template<size_t _N>
 typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
 
 template<size_t _N>
-struct Constant {
+struct MESHFEM_EXPORT Constant {
     static constexpr size_t N = _N;
     static constexpr size_t numVars = 0;
     typedef ElasticityTensor<Real, _N> ETensor;

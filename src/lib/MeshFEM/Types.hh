@@ -7,6 +7,8 @@
 #include "unused.hh"
 typedef double Real;
 
+#include <MeshFEM_export.h>
+
 template<size_t N>
 using VectorND = Eigen::Matrix<Real, N, 1, Eigen::ColMajor, N, 1>;
 template<size_t N>
@@ -19,7 +21,7 @@ typedef VectorND<3> Vector3D;
 typedef  PointND<2>  Point2D;
 typedef VectorND<2> Vector2D;
 
-extern Eigen::IOFormat pointFormatter;
+MESHFEM_EXPORT extern Eigen::IOFormat pointFormatter;
 
 template<class EmbeddingSpace, class Enable = void> struct Padder;
 template<class EmbeddingSpace, class Enable = void> struct Truncator;

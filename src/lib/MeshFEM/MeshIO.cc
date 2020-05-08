@@ -8,6 +8,7 @@
 using namespace std;
 
 namespace MeshIO {
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! IOVertex ASCII input  (for implementing OFF I/O)
 //  @param[in]  is      input stream
@@ -185,7 +186,7 @@ void save(const std::string &path, const std::vector<IOVertex> &nodes,
 //  @param[in]  type      mesh element type (default: guess from first)
 *///////////////////////////////////////////////////////////////////////////////
 MeshType load(std::istream &is, std::vector<IOVertex> &nodes,
-          std::vector<IOElement> &elements, Format format, MeshType type)
+              std::vector<IOElement> &elements, Format format, MeshType type)
 {
     MeshIO *io = getMeshIO(format);
 

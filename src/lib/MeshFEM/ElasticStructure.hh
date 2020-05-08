@@ -216,12 +216,12 @@ public:
             energy += QuadratureRule::integrate(f(element.index(), m_energy), element->volume());
         }
 #else   // Parallel
-        auto energy_summand = [&](size_t element_index, VectorX& summands) {
-            summands[element_index] = QuadratureRule::integrate(
+        auto energy_summand = [&](size_t element_index) {
+            return QuadratureRule::integrate(
                 f(element_index, m_elementEnergies[element_index] /*localEnergy*/),
                 m_mesh.element(element_index)->volume());
         };
-        energy = summation_parallel<Real>(energy_summand, m_mesh.numElements(), true);
+        energy = summation_parallel<Real>(energy_summand, m_mesh.numElements());
 #endif
         return energy / getVolume();
     }

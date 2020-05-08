@@ -27,6 +27,8 @@
 #include <MeshFEM/Fields.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
 
+#include <MeshFEM_export.h>
+
 // N: spatial dimension
 template<size_t N>
 class MSHFieldParser {
@@ -45,15 +47,15 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Constructor parses the mesh and fields in the MSH file.
     ////////////////////////////////////////////////////////////////////////////
-    MSHFieldParser(const std::string &mshPath, bool permitDimMismatch = false);
+    MESHFEM_EXPORT MSHFieldParser(const std::string &mshPath, bool permitDimMismatch = false);
 
     // Constructor used to avoid re-parsing the mesh part of the file.
     // (Often code parses the input mesh first to determine the dimension, then
     //  constructs that dimension's instantiation of MSHFieldParser)
-    MSHFieldParser(std::istream &is, const MeshIO::MeshType type,
-                   std::vector<MeshIO::IOElement> &&elements,
-                   std::vector<MeshIO::IOVertex>  &&vertices,
-                   const bool binary, bool permitDimMismatch = false);
+    MESHFEM_EXPORT MSHFieldParser(std::istream &is, const MeshIO::MeshType type,
+                                  std::vector<MeshIO::IOElement> &&elements,
+                                  std::vector<MeshIO::IOVertex>  &&vertices,
+                                  const bool binary, bool permitDimMismatch = false);
 
     const std::vector<MeshIO::IOElement> &elements() const { return m_elements; }
     const std::vector<MeshIO::IOVertex > &vertices() const { return m_vertices; }

@@ -36,9 +36,9 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath, bool permitDimMismatch)
 // Constructor used to avoid re-parsing the input mesh
 template<size_t N>
 MSHFieldParser<N>::MSHFieldParser(istream &is, const ::MeshIO::MeshType type,
-                                  std::vector<::MeshIO::IOElement> &&elements,
-                                  std::vector<::MeshIO::IOVertex>  &&vertices,
-                                  const bool binary, bool permitDimMismatch)
+                                                 std::vector<::MeshIO::IOElement> &&elements,
+                                                 std::vector<::MeshIO::IOVertex>  &&vertices,
+                                                 const bool binary, bool permitDimMismatch)
     : m_elements(std::move(elements)), m_vertices(std::move(vertices)), m_type(type)
 {
     if (!permitDimMismatch && (meshDimension() != N))

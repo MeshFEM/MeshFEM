@@ -59,7 +59,7 @@ endfunction()
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
         GIT_REPOSITORY https://github.com/wjakob/tbb.git
-        GIT_TAG        4c3ffe5a5f37addef0dd6283c74c4402a3b4ebc9
+        GIT_TAG        20357d83871e4cb93b2c724fe0c337cd999fd14f
     )
 endfunction()
 
