@@ -19,10 +19,17 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
     using Matrix = Eigen::Matrix<Real, Dim, Dim>;
 
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
+
+    NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other, const UninitializedDeformationTag &)
+        : m_lambda(other.m_lambda), m_mu(other.m_mu), m_finite_continuation_start(other.m_finite_continuation_start)
+    { }
+
     // Construct from Lame's first parameter (lambda) and shear modulus (mu).
     NeoHookeanEnergyBase(Real lambda, Real mu, Real finite_continuation_start = -1)
         : m_lambda(lambda), m_mu(mu), m_finite_continuation_start(finite_continuation_start)
-    { };
+    {
+        setDeformationGradient(Matrix::Identity());
+    }
 
     void setDeformationGradient(const Matrix& deformation_gradient) {
         m_F = deformation_gradient;
@@ -194,12 +201,13 @@ protected:
              - (2 *       unpaddedI3()  ) * (m_Finv * dF_a * delta_Finv_b).transpose();
     }
 
-    Matrix m_F    = Matrix::Identity(),
-           m_Finv = Matrix::Identity();
     Real m_lambda = 0.0; // Lame's first parameter
     Real m_mu = 0.0;     // Shear modulus
     Real m_finite_continuation_start = -1;
-    Real m_detF = 1.0;
+
+    // Cached deformation quantities.
+    Matrix m_F, m_Finv;
+    Real m_detF;
 };
 
 template<typename _Real, size_t _Dim>
@@ -211,7 +219,11 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
     using Base = NeoHookeanEnergyBase<_Real, 2, ::NeoHookeanEnergy>;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
+
     using Base::Base;
+
+    NeoHookeanEnergy(const NeoHookeanEnergy &other)
+        : Base(other), m_C33(other.m_C33) { }
 
     void setDeformationGradient(const Matrix &F) {
         Base::setDeformationGradient(F);

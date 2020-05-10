@@ -3,6 +3,8 @@
 
 #include <MeshFEM/Concepts.hh>
 
+struct UninitializedDeformationTag { }; // Tag used to avoid copying cached deformation quantities when unnecessary.
+
 struct LinearElaticEnergyConcept { };
 struct   NeoHookeanEnergyConcept { };
 

@@ -47,7 +47,7 @@
 //  Face orientation:
 //  Differing from [1], we orient a tet's half-faces to point inward (so that
 //  their opposites point outward). In particular, by always reversing
-//  orientation accross half-faces, this ensures the correct orientation of
+//  orientation across half-faces, this ensures the correct orientation of
 //  boundary mesh triangles, whose opposites are the inward-pointing face of
 //  their incident tet.
 //  This convention is consistent with TriMesh, where a triangle's half-edges

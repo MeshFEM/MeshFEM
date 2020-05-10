@@ -73,8 +73,10 @@ template<typename PerElemAssembler, class Derived>
 void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
     using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>;
     DALocalData<DenseMatrixType> daLocalData;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-                      make_dense_assembler(assembler, A.rows(), A.cols(), daLocalData));
+    get_gradient_assembly_arena().execute([&]() {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
+                          make_dense_assembler(assembler, A.rows(), A.cols(), daLocalData));
+    });
 
     for (const auto &data : daLocalData)
         A += data.A;
@@ -117,8 +119,10 @@ HessianAssembler<F, Real_> make_hessian_assembler(F &f, const CSCMatrix<SuiteSpa
 template<typename PerElemAssembler, typename Real_>
 void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_long, Real_> &H, const size_t numElems) {
     HALocalData<Real_> haLocalData;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-                      make_hessian_assembler(assembler, H, haLocalData));
+    get_hessian_assembly_arena().execute([&]() {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
+                          make_hessian_assembler(assembler, H, haLocalData));
+    });
 
     for (const HessianAssemblerData<Real> &data : haLocalData)
         H.addWithIdenticalSparsity(data.H);

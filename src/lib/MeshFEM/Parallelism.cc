@@ -2,14 +2,18 @@
 
 #ifdef MESHFEM_WITH_TBB
 
-std::unique_ptr<tbb::task_scheduler_init> g_task_scheduler_init;
+std::unique_ptr<tbb::global_control> g_global_control;
 std::unique_ptr<tbb::task_arena> g_hessian_assembly_arena,
                                  g_gradient_assembly_arena;
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void set_max_num_tbb_threads(int num_threads) {
-    g_task_scheduler_init = std::make_unique<tbb::task_scheduler_init>(num_threads);
+    g_global_control = std::make_unique<tbb::global_control>(tbb::global_control::parameter::max_allowed_parallelism, num_threads);
+}
+
+void unset_max_num_tbb_threads() {
+    g_global_control.reset();
 }
 
 void set_hessian_assembly_num_threads(int num_threads) {
