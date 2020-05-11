@@ -26,6 +26,7 @@ add_executable(unit_tests
     test_sparse_matrices.cc
     test_tensors.cc
     test_mass.cc
+    test_femmesh_traversal.cc
     )
 
 target_link_libraries(unit_tests PUBLIC

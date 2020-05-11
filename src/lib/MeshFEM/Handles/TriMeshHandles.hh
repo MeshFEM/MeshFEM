@@ -45,6 +45,15 @@ public:
     // Range circulating counter-clockwise around this vertex.
     CirculatorRange<HEH> incidentHalfEdges() const { return CirculatorRange<HEH>(halfEdge()); }
 
+    // Call `visitor(ei)` for each incident element `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) {
+        for (const auto &he : incidentHalfEdges()) {
+            auto t = he.tri();
+            if (t) visitor(t.index());
+        }
+    }
+
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)
     VH    volumeVertex() const { return VH(m_idx, m_mesh); }
@@ -115,6 +124,13 @@ public:
         if (m_idx < 0) return false;           // boundary halfedges aren't primary
         if (opposite().m_idx < 0) return true; // the single interior halfedge on the boundary is primary
         return m_idx < opposite().m_idx;       // in the interior, the smaller indexed halfedge is primary
+    }
+
+    // Call `visitor(ei)` for each incident tri `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) const {
+        if (tri())            visitor(tri().index());
+        if (opposite().tri()) visitor(opposite().tri().index());
     }
 
     // Note: these are only correct because of the careful boundary-case

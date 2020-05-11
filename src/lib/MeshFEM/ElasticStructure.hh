@@ -631,11 +631,9 @@ public:
             // Check if node is an edge node
             if (node.edgeNodeIndex() > 0) {
                 // Check the endpoints of its edge:
-                auto edge = m_mesh.edgeForEdgeNode(node.edgeNodeIndex());
-                if (std::find(vertex_indices.begin(), vertex_indices.end(), edge[0]) !=
-                      vertex_indices.end() &&
-                    std::find(vertex_indices.begin(), vertex_indices.end(), edge[1]) !=
-                      vertex_indices.end())
+                auto he = m_mesh.halfEdgeForEdgeNode(node.edgeNodeIndex());
+                if (std::find(vertex_indices.begin(), vertex_indices.end(), he. tip().index()) != vertex_indices.end() &&
+                    std::find(vertex_indices.begin(), vertex_indices.end(), he.tail().index()) != vertex_indices.end())
                 {
                     node_indices.push_back(node.index());
                 }

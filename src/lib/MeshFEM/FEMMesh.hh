@@ -114,7 +114,7 @@ public:
 
     size_t numElementNodes() const { return 0; }
     size_t numVertexNodes()  const { return BaseMesh::numVertices(); }
-    size_t numEdgeNodes()    const { return m_edgeForEdgeNode.size(); }
+    size_t numEdgeNodes()    const { return m_halfEdgeForEdgeNode.size(); }
     size_t numNodes()        const { return numVertexNodes() +  numEdgeNodes() + numElementNodes(); }
     size_t numElements()     const { return BaseMesh::numSimplices(); }
 
@@ -128,6 +128,7 @@ public:
     template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex
     template<class _Mesh> using  NHandle = typename HandleTraits<FEMMesh>::template  NHandle<_Mesh>; // Node
     template<class _Mesh> using  EHandle = typename HandleTraits<FEMMesh>::template  EHandle<_Mesh>; // Element
+    template<class _Mesh> using HEHandle = typename HandleTraits<FEMMesh>::template HEHandle<_Mesh>; // Halfedge (tri or tet)
     template<class _Mesh> using BVHandle = typename HandleTraits<FEMMesh>::template BVHandle<_Mesh>; // Boundary vertex
     template<class _Mesh> using BNHandle = typename HandleTraits<FEMMesh>::template BNHandle<_Mesh>; // Boundary node
     template<class _Mesh> using BEHandle = typename HandleTraits<FEMMesh>::template BEHandle<_Mesh>; // Boundary element
@@ -139,7 +140,6 @@ public:
 
     // We also want to allow traversal of this derived mesh starting from halfedges,
     // so we need to override the halfEdge(i)/halfEdges() methods.
-    template<class _Mesh> using HEHandle = typename BaseMesh::template HEHandle<_Mesh>; // Halfedge (tri or tet)
 
     // Number of strictly interior nodes (excluding nodes on the boundary).
     size_t numInternalNodes() const { return numNodes() - numBoundaryNodes(); }
@@ -217,8 +217,8 @@ public:
         }
         for (auto n : nodes()) {
             if (n.isEdgeNode()) {
-                const UnorderedPair &edge = m_edgeForEdgeNode.at(n.edgeNodeIndex());
-                n->p = 0.5 * (vertex(edge[0]).node()->p + vertex(edge[1]).node()->p);
+                const auto &he = halfEdgeForEdgeNode(n.edgeNodeIndex());
+                n->p = 0.5 * (he.tip().node()->p + he.tail().node()->p);
             }
         }
 
@@ -226,9 +226,8 @@ public:
         m_computeBBox();
     }
 
-    const UnorderedPair& edgeForEdgeNode(size_t edgeNodeIndex) const {
-        assert(edgeNodeIndex >= 0 && edgeNodeIndex < m_edgeForEdgeNode.size());
-        return m_edgeForEdgeNode.at(edgeNodeIndex);
+    HEHandle<const FEMMesh> halfEdgeForEdgeNode(size_t edgeNodeIndex) const {
+        return halfEdge(m_halfEdgeForEdgeNode.at(edgeNodeIndex));
     }
 
     // Also support reading from Luigi/Nico's vertex format
@@ -291,7 +290,6 @@ public:
         return b;
     }
 
-
     BoundaryMesh<      FEMMesh> boundary()       { return BoundaryMesh<      FEMMesh>(*this); }
     BoundaryMesh<const FEMMesh> boundary() const { return BoundaryMesh<const FEMMesh>(*this); }
 
@@ -306,7 +304,7 @@ private:
     // The true node index is numBoundaryVertexNodes() + m_BN[i]
     std::vector<int> m_BN;
 
-    std::vector<UnorderedPair> m_edgeForEdgeNode;
+    std::vector<int> m_halfEdgeForEdgeNode;
 
     // Look up the boundary/volume edge coinciding with a volume/boundary edge
     // Every boundary edge has a corresponding volume edge but not the other way
