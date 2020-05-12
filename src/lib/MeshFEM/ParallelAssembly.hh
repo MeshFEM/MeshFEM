@@ -7,6 +7,13 @@ template<typename Real_> using VecX_T = Eigen::Matrix<Real_, -1, 1>;
 
 #include <MeshFEM/Parallelism.hh>
 
+// Support custom thread-local data.
+struct CustomThreadLocalData {
+    void construct() { } // called once for each thread's copy.
+};
+
+struct CTLDEmpty : public CustomThreadLocalData { };
+
 #if MESHFEM_WITH_TBB
 // Energy summation
 
@@ -82,49 +89,70 @@ void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
         A += data.A;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 // Hessian assembly
+////////////////////////////////////////////////////////////////////////////////
 
-template<typename Real_>
+template<typename Real_, class CustomData_>
 struct HessianAssemblerData {
     CSCMatrix<SuiteSparse_long, Real_> H;
     bool constructed = false;
+    CustomData_ customData;
 };
 
-template<typename Real_>
-using HALocalData = tbb::enumerable_thread_specific<HessianAssemblerData<Real_>>;
+template<typename Real_, class CustomData_>
+using HALocalData = tbb::enumerable_thread_specific<HessianAssemblerData<Real_, CustomData_>>;
 
-template<typename F, typename Real_>
+template<class CustomData_>
+struct HAFunctionCaller {
+    template<class F, class HAD>
+    static void run(F &f, size_t si, HAD &data) {
+        f(si, data.H, data.customData);
+    }
+};
+
+// Without custom data, the per-element assembler takes only the element index
+// and the (thread-local) sparse Hessian to contribute to.
+template<>
+struct HAFunctionCaller<CTLDEmpty> {
+    template<class F, class HAD>
+    static void run(F &f, size_t si, HAD &data) {
+        f(si, data.H);
+    }
+};
+
+template<class CustomData_, class F, typename Real_>
 struct HessianAssembler {
     using CSCMat = CSCMatrix<SuiteSparse_long, Real_>;
-    HessianAssembler(F &f, const CSCMat &H, HALocalData<Real_> &locals) : Hsp(H), m_f(f), m_locals(locals) { }
+    HessianAssembler(F &f, const CSCMat &H, HALocalData<Real_, CustomData_> &locals) : Hsp(H), m_f(f), m_locals(locals) { }
 
     void operator()(const tbb::blocked_range<size_t> &r) const {
-        HessianAssemblerData<Real_> &data = m_locals.local();
-        if (!data.constructed) { data.H.zeros_like(Hsp); data.constructed = true; }
-        for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.H); }
+        HessianAssemblerData<Real_, CustomData_> &data = m_locals.local();
+        if (!data.constructed) { data.H.zeros_like(Hsp); data.customData.construct(); data.constructed = true; }
+        for (size_t si = r.begin(); si < r.end(); ++si) { HAFunctionCaller<CustomData_>::run(m_f, si, data); }
     }
 
     const CSCMat &Hsp; // sparsity pattern for H
 private:
     F &m_f;
-    HALocalData<Real_> &m_locals;
+    HALocalData<Real_, CustomData_> &m_locals;
 };
 
-template<typename F, typename Real_>
-HessianAssembler<F, Real_> make_hessian_assembler(F &f, const CSCMatrix<SuiteSparse_long, Real_> &H, HALocalData<Real_> &locals) {
-    return HessianAssembler<F, Real_>(f, H, locals);
+template<class CustomData_, class F, typename Real_>
+HessianAssembler<CustomData_, F, Real_> make_hessian_assembler(F &f, const CSCMatrix<SuiteSparse_long, Real_> &H, HALocalData<Real_, CustomData_> &locals) {
+    return HessianAssembler<CustomData_, F, Real_>(f, H, locals);
 }
 
 // Assemble a Hessian in parallel
-template<typename PerElemAssembler, typename Real_>
+template<class CustomData_ = CTLDEmpty, class PerElemAssembler, typename Real_>
 void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_long, Real_> &H, const size_t numElems) {
-    HALocalData<Real_> haLocalData;
+    HALocalData<Real_, CustomData_> haLocalData;
     get_hessian_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-                          make_hessian_assembler(assembler, H, haLocalData));
+                          make_hessian_assembler<CustomData_>(assembler, H, haLocalData));
     });
 
-    for (const HessianAssemblerData<Real> &data : haLocalData)
+    for (const auto &data : haLocalData)
         H.addWithIdenticalSparsity(data.H);
 }
 
