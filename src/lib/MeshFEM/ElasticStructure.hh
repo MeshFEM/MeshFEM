@@ -146,7 +146,6 @@ public:
         std::vector<Matrix> F(ne);
         EvalPtN barycenter;
         barycenter.fill(1.0 / (Dimension + 1));
-        for (const auto &e : m_mesh.elements())
         for (size_t ei = 0; ei < ne; ++ei)
             F[ei] = Matrix::Identity() + getFluctuationDisplacementGradient(ei, barycenter);
         return F;
