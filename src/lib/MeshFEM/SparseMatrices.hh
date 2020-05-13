@@ -1404,6 +1404,14 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
     }
 
+    // Update the symbolic factorization for with a different sparsity pattern.
+    template<typename Mat>
+    void updateSymbolicFactorization(Mat &&mat, int nmethods = 0) {
+        m_AStorage = std::forward<Mat>(mat);
+        m_matrixUpdated();
+        factorizeSymbolic(nmethods);
+    }
+
     // Recompute the numeric factorization using the new system matrix "tmat",
     // resuing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
@@ -1597,6 +1605,10 @@ private:
         m_A.p = m_AStorage.Ap.data();
         m_A.i = m_AStorage.Ai.data();
         m_A.x = m_AStorage.Ax.data();
+
+        m_A.nrow   = m_AStorage.m;
+        m_A.ncol   = m_AStorage.n;
+        m_A.nzmax  = m_AStorage.nnz();
     }
 
     void m_init(bool forceSupernodal, bool force_ll, bool suppressWarnings = false) {
@@ -1635,9 +1647,6 @@ private:
         m_c->grow2 = 0; // We don't plan to use the modify routines
         m_c->quick_return_if_not_posdef = true;
 
-        m_A.nrow   = m_AStorage.m;
-        m_A.ncol   = m_AStorage.n;
-        m_A.nzmax  = m_AStorage.nnz();
         m_A.nz     = nullptr; /* not needed because m_A is packed. */
         m_A.z      = nullptr; /* not needed because m_A is real. */
         m_A.stype  = 1; // upper triangle stored.
