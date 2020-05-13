@@ -1078,7 +1078,8 @@ struct CSCMatrix {
         return result;
     }
 
-    void applyRaw(const _Real *x, _Real *result, const bool transpose = false) const {
+    template<typename _Real2> // Templated to support, e.g., application of non-autodiff matrix to autodiff vector.
+    void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
         const bool swapIndices = transpose && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE);
 
         std::fill(result, result + (transpose ? n : m), 0.0);

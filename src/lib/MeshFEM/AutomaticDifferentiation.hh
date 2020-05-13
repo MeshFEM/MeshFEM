@@ -54,6 +54,11 @@ constexpr bool isAutodiffType() {
 template<typename T>
 bool isAutodiffType(const T &/* val */) { return isAutodiffType<T>(); }
 
+template<typename T>
+std::string autodiffOrNotString() {
+    return isAutodiffType<T>() ? "ADReal" : "Real";
+}
+
 // For casting to non autodiff types, we must strip
 template<bool IsAutodiffTarget>
 struct AutodiffCastImpl {
