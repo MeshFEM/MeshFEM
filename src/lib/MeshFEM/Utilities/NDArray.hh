@@ -69,6 +69,8 @@ public:
     static constexpr size_t size() { return Idx::size(); }
     const T &get1D(size_t i) const { return m_data[i]; }
           T &get1D(size_t i)       { return m_data[i]; }
+    const T &operator[](size_t i) const { return get1D(i); }
+          T &operator[](size_t i)       { return get1D(i); }
 
     void fill(const T &value) { m_data.fill(value); }
 private:
