@@ -711,8 +711,8 @@ struct CSCMatrix {
     template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
-    void fill(_Real val) { Ax.assign(nz, val); }
-    void setZero() { fill(0.0); }
+    void fill(_Real val) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setConstant(val); }
+    void setZero()       { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setZero(); }
 
     void setIdentity(bool preserveSparsity = false) {
         if (m != n) throw std::runtime_error("Only square matrices are supported");
@@ -759,6 +759,29 @@ struct CSCMatrix {
         }
         return findEntry<_detectMissing>(i, i);
     }
+
+    // Add the NxN block `B` to this matrix, placing its upper-left corner at (i, i).
+    // (Assumes the block already exists in the sparisty pattern)
+    // Only implemented for matrices with upper-triangle symmetry;
+    // we cannot achieve a performance advantage over the block version of
+    // addNZ for general sparse matrices.
+    template<typename Derived>
+    void addDiagBlock(_Index i, const Eigen::MatrixBase<Derived> &B) {
+        constexpr _Index N = Derived::ColsAtCompileTime;
+        static_assert((N == Derived::RowsAtCompileTime) && (N != Eigen::Dynamic), "Intended for fixed-size square blocks only");
+
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented/beneficial for UPPER_TRIANGLE matrices");
+
+        for (_Index l = 0; l < N; ++l) {
+            _Index idx = findDiagEntry(i + l); // bottom of column strip to add
+            for (SuiteSparse_long k = l; k >= 0; --k) { // upper triangle only
+                assert((Ai[idx] == i + k) && "Entry absent from sparsity pattern");
+                Ax[idx--] += B(k, l);
+            }
+        }
+    }
+
+    void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
     template<bool _detectMissing = false>
     _Index findEntry(_Index i, _Index j) const {
