@@ -112,11 +112,8 @@ public:
     using Mesh = FEMMesh<Dimension, Degree, Vector>;
 
     ElasticStructureBase(const ElasticStructureBase& other) = default;
-    ElasticStructureBase(const Energy& energy, const Mesh& mesh) 
-        : ElasticStructureBase(energy, mesh, mesh.boundingBox().volume())
-    {}
-    ElasticStructureBase(const Energy& energy, const Mesh& mesh, Real volume)
-        : m_mesh(mesh), m_energy(energy), m_volume(volume)
+    ElasticStructureBase(const Energy& energy, const Mesh& mesh)
+        : m_mesh(mesh), m_energy(energy)
     {
         // NOTE: initialize() must be called by the derived class as the
         // derived class constructor might need to initialize some variables
@@ -243,7 +240,7 @@ public:
         };
         energy = summation_parallel<Real>(energy_summand, m_mesh.numElements());
 #endif
-        return energy / getVolume();
+        return energy;
     }
 
 
@@ -270,7 +267,6 @@ public:
                           integrand[var.getLocalIndex()] = psi.denergy(delta_grad);
                           var.unsetDeltaGrad(delta_grad);
                       }
-                      integrand /= getVolume();
 
                   return integrand;
               },
@@ -472,7 +468,7 @@ public:
 
                             size_t variable_pair_index = getInfluencedVariablePairFlattenedIndex(variable_a, variable_b);
                             contribution[variable_pair_index] =
-                                (delta_denergy.transpose() * delta_grads[variable_a.getLocalIndex()]).trace() / getVolume();
+                                (delta_denergy.transpose() * delta_grads[variable_a.getLocalIndex()]).trace();
                         }
                     }
 
@@ -541,8 +537,7 @@ public:
                                 getInfluencedVariablePairFlattenedIndex(variable_a, variable_b);
                             contribution[variable_pair_index] =
                                 (delta_denergy.transpose() * delta_grads[variable_a.getLocalIndex()])
-                                .trace() /
-                                getVolume();
+                                .trace();
                         }
                   }
 
@@ -648,7 +643,6 @@ public:
     }
     size_t getNodeDOFIndex(size_t node_index) const { return node_index; }
 
-    Real getVolume() const { return m_volume; }
     const Mesh& mesh() const { return m_mesh; }
     Energy getEnergyDensity() const { return m_energy; }
 
@@ -711,12 +705,8 @@ public:
     using Mesh   = typename Base::Mesh;
     using Real   = typename Base::Real;
 
-    ElasticStructure(const Energy& energy, const Mesh& mesh) 
-        : ElasticStructure(energy, mesh, mesh.boundingBox().volume())
-    {}
-
-    ElasticStructure(const Energy& energy, const Mesh& mesh, Real volume)
-        : Base(energy, mesh, volume)
+    ElasticStructure(const Energy& energy, const Mesh& mesh)
+        : Base(energy, mesh)
     {
         Base::initialize();
     }

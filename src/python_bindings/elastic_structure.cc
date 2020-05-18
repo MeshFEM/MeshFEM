@@ -22,11 +22,9 @@ bindElasticStructure(py::module& module, py::module& detail_module)
     using Mesh       = typename EStructure::Mesh;
     using EmbeddingSpace = Eigen::Matrix<Real, Dimension, 1>;
 
-    module.def("ElasticStructure", [](const Mesh &m, const Energy &e, Real vol) {
-                if (vol <= 0.0) vol = m.boundingBox().volume();
-                return std::make_shared<EStructure>(e, m, vol);
-            }, py::arg("mesh"), py::arg("energy"), py::arg("volume") = 0.0);
-
+    module.def("ElasticStructure", [](const Mesh &m, const Energy &e) {
+                return std::make_shared<EStructure>(e, m);
+            }, py::arg("mesh"), py::arg("energy"));
 
     // We are using shared pointer as holder instead of unique pointers since some function takes
     // shared pointer as arguments
@@ -45,11 +43,9 @@ bindElasticStructure(py::module& module, py::module& detail_module)
            py::arg("energy"),
            py::arg("mesh"))
       .def(py::init<const Energy&,
-                    const typename EStructure::Mesh&,
-                    Real>(),
+                    const typename EStructure::Mesh&>(),
            py::arg("energy"),
-           py::arg("mesh"),
-           py::arg("volume"))
+           py::arg("mesh"))
       .def("mesh",    &EStructure::mesh)
       .def("numVars", &EStructure::numVars)
       .def("numElements", &EStructure::numElements)
