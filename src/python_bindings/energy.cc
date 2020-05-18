@@ -88,6 +88,9 @@ PYBIND11_MODULE(energy, m)
     m.def("IsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicLinear(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicLinear(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
 
+    // Note: these expressions are for volumetric elasticity. In the 2D case,
+    // plane stress conditions are applied inside the NeoHookean material class,
+    // so it is correct to pass the volumetric Lame parameters in both cases.
     auto lambdaFromENu = [](double E, double nu) { return E * nu / ((1 + nu) * (1 - 2 * nu)); };
     auto     muFromENu = [](double E, double nu) { return E / (2 * (1 + nu)); };
 

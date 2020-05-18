@@ -105,9 +105,9 @@ public:
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
 
-        // For 2D (plane strain), lambda is actually different...
-        // This can be found by inverting 2D orthotropic tensor with equal
-        // Young's moduli
+        // For 2D (plane stress), lambda is actually different...
+        // This can be found by inverting the 2D orthotropic compliance
+        // tensor with Ex = Ey = E.
         if (_Dim == 2)
             lambda = (nu * E) / (1.0 - nu * nu);
 
