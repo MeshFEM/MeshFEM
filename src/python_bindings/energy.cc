@@ -8,54 +8,58 @@ namespace py = pybind11;
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
+#include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template<typename Energy>
-void
-bindEnergy(py::class_<Energy>& energy_binding)
+py::class_<Energy>
+bindEnergy(py::module &detail_module)
 {
-    energy_binding
-        .def(
-            "setDeformationGradient", &Energy::setDeformationGradient, py::arg("deformation_gradient"))
+    py::class_<Energy> ebind(detail_module, getEnergyName<Energy>().c_str());
+    ebind
+        .def("setDeformationGradient", &Energy::setDeformationGradient, py::arg("deformation_gradient"))
         .def("energy", &Energy::energy)
-        .def("denergy",
-            py::overload_cast<>(&Energy::denergy, py::const_))
-        .def("denergy",
-            py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_),
-            py::arg("dF"))
+        .def("denergy", py::overload_cast<                              >(&Energy::denergy, py::const_))
+        .def("denergy", py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_), py::arg("dF"))
         .def("delta_denergy",  &Energy::delta_denergy,  py::arg("dF_a"))
         .def("d2energy",       &Energy::d2energy,       py::arg("dF_a"), py::arg("dF_b"))
         .def("delta2_denergy", &Energy::delta2_denergy, py::arg("dF_a"), py::arg("dF_b"))
+        .def("PK2Stress",      &Energy::PK2Stress)
         ;
+    return ebind;
 }
 
 template<size_t _Dimension>
-void
-bindLinearElasticEnergy(py::module& detail_module)
+void bindLinearElasticEnergy(py::module &detail_module)
 {
     using LEEnergy = LinearElasticEnergy<double, _Dimension>;
-
-    py::class_<LEEnergy> linear_elastic_energy(detail_module, getLinearElasticEnergyName<_Dimension>().c_str());
-    linear_elastic_energy.def(py::init<const typename LEEnergy::ETensor&>(),
-        py::arg("elasticity_tensor"));
-
-    bindEnergy(linear_elastic_energy);
+    auto ebind = bindEnergy<LEEnergy>(detail_module);
+    ebind.def(py::init<const typename LEEnergy::ETensor&>(), py::arg("elasticity_tensor"));
 }
 
 template<size_t _Dimension>
-void
-bindNeoHookeanEnergy(py::module& detail_module)
+void bindCRLinearElasticEnergy(py::module &detail_module)
 {
-    py::class_<NeoHookeanEnergy<double, _Dimension>> neo_hookean_energy(
-        detail_module, getNeoHookeanEnergyName<_Dimension>().c_str());
-    neo_hookean_energy.def(
-        py::init<double, double, double>(),
-        py::arg("first_lame_parameter"),
-        py::arg("shear_modulus"),
-        py::arg("finite_continuation_start") = -1);
+    using CRLE = CorotatedLinearElasticity<double, _Dimension>;
+    using Mat  = typename CRLE::Matrix;
+    auto ebind = bindEnergy<CRLE>(detail_module);
+    ebind.def(py::init<const typename CRLE::ETensor&>(), py::arg("elasticity_tensor"))
+         .def("R",     &CRLE::R)
+         .def("S",     &CRLE::S)
+         .def("sigma", &CRLE::biotStress)
+         .def("delta_R", &CRLE::delta_R, py::arg("dF"))
+         .def("delta_S",     [](const CRLE &cr, const Mat &dF) { return cr.delta_S(dF, cr.delta_R(dF)); }, py::arg("dF"))
+         .def("delta_sigma", [](const CRLE &cr, const Mat &dF) { return cr.delta_sigma(cr.delta_S(dF, cr.delta_R(dF))); }, py::arg("dF"))
+         .def("isIsotropic", &CRLE::isIsotropic)
+         ;
+}
 
-    bindEnergy(neo_hookean_energy);
+template<size_t _Dimension>
+void bindNeoHookeanEnergy(py::module& detail_module)
+{
+    auto ebind = bindEnergy<NeoHookeanEnergy<double, _Dimension>>(detail_module);
+    ebind.def(py::init<double, double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"), py::arg("finite_continuation_start") = -1);
 }
 
 py::object constructNeoHookean(size_t dimension, double lambda, double mu, double finiteContinuationStart) {
@@ -70,23 +74,36 @@ py::object constructIsotropicLinear(size_t dimension, double young, double poiss
     throw std::runtime_error("Argument 'dimension' must be 2 or 3");
 }
 
+py::object constructIsotropicCorotated(size_t dimension, double young, double poisson) {
+    if (dimension == 2) return py::cast(new CorotatedLinearElasticity<double, 2>(ElasticityTensor<double, 2>(young, poisson), true), py::return_value_policy::take_ownership);
+    if (dimension == 3) return py::cast(new CorotatedLinearElasticity<double, 3>(ElasticityTensor<double, 3>(young, poisson), true), py::return_value_policy::take_ownership);
+    throw std::runtime_error("Argument 'dimension' must be 2 or 3");
+}
+
 PYBIND11_MODULE(energy, m)
 {
     py::module detail_module = m.def_submodule("detail");
     py::module::import("tensors");
 
-    bindLinearElasticEnergy<2>(detail_module);
-    bindLinearElasticEnergy<3>(detail_module);
-    bindNeoHookeanEnergy<2>   (detail_module);
-    bindNeoHookeanEnergy<3>   (detail_module);
+    bindLinearElasticEnergy<2>  (detail_module);
+    bindLinearElasticEnergy<3>  (detail_module);
+    bindNeoHookeanEnergy<2>     (detail_module);
+    bindNeoHookeanEnergy<3>     (detail_module);
+    bindCRLinearElasticEnergy<2>(detail_module);
+    bindCRLinearElasticEnergy<3>(detail_module);
 
     m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
-    m.def("LinearElastic", [](const ElasticityTensor<double, 3> &etensor) { return LinearElasticEnergy<double, 3>(etensor); }, py::arg("elasticity_tensor"));
-    m.def("LinearElastic", [](const ElasticityTensor<double, 2> &etensor) { return LinearElasticEnergy<double, 2>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("LinearElastic",          [](const ElasticityTensor<double, 3> &etensor) { return LinearElasticEnergy      <double, 3>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("LinearElastic",          [](const ElasticityTensor<double, 2> &etensor) { return LinearElasticEnergy      <double, 2>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("CorotatedLinearElastic", [](const ElasticityTensor<double, 3> &etensor) { return CorotatedLinearElasticity<double, 3>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("CorotatedLinearElastic", [](const ElasticityTensor<double, 2> &etensor) { return CorotatedLinearElasticity<double, 2>(etensor); }, py::arg("elasticity_tensor"));
 
     m.def("IsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicLinear(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicLinear(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+
+    m.def("CorotatedIsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicCorotated(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
+    m.def("CorotatedIsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicCorotated(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
 
     // Note: these expressions are for volumetric elasticity. In the 2D case,
     // plane stress conditions are applied inside the NeoHookean material class,

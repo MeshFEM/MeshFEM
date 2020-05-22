@@ -13,13 +13,14 @@
 template<typename _Real, size_t _Dim, template<typename, size_t> class _Derived_T>
 struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
 {
-    static constexpr size_t Dim = _Dim;
+    static constexpr size_t Dimension = _Dim;
     using Real = _Real;
-    using Derived = _Derived_T<Real, Dim>;
-    using Matrix = Eigen::Matrix<Real, Dim, Dim>;
+    using Derived = _Derived_T<Real, Dimension>;
+    using Matrix = Eigen::Matrix<Real, Dimension, Dimension>;
 
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
 
+    // Constructor copying material properties only, not the current deformation
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other, const UninitializedDeformationTag &)
         : m_lambda(other.m_lambda), m_mu(other.m_mu), m_finite_continuation_start(other.m_finite_continuation_start)
     { }
@@ -153,6 +154,8 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
 
     // (d^3 I3 / dF^3) :: (dF_a \otimes dF_b)
     Matrix delta2_d_I3_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return derived().delta2_d_I3_d_F(dF_a, dF_b); }
+
+    Matrix PK2Stress() const { return m_Finv * denergy(); }
 
     const Derived &derived() const { return *static_cast<const Derived *>(this); }
 protected:

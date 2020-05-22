@@ -11,9 +11,7 @@
 template <typename _Real, size_t _Dimension>
 struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
-    using FlatSymmetricMatrix = Eigen::Matrix<_Real, SMatrix::flatSize(), 1>;
 
-   public:
     static constexpr size_t Dimension = _Dimension;
     using Real = _Real;
     using Matrix = Eigen::Matrix<_Real, _Dimension, _Dimension>;
@@ -65,14 +63,7 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
             dF, m_elasticity_tensor.doubleContract(m_small_strain_tensor));
     }
 
-    Matrix denergy() const {
-        auto stress = m_elasticity_tensor.doubleContract(m_small_strain_tensor);
-        Matrix result;
-        for (size_t i = 0; i < Dimension; ++i)
-            for (size_t j = 0; j < Dimension; ++j)
-                result(i, j) = stress(i, j);
-        return result;
-    }
+    Matrix denergy() const { return m_elasticity_tensor.doubleContract(m_small_strain_tensor).toMatrix(); }
 
 #if 1
     /**
@@ -107,6 +98,7 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     // Hessian is constant, third derivatives are zero.
     Matrix delta2_denergy(const Matrix &/* dF_a */, const Matrix &/* dF_b */) { return Matrix::Zero(); }
 
+    Matrix PK2Stress() const { throw std::runtime_error("Unimplemented"); }
 private:
     ETensor m_elasticity_tensor;
     SMatrix m_small_strain_tensor;

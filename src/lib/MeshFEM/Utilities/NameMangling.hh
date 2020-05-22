@@ -35,40 +35,19 @@ std::string getMeshName() {
     return getFEMName<_Mesh::K, _Mesh::Deg, typename _Mesh::EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<_Real>();
 }
 
-template<typename _Energy>
-std::string getEnergyName() {
-    if (isLinearElastic<_Energy>::value) {
-        return "LinearElastic";
-    }
-    if (isNeoHookean<_Energy>::value) {
-        return "NeoHookean";
-    }
-    return "NotImplemented";
-}
-
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
 std::string getElasticStructureTypeName() {
-    return getFEMName<_K, _Degree, _EmbeddingSpace>() + getEnergyName<_Energy>();
+    return getFEMName<_K, _Degree, _EmbeddingSpace>() + _Energy::name;
 }
-
 
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
 std::string getElasticStructureClassName() {
     return getElasticStructureTypeName<_Energy, _K, _Degree, _EmbeddingSpace>() + "ElasticStructure";
 }
 
-template<size_t _Dimension>
-std::string
-getLinearElasticEnergyName()
-{
-    return "LinearElasticEnergy" + std::to_string(_Dimension) + "D";
-}
-
-template<size_t _Dimension>
-std::string
-getNeoHookeanEnergyName()
-{
-    return "NeoHookeanEnergy" + std::to_string(_Dimension) + "D";
+template<typename _Energy>
+std::string getEnergyName() {
+    return _Energy::name + std::to_string(_Energy::Dimension) + "D";
 }
 
 template<size_t _Dimension>
