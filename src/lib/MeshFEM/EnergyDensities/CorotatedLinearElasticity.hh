@@ -192,15 +192,13 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
     }
 
     Matrix delta2_denergy(const Matrix &dF_a, const Matrix &dF_b) {
-        Matrix dR_a = delta_R(dF_a),
+        typename CRQ::IRotType w_a = 2 * m_Ginv * CRQ::sk_inv(m_R.transpose() * dF_a);
+        Matrix dR_a = CRQ::right_mul_sk(m_R, w_a),
                dR_b = delta_R(dF_b);
         Matrix dS_a = delta_S(dF_a, dR_a),
                dS_b = delta_S(dF_b, dR_b);
         Matrix dsigma_a = delta_sigma(dS_a);
         Matrix dsigma_b = delta_sigma(dS_b);
-
-        // TODO: merge with dR_a
-        typename CRQ::IRotType w_a = 2 * m_Ginv * CRQ::sk_inv(m_R.transpose() * dF_a);
 
         Matrix d2R, d2S, d2sigma;
         d2R = CRQ::right_mul_sk(dR_b, w_a)
