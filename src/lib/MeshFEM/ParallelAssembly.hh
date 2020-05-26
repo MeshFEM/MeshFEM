@@ -78,7 +78,7 @@ DenseAssembler<F, DenseMatrixType> make_dense_assembler(F &f, size_t nrows, size
 
 template<typename PerElemAssembler, class Derived>
 void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
-    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>;
+    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
     DALocalData<DenseMatrixType> daLocalData;
     get_gradient_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
