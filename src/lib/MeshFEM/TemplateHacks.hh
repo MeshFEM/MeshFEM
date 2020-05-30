@@ -31,7 +31,15 @@ struct CopyCV : public
                                       >::type
                     >
 { };
+
 template<class _CVType, class _NonCVType>
 using CopyCV_t = typename CopyCV<_CVType, _NonCVType>::type;
+
+#include <tuple>
+
+// Get first type of a template parameter pack.
+// https://stackoverflow.com/a/45578527/122710
+template<typename... Types>
+using FirstType = typename std::tuple_element<0, std::tuple<Types...>>::type;
 
 #endif /* end of include guard: TEMPLATE_HACKS_HH */
