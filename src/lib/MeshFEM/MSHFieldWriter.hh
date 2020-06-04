@@ -55,18 +55,16 @@ public:
           m_numNodes(nodes.size()), m_numElements(elements.size()),
           m_binary(binary)
     {
+        if (!m_outStream.is_open())
+            throw std::runtime_error("Failed to open output file '" + mshPath + "'");
+
         m_numOutputNodesPerElement.reserve(m_numElements);
         for (const auto &e : elements)
             m_numOutputNodesPerElement.push_back(e.size());
-        if (!m_outStream.is_open()) {
-            std::cout << "Failed to open output file '"
-                      << mshPath << '\'' << std::endl;
-        }
-        else {
-            MeshIO::MeshIO_MSH io;
-            io.setBinary(binary);
-            io.save(m_outStream, nodes, elements, meshType);
-        }
+
+        MeshIO::MeshIO_MSH io;
+        io.setBinary(binary);
+        io.save(m_outStream, nodes, elements, meshType);
     }
 
     ////////////////////////////////////////////////////////////////////////////
