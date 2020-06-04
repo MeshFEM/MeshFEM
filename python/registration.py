@@ -38,7 +38,7 @@ def align_points_with_axes_xform(V):
     Returns
     -------
     (R, t)
-        The rigid transformation V ==> R * (V + t) reorienting V
+        The rigid transformation V ==> R^T * (V + t) reorienting V
     '''
     c = np.mean(V, axis=0)
     Vcentered = V - c
@@ -46,13 +46,23 @@ def align_points_with_axes_xform(V):
     if (np.linalg.det(R) < 0): R[:, 2] *= -1
     return R, -c
 
-def align_points_with_axes(V):
+def align_points_with_axes(V, alignmentSubset = None):
     '''
     Center the point cloud `V` at the origin and orient its longest axis along X, medium along y and shortest along Z.
+
+    Parameters
+    ----------
+    V
+        Points to align
+    alignmentSubset
+        Subset of the points used to compute alignment transformation
 
     Returns
     -------
     The rigidly transformed point cloud.
     '''
-    R, t = align_points_with_axes_xform(V)
+    if (alignmentSubset is None):
+        R, t = align_points_with_axes_xform(V)
+    else:
+        R, t = align_points_with_axes_xform(V[alignmentSubset])
     return (V + t) @ R
