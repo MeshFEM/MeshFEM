@@ -174,6 +174,7 @@ class HEHandle : public BaseMesh_t<_Mesh>::template HEHandle<_Mesh> {
 protected:
     using Base = typename BaseMesh_t<_Mesh>::template HEHandle<_Mesh>;
     using Base::m_mesh; using Base::m_idx; using Base::Base;
+    friend Base;
 };
 
 } // _FEMMeshHandles

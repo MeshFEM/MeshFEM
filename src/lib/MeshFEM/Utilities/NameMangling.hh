@@ -37,7 +37,7 @@ std::string getMeshName() {
 
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
 std::string getElasticStructureTypeName() {
-    return getFEMName<_K, _Degree, _EmbeddingSpace>() + _Energy::name;
+    return getFEMName<_K, _Degree, _EmbeddingSpace>() + _Energy::name();
 }
 
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
@@ -47,7 +47,7 @@ std::string getElasticStructureClassName() {
 
 template<typename _Energy>
 std::string getEnergyName() {
-    return _Energy::name + std::to_string(_Energy::Dimension) + "D";
+    return _Energy::name() + std::to_string(_Energy::Dimension) + "D";
 }
 
 template<size_t _Dimension>

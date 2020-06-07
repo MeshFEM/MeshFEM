@@ -93,14 +93,14 @@ void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
 // Hessian assembly
 ////////////////////////////////////////////////////////////////////////////////
 
-template<typename Real_, class CustomData_>
+template<typename Real_, class CustomData_ = CTLDEmpty>
 struct HessianAssemblerData {
     CSCMatrix<SuiteSparse_long, Real_> H;
     bool constructed = false;
     CustomData_ customData;
 };
 
-template<typename Real_, class CustomData_>
+template<typename Real_, class CustomData_ = CTLDEmpty>
 using HALocalData = tbb::enumerable_thread_specific<HessianAssemblerData<Real_, CustomData_>>;
 
 template<class CustomData_>
@@ -150,6 +150,35 @@ void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_
     get_hessian_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
                           make_hessian_assembler<CustomData_>(assembler, H, haLocalData));
+    });
+
+    for (const auto &data : haLocalData)
+        H.addWithIdenticalSparsity(data.H);
+}
+
+// Assemble a Hessian consisting of two distinct element types (e.g., membrane + hinge energies),
+// for which the caller provides assembly routines assembler1 and assembler2.
+template<class CustomData_ = CTLDEmpty, class PerElemAssembler1, class PerElemAssembler2, typename Real_>
+void assemble_parallel(const PerElemAssembler1 &assembler1, const size_t numElems1,
+                       const PerElemAssembler2 &assembler2, const size_t numElems2,
+                       CSCMatrix<SuiteSparse_long, Real_> &H,
+                       const std::string benchmarkTimerName1 = std::string(),
+                       const std::string benchmarkTimerName2 = std::string()) {
+    HALocalData<Real_, CustomData_> haLocalData;
+    get_hessian_assembly_arena().execute([&]() {
+        if (numElems1 > 0) {
+            if (!benchmarkTimerName1.empty()) BENCHMARK_START_TIMER(benchmarkTimerName1);
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems1),
+                              make_hessian_assembler<CustomData_>(assembler1, H, haLocalData));
+            if (!benchmarkTimerName1.empty()) BENCHMARK_STOP_TIMER(benchmarkTimerName1);
+        }
+
+        if (numElems2 > 0) {
+            if (!benchmarkTimerName2.empty()) BENCHMARK_START_TIMER(benchmarkTimerName2);
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems2),
+                              make_hessian_assembler<CustomData_>(assembler2, H, haLocalData));
+            if (!benchmarkTimerName2.empty()) BENCHMARK_STOP_TIMER(benchmarkTimerName2);
+        }
     });
 
     for (const auto &data : haLocalData)
