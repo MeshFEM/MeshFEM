@@ -41,9 +41,7 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
         : m_elasticity_tensor(other.m_elasticity_tensor) { }
 
     void setDeformationGradient(const Matrix& deformation_gradient) {
-        m_small_strain_tensor = SMatrix(
-                0.5 * (deformation_gradient + deformation_gradient.transpose()) - Matrix::Identity(),
-            typename SMatrix::skip_validation());
+        m_small_strain_tensor = symmetrized(deformation_gradient - Matrix::Identity());
     }
 
     _Real energy() const {
@@ -58,7 +56,7 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
      *
      *  @param dF the direction
      */
-    _Real denergy(const Matrix& dF) const {
+    _Real denergy(const Matrix &dF) const {
         return doubleContract(
             dF, m_elasticity_tensor.doubleContract(m_small_strain_tensor));
     }
@@ -71,9 +69,8 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
      *  density in respect to the deformation gradient.
      */
     _Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
-        SMatrix a(dF_lhs + dF_lhs.transpose(), typename SMatrix::skip_validation());
-        SMatrix b(dF_rhs + dF_rhs.transpose(), typename SMatrix::skip_validation());
-        return 0.25 * a.doubleContract(m_elasticity_tensor.doubleContract(b));
+        return symmetrized(dF_rhs).doubleContract(
+                    m_elasticity_tensor.doubleContract(symmetrized(dF_rhs)));
     }
 #else
     _Real d2energy(const Matrix& dF_lhs, const Matrix& dF_rhs) const {
@@ -83,20 +80,13 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     }
 #endif
 
-    Matrix delta_denergy(const Matrix& dF) const {
-        SMatrix sym = m_elasticity_tensor.doubleContract(
-                    SMatrix(dF + dF.transpose(), typename SMatrix::skip_validation()));
-        sym *= 0.5;
-        Matrix result;
-        for (size_t i = 0; i < Dimension; ++i)
-            for (size_t j = 0; j < Dimension; ++j)
-                result(i, j) = sym(i, j);
-
-        return result;
+    template<class Mat_>
+    Matrix delta_denergy(const Mat_ &dF) const {
+        return m_elasticity_tensor.doubleContract(symmetrized(dF)).toMatrix();
     }
 
     // Hessian is constant, third derivatives are zero.
-    Matrix delta2_denergy(const Matrix &/* dF_a */, const Matrix &/* dF_b */) { return Matrix::Zero(); }
+    Matrix delta2_denergy(const Matrix &/* dF_a */, const Matrix &/* dF_b */) const { return Matrix::Zero(); }
 
     Matrix PK2Stress() const { throw std::runtime_error("Unimplemented"); }
 private:

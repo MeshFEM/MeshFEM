@@ -52,14 +52,9 @@ pybind11_add_module(curvature curvature.cc)
 set_target_properties(curvature PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(curvature PUBLIC MeshFEM intel_pybind_14_hack)
 
-find_package(Boost REQUIRED)
-if(Boost_FOUND)
-	pybind11_add_module(elastic_structure elastic_structure.cc)
-    target_include_directories(elastic_structure PUBLIC ${Boost_INCLUDE_DIRS}) 
-	set_target_properties(elastic_structure PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-	target_link_libraries(elastic_structure PUBLIC MeshFEM ${Boost_LIBRARIES} intel_pybind_14_hack)
-	set(MESH_MODULES ${MESH_MODULES} "elastic_structure")
-endif()
+pybind11_add_module(elastic_object elastic_object.cc)
+set_target_properties(elastic_object PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(elastic_object PUBLIC MeshFEM intel_pybind_14_hack)
 
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)

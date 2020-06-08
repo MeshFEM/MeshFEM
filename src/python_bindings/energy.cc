@@ -17,14 +17,15 @@ py::class_<Energy>
 bindEnergy(py::module &detail_module)
 {
     py::class_<Energy> ebind(detail_module, getEnergyName<Energy>().c_str());
+    using Mat = typename Energy::Matrix;
     ebind
         .def("setDeformationGradient", &Energy::setDeformationGradient, py::arg("deformation_gradient"))
         .def("energy", &Energy::energy)
-        .def("denergy", py::overload_cast<                              >(&Energy::denergy, py::const_))
-        .def("denergy", py::overload_cast<const typename Energy::Matrix&>(&Energy::denergy, py::const_), py::arg("dF"))
-        .def("delta_denergy",  &Energy::delta_denergy,  py::arg("dF_a"))
-        .def("d2energy",       &Energy::d2energy,       py::arg("dF_a"), py::arg("dF_b"))
-        .def("delta2_denergy", &Energy::delta2_denergy, py::arg("dF_a"), py::arg("dF_b"))
+        .def("denergy", py::overload_cast<          >(&Energy::denergy, py::const_))
+        .def("denergy", py::overload_cast<const Mat&>(&Energy::denergy, py::const_), py::arg("dF"))
+        .def("d2energy",       &Energy::d2energy, py::arg("dF_a"), py::arg("dF_b"))
+        .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
+        .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
         .def("PK2Stress",      &Energy::PK2Stress)
         ;
     return ebind;
@@ -48,8 +49,8 @@ void bindCRLinearElasticEnergy(py::module &detail_module)
          .def("R",     &CRLE::R)
          .def("S",     &CRLE::S)
          .def("sigma", &CRLE::biotStress)
-         .def("delta_R", &CRLE::delta_R, py::arg("dF"))
-         .def("delta_S",     [](const CRLE &cr, const Mat &dF) { return cr.delta_S(dF, cr.delta_R(dF)); }, py::arg("dF"))
+         .def("delta_R",     [](const CRLE &cr, const Mat &dF) { return cr.delta_R(dF);                                 }, py::arg("dF"))
+         .def("delta_S",     [](const CRLE &cr, const Mat &dF) { return cr.delta_S(dF, cr.delta_R(dF));                 }, py::arg("dF"))
          .def("delta_sigma", [](const CRLE &cr, const Mat &dF) { return cr.delta_sigma(cr.delta_S(dF, cr.delta_R(dF))); }, py::arg("dF"))
          .def("isIsotropic", &CRLE::isIsotropic)
          ;

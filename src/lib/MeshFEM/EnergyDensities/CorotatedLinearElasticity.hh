@@ -160,12 +160,14 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
     const Matrix &S() const { return m_S; }
     const Matrix &biotStress() const { return m_biotStress; }
 
-    Matrix delta_R(const Matrix &dF) const {
+    template<class Mat_>
+    Matrix delta_R(const Mat_ &dF) const {
         typename CRQ::IRotType w = 2 * m_Ginv * CRQ::sk_inv(m_R.transpose() * dF);
         return CRQ::right_mul_sk(m_R, w);
     }
 
-    Matrix delta_S(const Matrix &dF, const Matrix &dR) const {
+    template<class Mat_>
+    Matrix delta_S(const Mat_ &dF, const Matrix &dR) const {
         return dR.transpose() * m_F + m_R.transpose() * dF;
     }
 
@@ -173,7 +175,8 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
         return m_elasticity_tensor.doubleContract(SMatrix(dS)).toMatrix();
     }
 
-    Matrix delta_denergy(const Matrix &dF) const {
+    template<class Mat_>
+    Matrix delta_denergy(const Mat_ &dF) const {
         Matrix dR     = delta_R(dF);
         Matrix dS     = delta_S(dF, dR);
         Matrix dsigma = delta_sigma(dS);
@@ -191,7 +194,8 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
         return doubleContract(delta_denergy(dF_lhs), dF_rhs);
     }
 
-    Matrix delta2_denergy(const Matrix &dF_a, const Matrix &dF_b) {
+    template<class Mat_, class Mat2_>
+    Matrix delta2_denergy(const Mat_ &dF_a, const Mat2_ &dF_b) const {
         typename CRQ::IRotType w_a = 2 * m_Ginv * CRQ::sk_inv(m_R.transpose() * dF_a);
         Matrix dR_a = CRQ::right_mul_sk(m_R, w_a),
                dR_b = delta_R(dF_b);

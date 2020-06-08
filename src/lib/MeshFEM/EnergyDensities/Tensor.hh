@@ -6,6 +6,7 @@
 #include "../ElasticityTensor.hh"
 #include "../Flattening.hh"
 #include "../SymmetricMatrix.hh"
+#include "../Types.hh"
 
 template<typename _Real,
          size_t t_N,
@@ -28,10 +29,8 @@ doubleContract(const ConstSymmetricMatrixBase<_Real, t_N, _Storage_t, _ConstStor
 
     // Note: This can be optimized by using the fact that lhs is symmetric
     _Real e = 0;
-    for (size_t i = 0; i < t_N; ++i)
-    {
-        for (size_t j = 0; j < t_N; ++j)
-        {
+    for (size_t i = 0; i < t_N; ++i) {
+        for (size_t j = 0; j < t_N; ++j) {
             e += lhs(i, j) * rhs(i, j);
         }
     }
@@ -51,28 +50,32 @@ doubleContract(const Eigen::MatrixBase<_Derived>& lhs,
     return doubleContract(rhs, lhs);
 }
 
-/**
- *  Apply the Symm operator on the matrix.
- */
 template<typename _Derived>
-void
-symmetrize(Eigen::MatrixBase<_Derived>& m)
-{
-    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime, "");
+void symmetrize(Eigen::MatrixBase<_Derived>& m) {
+    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime,
+                  "Symmetrization only makes sense for square matrices");
+    m = 0.5 * (m + m.transpose()).eval();
+}
 
-    m = .5 * (m + m.transpose()).eval();
+template<typename EigenType>
+using SMVType = SymmetricMatrixValue<typename EigenType::Scalar,
+                                     EigenType::RowsAtCompileTime>;
+
+template<typename _Derived>
+SMVType<_Derived>
+symmetrized(const Eigen::MatrixBase<_Derived> &A) {
+    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime,
+                  "Symmetrization only makes sense for square matrices");
+    return SMVType<_Derived>(0.5 * (A + A.transpose()), typename SMVType<_Derived>::skip_validation());
 }
 
 template<typename _Derived>
-bool
-isSymmetric(const Eigen::MatrixBase<_Derived>& matrix)
-{
-    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime, "");
+bool isSymmetric(const Eigen::MatrixBase<_Derived>& matrix) {
+    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime,
+                  "Symmetry check only makes sense for square matrices");
 
-    for (size_t col = 0; col < _Derived::ColsAtCompileTime; ++col)
-    {
-        for (size_t row = 0; row <= col; ++row)
-        {
+    for (size_t col = 0; col < _Derived::ColsAtCompileTime; ++col) {
+        for (size_t row = 0; row <= col; ++row) {
             if (std::abs(matrix(row, col) - matrix(col, row)) > 1e-13)
                 return false;
         }
@@ -83,6 +86,8 @@ isSymmetric(const Eigen::MatrixBase<_Derived>& matrix)
 template<typename _Derived1, typename _Derived2>
 typename _Derived1::Scalar doubleContract(const Eigen::MatrixBase<_Derived1>& lhs, const Eigen::MatrixBase<_Derived2>& rhs)
 {
+    static_assert((int(_Derived1::RowsAtCompileTime) == int(_Derived2::RowsAtCompileTime)) &&
+                  (int(_Derived1::ColsAtCompileTime) == int(_Derived2::ColsAtCompileTime)), "Dimensions of A and B must match to compute A : B");
     return (lhs.transpose() * rhs).trace();
 }
 
@@ -92,18 +97,10 @@ doubleContract(const ElasticityTensor<_Real, _Dim>& lhs, const Eigen::MatrixBase
 {
     SymmetricMatrixValue<_Real, _Dim> result;
     for (size_t i = 0; i < _Dim; ++i)
-    {
         for (size_t j = i; j < _Dim; ++j)
-        {
             for (size_t k = 0; k < _Dim; ++k)
-            {
                 for (size_t l = 0; l < _Dim; ++l)
-                {
                     result(i, j) += lhs(i, j, k, l) * rhs(k, l);
-                }
-            }
-        }
-    }
 
     return result;
 }
@@ -180,24 +177,151 @@ struct Indices<_Dimension, Eigen::RowMajor>
 };
 
 template<size_t _Dimension, size_t _StoragePolicy = Eigen::ColMajor>
-std::tuple<size_t, size_t>
-getNextIndices(size_t row, size_t col)
-{
+std::tuple<size_t, size_t> getNextIndices(size_t row, size_t col) {
     return Indices<_Dimension, _StoragePolicy>::getNext(row, col);
 }
 
 template<size_t _Dimension, size_t _StoragePolicy = Eigen::ColMajor>
-std::tuple<size_t, size_t>
-getUpperTriangleNextIndices(size_t row, size_t col)
-{
+std::tuple<size_t, size_t> getUpperTriangleNextIndices(size_t row, size_t col) {
     return Indices<_Dimension, _StoragePolicy>::getUpperTriangleNext(row, col);
 }
 
 template<size_t _Dimension, size_t _StoragePolicy = Eigen::ColMajor>
-bool
-arePastEndIndices(size_t row, size_t col)
-{
+bool arePastEndIndices(size_t row, size_t col) {
     return Indices<_Dimension, _StoragePolicy>::arePastEnd(row, col);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Support for accelerating calculations involving Jacobians of vector-valued
+// shape functions
+////////////////////////////////////////////////////////////////////////////////
+
+// The vectorized shape functions are of the form
+//      e_c phi_n
+// and their Jacobians look like:
+//      e_c \otimes grad phi_n
+// where e_c is a canonical basis vector for R^D (the output space dimension)
+// and grad phi_n is a vector in R^N (the input space dimension).
+// This class provides a compact representation for these Jacobians which
+// will also allow more efficient contraction operations.
+template<int D, class GradType>
+struct VectorizedShapeFunctionJacobian {
+    static constexpr int N = GradType::RowsAtCompileTime;
+
+    // Emulate part of Eigen's interface.
+    static constexpr int RowsAtCompileTime = N;
+    using Scalar     = typename GradType::Scalar;
+    using MatrixType = Eigen::Matrix<Scalar, D, N>;
+    using Derived    = MatrixType;
+
+    int c;
+    GradType g;
+
+    template<class Derived>
+    VectorizedShapeFunctionJacobian(int cc, const Eigen::MatrixBase<Derived> &gg)
+        : c(cc), g(gg) { }
+
+    MatrixType toMatrix() const {
+        MatrixType result(MatrixType::Zero());
+        result.row(c) = g.transpose();
+        return result;
+    }
+
+    // Note: it doesn't seem possible to actually use this explicit cast operator
+    // except by directly calling `.operator MatrixType()`--this is because Eigen's
+    // converting constructor is preferred when issuing a
+    // `static_cast<MatrixType()` or `MatrixType()`.
+    explicit operator MatrixType() const { // Allow conversion to underlying matrix type when necessary.
+        return toMatrix();
+    }
+
+    template<class Derived>
+    friend auto operator*(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
+        Eigen::Matrix<Scalar, D, Derived::ColsAtCompileTime> result;
+        result.setZero();
+        result.row(A.c) = (A.g.transpose() * B.template cast<Scalar>());
+        return result;
+    }
+
+    template<class Derived>
+    friend auto operator*(const Eigen::MatrixBase<Derived> &A, const VectorizedShapeFunctionJacobian &B) {
+        return A.col(B.c).template cast<Scalar>() * B.g.transpose();
+    }
+};
+
+// Unfortunately, our explicit VSFJ::operator MatrixType appears to be unusable
+// (see discussion above its definition).
+// To support conversion to MatrixType from either VSFJ or MatrixType, we need to introduce
+// our own `toMatrix` explicit cast. This calls VSFJ::toMatrix in the VSFJ case and
+// perfectly forwards the return value in the MatrixType case (and all other cases).
+template<class MatrixType> MatrixType &&toMatrix(MatrixType &&mat) { return std::forward<MatrixType>(mat); }
+template<int D, class GradType>
+typename VectorizedShapeFunctionJacobian<D, GradType>::MatrixType
+toMatrix(const VectorizedShapeFunctionJacobian<D, GradType> &vsfj) {
+    return vsfj.toMatrix();
+}
+
+// Let VectorizedShapeFunctionJacobian masquerade as a DxN matrix in metaprogramming type checks
+template<int D, class GradType, int RowSize, int ColSize>
+struct isMatrixOfSize<VectorizedShapeFunctionJacobian<D, GradType>, RowSize, ColSize,
+                      typename std::enable_if<(D == RowSize) && (GradType::RowsAtCompileTime == ColSize), void>::type> : std::true_type { };
+
+// A : (B.c otimes B.g)
+template<class Derived, int D, class GradType>
+typename Derived::Scalar doubleContract(const Eigen::MatrixBase<Derived> &A,
+                      const VectorizedShapeFunctionJacobian<D, GradType> &B) {
+    return A.row(B.c).dot(B.g);
+}
+
+template<class Derived, int D, class GradType>
+auto doubleContract(const VectorizedShapeFunctionJacobian<D, GradType> &A,
+                      const Eigen::MatrixBase<Derived> &B) { return doubleContract(B, A); }
+
+template<class T>
+struct IsVectorizedShapeFunctionJacobian { static constexpr bool value = false; };
+template<int D, class GradType>
+struct IsVectorizedShapeFunctionJacobian<VectorizedShapeFunctionJacobian<D, GradType>> {
+    static constexpr bool value = true;
+};
+
+// Some operations that can be accelerated with VectorizedShapeFunctionJacobian types.
+template<class AType, class BType, typename =
+    std::enable_if_t<!IsVectorizedShapeFunctionJacobian<AType>::value ||
+                     !IsVectorizedShapeFunctionJacobian<BType>::value, void>>
+bool AtBKnownZero(const AType &, const BType &) { return false; }
+
+template<int D, class GradType>
+bool AtBKnownZero(const VectorizedShapeFunctionJacobian<D, GradType> &A,
+                  const VectorizedShapeFunctionJacobian<D, GradType> &B) {
+    return A.c != B.c;
+}
+
+template<class AType, class BType, typename =
+    std::enable_if_t<!IsVectorizedShapeFunctionJacobian<AType>::value ||
+                     !IsVectorizedShapeFunctionJacobian<BType>::value, void>>
+auto computeAtB(const AType &A, const BType &B) {
+    return A.transpose() * B;
+}
+
+template<int D, class GradType>
+auto computeAtB(const VectorizedShapeFunctionJacobian<D, GradType> &A,
+                const VectorizedShapeFunctionJacobian<D, GradType> &B) {
+    using VSFJ = VectorizedShapeFunctionJacobian<D, GradType>;
+    using Scalar = typename VSFJ::Scalar;
+    using Result = Eigen::Matrix<Scalar, VSFJ::N, VSFJ::N>;
+
+    if (A.c == B.c)
+        return Result(A.g * B.g.transpose());
+    return Result(Result::Zero());
+}
+
+template<int D, class GradType>
+SMVType<VectorizedShapeFunctionJacobian<D, GradType>>
+symmetrized(const VectorizedShapeFunctionJacobian<D, GradType> &A) {
+    SMVType<VectorizedShapeFunctionJacobian<D, GradType>> result; // zero-initializes
+    for (size_t i = 0; i < D; ++i)
+        result(A.c, i) = ((i == A.c) ? 1.0 : 0.5) * A.g[i];
+    return result;
 }
 
 #endif
