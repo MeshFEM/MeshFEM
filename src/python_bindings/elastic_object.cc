@@ -26,8 +26,6 @@ void bindElasticObject(py::module& module, py::module& detail_module)
 
     module.def("ElasticObject", [](const Mesh &m, const Energy &e) { return std::make_shared<EO>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
-    // We are using shared pointer as holder instead of unique pointers since some function takes
-    // shared pointer as arguments
     py::class_<EO, std::shared_ptr<EO>>(detail_module, getElasticObjectName<Energy, K, Deg, Vector>().c_str())
       .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
       .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })

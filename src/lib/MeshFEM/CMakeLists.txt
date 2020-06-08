@@ -14,7 +14,6 @@ add_library(MeshFEM SHARED
         EdgeFields.cc
         EdgeFields.hh
         ElasticityTensor.hh
-        ElasticStructure.hh
         EmbeddedElement.hh
         ExpressionVector.hh
         FEMMesh.hh

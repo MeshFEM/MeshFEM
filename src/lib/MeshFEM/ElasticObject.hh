@@ -43,7 +43,6 @@ public:
     using VXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using Mesh = FEMMesh<K, Deg, Vector>;
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
-    using SFGradsEvaled = Eigen::Matrix<Real, N, numNodesPerElement>;
 
     ElasticObject(const Energy &energy, const Mesh &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
@@ -151,7 +150,7 @@ public:
                     psi.setDeformationGradient(getDeformationGradient(ei, x));
                     Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
 
-                    SFGradsEvaled sfGrads;
+                    Eigen::Matrix<Real, N, numNodesPerElement> sfGrads;
                     for (const auto &n : e.nodes())
                         sfGrads.col(n.localIndex()) = e->gradPhi(n.localIndex())(x);
 
