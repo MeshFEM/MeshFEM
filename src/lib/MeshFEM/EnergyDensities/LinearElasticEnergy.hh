@@ -63,22 +63,14 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
 
     Matrix denergy() const { return m_elasticity_tensor.doubleContract(m_small_strain_tensor).toMatrix(); }
 
-#if 1
     /**
      *  Returns dF_lhs : H : dF_rhs, where H is the hessian of the energy
      *  density in respect to the deformation gradient.
      */
     _Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
         return symmetrized(dF_rhs).doubleContract(
-                    m_elasticity_tensor.doubleContract(symmetrized(dF_rhs)));
+                    m_elasticity_tensor.doubleContract(symmetrized(dF_lhs)));
     }
-#else
-    _Real d2energy(const Matrix& dF_lhs, const Matrix& dF_rhs) const {
-        _Real result =
-            doubleContract(dF_lhs, doubleContract(m_elasticity_tensor, dF_rhs));
-        return result;
-    }
-#endif
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const {
