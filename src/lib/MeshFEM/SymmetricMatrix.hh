@@ -259,10 +259,13 @@ public:
                 (*this)(i, j) = mat(i, j);
 
         // Validate symmetry by checking lower triangle
-        for (size_t i = 1; i < t_N; ++i)
-            for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
+        }
         return *this;
     }
 
@@ -373,10 +376,13 @@ public:
                                                     (Derived::ColsAtCompileTime == t_N), int>::type = 0>
     SymmetricMatrix(const Eigen::MatrixBase<Derived> &mat) : SymmetricMatrix(mat, skip_validation()) {
         // Validate symmetry by checking lower triangle
-        for (size_t i = 1; i < t_N; ++i)
-            for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
+        }
     }
 
     // Construct a unit canonical basis symmetric matrix:
