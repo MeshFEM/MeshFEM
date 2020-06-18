@@ -319,7 +319,7 @@ template<int D, class GradType>
 SMVType<VectorizedShapeFunctionJacobian<D, GradType>>
 symmetrized(const VectorizedShapeFunctionJacobian<D, GradType> &A) {
     SMVType<VectorizedShapeFunctionJacobian<D, GradType>> result; // zero-initializes
-    for (size_t i = 0; i < D; ++i)
+    for (int i = 0; i < int(D); ++i)
         result(A.c, i) = ((i == A.c) ? 1.0 : 0.5) * A.g[i];
     return result;
 }
