@@ -50,6 +50,7 @@ public:
     size_t numVars() const { return m_x.size(); }
     size_t numElements() const { return m_mesh.numElements(); }
     size_t numVertices() const { return m_mesh.numVertices(); }
+    size_t numRestStateVars() const { return numVertices() * N; }
 
     void setIdentityDeformation() {
         m_x.resize(m_mesh.numNodes(), N);
@@ -71,7 +72,7 @@ public:
     }
 
     VXd getRestState() const {
-        VXd rest_state(N * numVertices());
+        VXd rest_state(numRestStateVars());
         for (const auto& vertex : m_mesh.vertices())
             rest_state.template segment<N>(N * vertex.index()) = vertex.node()->p;
         return rest_state;
