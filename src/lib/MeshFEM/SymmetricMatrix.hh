@@ -20,6 +20,7 @@
 
 #include "Flattening.hh"
 #include <Eigen/Dense>
+#include <Eigen/src/Core/Matrix.h>
 #include <iostream>
 #include <type_traits>
 #include "utils.hh"
@@ -78,6 +79,10 @@ public:
                 mat(i, j) = operator()(i, j);
         return mat;
     }
+
+    // Note: this method provides the same conversion interface as Eigen::DenseBase::matrix();
+    // this allows generic code to call `.matrix()` on SymmetricMatrix or Eigen types.
+    Eigen::Matrix<_Real, N, N> matrix() const { return toMatrix(); }
 
     EigenvaluesType eigenvalues() const {
         Eigen::Matrix<_Real, N, N> mat;
@@ -261,7 +266,7 @@ public:
         // Validate symmetry by checking lower triangle
         for (size_t i = 1; i < t_N; ++i)
             for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-12)
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
         return *this;
     }
@@ -375,7 +380,7 @@ public:
         // Validate symmetry by checking lower triangle
         for (size_t i = 1; i < t_N; ++i)
             for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-12)
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
     }
 
@@ -502,7 +507,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Assignment/compount assignment operator overloads.
     // These call the base operator after copying/checking dynamic size, but
-    // need a static cast to avoid calling Base's opeartor with
+    // need a static cast to avoid calling Base's operator with
     // DynamicSymmetricMatrix RHS (it would falsely throw a size mismatch).
     ////////////////////////////////////////////////////////////////////////////
     DynamicSymmetricMatrix &operator=(const DynamicSymmetricMatrix  &b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(    static_cast<const Base &>(b) ); return *this; }

@@ -8,6 +8,12 @@
 set(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
 
+# Make MESHFEM_EXTERNAL path available also to parent projects.
+get_directory_property(hasParent PARENT_DIRECTORY)
+if (hasParent)
+    set(MESHFEM_EXTERNAL "${MESHFEM_EXTERNAL}" PARENT_SCOPE)
+endif()
+
 # Download and update 3rdparty libraries
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
@@ -39,7 +45,7 @@ if(NOT TARGET meshfem::boost)
 endif()
 
 # Catch2
-if(NOT TARGET Catch2::Catch2 AND (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR))
+if(NOT TARGET Catch2::Catch2)
     meshfem_download_catch()
     add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
     list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)

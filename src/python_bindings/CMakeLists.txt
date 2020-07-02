@@ -28,12 +28,10 @@ target_link_libraries(benchmark PUBLIC MeshFEM)
 
 pybind11_add_module(energy energy.cc)
 set_target_properties(energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_compile_definitions(energy PRIVATE)
 target_link_libraries(energy PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(tensors tensors.cc)
 set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_compile_definitions(tensors PRIVATE)
 target_link_libraries(tensors PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(periodic_homogenization periodic_homogenization.cc)

@@ -1,9 +1,8 @@
 #ifndef AUTOMATICDIFFERENTIATION_HH
 #define AUTOMATICDIFFERENTIATION_HH
 
-#include <unsupported/Eigen/AutoDiff>
-
 #include "Types.hh"
+#include <unsupported/Eigen/AutoDiff>
 
 using ADReal = Eigen::AutoDiffScalar<Eigen::Matrix<Real, 1, 1>>;
 

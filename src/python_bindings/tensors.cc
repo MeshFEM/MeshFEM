@@ -57,6 +57,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("inverse",         &ETensor::inverse)
         .def("pseudoinverse",   &ETensor::inverse)
         .def("frobeniusNormSq", &ETensor::frobeniusNormSq)
+        .def("transform",       &ETensor::transform, py::arg("R"), "Apply a *orthogonal* change of coordinates to this tensor")
         .def("__sub__", [](const ETensor &E, const ETensor &Eother) { return E - Eother; })
         .def("__repr__", [](const ETensor &E) {
                 std::stringstream ss;

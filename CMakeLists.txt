@@ -131,7 +131,6 @@ add_subdirectory(src/python_bindings)
 # Compile tests only if this is a top-level project
 if(MeshFEM_MASTER_PROJECT)
     # Unit tests
-    include(CTest)
     enable_testing()
     add_subdirectory(tests)
 endif()

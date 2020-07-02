@@ -49,7 +49,9 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
     obj.setVars(xeval)
     h = evalWithCustomArgs(obj.hessian, customArgs)
     fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
-    analytic_delta_grad = h.apply(perturb)
+    if isinstance(h, np.ndarray): # Dense case
+        analytic_delta_grad = h @ perturb
+    else: analytic_delta_grad = h.apply(perturb)
 
     obj.setVars(xold)
 
@@ -65,8 +67,8 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
         errors.append(err)
     return (epsilons, errors, an)
 
+from matplotlib import pyplot as plt
 def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    from matplotlib import pyplot as plt
     eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars)
     plt.loglog(eps, errors, label='grad')
     plt.grid()
@@ -87,7 +89,6 @@ def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
     return (epsilons, errors, an)
 
 def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    from matplotlib import pyplot as plt
     eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars)
     plt.loglog(eps, errors, label='hess')
     plt.grid()

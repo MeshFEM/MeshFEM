@@ -45,9 +45,14 @@ __pycache__
 .vscode/
 .idea/
 build/
+build2/
 build_debug/
 cmake-build-*/
 data
+
+# Clangd completion files
+.clangd/
+compile_commands.json
 
 # Dependencies
 /3rdparty

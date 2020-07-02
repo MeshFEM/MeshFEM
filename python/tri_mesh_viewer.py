@@ -4,6 +4,7 @@ import ipywidgets
 import ipywidgets.embed
 
 from vis.fields import DomainType, VisualizationField, ScalarField, VectorField
+import mesh_operations
 
 # Threejs apparently only supports square textures, so we need to add padding to rectangular textures.
 # The input UVs are assumed to take values in [0, 1]^2 where (0, 0) and (1, 1) are the lower left and upper right
@@ -517,8 +518,7 @@ class ViewerBase:
 class RawMesh():
     def __init__(self, vertices, faces, normals = None):
         if (normals is None):
-            normals = np.zeros_like(vertices)
-            normals[:, -1] = 1.0
+            normals = mesh_operations.getVertexNormalsRaw(vertices, faces)
         self.updateGeometry(vertices, faces, normals)
 
     def visualizationGeometry(self):
@@ -535,6 +535,8 @@ class RawMesh():
 
 class TriMeshViewer(ViewerBase):
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
+            trimesh = RawMesh(*trimesh)
         self.isLineMesh = False
         self.MeshConstructor = pythreejs.Mesh
         super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView, transparent)

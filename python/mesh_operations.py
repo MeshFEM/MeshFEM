@@ -109,3 +109,20 @@ def getVertexNormals(m):
         Nvert[f] += an
     Nvert /= np.linalg.norm(Nvert, axis=1)[:, np.newaxis]
     return Nvert
+
+def getVertexNormalsRaw(V, F):
+    if (V.shape[1] == 2):
+        N = np.zeros_like(V)
+        N[:, -1] = 1.0
+        return N
+
+    if (V.shape[1] != 3):
+        raise Exception('Invalid vertex array size')
+
+    dblAFN = np.cross(V[F][:, 1, :] - V[F][:, 0, :], V[F][:, 2, :] - V[F][:, 0, :]) # 2 * area-weighted face normal
+    N = np.zeros((len(V), 3))
+    # Sum the area-weighted normals of faces incident the vertices
+    np.add.at(N, F, dblAFN[:, np.newaxis, :])
+    norms = np.linalg.norm(N, axis=1)
+    norms[norms < 1e-8] = 1.0
+    return N / norms[:, np.newaxis]
