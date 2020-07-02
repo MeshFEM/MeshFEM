@@ -5,6 +5,7 @@
 namespace py = pybind11;
 
 #include <MeshFEM/ElasticObject.hh>
+#include <MeshFEM/ElasticObjectLoads.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
