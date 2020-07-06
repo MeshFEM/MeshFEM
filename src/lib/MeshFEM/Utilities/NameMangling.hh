@@ -9,6 +9,8 @@
 #ifndef NAME_MANGLING_HH
 #define NAME_MANGLING_HH
 
+#include <string>
+#include <array>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template<typename _Real>
