@@ -35,6 +35,21 @@ def mergedMesh(meshes):
         mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
     return vm.vertices(), np.vstack(mergedTris)
 
+# Concatenate a collection of meshes, dropping dangling vertices.
+def concatenateMeshes(meshes):
+    Vout = []
+    Fout = []
+    nv = 0
+    for mesh in meshes:
+        if isinstance(mesh, list) or isinstance(mesh, tuple):
+            V, F = mesh
+        else:
+            V, F = mesh.vertices(), mesh.triangles()
+        Vout.append(V)
+        Fout.append(F + nv)
+        nv += V.shape[0]
+    return removeDanglingVertices(np.vstack(Vout), np.vstack(Fout))
+
 def removeDanglingVertices(V, F):
     """
     Remove vertices unreferenced by `F` and renumber the remaining vertices.

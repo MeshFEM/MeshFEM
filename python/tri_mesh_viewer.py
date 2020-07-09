@@ -178,6 +178,7 @@ class ViewerBase:
             self.objects.add([self.meshes, self.ghostMeshes])
         else:
             superView.objects.add([self.meshes, self.ghostMeshes])
+        self.subviews = []
 
         self._arrowMaterial = None # Will hold this viewer's instance of the special vector field shader (shared/overridden by superView)
         self._arrowSize    = 60
@@ -468,6 +469,20 @@ class ViewerBase:
     # Implemented here to give subclasses a chance to customize
     def getVisualizationGeometry(self):
         return self.mesh.visualizationGeometry()
+
+    def highlightTriangles(self, tris):
+        """
+        Add a subview highlighting a triangle or list of triangles.
+        """
+        if isinstance(tris, int):
+            tris = np.array([tris], dtype=np.int)
+        submesh = mesh_operations.removeDanglingVertices(self.mesh.vertices(), self.mesh.triangles()[tris])
+        subview = TriMeshViewer(submesh, superView=self)
+        subview.showPoints()
+        self.subviews.append(subview)
+
+    def clearSubviews(self):
+        self.subviews = []
 
     def __cleanMeshes(self, meshGroup):
         meshes = list(meshGroup.children)
