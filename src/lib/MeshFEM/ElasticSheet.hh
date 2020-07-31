@@ -161,12 +161,6 @@ public:
     template <class SHEHandle, class SVHandle>
     M3d delta_d_A_gamma_div_len_d_x(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const;
 
-
-    template <class SHEHandle>
-    M3d debug_gradCornerPos(const SHEHandle &he) const;
-    template <class SHEHandle, class SVHandle>
-    M3d debug_delta_gradCornerPos(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const;
-
     const MX3d &midedgeNormals()                       const { return m_midedgeNormals; }
     const std::vector<Frame> &midedgeReferenceFrames() const { return m_referenceFrame; }
     const std::vector<Frame> & sourceReferenceFrames() const { return m_sourceReferenceFrame; }

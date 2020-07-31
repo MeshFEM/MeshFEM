@@ -65,41 +65,6 @@ void bindElasticSheet(py::module& module, py::module& detail_module)
          })
       .def_property("thickness", &ES::getThickness, &ES::setThickness)
      ;
-
-    pyES.def("debug", [](ES &es, Real eps, size_t triIdx, size_t lvi, size_t c) {
-            py::scoped_ostream_redirect stream1(std::cout, py::module::import("sys").attr("stdout"));
-            py::scoped_ostream_redirect stream2(std::cerr, py::module::import("sys").attr("stderr"));
-            const auto &m = es.mesh();
-            const auto &t = m.element(triIdx);
-
-            es.updateSourceFrame();
-            auto x = es.deformedPositions();
-            auto x_perturb = x;
-            auto vbi = t.vertices().begin();
-            for (size_t i = 0; i < lvi; ++i) ++vbi;
-            const auto &v_b = *vbi;
-            for (const auto &he : t.halfEdges()) {
-                x_perturb(v_b.index(), c) = x(v_b.index(), c) + eps;
-                es.setDeformedPositions(x_perturb);
-                // auto val_p = es.d_A_gamma_div_len_d_x(he, false);
-                auto val_p = es.debug_gradCornerPos(he);
-                x_perturb(v_b.index(), c) = x(v_b.index(), c) - eps;
-                es.setDeformedPositions(x_perturb);
-                // auto val_m = es.d_A_gamma_div_len_d_x(he, false);
-                auto val_m = es.debug_gradCornerPos(he);
-
-                es.setDeformedPositions(x);
-
-                std::cout << "fd approx for he " << he.localIndex() << std::endl;
-                std::cout << (val_p - val_m) / (2 * eps) << std::endl << std::endl;
-
-                std::cout << "analytical value:" << std::endl;
-                // std::cout << es.delta_d_A_gamma_div_len_d_x(he, v_b, c);
-                std::cout << es.debug_delta_gradCornerPos(he, v_b, c);
-                std::cout << std::endl << "----------------------------------------"
-                          << std::endl;
-            }
-        }, py::arg("eps") = 1e-6, py::arg("triIdx") = 0, py::arg("lvi") = 0, py::arg("c") = 0);
 }
 
 PYBIND11_MODULE(elastic_sheet, m)

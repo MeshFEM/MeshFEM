@@ -299,56 +299,6 @@ typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::delta_d_A_gamma_div_len_d
     return delta_gradCornerPos;
 }
 
-template <class Psi_C>
-template <class SHEHandle>
-typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::debug_gradCornerPos(const SHEHandle &he) const {
-    const auto &m = mesh();
-    const size_t ei = he.tri().index();
-    const auto &e = m.element(ei);
-    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
-    const M32d &B = m_B[ei];
-
-    psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
-    const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-    const M2d stress = psi.PK2Stress();
-
-    const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
-    const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-
-    M3d gradCornerPos = dE_d_A_gamma_div_len * d_A_gamma_div_len_d_x(he, false);
-    return gradCornerPos;
-}
-
-template <class Psi_C>
-template <class SHEHandle, class SVHandle>
-typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::debug_delta_gradCornerPos(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const {
-    const auto &m = mesh();
-    const size_t ei = he.tri().index();
-    const auto &e = m.element(ei);
-    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
-    const M32d &B = m_B[ei];
-
-    psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
-    const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-    const M2d stress = psi.PK2Stress();
-
-    const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
-    const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-    const M3d d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x(he, true);
-
-    M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
-
-    for (const auto &he_b : e.halfEdges()) {
-        const V2d Bt_glambda_ref_b = B.transpose() * e->gradBarycentric().col(he_b.localIndex());
-        const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(psi.delta_PK2Stress(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose()) * Bt_glambda_ref);
-        d2_E_d_A_gamma_div_len_dx += d2E_d2_A_gamma_div_len_ab * d_A_gamma_div_len_d_x(he_b, true);
-    }
-
-    M3d delta_gradCornerPos = d2_E_d_A_gamma_div_len_dx(c_b, v_b.localIndex()) * d_A_gamma_div_len_d_xa
-                            +   dE_d_A_gamma_div_len *                     delta_d_A_gamma_div_len_d_x(he, v_b, c_b);
-    return delta_gradCornerPos;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // Elastic Energy Hessian
 ////////////////////////////////////////////////////////////////////////////////
