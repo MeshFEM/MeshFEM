@@ -54,6 +54,10 @@ pybind11_add_module(elastic_object elastic_object.cc)
 set_target_properties(elastic_object PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(elastic_object PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(elastic_sheet elastic_sheet.cc)
+set_target_properties(elastic_sheet PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(elastic_sheet PUBLIC MeshFEM intel_pybind_14_hack)
+
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)
     set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")

@@ -40,7 +40,7 @@ public:
     using Vector = Eigen::Matrix<Real, N, 1>;
     using Matrix = Eigen::Matrix<Real, N, N>;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
-    using VXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
+    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using Mesh = FEMMesh<K, Deg, Vector>;
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
 
@@ -62,13 +62,13 @@ public:
     void setVars(const VXd &vars) {
         if (size_t(vars.rows()) != numVars())
             throw std::invalid_argument("Invalid variable size");
-        m_x = Eigen::Map<const VXNd>(vars.data(), m_x.rows(), m_x.cols());
+        m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());
     }
 
     void setRestState(const VXd &vertexPositions) {
         if (size_t(vertexPositions.size()) != N * numVertices())
             throw std::invalid_argument("Invalid vertexPositions size");
-        m_mesh.setNodePositions(Eigen::Map<const VXNd>(vertexPositions.data(), numVertices(), N));
+        m_mesh.setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), N));
     }
 
     VXd getRestState() const {
@@ -225,7 +225,7 @@ public:
 
     Vector getNodePosition(size_t node_index) const { return m_x.row(node_index); }
 
-    VXNd deformedVertices() const { return m_x.topRows(numVertices()); }
+    MXNd deformedVertices() const { return m_x.topRows(numVertices()); }
 
     const Mesh &mesh() const { return m_mesh; }
 
@@ -244,12 +244,12 @@ public:
 
 protected:
     Mesh m_mesh;
-    // Energy density for each element (with support for multi-material microstructures).
-    // For single-material microstructures, this vector will contain only a single entry.
+    // Energy density for each element (with support for multi-material objects).
+    // For single-material objects, this vector will contain only a single entry.
     std::vector<Energy> m_energyDensities;
 
     // Deformed positions for each node
-    VXNd m_x;
+    MXNd m_x;
 };
 
 #endif /* end of include guard: ELASTICOBJECT_HH */

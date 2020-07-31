@@ -5,10 +5,12 @@
 namespace py = pybind11;
 
 #include <MeshFEM/ElasticObject.hh>
+#include <MeshFEM/MassMatrix.hh>
 #include <MeshFEM/ElasticObjectLoads.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
+#include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
@@ -41,6 +43,9 @@ void bindElasticObject(py::module& module, py::module& detail_module)
       .def("gradient",               &EO::gradient)
       .def("hessian",                py::overload_cast<>(&EO::hessian, py::const_))
       .def("hessianSparsityPattern", &EO::hessianSparsityPattern)
+      .def("massMatrix", [](const EO &e, bool lumped) {
+                    return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
+              }, py::arg("lumped") = false)
       .def("deformedVertices",       &EO::deformedVertices)
       .def("getEnergyDensity",       &EO::getEnergyDensity, py::arg("ei"))
       .def("visualizationGeometry", [](const EO &obj) {
@@ -66,4 +71,8 @@ PYBIND11_MODULE(elastic_object, m)
     bindElasticObject<CorotatedLinearElasticity, 3, 1>(m, detail_module);
     bindElasticObject<CorotatedLinearElasticity, 3, 2>(m, detail_module);
     bindElasticObject<CorotatedLinearElasticity, 2, 2>(m, detail_module);
+    bindElasticObject<  StVenantKirchhoffEnergy, 2, 1>(m, detail_module);
+    bindElasticObject<  StVenantKirchhoffEnergy, 3, 1>(m, detail_module);
+    bindElasticObject<  StVenantKirchhoffEnergy, 3, 2>(m, detail_module);
+    bindElasticObject<  StVenantKirchhoffEnergy, 2, 2>(m, detail_module);
 }

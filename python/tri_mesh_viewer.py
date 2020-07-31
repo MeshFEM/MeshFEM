@@ -58,10 +58,11 @@ def replicateAttributesPerTriCorner(attr, perTriColor = True):
 # Therefore, we will need different materials for all the combinations of
 # settings used in our viewer. We do that here, on demand.
 class MaterialLibrary:
-    def __init__(self, isLineMesh):
+    def __init__(self, isLineMesh, isPointCloud):
         self.materials = {}
         self.isLineMesh = isLineMesh
-        if (not isLineMesh):
+        self.isPointCloud = isPointCloud
+        if (not isLineMesh and not isPointCloud):
             self.commonArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
         else:
             self.commonArgs = {}
@@ -72,6 +73,9 @@ class MaterialLibrary:
             if (self.isLineMesh):
                 args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
                 self.materials[name] = pythreejs.LineBasicMaterial(**args, **self.commonArgs)
+            elif (self.isPointCloud):
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
+                self.materials[name] = pythreejs.PointsMaterial(**args, **self.commonArgs, size=5, sizeAttenuation=False)
             else:
                 args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
@@ -82,8 +86,9 @@ class MaterialLibrary:
         if name not in self.materials:
             args = {'transparent': True, 'opacity': 0.25}
             args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), solidColor))
-            if (self.isLineMesh): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
-            else:                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
+            if   (self.isLineMesh  ): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
+            elif (self.isPointCloud): self.materials[name] = pythreejs.     PointsMaterial(**args, **self.commonArgs, size=5, sizeAttenuation=False)
+            else:                 self.materials[name]     = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         else:
             # Update the existing ghost material's color (if a solid color is used)
             useVertexColors, textureMapDataTex = self._extractMaterialDescriptors(origMaterial)
@@ -134,8 +139,8 @@ class ViewerBase:
         # Note: subclass's constructor should define
         # self.MeshConstructor and self.isLineMesh, which will
         # determine how the geometry is interpreted.
-        if (self.isLineMesh is None):
-            self.isLineMesh = False
+        if (not hasattr(self, "isLineMesh"  )): self.isLineMesh   = False
+        if (not hasattr(self, "isPointCloud")): self.isPointCloud = False
         if (self.MeshConstructor is None):
             self.MeshConstructor = pythreejs.Mesh
 
@@ -151,7 +156,7 @@ class ViewerBase:
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
         self.ghostColor = 'red'
 
-        self.materialLibrary = MaterialLibrary(self.isLineMesh)
+        self.materialLibrary = MaterialLibrary(self.isLineMesh, self.isPointCloud)
 
         # Sometimes we do not use a particular attribute buffer, e.g. the index buffer when displaying
         # per-face scalar fields. But to avoid reallocating these buffers when
@@ -552,7 +557,6 @@ class TriMeshViewer(ViewerBase):
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
         if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
             trimesh = RawMesh(*trimesh)
-        self.isLineMesh = False
         self.MeshConstructor = pythreejs.Mesh
         super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView, transparent)
         if wireframe: self.showWireframe(True)
@@ -564,6 +568,13 @@ class LineMeshViewer(ViewerBase):
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
+
+class PointCloudViewer(ViewerBase):
+    def __init__(self, points, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+        pcmesh = RawMesh(points, np.zeros((0, 3), dtype=np.uint32), None)
+        self.isPointCloud = True
+        self.MeshConstructor = pythreejs.Points
+        super().__init__(pcmesh, width, height, textureMap, scalarField, vectorField, superView)
 
 # Visualize a parametrization by animating the flattening and unflattening of the mesh to the plane.
 class FlatteningAnimation:

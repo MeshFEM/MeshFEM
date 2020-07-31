@@ -126,7 +126,7 @@ def getVertexNormals(m):
     return Nvert
 
 def getVertexNormalsRaw(V, F):
-    if (V.shape[1] == 2):
+    if ((V.shape[1] == 1) or (V.shape[1] == 2)):
         N = np.zeros_like(V)
         N[:, -1] = 1.0
         return N

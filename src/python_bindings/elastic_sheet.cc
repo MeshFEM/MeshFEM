@@ -1,0 +1,113 @@
+#include <pybind11/eigen.h>
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/iostream.h>
+namespace py = pybind11;
+
+#include <MeshFEM/ElasticSheet.hh>
+#include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
+#include <MeshFEM/Utilities/MeshConversion.hh>
+#include "MeshEntities.hh"
+
+template<class Psi_C>
+void bindElasticSheet(py::module& module, py::module& detail_module)
+{
+    using Energy = Psi_C;
+    using ES   = ElasticSheet<Psi_C>;
+    using Mesh = typename ES::Mesh;
+
+    module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e) { return std::make_shared<ES>(m, e); }, py::arg("mesh"), py::arg("energy"));
+
+    py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, ("ElasticSheet" + getEnergyName<Energy>()).c_str());
+
+    using EType = typename ES::EnergyType;
+    py::enum_<EType>(pyES, "EnergyType")
+        .value("Full"    ,  EType::Full)
+        .value("Membrane" , EType::Membrane)
+        .value("Bending",   EType::Bending)
+        ;
+
+    pyES
+      .def("mesh",                   py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
+      .def("numVars",                &ES::numVars)
+      .def("thetaOffset",            &ES::thetaOffset)
+      .def("setIdentityDeformation", &ES::setIdentityDeformation)
+      .def("getVars",                &ES::getVars)
+      .def("getThetas",              &ES::getThetas)
+      .def("setThetas",              &ES::setThetas)
+      .def("setDeformedPositions",   &ES::setDeformedPositions)
+      .def("getDeformedPositions",   &ES::deformedPositions)
+      .def("updateSourceFrame",      &ES::updateSourceFrame)
+      .def("setVars",                &ES::setVars, py::arg("vars"))
+      .def("getII",                  &ES::getII)
+      .def("getRestII",              &ES::getRestII)
+      .def("getB",                   &ES::getB)
+      .def("getAlphas",              &ES::getAlphas)
+      .def("getSourceAlphas",        &ES::getSourceAlphas)
+      .def("energy",                 &ES::energy,   py::arg("etype") = EType::Full)
+      .def("gradient",               &ES::gradient, py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
+      .def("hessian",                [](const ES &es, EType etype) { auto H = es.hessianSparsityPattern(); es.hessian(H, etype); return H; }, py::arg("etype") = EType::Full)
+      .def("hessianSparsityPattern", &ES::hessianSparsityPattern)
+      // .def("massMatrix", [](const ES &e, bool lumped) {
+      //               return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
+      //         }, py::arg("lumped") = false)
+      .def("deformedPositions",      &ES::deformedPositions)
+      .def("midedgeNormals",         &ES::midedgeNormals)
+      .def("midedgeReferenceFrames", &ES::midedgeReferenceFrames)
+      .def("sourceReferenceFrames"  ,&ES::sourceReferenceFrames)
+      .def("edgeMidpoints",          &ES::edgeMidpoints)
+      .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
+      .def("visualizationGeometry", [](const ES &obj) {
+            FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());
+            return getVisualizationGeometry(visMesh);
+         })
+      .def_property("thickness", &ES::getThickness, &ES::setThickness)
+     ;
+
+    pyES.def("debug", [](ES &es, Real eps, size_t triIdx, size_t lvi, size_t c) {
+            py::scoped_ostream_redirect stream1(std::cout, py::module::import("sys").attr("stdout"));
+            py::scoped_ostream_redirect stream2(std::cerr, py::module::import("sys").attr("stderr"));
+            const auto &m = es.mesh();
+            const auto &t = m.element(triIdx);
+
+            es.updateSourceFrame();
+            auto x = es.deformedPositions();
+            auto x_perturb = x;
+            auto vbi = t.vertices().begin();
+            for (size_t i = 0; i < lvi; ++i) ++vbi;
+            const auto &v_b = *vbi;
+            for (const auto &he : t.halfEdges()) {
+                x_perturb(v_b.index(), c) = x(v_b.index(), c) + eps;
+                es.setDeformedPositions(x_perturb);
+                // auto val_p = es.d_A_gamma_div_len_d_x(he, false);
+                auto val_p = es.debug_gradCornerPos(he);
+                x_perturb(v_b.index(), c) = x(v_b.index(), c) - eps;
+                es.setDeformedPositions(x_perturb);
+                // auto val_m = es.d_A_gamma_div_len_d_x(he, false);
+                auto val_m = es.debug_gradCornerPos(he);
+
+                es.setDeformedPositions(x);
+
+                std::cout << "fd approx for he " << he.localIndex() << std::endl;
+                std::cout << (val_p - val_m) / (2 * eps) << std::endl << std::endl;
+
+                std::cout << "analytical value:" << std::endl;
+                // std::cout << es.delta_d_A_gamma_div_len_d_x(he, v_b, c);
+                std::cout << es.debug_delta_gradCornerPos(he, v_b, c);
+                std::cout << std::endl << "----------------------------------------"
+                          << std::endl;
+            }
+        }, py::arg("eps") = 1e-6, py::arg("triIdx") = 0, py::arg("lvi") = 0, py::arg("c") = 0);
+}
+
+PYBIND11_MODULE(elastic_sheet, m)
+{
+    py::module detail_module = m.def_submodule("detail");
+    py::module::import("mesh");
+    py::module::import("energy");
+    py::module::import("sparse_matrices");
+
+    bindElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>(m, detail_module);
+}

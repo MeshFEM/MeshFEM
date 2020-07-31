@@ -10,9 +10,15 @@ def preamble(obj, xeval, perturb, fixedVars = []):
     perturb[fixedVars] = 0.0
     return (xold, xeval, perturb)
 
+# Pybind11 methods/funcs apparently don't support `inspect.signature`,
+# but at least their arg names are guaranteed to appear in the docstring... :(
+def hasArg(func, argName):
+    return argName in func.__doc__
+
 def evalWithCustomArgs(f, customArgs):
     if (customArgs is not None):
         if (isinstance(customArgs, list)): return f(*customArgs)
+        if (isinstance(customArgs, dict)): return f(**{k: v for k, v in customArgs.items() if hasArg(f, k)})
         return f(customArgs)
     return f()
 

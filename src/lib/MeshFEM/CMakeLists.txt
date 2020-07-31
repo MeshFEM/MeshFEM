@@ -121,6 +121,9 @@ add_library(MeshFEM SHARED
 
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
+
+        ElasticObject.hh
+        ElasticSheet.hh
 )
 
 # Include directories

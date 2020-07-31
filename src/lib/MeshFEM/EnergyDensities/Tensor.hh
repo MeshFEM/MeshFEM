@@ -218,7 +218,8 @@ struct VectorizedShapeFunctionJacobian {
     static constexpr int N = GradType::RowsAtCompileTime;
 
     // Emulate part of Eigen's interface.
-    static constexpr int RowsAtCompileTime = N;
+    static constexpr int RowsAtCompileTime = D;
+    static constexpr int ColsAtCompileTime = N;
     using Scalar     = typename GradType::Scalar;
     using MatrixType = Eigen::Matrix<Scalar, D, N>;
     using Derived    = MatrixType;
@@ -250,15 +251,27 @@ struct VectorizedShapeFunctionJacobian {
 
     template<class Derived>
     friend auto operator*(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
-        Eigen::Matrix<Scalar, D, Derived::ColsAtCompileTime> result;
-        result.setZero();
-        result.row(A.c) = (A.g.transpose() * B.template cast<Scalar>());
-        return result;
+        using ResultType = VectorizedShapeFunctionJacobian<D, Eigen::Matrix<Scalar, Derived::ColsAtCompileTime, 1>>;
+        return ResultType(A.c, B.template cast<Scalar>().transpose() * A.g);
     }
 
     template<class Derived>
     friend auto operator*(const Eigen::MatrixBase<Derived> &A, const VectorizedShapeFunctionJacobian &B) {
         return A.col(B.c).template cast<Scalar>() * B.g.transpose();
+    }
+
+    template<class Derived>
+    friend MatrixType operator+(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
+        static_assert((RowsAtCompileTime == Derived::RowsAtCompileTime) &&
+                      (ColsAtCompileTime == Derived::ColsAtCompileTime), "Size mismatch");
+        MatrixType result(B);
+        result.row(A.c) += A.g.transpose();
+        return result;
+    }
+
+    template<class Derived>
+    friend MatrixType operator+(const Eigen::MatrixBase<Derived> &A, const VectorizedShapeFunctionJacobian &B) {
+        return B + A;
     }
 };
 
