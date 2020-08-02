@@ -122,7 +122,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
     prob->writeIterates = options.writeIterateFiles;
 
     prob->setVars(prob->applyBoundConstraints(prob->getVars()));
-    Eigen::VectorXd vars, step, g(prob->numVars());
+    Eigen::VectorXd vars, step;
 
     // Indices of the bound constraints in our working set.
     WorkingSet workingSet(*prob);
@@ -175,6 +175,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
 
     BENCHMARK_START_TIMER_SECTION("Newton iterations");
     size_t it;
+    Eigen::VectorXd g(prob->numVars());
 
     Eigen::VectorXd za, zg, g_free;
     if (prob->hasLEQConstraint()) { za = zeroOutFixedVars(prob->LEQConstraintMatrix()); }
