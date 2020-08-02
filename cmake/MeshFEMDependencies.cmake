@@ -103,6 +103,14 @@ if(NOT TARGET triangle::triangle)
     add_library(triangle::triangle ALIAS triangle)
 endif()
 
+# Spectra library
+if(NOT TARGET spectra::spectra)
+    meshfem_download_spectra()
+    add_library(meshfem_spectra INTERFACE)
+    target_include_directories(meshfem_spectra SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/spectra/include)
+    add_library(meshfem::spectra ALIAS meshfem_spectra)
+endif()
+
 # TinyExpr library
 if(NOT TARGET tinyexpr::tinyexpr)
     meshfem_download_tinyexpr()
@@ -112,10 +120,10 @@ if(NOT TARGET tinyexpr::tinyexpr)
 endif()
 
 # Cholmod solver
-find_package(Cholmod REQUIRED) # provides cholmod::cholmod
+find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
 
 # UmfPack solver
-find_package(Umfpack REQUIRED) # provides umfpack::umfpack
+find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
 
 ################################################################################
 # Optional libraries

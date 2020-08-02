@@ -1,3 +1,5 @@
+#include "newton_optimizer/newton_optimizer.hh"
+
 template <class Psi_C>
 void ElasticSheet<Psi_C>::setIdentityDeformation() {
     const auto &m = mesh();
@@ -8,37 +10,173 @@ void ElasticSheet<Psi_C>::setIdentityDeformation() {
         m_deformedPositions.row(v.index()) = v.node()->p.transpose();
     m_updateDeformedElements();
 
+    initializeMidedgeNormals();
+}
+
+// Quadratic minimization to infer midedge normals (thetas):
+// minimize the squared Frobenius norm of the second fundamental form.
+// (This objective is proportional to the bending energy stored in an isotropic
+// plate with Young's modulus 1 and Poisson's ratio 0.)
+// For convenience we use our Newton sovler even though it should always
+// converge in a single iteration.
+//
+// In order to make the normals/curvature computed independent of the reference
+// configuration, we pose the inference energy on the deformed mesh (pushing
+// the second fundamental form forward to the deformed configuration). We
+// calculate this pushed-forward fundamental form directly and then verify its
+// pullback agrees with II.
+template<class ESheet>
+struct NormalInferenceProblem : public NewtonProblem {
+    using M3d = typename ESheet::M3d;
+    NormalInferenceProblem(ESheet &sheet) : m_sheet(sheet) {
+        m_hessianSparsity = sheet.hessianSparsityPattern();
+        const size_t to = sheet.thetaOffset();
+        m_hessianSparsity.rowColRemoval([to](size_t i) { return i < to; });
+
+        m_updateDeformedII();
+    }
+
+    virtual size_t numVars() const override { return m_sheet.numThetas(); }
+    virtual void setVars(const VXd &vars) override { m_sheet.setThetas(vars.cast<typename ESheet::Real>()); m_updateDeformedII(); }
+    virtual const VXd getVars() const override { return m_sheet.getThetas().template cast<double>(); }
+
+    virtual Real energy() const override {
+        Real result = 0.0;
+        const size_t ne = m_deformedII.size();
+        for (size_t ei = 0; ei < ne; ++ei)
+            result += 0.5 * m_sheet.deformedElement(ei).volume() * m_deformedII[ei].squaredNorm();
+        return result;
+    }
+
+    virtual VXd gradient(bool freshIterate = false) const override {
+        VXd g(VXd::Zero(numVars()));
+        for (const auto &e : m_sheet.mesh().elements()) {
+            const size_t ei = e.index();
+            const auto &II = m_deformedII[ei];
+            const auto &de = m_sheet.deformedElement(ei);
+            const Real A = de.volume();
+            const Real dE_dpsi = A;
+            for (const auto &he : e.halfEdges()) {
+                const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
+                const Real sign = he.isPrimary() ? 1.0 : -1.0;
+                const Real len = m_sheet.deformedEdgeVector(he).norm();
+
+                const auto &glambda = de.gradBarycentric().col(he.localIndex());
+                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (II * glambda).dot(glambda); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+                // The derivative with respect to the theta variables is simple
+                g[edgeIdx] += ((sign * (A / len))) * dE_d_A_gamma_div_len;
+            }
+        }
+
+        return g;
+    }
+
+    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+
+protected:
+    virtual void m_evalHessian(SuiteSparseMatrix &result) const override {
+        result.setZero();
+        for (const auto &e : m_sheet.mesh().elements()) {
+            const size_t ei = e.index();
+            const auto &II = m_deformedII[ei];
+            const auto &de = m_sheet.deformedElement(ei);
+            const Real A = de.volume();
+            const Real dE_dpsi = A;
+            for (const auto &he : e.halfEdges()) {
+                const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
+                const Real sign = he.isPrimary() ? 1.0 : -1.0;
+                const Real len = m_sheet.deformedEdgeVector(he).norm();
+
+                const auto &glambda = de.gradBarycentric().col(he.localIndex());
+                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (II * glambda).dot(glambda); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+
+                for (const auto &he_b : e.halfEdges()) {
+                    const size_t edgeIdx_b = m_sheet.edgeForHalfEdge(he_b.index());
+                    if (edgeIdx > edgeIdx_b) continue;
+
+                    const auto &glambda_b = de.gradBarycentric().col(he_b.localIndex());
+
+                    const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
+                    const Real len_b = m_sheet.deformedEdgeVector(he_b).norm();
+                    const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * dE_dpsi) * std::pow(glambda.dot(glambda_b), 2);
+
+                    // (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
+                    const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
+
+                    result.addNZ(edgeIdx, edgeIdx_b, (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len);
+                }
+            }
+        }
+    }
+
+    virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
+        result.setIdentity(true);
+    }
+
+    void m_updateDeformedII() {
+        const auto &m = m_sheet.mesh();
+        m_deformedII.resize(m.numElements());
+        const auto &II = m_sheet.getII();
+        const auto &gammas = m_sheet.getGammas();
+
+        for (const auto &e : m.elements()) {
+            const size_t ei = e.index();
+            auto &II_d = m_deformedII[ei];
+            II_d.setZero();
+            const auto &de = m_sheet.deformedElement(e.index());
+            for (const auto &he : e.halfEdges()) {
+                auto glambda = de.gradBarycentric().col(he.localIndex());
+                Real len = m_sheet.deformedEdgeVector(he).norm();
+                II_d += ((4 * gammas[he.index()] * (de.volume() / len)) * glambda) * glambda.transpose();
+            }
+
+            M3d F = m_sheet.getCornerPositions(ei) * e->gradBarycentric().transpose();
+            if ((II[ei] - F.transpose() * II_d * F).squaredNorm() / II[ei].squaredNorm() > 1e-18)
+                throw std::runtime_error("Second fundamental form pushforward mismatch.");
+        }
+    }
+
+    ESheet &m_sheet;
+    mutable SuiteSparseMatrix m_hessianSparsity;
+    std::vector<M3d> m_deformedII;
+};
+
+template <class Psi_C>
+void ElasticSheet<Psi_C>::initializeMidedgeNormals(bool minimizeBending) {
+    const auto &m = mesh();
+
     // Initialize the reference frames.
     // We pick the averaged edge normals as the initial d1 frame vector and midedge normal.
     m_referenceFrame.resize(m_numEdges);
     m.visitEdges([this, &m](CHEHandle he, size_t edgeIndex) {
         V3d t  = (deformedEdgeVector(he)).normalized().transpose();
-        V3d d1 = m.element(he.tri().index())->normal();
-        if (!he.isBoundary()) d1 += m.element(he.opposite().tri().index())->normal();
+        V3d d1 = m_deformedElements[he.tri().index()].normal();
+        if (!he.isBoundary()) d1 += m_deformedElements[he.opposite().tri().index()].normal();
         d1 = d1.normalized();
 
-        if (std::abs(t.dot(d1)) > 1e-14) throw std::logic_error("Non-perpendicular averaged edge normal");
+        if (std::abs(t.dot(d1)) > 1e-14) throw std::logic_error("Non-perpendicular averaged edge normal: " + std::to_string(t.dot(d1)));
 
         m_referenceFrame[edgeIndex] << t, d1, t.cross(d1); // Generate the third vector of the right-handed frame.
     });
 
     // Measure the angle around the edge tangent from reference director d1 to the triangle normal.
     // (ccw with tip pointing toward us)
-    m_alphas.setZero(m.numHalfEdges());
+    m_alphas.resize(m.numHalfEdges());
     for (const auto &he : m.halfEdges()) {
         const auto &frame = m_referenceFrame[m_edgeForHalfEdge[he.index()]];
-        m_alphas[he.index()] = angle<Real>(frame.col(0), frame.col(1), he.tri()->normal());
 
+        const auto &n = m_deformedElements[he.tri().index()].normal();
+        m_alphas[he.index()] = angle<Real>(frame.col(0), frame.col(1), n);
         if (std::abs(m_alphas[he.index()]) > M_PI / 2) { // Shouldn't happen except for sharp creases
             std::cout << "WARNING: Large alpha: " << m_alphas[he.index()] << std::endl;
             std::cout << frame << std::endl;
-            std::cout << "Tri normal: " << he.tri()->normal().transpose() << std::endl;
+            std::cout << "Tri normal: " << n.transpose() << std::endl;
 
-            V3d n = he.tri()->normal();
+            V3d n_avg = n;
             if (he.opposite().tri())
-                n += he.opposite().tri()->normal();
-            n = n.normalized();
-            std::cout << "Averaged edge normal: " << n.transpose() << std::endl << std::endl;
+                n_avg += m_deformedElements[he.opposite().tri().index()].normal();
+            n_avg = n_avg.normalized();
+            std::cout << "Averaged edge normal: " << n_avg.transpose() << std::endl << std::endl;
             std::cout << "For he, edge: " << he.index() << ", " << m_edgeForHalfEdge[he.index()] << std::endl;
         }
     }
@@ -50,11 +188,12 @@ void ElasticSheet<Psi_C>::setIdentityDeformation() {
     // Side effect: updates the cached shape operator and midedge normals.
     setThetas(VXd::Zero(m_numEdges));
 
-    // TODO: Finally, infer the "best" midedge normals by minimizing the bending energy with respect to theta.
-
-    // Apply this resulting shape operator as the rest shape operator
-    // (To handle curved shells.)
-    m_restII = m_II;
+    // Finally, infer the "best" midedge normals by minimizing the bending energy with respect to theta.
+    if (minimizeBending) {
+        auto problem = std::make_unique<NormalInferenceProblem<ElasticSheet>>(*this);
+        auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
+        opt->optimize();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -513,6 +652,31 @@ SuiteSparseMatrix ElasticSheet<Psi_C>::hessianSparsityPattern(Real val) const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Geometric quantities
+////////////////////////////////////////////////////////////////////////////////
+template <class Psi_C>
+typename ElasticSheet<Psi_C>::MX2d ElasticSheet<Psi_C>::getPrincipalCurvatures() const {
+    const auto &m = mesh();
+    MX2d result(m.numElements(), 2);
+    for (const auto &e : m.elements()) {
+        // Principal curvatures are the eigenvalues of the (asymmetric) shape operator h g^{-1},
+        // where h and g are the first and second fundamental forms, respectively.
+        // Sign conventions vary, but we take the (somewhat less common) convention that
+        // a sphere's princinpal curvatures are positive.
+        const size_t ei = e.index();
+        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+        M2d S = (m_B[ei].transpose() * m_II[ei] * m_B[ei]) * (FB.transpose() * FB).inverse();
+
+        Eigen::EigenSolver<M2d> esolver(S);
+        auto eigs = esolver.eigenvalues();
+        if (eigs.imag().norm() / eigs.real().norm() > 1e-10) throw std::runtime_error("Non-real curvatures");
+        result.row(ei) = eigs.real();
+        if (result(ei, 0) > result(ei, 1)) std::swap(result(ei, 0), result(ei, 1));
+    }
+    return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Internal state management
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_C>
@@ -576,23 +740,16 @@ template <class Psi_C>
 void ElasticSheet<Psi_C>::m_updateShapeOperators() {
     const auto &m = mesh();
     m_II.resize(m.numTris());
+    auto gammas = getGammas();
 
     for (const auto &e : m.elements()) {
         auto &result = m_II[e.index()];
         result.setZero();
         const auto &deformedElement = m_deformedElements[e.index()];
         for (const auto &he : e.halfEdges()) {
-            auto glambda = e->gradBarycentric().col(he.localIndex());
-            Real gamma = m_thetas[m_edgeForHalfEdge[he.index()]] - m_alphas[he.index()];
-            // The current triangle's shape operator is defined in terms of the
-            // angle gamma between the triangle normal and midedge normal
-            // ***around the oriented edge vectors***. But thetas/alphas are
-            // defined as angles around the primary halfedge vector (which may
-            // point in the opposite direction). Therefore we must negate gamma
-            // for non-primary half edges.
-            if (!he.isPrimary()) gamma *= -1.0;
+            auto glambda_ref = e->gradBarycentric().col(he.localIndex());
             Real len = deformedEdgeVector(he).norm();
-            result += ((4 * gamma * (deformedElement.volume() / len)) * glambda) * glambda.transpose();
+            result += ((4 * gammas[he.index()] * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
         }
     }
 }

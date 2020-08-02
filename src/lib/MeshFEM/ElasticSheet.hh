@@ -64,6 +64,7 @@ public:
     using M32d  = Eigen::Matrix<Real, 3, 2>;
     using VXd   = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using MX3d  = Eigen::Matrix<Real, Eigen::Dynamic, 3, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
+    using MX2d  = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>;
     using Frame = M3d; // Columns are [tangent, d1, d2], a right-handed orthonormal frame adapted to a particular edge tangent.
 
     static constexpr size_t K   = 2;
@@ -93,6 +94,10 @@ public:
         });
 
         setIdentityDeformation();
+
+        // Apply this resulting shape operator as the rest shape operator
+        // (To handle curved shells.)
+        m_restII = m_II;
     }
 
     const Mesh &mesh() const { return *m_mesh; }
@@ -103,6 +108,8 @@ public:
         return 3 * m_numVertices
                  + m_numEdges;
     }
+    size_t numThetas() const { return m_numEdges; }
+
     size_t thetaOffset() const { return 3 * m_numVertices; }
 
     void setThickness(Real thickness) {
@@ -110,6 +117,7 @@ public:
     }
 
     Real getThickness() const { return m_h; }
+    size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
 
     void setVars(Eigen::Ref<const VXd> vars) {
         if (size_t(vars.rows()) != numVars()) throw std::runtime_error("Invalid vars size");
@@ -181,16 +189,24 @@ public:
     // specified).
     void setIdentityDeformation();
 
+    // (Re-)initialize the midedge normals, inferring them from the midsurface.
+    void initializeMidedgeNormals(bool minimizeBending = true);
+
     void updateSourceFrame() {
         m_sourceReferenceFrame = m_referenceFrame;
         m_sourceAlphas         = m_alphas;
     }
+
+    // Update our parametrizaton of the system's DoFs
+    // (currently this just means updating the source frames.)
+    void updateParametrization() { updateSourceFrame(); }
 
     template<class HEType>
     auto deformedEdgeVector(const HEType &he) const {
         return (m_deformedPositions.row(he. tip().index())
              - m_deformedPositions.row(he.tail().index())).eval();
     }
+    const auto &deformedElement(size_t ei) const { return m_deformedElements.at(ei); }
 
     // Get the deformed positions of triangle ti's corners as columns
     // of a 3x3 matrix.
@@ -208,8 +224,40 @@ public:
     const std::vector<M3d>   &getRestII() const { return m_restII; }
     const std::vector<M32d>  &getB()      const { return m_B;      }
 
+    // Get the per-element right Cauchy-Green deformation tensors/first
+    // fundamentals form representing the deformation.
+    std::vector<M2d>  getC() const {
+        std::vector<M2d> C;
+        const auto &m = mesh();
+        C.reserve(m.numElements());
+        for (const auto e : m.elements()) {
+            const size_t ei = e.index();
+            M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+            C.push_back(FB.transpose() * FB);
+        }
+        return C;
+    }
+
     const VXd &getAlphas()       const { return m_alphas;       }
     const VXd &getSourceAlphas() const { return m_sourceAlphas; }
+    VXd        getGammas() const {
+        const auto &m = mesh();
+        VXd gammas(m.numHalfEdges());
+        for (const auto &he : m.halfEdges()) {
+            // The current triangle's shape operator is defined in terms of the
+            // angle gamma between the triangle normal and midedge normal
+            // ***around the oriented edge vectors***. But thetas/alphas are
+            // defined as angles around the primary halfedge vector (which may
+            // point in the opposite direction). Therefore we must negate gamma
+            // for non-primary half edges.
+            double sign = he.isPrimary() ? 1.0 : -1.0;
+            gammas[he.index()] = sign * (m_thetas[m_edgeForHalfEdge[he.index()]] - m_alphas[he.index()]);
+        }
+        return gammas;
+    }
+
+    // Get the principal curvatures of the deformed sheet geometry.
+    MX2d getPrincipalCurvatures() const;
 
 private:
     // Update the current midedge reference frame to adapt to the new deformed

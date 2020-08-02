@@ -58,6 +58,12 @@ pybind11_add_module(elastic_sheet elastic_sheet.cc)
 set_target_properties(elastic_sheet PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(elastic_sheet PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(py_newton_optimizer newton_optimizer.cc)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD 14)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD_REQUIRED ON)
+set_target_properties(py_newton_optimizer PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/python)
+target_link_libraries(py_newton_optimizer PUBLIC MeshFEM intel_pybind_14_hack)
+
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)
     set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")

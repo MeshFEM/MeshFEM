@@ -16,6 +16,9 @@ add_library(MeshFEM SHARED
         ElasticityTensor.hh
         EmbeddedElement.hh
         ExpressionVector.hh
+        Eigensolver.cc
+        Eigensolver.hh
+        EquilibriumSolver.hh
         FEMMesh.hh
         FEMMesh.inl
         Fields.hh
@@ -119,6 +122,10 @@ add_library(MeshFEM SHARED
         Utilities/NameMangling.hh
         wrappers/meshfem_triangle.h
 
+        newton_optimizer/newton_optimizer.cc
+        newton_optimizer/newton_optimizer.hh
+        newton_optimizer/ConvergenceReport.hh
+
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
 
@@ -144,6 +151,7 @@ target_link_libraries(${PROJECT_NAME}
         umfpack::umfpack
         cholmod::cholmod
         meshfem::boost
+        meshfem::spectra
 #		CGAL::CGAL
     PRIVATE
         warnings::all
