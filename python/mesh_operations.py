@@ -1,9 +1,8 @@
 import numpy as np
 
 class VertexMerger:
-    def __init__(self, dim = 3):
+    def __init__(self):
         self.mergedVertices = {}
-        self.dim = dim
 
     def add(self, pt):
         '''
@@ -17,7 +16,8 @@ class VertexMerger:
         return idx
     def numVertices(self): return len(self.mergedVertices)
     def vertices(self):
-        V = np.empty((self.numVertices(), self.dim, ))
+        dim = len(next(iter(self.mergedVertices))) # dimension of arbitrary point
+        V = np.empty((self.numVertices(), dim))
         for pt_tuple, idx in self.mergedVertices.items():
             V[idx, :] = pt_tuple
         return V
@@ -49,6 +49,12 @@ def concatenateMeshes(meshes):
         Fout.append(F + nv)
         nv += V.shape[0]
     return removeDanglingVertices(np.vstack(Vout), np.vstack(Fout))
+
+# Convert a polyline in the form of a list of points into a (V, E) indexed line
+# set representation.
+def polylineToLineMesh(polyline):
+    idxs = np.arange(polyline.shape[0] - 1)
+    return polyline, np.column_stack([idxs, idxs + 1])
 
 def removeDanglingVertices(V, F):
     """
