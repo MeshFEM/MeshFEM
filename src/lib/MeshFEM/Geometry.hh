@@ -789,7 +789,7 @@ Vec3_T<Real_> parallelTransportNormalized(Eigen::Ref<const Vec3_T<Real_>> t0,
         // difference test can easily trigger this case).
         return v;
     }
-    if (!isAutodiffType<Real_>()) {
+    if (!isAutoDiffType<Real_>()) {
         // Make parallelTransport(t, t, v) precisely the identity operation; this
         // is needed, e.g. to ensure rods with updated source frames can be
         // restored exactly from a file without small numerical perturbations.

@@ -46,16 +46,16 @@ stripAutoDiff(const T &val) {
 }
 
 template<typename T>
-constexpr bool isAutodiffType() {
+constexpr bool isAutoDiffType() {
     return !std::is_same<typename StripAutoDiffImpl<T>::result_type, T>::value;
 }
 
 template<typename T>
-bool isAutodiffType(const T &/* val */) { return isAutodiffType<T>(); }
+constexpr bool isAutoDiffType(const T &) { return isAutoDiffType<T>(); }
 
 template<typename T>
 std::string autodiffOrNotString() {
-    return isAutodiffType<T>() ? "ADReal" : "Real";
+    return isAutoDiffType<T>() ? "ADReal" : "Real";
 }
 
 // For casting to non autodiff types, we must strip
@@ -90,7 +90,7 @@ struct AutodiffCastImpl<true> {
 
 template<typename TNew, typename TOrig>
 TNew autodiffCast(const TOrig &orig) {
-    return AutodiffCastImpl<isAutodiffType<TNew>()>::template run<TNew>(orig);
+    return AutodiffCastImpl<isAutoDiffType<TNew>()>::template run<TNew>(orig);
 }
 
 // std::numeric_limits is dangerous! If you use it on Eigen's autodiff types you
@@ -104,6 +104,23 @@ struct safe_numeric_limits
                   "std::numeric_limits is broken for non-arithmetic types!");
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// Utility functions
+////////////////////////////////////////////////////////////////////////////////
+// If "val" does not yet have a nonempty vector of derivatives, initialize it to
+// the appropriately sized vector of zeros.
+template<typename T>
+typename std::enable_if<isAutoDiffType<T>(), void>::type
+zeroInitializeEmptyDerivatives(T &val, const size_t numVars) {
+    auto &der = val.derivatives();
+    if (der.rows() == 0) der.setZero(numVars);
+    assert(der.rows() == numVars);
+}
+
+template<typename T>
+typename std::enable_if<!isAutoDiffType<T>(), void>::type
+zeroInitializeEmptyDerivatives(T &/* val */, const size_t numVars) { }
+
 inline VecX_T<Real> extractDirectionalDerivative(const VecX_T<ADReal> &a) {
     const int n = a.size();
     VecX_T<Real> result(n);
@@ -111,5 +128,123 @@ inline VecX_T<Real> extractDirectionalDerivative(const VecX_T<ADReal> &a) {
         result[i] = a[i].derivatives()[0];
     return result;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Extra autodiff math functions
+// Note: Eigen 3.3 changes how functions are declared and now finally implements
+// tanh itself
+////////////////////////////////////////////////////////////////////////////////
+namespace Eigen {
+#if !EIGEN_VERSION_AT_LEAST(3,3,0)
+    template<typename NewDerType>
+    inline AutoDiffScalar<NewDerType> MakeAutoDiffScalar(const typename NewDerType::Scalar& value, const NewDerType &der) {
+      return AutoDiffScalar<NewDerType>(value,der);
+    }
+
+    #define EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(FUNC,CODE) \
+    template<typename DerType> \
+    inline const Eigen::AutoDiffScalar<Eigen::CwiseUnaryOp<Eigen::internal::scalar_multiple_op<typename Eigen::internal::traits<typename Eigen::internal::remove_all<DerType>::type>::Scalar>, const typename Eigen::internal::remove_all<DerType>::type> > \
+    FUNC(const Eigen::AutoDiffScalar<DerType>& x) { \
+        using namespace Eigen; \
+        typedef typename Eigen::internal::traits<typename Eigen::internal::remove_all<DerType>::type>::Scalar Scalar; \
+        CODE; \
+    }
+
+    // Implement tanh for eigen autodiff
+    EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(tanh,
+      using std::tanh;
+      using std::cosh;
+      using numext::abs2;
+      return MakeAutoDiffScalar(tanh(x.value()),
+                        x.derivatives() * (Scalar(1)/abs2(cosh(x.value()))));
+    )
+#else // EIGEN Version < 3.3
+    #define EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(FUNC,CODE) \
+    template<typename DerType> \
+    inline const Eigen::AutoDiffScalar< \
+    EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE(typename Eigen::internal::remove_all<DerType>::type, typename Eigen::internal::traits<typename Eigen::internal::remove_all<DerType>::type>::Scalar, product) > \
+    FUNC(const Eigen::AutoDiffScalar<DerType>& x) { \
+        using namespace Eigen; \
+        EIGEN_UNUSED typedef typename Eigen::internal::traits<typename Eigen::internal::remove_all<DerType>::type>::Scalar Scalar; \
+        CODE; \
+    }
+#endif // Eigen Version Check
+
+    // Implement log(cosh(x)) with derivative; useful for stable exp_smin computation
+    EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(log_cosh,
+        Scalar val = std::log(std::cosh(x.value()));
+        return MakeAutoDiffScalar(val,
+            x.derivatives() * std::tanh(x.value()));
+    )
+    #undef EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY
+
+    // Eigen doesn't provide pow for autodiff-typed power.
+    template<typename _DerType1, typename _DerType2>
+    Eigen::AutoDiffScalar<typename Eigen::internal::remove_all<_DerType1>::type>
+    pow(const Eigen::AutoDiffScalar<_DerType1> &x,
+        const Eigen::AutoDiffScalar<_DerType2> &p)
+    {
+        using DerType1 = typename Eigen::internal::remove_all<_DerType1>::type;
+        using DerType2 = typename Eigen::internal::remove_all<_DerType2>::type;
+        using Scalar  = typename Eigen::internal::traits<DerType1>::Scalar;
+        using Scalar2 = typename Eigen::internal::traits<DerType2>::Scalar;
+        static_assert(std::is_same<Scalar, Scalar2>::value, "Scalar types must be same for base and exponent");
+
+        if (x.value() < 0) throw std::runtime_error("Pow called with negative base");
+        // Avoid numerical issues with zero base: derivative wrt p should be
+        // zero but will be NaN.
+        Scalar safe_logx = std::log(
+                std::max(x.value(),
+                         safe_numeric_limits<Scalar>::min() // minimum positive normalized value
+        ));
+
+        // Note: make_coherent const-casts the derivatives.
+        internal::make_coherent(x.derivatives(), p.derivatives());
+
+        return AutoDiffScalar<DerType1>(std::pow(x.value(), p.value()),
+                std::pow(x.value(), p.value() - 1.0) * (
+                    x.derivatives() * p.value() +
+                    p.derivatives() * x.value() * safe_logx
+                ));
+    }
+}
+
+// Implement log_cosh for non-autodiff types.
+template<typename T>
+typename std::enable_if<!isAutoDiffType<T>(), T>::type
+log_cosh(const T val) {
+    return log(cosh(val));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Derivative debugging
+////////////////////////////////////////////////////////////////////////////////
+// Check for Inf/NaN in derivative fields
+template<typename T>
+typename std::enable_if<isAutoDiffType<T>(), bool>::type
+hasInvalidDerivatives(const T &val) {
+    const auto &der = val.derivatives();
+    for (int i = 0; i < der.rows(); ++i)
+        if (std::isnan(der[i]) || std::isinf(der[i])) return true;
+    return false;
+}
+
+// Return false for non-autodiff types.
+template<typename T>
+typename std::enable_if<!isAutoDiffType<T>(), bool>::type
+hasInvalidDerivatives(const T &/* val */) { return false; }
+
+template<typename T>
+typename std::enable_if<isAutoDiffType<T>(), void>::type
+reportDerivatives(std::ostream &os, const T &val) {
+    auto prec = os.precision(5);
+    os << val.derivatives().transpose();
+    os.precision(prec);
+}
+
+// do nothing for non-autodiff types.
+template<typename T>
+typename std::enable_if<!isAutoDiffType<T>(), void>::type
+reportDerivatives(std::ostream &/* os */, const T &/* val */) { }
 
 #endif /* end of include guard: AUTOMATICDIFFERENTIATION_HH */
