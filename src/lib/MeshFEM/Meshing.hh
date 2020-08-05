@@ -456,7 +456,7 @@ class PolygonSetTriangulation
 
         // Use "triangle" to create a Delunay triangulation of the final set of points.
         // The Y flag is to avoid the addition of points to the boundary edges.
-        triangulatePSLC(new_points,
+        triangulatePSLG(new_points,
                         new_edges,
                         holes,
                         out_vertices,

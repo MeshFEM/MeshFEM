@@ -80,7 +80,7 @@ void write_poly(const std::string &filename, const Vertices &v, const Edges &e) 
 
 // Largely taken from Luigi/Nico's tessellator2d.h
 template<class _EdgeSoup, class HolePoint, class HolePtAllocator>
-void triangulatePSLC(const _EdgeSoup &edgeSoup,
+void triangulatePSLG(const _EdgeSoup &edgeSoup,
         const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
@@ -238,7 +238,7 @@ void triangulatePoints(
 
 // Convenience function for point/edge collections representation
 template<class Point, class HolePoint, class Edge, class PtAllocator, class HolePtAllocator>
-void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
+void triangulatePSLG(const std::vector<Point, PtAllocator> &inPoints,
         const std::vector<Edge> &inEdges,
         const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
@@ -248,7 +248,7 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
         std::vector<int> *outPointMarkers = nullptr,
         std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
         bool omitQualityFlag = false) {
-    triangulatePSLC(
+    triangulatePSLG(
             EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
             holes, outVertices, outTriangles, area, additionalFlags,
             outPointMarkers, outMarkedEdges, omitQualityFlag);
@@ -256,7 +256,7 @@ void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
 
 // Convenience function for list of closed polygons representation
 template<class Point, class HolePoint, class HolePtAllocator>
-void triangulatePSLC(const std::list<std::list<Point>> &polygons,
+void triangulatePSLG(const std::list<std::list<Point>> &polygons,
         const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
@@ -265,7 +265,7 @@ void triangulatePSLC(const std::list<std::list<Point>> &polygons,
         std::vector<int> *outPointMarkers = nullptr,
         std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
         bool omitQualityFlag = false) {
-    triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
+    triangulatePSLG(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
             holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges, omitQualityFlag);
 }
 

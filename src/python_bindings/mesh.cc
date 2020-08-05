@@ -143,6 +143,23 @@ struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingS
                         }
                         return result;
                     })
+            .def("boundaryLoops", [](const Mesh &m) {
+                    std::vector<bool> visited(m.numBoundaryVertices());
+                    std::vector<std::vector<size_t>> result;
+                    for (const auto &be : m.boundaryEdges()) {
+                        if (visited[be.tip().index()]) continue;
+                        auto curr = be;
+                        result.emplace_back();
+                        auto &loop = result.back();
+                        while (!visited[curr.tip().index()]) {
+                            size_t bvi = curr.tip().index();
+                            visited[bvi] = true;
+                            curr = curr.next();
+                            loop.push_back(bvi);
+                        }
+                    }
+                    return result;
+                }, "Get the lists of *boundary vertex indices* making up each boundary loop")
         ;
         return mesh_bindings;
     }
