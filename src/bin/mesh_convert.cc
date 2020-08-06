@@ -573,7 +573,7 @@ int main(int argc, const char *argv[])
             // previous filters.
             for (auto &v : outVertices) { pts.push_back(v); }
             for (auto &e : outElements) { edges.push_back({e[0], e[1]}); }
-            triangulatePSLC(pts, edges, std::vector<Point3D>(), outVertices, outElements,
+            triangulatePSLG(pts, edges, std::vector<Point3D>(), outVertices, outElements,
                             args["triangulate"].as<double>());
         }
     }

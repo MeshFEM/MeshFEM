@@ -225,7 +225,8 @@ public:
 
     Vector getNodePosition(size_t node_index) const { return m_x.row(node_index); }
 
-    MXNd deformedVertices() const { return m_x.topRows(numVertices()); }
+    MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
+    MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
 
     const Mesh &mesh() const { return m_mesh; }
 
@@ -240,6 +241,16 @@ public:
         for (const auto &n : e.nodes())
             F += (e->gradPhi(n.localIndex())(x) * m_x.row(n.index())).transpose();
         return F;
+    }
+
+    VXd element3DVolumes() const {
+        if (N != 3) { throw std::runtime_error("Only 3D meshes have element volumes"); }
+        // For a tet mesh, the 3D volume associated with a tetrahedron is simply the tet's volume.
+        const auto &m = mesh();
+        VXd result(m.numElements());
+        for (const auto &e : m.elements())
+            result[e.index()] = e->volume();
+        return result;
     }
 
 protected:

@@ -2,6 +2,7 @@
 #define EQUILIBRIUMBINDING_HH
 #include <MeshFEM/EquilibriumSolver.hh>
 
+#include <pybind11/iostream.h>
 // Hack around a limitation of pybind11 where we cannot specify argument passing policies and
 // pybind11 tries to make a copy if the passed instance is not already registered:
 //      https://github.com/pybind/pybind11/issues/1200

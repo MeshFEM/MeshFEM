@@ -69,6 +69,7 @@ public:
 
     static constexpr size_t K   = 2;
     static constexpr size_t Deg = 1;
+    static constexpr size_t N   = 3;
     using  Mesh = FEMMesh<2, Deg, V3d>;
     using TMesh = typename Mesh::BaseMesh; // TriMesh data structure underlying FEMMesh
     using VSFJ = VectorizedShapeFunctionJacobian<3, V3d>;
@@ -258,6 +259,15 @@ public:
 
     // Get the principal curvatures of the deformed sheet geometry.
     MX2d getPrincipalCurvatures() const;
+
+    // The volume associated with a shell element is area * thickness.
+    VXd element3DVolumes() const {
+        const auto &m = mesh();
+        VXd result(m.numElements());
+        for (const auto &e : m.elements())
+            result[e.index()] = e->volume() * m_h;
+        return result;
+    }
 
 private:
     // Update the current midedge reference frame to adapt to the new deformed

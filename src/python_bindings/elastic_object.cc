@@ -14,9 +14,11 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
+#include "EquilibriumBinding.hh"
+#include "LoadBindings.hh"
 
 template<template<typename, size_t> class _Energy_T, size_t _K, size_t _Degree>
-void bindElasticObject(py::module& module, py::module& detail_module)
+void bindElasticObject(py::module &module, py::module &detail_module)
 {
     static constexpr size_t K   = _K;
     static constexpr size_t N   = _K;
@@ -29,7 +31,9 @@ void bindElasticObject(py::module& module, py::module& detail_module)
 
     module.def("ElasticObject", [](const Mesh &m, const Energy &e) { return std::make_shared<EO>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
-    py::class_<EO, std::shared_ptr<EO>>(detail_module, getElasticObjectName<Energy, K, Deg, Vector>().c_str())
+    const std::string name = getElasticObjectName<Energy, K, Deg, Vector>();
+    py::class_<EO, std::shared_ptr<EO>> pyEO(detail_module, name.c_str());
+    pyEO
       .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
       .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })
       .def_property_readonly_static("energy_name", [](py::object /* self */) { return getEnergyName<Energy>(); })
@@ -53,6 +57,9 @@ void bindElasticObject(py::module& module, py::module& detail_module)
             return getVisualizationGeometry(visMesh);
          })
      ;
+
+    addComputeEquilibriumBinding<EO>(pyEO);
+    addLoadBindings<EO>(pyEO, detail_module, name);
 }
 
 PYBIND11_MODULE(elastic_object, m)

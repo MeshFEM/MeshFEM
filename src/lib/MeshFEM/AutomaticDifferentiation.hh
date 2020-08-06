@@ -119,7 +119,7 @@ zeroInitializeEmptyDerivatives(T &val, const size_t numVars) {
 
 template<typename T>
 typename std::enable_if<!isAutoDiffType<T>(), void>::type
-zeroInitializeEmptyDerivatives(T &/* val */, const size_t numVars) { }
+zeroInitializeEmptyDerivatives(T &/* val */, const size_t /* numVars */) { }
 
 inline VecX_T<Real> extractDirectionalDerivative(const VecX_T<ADReal> &a) {
     const int n = a.size();

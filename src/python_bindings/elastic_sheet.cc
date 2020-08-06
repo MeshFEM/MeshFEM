@@ -2,7 +2,6 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/iostream.h>
 namespace py = pybind11;
 
 #include <MeshFEM/ElasticSheet.hh>
@@ -11,9 +10,10 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
 #include "EquilibriumBinding.hh"
+#include "LoadBindings.hh"
 
 template<class Psi_C>
-void bindElasticSheet(py::module& module, py::module& detail_module)
+void bindElasticSheet(py::module &module, py::module &detail_module)
 {
     using Energy = Psi_C;
     using ES   = ElasticSheet<Psi_C>;
@@ -22,7 +22,8 @@ void bindElasticSheet(py::module& module, py::module& detail_module)
 
     module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e) { return std::make_shared<ES>(m, e); }, py::arg("mesh"), py::arg("energy"));
 
-    py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, ("ElasticSheet" + getEnergyName<Energy>()).c_str());
+    const std::string name = "ElasticSheet" + getEnergyName<Energy>();
+    py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
 
     using EType = typename ES::EnergyType;
     py::enum_<EType>(pyES, "EnergyType")
@@ -78,6 +79,7 @@ void bindElasticSheet(py::module& module, py::module& detail_module)
       ;
 
     addComputeEquilibriumBinding<ES>(pyES);
+    addLoadBindings<ES>(pyES, detail_module, name);
 }
 
 PYBIND11_MODULE(elastic_sheet, m)

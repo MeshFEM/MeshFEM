@@ -38,7 +38,7 @@ auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */) -> declty
 }
 
 // First argument exists but is not boolean (doesn't look like it accepts a freshIterate flag).
-template<class EQSystem, std::enable_if_t<!std::is_integral<typename function_traits<decltype(&EQSystem::gradient)>::template arg<0>>::value, int> = 0>
+template<class EQSystem, std::enable_if_t<(function_traits<decltype(&EQSystem::gradient)>::arity > 0) && (!std::is_integral<typename function_traits<decltype(&EQSystem::gradient)>::template arg<0>>::value), int> = 0>
 auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */) -> decltype(sys.gradient()) {
     return sys.gradient();
 }
