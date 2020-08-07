@@ -58,13 +58,19 @@ void bindElasticObject(py::module &module, py::module &detail_module)
          })
      ;
 
-    addComputeEquilibriumBinding<EO>(pyEO);
+    addComputeEquilibriumBinding<EO>(pyEO, detail_module, name);
     addLoadBindings<EO>(pyEO, detail_module, name);
 }
 
 PYBIND11_MODULE(elastic_object, m)
 {
     py::module detail_module = m.def_submodule("detail");
+
+    py::module::import("mesh");
+    py::module::import("energy");
+    py::module::import("sparse_matrices");
+    py::module::import("py_newton_optimizer");
+    py::module::import("loads");
 
     bindElasticObject<      LinearElasticEnergy, 2, 1>(m, detail_module);
     bindElasticObject<      LinearElasticEnergy, 3, 1>(m, detail_module);

@@ -11,12 +11,13 @@
 #ifndef GRAVITY_HH
 #define GRAVITY_HH
 
+#include "Load.hh"
 #include <MeshFEM/GaussQuadrature.hh>
 
 namespace Loads {
 
 template<class Object>
-struct Gravity {
+struct Gravity : public Load<3, typename Object::Real> {
     using Real = typename Object::Real;
     using VXd  = typename Object::VXd;
     using V3d  = Eigen::Matrix<Real, 3, 1>;
@@ -29,46 +30,31 @@ struct Gravity {
         restStateUpdated();
     }
 
-
-    void set_rho(Real rho) { m_rho = rho; restStateUpdated(); }
+    void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
     Real get_rho(Real rho) { return m_rho; }
 
-    void deformedStateUpdated() { /* Gravity force is const wrt. x */ }
+    virtual void deformedStateUpdated() override { /* Gravity force is const wrt. x */ }
 
-    void restStateUpdated() {
-        m_grad.setZero(m_obj.numVars());
-        const auto &m = m_obj.mesh();
-        Interpolant<Real, K, Deg> phi;
-        phi = 0.0;
-        for (const auto &e : m.elements()) {
-            for (const auto &n : e.nodes()) {
-                phi[n.localIndex()] = 1.0;
-                m_grad.template segment<3>(3 * n.index()) += m_g * phi.integrate(e->volume());
-                phi[n.localIndex()] = 0.0;
-            }
-        }
+    virtual void restStateUpdated() override { m_updateCache(); }
 
-        m_grad *= m_rho;
-    }
-
-    Real energy() const {
+    virtual Real energy() const override {
         return m_grad.dot(m_obj.getVars());
     }
 
     // Gradient with respect to the deformed state
-    VXd grad_x() const {
+    virtual VXd grad_x() const override {
         return m_grad;
     }
 
     // Gradient with respect to the rest state
-    VXd grad_X() const {
+    virtual VXd grad_X() const override {
         throw std::runtime_error("TODO");
     }
 
     // Gravity is linear ==> Hessian is zero.
-    void hessian(SuiteSparseMatrix& /* H */) const { }
+    virtual void hessian(SuiteSparseMatrix& /* H */) const override { }
 
-    SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const {
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
         const size_t nv = m_obj.numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
@@ -79,6 +65,23 @@ private:
     const Object &m_obj;
     Real m_rho;
     V3d  m_g; // Gravitational acceleration vector
+
+    void m_updateCache() {
+        m_grad.setZero(m_obj.numVars());
+        const auto &m = m_obj.mesh();
+        Interpolant<Real, K, Deg> phi;
+        phi = 0.0;
+        for (const auto &e : m.elements()) {
+            for (const auto &n : e.nodes()) {
+                phi[n.localIndex()] = 1.0;
+                m_grad.template segment<3>(3 * n.index()) += m_g; //  * phi.integrate(e->volume());
+                phi[n.localIndex()] = 0.0;
+            }
+        }
+
+        m_grad *= -m_rho;
+    }
+
     VXd m_grad;
 };
 

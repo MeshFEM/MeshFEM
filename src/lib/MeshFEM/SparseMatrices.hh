@@ -121,7 +121,7 @@ struct TripletMatrix {
     }
 
     // Sort and sum of repeated entries
-    bool needsSumRepated() const { return needs_sum_repeated; }
+    bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
         if (!needsSumRepated()) { return; }
 
@@ -942,6 +942,8 @@ struct CSCMatrix {
         _Index inputSize = std::min(b.m, blockEnd) - blockStart;
         if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
         if ((m != inputSize + offset) || (n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+        if (b.nz == 0) return;
+        if (nz == 0) { *this = b; return; }
 
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();

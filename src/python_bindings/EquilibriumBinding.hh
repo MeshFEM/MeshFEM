@@ -15,13 +15,30 @@ CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
 }
 
 template<class EQSystem, class PYEs>
-void addComputeEquilibriumBinding(PYEs &pyES) {
-    pyES.def("computeEquilibrium",
-              [](EQSystem &sys, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr) {
-                py::scoped_ostream_redirect stream1(std::cout, py::module::import("sys").attr("stdout"));
-                py::scoped_ostream_redirect stream2(std::cerr, py::module::import("sys").attr("stderr"));
-                return equilibrium_newton(sys, fixedVars, opts, callbackWrapper(pcb));
-          }, py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr);
+void addComputeEquilibriumBinding(PYEs &pyES, py::module &detail_module, const std::string &objectName) {
+    using EQProb = EquilibriumProblem<EQSystem>;
+    using LC = LoadCollection<EQSystem>;
+
+    pyES
+        .def("computeEquilibrium",
+            [](EQSystem &sys, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr) {
+                return equilibrium_newton(sys, loads, fixedVars, opts, callbackWrapper(pcb));
+            },
+            py::arg("loads") = LC(),
+            py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr,
+            py::call_guard<py::scoped_ostream_redirect,
+                           py::scoped_estream_redirect>())
+        .def("EquilibriumProblem",
+            [](EQSystem &sys, const LC &loads) {
+                return std::make_unique<EQProb>(sys, loads);
+            },
+            py::arg("loads") = LC())
+        ;
+
+    using EQProb = EquilibriumProblem<EQSystem>;
+    py::class_<EQProb, NewtonProblem>(detail_module, ("EquilibriumProblem" + objectName).c_str())
+        .def("loads", &EQProb::loads, py::return_value_policy::reference)
+        ;
 }
 
 #endif /* end of include guard: EQUILIBRIUMBINDING_HH */

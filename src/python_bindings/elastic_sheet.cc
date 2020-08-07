@@ -78,7 +78,7 @@ void bindElasticSheet(py::module &module, py::module &detail_module)
       .def_property("thickness", &ES::getThickness, &ES::setThickness)
       ;
 
-    addComputeEquilibriumBinding<ES>(pyES);
+    addComputeEquilibriumBinding<ES>(pyES, detail_module, name);
     addLoadBindings<ES>(pyES, detail_module, name);
 }
 
@@ -89,6 +89,7 @@ PYBIND11_MODULE(elastic_sheet, m)
     py::module::import("energy");
     py::module::import("sparse_matrices");
     py::module::import("py_newton_optimizer");
+    py::module::import("loads");
 
     bindElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>(m, detail_module);
 }

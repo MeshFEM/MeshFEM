@@ -1,5 +1,7 @@
 #include "newton_optimizer/newton_optimizer.hh"
 
+#define NORMAL_INFERENCE_PROBLEM_VERBOSITY 0
+
 template <class Psi_C>
 void ElasticSheet<Psi_C>::setIdentityDeformation() {
     const auto &m = mesh();
@@ -192,6 +194,7 @@ void ElasticSheet<Psi_C>::initializeMidedgeNormals(bool minimizeBending) {
     if (minimizeBending) {
         auto problem = std::make_unique<NormalInferenceProblem<ElasticSheet>>(*this);
         auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
+        opt->options.verbose = NORMAL_INFERENCE_PROBLEM_VERBOSITY;
         opt->optimize();
     }
 }
@@ -698,7 +701,6 @@ void ElasticSheet<Psi_C>::m_adaptReferenceFrame() {
         // }
         f_ref.col(1) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(1));
         f_ref.col(2) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(2));
-
 
         auto hop = he.opposite();
         // Measure the ccw angle around the edge tangent from reference director d1 to the triangle normal.
