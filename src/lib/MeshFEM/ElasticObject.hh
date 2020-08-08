@@ -19,6 +19,8 @@
 #include "EnergyDensities/Tensor.hh"
 #include <Eigen/Sparse>
 
+#include "RigidMotionPins.hh"
+
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
@@ -251,6 +253,21 @@ public:
         for (const auto &e : m.elements())
             result[e.index()] = e->volume();
         return result;
+    }
+
+    // Apply a rigid transformation `x --> R x + t` to the deformed configuration.
+    void applyRigidTransform(const Matrix &R, const Vector &t) {
+        if (((R.transpose() * R - Matrix::Identity()).norm() > 1e-8) || (R.determinant() < 0))
+            throw std::runtime_error("R is not a rotation");
+        m_x = ((m_x * R.transpose()).rowwise() + t.transpose()).eval();
+    }
+
+    // Reorient the current deformed configuration so that global rigid motions
+    // can be pinned down with just 6 variable pin constraints.
+    // Also return the indices of these 6 variables.
+    typename RigidMotionPins<ElasticObject>::PinVars
+    prepareRigidMotionPins() {
+        return RigidMotionPins<ElasticObject>::run(*this);
     }
 
 protected:

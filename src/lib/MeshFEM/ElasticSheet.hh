@@ -41,6 +41,8 @@
 #include "EnergyDensities/Tensor.hh"
 #include "Geometry.hh"
 
+#include "RigidMotionPins.hh"
+
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
 // intuitively expressed in the global 2D coordinate system; this is
@@ -269,6 +271,34 @@ public:
         return result;
     }
 
+    // Apply a rigid transformation `x --> R x + t` to the deformed configuration.
+    // Rotating the deformed configuration is slightly complicated by needing
+    // to maintain source and current reference frames...
+    void applyRigidTransform(const M3d &R, const V3d &t) {
+        if (((R.transpose() * R - M3d::Identity()).norm() > 1e-8) || (R.determinant() < 0))
+            throw std::runtime_error("R is not a rotation");
+
+        // Rotate the source reference frame so that setDeformedConfiguration()
+        // produces the correct normals/shape operators/reference frame...
+        for (size_t i = 0; i < m_numEdges; ++i)
+            m_sourceReferenceFrame[i] = (R * m_sourceReferenceFrame[i]).eval();
+
+        auto prerotationFrames = m_referenceFrame; // for validation
+        setDeformedPositions((m_deformedPositions * R.transpose()).rowwise() + t.transpose());
+
+        for (size_t i = 0; i < m_numEdges; ++i) {
+            if ((m_referenceFrame[i] - R * prerotationFrames[i]).norm() > 1e-8)
+                throw std::runtime_error("Frame update failure");
+        }
+    }
+
+    // Reorient the current deformed configuration so that global rigid motions
+    // can be pinned down with just 6 variable pin constraints.
+    // Also return the indices of these 6 variables.
+    std::array<size_t, 6> prepareRigidMotionPins() {
+        return RigidMotionPins<ElasticSheet>::run(*this);
+    }
+
 private:
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.
@@ -334,7 +364,7 @@ private:
     // Sheet thickness
     Real m_h = 1.0;
 
-    // Orthonormal basis for each triangle's tangent space
+    // Orthonormal basis for each reference triangle's tangent space
     std::vector<M32d> m_B;
 
     const size_t m_numVertices,
