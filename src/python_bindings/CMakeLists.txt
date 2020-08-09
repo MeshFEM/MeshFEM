@@ -68,6 +68,10 @@ pybind11_add_module(loads loads.cc)
 set_target_properties(loads PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(loads PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(field_sampler field_sampler.cc)
+set_target_properties(field_sampler PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(field_sampler PUBLIC MeshFEM intel_pybind_14_hack)
+
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)
     set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")

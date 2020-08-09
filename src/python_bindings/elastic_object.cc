@@ -74,6 +74,7 @@ PYBIND11_MODULE(elastic_object, m)
     py::module::import("py_newton_optimizer");
     py::module::import("loads");
 
+
     bindElasticObject<      LinearElasticEnergy, 2, 1>(m, detail_module);
     bindElasticObject<      LinearElasticEnergy, 3, 1>(m, detail_module);
     bindElasticObject<      LinearElasticEnergy, 3, 2>(m, detail_module);

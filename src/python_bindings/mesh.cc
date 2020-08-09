@@ -3,6 +3,8 @@
 #include <pybind11/stl.h>
 namespace py = pybind11;
 
+#include "BindingInstantiations.hh"
+
 #include <Eigen/Dense>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/FEMMesh.hh>
@@ -19,17 +21,17 @@ namespace py = pybind11;
 
 #include "MeshEntities.hh"
 
-template<size_t _K, size_t _Degree, class _EmbeddingSpace>
+template<class Mesh>
 struct MeshBindingsBase {
-    using Mesh = FEMMesh<_K, _Degree, _EmbeddingSpace>;
-    using Real = typename _EmbeddingSpace::Scalar;
+    using Real = typename Mesh::Real;
+    static constexpr size_t K = Mesh::K;
     static constexpr size_t EmbeddingDimension = Mesh::EmbeddingDimension;
     using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
-    using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,                  3>;
-    using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, _K + 1>;
+    using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,     3>;
+    using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
 
-    static MeshBindingsType<Mesh> bind(py::module& module) {
-        MeshBindingsType<Mesh> mb(module, getMeshName<Mesh>().c_str());
+    static MeshBindingsType<Mesh> bind(py::module &/* module */, py::module &detail_module) {
+        MeshBindingsType<Mesh> mb(detail_module, getMeshName<Mesh>().c_str());
         // WARNING: Mesh's holder type is a shared_ptr; returning a unique_ptr will lead to a dangling pointer in the current version of Pybind11
         mb.def(py::init([](       const std::string &path) { return std::shared_ptr<Mesh>(Mesh::load(path)); }), py::arg("path"))
           .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));
@@ -64,10 +66,10 @@ struct MeshBindingsBase {
           .def("visualizationGeometry",  &getVisualizationGeometry <Mesh>)
           .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
-          .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (_K == 2) ? "Vertex normals (triangle area weighted)"
-                                                                         : "Boundary vertex normals (triangle area weighted)")
-          .def("normals", &getNormals<Mesh>, (_K == 2) ? "Triangle normals"
-                                                       : "Boundary triangle normals")
+          .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (K == 2) ? "Vertex normals (triangle area weighted)"
+                                                                        : "Boundary vertex normals (triangle area weighted)")
+          .def("normals", &getNormals<Mesh>, (K == 2) ? "Triangle normals"
+                                                      : "Boundary triangle normals")
           .def("elementVolumes", [](const Mesh &m) {
                       Eigen::VectorXd result(m.numElements());
                       for (const auto &e : m.elements()) result[e.index()] = e->volume();
@@ -79,11 +81,11 @@ struct MeshBindingsBase {
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
           .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh",  [](const Mesh &) { return _K == 3; })
+          .def("is_tet_mesh",  [](const Mesh &) { return K == 3; })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
-          .def_property_readonly_static("degree", [](py::object) { return _Degree; })
-          .def_property_readonly_static("simplexDimension", [](py::object) { return _K; })
+          .def_property_readonly_static("degree", [](py::object) { return Mesh::Deg; })
+          .def_property_readonly_static("simplexDimension", [](py::object) { return Mesh::K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
 
           .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })
@@ -92,14 +94,18 @@ struct MeshBindingsBase {
     }
 };
 
-template<size_t _Degree, class _EmbeddingSpace>
-struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingSpace> {
-    using Base = MeshBindingsBase<2, _Degree, _EmbeddingSpace>;
-    using Mesh = typename Base::Mesh;
+template<class Mesh>
+struct MeshBindings;
+
+// Triangle-mesh-specific bindings.
+template<size_t _Deg, class _EmbeddingSpace>
+struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase<FEMMesh<2, _Deg, _EmbeddingSpace>> {
+    using Mesh = FEMMesh<2, _Deg, _EmbeddingSpace>;
+    using Base = MeshBindingsBase<Mesh>;
     using Real = typename Mesh::Real;
     using V3d  = Eigen::Matrix<Real, 3, 1>;
-    static MeshBindingsType<Mesh> bind(py::module& module) {
-        auto mesh_bindings = Base::bind(module);
+    static MeshBindingsType<Mesh> bind(py::module &module, py::module &detail_module) {
+        auto mesh_bindings = Base::bind(module, detail_module);
         mesh_bindings
             .def("numTris",     &Mesh::numTris)
             .def("triangles",  [](const Mesh &m) { return getElementCorners(m.elements()); })
@@ -165,13 +171,14 @@ struct TriMeshSpecificBindings : public MeshBindingsBase<2, _Degree, _EmbeddingS
     }
 };
 
-template<size_t _Degree, class _EmbeddingSpace>
-struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingSpace> {
-    using Base = MeshBindingsBase<3, _Degree, _EmbeddingSpace>;
-    using Mesh = typename Base::Mesh;
-    using BoundaryMesh = FEMMesh<2, _Degree, _EmbeddingSpace>;
-    static MeshBindingsType<Mesh> bind(py::module& module) {
-        auto mesh_bindings = Base::bind(module);
+// Tetrahedral-mesh-specific bindings.
+template<size_t _Deg, class _EmbeddingSpace>
+struct MeshBindings<FEMMesh<3, _Deg, _EmbeddingSpace>> : public MeshBindingsBase<FEMMesh<3, _Deg, _EmbeddingSpace>> {
+    using Mesh = FEMMesh<3, _Deg, _EmbeddingSpace>;
+    using Base = MeshBindingsBase<Mesh>;
+    using BoundaryMesh = FEMMesh<2, Mesh::Deg, typename Mesh::EmbeddingSpace>;
+    static MeshBindingsType<Mesh> bind(py::module &module, py::module &detail_module) {
+        auto mesh_bindings = Base::bind(module, detail_module);
         mesh_bindings
             .def("numTets",     &Mesh::numTets)
             .def("tets", [](const Mesh &m) { return getElementCorners(m.elements()); })
@@ -182,15 +189,6 @@ struct TetMeshSpecificBindings : public MeshBindingsBase<3, _Degree, _EmbeddingS
         return mesh_bindings;
     }
 };
-
-template<size_t _K, size_t _Degree, class _EmbeddingSpace>
-struct MeshBindings;
-
-template<size_t _Degree, class _EmbeddingSpace>
-struct MeshBindings<2, _Degree, _EmbeddingSpace> : public TriMeshSpecificBindings<_Degree, _EmbeddingSpace> { };
-
-template<size_t _Degree, class _EmbeddingSpace>
-struct MeshBindings<3, _Degree, _EmbeddingSpace> : public TetMeshSpecificBindings<_Degree, _EmbeddingSpace> { };
 
 template<size_t _Dimension>
 void bindPeriodicCondition(py::module& module)
@@ -212,31 +210,23 @@ void bindPeriodicCondition(py::module& module)
       .def("periodicDoFsForNodes", &PeriodicCondition<_Dimension>::periodicDoFsForNodes);
 }
 
-template<typename _Real>
-void addMeshBindings(py::module &m) {
-    using V3d = Eigen::Matrix<_Real, 3, 1>;
-    using V2d = Eigen::Matrix<_Real, 2, 1>;
-
-    MeshBindings<3, 1, V3d>::bind(m); // linear    tet mesh in 3d
-    MeshBindings<3, 2, V3d>::bind(m); // quadratic tet mesh in 3d
-
-    MeshBindings<2, 1, V2d>::bind(m); // linear    tri mesh in 2d
-    MeshBindings<2, 2, V2d>::bind(m); // quadratic tri mesh in 2d
-    MeshBindings<2, 1, V3d>::bind(m); // linear    tri mesh in 3d
-    MeshBindings<2, 2, V3d>::bind(m); // quadratic tri mesh in 3d
-}
+// Wrapper to conform to the BindingInstantiations Binder interface.
+struct MeshBinder {
+    template<class Mesh>
+    static void bind(py::module &module, py::module &detail_module) {
+        MeshBindings<Mesh>::bind(module, detail_module);
+    }
+};
 
 PYBIND11_MODULE(mesh, m)
 {
     m.doc() = "MeshFEM finite element mesh data structure bindings";
+    py::module detail_module = m.def_submodule("detail");
 
     bindMSHFieldWriter(m);
     bindMSHFieldParser(m);
 
-    addMeshBindings<double>(m);
-#if MESHFEM_BIND_LONG_DOUBLE
-    addMeshBindings<long double>(m);
-#endif
+    generateMeshSpecificBindings<MeshBinder>(m, detail_module, MeshBinder());
 
     bindPeriodicCondition<2>(m);
     bindPeriodicCondition<3>(m);

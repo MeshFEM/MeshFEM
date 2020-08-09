@@ -26,6 +26,8 @@ add_library(MeshFEM SHARED
         function_traits.hh
         Functions.hh
         Future.hh
+        FieldSampler.cc
+        FieldSampler.hh
         GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
