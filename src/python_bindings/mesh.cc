@@ -84,8 +84,8 @@ struct MeshBindingsBase {
           .def("is_tet_mesh",  [](const Mesh &) { return K == 3; })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
-          .def_property_readonly_static("degree", [](py::object) { return Mesh::Deg; })
-          .def_property_readonly_static("simplexDimension", [](py::object) { return Mesh::K; })
+          .def_property_readonly_static("degree",             [](py::object) { return Mesh::Deg; })
+          .def_property_readonly_static("simplexDimension",   [](py::object) { return Mesh::K; })
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
 
           .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })

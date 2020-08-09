@@ -38,8 +38,8 @@ std::string getMeshName() {
 }
 
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
-std::string getElasticObjectName() {
-    return getFEMName<_K, _Degree, _EmbeddingSpace>() + _Energy::name() + "ElasticObject";
+std::string getElasticSolidName() {
+    return getFEMName<_K, _Degree, _EmbeddingSpace>() + _Energy::name() + "ElasticSolid";
 }
 
 template<typename _Energy>

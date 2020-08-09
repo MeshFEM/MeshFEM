@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
-// ElasticObject.hh
+// ElasticSolid.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Represents a (potentially nonlinear) elastic object made of triangles/tets.
+//  Represents a hyperlastic elastic solid made of triangles/tets.
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
@@ -25,7 +25,7 @@
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
 template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
-class ElasticObject {
+class ElasticSolid {
 public:
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
@@ -46,7 +46,7 @@ public:
     using Mesh = FEMMesh<K, Deg, Vector>;
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
 
-    ElasticObject(const Energy &energy, const Mesh &mesh)
+    ElasticSolid(const Energy &energy, const Mesh &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
 
     size_t numVars() const { return m_x.size(); }
@@ -265,15 +265,15 @@ public:
     // Reorient the current deformed configuration so that global rigid motions
     // can be pinned down with just 6 variable pin constraints.
     // Also return the indices of these 6 variables.
-    typename RigidMotionPins<ElasticObject>::PinVars
+    typename RigidMotionPins<ElasticSolid>::PinVars
     prepareRigidMotionPins() {
-        return RigidMotionPins<ElasticObject>::run(*this);
+        return RigidMotionPins<ElasticSolid>::run(*this);
     }
 
 protected:
     Mesh m_mesh;
-    // Energy density for each element (with support for multi-material objects).
-    // For single-material objects, this vector will contain only a single entry.
+    // Energy density for each element (with support for multi-material solids).
+    // For single-material solids, this vector will contain only a single entry.
     std::vector<Energy> m_energyDensities;
 
     // Deformed positions for each node
