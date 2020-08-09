@@ -6,6 +6,7 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 #include "project_to_line.h"
+#include "parallel_for.h"
 #include <cassert>
 #include <Eigen/Core>
 
@@ -40,9 +41,8 @@ IGLAABB_INLINE void iglaabb::project_to_line(
   t.resize(np,1);
   sqrD.resize(np,1);
   // loop over points
-#pragma omp parallel for if (np>10000)
-  for(int i = 0;i<np;i++)
-  {
+
+  iglaabb::parallel_for(np, [&](int i) {
     const typename DerivedP::ConstRowXpr Pi = P.row(i);
     // vector from point i to source
     const DerivedD SmPi = S-Pi;
@@ -50,7 +50,7 @@ IGLAABB_INLINE void iglaabb::project_to_line(
     // P projected onto line
     const DerivedD projP = (1-t(i))*S + t(i)*D;
     sqrD(i) = (Pi-projP).squaredNorm();
-  }
+  }, 10000);
 }
 
 template <typename Scalar>

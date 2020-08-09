@@ -15,7 +15,7 @@ namespace iglaabb{
   // For use with functions like std::sort
   template<class T> struct IndexLessThan
   {
-    IndexLessThan(const T arr) : arr(arr) {}
+    IndexLessThan(const T arr_) : arr(arr_) {}
     bool operator()(const size_t a, const size_t b) const
     {
       return arr[a] < arr[b];
@@ -26,7 +26,7 @@ namespace iglaabb{
   // For use with functions like std::unique
   template<class T> struct IndexEquals
   {
-    IndexEquals(const T arr) : arr(arr) {}
+    IndexEquals(const T arr_) : arr(arr_) {}
     bool operator()(const size_t a, const size_t b) const
     {
       return arr[a] == arr[b];
@@ -37,7 +37,7 @@ namespace iglaabb{
   // For use with functions like std::sort
   template<class T> struct IndexVectorLessThan
   {
-    IndexVectorLessThan(const T & vec) : vec ( vec) {}
+    IndexVectorLessThan(const T & vec_) : vec(vec_) {}
     bool operator()(const size_t a, const size_t b) const
     {
       return vec(a) < vec(b);
@@ -48,10 +48,10 @@ namespace iglaabb{
   // For use with functions like std::sort
   template<class T> struct IndexDimLessThan
   {
-    IndexDimLessThan(const T & mat,const int & dim, const int & j) : 
-      mat(mat),
-      dim(dim),
-      j(j)
+    IndexDimLessThan(const T & mat_, const int & dim_, const int & j_) : 
+      mat(mat_),
+      dim(dim_),
+      j(j_)
     {}
     bool operator()(const size_t a, const size_t b) const
     {
@@ -71,7 +71,7 @@ namespace iglaabb{
   // For use with functions like std::sort
   template<class T> struct IndexRowLessThan
   {
-    IndexRowLessThan(const T & mat) : mat ( mat) {}
+    IndexRowLessThan(const T & mat_) : mat(mat_) {}
     bool operator()(const size_t a, const size_t b) const
     {
       const int cols = mat.cols();
@@ -95,7 +95,7 @@ namespace iglaabb{
   // For use with functions like std::sort
   template<class T> struct IndexRowEquals
   {
-    IndexRowEquals(const T & mat) : mat ( mat) {}
+    IndexRowEquals(const T & mat_) : mat(mat_) {}
     bool operator()(const size_t a, const size_t b) const
     {
       const int cols = mat.cols();

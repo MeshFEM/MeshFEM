@@ -12,8 +12,6 @@
 #include <limits>
 #include <cassert>
 
-
-
 template <
   int DIM,
   typename Derivedp,
@@ -23,12 +21,12 @@ template <
   typename Derivedc,
   typename Derivedb>
 IGLAABB_INLINE void iglaabb::point_simplex_squared_distance(
-  const Eigen::MatrixBase<Derivedp> & p,
+  const Eigen::MatrixBase<Derivedp> & p_in,
   const Eigen::MatrixBase<DerivedV> & V,
   const Eigen::MatrixBase<DerivedEle> & Ele,
   const typename DerivedEle::Index primitive,
   Derivedsqr_d & sqr_d,
-  Eigen::MatrixBase<Derivedc> & c,
+  Eigen::MatrixBase<Derivedc> & c_out,
   Eigen::PlainObjectBase<Derivedb> & bary)
 {
   typedef typename Derivedp::Scalar Scalar;
@@ -109,7 +107,7 @@ IGLAABB_INLINE void iglaabb::point_simplex_squared_distance(
     return a + ab * v + ac * w; // = u*a + v*b + w*c, u = va * denom = 1.0-v-w
   };
 
-  assert(p.size() == DIM);
+  assert(p_in.size() == DIM);
   assert(V.cols() == DIM);
   assert(Ele.cols() <= DIM+1);
   assert(Ele.cols() <= 3 && "Only simplices up to triangles are considered");
@@ -121,8 +119,8 @@ IGLAABB_INLINE void iglaabb::point_simplex_squared_distance(
     ) && "bary must be Dynamic or size of Ele.cols()");
 
   BaryPoint tmp_bary;
-  c = (const Derivedc &)ClosestBaryPtPointTriangle(
-    p,
+  c_out = (const Derivedc &)ClosestBaryPtPointTriangle(
+    p_in,
     V.row(Ele(primitive,0)),
     // modulo is a HACK to handle points, segments and triangles. Because of
     // this, we need 3d buffer for bary
@@ -131,7 +129,7 @@ IGLAABB_INLINE void iglaabb::point_simplex_squared_distance(
     tmp_bary);
   bary.resize( Derivedb::RowsAtCompileTime == 1 ? 1 : Ele.cols(), Derivedb::ColsAtCompileTime == 1 ? 1 : Ele.cols());
   bary.head(Ele.cols()) = tmp_bary.head(Ele.cols());
-  sqr_d = (p-c).squaredNorm();
+  sqr_d = (p_in-c_out).squaredNorm();
 }
 
 template <

@@ -15,12 +15,13 @@
 #define RIGIDMOTIONPINS_HH
 
 #include "Types.hh"
+#include <type_traits>
 
-template<class Object, bool /* enabler */ = true>
+template<class Object, typename /* enabler */ = std::true_type>
 struct RigidMotionPins;
 
 template<class Object>
-struct RigidMotionPins<Object, int(Object::N) == 3> {
+struct RigidMotionPins<Object, std::integral_constant<bool, Object::N == 3>> {
     using PinVars = std::array<size_t, 6>;
     static PinVars run(Object &obj) {
         using M3d = Eigen::Matrix<typename Object::Real, 3, 3>;
@@ -68,7 +69,7 @@ struct RigidMotionPins<Object, int(Object::N) == 3> {
 };
 
 template<class Object>
-struct RigidMotionPins<Object, int(Object::N) == 2> {
+struct RigidMotionPins<Object, std::integral_constant<bool, Object::N == 2>> {
     using PinVars = std::array<size_t, 3>;
     static PinVars run(Object &obj) {
         using M2d = Eigen::Matrix<typename Object::Real, 2, 2>;

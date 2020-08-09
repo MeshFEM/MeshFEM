@@ -23,7 +23,7 @@ namespace iglaabb
       T data;
     public:
       SortableRow():data(){};
-      SortableRow(const T & data):data(data){};
+      SortableRow(const T & data_):data(data_){};
       bool operator<(const SortableRow & that) const
       {
         // Lexicographical

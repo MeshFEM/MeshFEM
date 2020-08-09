@@ -7,6 +7,7 @@
 // obtain one at http://mozilla.org/MPL/2.0/.
 #include "project_to_line_segment.h"
 #include "project_to_line.h"
+#include "parallel_for.h"
 #include <Eigen/Core>
 
 template <
@@ -25,9 +26,7 @@ IGLAABB_INLINE void iglaabb::project_to_line_segment(
   project_to_line(P,S,D,t,sqrD);
   const int np = P.rows();
   // loop over points and fix those that projected beyond endpoints
-#pragma omp parallel for if (np>10000)
-  for(int p = 0;p<np;p++)
-  {
+  iglaabb::parallel_for(np, [&](int p) {
     const DerivedP Pp = P.row(p);
     if(t(p)<0)
     {
@@ -38,7 +37,7 @@ IGLAABB_INLINE void iglaabb::project_to_line_segment(
       sqrD(p) = (Pp-D).squaredNorm();
       t(p) = 1;
     }
-  }
+  }, 10000);
 }
 
 #ifdef IGLAABB_STATIC_LIBRARY

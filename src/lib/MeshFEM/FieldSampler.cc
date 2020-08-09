@@ -32,11 +32,11 @@ struct MESHFEM_EXPORT FieldSamplerImpl : public FieldSampler {
         B.resize(np, m_F.cols());
 
         for (size_t i = 0; i < np; ++i) {
-            iglaabb::parallel_for(np, [&B, &I, &C, this](int i) {
+            iglaabb::parallel_for(np, [&B, &I, &C, this](int ii) {
                     Eigen::RowVector3d pt, baryCoords;
                     double dist;
-                    iglaabb::point_simplex_squared_distance<3>(C.row(i), m_V, m_F, I[i], dist, pt, baryCoords);
-                    B.row(i) = baryCoords;
+                    iglaabb::point_simplex_squared_distance<3>(C.row(ii), m_V, m_F, I[ii], dist, pt, baryCoords);
+                    B.row(ii) = baryCoords;
                 }, 10000);
         }
     }
