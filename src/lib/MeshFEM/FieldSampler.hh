@@ -4,6 +4,10 @@
 /*! @file
 //  Sample piecewise polynomial fields defined on a triangulated/tetrahedralized
 //  volume by evaluating the field at the closest point to each sample point.
+//
+//  Samplers are implemented for both "raw meshes" (given in indexed face set
+//  representation) and FEMMesh types. Raw meshes only support piecewise linear
+//  fields.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  08/08/2020 15:05:47
@@ -14,12 +18,27 @@
 #include <memory>
 #include <stdexcept>
 #include "Types.hh"
+#include "Functions.hh"
+#include "Utilities/MeshConversion.hh"
 
 #include <MeshFEM_export.h>
 
+////////////////////////////////////////////////////////////////////////////////
+// Factory Function Declarations
+////////////////////////////////////////////////////////////////////////////////
+struct FieldSampler;
+MESHFEM_EXPORT
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(Eigen::Ref<const Eigen::MatrixXd> V,
+                                                        Eigen::Ref<const Eigen::MatrixXi> F);
+template<class FEMMesh_>
+MESHFEM_EXPORT
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh);
+
 struct MESHFEM_EXPORT FieldSampler {
-    static std::unique_ptr<FieldSampler> construct(Eigen::Ref<const Eigen::MatrixXd> V,
-                                                   Eigen::Ref<const Eigen::MatrixXi> F);
+    template<typename... Args>
+    static std::unique_ptr<FieldSampler> construct(Args &&... args) {
+        return ConstructFieldSamplerImpl(std::forward<Args>(args)...);
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Get the closest element (codimension 0) to each query point and the
@@ -46,7 +65,9 @@ struct MESHFEM_EXPORT FieldSampler {
                                              Eigen::MatrixXd &B) const = 0;
 
     // Check whether the sampler mesh contains each query point.
-    Eigen::Array<bool, Eigen::Dynamic, 1> contains(Eigen::Ref<const Eigen::MatrixXd> P, Real eps = 0.00) const {
+    // Note: even if the point lies within the mesh, the distance libigl computes may be
+    // slightly nonzero; we use the `eps` to get around this.
+    Eigen::Array<bool, Eigen::Dynamic, 1> contains(Eigen::Ref<const Eigen::MatrixXd> P, Real eps = 1e-10) const {
         Eigen::VectorXi I;
         Eigen::VectorXd sq_dists;
         Eigen::MatrixXd C;
@@ -54,49 +75,144 @@ struct MESHFEM_EXPORT FieldSampler {
         return sq_dists.array() <= eps * eps;
     }
 
-    // Sample a piecewise linear field
-    // P: (#points x dim) matrix of stacked query point row vectors
-    // fieldValues (|V| x fieldDim) matrix of stacked per-vertex field values
+    // Sample the field described by fieldValues at points P.
+    // (This is a piecewise linear field for RawMeshFieldSampler instances, or
+    //  a FEMMesh field for MeshFieldSampler instances).
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
-                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const {
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const = 0;
+
+    virtual ~FieldSampler() { }
+};
+
+
+template<size_t N>
+struct SamplerAABB;
+
+// Dimension-specific implementation
+template<size_t N>
+struct MESHFEM_EXPORT FieldSamplerImpl : public FieldSampler {
+    FieldSamplerImpl(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+
+    virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
+                                        Eigen::VectorXd &sq_dists,
+                                        Eigen::VectorXi &I,
+                                        Eigen::MatrixXd &C) const override;
+
+    virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
+                                             Eigen::VectorXi &I,
+                                             Eigen::MatrixXd &B) const override;
+
+    // Need out-of-line destructor since SamplerAABB is an incomplete type
+    virtual ~FieldSamplerImpl();
+protected:
+    std::unique_ptr<SamplerAABB<N>> m_samplerAABB;
+    Eigen::MatrixXd m_V;
+    Eigen::MatrixXi m_F;
+};
+
+// Mesh type-specific implementations
+template<size_t N>
+struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
+    using Base = FieldSamplerImpl<N>;
+    using Base::Base;
+
+    virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
         if (fieldValues.rows() != m_V.rows()) throw std::runtime_error("Invalid fieldValues size");
 
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
-        closestElementAndBaryCoords(P, I, B);
+        this->closestElementAndBaryCoords(P, I, B);
         const int numCorners = B.cols();
         if (B.cols() != m_F.cols()) throw std::logic_error("Barycentric coordinates size mismatch");
 
         const int np = P.rows();
         Eigen::MatrixXd outSamples(np, fieldValues.cols());
-        for (int i = 0; i < np; ++i) {
-            auto ele = m_F.row(I[i]);
-            auto b   = B.row(i);
-            outSamples.row(i) = b[0] * fieldValues.row(ele[0]);
+        for (int p = 0; p < np; ++p) {
+            auto ele = m_F.row(I[p]);
+            auto b   = B.row(p);
+            outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
             for (int j = 1; j < numCorners; ++j)
-                outSamples.row(i) += b[j] * fieldValues.row(ele[j]);
+                outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
+        }
+
+        return outSamples;
+    }
+protected:
+    using Base::m_V;
+    using Base::m_F;
+};
+
+template<class FEMMesh_>
+struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
+    using Base = FieldSamplerImpl<FEMMesh_::EmbeddingDimension>;
+
+    MeshFieldSampler(const FEMMesh_ &m)
+        : Base(getV(m), getF(m)), m_mesh(m) { }
+
+    // Sample a piecewise polynomial field defined on a FEMMesh. This field is
+    // auto-detected based on its size as either per-vertex, per-element, or
+    // per-node.
+    virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
+        const auto &m = m_mesh;
+
+        // Look up the sample points' closest elements and barycentric coordinates
+        Eigen::VectorXi I;
+        Eigen::MatrixXd B;
+        this->closestElementAndBaryCoords(P, I, B);
+        const int numCorners = B.cols();
+        if (B.cols() != m_F.cols()) throw std::logic_error("Barycentric coordinates size mismatch");
+
+        const int np = P.rows();
+        Eigen::MatrixXd outSamples(np, fieldValues.cols());
+
+        if (fieldValues.rows() == m.numVertices()) {
+            for (int p = 0; p < np; ++p) {
+                auto ele = m_F.row(I[p]);
+                auto b   = B.row(p);
+                outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
+                for (int j = 1; j < numCorners; ++j)
+                    outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
+            }
+        }
+        else if (fieldValues.rows() == m.numElements()) {
+            for (int p = 0; p < np; ++p)
+                outSamples.row(p) = fieldValues.row(I[p]);
+        }
+        else if (fieldValues.rows() == m.numNodes()) {
+            using T = Eigen::Matrix<double, 1, Eigen::Dynamic>;
+            constexpr size_t K = FEMMesh_::K;
+            Interpolant<T, K, FEMMesh_::Deg> interp;
+            for (int p = 0; p < np; ++p) {
+                for (const auto &n : m.element(I[p]).nodes())
+                    interp[n.localIndex()] = fieldValues.row(n.index());
+                EvalPt<K> evalPt;
+                for (size_t i = 0; i < evalPt.size(); ++i) evalPt[i] = B(p, i);
+                outSamples.row(p) = interp(evalPt);
+            }
+        }
+        else {
+            throw std::runtime_error("Invalid fieldValues size");
         }
 
         return outSamples;
     }
 
-    // Sample a piecewise polynomial field
-    template<class FEMMesh_>
-    Eigen::MatrixXd sample(const FEMMesh_ &mesh, Eigen::Ref<const Eigen::MatrixXd> P) {
-        if ((mesh.numElements() != m_F.rows()) || (mesh.numVertices() != m_F.rows()))
-            throw std::runtime_error("Attempted to sample a different mesh from the one for which the sampler was constructed");
-
-        throw std::runtime_error("Unimplemented");
-    }
-
-    virtual ~FieldSampler() { }
-
 protected:
-    FieldSampler(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
-        : m_V(V), m_F(F) { }
-
-    Eigen::MatrixXd m_V;
-    Eigen::MatrixXi m_F;
+    const FEMMesh_ &m_mesh;
+    using Base::m_V;
+    using Base::m_F;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Templated Factory Function Definitions
+////////////////////////////////////////////////////////////////////////////////
+template<class FEMMesh_>
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh) {
+    return std::unique_ptr<FieldSampler>(static_cast<FieldSampler *>(new MeshFieldSampler<FEMMesh_>(mesh)));
+}
+
 
 #endif /* end of include guard: FIELDSAMPLER_HH */

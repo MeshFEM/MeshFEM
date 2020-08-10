@@ -6,10 +6,28 @@ namespace py = pybind11;
 
 #include <MeshFEM/FieldSampler.hh>
 
+#include "BindingInstantiations.hh"
+
+template<class PyFS>
+struct SamplingMeshBinder {
+    SamplingMeshBinder(PyFS &pyFS) : m_pyFS(pyFS) { }
+
+    template<class Mesh>
+    void bind(py::module &/* m */, py::module &/* detail_module */) {
+        m_pyFS.def(py::init([](const Mesh &mesh) {
+                        return FieldSampler::construct(mesh);
+                    }), py::arg("mesh"))
+        ;
+    }
+
+private:
+    PyFS &m_pyFS;
+};
+
 PYBIND11_MODULE(field_sampler, m)
 {
-    py::class_<FieldSampler, std::unique_ptr<FieldSampler>>(m, "FieldSampler")
-        .def(py::init([](Eigen::Ref<const Eigen::MatrixXd> V,
+    py::class_<FieldSampler, std::unique_ptr<FieldSampler>> pyFS(m, "FieldSampler");
+    pyFS.def(py::init([](Eigen::Ref<const Eigen::MatrixXd> V,
                          Eigen::Ref<const Eigen::MatrixXi> F) {
                     return FieldSampler::construct(V, F);
                 }), py::arg("V"), py::arg("F"))
@@ -31,11 +49,13 @@ PYBIND11_MODULE(field_sampler, m)
         .def("contains", [](const FieldSampler &s,
                           Eigen::Ref<const Eigen::MatrixXd> P, double eps) {
                 return s.contains(P, eps);
-            }, py::arg("P"), py::arg("eps") = 0.0)
+            }, py::arg("P"), py::arg("eps") = 1e-10)
         .def("sample", [](const FieldSampler &s,
                           Eigen::Ref<const Eigen::MatrixXd> P,
                           Eigen::Ref<const Eigen::MatrixXd> fieldValues) {
                 return s.sample(P, fieldValues);
             }, py::arg("P"), py::arg("fieldValues")) // Piecewise linear field
         ;
+
+    generateMeshSpecificBindings(m, m, SamplingMeshBinder<decltype(pyFS)>(pyFS));
 }
