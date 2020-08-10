@@ -118,7 +118,6 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
 
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
                                    Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
-        if (fieldValues.rows() != m_V.rows()) throw std::runtime_error("Invalid fieldValues size");
 
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
@@ -128,12 +127,22 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
 
         const int np = P.rows();
         Eigen::MatrixXd outSamples(np, fieldValues.cols());
-        for (int p = 0; p < np; ++p) {
-            auto ele = m_F.row(I[p]);
-            auto b   = B.row(p);
-            outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
-            for (int j = 1; j < numCorners; ++j)
-                outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
+
+        if (fieldValues.rows() == m_V.rows()) {
+            for (int p = 0; p < np; ++p) {
+                auto ele = m_F.row(I[p]);
+                auto b   = B.row(p);
+                outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
+                for (int j = 1; j < numCorners; ++j)
+                    outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
+            }
+        }
+        else if (fieldValues.rows() == m_F.rows()) {
+            for (int p = 0; p < np; ++p)
+                outSamples.row(p) = fieldValues.row(I[p]);
+        }
+        else {
+            throw std::runtime_error("Invalid fieldValues size");
         }
 
         return outSamples;
