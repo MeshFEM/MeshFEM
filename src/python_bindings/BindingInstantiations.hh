@@ -16,6 +16,7 @@
 
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/ElasticSolid.hh>
+#include <MeshFEM/ElasticSheet.hh>
 
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
@@ -84,6 +85,7 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
 
 template<class ESBinder>
 void generateElasticSheetBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
+    b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
 }
 
 template<class EOBinder>

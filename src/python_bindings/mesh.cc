@@ -31,7 +31,7 @@ struct MeshBindingsBase {
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
 
     static MeshBindingsType<Mesh> bind(py::module &/* module */, py::module &detail_module) {
-        MeshBindingsType<Mesh> mb(detail_module, getMeshName<Mesh>().c_str());
+        MeshBindingsType<Mesh> mb(detail_module, NameMangler<Mesh>::name().c_str());
         // WARNING: Mesh's holder type is a shared_ptr; returning a unique_ptr will lead to a dangling pointer in the current version of Pybind11
         mb.def(py::init([](       const std::string &path) { return std::shared_ptr<Mesh>(Mesh::load(path)); }), py::arg("path"))
           .def(py::init([](const MXNd &V, const MXKp1i &F) { return std::make_shared<Mesh>(F, V);  }), py::arg("V"), py::arg("F"));

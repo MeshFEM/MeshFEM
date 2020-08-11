@@ -17,6 +17,7 @@
 #include "Types.hh"
 #include "Functions.hh"
 #include "EnergyDensities/Tensor.hh"
+#include "EnergyDensities/EnergyTraits.hh"
 #include <Eigen/Sparse>
 
 #include "RigidMotionPins.hh"

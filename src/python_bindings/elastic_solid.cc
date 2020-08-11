@@ -14,10 +14,8 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
 
-#include "BindingInstantiations.hh"
-
 #include "EquilibriumBinding.hh"
-#include "LoadBindings.hh"
+#include "BindingInstantiations.hh"
 
 struct ElasticSolidBinder {
     template<class ES>
@@ -62,7 +60,6 @@ struct ElasticSolidBinder {
          ;
 
         addComputeEquilibriumBinding<ES>(pyEO, detail_module, name);
-        addLoadBindings<ES>(pyEO, detail_module, name);
     }
 };
 

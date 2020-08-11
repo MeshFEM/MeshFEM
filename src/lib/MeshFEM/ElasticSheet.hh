@@ -39,6 +39,7 @@
 #include "SparseMatrices.hh"
 #include "Types.hh"
 #include "EnergyDensities/Tensor.hh"
+#include "EnergyDensities/EnergyTraits.hh"
 #include "Geometry.hh"
 
 #include "RigidMotionPins.hh"
@@ -52,12 +53,13 @@
 // m_B, which is probably quite inconvenient...
 //
 // TODO: option to disable midedge normals/bending energy.
-template <class Psi_C>
+template <class _Psi_C>
 class ElasticSheet {
 public:
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
     using EvalPtN = EvalPt<3>;
 
+    using Psi_C = _Psi_C;
     using Real  = typename Psi_C::Real;
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;
