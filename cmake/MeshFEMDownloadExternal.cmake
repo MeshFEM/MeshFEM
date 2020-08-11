@@ -31,6 +31,14 @@ function(meshfem_download_catch)
     )
 endfunction()
 
+## Ceres
+function(meshfem_download_ceres)
+    meshfem_download_project(ceres
+        GIT_REPOSITORY https://github.com/jdumas/ceres-solver.git
+        GIT_TAG        2ba66a2c22959d9c455a8f2074dc7a605c4a92e8
+    )
+endfunction()
+
 ## Eigen
 function(meshfem_download_eigen)
     meshfem_download_project(eigen

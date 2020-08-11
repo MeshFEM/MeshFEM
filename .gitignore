@@ -44,10 +44,10 @@ __pycache__
 # Extra directories
 .vscode/
 .idea/
-build/
-build_debug/
-cmake-build-*/
-data
+/build
+/build_debug/
+/cmake-build-*
+/data
 
 # Dependencies
 /3rdparty
