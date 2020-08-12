@@ -56,7 +56,7 @@ def tetrahedralize_extrusion(m2d, holePts, thickness, maxVol):
         Indexed element set representation of the output tetrahedral mesh.
     """
     # Ignore interior triangulation to allow TetGen to construct its preferred surface triangulation
-    V, F = m2d.vertices()[m2d.boundaryVertices()], m2d.elements()
+    V = m2d.vertices()[m2d.boundaryVertices()]
     if V.shape[1] == 2:
         v = np.pad(V, [(0, 0), (0, 1)])
 
