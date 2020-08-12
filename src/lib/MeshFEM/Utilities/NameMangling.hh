@@ -56,19 +56,28 @@ getElasticityTensorName()
 
 ////////////////////////////////////////////////////////////////////////////////
 // More convenient unified interface based on template spcialization.
+// Use forward declarations of the templates for which we specialize to avoid
+// increasing compilation time.
 ////////////////////////////////////////////////////////////////////////////////
 template<typename T>
 struct NameMangler;
 
-#include <MeshFEM/FEMMesh.hh> // TODO: try forward declaration
-template<size_t _K, size_t _Degree, class _EmbeddingSpace>
-struct NameMangler<FEMMesh<_K, _Degree, _EmbeddingSpace>> {
+// FEMMesh
+template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
+class FEMMesh;
+
+template<size_t _K, size_t _Degree, class _EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
+struct NameMangler<FEMMesh<_K, _Degree, _EmbeddingSpace, _FEMData>> {
     static std::string name() {
         return getFEMName<_K, _Degree, _EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<typename _EmbeddingSpace::Scalar>();
     }
 };
 
-#include <MeshFEM/ElasticSolid.hh>
+
+// ElasticSolid
+template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
+class ElasticSolid;
+
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct NameMangler<ElasticSolid<_K, _Degree, _EmbeddingSpace, _Energy>> {
     static std::string name() {
@@ -76,13 +85,20 @@ struct NameMangler<ElasticSolid<_K, _Degree, _EmbeddingSpace, _Energy>> {
     }
 };
 
-#include <MeshFEM/ElasticSheet.hh>
+// ElasticSheet
+template <class _Psi_C>
+class ElasticSheet;
+
 template<class Psi_C>
 struct NameMangler<ElasticSheet<Psi_C>> {
     static std::string name() {
         return "ElasticSheet" + getEnergyName<Psi_C>();
     }
 };
+
+// ElasticityTensor
+template<typename _Real, size_t _Dim, bool _MajorSymmetry>
+class ElasticityTensor;
 
 template<typename _Real, size_t _Dim, bool _MajorSymmetry>
 struct NameMangler<ElasticityTensor<_Real, _Dim, _MajorSymmetry>> {
@@ -91,10 +107,14 @@ struct NameMangler<ElasticityTensor<_Real, _Dim, _MajorSymmetry>> {
     }
 };
 
-template<typename _Real, size_t _N>
-struct NameMangler<SymmetricMatrixValue<_Real, _N>> {
+// SymmetricMatrix
+template<size_t t_N, typename Storage>
+class SymmetricMatrix;
+
+template<size_t t_N, typename Storage>
+struct NameMangler<SymmetricMatrix<t_N, Storage>> {
     static std::string name() {
-        return "SymmetricMatrix" + std::to_string(_N) + "D" +  floatingPointTypeSuffix<_Real>();
+        return "SymmetricMatrix" + std::to_string(t_N) + "D" +  floatingPointTypeSuffix<typename Storage::Scalar>();
     }
 };
 
