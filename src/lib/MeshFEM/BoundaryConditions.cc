@@ -49,7 +49,13 @@ std::vector<string> parseExpressionVector(const json &params) {
     runtime_error err("Failed to parse expression vector");
     vector<string> result;
     for (const auto &val : params) {
-        result.push_back(val);
+        if (val.is_string()) {
+            result.push_back(val);
+        } else if (val.is_number()) {
+            result.push_back(val.dump());
+        } else {
+            throw err;
+        }
     }
     return result;
 }

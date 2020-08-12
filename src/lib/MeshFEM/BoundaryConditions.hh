@@ -15,6 +15,8 @@
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/ExpressionVector.hh>
+#include <MeshFEM/ComponentMask.hh>
+
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,7 +33,6 @@
 #include <cassert>
 #include <limits>
 #include <bitset>
-#include <MeshFEM/ComponentMask.hh>
 
 template<size_t _N>
 struct BoundaryCondition {
