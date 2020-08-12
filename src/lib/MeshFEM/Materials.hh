@@ -99,7 +99,7 @@ struct MESHFEM_EXPORT VariableMaterial {
 
 // Var 0: Young's modulus, var 1: Poisson ratio
 template<size_t _N>
-struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
+struct MESHFEM_EXPORT Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
@@ -272,7 +272,7 @@ typename Isotropic<_N>::IsotropicBounds Isotropic<_N>::g_bounds;
 // Vars 6..8: Shear ratios   (YZ, ZX, XY)
 size_t constexpr nOrthotropicVars(size_t n) { return (n == 3) ? 9 : 4; }
 template<size_t _N>
-struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
+struct MESHFEM_EXPORT Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
