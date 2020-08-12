@@ -28,12 +28,10 @@ target_link_libraries(benchmark PUBLIC MeshFEM)
 
 pybind11_add_module(energy energy.cc)
 set_target_properties(energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_compile_definitions(energy PRIVATE)
 target_link_libraries(energy PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(tensors tensors.cc)
 set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_compile_definitions(tensors PRIVATE)
 target_link_libraries(tensors PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(periodic_homogenization periodic_homogenization.cc)
@@ -52,9 +50,27 @@ pybind11_add_module(curvature curvature.cc)
 set_target_properties(curvature PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(curvature PUBLIC MeshFEM intel_pybind_14_hack)
 
-pybind11_add_module(elastic_object elastic_object.cc)
-set_target_properties(elastic_object PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(elastic_object PUBLIC MeshFEM intel_pybind_14_hack)
+pybind11_add_module(elastic_solid elastic_solid.cc)
+set_target_properties(elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(elastic_solid PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(elastic_sheet elastic_sheet.cc)
+set_target_properties(elastic_sheet PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(elastic_sheet PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(py_newton_optimizer newton_optimizer.cc)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD 14)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD_REQUIRED ON)
+set_target_properties(py_newton_optimizer PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/python)
+target_link_libraries(py_newton_optimizer PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(loads loads.cc)
+set_target_properties(loads PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(loads PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(field_sampler field_sampler.cc)
+set_target_properties(field_sampler PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(field_sampler PUBLIC MeshFEM intel_pybind_14_hack)
 
 # If it is used as submodule, deploy python scripts and libs
 if(NOT MeshFEM_MASTER_PROJECT)

@@ -3,13 +3,12 @@
 
 #include <Eigen/Dense>
 #include <MeshFEM/ElasticityTensor.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template <typename _Real, size_t _Dimension>
-struct LinearElasticEnergy : public LinearElaticEnergyConcept {
+struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
 
     static constexpr size_t Dimension = _Dimension;
@@ -26,12 +25,8 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
      *  with setDeformationGradient.
      */
     LinearElasticEnergy(const ETensor& elasticity_tensor)
-        : m_elasticity_tensor(elasticity_tensor) {}
-
-    LinearElasticEnergy(const ETensor& elasticity_tensor,
-                        const Matrix& deformation_gradient)
         : m_elasticity_tensor(elasticity_tensor) {
-        setDeformationGradient(deformation_gradient);
+        setDeformationGradient(Matrix::Identity());
     }
 
     LinearElasticEnergy(const LinearElasticEnergy&) = default;
@@ -40,9 +35,11 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     LinearElasticEnergy(const LinearElasticEnergy &other, const UninitializedDeformationTag &)
         : m_elasticity_tensor(other.m_elasticity_tensor) { }
 
-    void setDeformationGradient(const Matrix& deformation_gradient) {
-        m_small_strain_tensor = symmetrized(deformation_gradient - Matrix::Identity());
+    void setDeformationGradient(const Matrix &F) {
+        m_F = F;
+        m_small_strain_tensor = symmetrized(F - Matrix::Identity());
     }
+    const Matrix &getDeformationGradient() const { return m_F; }
 
     _Real energy() const {
         return m_small_strain_tensor.doubleContract(
@@ -81,7 +78,8 @@ struct LinearElasticEnergy : public LinearElaticEnergyConcept {
     Matrix delta2_denergy(const Matrix &/* dF_a */, const Matrix &/* dF_b */) const { return Matrix::Zero(); }
 
     Matrix PK2Stress() const { throw std::runtime_error("Unimplemented"); }
-private:
+protected:
+    Matrix m_F = Matrix::Identity();
     ETensor m_elasticity_tensor;
     SMatrix m_small_strain_tensor;
 };

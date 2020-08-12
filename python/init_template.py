@@ -16,8 +16,4 @@ import importlib
 if importlib.util.find_spec('pythreejs') is not None:
     import tri_mesh_viewer
 
-# may not have elastic_structure build if Boost is not presented
-try:
-    import elastic_structure
-except:
-    pass
+import elastic_solid

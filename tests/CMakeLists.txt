@@ -16,6 +16,7 @@ add_executable(unit_tests
     test_tensors.cc
     test_mass.cc
     test_femmesh_traversal.cc
+    test_edensity_adaptors.cc
     )
 
 target_link_libraries(unit_tests PUBLIC

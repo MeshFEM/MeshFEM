@@ -70,6 +70,14 @@ symmetrized(const Eigen::MatrixBase<_Derived> &A) {
 }
 
 template<typename _Derived>
+SMVType<_Derived>
+symmetrized_x2(const Eigen::MatrixBase<_Derived> &A) {
+    static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime,
+                  "Symmetrization only makes sense for square matrices");
+    return SMVType<_Derived>(A + A.transpose(), typename SMVType<_Derived>::skip_validation());
+}
+
+template<typename _Derived>
 bool isSymmetric(const Eigen::MatrixBase<_Derived>& matrix) {
     static_assert(_Derived::RowsAtCompileTime == _Derived::ColsAtCompileTime,
                   "Symmetry check only makes sense for square matrices");
@@ -83,24 +91,25 @@ bool isSymmetric(const Eigen::MatrixBase<_Derived>& matrix) {
     return true;
 }
 
+// Compute the scalar product of two matrices A : B
 template<typename _Derived1, typename _Derived2>
-typename _Derived1::Scalar doubleContract(const Eigen::MatrixBase<_Derived1>& lhs, const Eigen::MatrixBase<_Derived2>& rhs)
+typename _Derived1::Scalar doubleContract(const Eigen::MatrixBase<_Derived1>& A, const Eigen::MatrixBase<_Derived2>& B)
 {
     static_assert((int(_Derived1::RowsAtCompileTime) == int(_Derived2::RowsAtCompileTime)) &&
                   (int(_Derived1::ColsAtCompileTime) == int(_Derived2::ColsAtCompileTime)), "Dimensions of A and B must match to compute A : B");
-    return (lhs.transpose() * rhs).trace();
+    return (A.transpose() * B).trace();
 }
 
 template<typename _Real, size_t _Dim, typename Derived>
 SymmetricMatrixValue<_Real, _Dim>
-doubleContract(const ElasticityTensor<_Real, _Dim>& lhs, const Eigen::MatrixBase<Derived>& rhs)
+doubleContract(const ElasticityTensor<_Real, _Dim>& A, const Eigen::MatrixBase<Derived>& B)
 {
     SymmetricMatrixValue<_Real, _Dim> result;
     for (size_t i = 0; i < _Dim; ++i)
         for (size_t j = i; j < _Dim; ++j)
             for (size_t k = 0; k < _Dim; ++k)
                 for (size_t l = 0; l < _Dim; ++l)
-                    result(i, j) += lhs(i, j, k, l) * rhs(k, l);
+                    result(i, j) += A(i, j, k, l) * B(k, l);
 
     return result;
 }
@@ -209,7 +218,8 @@ struct VectorizedShapeFunctionJacobian {
     static constexpr int N = GradType::RowsAtCompileTime;
 
     // Emulate part of Eigen's interface.
-    static constexpr int RowsAtCompileTime = N;
+    static constexpr int RowsAtCompileTime = D;
+    static constexpr int ColsAtCompileTime = N;
     using Scalar     = typename GradType::Scalar;
     using MatrixType = Eigen::Matrix<Scalar, D, N>;
     using Derived    = MatrixType;
@@ -235,31 +245,47 @@ struct VectorizedShapeFunctionJacobian {
         return toMatrix();
     }
 
+    // Note: this method provides the same conversion interface as Eigen::DenseBase::matrix();
+    // this allows generic code to call `.matrix()` on VSFJ or Eigen types.
+    MatrixType matrix() const { return toMatrix(); }
+
     template<class Derived>
     friend auto operator*(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
-        Eigen::Matrix<Scalar, D, Derived::ColsAtCompileTime> result;
-        result.setZero();
-        result.row(A.c) = (A.g.transpose() * B.template cast<Scalar>());
-        return result;
+        using ResultType = VectorizedShapeFunctionJacobian<D, Eigen::Matrix<Scalar, Derived::ColsAtCompileTime, 1>>;
+        return ResultType(A.c, B.template cast<Scalar>().transpose() * A.g);
     }
 
     template<class Derived>
     friend auto operator*(const Eigen::MatrixBase<Derived> &A, const VectorizedShapeFunctionJacobian &B) {
         return A.col(B.c).template cast<Scalar>() * B.g.transpose();
     }
+
+    template<class Derived>
+    friend MatrixType operator+(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
+        static_assert((RowsAtCompileTime == Derived::RowsAtCompileTime) &&
+                      (ColsAtCompileTime == Derived::ColsAtCompileTime), "Size mismatch");
+        MatrixType result(B);
+        result.row(A.c) += A.g.transpose();
+        return result;
+    }
+
+    template<class Derived>
+    friend MatrixType operator+(const Eigen::MatrixBase<Derived> &A, const VectorizedShapeFunctionJacobian &B) {
+        return B + A;
+    }
 };
 
-// Unfortunately, our explicit VSFJ::operator MatrixType appears to be unusable
-// (see discussion above its definition).
-// To support conversion to MatrixType from either VSFJ or MatrixType, we need to introduce
-// our own `toMatrix` explicit cast. This calls VSFJ::toMatrix in the VSFJ case and
-// perfectly forwards the return value in the MatrixType case (and all other cases).
-template<class MatrixType> MatrixType &&toMatrix(MatrixType &&mat) { return std::forward<MatrixType>(mat); }
-template<int D, class GradType>
-typename VectorizedShapeFunctionJacobian<D, GradType>::MatrixType
-toMatrix(const VectorizedShapeFunctionJacobian<D, GradType> &vsfj) {
-    return vsfj.toMatrix();
-}
+// // Unfortunately, our explicit VSFJ::operator MatrixType appears to be unusable
+// // (see discussion above its definition).
+// // To support conversion to MatrixType from either VSFJ or MatrixType, we need to introduce
+// // our own `toMatrix` explicit cast. This calls VSFJ::toMatrix in the VSFJ case and
+// // perfectly forwards the return value in the MatrixType case (and all other cases).
+// template<class MatrixType> MatrixType &&toMatrix(MatrixType &&mat) { return std::forward<MatrixType>(mat); }
+// template<int D, class GradType>
+// typename VectorizedShapeFunctionJacobian<D, GradType>::MatrixType
+// toMatrix(const VectorizedShapeFunctionJacobian<D, GradType> &vsfj) {
+//     return vsfj.toMatrix();
+// }
 
 // Let VectorizedShapeFunctionJacobian masquerade as a DxN matrix in metaprogramming type checks
 template<int D, class GradType, int RowSize, int ColSize>
@@ -322,6 +348,18 @@ symmetrized(const VectorizedShapeFunctionJacobian<D, GradType> &A) {
     for (int i = 0; i < int(D); ++i)
         result(A.c, i) = ((i == A.c) ? 1.0 : 0.5) * A.g[i];
     return result;
+}
+
+// Note: C better be symmetric!
+template<class Mat_>
+Eigen::Matrix<typename Mat_::Scalar,
+              Mat_::RowsAtCompileTime,
+              Mat_::ColsAtCompileTime>
+spdMatrixSqrt(const Mat_ &C) {
+    constexpr static int N = Mat_::RowsAtCompileTime;
+    static_assert((N == 2) || (N == 3), "Unexpected matrix size");
+    using MNd = Eigen::Matrix<typename Mat_::Scalar, N, N>;
+    return Eigen::SelfAdjointEigenSolver<MNd>(C).operatorSqrt();
 }
 
 #endif

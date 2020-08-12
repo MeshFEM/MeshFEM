@@ -16,6 +16,9 @@ add_library(MeshFEM SHARED
         ElasticityTensor.hh
         EmbeddedElement.hh
         ExpressionVector.hh
+        Eigensolver.cc
+        Eigensolver.hh
+        EquilibriumSolver.hh
         FEMMesh.hh
         FEMMesh.inl
         Fields.hh
@@ -23,6 +26,8 @@ add_library(MeshFEM SHARED
         function_traits.hh
         Functions.hh
         Future.hh
+        FieldSampler.cc
+        FieldSampler.hh
         GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
@@ -119,8 +124,15 @@ add_library(MeshFEM SHARED
         Utilities/NameMangling.hh
         wrappers/meshfem_triangle.h
 
+        newton_optimizer/newton_optimizer.cc
+        newton_optimizer/newton_optimizer.hh
+        newton_optimizer/ConvergenceReport.hh
+
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
+
+        ElasticSolid.hh
+        ElasticSheet.hh
 )
 
 # Include directories
@@ -141,12 +153,14 @@ target_link_libraries(${PROJECT_NAME}
         umfpack::umfpack
         cholmod::cholmod
         meshfem::boost
+        meshfem::spectra
 #		CGAL::CGAL
     PRIVATE
         warnings::all
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
+#target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
 target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
 
 # Generate MeshFEM_export.h which provides the MESHFEM_EXPORT macro

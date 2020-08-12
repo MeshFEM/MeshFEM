@@ -1,6 +1,7 @@
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/Future.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <iostream>
 
 ////////////////////////////////////////////////////////////////////////////
@@ -12,6 +13,7 @@ template<typename Elements, typename Vertices>
 FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
 FEMMesh(const Elements &elems, const Vertices &vertices)
     : BaseMesh(elems, VertexArrayAdaptor<Vertices>::numVertices(vertices)) {
+    // BENCHMARK_SCOPED_TIMER_SECTION timer("FEMMesh constructor");
     if (_Deg == 2) {
         std::map<UnorderedPair, size_t> edgeNodes;
         // Construct an edge node for each volume edge.

@@ -20,6 +20,7 @@
 
 #include "Flattening.hh"
 #include <Eigen/Dense>
+#include <Eigen/src/Core/Matrix.h>
 #include <iostream>
 #include <type_traits>
 #include "utils.hh"
@@ -78,6 +79,10 @@ public:
                 mat(i, j) = operator()(i, j);
         return mat;
     }
+
+    // Note: this method provides the same conversion interface as Eigen::DenseBase::matrix();
+    // this allows generic code to call `.matrix()` on SymmetricMatrix or Eigen types.
+    Eigen::Matrix<_Real, N, N> matrix() const { return toMatrix(); }
 
     EigenvaluesType eigenvalues() const {
         Eigen::Matrix<_Real, N, N> mat;
@@ -259,10 +264,13 @@ public:
                 (*this)(i, j) = mat(i, j);
 
         // Validate symmetry by checking lower triangle
-        for (size_t i = 1; i < t_N; ++i)
-            for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
+        }
         return *this;
     }
 
@@ -373,10 +381,13 @@ public:
                                                     (Derived::ColsAtCompileTime == t_N), int>::type = 0>
     SymmetricMatrix(const Eigen::MatrixBase<Derived> &mat) : SymmetricMatrix(mat, skip_validation()) {
         // Validate symmetry by checking lower triangle
-        for (size_t i = 1; i < t_N; ++i)
-            for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
+        }
     }
 
     // Construct a unit canonical basis symmetric matrix:
@@ -502,7 +513,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Assignment/compount assignment operator overloads.
     // These call the base operator after copying/checking dynamic size, but
-    // need a static cast to avoid calling Base's opeartor with
+    // need a static cast to avoid calling Base's operator with
     // DynamicSymmetricMatrix RHS (it would falsely throw a size mismatch).
     ////////////////////////////////////////////////////////////////////////////
     DynamicSymmetricMatrix &operator=(const DynamicSymmetricMatrix  &b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(    static_cast<const Base &>(b) ); return *this; }

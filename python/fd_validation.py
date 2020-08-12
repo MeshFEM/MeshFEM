@@ -10,9 +10,15 @@ def preamble(obj, xeval, perturb, fixedVars = []):
     perturb[fixedVars] = 0.0
     return (xold, xeval, perturb)
 
+# Pybind11 methods/funcs apparently don't support `inspect.signature`,
+# but at least their arg names are guaranteed to appear in the docstring... :(
+def hasArg(func, argName):
+    return argName in func.__doc__
+
 def evalWithCustomArgs(f, customArgs):
     if (customArgs is not None):
         if (isinstance(customArgs, list)): return f(*customArgs)
+        if (isinstance(customArgs, dict)): return f(**{k: v for k, v in customArgs.items() if hasArg(f, k)})
         return f(customArgs)
     return f()
 
@@ -49,7 +55,9 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
     obj.setVars(xeval)
     h = evalWithCustomArgs(obj.hessian, customArgs)
     fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
-    analytic_delta_grad = h.apply(perturb)
+    if isinstance(h, np.ndarray): # Dense case
+        analytic_delta_grad = h @ perturb
+    else: analytic_delta_grad = h.apply(perturb)
 
     obj.setVars(xold)
 
@@ -65,8 +73,8 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
         errors.append(err)
     return (epsilons, errors, an)
 
+from matplotlib import pyplot as plt
 def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    from matplotlib import pyplot as plt
     eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars)
     plt.loglog(eps, errors, label='grad')
     plt.grid()
@@ -87,7 +95,6 @@ def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
     return (epsilons, errors, an)
 
 def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    from matplotlib import pyplot as plt
     eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars)
     plt.loglog(eps, errors, label='hess')
     plt.grid()

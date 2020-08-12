@@ -7,6 +7,9 @@
 #ifndef MESHENTITIES_HH
 #define MESHENTITIES_HH
 
+#include <MeshFEM/Future.hh>
+#include <MeshFEM/Handles/Handle.hh>
+
 // Gets the *volume* vertex indices making up a volume or boundary element.
 template<class _EHandle, size_t... I>
 Eigen::Matrix<int, sizeof...(I), 1> getElementCorners(const _EHandle &e, bool volumeIndices, Future::index_sequence<I...>) {
@@ -96,7 +99,6 @@ getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.vertice
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getNormals(const _Mesh &m) { return getNormals(m.elements()); }
-
 
 // Surface normals for tet meshes
 template<class _Mesh>

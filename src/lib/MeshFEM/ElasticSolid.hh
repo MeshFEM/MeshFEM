@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
-// ElasticObject.hh
+// ElasticSolid.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Represents a (potentially nonlinear) elastic object made of triangles/tets.
+//  Represents a hyperlastic elastic solid made of triangles/tets.
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
@@ -17,13 +17,16 @@
 #include "Types.hh"
 #include "Functions.hh"
 #include "EnergyDensities/Tensor.hh"
+#include "EnergyDensities/EnergyTraits.hh"
 #include <Eigen/Sparse>
+
+#include "RigidMotionPins.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
 template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
-class ElasticObject {
+class ElasticSolid {
 public:
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
@@ -40,16 +43,17 @@ public:
     using Vector = Eigen::Matrix<Real, N, 1>;
     using Matrix = Eigen::Matrix<Real, N, N>;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
-    using VXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
+    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using Mesh = FEMMesh<K, Deg, Vector>;
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
 
-    ElasticObject(const Energy &energy, const Mesh &mesh)
+    ElasticSolid(const Energy &energy, const Mesh &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
 
     size_t numVars() const { return m_x.size(); }
     size_t numElements() const { return m_mesh.numElements(); }
     size_t numVertices() const { return m_mesh.numVertices(); }
+    size_t numRestStateVars() const { return numVertices() * N; }
 
     void setIdentityDeformation() {
         m_x.resize(m_mesh.numNodes(), N);
@@ -61,17 +65,17 @@ public:
     void setVars(const VXd &vars) {
         if (size_t(vars.rows()) != numVars())
             throw std::invalid_argument("Invalid variable size");
-        m_x = Eigen::Map<const VXNd>(vars.data(), m_x.rows(), m_x.cols());
+        m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());
     }
 
     void setRestState(const VXd &vertexPositions) {
         if (size_t(vertexPositions.size()) != N * numVertices())
             throw std::invalid_argument("Invalid vertexPositions size");
-        m_mesh.setNodePositions(Eigen::Map<const VXNd>(vertexPositions.data(), numVertices(), N));
+        m_mesh.setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), N));
     }
 
     VXd getRestState() const {
-        VXd rest_state(N * numVertices());
+        VXd rest_state(numRestStateVars());
         for (const auto& vertex : m_mesh.vertices())
             rest_state.template segment<N>(N * vertex.index()) = vertex.node()->p;
         return rest_state;
@@ -224,7 +228,8 @@ public:
 
     Vector getNodePosition(size_t node_index) const { return m_x.row(node_index); }
 
-    VXNd deformedVertices() const { return m_x.topRows(numVertices()); }
+    MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
+    MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
 
     const Mesh &mesh() const { return m_mesh; }
 
@@ -241,14 +246,39 @@ public:
         return F;
     }
 
+    VXd element3DVolumes() const {
+        if (N != 3) { throw std::runtime_error("Only 3D meshes have element volumes"); }
+        // For a tet mesh, the 3D volume associated with a tetrahedron is simply the tet's volume.
+        const auto &m = mesh();
+        VXd result(m.numElements());
+        for (const auto &e : m.elements())
+            result[e.index()] = e->volume();
+        return result;
+    }
+
+    // Apply a rigid transformation `x --> R x + t` to the deformed configuration.
+    void applyRigidTransform(const Matrix &R, const Vector &t) {
+        if (((R.transpose() * R - Matrix::Identity()).norm() > 1e-8) || (R.determinant() < 0))
+            throw std::runtime_error("R is not a rotation");
+        m_x = ((m_x * R.transpose()).rowwise() + t.transpose()).eval();
+    }
+
+    // Reorient the current deformed configuration so that global rigid motions
+    // can be pinned down with just 6 variable pin constraints.
+    // Also return the indices of these 6 variables.
+    typename RigidMotionPins<ElasticSolid>::PinVars
+    prepareRigidMotionPins() {
+        return RigidMotionPins<ElasticSolid>::run(*this);
+    }
+
 protected:
     Mesh m_mesh;
-    // Energy density for each element (with support for multi-material microstructures).
-    // For single-material microstructures, this vector will contain only a single entry.
+    // Energy density for each element (with support for multi-material solids).
+    // For single-material solids, this vector will contain only a single entry.
     std::vector<Energy> m_energyDensities;
 
     // Deformed positions for each node
-    VXNd m_x;
+    MXNd m_x;
 };
 
 #endif /* end of include guard: ELASTICOBJECT_HH */

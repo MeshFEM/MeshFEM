@@ -25,8 +25,9 @@
 *.a
 *.lib
 
-# Python cache
+# Python cache and notebook stuff
 __pycache__
+.ipynb_checkpoints
 
 # Executables
 *.exe
@@ -45,9 +46,14 @@ __pycache__
 .vscode/
 .idea/
 /build
-/build_debug/
+/build2
+/build_debug
 /cmake-build-*
 /data
+
+# Clangd completion files
+.clangd/
+compile_commands.json
 
 # Dependencies
 /3rdparty

@@ -12,17 +12,19 @@
 
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 
 /**
  *  Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
  */
 template<typename _Real, size_t _Dim, template<typename, size_t> class _Derived_T>
-struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
+struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
 {
     static constexpr size_t Dimension = _Dim;
+    static constexpr size_t N         = _Dim;
     using Real = _Real;
-    using Derived = _Derived_T<Real, Dimension>;
-    using Matrix = Eigen::Matrix<Real, Dimension, Dimension>;
+    using Derived = _Derived_T<Real, N>;
+    using Matrix = Eigen::Matrix<Real, N, N>;
 
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
 
@@ -43,6 +45,8 @@ struct NeoHookeanEnergyBase : public NeoHookeanEnergyConcept
         m_detF = deformation_gradient.determinant();
         m_Finv = m_F.inverse();
     }
+
+    const Matrix &getDeformationGradient() const { return m_F; }
 
     Real energy() const {
         // Standard behavior: return inf for inverted elements
@@ -222,8 +226,8 @@ protected:
     Real m_finite_continuation_start = -1;
 
     // Cached deformation quantities.
-    Matrix m_F, m_Finv;
-    Real m_detF;
+    Matrix m_F = Matrix::Identity(), m_Finv = Matrix::Identity();
+    Real m_detF = 1.0;
 };
 
 template<typename _Real, size_t _Dim>
@@ -260,7 +264,7 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
 
     // (d^2 I1 / dF^2) : dF
     template<class Mat_>
-    Matrix delta_d_I1_d_F(const Mat_ &dF) const { return 2 * toMatrix(dF) + delta_d_C33_d_F(dF); }
+    Matrix delta_d_I1_d_F(const Mat_ &dF) const { return 2 * dF.matrix() + delta_d_C33_d_F(dF); }
 
     // (d^2 I&1 / dF^2) : dF
     template<typename Mat_>
@@ -348,7 +352,7 @@ private:
     using Base::d_unpaddedI3_d_F;
     using Base::delta_d_unpaddedI3_d_F;
     using Base::delta2_d_unpaddedI3_d_F;
-    Real m_C33;
+    Real m_C33 = 1.0;
 };
 
 template<typename _Real>
@@ -365,7 +369,7 @@ struct NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHoo
     Matrix d_I1_d_F() const { return 2 * m_F; }
     Matrix d_I3_d_F() const { return this->d_unpaddedI3_d_F(); }
 
-    template<typename Mat_> Matrix delta_d_I1_d_F(const Mat_ &dF) const { return 2 * toMatrix(dF); }
+    template<typename Mat_> Matrix delta_d_I1_d_F(const Mat_ &dF) const { return 2 * dF.matrix(); }
     template<typename Mat_> Matrix delta_d_I3_d_F(const Mat_ &dF) const { return this->delta_d_unpaddedI3_d_F(dF); }
 
     Matrix delta2_d_I1_d_F(const Matrix &/* dF_a */, const Matrix /* &dF_b */) const { return Matrix::Zero(); }
@@ -376,5 +380,82 @@ private:
     using Base::m_lambda;
     using Base::m_mu;
 };
+
+// Simulate a Neo-Hookean sheet made of a material with Poisson's ratio 0.5.
+// This would cause the volumetric NeoHookeanEnergy above to blow up, but we
+// can obtain a membrane energy by imposing incompressibility as a hard
+// constraint.
+template<typename _Real>
+struct IncompressibleNeoHookeanEnergyCBased {
+    static constexpr size_t Dimension = 2;
+    static constexpr size_t N         = 2;
+    using Real   = _Real;
+    using Matrix = Eigen::Matrix<_Real, 2, 2>;
+    using M2d    = Matrix;
+
+    static constexpr const char *name() { return "IncompressibleNeoHookean"; }
+
+    IncompressibleNeoHookeanEnergyCBased(Real E = 6) {
+        setYoungModulus(E);
+    }
+
+    void setC(const M2d &C) {
+        Real a = C(0, 0),
+             b = C(0, 1),
+             c = C(1, 1);
+        if (std::abs(b - C(1, 0)) > 1e-15) throw std::runtime_error("Asymmetric matrix");
+
+        m_C = C;
+        m_trace_C = C.trace();
+        m_det_C = a * c - b * b;
+        m_grad_det_C <<  c, -b,
+                        -b,  a;
+    }
+
+    Real energy() const {
+        return stiffness * (m_trace_C + 1.0 / m_det_C - 3.0);
+    }
+
+    // dpsi / dE = 2 * dpsi/dC
+    M2d PK2Stress() const {
+        return 2 * stiffness * (M2d::Identity() - (1.0 / (m_det_C * m_det_C)) * m_grad_det_C);
+    }
+
+    template<class Mat_>
+    M2d delta_PK2Stress(const Mat_ &dC) const {
+        M2d adj_dC;
+        adj_dC << dC(1, 1), -dC(0, 1),
+                 -dC(1, 0),  dC(0, 0);
+        return 2 * (((2.0 * stiffness / (m_det_C * m_det_C * m_det_C)) * doubleContract(m_grad_det_C, dC)) * m_grad_det_C
+                         - (stiffness / (m_det_C * m_det_C))                                               * adj_dC);
+    }
+
+    template<class Mat_, class Mat2_>
+    Matrix delta2_PK2Stress(const Mat_ &/* dC_a */, const Mat2_ &/* dC_b */) const {
+        throw std::runtime_error("Unimplemented");
+    }
+
+    // The stiffness parameter is mu / 2 = E / (4 * (1 + nu)) = E / 6
+    void setYoungModulus(Real E) {
+        stiffness = E / 6;
+    }
+
+    Real youngModulus() const {
+        return stiffness * 6;
+    }
+
+    void copyMaterialProperties(const IncompressibleNeoHookeanEnergyCBased &other) { setYoungModulus(other.youngModulus()); }
+
+    Real stiffness = 1.0; // mu / 2
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+private:
+    Real m_trace_C, m_det_C;
+    M2d m_grad_det_C;
+    M2d m_C;
+};
+
+template <typename _Real>
+using IncompressibleNeoHookeanEnergy = EnergyDensityFBasedFromCBased<IncompressibleNeoHookeanEnergyCBased<_Real>>;
 
 #endif

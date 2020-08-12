@@ -84,7 +84,7 @@ struct CRQuantities<_Real, 2> {
 };
 
 template <typename _Real, size_t _Dimension>
-struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
+struct CorotatedLinearElasticity : public Concepts::CRLinearElaticEnergy {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
 
     static constexpr size_t Dimension = _Dimension;
@@ -96,12 +96,9 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
 
     // We can use simplified formulas if we know `elasticity_tensor` is isotropic. This is
     // specified with the `isotropic` argument.
-    CorotatedLinearElasticity(const ETensor& elasticity_tensor, bool isotropic = false) : m_elasticity_tensor(elasticity_tensor), m_isotropic(isotropic) {}
-
-    CorotatedLinearElasticity(const ETensor& elasticity_tensor,
-                              const Matrix& deformation_gradient, bool isotropic = false)
-        : m_elasticity_tensor(elasticity_tensor), m_isotropic(isotropic) {
-        setDeformationGradient(deformation_gradient);
+    CorotatedLinearElasticity(const ETensor& elasticity_tensor, bool isotropic = false) :
+        m_elasticity_tensor(elasticity_tensor), m_isotropic(isotropic) {
+        setDeformationGradient(Matrix::Identity());
     }
 
     // Constructor copying material properties only, not the current deformation
@@ -140,6 +137,8 @@ struct CorotatedLinearElasticity : public CRLinearElaticEnergyConcept {
             m_pk1_stress = m_R * m_biotStress;
         }
     }
+
+    const Matrix &getDeformationGradient() const { return m_F; }
 
     _Real energy() const {
         return 0.5 * doubleContract(m_biotStress, m_biotStrain);

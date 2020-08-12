@@ -42,7 +42,37 @@ void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
 }
 
 template<size_t _Deg>
-void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &/* m */) {
+void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &m) {
+    // Visit each boundary loop: clockwise traversal
+    const size_t nbe = m.numBoundaryElements();
+    auto traverse_boundary_loop = [&](auto next) {
+        std::vector<size_t> component(nbe);
+        size_t numComponents = 0;
+        for (const auto &be : m.boundaryElements()) {
+            if (component[be.index()] > 0) continue;
+            ++numComponents;
+            auto be_curr = be;
+            while (component[be_curr.index()] == 0) {
+                component[be_curr.index()] = numComponents;
+                be_curr = next(be_curr);
+                REQUIRE(((be_curr.index() >= 0) && (be_curr.index() < int(nbe))));
+                std::cout << be_curr.index() << std::endl;
+            }
+            REQUIRE(component[be_curr.index()] == numComponents); // Ensure consistent assignment to entire loop
+        }
+        return component;
+    };
+    auto componentCW  = traverse_boundary_loop([](const auto &be) { return be.next(); });
+    auto componentCCW = traverse_boundary_loop([](const auto &be) { return be.prev(); });
+
+    REQUIRE(componentCW == componentCCW);
+
+    // Our test mesh is a triangulated 16x16 square grid with the middle 4x4
+    // block removed. The ground truth number of edges is:
+    // 760 = 16 * 16 * 3 + 16 * 2 // each square contributes 3 edges, and the bottom/right grid boundaries contribute 16 each
+    //        - 4 * 4 * 3 + 4 * 2 // each hole square subtracts 3 edges, but the upper/left boundaries should be added back.
+    //
+    REQUIRE(m.numEdges() == 760);
 }
 
 template<size_t _Dim, size_t _Deg>

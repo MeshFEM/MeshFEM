@@ -86,3 +86,11 @@ function(meshfem_download_triangle)
         GIT_TAG        d6761dd691e2e1318c83bf7773fea88d9437464a
     )
 endfunction()
+
+## Spectra
+function(meshfem_download_spectra)
+    meshfem_download_project(spectra
+        GIT_REPOSITORY https://github.com/yixuan/spectra.git
+        GIT_TAG        ec27cfd2210a9b2322825c4cb8e5d47f014e1ac3
+    )
+endfunction()

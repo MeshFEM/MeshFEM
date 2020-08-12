@@ -61,6 +61,13 @@ public:
     size_t numTris()          const { return V.size() / 3; }
     size_t numFaces()         const { return numTris(); }
 
+    // Warning: not constant time!
+    size_t numEdges() const {
+        size_t result = 0;
+        visitEdges([&result](HEHandle<const TriMesh> /* he */, size_t /* edgeIdx */) { ++result; });
+        return result;
+    }
+
     size_t numBoundaryVertices() const { return bV.size(); }
     size_t numBoundaryEdges()    const { return bTipTail.size() / 2; }
 
@@ -92,6 +99,22 @@ public:
     // Higher-level entity access
     HEHandle<      TriMesh> halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }
     HEHandle<const TriMesh> halfEdge(size_t s, size_t e) const { return halfEdge(m_halfedgeIndex(s, e)); }
+
+    // Visitors
+    // Call f(he, edge_idx) for the primary half-edge of each edge.
+    // Also assigns a unique (arbitrary) index to each edge, passing it to f.
+    template<class F>
+    void visitEdges(F &&f) {
+        size_t i = 0;
+        for (const auto &he : halfEdges())
+            if (he.isPrimary()) { f(he, i); ++i; }
+    }
+    template<class F>
+    void visitEdges(F &&f) const {
+        size_t i = 0;
+        for (const auto &he : halfEdges())
+            if (he.isPrimary()) { f(he, i); ++i; }
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).

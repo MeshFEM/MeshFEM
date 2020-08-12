@@ -1,9 +1,8 @@
 import numpy as np
 
 class VertexMerger:
-    def __init__(self, dim = 3):
+    def __init__(self):
         self.mergedVertices = {}
-        self.dim = dim
 
     def add(self, pt):
         '''
@@ -17,7 +16,8 @@ class VertexMerger:
         return idx
     def numVertices(self): return len(self.mergedVertices)
     def vertices(self):
-        V = np.empty((self.numVertices(), self.dim, ))
+        dim = len(next(iter(self.mergedVertices))) # dimension of arbitrary point
+        V = np.empty((self.numVertices(), dim))
         for pt_tuple, idx in self.mergedVertices.items():
             V[idx, :] = pt_tuple
         return V
@@ -34,6 +34,27 @@ def mergedMesh(meshes):
             V, F = mesh.vertices(), mesh.triangles()
         mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
     return vm.vertices(), np.vstack(mergedTris)
+
+# Concatenate a collection of meshes, dropping dangling vertices.
+def concatenateMeshes(meshes):
+    Vout = []
+    Fout = []
+    nv = 0
+    for mesh in meshes:
+        if isinstance(mesh, list) or isinstance(mesh, tuple):
+            V, F = mesh
+        else:
+            V, F = mesh.vertices(), mesh.triangles()
+        Vout.append(V)
+        Fout.append(F + nv)
+        nv += V.shape[0]
+    return removeDanglingVertices(np.vstack(Vout), np.vstack(Fout))
+
+# Convert a polyline in the form of a list of points into a (V, E) indexed line
+# set representation.
+def polylineToLineMesh(polyline):
+    idxs = np.arange(polyline.shape[0] - 1)
+    return polyline, np.column_stack([idxs, idxs + 1])
 
 def removeDanglingVertices(V, F):
     """
@@ -109,3 +130,20 @@ def getVertexNormals(m):
         Nvert[f] += an
     Nvert /= np.linalg.norm(Nvert, axis=1)[:, np.newaxis]
     return Nvert
+
+def getVertexNormalsRaw(V, F):
+    if ((V.shape[1] == 1) or (V.shape[1] == 2)):
+        N = np.zeros_like(V)
+        N[:, -1] = 1.0
+        return N
+
+    if (V.shape[1] != 3):
+        raise Exception('Invalid vertex array size')
+
+    dblAFN = np.cross(V[F][:, 1, :] - V[F][:, 0, :], V[F][:, 2, :] - V[F][:, 0, :]) # 2 * area-weighted face normal
+    N = np.zeros((len(V), 3))
+    # Sum the area-weighted normals of faces incident the vertices
+    np.add.at(N, F, dblAFN[:, np.newaxis, :])
+    norms = np.linalg.norm(N, axis=1)
+    norms[norms < 1e-8] = 1.0
+    return N / norms[:, np.newaxis]

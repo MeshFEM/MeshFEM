@@ -121,7 +121,7 @@ struct TripletMatrix {
     }
 
     // Sort and sum of repeated entries
-    bool needsSumRepated() const { return needs_sum_repeated; }
+    bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
         if (!needsSumRepated()) { return; }
 
@@ -844,12 +844,12 @@ struct CSCMatrix {
     // return the index of the next nonzero entry after the written strip.
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values) {
+    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
         return addNZ(findEntry(i, j), values);
     }
 
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values, _Index hint) {
+    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values, _Index hint) {
         if ((hint < nz) && (Ai[hint] == i) && (hint < Ap[j + 1]) && (hint >= Ap[j]))
             return addNZ(hint, values);
         return addNZ(i, j, values);
@@ -857,9 +857,9 @@ struct CSCMatrix {
 
     // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
-    _Index addNZ(_Index idx, const Eigen::EigenBase<Derived> &values) {
-        static_assert(Derived::ColsAtCompileTime == 1, "Only row vectors can be added with addNZ");
-        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.size()) += values;
+    _Index addNZ(_Index idx, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZ");
+        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
 
@@ -942,6 +942,8 @@ struct CSCMatrix {
         _Index inputSize = std::min(b.m, blockEnd) - blockStart;
         if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
         if ((m != inputSize + offset) || (n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+        if (b.nz == 0) return;
+        if (nz == 0) { *this = b; return; }
 
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
