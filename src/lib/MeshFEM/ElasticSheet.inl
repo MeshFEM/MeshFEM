@@ -641,7 +641,7 @@ SuiteSparseMatrix ElasticSheet<Psi_C>::hessianSparsityPattern(Real val) const {
             // *Other* theta variables
             for (const auto &he : t.halfEdges()) {
                 size_t otherEdgeIdx = m_edgeForHalfEdge[he.index()];
-                if (otherEdgeIdx != edgeIndex)
+                if (otherEdgeIdx < edgeIndex)
                     Ai.push_back(to + otherEdgeIdx);
             }
         });

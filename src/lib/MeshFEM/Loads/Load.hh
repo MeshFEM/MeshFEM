@@ -20,10 +20,6 @@ struct Load {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
 
-    // Notifications of changes to the object's deformed/rest state
-    virtual void deformedStateUpdated() = 0;
-    virtual void     restStateUpdated() = 0;
-
     virtual Real energy() const = 0;
 
     // Derivative with respect to deformed configuration

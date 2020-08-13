@@ -11,6 +11,7 @@
 #define SPREADERS_HH
 
 #include "Load.hh"
+#include <memory>
 
 namespace Loads {
 
@@ -25,7 +26,7 @@ struct Spreaders : public Load<3, typename Object::Real> {
     using VXi  = Eigen::VectorXi;
     static constexpr size_t N = 3;
 
-    Spreaders(const Object &obj,
+    Spreaders(std::weak_ptr<const Object> obj,
               const std::vector<VXi> &clusterVtxs,
               const MX2i &connectivity,
               Real magnitude,
@@ -33,15 +34,15 @@ struct Spreaders : public Load<3, typename Object::Real> {
         : m_obj(obj),
           m_clusterVtxs(clusterVtxs), m_connectivity(connectivity),
           m_magnitude(magnitude), m_disableHessian(disableHessian) {
-        restStateUpdated();
+        if (size_t(connectivity.maxCoeff()) >= clusterVtxs.size())
+            throw std::runtime_error("Edge index out of bounds");
+        m_updateCache();
+        m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
+        // Spreader force is const wrt. X
     }
 
-    void setMagnitude(Real mag)       { m_magnitude = mag; m_updateCache(); }
-    Real getMagnitude(Real mag) const { return m_magnitude; }
-
-    virtual void deformedStateUpdated() override { m_updateCache(); }
-
-    virtual void restStateUpdated() override { /* Spreader force is const wrt. X */ }
+    void setMagnitude(Real mag) { m_magnitude = mag; m_updateCache(); }
+    Real getMagnitude() const   { return m_magnitude; }
 
     virtual Real energy() const override { return m_energy; }
 
@@ -69,7 +70,6 @@ struct Spreaders : public Load<3, typename Object::Real> {
             VXd scale(ncv);
             scale << VXd::Constant(nv0,  1.0 / nv0),
                      VXd::Constant(nv1, -1.0 / nv1);
-            scale *= std::sqrt(m_magnitude);
 
             for (size_t vb = 0; vb < ncv; ++vb) {
                 for (size_t c_b = 0; c_b < 3; ++c_b) {
@@ -77,7 +77,7 @@ struct Spreaders : public Load<3, typename Object::Real> {
                     for (size_t va = 0; va < ncv; ++va) {
                         const size_t var_a_offset = 3 * coupledVertices[va];
                         if (var_a_offset > var_b) continue;
-                        H.addNZ(var_a_offset, var_b, -(scale[va] * scale[vb]) * da_de.col(c_b).head(std::min<size_t>(3, var_b - var_a_offset + 1)));
+                        H.addNZ(var_a_offset, var_b, -m_magnitude * (scale[va] * scale[vb]) * da_de.col(c_b).head(std::min<size_t>(3, var_b - var_a_offset + 1)));
                     }
                 }
             }
@@ -85,25 +85,47 @@ struct Spreaders : public Load<3, typename Object::Real> {
     }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = m_obj.numVars();
+        const size_t nv = getObj().numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
 
         if (!m_disableHessian) {
+            // Interactions within cluster
+            for (const auto &cluster : m_clusterVtxs) {
+                const int nv = cluster.rows();
+                for (int va = 0; va < nv; ++va) {
+                    for (int vb = 0; vb < nv; ++vb) {
+                        for (size_t ca = 0; ca < 3; ++ca) {
+                            for (size_t cb = 0; cb < 3; ++cb) {
+                                size_t var_a = 3 * cluster[va] + ca,
+                                       var_b = 3 * cluster[vb] + cb;
+                                if (var_a > var_b) continue;
+                                Hsp.addNZ(var_a, var_b, 1.0);
+                            }
+                        }
+                    }
+                }
+            }
+            // Cross-cluster interactions
             for (int i = 0; i < m_connectivity.rows(); ++i) {
-                const int nv0 = m_clusterVtxs[m_connectivity(i, 0)].rows(),
-                          nv1 = m_clusterVtxs[m_connectivity(i, 1)].rows();
-                VXi coupledVertices(nv0 + nv1);
-                coupledVertices << m_clusterVtxs[m_connectivity(i, 0)],
-                                   m_clusterVtxs[m_connectivity(i, 1)];
-                for (size_t vi = 0; vi < coupledVertices.rows(); ++vi) {
-                    for (size_t vj = 0; vj < coupledVertices.rows(); ++vj) {
-                        for (size_t ci = 0; ci < 3; ++ci) {
-                            for (size_t cj = 0; cj < 3; ++cj) {
-                                size_t var_i = 3 * coupledVertices[vi] + ci,
-                                       var_j = 3 * coupledVertices[vj] + cj;
-                                if (var_i > var_j) continue;
-                                Hsp.addNZ(var_i, var_j, 1.0);
+                if (m_connectivity(i, 0) == m_connectivity(i, 1))
+                    throw std::runtime_error("Loop edge detected");
+                const auto &cluster_a = m_clusterVtxs[m_connectivity(i, 0)];
+                const auto &cluster_b = m_clusterVtxs[m_connectivity(i, 1)];
+                const int nva = cluster_a.rows(),
+                          nvb = cluster_b.rows();
+                // std::cout << "Adding interactions between " << m_connectivity.row(i) << std::endl;
+                // std::cout << "cluster_a = " << cluster_a.head(3).transpose() << ", ..." << std::endl;
+                // std::cout << "cluster_b = " << cluster_b.head(3).transpose() << ", ..." << std::endl;
+                for (int va = 0; va < nva; ++va) {
+                    for (int vb = 0; vb < nvb; ++vb) {
+                        for (size_t ca = 0; ca < 3; ++ca) {
+                            for (size_t cb = 0; cb < 3; ++cb) {
+                                size_t var_a = 3 * cluster_a[va] + ca,
+                                       var_b = 3 * cluster_b[vb] + cb;
+                                if (var_a == var_b) throw std::runtime_error("Non-disjoint clusters");
+                                if (var_a > var_b) std::swap(var_a, var_b);
+                                Hsp.addNZ(var_a, var_b, 1.0);
                             }
                         }
                     }
@@ -116,17 +138,28 @@ struct Spreaders : public Load<3, typename Object::Real> {
         return Hsp_csc;
     }
 
+    virtual ~Spreaders() {
+        if (auto o = m_obj.lock())
+            o->deregisterDeformationUpdateCallback(m_callbackID);
+    }
+
 private:
-    const Object &m_obj;
+    std::weak_ptr<const Object> m_obj;
     std::vector<VXi> m_clusterVtxs;
     MX2i m_connectivity;
     Real m_magnitude;
     const bool m_disableHessian;
+    int m_callbackID;
+
+    const Object &getObj() const {
+        if (auto o = m_obj.lock()) return *o;
+        throw std::runtime_error("Elastic object was destroyed");
+    }
 
     void m_updateCache() {
         m_dist.resize(m_connectivity.rows());
         m_axis.resize(m_connectivity.rows(), 3);
-        const auto &x = m_obj.deformedPositions();
+        const auto &x = getObj().deformedPositions();
 
         MX3d clusterMeans(MX3d::Zero(m_clusterVtxs.size(), 3));
         for (size_t i = 0; i < m_clusterVtxs.size(); ++i) {
@@ -146,7 +179,7 @@ private:
 
         m_energy = -m_magnitude * m_dist.sum();
 
-        m_grad.setZero(m_obj.numVars());
+        m_grad.setZero(getObj().numVars());
         for (int i = 0; i < m_connectivity.rows(); ++i) {
             for (size_t j = 0; j < 2; ++j) {
                 const VXi &cluster = m_clusterVtxs[m_connectivity(i, j)];

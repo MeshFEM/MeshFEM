@@ -30,6 +30,9 @@ struct MeshBindingsBase {
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,     3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
 
+    MeshBindingsBase() { }
+    ~MeshBindingsBase() { }
+
     static MeshBindingsType<Mesh> bind(py::module &/* module */, py::module &detail_module) {
         MeshBindingsType<Mesh> mb(detail_module, NameMangler<Mesh>::name().c_str());
         // WARNING: Mesh's holder type is a shared_ptr; returning a unique_ptr will lead to a dangling pointer in the current version of Pybind11
@@ -75,6 +78,18 @@ struct MeshBindingsBase {
                       for (const auto &e : m.elements()) result[e.index()] = e->volume();
                       return result;
                   })
+          .def("barycenters", [](const Mesh &m) {
+                Eigen::MatrixXd result(m.numElements(), size_t(EmbeddingDimension));
+                for (const auto &e : m.elements()) {
+                    auto b = result.row(e.index());
+                    b.setZero();
+                    for (const auto v : e.vertices()) {
+                        b += v.node()->p;
+                    }
+                    b /= e.numVertices();
+                }
+                return result;
+              }, "Get the barycenters of each element")
 
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)

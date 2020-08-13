@@ -43,6 +43,7 @@
 #include "Geometry.hh"
 
 #include "RigidMotionPins.hh"
+#include "ElasticObject.hh"
 
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
@@ -54,7 +55,7 @@
 //
 // TODO: option to disable midedge normals/bending energy.
 template <class _Psi_C>
-class ElasticSheet {
+class ElasticSheet : public ElasticObject<typename _Psi_C::Real> {
 public:
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
     using EvalPtN = EvalPt<3>;
@@ -124,7 +125,7 @@ public:
     Real getThickness() const { return m_h; }
     size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
 
-    void setVars(Eigen::Ref<const VXd> vars) {
+    virtual void setVars(Eigen::Ref<const VXd> vars) override {
         if (size_t(vars.rows()) != numVars()) throw std::runtime_error("Invalid vars size");
         m_thetas = vars.tail(m_numEdges);
         setDeformedPositions(Eigen::Map<const MX3d>(vars.data(), m_numVertices, 3));
@@ -135,6 +136,8 @@ public:
         m_deformedPositions = x;
         m_updateDeformedElements();
         m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
+
+        this->m_deformedConfigUpdated();
     }
 
     const VXd &getThetas() const { return m_thetas; }
@@ -145,6 +148,8 @@ public:
 
         m_updateShapeOperators();
         m_updateMidedgeNormals();
+
+        this->m_deformedConfigUpdated();
     }
 
     VXd getVars() const {
@@ -157,15 +162,30 @@ public:
     MX3d deformedPositions() const { return m_deformedPositions; }
     VXd  thetas()            const { return m_thetas;            }
 
+    MX3d restPositions() const {
+        const auto &m = mesh();
+        MX3d rpos(m.numNodes(), 3);
+        for (const auto &n : m.nodes())
+            rpos.row(n.index()) = n->p;
+        return rpos;
+    }
+
+    MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
+
     const Psi_C &getEnergyDensity(size_t ei) const {
         if (m_psi.size() == 1) return m_psi.front();
         return m_psi.at(ei);
     }
 
-    Real energy(const EnergyType etype = EnergyType::Full) const;
-    VXd  gradient(bool updatedSource = false, const EnergyType etype = EnergyType::Full) const;
-    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype = EnergyType::Full) const;
-    SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const;
+    Real energy(const EnergyType etype) const;
+    VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
+    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype) const;
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
+
+    // Overloads implementing generic ElasticObject interface.
+    virtual Real  energy() const override { return energy(EnergyType::Full); }
+    virtual VXd gradient() const override { return gradient(false, EnergyType::Full); }
+    virtual void hessian(SuiteSparseMatrix &Hout) const override { hessian(Hout, EnergyType::Full); }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;
@@ -371,6 +391,7 @@ private:
 
     const size_t m_numVertices,
                  m_numEdges;
+
 };
 
 #include "ElasticSheet.inl"

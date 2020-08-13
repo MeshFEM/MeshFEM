@@ -25,7 +25,7 @@ struct ElasticSolidBinder {
         static constexpr size_t Deg = ES::Deg;
         using Vector = VectorND<N>;
         using Energy = typename ES::Energy;
-
+        using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, N>;
         using Mesh = typename ES::Mesh;
 
         module.def("ElasticSolid", [](const Mesh &m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
@@ -51,12 +51,16 @@ struct ElasticSolidBinder {
           .def("massMatrix", [](const ES &e, bool lumped) {
                         return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
                   }, py::arg("lumped") = false)
-          .def("deformedVertices",       &ES::deformedVertices)
+          .def("getDeformedPositions",   &ES::deformedPositions)
+          .def("getRestPositions",       &ES::restPositions)
+          .def("getNodeDisplacements",   &ES::nodeDisplacements)
           .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
           .def("visualizationGeometry", [](const ES &obj) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
                 return getVisualizationGeometry(visMesh);
              })
+          .def("visualizationField", [](const ES &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const ES &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
          ;
 
         addComputeEquilibriumBinding<ES>(pyEO, detail_module, name);

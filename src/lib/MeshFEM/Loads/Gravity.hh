@@ -25,20 +25,17 @@ struct Gravity : public Load<3, typename Object::Real> {
     static constexpr size_t K   = Object::K;
     static constexpr size_t Deg = Object::Deg;
 
-    Gravity(const Object &obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
+    Gravity(std::weak_ptr<const Object> obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
         : m_obj(obj), m_rho(rho), m_g(g) {
-        restStateUpdated();
+        m_updateCache();
+        m_callbackID = getObj().registerRestConfigUpdateCallback([this]() { m_updateCache(); });
     }
 
     void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
     Real get_rho(Real rho) { return m_rho; }
 
-    virtual void deformedStateUpdated() override { /* Gravity force is const wrt. x */ }
-
-    virtual void restStateUpdated() override { m_updateCache(); }
-
     virtual Real energy() const override {
-        return m_grad.dot(m_obj.getVars());
+        return m_grad.dot(getObj().getVars());
     }
 
     // Gradient with respect to the deformed state
@@ -55,20 +52,31 @@ struct Gravity : public Load<3, typename Object::Real> {
     virtual void hessian(SuiteSparseMatrix& /* H */) const override { }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = m_obj.numVars();
+        const size_t nv = getObj().numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
         return SuiteSparseMatrix(Hsp);
     }
 
+    virtual ~Gravity() {
+        if (auto o = m_obj.lock())
+            o->deregisterRestConfigUpdateCallback(m_callbackID);
+    }
+
 private:
-    const Object &m_obj;
+    std::weak_ptr<const Object> m_obj;
     Real m_rho;
     V3d  m_g; // Gravitational acceleration vector
+    int m_callbackID;
+
+    const Object &getObj() const {
+        if (auto o = m_obj.lock()) return *o;
+        throw std::runtime_error("Elastic object was destroyed");
+    }
 
     void m_updateCache() {
-        m_grad.setZero(m_obj.numVars());
-        const auto &m = m_obj.mesh();
+        m_grad.setZero(getObj().numVars());
+        const auto &m = getObj().mesh();
         Interpolant<Real, K, Deg> phi;
         phi = 0.0;
         for (const auto &e : m.elements()) {

@@ -460,6 +460,10 @@ class ViewerBase:
         self.cam.position, self.cam.up, self.controls.target = params
         self.cam.lookAt(self.controls.target)
 
+    def resetCamera(self):
+        self.cam.position, self.cam.up, self.controls.target = [0.0, 0.0, 5.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]
+        self.cam.lookAt(self.controls.target)
+
     def show(self):
         return self.renderer
 

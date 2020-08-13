@@ -16,11 +16,10 @@ void bind(py::module &m) {
     using Load = Loads::Load<N, double>;
     py::class_<Load, std::shared_ptr<Load>>(m, ("Load" + std::to_string(N)).c_str())
         .def("energy",               &Load::energy)
-        .def("deformedStateUpdated", &Load::deformedStateUpdated)
-        .def("restStateUpdated",     &Load::restStateUpdated)
         .def("grad_x",               &Load::grad_x)
         .def("grad_X",               &Load::grad_X)
-        .def("hessian", [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
+        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
+        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
         ;
 }
 
@@ -39,7 +38,7 @@ struct LoadBinder {
            ;
 
         using V3d = Eigen::Vector3d;
-        module.def("Gravity", [&](const Object &obj, double rho, const V3d &g) {
+        module.def("Gravity", [&](const std::shared_ptr<Object> &obj, double rho, const V3d &g) {
                     return std::make_shared<GLoad>(obj, rho, g);
                 }, py::arg("obj"), py::arg("rho"), py::arg("g") = V3d(0.0, 0.0, 9.80635))
              ;
@@ -53,7 +52,7 @@ struct LoadBinder {
         py::class_<SLoad, Load, std::shared_ptr<SLoad>>(detail_module, ("Spreaders" + NameMangler<Object>::name()).c_str())
              .def_property("magnitude", &SLoad::getMagnitude, &SLoad::setMagnitude)
              ;
-        module.def("Spreaders", [&](const Object &obj, const std::vector<VXi> &clusterVtxs,
+        module.def("Spreaders", [&](const std::shared_ptr<Object> &obj, const std::vector<VXi> &clusterVtxs,
                                    const MX2i &connectivity, Real force, bool disableHessian) {
                     return std::make_shared<SLoad>(obj, clusterVtxs, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("clusterVtxs"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)

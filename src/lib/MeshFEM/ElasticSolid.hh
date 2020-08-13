@@ -4,8 +4,8 @@
 /*! @file
 //  Represents a hyperlastic elastic solid made of triangles/tets.
 *///////////////////////////////////////////////////////////////////////////////
-#ifndef ELASTICOBJECT_HH
-#define ELASTICOBJECT_HH
+#ifndef ELASTICSOLID_HH
+#define ELASTICSOLID_HH
 
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
@@ -21,12 +21,13 @@
 #include <Eigen/Sparse>
 
 #include "RigidMotionPins.hh"
+#include "ElasticObject.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
 template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
-class ElasticSolid {
+class ElasticSolid : public ElasticObject<typename EmbeddingSpace::Scalar> {
 public:
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
@@ -62,10 +63,15 @@ public:
     }
 
     VXd getVars() const { return Eigen::Map<const VXd>(m_x.data(), m_x.size()); }
-    void setVars(const VXd &vars) {
+    virtual void setVars(Eigen::Ref<const VXd> vars) override {
         if (size_t(vars.rows()) != numVars())
             throw std::invalid_argument("Invalid variable size");
         m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());
+        this->m_deformedConfigUpdated();
+    }
+
+    void setDeformedPositions(Eigen::Ref<const MXNd> vertexPositions) {
+        setVars(Eigen::Map<const VXd>(vertexPositions.data(), vertexPositions.size()));
     }
 
     void setRestState(const VXd &vertexPositions) {
@@ -76,8 +82,8 @@ public:
 
     VXd getRestState() const {
         VXd rest_state(numRestStateVars());
-        for (const auto& vertex : m_mesh.vertices())
-            rest_state.template segment<N>(N * vertex.index()) = vertex.node()->p;
+        for (const auto &v : m_mesh.vertices())
+            rest_state.template segment<N>(N * v.index()) = v.node()->p;
         return rest_state;
     }
 
@@ -85,7 +91,7 @@ public:
     // TODO: various stress measures
 
     // Evaluate the elastic energy stored in the object.
-    Real energy() const {
+    virtual Real energy() const override {
         auto energy_summand = [&](size_t ei) {
             Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
             return QuadratureRule::integrate(
@@ -99,7 +105,7 @@ public:
     }
 
     // Evaluate the gradient of the elastic energy with respect to the deformation variables.
-    VXd gradient() const {
+    virtual VXd gradient() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("gradient");
         VXd g(VXd::Zero(numVars()));
 
@@ -144,7 +150,7 @@ public:
                        : j + (i * (i + 1)) / 2;
     }
 
-    void hessian(SuiteSparseMatrix& H) const {
+    virtual void hessian(SuiteSparseMatrix& H) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
         auto assembler_per_element_contrib = [&](size_t ei, SuiteSparseMatrix& Hout) {
             const auto &m = m_mesh;
@@ -202,7 +208,7 @@ public:
         assemble_parallel(assembler_per_element_contrib, H, numElements());
     }
 
-    SuiteSparseMatrix hessianSparsityPattern() const {
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
         TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
 
@@ -230,6 +236,13 @@ public:
 
     MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
     MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
+    MXNd restPositions() const {
+        MXNd rpos(m_mesh.numNodes(), N);
+        for (const auto &n : m_mesh.nodes())
+            rpos.row(n.index()) = n->p;
+        return rpos;
+    }
+    MXNd nodeDisplacements() const { return deformedPositions() - restPositions(); }
 
     const Mesh &mesh() const { return m_mesh; }
 
@@ -260,7 +273,7 @@ public:
     void applyRigidTransform(const Matrix &R, const Vector &t) {
         if (((R.transpose() * R - Matrix::Identity()).norm() > 1e-8) || (R.determinant() < 0))
             throw std::runtime_error("R is not a rotation");
-        m_x = ((m_x * R.transpose()).rowwise() + t.transpose()).eval();
+        setDeformedPositions(((m_x * R.transpose()).rowwise() + t.transpose()).eval());
     }
 
     // Reorient the current deformed configuration so that global rigid motions
@@ -281,4 +294,4 @@ protected:
     MXNd m_x;
 };
 
-#endif /* end of include guard: ELASTICOBJECT_HH */
+#endif /* end of include guard: ELASTICSOLID_HH */

@@ -22,35 +22,28 @@
 
 #include <memory>
 #include <functional>
+#include <utility>
+
 using CallbackFunction = std::function<void(NewtonProblem &, size_t)>;
 
-// Some systems want to know whether the gradient is being evaluated at a
-// "fresh iterate" (i.e., not within a line search) while others do not accept
-// this information...
-template<class EQSystem, std::enable_if_t<std::is_integral<typename function_traits<decltype(&EQSystem::gradient)>::template arg<0>>::value, int> = 0>
-auto guardedGradientCall(const EQSystem &sys, bool freshIterate) -> decltype(sys.gradient(freshIterate)) {
-    return sys.gradient(freshIterate);
-}
+////////////////////////////////////////////////////////////////////////////////
+// "Guarded" implementation calls:
+// There are optional parts of the ElasticObject interface to support certain
+// objects whose gradient methods want to know if they are called on a "fresh
+// iterate" (i.e., not within a line search) or who need up update their DoF
+// definitions at the end of each line search.
+// The following `guarded` calls only use these optional features when
+// available. We use a hack to disambiguate the calls when more than
+// one is valid (e.g., when the system provides both a `gradient()` and a
+// `gradient(bool)`: we pass an integer as the last parameter which prefers
+// the overload accepting an `int` but that will still match the one accepting
+// a `long` if the `int` overload if invalid.
+////////////////////////////////////////////////////////////////////////////////
+template<class EQSystem> auto guardedGradientCall(const EQSystem &sys, bool freshIterate,        int     /* PREFERRED */) -> decltype(sys.gradient(freshIterate)) { return sys.gradient(freshIterate); }
+template<class EQSystem> auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */, long /* NON-PREFERRED */) -> decltype(sys.gradient())             { return sys.gradient(); }
 
-// No arguments
-template<class EQSystem, std::enable_if_t<function_traits<decltype(&EQSystem::gradient)>::arity == 0, int> = 0>
-auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */) -> decltype(sys.gradient()) {
-    return sys.gradient();
-}
-
-// First argument exists but is not boolean (doesn't look like it accepts a freshIterate flag).
-template<class EQSystem, std::enable_if_t<(function_traits<decltype(&EQSystem::gradient)>::arity > 0) && (!std::is_integral<typename function_traits<decltype(&EQSystem::gradient)>::template arg<0>>::value), int> = 0>
-auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */) -> decltype(sys.gradient()) {
-    return sys.gradient();
-}
-
-template<class EQSystem>
-void guardedParametrizationUpdate(EQSystem &/* sys */, long /* NON-PREFERRED */) { /* NOP */ }
-
-template<class EQSystem>
-auto guardedParametrizationUpdate(EQSystem &sys, int /* PREFERRED */) -> decltype(sys.updateParametrization()) {
-    return sys.updateParametrization();
-}
+template<class EQSystem> auto guardedParametrizationUpdate(EQSystem &sys, int      /* PREFERRED */) -> decltype(sys.updateParametrization()) { return sys.updateParametrization(); }
+template<class EQSystem> void guardedParametrizationUpdate(EQSystem &   , long /* NON-PREFERRED */) { /* NOP */ } 
 
 template<class EQSystem>
 using LoadCollection = std::vector<std::shared_ptr<Loads::Load<EQSystem::N, typename EQSystem::Real>>>;
@@ -71,8 +64,6 @@ struct EquilibriumProblem : public NewtonProblem {
 
     virtual void setVars(const VXd &vars) override {
         m_sys.setVars(vars.cast<typename EQSystem::Real>());
-        for (auto &l : m_loads)
-            l->deformedStateUpdated();
     }
     virtual const VXd getVars() const override { return m_sys.getVars().template cast<double>(); }
     virtual size_t numVars() const override { return m_sys.numVars(); }
@@ -85,7 +76,7 @@ struct EquilibriumProblem : public NewtonProblem {
     }
 
     virtual VXd gradient(bool freshIterate = false) const override {
-        auto result = guardedGradientCall(m_sys, freshIterate);
+        auto result = guardedGradientCall(m_sys, freshIterate, 0/* disambiguation hack to ensure`freshIterate` is passed when possible */);
         for (const auto &l : m_loads)
             result += l->grad_x();
 
@@ -124,8 +115,6 @@ protected:
 
     mutable SuiteSparseMatrix m_hessianSparsity;
 };
-
-
 
 template<class EQSys>
 std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(EQSys &sys, const LoadCollection<EQSys> &loads,
