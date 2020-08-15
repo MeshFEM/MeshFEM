@@ -57,7 +57,7 @@ public:
     size_t numRestStateVars() const { return numVertices() * N; }
 
     void setIdentityDeformation() {
-        m_x.resize(m_mesh.numNodes(), N);
+        m_x.resize(m_mesh.numNodes(), size_t(N));
         for (const auto &n : m_mesh.nodes())
             m_x.row(n.index()) = n->p;
     }
@@ -77,7 +77,7 @@ public:
     void setRestState(const VXd &vertexPositions) {
         if (size_t(vertexPositions.size()) != N * numVertices())
             throw std::invalid_argument("Invalid vertexPositions size");
-        m_mesh.setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), N));
+        m_mesh.setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), size_t(N)));
     }
 
     VXd getRestState() const {
@@ -237,7 +237,7 @@ public:
     MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
     MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
     MXNd restPositions() const {
-        MXNd rpos(m_mesh.numNodes(), N);
+        MXNd rpos(m_mesh.numNodes(), size_t(N));
         for (const auto &n : m_mesh.nodes())
             rpos.row(n.index()) = n->p;
         return rpos;
