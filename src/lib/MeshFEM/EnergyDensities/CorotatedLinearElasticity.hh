@@ -16,6 +16,8 @@
 #define COROTATEDLINEARELASTICITY_HH
 
 #include <Eigen/Dense>
+#include "EnergyTraits.hh"
+#include "Tensor.hh"
 
 // Dimension-specific calculations
 template<typename _Real, size_t N>

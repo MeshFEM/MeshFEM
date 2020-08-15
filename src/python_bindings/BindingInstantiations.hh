@@ -21,6 +21,7 @@
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
+#include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 
 template<class MeshBinder>
@@ -77,10 +78,11 @@ template<class ESBinder>
 void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
     // For each energy, generate an elastic solid binding
     // for each mesh we bind (neglecting meshes embedded in higher dimensions).
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,       LinearElasticEnergy>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,          NeoHookeanEnergy>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, CorotatedLinearElasticity>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,   StVenantKirchhoffEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,          LinearElasticEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,             NeoHookeanEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    CorotatedLinearElasticity>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,      StVenantKirchhoffEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
 }
 
 template<class ESBinder>

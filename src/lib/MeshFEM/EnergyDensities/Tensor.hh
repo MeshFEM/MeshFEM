@@ -260,6 +260,16 @@ struct VectorizedShapeFunctionJacobian {
         return A.col(B.c).template cast<Scalar>() * B.g.transpose();
     }
 
+    template<typename Real2, class Enable = std::enable_if_t<std::is_arithmetic<Real2>::value>>
+    friend VectorizedShapeFunctionJacobian operator*(const Real2 &s, const VectorizedShapeFunctionJacobian &B) {
+        return VectorizedShapeFunctionJacobian(B.c, s * B.g);
+    }
+
+    template<typename Real2, class Enable = std::enable_if_t<std::is_arithmetic<Real2>::value>>
+    friend VectorizedShapeFunctionJacobian operator*(const VectorizedShapeFunctionJacobian &B, const Real2 &s) {
+        return VectorizedShapeFunctionJacobian(B.c, s * B.g);
+    }
+
     template<class Derived>
     friend MatrixType operator+(const VectorizedShapeFunctionJacobian &A, const Eigen::MatrixBase<Derived> &B) {
         static_assert((RowsAtCompileTime == Derived::RowsAtCompileTime) &&
