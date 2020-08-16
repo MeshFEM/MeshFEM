@@ -227,8 +227,7 @@ struct VectorizedShapeFunctionJacobian {
     int c;
     GradType g;
 
-    template<class Derived>
-    VectorizedShapeFunctionJacobian(int cc, const Eigen::MatrixBase<Derived> &gg)
+    VectorizedShapeFunctionJacobian(int cc, Eigen::Ref<const GradType> gg)
         : c(cc), g(gg) { }
 
     MatrixType toMatrix() const {
@@ -370,6 +369,43 @@ spdMatrixSqrt(const Mat_ &C) {
     static_assert((N == 2) || (N == 3), "Unexpected matrix size");
     using MNd = Eigen::Matrix<typename Mat_::Scalar, N, N>;
     return Eigen::SelfAdjointEigenSolver<MNd>(C).operatorSqrt();
+}
+
+// Compute the double contraction `C : e` for fourth order tensor `C` and matrix `e`.
+// Assumes that C has been flattened with the same ordering as e's storage storage order!
+template<class FlattenedTensorDerived, class Derived>
+std::enable_if_t<(FlattenedTensorDerived::RowsAtCompileTime == FlattenedTensorDerived::ColsAtCompileTime)
+                && (FlattenedTensorDerived::ColsAtCompileTime == (Derived::RowsAtCompileTime * Derived::ColsAtCompileTime)),
+Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>>
+applyFlattened4thOrderTensor(const Eigen::MatrixBase<FlattenedTensorDerived> &C, const Eigen::MatrixBase<Derived> &e) {
+    using Scalar = typename Derived::Scalar;
+    constexpr int M = Derived::RowsAtCompileTime,
+                  N = Derived::ColsAtCompileTime;
+    using FlatMatrix = Eigen::Matrix<Scalar, M * N, 1>;
+    Eigen::Matrix<Scalar, M, N, Derived::Options> result;
+    Eigen::Map<FlatMatrix>(result.data()) = C * Eigen::Map<const FlatMatrix>(e.derived().data()).eval();
+    return result;
+}
+
+// Compute the double contraction `C : e` for fourth order tensor `C` and matrix `e`.
+// Assumes that C has been flattened **in column major order**
+template<class FlattenedTensorDerived, int D, class GradType>
+std::enable_if_t<(FlattenedTensorDerived::RowsAtCompileTime == FlattenedTensorDerived::RowsAtCompileTime)
+                && (FlattenedTensorDerived::ColsAtCompileTime == (D * GradType::RowsAtCompileTime)),
+Eigen::Matrix<typename FlattenedTensorDerived::Scalar, D, GradType::RowsAtCompileTime>>
+applyFlattened4thOrderTensor(const Eigen::MatrixBase<FlattenedTensorDerived> &C,
+                             const VectorizedShapeFunctionJacobian<D, GradType> &e) {
+    using Scalar = typename FlattenedTensorDerived::Scalar;
+    constexpr int M = D,
+                  N = GradType::RowsAtCompileTime;
+    using FlatMatrix = Eigen::Matrix<Scalar, M * N, 1>;
+    // "e" consists of a single nonzero row at index "e.c" with values "e.g"
+    // We assume column major ordering, so the flattened version of "e" has
+    // nonzero values at indices `e.c + D * i`.
+    FlatMatrix flatResult = C.col(e.c) * e.g[0];
+    for (int i = 1; i < N; ++i)
+        flatResult += C.col(e.c + D * i) * e.g[i];
+    return Eigen::Map<Eigen::Matrix<Scalar, M, N>>(flatResult.data());
 }
 
 #endif

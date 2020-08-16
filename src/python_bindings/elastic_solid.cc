@@ -54,7 +54,7 @@ struct ElasticSolidBinder {
           .def("getDeformedPositions",   &ES::deformedPositions)
           .def("getRestPositions",       &ES::restPositions)
           .def("getNodeDisplacements",   &ES::nodeDisplacements)
-          .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
+          .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference)
           .def("visualizationGeometry", [](const ES &obj) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
                 return getVisualizationGeometry(visMesh);

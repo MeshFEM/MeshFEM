@@ -3,6 +3,7 @@
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
+#include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <catch2/catch.hpp>
 
 #include "EDensityTestUtils.hh"
@@ -52,5 +53,23 @@ TEST_CASE("Energy Density Adaptors", "[edensity_adaptors]") {
     SECTION("Membrane energy") {
         compareEnergies(StVenantKirchhoffEnergyCBased<Real, 2>(ElasticityTensor<Real, 2>(E, nu)),
                         StVenantKirchhoffMembraneEnergy<Real> (ElasticityTensor<Real, 2>(E, nu)));
+    }
+
+    SECTION("AutoHessianProjection 2D") {
+        AutoHessianProjection<CorotatedLinearElasticity<Real, 2>> psi(ElasticityTensor<Real, 2>(E, nu));
+        psi.projectionEnabled = true;
+        compareFEnergies(psi, IsoCRLEWithHessianProjection<Real, 2>(lambdaPlaneStress, mu));
+
+        psi.projectionEnabled = false;
+        compareFEnergies(psi, CorotatedLinearElasticity<Real, 2>(ElasticityTensor<Real, 2>(E, nu)));
+    }
+
+    SECTION("AutoHessianProjection 3D") {
+        AutoHessianProjection<CorotatedLinearElasticity<Real, 3>> psi(ElasticityTensor<Real, 3>(E, nu));
+        psi.projectionEnabled = true;
+        compareFEnergies(psi, IsoCRLEWithHessianProjection<Real, 3>(lambda, mu));
+
+        psi.projectionEnabled = false;
+        compareFEnergies(psi, CorotatedLinearElasticity<Real, 3>(ElasticityTensor<Real, 3>(E, nu)));
     }
 }

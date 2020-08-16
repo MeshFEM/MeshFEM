@@ -37,6 +37,20 @@ bindEnergyFBased(py::module &detail_module)
 
 template<class Energy>
 py::class_<Energy>
+bindEnergyFBasedAutoProjected(py::module &detail_module)
+{
+    using HPE = AutoHessianProjection<Energy>;
+    auto ebind = bindEnergyFBased<HPE>(detail_module);
+    ebind.def("eigenvalues",      &HPE::eigenvalues)
+         .def("eigenmatrices",    &HPE::eigenmatrices)
+         .def("projectedHessian", &HPE::projectedHessian)
+         .def_readwrite("projectionEnabled", &HPE::projectionEnabled)
+         ;
+    return ebind;
+}
+
+template<class Energy>
+py::class_<Energy>
 bindEnergyCBased(py::module &detail_module)
 {
     py::class_<Energy> ebind(detail_module, (getEnergyName<Energy>() + "_C").c_str());
@@ -124,6 +138,14 @@ void bindStVKEnergy(py::module &detail_module)
     ebind.def(py::init<const typename STVK::ETensor&>(), py::arg("elasticity_tensor"));
 }
 
+template<size_t _Dimension>
+void bindStVKEnergyHP(py::module &detail_module)
+{
+    using STVK = StVenantKirchhoffEnergy<double, _Dimension>;
+    auto ebind = bindEnergyFBasedAutoProjected<STVK>(detail_module);
+    ebind.def(py::init<const typename STVK::ETensor&>(), py::arg("elasticity_tensor"));
+}
+
 py::object constructNeoHookean(size_t dimension, double lambda, double mu, double finiteContinuationStart) {
     if (dimension == 2) return py::cast(new NeoHookeanEnergy<double, 2>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
     if (dimension == 3) return py::cast(new NeoHookeanEnergy<double, 3>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
@@ -169,6 +191,8 @@ PYBIND11_MODULE(energy, m)
     bindStVKEnergy<3>           (detail_module);
     bindIsoCRLEWithHP<2>        (detail_module);
     bindIsoCRLEWithHP<3>        (detail_module);
+    bindStVKEnergyHP<2>         (detail_module);
+    bindStVKEnergyHP<3>         (detail_module);
 
     using ETensor2D = ElasticityTensor<double, 2>;
     using ETensor3D = ElasticityTensor<double, 3>;
@@ -248,4 +272,6 @@ PYBIND11_MODULE(energy, m)
 
     m.def("IsoCRLEWithHessianProjection", [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsoCRLEWithHessianProjection", [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+    m.def("StVenantKirchhoffAutoProjected", [](const ETensor3D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 3>>>(etensor); }, py::arg("elasticity_tensor"));
+    m.def("StVenantKirchhoffAutoProjected", [](const ETensor2D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 2>>>(etensor); }, py::arg("elasticity_tensor"));
 }
