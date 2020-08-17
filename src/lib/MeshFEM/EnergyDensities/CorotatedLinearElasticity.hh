@@ -107,7 +107,7 @@ struct CorotatedLinearElasticity : public Concepts::CRLinearElaticEnergy {
     CorotatedLinearElasticity(const CorotatedLinearElasticity &other, const UninitializedDeformationTag &)
         : m_elasticity_tensor(other.m_elasticity_tensor), m_isotropic(other.m_isotropic) { }
 
-    void setDeformationGradient(const Matrix &F) {
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
@@ -124,6 +124,8 @@ struct CorotatedLinearElasticity : public Concepts::CRLinearElaticEnergy {
 
         // Analog to Cauchy stress for linear elasticity.
         m_biotStress = m_elasticity_tensor.doubleContract(SMatrix(m_biotStrain)).toMatrix();
+
+        if (elevel == EvalLevel::EnergyOnly) return;
 
         m_G    = CRQ::getG(m_S);
         m_Ginv = CRQ::getGinv(m_G);

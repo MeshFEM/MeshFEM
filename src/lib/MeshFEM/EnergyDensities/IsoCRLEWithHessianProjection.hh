@@ -39,7 +39,7 @@ struct IsoCRLEWithHessianProjection {
         : m_lambda(other.m_lambda), m_mu(other.m_mu), projectionEnabled(other.projectionEnabled)
     { }
 
-    void setDeformationGradient(const Matrix &F) {
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
@@ -54,6 +54,8 @@ struct IsoCRLEWithHessianProjection {
 
         m_biotStress = m_lambda * (m_traceSigma - N) * Matrix::Identity() + 2 * m_mu * m_biotStrain;
         m_pk1_stress = m_R * m_biotStress;
+
+        if (elevel < EvalLevel::Hessian) return;
 
         if (N == 3) {
             m_twistEigenvalueDenominators = m_traceSigma - svd.singularValues().array();

@@ -40,7 +40,7 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
         setDeformationGradient(Matrix::Identity());
     }
 
-    void setDeformationGradient(const Matrix& deformation_gradient) {
+    void setDeformationGradient(const Matrix& deformation_gradient, const EvalLevel /* elevel */ = EvalLevel::Full) {
         m_F = deformation_gradient;
         m_detF = deformation_gradient.determinant();
         m_Finv = m_F.inverse();
@@ -245,8 +245,8 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
     NeoHookeanEnergy(const NeoHookeanEnergy &other)
         : Base(other), m_C33(other.m_C33) { }
 
-    void setDeformationGradient(const Matrix &F) {
-        Base::setDeformationGradient(F);
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
+        Base::setDeformationGradient(F, elevel);
         m_C33 = (m_lambda + 2 * m_mu) / (m_lambda * unpaddedI3() + 2 * m_mu);
     }
 

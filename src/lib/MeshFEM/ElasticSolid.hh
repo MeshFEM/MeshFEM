@@ -21,7 +21,10 @@
 #include <Eigen/Sparse>
 
 #include "RigidMotionPins.hh"
+
 #include "ElasticObject.hh"
+#include "MassMatrix.hh"
+#include "Laplacian.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
@@ -96,7 +99,7 @@ public:
             Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
             return QuadratureRule::integrate(
                 [ei, &psi, this](const EvalPtN &x) {
-                    psi.setDeformationGradient(getDeformationGradient(ei, x));
+                    psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
                     return psi.energy();
                 }, m_mesh.element(ei)->volume());
         };
@@ -116,7 +119,7 @@ public:
             const auto &e = m_mesh.element(ei);
             auto contrib = QuadratureRule::integrate([&](const EvalPtN& x) {
                       LocalGradient integrand;
-                      psi.setDeformationGradient(getDeformationGradient(ei, x));
+                      psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Gradient);
                       Matrix denergy = psi.denergy();
 
                       for (const auto &n : e.nodes()) {
@@ -157,7 +160,7 @@ public:
             const auto &e = m.element(ei);
             Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
             VXd hessian_contribution = QuadratureRule::integrate([&](const EvalPtN &x) {
-                    psi.setDeformationGradient(getDeformationGradient(ei, x));
+                    psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Hessian);
                     Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
 
                     Eigen::Matrix<Real, N, numNodesPerElement> sfGrads;
@@ -229,6 +232,17 @@ public:
 
         SuiteSparseMatrix result(std::move(triplet_result));
         result.fill(0.);
+        return result;
+    }
+
+    virtual SuiteSparseMatrix massMatrix(bool lumped = false) const override {
+        return MassMatrix::construct_vector_valued<>(mesh(), lumped);
+    }
+
+    virtual SuiteSparseMatrix sobolevInnerProductMatrix(Real Mscale = 1.0) const override {
+        SuiteSparseMatrix result = Laplacian::construct_vector_valued<>(mesh());
+        if (Mscale != 0.0)
+            result.addWithDistinctSparsityPattern(massMatrix(), Mscale);
         return result;
     }
 

@@ -41,7 +41,7 @@ struct MESHFEM_EXPORT NewtonProblem {
 
     const SuiteSparseMatrix &hessian() const {
         if (!m_cachedHessian) { m_cachedHessian = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern()); }
-        if (!m_cachedHessianUpToDate) {
+        if (disableCaching || !m_cachedHessianUpToDate) {
             m_evalHessian(*m_cachedHessian);
             m_cachedHessianUpToDate = true;
         }
@@ -59,7 +59,7 @@ struct MESHFEM_EXPORT NewtonProblem {
             }
             return *m_identityMetric;
         }
-        if (!m_cachedMetric) {
+        if (disableCaching || !m_cachedMetric) {
             m_cachedMetric = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern());
             m_evalMetric(*m_cachedMetric);
         }
@@ -221,6 +221,8 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual void customIterateReport(ConvergenceReport &/* report */) const { }
 
     virtual ~NewtonProblem() { }
+
+    bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
 
 protected:
     // Clear the cached per-iterate quantities
@@ -439,6 +441,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // We fix variables by constraining the newton step to have zeros for these entries
     std::vector<char> isFixed;
     mutable CachedHessianL2Norm m_cachedHessianL2Norm;
+
 private:
     std::unique_ptr<NewtonProblem> prob;
 };

@@ -58,6 +58,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
 
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"))
+        .def_readonly("m",  &SuiteSparseMatrix::m)
+        .def_readonly("n",  &SuiteSparseMatrix::n)
+        .def_readonly("nz", &SuiteSparseMatrix::nz)
         .def("setZero",     &SuiteSparseMatrix::setZero)
         .def("fill",        &SuiteSparseMatrix::fill)
         .def("setIdentity", &SuiteSparseMatrix::setIdentity)

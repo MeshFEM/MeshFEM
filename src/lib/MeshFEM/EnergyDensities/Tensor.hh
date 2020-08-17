@@ -284,18 +284,6 @@ struct VectorizedShapeFunctionJacobian {
     }
 };
 
-// // Unfortunately, our explicit VSFJ::operator MatrixType appears to be unusable
-// // (see discussion above its definition).
-// // To support conversion to MatrixType from either VSFJ or MatrixType, we need to introduce
-// // our own `toMatrix` explicit cast. This calls VSFJ::toMatrix in the VSFJ case and
-// // perfectly forwards the return value in the MatrixType case (and all other cases).
-// template<class MatrixType> MatrixType &&toMatrix(MatrixType &&mat) { return std::forward<MatrixType>(mat); }
-// template<int D, class GradType>
-// typename VectorizedShapeFunctionJacobian<D, GradType>::MatrixType
-// toMatrix(const VectorizedShapeFunctionJacobian<D, GradType> &vsfj) {
-//     return vsfj.toMatrix();
-// }
-
 // Let VectorizedShapeFunctionJacobian masquerade as a DxN matrix in metaprogramming type checks
 template<int D, class GradType, int RowSize, int ColSize>
 struct isMatrixOfSize<VectorizedShapeFunctionJacobian<D, GradType>, RowSize, ColSize,

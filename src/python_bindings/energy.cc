@@ -22,7 +22,7 @@ bindEnergyFBased(py::module &detail_module)
     py::class_<Energy> ebind(detail_module, getEnergyName<Energy>().c_str());
     using Mat = typename Energy::Matrix;
     ebind
-        .def("setDeformationGradient", &Energy::setDeformationGradient, py::arg("deformation_gradient"))
+        .def("setDeformationGradient", [](Energy &e, const Mat &F) { e.setDeformationGradient(F); }, py::arg("deformation_gradient"))
         .def("getDeformationGradient", &Energy::getDeformationGradient)
         .def("energy", &Energy::energy)
         .def("denergy", py::overload_cast<          >(&Energy::denergy, py::const_))

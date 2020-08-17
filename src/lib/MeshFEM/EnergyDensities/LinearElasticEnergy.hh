@@ -35,7 +35,7 @@ struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
     LinearElasticEnergy(const LinearElasticEnergy &other, const UninitializedDeformationTag &)
         : m_elasticity_tensor(other.m_elasticity_tensor) { }
 
-    void setDeformationGradient(const Matrix &F) {
+    void setDeformationGradient(const Matrix &F, const EvalLevel /* elevel */ = EvalLevel::Full) {
         m_F = F;
         m_small_strain_tensor = symmetrized(F - Matrix::Identity());
     }

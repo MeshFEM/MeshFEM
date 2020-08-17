@@ -54,7 +54,7 @@ struct EnergyDensityFBasedFromCBased : public Psi_C {
     EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &other, const UninitializedDeformationTag &tag)
         : Base(other, tag), m_F(other.m_F) { }
 
-    void setDeformationGradient(const Matrix &F) {
+    void setDeformationGradient(const Matrix &F, const EvalLevel /* elevel */ = EvalLevel::Full) {
         m_F = F;
         Base::setC(F.transpose() * F);
     }
@@ -162,33 +162,34 @@ struct AutoHessianProjection : Psi_F {
 
     static std::string name() { return Base::name() + std::string("AutoProjected"); }
 
-    void setDeformationGradient(const Matrix &F) {
-        Base::setDeformationGradient(F);
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
+        Base::setDeformationGradient(F, elevel);
 
         // For efficiency, we only construct H and decompose H if we are
         // actually applying a Hessian projection.
         // See WARNING below!
-        if (projectionEnabled) {
-            // Evaluate the full Hessian by probing it on a basis with delta_denergy.
-            Hessian H;
-            VectorizedShapeFunctionJacobian<N, Vector> probe(0, Vector::Zero());
-            for (size_t j = 0; j < N; ++j) {
-                probe.g[j] = 1.0;
-                for (size_t i = 0; i < N; ++i) {
-                    probe.c = i;
-                    auto delta_de = Base::delta_denergy(probe);
-                    // Column major flattening order to match `Matrix`!
-                    H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
-                }
-                probe.g[j] = 0.0;
+        if (!projectionEnabled || elevel < EvalLevel::Hessian)
+            return;
+
+        // Evaluate the full Hessian by probing it on a basis with delta_denergy.
+        Hessian H;
+        VectorizedShapeFunctionJacobian<N, Vector> probe(0, Vector::Zero());
+        for (size_t j = 0; j < N; ++j) {
+            probe.g[j] = 1.0;
+            for (size_t i = 0; i < N; ++i) {
+                probe.c = i;
+                auto delta_de = Base::delta_denergy(probe);
+                // Column major flattening order to match `Matrix`!
+                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
             }
-
-            if ((H - H.transpose()).squaredNorm() > 1e-10 * H.squaredNorm())
-                throw std::runtime_error("Asymmetric probed Hessian");
-
-            ESolver Hes(H);
-            m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            probe.g[j] = 0.0;
         }
+
+        if ((H - H.transpose()).squaredNorm() > 1e-10 * H.squaredNorm())
+            throw std::runtime_error("Asymmetric probed Hessian");
+
+        ESolver Hes(H);
+        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
     }
 
     template<class Mat_>

@@ -97,6 +97,23 @@ TripletMatrix<> construct(const _FEMMesh &mesh) {
     return L;
 }
 
+// Construct the Laplacian matrix for vector-valued shape functions
+template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh>
+TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh) {
+    TripletMatrix<> Lscalar = construct<Deg>(mesh);
+    Lscalar.sumRepeated();
+
+    constexpr size_t N = _FEMMesh::EmbeddingDimension;
+    TripletMatrix<> L(Lscalar.n * N, Lscalar.m * N);
+    L.reserve(N * Lscalar.nnz());
+
+    for (const auto &t : Lscalar)
+        for (size_t c = 0; c < N; ++c)
+            L.addNZ(N * t.i + c, N * t.j + c, t.v);
+    L.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
+    return L;
+}
+
 }
 
 #endif /* end of include guard: LAPLACIAN_HH */

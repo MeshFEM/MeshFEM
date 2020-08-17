@@ -1446,7 +1446,13 @@ public:
     //       further ensure it is spd.
     template<typename Mat>
     void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
-        if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+        if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) {
+            // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+            throw std::runtime_error("Wrong matrix size; " + std::to_string(m_L != nullptr)
+                    + ", " + std::to_string(m_L ? m_L->n : 0)
+                    + ", " + std::to_string(mat.m)
+                    + ", " + std::to_string(mat.n));
+        }
         if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
         if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
 

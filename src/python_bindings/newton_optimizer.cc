@@ -65,6 +65,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("feasible",               &NewtonProblem::feasible)
         .def("feasibleStepLength",     py::overload_cast<const Eigen::VectorXd &>(&NewtonProblem::feasibleStepLength, py::const_))
         .def("iterationCallback",      &NewtonProblem::iterationCallback)
+        .def_readwrite("disableCaching", &NewtonProblem::disableCaching)
         ;
 
     py::class_<WorkingSet>(m, "WorkingSet")

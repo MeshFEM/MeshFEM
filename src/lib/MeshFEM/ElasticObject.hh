@@ -30,6 +30,10 @@ public:
     virtual void hessian(SuiteSparseMatrix &Hout) const = 0;
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const = 0;
 
+    // Optional interface
+    virtual SuiteSparseMatrix massMatrix(bool /* lumped */ = false)              const { throw std::runtime_error("Unimplemented"); }
+    virtual SuiteSparseMatrix sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
+
     // The callback interface is not considered part of the elastic object's
     // state and therefore the register/deregister methods are marked const.
     int    registerDeformationUpdateCallback(const NotificationCB &cb) const { return registerCallback(cb, m_deformationUpdateCBs); }
