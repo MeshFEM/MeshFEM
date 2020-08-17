@@ -1448,7 +1448,7 @@ public:
     void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
         if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) {
             // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
-            throw std::runtime_error("Wrong matrix size; " + std::to_string(m_L != nullptr)
+            throw std::runtime_error("Wrong matrix size; " + std::to_string(int(m_L != nullptr))
                     + ", " + std::to_string(m_L ? m_L->n : 0)
                     + ", " + std::to_string(mat.m)
                     + ", " + std::to_string(mat.n));
