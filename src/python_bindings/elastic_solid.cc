@@ -44,6 +44,7 @@ struct ElasticSolidBinder {
           .def("setVars",                   &ES::setVars, py::arg("vars"))
           .def("applyRigidTransform",       &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",    &ES::prepareRigidMotionPins)
+          .def("filterRMPinArtifacts",      &ES::filterRMPinArtifacts, py::arg("pinVertices"))
           .def("energy",                    &ES::energy)
           .def("gradient",                  &ES::gradient)
           .def("hessian",                   py::overload_cast<>(&ES::hessian, py::const_))

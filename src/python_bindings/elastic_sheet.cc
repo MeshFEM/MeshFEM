@@ -45,6 +45,7 @@ struct ElasticSheetBinder {
           .def("getNodeDisplacements",     &ES::nodeDisplacements)
           .def("applyRigidTransform",      &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",   &ES::prepareRigidMotionPins)
+          .def("filterRMPinArtifacts",     &ES::filterRMPinArtifacts, py::arg("pinVertices"))
           .def("initializeMidedgeNormals", &ES::initializeMidedgeNormals, py::arg("minimizeBending") = true)
           .def("updateSourceFrame",        &ES::updateSourceFrame)
           .def("setVars",                  &ES::setVars, py::arg("vars"))

@@ -90,48 +90,51 @@ public:
         return rest_state;
     }
 
-    // TODO: boundary conditions (adapt from LinearElasticity::applyBoundaryConditions)
-    // TODO: various stress measures
-
-    // Evaluate the elastic energy stored in the object.
-    virtual Real energy() const override {
-        auto energy_summand = [&](size_t ei) {
-            Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-            return QuadratureRule::integrate(
-                [ei, &psi, this](const EvalPtN &x) {
-                    psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
-                    return psi.energy();
-                }, m_mesh.element(ei)->volume());
-        };
-
-        return summation_parallel<Real>(energy_summand, m_mesh.numElements());
+    // Energy stored in a single element.
+    Real elementEnergy(size_t ei) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        return QuadratureRule::integrate(
+            [ei, &psi, this](const EvalPtN &x) {
+                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
+                return psi.energy();
+            }, m_mesh.element(ei)->volume());
     }
 
-    // Evaluate the gradient of the elastic energy with respect to the deformation variables.
+    // Energy stored in the full object.
+    virtual Real energy() const override {
+        return summation_parallel<Real>([this](size_t ei) { return elementEnergy(ei); },
+                                        m_mesh.numElements());
+    }
+
+    // Gradient of a single element's energy with respect to its nodes' deformed positions..
+    using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
+    ElementGradient elementGradient(size_t ei) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        const auto &e = m_mesh.element(ei);
+        return QuadratureRule::integrate([&](const EvalPtN& x) {
+                  ElementGradient integrand;
+                  psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Gradient);
+                  Matrix denergy = psi.denergy();
+
+                  for (const auto &n : e.nodes()) {
+                      VSFJ gradPhi(0, e->gradPhi(n.localIndex())(x));
+                      for (size_t c = 0; c < N; ++c) {
+                          gradPhi.c = c;
+                          integrand[N * n.localIndex() + c] = doubleContract(gradPhi, denergy);
+                      }
+                  }
+                return integrand;
+            }, e->volume());
+    }
+
+    // Gradient of the full object's energy with respect to all deformation variables.
     virtual VXd gradient() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("gradient");
         VXd g(VXd::Zero(numVars()));
 
         auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
-            using LocalGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
-
-            Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-            const auto &e = m_mesh.element(ei);
-            auto contrib = QuadratureRule::integrate([&](const EvalPtN& x) {
-                      LocalGradient integrand;
-                      psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Gradient);
-                      Matrix denergy = psi.denergy();
-
-                      for (const auto &n : e.nodes()) {
-                          VSFJ gradPhi(0, e->gradPhi(n.localIndex())(x));
-                          for (size_t c = 0; c < N; ++c) {
-                              gradPhi.c = c;
-                              integrand[N * n.localIndex() + c] = doubleContract(gradPhi, denergy);
-                          }
-                      }
-                    return integrand;
-                }, e->volume());
-            for (const auto &n : e.nodes())
+            ElementGradient contrib = elementGradient(ei);
+            for (const auto &n : m_mesh.element(ei).nodes())
                 g_out.template segment<N>(N * n.index()) += contrib.template segment<N>(N * n.localIndex());
         };
 
@@ -153,40 +156,48 @@ public:
                        : j + (i * (i + 1)) / 2;
     }
 
+    using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
+    PerElementHessian elementHessian(size_t ei) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        const auto &m = m_mesh;
+        const auto &e = m.element(ei);
+        return QuadratureRule::integrate([&](const EvalPtN &x) {
+                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Hessian);
+                Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
+
+
+                Eigen::Matrix<Real, N, numNodesPerElement> sfGrads;
+                for (const auto &n : e.nodes())
+                    sfGrads.col(n.localIndex()) = e->gradPhi(n.localIndex())(x);
+
+                for (const auto &n_b : e.nodes()) {
+                    VSFJ gradPhi_b(0, sfGrads.col(n_b.localIndex()));
+                    for (size_t c_b = 0; c_b < N; ++c_b) {
+                        size_t var_b = N * n_b.localIndex() + c_b;
+                        gradPhi_b.c = c_b;
+                        Matrix delta_denergy = psi.delta_denergy(gradPhi_b);
+                        for (const auto &n_a : e.nodes()) {
+                            VSFJ gradPhi_a(0, sfGrads.col(n_a.localIndex()));
+                            for (size_t c_a = 0; c_a < N; ++c_a) {
+                                size_t var_a = N * n_a.localIndex() + c_a;
+                                gradPhi_a.c = c_a;
+                                contribution[perElementHessianFlattening(var_a, var_b)] = doubleContract(gradPhi_a, delta_denergy);
+                            }
+                        }
+                    }
+                }
+
+                return contribution;
+            },
+            e->volume());
+    }
+
     virtual void hessian(SuiteSparseMatrix& H) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
         auto assembler_per_element_contrib = [&](size_t ei, SuiteSparseMatrix& Hout) {
             const auto &m = m_mesh;
             const auto &e = m.element(ei);
-            Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-            VXd hessian_contribution = QuadratureRule::integrate([&](const EvalPtN &x) {
-                    psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Hessian);
-                    Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
-
-                    Eigen::Matrix<Real, N, numNodesPerElement> sfGrads;
-                    for (const auto &n : e.nodes())
-                        sfGrads.col(n.localIndex()) = e->gradPhi(n.localIndex())(x);
-
-                    for (const auto &n_b : e.nodes()) {
-                        VSFJ gradPhi_b(0, sfGrads.col(n_b.localIndex()));
-                        for (size_t c_b = 0; c_b < N; ++c_b) {
-                            size_t var_b = N * n_b.localIndex() + c_b;
-                            gradPhi_b.c = c_b;
-                            Matrix delta_denergy = psi.delta_denergy(gradPhi_b);
-                            for (const auto &n_a : e.nodes()) {
-                                VSFJ gradPhi_a(0, sfGrads.col(n_a.localIndex()));
-                                for (size_t c_a = 0; c_a < N; ++c_a) {
-                                    size_t var_a = N * n_a.localIndex() + c_a;
-                                    gradPhi_a.c = c_a;
-                                    contribution[perElementHessianFlattening(var_a, var_b)] = doubleContract(gradPhi_a, delta_denergy);
-                                }
-                            }
-                        }
-                    }
-
-                    return contribution;
-                },
-                e->volume());
+            PerElementHessian contrib = elementHessian(ei);
 
             // Accumulate vertical strips into the global Sparse matrix.
             for (const auto &n_b : e.nodes()) {
@@ -201,7 +212,7 @@ public:
                         Vector block;
                         size_t len = std::min(size_t(N), gvar_b - gvar_a + 1);
                         for (size_t c = 0; c < len; ++c)
-                            block[c] = hessian_contribution(perElementHessianFlattening(var_a + c, var_b));
+                            block[c] = contrib(perElementHessianFlattening(var_a + c, var_b));
                         Hout.addNZ(gvar_a, gvar_b, block.topRows(len));
                     }
                 }
@@ -293,9 +304,14 @@ public:
     // Reorient the current deformed configuration so that global rigid motions
     // can be pinned down with just 6 variable pin constraints.
     // Also return the indices of these 6 variables.
-    typename RigidMotionPins<ElasticSolid>::PinVars
+    using RMPins = RigidMotionPins<ElasticSolid>;
+    typename RMPins::PinInfo
     prepareRigidMotionPins() {
-        return RigidMotionPins<ElasticSolid>::run(*this);
+        return RMPins::run(*this);
+    }
+
+    void filterRMPinArtifacts(const typename RMPins::PinVertices &pinVertices) {
+        ::filterRMPinArtifacts(*this, pinVertices);
     }
 
 protected:

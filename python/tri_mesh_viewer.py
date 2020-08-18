@@ -475,6 +475,16 @@ class ViewerBase:
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)
 
+    def setDarkMode(self, dark=True):
+        if (dark):
+            self.renderer.scene.background = '#111111'
+            self.materialLibrary.material(False).color = '#F49111' # 'orange'
+            self.wireframeMaterial().color = '#220022'
+        else:
+            self.renderer.scene.background = '#FFFFFF'
+            self.materialLibrary.material(False).color = 'lightgray'
+            self.wireframeMaterial().color = 'black'
+
     # Implemented here to give subclasses a chance to customize
     def getVisualizationGeometry(self):
         return self.mesh.visualizationGeometry()

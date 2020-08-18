@@ -317,8 +317,15 @@ public:
     // Reorient the current deformed configuration so that global rigid motions
     // can be pinned down with just 6 variable pin constraints.
     // Also return the indices of these 6 variables.
-    std::array<size_t, 6> prepareRigidMotionPins() {
-        return RigidMotionPins<ElasticSheet>::run(*this);
+    using RMPins = RigidMotionPins<ElasticSheet>;
+    typename RMPins::PinInfo
+    prepareRigidMotionPins() {
+        return RMPins::run(*this);
+    }
+
+    void filterRMPinArtifacts(const typename RMPins::PinVertices &pinVertices) {
+        throw std::runtime_error("Unimplemented");
+        // ::filterRMPinArtifacts(*this, pinVertices);
     }
 
 private:
