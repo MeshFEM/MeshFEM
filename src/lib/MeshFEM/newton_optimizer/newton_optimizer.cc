@@ -190,6 +190,9 @@ ConvergenceReport NewtonOptimizer::optimize() {
 
         // std::cout << "pre-update gradient: " << zeroOutFixedVars(prob->gradient(false)).norm() << std::endl;
         prob->iterationCallback(it);
+        // Note: we allow the iteration callback to modify the variables!
+        // (in case the user wants to run some custom projection/filter at the start
+        //  of each Newton iteration).
         vars = prob->getVars();
 
         g = prob->gradient(true);

@@ -157,12 +157,13 @@ public:
     }
 
     using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
-    PerElementHessian elementHessian(size_t ei) const {
+    PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &m = m_mesh;
         const auto &e = m.element(ei);
         return QuadratureRule::integrate([&](const EvalPtN &x) {
-                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Hessian);
+                psi.setDeformationGradient(getDeformationGradient(ei, x), disableProjection ? EvalLevel::HessianWithDisabledProjection
+                                                                                            : EvalLevel::Hessian);
                 Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
 
 

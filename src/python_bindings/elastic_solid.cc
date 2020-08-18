@@ -64,6 +64,21 @@ struct ElasticSolidBinder {
          ;
 
         addComputeEquilibriumBinding<ES>(pyEO, detail_module, name);
+
+#if 0 // For debugging
+        using SVP = SingleVertexOptProblem<ES>;
+        py::class_<SVP>(detail_module, ("SingleVertexOptProblem" + name).c_str())
+            .def("numVars",  [](const SVP &svp) { return svp.numVars(); })
+            .def("getVars",  &SVP::getVars)
+            .def("setVars",  &SVP::setVars)
+            .def("energy",   &SVP::energy)
+            .def("gradient", &SVP::gradient)
+            .def("hessian",  &SVP::hessian)
+            ;
+        module.def("SingleVertexOptProblem", [](ES &es, size_t vi) {
+                return std::make_unique<SVP>(es, vi);
+            }, py::arg("es"), py::arg("vi"));
+#endif
     }
 };
 

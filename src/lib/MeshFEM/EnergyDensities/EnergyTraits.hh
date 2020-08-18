@@ -9,7 +9,7 @@ struct UninitializedDeformationTag { }; // Tag used to avoid copying cached defo
 // to compute, and we would like to avoid these costs when we only need the
 // energy or gradient. We therefore allow the caller to specify exactly what
 // quantities they need when setting the energy density's deformation.
-enum class EvalLevel : int { EnergyOnly = 0, Gradient = 1, Hessian = 2, Full = 3 };
+enum class EvalLevel : int { EnergyOnly = 0, Gradient = 1, Hessian = 3, Full = 3, HessianWithDisabledProjection = 4 };
 
 namespace Concepts {
     struct CRLinearElaticEnergy { static constexpr const char *name() { return "CorotatedLinearElasticity"; } };

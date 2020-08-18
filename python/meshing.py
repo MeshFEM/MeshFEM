@@ -58,7 +58,7 @@ def tetrahedralize_extrusion(m2d, holePts, thickness, maxVol):
     # Ignore interior triangulation to allow TetGen to construct its preferred surface triangulation
     V = m2d.vertices()[m2d.boundaryVertices()]
     if V.shape[1] == 2:
-        v = np.pad(V, [(0, 0), (0, 1)])
+        V = np.pad(V, [(0, 0), (0, 1)])
 
     nv = len(V)
 
@@ -100,5 +100,5 @@ def tetrahedralize_extruded_polylines(polylines, holePts, thickness, maxVol):
         Indexed element set representation of the output tetrahedral mesh.
     """
     # Generate a low-quality triangulation so that we can traverse polygons of the facets
-    m2d_coarse = mesh.Mesh(*triangulate_polylines(polylines, holePts, lowQuality=True))
+    m2d_coarse = mesh.Mesh(*triangulate_polylines(polylines, holePts, lowQuality=True), degree=1, embeddingDimension=2)
     return tetrahedralize_extrusion(m2d_coarse, holePts, thickness, maxVol)

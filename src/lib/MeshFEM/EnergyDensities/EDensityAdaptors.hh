@@ -168,7 +168,8 @@ struct AutoHessianProjection : Psi_F {
         // For efficiency, we only construct H and decompose H if we are
         // actually applying a Hessian projection.
         // See WARNING below!
-        if (!projectionEnabled || elevel < EvalLevel::Hessian)
+        m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
+        if (!usingProjection() || elevel < EvalLevel::Hessian)
             return;
 
         // Evaluate the full Hessian by probing it on a basis with delta_denergy.
@@ -194,7 +195,7 @@ struct AutoHessianProjection : Psi_F {
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const {
-        if (projectionEnabled)
+        if (usingProjection())
             return applyFlattened4thOrderTensor(m_projectedHessian, dF);
         return Base::delta_denergy(dF);
     }
@@ -205,7 +206,7 @@ struct AutoHessianProjection : Psi_F {
 
     template<class Mat_, class Mat2_>
     Matrix delta2_denergy(const Mat_ &dF_a, const Mat2_ &dF_b) const {
-        if (projectionEnabled) {
+        if (usingProjection()) {
             // What is the use-case here?
             throw std::runtime_error("Derivatives of the projected Hessian not implemented");
         }
@@ -224,7 +225,10 @@ struct AutoHessianProjection : Psi_F {
         return result;
     }
 
+    // Undefined behavior if usingProjection() was false on the last call to setDeformationGradient...
     const Hessian &projectedHessian() const { return m_projectedHessian; }
+
+    bool usingProjection() const { return projectionEnabled && m_projectionMask; }
 
     // WARNING: changing this from `false` to `true` makes the result of
     // `delta2_denergy` undefined until the next call to
@@ -233,6 +237,7 @@ struct AutoHessianProjection : Psi_F {
 
 private:
     Hessian m_projectedHessian;
+    bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
 };
 
 #endif /* end of include guard: EDENSITYADAPTORS_HH */

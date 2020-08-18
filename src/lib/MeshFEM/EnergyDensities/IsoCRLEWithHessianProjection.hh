@@ -56,6 +56,7 @@ struct IsoCRLEWithHessianProjection {
         m_pk1_stress = m_R * m_biotStress;
 
         if (elevel < EvalLevel::Hessian) return;
+        m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
 
         if (N == 3) {
             m_twistEigenvalueDenominators = m_traceSigma - svd.singularValues().array();
@@ -96,7 +97,7 @@ struct IsoCRLEWithHessianProjection {
         for (size_t i = 0; i < numTwistEigenmatrices; ++i) {
             Real coeff = (m_lambda * (m_traceSigma - N) - 2 * m_mu) / m_twistEigenvalueDenominators[i];
             // Full eigenvalue (2 * mu + 2 * coeff) > 0 ==> coeff > -mu
-            if (projectionEnabled) coeff = std::max(coeff, -m_mu);
+            if (usingProjection()) coeff = std::max(coeff, -m_mu);
             result += m_Tsqrt2[i] * (doubleContract(m_Tsqrt2[i], dF) *  coeff);
         }
         return result;
@@ -111,11 +112,15 @@ struct IsoCRLEWithHessianProjection {
         throw std::runtime_error("Unimplemneted.");
     }
 
+    bool usingProjection() const { return projectionEnabled && m_projectionMask; }
+
     bool projectionEnabled = true;
 
 private:
     Real m_lambda = 0.0;   // Lame's first parameter
     Real m_mu = 0.0;       // Shear modulus
+
+    bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
 
     ////////////////////////////////////////////////////////////////////////////
     // Deformed state quantities
