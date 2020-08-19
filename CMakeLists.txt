@@ -93,7 +93,8 @@ option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to p
 option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
 option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
-option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   ON)
+option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
+option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 
 ################################################################################
 # Dependencies
