@@ -45,11 +45,11 @@ __pycache__
 # Extra directories
 .vscode/
 .idea/
-build/
-build2/
-build_debug/
-cmake-build-*/
-data
+/build
+/build2
+/build_debug
+/cmake-build-*
+/data
 
 # Clangd completion files
 .clangd/

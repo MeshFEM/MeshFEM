@@ -23,6 +23,13 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Detects whether this is a top-level project
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(MESHFEM_TOPLEVEL_PROJECT ON)
+else()
+    set(MESHFEM_TOPLEVEL_PROJECT OFF)
+endif()
+
 ################################################################################
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -68,32 +75,25 @@ include(Warnings)
 # the python bindings (shared libraries) to link.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Helper function
-include(MeshFEMSingleApp)
+# Helper functions
+include(MeshFEMUtils)
 
 ################################################################################
 # Options
 ################################################################################
 
 # By default, disable C++11 ABI on the Prince cluster
-cmake_host_system_information(RESULT MY_HOSTNAME QUERY HOSTNAME)
 if("$ENV{CLUSTER}" STREQUAL "PRINCE")
     set(DISABLE_CXX11_ABI_DEFAULT ON)
 else()
     set(DISABLE_CXX11_ABI_DEFAULT OFF)
 endif()
 
-# By default, compile binaries only for toplevel projects
-if(MeshFEM_MASTER_PROJECT)
-    set(MESHFEM_LIB_ONLY_DEFAULT OFF)
-else()
-    set(MESHFEM_LIB_ONLY_DEFAULT ON)
-endif()
-
 option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
-option(MESHFEM_LIB_ONLY              "Compile only the MeshFEM library (not the binary applications)" ${MESHFEM_LIB_ONLY_DEFAULT})
+option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
+option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   ON)
 
 ################################################################################
 # Dependencies
@@ -108,7 +108,7 @@ include(MeshFEMDependencies)
 
 add_subdirectory(src/lib)
 
-if(NOT MESHFEM_LIB_ONLY)
+if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
 endif()
 

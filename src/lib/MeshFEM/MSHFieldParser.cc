@@ -1,13 +1,12 @@
 #include <MeshFEM/MSHFieldParser.hh>
 #include <MeshFEM/Types.hh>
+#include <MeshFEM/StringUtils.hh>
 
-#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <vector>
 #include <map>
 
 using namespace std;
-//using namespace MeshIO;
 
 int readIntLine(istream &is) {
     string tmp;
@@ -221,7 +220,7 @@ m_parseField(istream &is, const string &header, string &name,
     }
 
     fieldData.resize(dim, numEntries);
-    
+
     is >> ws;
     std::runtime_error invalidNPE("Unexpected number-of-nodes-per-element");
     for (size_t i = 0; i < numEntries; ++i) {
@@ -241,7 +240,7 @@ m_parseField(istream &is, const string &header, string &name,
             string dataLine;
             getline(is >> ws, dataLine);
             vector<string> data;
-            boost::split(data, dataLine, boost::is_any_of("\t "));
+            data = MeshFEM::split(dataLine, "\t ");
             int offset = 1; // skip entity index
             if (elementNodeData) {
                 if (size_t(stoi(data[dim])) != npe) throw invalidNPE;

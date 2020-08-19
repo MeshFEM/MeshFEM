@@ -80,7 +80,7 @@ std::ostream & operator<<(std::ostream &os, const IOElement &e) {
 //  @param[in]  path    mesh path
 //  @return     file format, or INVALID if the extension wasn't recognized
 *///////////////////////////////////////////////////////////////////////////////
-Format guessFormat(const std::string &path) {
+MESHFEM_EXPORT Format guessFormat(const std::string &path) {
     // Extract file extension from the path (including the last .)
     std::string ext = fileExtension(path);
     // Make comparisons insensitive;

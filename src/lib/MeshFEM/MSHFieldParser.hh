@@ -13,7 +13,6 @@
 #ifndef MSHFIELDPARSER_HH
 #define MSHFIELDPARSER_HH
 
-#include <boost/algorithm/string.hpp>
 #include <iosfwd>
 #include <string>
 #include <map>

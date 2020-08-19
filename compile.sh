@@ -7,9 +7,9 @@
 #
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=20
 #SBATCH --time=2:00:00
-#SBATCH --mem=16GB
+#SBATCH --mem=32GB
 
 # Load modules
 module purge
@@ -28,16 +28,20 @@ module load suitesparse/intel/4.5.4
 cd "${SLURM_SUBMIT_DIR}"
 
 # Compile main program
-mkdir build
-cd build
-echo ${BUILD}
+SOURCE_DIR=${SLURM_SUBMIT_DIR}
+BUILD_DIR=/scratch/${USER}/build/MeshFEM
 
+mkdir -p ${BUILD_DIR}
+cd ${BUILD_DIR}
+
+echo ${BUILD}
 if [ -z "${BUILD}" ]; then
 	BUILD=Release
 fi
 
-mkdir ${BUILD}
+mkdir -p ${BUILD}
 pushd ${BUILD}
-cmake -DCMAKE_BUILD_TYPE=${BUILD} ../..
-make -j8
+cmake -DCMAKE_BUILD_TYPE=${BUILD} ${SOURCE_DIR}
+make -j20
+make test
 popd

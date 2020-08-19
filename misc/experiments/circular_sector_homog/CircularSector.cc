@@ -146,8 +146,8 @@ int main(int argc, const char *argv[])
     // // hole boundary...
     // holes.clear();
 
-    // triangulatePSLC(inVertices, inEdges, holes, outVertices, outTriangles, args["area"].as<double>(), "Y");
-    triangulatePSLC(inVertices, inEdges, holes, outVertices, outTriangles, args["area"].as<double>(), "Q");
+    // triangulatePSLG(inVertices, inEdges, holes, outVertices, outTriangles, args["area"].as<double>(), "Y");
+    triangulatePSLG(inVertices, inEdges, holes, outVertices, outTriangles, args["area"].as<double>(), "Q");
     save(args["outMesh"].as<string>(), outVertices, outTriangles);
 
     return 0;

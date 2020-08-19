@@ -326,7 +326,7 @@ namespace MeshIO {
     //  @param[in]  path    mesh path
     //  @return     file format, or INVALID if the extension wasn't recognized
     *///////////////////////////////////////////////////////////////////////////
-    Format guessFormat(const std::string &path);
+    MESHFEM_EXPORT Format guessFormat(const std::string &path);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Gets a parser/writer that will work with a particular file format
