@@ -56,6 +56,7 @@ protected:
     using _H::m_mesh; using _H::m_idx; using _H::_H;
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using BNH = typename _Mesh::template BNHandle<_Mesh>;
+    using HEH = typename _Mesh::template HEHandle<_Mesh>;
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numNodes()); }
 
@@ -63,12 +64,23 @@ public:
     bool isEdgeNode()   const { return edgeNodeIndex() >= 0; }
     bool isVertexNode() const { return m_mesh.m_vertexForNode(m_idx) >= 0; }
 
+    // If this is a vertex node, get an incident halfedge; if it's an edge node,
+    // get the containing halfedge.
+    HEH halfEdge() const { return !isEdgeNode() ? vertex().halfEdge() : HEH(m_mesh.m_halfEdgeForEdgeNode[edgeNodeIndex()], m_mesh); }
+
     // Get the vertex this node is sitting on (if any)
     VH vertex()     const { return VH(m_mesh.m_vertexForNode(m_idx), m_mesh); }
 
     // Get the boundary node collocated with this volume node
     // Returns invalid if internal
     BNH boundaryNode() const { return BNH(m_mesh.m_bdryNodeForVolNode(m_idx), m_mesh); }
+
+    // Call `visitor(ei)` for each incident element `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) const {
+        if (isEdgeNode()) { halfEdge().visitIncidentElements(visitor); }
+        else              {   vertex().visitIncidentElements(visitor); }
+    }
 
     // Identity operation--avoids explicitly handling some special use cases.
     const NHandle &volumeNode() const { return *this; }
@@ -154,7 +166,18 @@ public:
     SubEntityHandleRange<NRangeTraits> nodes() const { return SubEntityHandleRange<NRangeTraits>(*this); }
 };
 
-}
+////////////////////////////////////////////////////////////////////////////////
+// Half Edge Handles
+////////////////////////////////////////////////////////////////////////////////
+template<class _Mesh>
+class HEHandle : public BaseMesh_t<_Mesh>::template HEHandle<_Mesh> {
+protected:
+    using Base = typename BaseMesh_t<_Mesh>::template HEHandle<_Mesh>;
+    using Base::m_mesh; using Base::m_idx; using Base::Base;
+    friend Base;
+};
+
+} // _FEMMeshHandles
 
 template<size_t _K, size_t _Deg, class EmbeddingSpace,
          template <size_t, size_t, class> class _FEMData>
@@ -162,15 +185,16 @@ struct HandleTraits<FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>> {
     template<class _Mesh> using  VHandle = _FEMMeshHandles:: VHandle<_Mesh>; // Vertex
     template<class _Mesh> using  NHandle = _FEMMeshHandles:: NHandle<_Mesh>; // Node
     template<class _Mesh> using  EHandle = _FEMMeshHandles:: EHandle<_Mesh>; // Element
+    template<class _Mesh> using HEHandle = _FEMMeshHandles::HEHandle<_Mesh>; // Half edge
     template<class _Mesh> using BVHandle = _FEMMeshHandles::BVHandle<_Mesh>; // Boundary vertex
     template<class _Mesh> using BNHandle = _FEMMeshHandles::BNHandle<_Mesh>; // Boundary node
     template<class _Mesh> using BEHandle = _FEMMeshHandles::BEHandle<_Mesh>; // Boundary element
 };
 
-// Range traits for all tri handle types: get the corresponding entity counts.
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: VHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numVertices()        ; } }; // Vertex
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: NHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numNodes()           ; } }; // Node
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles:: EHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numElements()        ; } }; // Element
+template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::HEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numHalfEdges()       ; } }; // Half edges
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } }; // Boundary vertex
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BNHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryNodes()   ; } }; // Boundary node
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryElements(); } }; // Boundary element

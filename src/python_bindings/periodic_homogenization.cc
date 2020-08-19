@@ -13,7 +13,7 @@ namespace py = pybind11;
 #include <MeshFEM/OrthotropicHomogenization.hh>
 #include <MeshFEM/LinearElasticity.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
 
 template<typename Mesh>
 using ETensor = ElasticityTensor<typename Mesh::Real, Mesh::EmbeddingDimension>;
@@ -150,7 +150,7 @@ void bindHomogenization(py::module &m, py::module &detail_module) {
     using HR = HomogenizationResult<_Mesh>;
     using SMValue = SymmetricMatrixValue<Real, N>;
 
-    py::class_<HR>(detail_module, ("HomogenizationResult" + getMeshName<_Mesh>()).c_str())
+    py::class_<HR>(detail_module, ("HomogenizationResult" + NameMangler<_Mesh>::name()).c_str())
         .def_readonly("Ch",          &HR::Ch)
         .def_readonly("w_ij",        &HR::w_ij)
         .def_readonly("strain_w_ij", &HR::strain_w_ij)
@@ -194,15 +194,4 @@ PYBIND11_MODULE(periodic_homogenization, m) {
 // #if MESHFEM_BIND_LONG_DOUBLE
 //     addBindings<long double>(m, detail_module);
 // #endif
-
-    ////////////////////////////////////////////////////////////////////////////////
-    // Benchmarking
-    ////////////////////////////////////////////////////////////////////////////////
-    m.def("benchmark_reset", &BENCHMARK_RESET);
-    m.def("benchmark_report", [](bool includeMessages) {
-            py::scoped_ostream_redirect stream(std::cout, py::module::import("sys").attr("stdout"));
-            if (includeMessages) BENCHMARK_REPORT(); else BENCHMARK_REPORT_NO_MESSAGES();
-        },
-        py::arg("include_messages") = false)
-        ;
 }

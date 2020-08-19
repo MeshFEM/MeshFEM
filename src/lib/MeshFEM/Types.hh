@@ -7,6 +7,8 @@
 #include "unused.hh"
 typedef double Real;
 
+#include <MeshFEM_export.h>
+
 template<size_t N>
 using VectorND = Eigen::Matrix<Real, N, 1, Eigen::ColMajor, N, 1>;
 template<size_t N>
@@ -18,6 +20,17 @@ typedef  PointND<3>  Point3D;
 typedef VectorND<3> Vector3D;
 typedef  PointND<2>  Point2D;
 typedef VectorND<2> Vector2D;
+
+MESHFEM_EXPORT extern Eigen::IOFormat pointFormatter;
+
+// Types templated on floating point representation.
+template<typename Real_> using  Vec3_T = Eigen::Matrix<Real_, 3, 1>;
+template<typename Real_> using   Pt3_T = Vec3_T<Real_>;
+template<typename Real_> using  Vec2_T = Eigen::Matrix<Real_, 2, 1>;
+template<typename Real_> using  VecX_T = Eigen::Matrix<Real_, Eigen::Dynamic, 1>;
+template<typename Real_> using  Mat3_T = Eigen::Matrix<Real_, 3, 3>;
+template<typename Real_> using  Mat2_T = Eigen::Matrix<Real_, 2, 2>;
+template<typename Real_> using MatX3_T = Eigen::Matrix<Real_, Eigen::Dynamic, 3>;
 
 extern Eigen::IOFormat pointFormatter;
 
@@ -46,13 +59,18 @@ using EnableIfVectorOfSize = EnableIfMatrixOfSize<EigenType, VectorSize, 1, T>;
 
 template<class EigenType> using V3MatchingScalarType = Eigen::Matrix<typename EigenType::Scalar, 3, 1>;
 template<class EigenType> using V2MatchingScalarType = Eigen::Matrix<typename EigenType::Scalar, 2, 1>;
+template<class EigenType> using V1MatchingScalarType = Eigen::Matrix<typename EigenType::Scalar, 1, 1>;
 
 // Padding, truncation of 2D, 3D vectors
+template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 1>> { static V3MatchingScalarType<EigenType> run(const EigenType &p) { return V3MatchingScalarType<EigenType>(p[0],  0.0, 0.0); } };
 template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 2>> { static V3MatchingScalarType<EigenType> run(const EigenType &p) { return V3MatchingScalarType<EigenType>(p[0], p[1], 0.0); } };
 template<class EigenType> struct    Padder<EigenType, EnableIfVectorOfSize<EigenType, 3>> { static const EigenType &               run(const EigenType &p) { return p; } }; // pass-through
-template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 2>> { template<typename InEigenType> static EnableIfVectorOfSize<InEigenType, 3, V2MatchingScalarType<EigenType>> run(const InEigenType &pt3D) { if (std::abs(pt3D[2]) > 1e-6) throw std::runtime_error("Nonzero z component in embedded Point2D"); return V2MatchingScalarType<EigenType>(pt3D[0], pt3D[1]); }
-                                                                                            template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 2, InEigenType> &run(const InEigenType &pt2D) { return pt2D; } }; // pass-through
-template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 3>> { template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 3, InEigenType> &run(const InEigenType &pt3D) { return pt3D; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 1>> { template<typename InEigenType> static       EnableIfVectorOfSize<InEigenType, 3, V1MatchingScalarType<EigenType>>  run(const InEigenType &pt3D) { if ((std::abs(pt3D[1]) > 1e-6) || (std::abs(pt3D[1]) > 1e-6)) throw std::runtime_error("Nonzero y or z component in embedded Point1D"); return V1MatchingScalarType<EigenType>(pt3D[0]); }
+                                                                                            template<typename InEigenType> static       EnableIfVectorOfSize<InEigenType, 2, V1MatchingScalarType<EigenType>>  run(const InEigenType &pt2D) { if ( std::abs(pt2D[1]) > 1e-6                               ) throw std::runtime_error("Nonzero y component in embedded Point1D");      return V1MatchingScalarType<EigenType>(pt2D[0]); }
+                                                                                            template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 1,                     InEigenType> &run(const InEigenType &pt1D) { return pt1D; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 2>> { template<typename InEigenType> static       EnableIfVectorOfSize<InEigenType, 3, V2MatchingScalarType<EigenType>>  run(const InEigenType &pt3D) { if (std::abs(pt3D[2]) > 1e-6) throw std::runtime_error("Nonzero z component in embedded Point2D"); return V2MatchingScalarType<EigenType>(pt3D[0], pt3D[1]); }
+                                                                                            template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 2,                     InEigenType> &run(const InEigenType &pt2D) { return pt2D; } }; // pass-through
+template<class EigenType> struct Truncator<EigenType, EnableIfVectorOfSize<EigenType, 3>> { template<typename InEigenType> static const EnableIfVectorOfSize<InEigenType, 3,                     InEigenType> &run(const InEigenType &pt3D) { return pt3D; } }; // pass-through
 
 // Provide padding/truncation for points of eigen type.
 template<                       class InPointDerived> V3MatchingScalarType<InPointDerived> padTo3D(const Eigen::MatrixBase<InPointDerived> &p) { return    Padder<Eigen::MatrixBase< InPointDerived>>::run(p); }
@@ -103,6 +121,7 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
 
 // Work around alignment issues for C++ versions before C++17:
 // http://eigen.tuxfamily.org/dox-devel/group__TopicStlContainers.html
+#include <Eigen/StdVector>
 #include <vector>
 template<typename T>
 using aligned_std_vector = std::vector<T, Eigen::aligned_allocator<T>>;

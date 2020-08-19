@@ -38,7 +38,7 @@
 //              Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
 //              Edge   node i: 4 * lambda_j * lambda_k
 //                             where j, k are the edge endpoint (vertex) nodes
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  10/06/2014 17:51:57
@@ -83,108 +83,147 @@ namespace detail {
     using namespace Simplex;
 
     ////////////////////////////////////////////////////////////////////////////
-    // Interpolation
+    // Shape Function Lookup Tables
+    // Accessed like:
+    //      ShapeFunctions<Deg, NodeIndex>::eval(c0, c1, ...)
     ////////////////////////////////////////////////////////////////////////////
-    // Constant functions don't interpolate...
-    template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
-    _T _interpolate(const Interpolant<_T, _K, 0, _NS> &f, Args&&... /* args */) { return f[0]; }
+    template<size_t _Deg, size_t _NodeIdx>
+    struct ShapeFunctions;
 
     // Barycentric coordinates are the linear shape functions for all simplices.
-    // template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
-    // _T _interpolate(const Interpolant<_T, _K, 1, _NS> &f, const BaryCoords &c) {
-    //     _T result = c[0] * f[0];
-    //     for (size_t i = 1; i < numNodes(_K, 1); ++i)
-    //         result += c[i] * f[i];
-    //     return result;
-    // }
-    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Edge,        1, _NS> &f, Real c0, Real c1                  ) { _T result = c0 * f[0]; result += c1 * f[1];                                           return result; }
-    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Triangle,    1, _NS> &f, Real c0, Real c1, Real c2         ) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2];                    ; return result; }
-    template<typename _T, template<typename, size_t, size_t> class _NS> _T _interpolate(const Interpolant<_T, Tetrahedron, 1, _NS> &f, Real c0, Real c1, Real c2, Real c3) { _T result = c0 * f[0]; result += c1 * f[1]; result += c2 * f[2]; result += c3 * f[3]; return result; }
+    template<size_t _NodeIdx>
+    struct ShapeFunctions<1, _NodeIdx> {
+        inline static constexpr Real eval(Real c0, Real c1                  ) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Edge,        1)>{{ c0, c1        }}); }
+        inline static constexpr Real eval(Real c0, Real c1, Real c2         ) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Triangle,    1)>{{ c0, c1, c2    }}); }
+        inline static constexpr Real eval(Real c0, Real c1, Real c2, Real c3) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Tetrahedron, 1)>{{ c0, c1, c2, c3}}); }
+    };
 
     // Quadratic shape functions are simple functions of the barycentric coords:
     //    Vertex node i: 2 * lambda_i * (lambda_i - 0.5)
     //    Edge   node  : 4 * lambda_j * lambda_k
     //                   where j, k are the edge endpoint (vertex) nodes
-    // template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename BaryCoords>
-    // _T _interpolate(const Interpolant<_T, _K, 2, _NS> &f, const BaryCoords &c) {
-    //     _T result = (2 * c[0] * (c[0] - 0.5)) * f[0];
-    //     for (size_t i = 1; i < numVertices(_K); ++i) result += (2 * c[i] * (c[i] - 0.5)) * f[i];
-    //     for (size_t i = 0; i <    numEdges(_K); ++i) result += (4 * c[edgeStartNode(i)] * c[edgeEndNode(i)]) * f[i + numVertices(_K)];
-    //     return result;
-    // }
-    template<typename _T, template<typename, size_t, size_t> class _NS>
-    _T _interpolate(const Interpolant<_T, Simplex::Edge, 2, _NS> &f, Real c0, Real c1) {
-        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]);
-        result += (4 * c0 * c1) * f[2];
-        return result;
+    template<size_t _NodeIdx>
+    struct ShapeFunctions<2, _NodeIdx> {
+        inline static constexpr Real eval(Real c0, Real c1                  ) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Edge,        2)>{{ 2 * c0 * (c0 - 0.5), 2 * c1 * (c1 - 0.5),                                           4 * c0 * c1                                                                   }}); }
+        inline static constexpr Real eval(Real c0, Real c1, Real c2         ) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Triangle,    2)>{{ 2 * c0 * (c0 - 0.5), 2 * c1 * (c1 - 0.5), 2 * c2 * (c2 - 0.5),                      4 * c0 * c1, 4 * c1 * c2, 4 * c2 * c0                                         }}); }
+        inline static constexpr Real eval(Real c0, Real c1, Real c2, Real c3) { return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Tetrahedron, 2)>{{ 2 * c0 * (c0 - 0.5), 2 * c1 * (c1 - 0.5), 2 * c2 * (c2 - 0.5), 2 * c3 * (c3 - 0.5), 4 * c0 * c1, 4 * c1 * c2, 4 * c2 * c0, 4 * c0 * c3, 4 * c2 * c3, 4 * c1 * c3  }}); }
+    };
+
+    // Cubic triangle
+    template<size_t _NodeIdx>
+    struct ShapeFunctions<3, _NodeIdx> {
+        inline static constexpr Real eval(Real c0, Real c1, Real c2) {
+            return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Triangle, 3)>{{
+                    // Corner nodes: normalization weight 9 / 2
+                    c0 * (c0 - 1 / 3.) * (c0 - 2 / 3.) * (9 / 2.),
+                    c1 * (c1 - 1 / 3.) * (c1 - 2 / 3.) * (9 / 2.),
+                    c2 * (c2 - 1 / 3.) * (c2 - 2 / 3.) * (9 / 2.),
+                    // Edge nodes: normalization weight 27 / 2
+                    c0 * c1 * (c0 - 1 / 3.) * (27 / 2.),
+                    c0 * c1 * (c1 - 1 / 3.) * (27 / 2.),
+                    c1 * c2 * (c1 - 1 / 3.) * (27 / 2.),
+                    c1 * c2 * (c2 - 1 / 3.) * (27 / 2.),
+                    c2 * c0 * (c2 - 1 / 3.) * (27 / 2.),
+                    c2 * c0 * (c0 - 1 / 3.) * (27 / 2.),
+                    // Center node: normalization weight 27
+                    27 * c0 * c1 * c2
+                }});
+        }
+    };
+
+    // Quartic tri
+    template<size_t _NodeIdx>
+    struct ShapeFunctions<4, _NodeIdx> {
+        inline static constexpr Real eval(Real c0, Real c1, Real c2) {
+            return std::get<_NodeIdx>(std::array<Real, Simplex::numNodes(Simplex::Triangle, 4)>{{
+                    // Corner nodes: normalization weight 32 / 3
+                    (c0 * (c0 - 1 / 4.) * (c0 - 2 / 4.) * (c0 - 3 / 4.)) * (32 / 3.),
+                    (c1 * (c1 - 1 / 4.) * (c1 - 2 / 4.) * (c1 - 3 / 4.)) * (32 / 3.),
+                    (c2 * (c2 - 1 / 4.) * (c2 - 2 / 4.) * (c2 - 3 / 4.)) * (32 / 3.),
+
+                    // Edge non-midpoint nodes: normalization weight 128 / 3
+                    // Edge midpoint nodes:     normalization weight 64
+                    (c0 * c1 * (c0 - 1 / 4.) * (c0 - 2 / 4.)) * (128 / 3.),
+                    (c0 * c1 * (c0 - 1 / 4.) * (c1 - 1 / 4.)) *        64.,
+                    (c0 * c1 * (c1 - 1 / 4.) * (c1 - 2 / 4.)) * (128 / 3.),
+                    (c1 * c2 * (c1 - 1 / 4.) * (c1 - 2 / 4.)) * (128 / 3.),
+                    (c1 * c2 * (c1 - 1 / 4.) * (c2 - 1 / 4.)) *        64.,
+                    (c1 * c2 * (c2 - 1 / 4.) * (c2 - 2 / 4.)) * (128 / 3.),
+                    (c2 * c0 * (c2 - 1 / 4.) * (c2 - 2 / 4.)) * (128 / 3.),
+                    (c2 * c0 * (c2 - 1 / 4.) * (c0 - 1 / 4.)) *        64.,
+                    (c2 * c0 * (c0 - 1 / 4.) * (c0 - 2 / 4.)) * (128 / 3.),
+
+                    // Central nodes: normalization weight 128
+                    c0 * c1 * c2 * (c0 - 1 / 4.) * 128.,
+                    c0 * c1 * c2 * (c1 - 1 / 4.) * 128.,
+                    c0 * c1 * c2 * (c2 - 1 / 4.) * 128.
+                }});
+        }
+    };
+
+    // Evaluate the _NodeIdx^th degree _Deg shape function at a vector of barycentric coordinates.
+    template<size_t _Deg, size_t _NodeIdx, size_t _K, size_t... CoordIdxs>
+    Real shapeFunctionEvaluatorImpl(const EvalPt<_K> &baryCoords, Future::index_sequence<CoordIdxs...>) {
+        return detail::ShapeFunctions<_Deg, _NodeIdx>::eval(baryCoords[CoordIdxs]...);
     }
-    template<typename _T, template<typename, size_t, size_t> class _NS>
-    _T _interpolate(const Interpolant<_T, Simplex::Triangle, 2, _NS> &f, Real c0, Real c1, Real c2) {
-        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]);
-        result += (4 * c0 * c1) * f[3]; result += (4 * c1 * c2) * f[4]; result += (4 * c2 * c0) * f[5];
-        return result;
-    }
-    template<typename _T, template<typename, size_t, size_t> class _NS>
-    _T _interpolate(const Interpolant<_T, Simplex::Tetrahedron, 2, _NS> &f, Real c0, Real c1, Real c2, Real c3) {
-        _T result((2 * c0 * (c0 - 0.5)) * f[0]); result += ((2 * c1 * (c1 - 0.5)) * f[1]); result += ((2 * c2 * (c2 - 0.5)) * f[2]); result += ((2 * c3 * (c3 - 0.5)) * f[3]);
-        result += (4 * c0 * c1) * f[4]; result += (4 * c1 * c2) * f[5]; result += (4 * c2 * c0) * f[6]; result += (4 * c0 * c3) * f[7]; result += (4 * c2 * c3) * f[8]; result += (4 * c1 * c3) * f[9];
-        return result;
+
+    // Evaluate at a vector of barycentric coordinates
+    template<size_t _Deg, size_t _NodeIdx, size_t _K>
+    Real shapeFunctionEvaluator(const EvalPt<_K> &baryCoords) {
+        return shapeFunctionEvaluatorImpl<_Deg, _NodeIdx, _K>(baryCoords, Future::make_index_sequence<Simplex::numVertices(_K)>());
     }
 
-    // Cubic triangle interpolation
-    template<typename _T, template<typename, size_t, size_t> class _NS>
-    _T _interpolate(const Interpolant<_T, Simplex::Triangle, 3, _NS> &f, Real c0, Real c1, Real c2) {
-        // Corner nodes: normalization weight 9 / 2
-        _T result((c0 * (c0 - 1 / 3.) * (c0 - 2 / 3.)) * f[0]);
-        result += (c1 * (c1 - 1 / 3.) * (c1 - 2 / 3.)) * f[1];
-        result += (c2 * (c2 - 1 / 3.) * (c2 - 2 / 3.)) * f[2];
-        result *= 1 / 3.; // (9/2) / (27/2) = 1/3
-
-        // Edge nodes: normalization weight 27 / 2
-        result += (c0 * c1 * (c0 - 1 / 3.)) * f[3];
-        result += (c0 * c1 * (c1 - 1 / 3.)) * f[4];
-        result += (c1 * c2 * (c1 - 1 / 3.)) * f[5];
-        result += (c1 * c2 * (c2 - 1 / 3.)) * f[6];
-        result += (c2 * c0 * (c2 - 1 / 3.)) * f[7];
-        result += (c2 * c0 * (c0 - 1 / 3.)) * f[8];
-        result *= 27 / 2.;
-
-        // Center node: normalization weight 27
-        result += (27 * c0 * c1 * c2) * f[9];
-        return result;
+    // Evaluate a runtime-selected shape function at a vector of barycentric coordinates.
+    template<size_t _Deg, size_t _K, size_t... NodeIdxs>
+    Real shapeFunctionImpl(size_t ni, const EvalPt<_K> &baryCoords, Future::index_sequence<NodeIdxs...>) {
+        static std::array<Real (*)(const EvalPt<_K> &),
+                          Simplex::numNodes(_K, _Deg)>
+                    phi{{detail::shapeFunctionEvaluator<_Deg, NodeIdxs, _K>...}};
+        return phi.at(ni)(baryCoords);
     }
 
-    // Quartic triangle interpolation
-    template<typename _T, template<typename, size_t, size_t> class _NS>
-    _T _interpolate(const Interpolant<_T, Simplex::Triangle, 4, _NS> &f, Real c0, Real c1, Real c2) {
-        // Corner nodes: normalization weight 32 / 3
-        _T result((c0 * (c0 - 1 / 4.) * (c0 - 2 / 4.) * (c0 - 3 / 4.)) * f[0]);
-        result += (c1 * (c1 - 1 / 4.) * (c1 - 2 / 4.) * (c1 - 3 / 4.)) * f[1];
-        result += (c2 * (c2 - 1 / 4.) * (c2 - 2 / 4.) * (c2 - 3 / 4.)) * f[2];
-        result *= 1 / 4.; // (32 / 3) / (128 / 3) = 1 / 4
+    ////////////////////////////////////////////////////////////////////////////
+    // Interpolation
+    // Use the shape function lookup tables above to evaluate interpolants at
+    // specified barycentric coordinates. Called like:
+    //      InterpolateImpl<numNodes - 1, Deg>::run(f, c0, c1, ...)
+    ////////////////////////////////////////////////////////////////////////////
+    template<int _ContribNode, size_t _Deg>
+    struct InterpolateImpl {
+        // To avoid temporaries/unnecessary zero initialization, the
+        // last node's contribution is used to initialize the result and then all other nodes' contributions are accumulated into resut
+        template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+        static _T run(const Interpolant<_T, _K, _Deg, _NS> &f, Args... baryCoords) {
+            static_assert(_ContribNode == numNodes(_K, _Deg) - 1, "run must be called with the last node's index.");
 
-        // Edge non-midpoint nodes: normalization weight 128 / 3
-        result += (c0 * c1 * (c0 - 1 / 4.) * (c0 - 2 / 4.)) * f[3];
-        result += (c0 * c1 * (c1 - 1 / 4.) * (c1 - 2 / 4.)) * f[5];
-        result += (c1 * c2 * (c1 - 1 / 4.) * (c1 - 2 / 4.)) * f[6];
-        result += (c1 * c2 * (c2 - 1 / 4.) * (c2 - 2 / 4.)) * f[8];
-        result += (c2 * c0 * (c2 - 1 / 4.) * (c2 - 2 / 4.)) * f[9];
-        result += (c2 * c0 * (c0 - 1 / 4.) * (c0 - 2 / 4.)) * f[11];
-        result *= 2 / 3.; // (128 / 3) / 64 = 2 / 3
+            _T result(ShapeFunctions<_Deg, _ContribNode>::eval(baryCoords...) * f[_ContribNode]);
+            InterpolateImpl<_ContribNode - 1, _Deg>::accumulate(f, result, baryCoords...);
+            return result;
+        }
 
-        // Edge midpoint nodes: normalization weight 64
-        result += (c0 * c1 * (c0 - 1 / 4.) * (c1 - 1 / 4.)) * f[4];
-        result += (c1 * c2 * (c1 - 1 / 4.) * (c2 - 1 / 4.)) * f[7];
-        result += (c2 * c0 * (c2 - 1 / 4.) * (c0 - 1 / 4.)) * f[10];
-        result *= 1 / 2.; // 64 / 128 = 1 / 2
+        template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+        static void accumulate(const Interpolant<_T, _K, _Deg, _NS> &f, _T &result, Args... baryCoords) {
+            result += ShapeFunctions<_Deg, _ContribNode>::eval(baryCoords...) * f[_ContribNode];
+            InterpolateImpl<_ContribNode - 1, _Deg>::accumulate(f, result, baryCoords...);
+        }
+    };
 
-        // Central nodes: normalization weight 128
-        result += c0 * c1 * c2 * (c0 - 1 / 4.) * f[12];
-        result += c0 * c1 * c2 * (c1 - 1 / 4.) * f[13];
-        result += c0 * c1 * c2 * (c2 - 1 / 4.) * f[14];
-        result *= 128;
-        return result;
-    }
+    // Constant functions don't interpolate.
+    template<int _ContribNode>
+    struct InterpolateImpl<_ContribNode, 0> {
+        static_assert(_ContribNode == 0, "Only one node on constant elements...");
+        template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+        static _T run(const Interpolant<_T, _K, 0, _NS> &f, Args... /* baryCoords */) {
+            return f[0];
+        }
+    };
+
+    // Base case: no nodes.
+    template<size_t _Deg>
+    struct InterpolateImpl<-1, _Deg> {
+        template<typename _T, size_t _K, template<typename, size_t, size_t> class _NS, typename... Args>
+        static void accumulate(const Interpolant<_T, _K, _Deg, _NS> &/* f */, _T &/* result */, Args... /* baryCoords */) { }
+    };
 
     ////////////////////////////////////////////////////////////////////////////
     // Exact integrals for constant, linear, and quadratic interpolants over a
@@ -210,7 +249,7 @@ namespace detail {
         result *= volume / numNodes(_K, 1);
         return result;
     }
-    
+
     // Quadratic Edge
     // (vol / 6) * (f_0 + f_1 + 4 * f_2)
     template<typename _T, template<typename, size_t, size_t> class NS>
@@ -403,6 +442,12 @@ namespace detail {
     }
 }
 
+template<size_t _Deg, size_t _K>
+Real shapeFunction(size_t ni, const EvalPt<_K> &baryCoords) {
+    return detail::shapeFunctionImpl<_Deg, _K>(ni, baryCoords,
+                                               Future::make_index_sequence<Simplex::numNodes(_K, _Deg)>());
+}
+
 // Interpolation on a _K simplex (runs the implementations above).
 // Usage:
 // Interpolation<Simplex::{Edge,Triangle,Tetrahedron}, Degree>::interpolate(f);
@@ -494,7 +539,7 @@ public:
         static_assert(((_Deg == 0) && (sizeof...(baryCoords) == 0))
                 || (Simplex::numVertices(_K) == sizeof...(baryCoords)),
                 "Invalid number of barycentric coordinates passed.");
-        return detail::_interpolate(*this, baryCoords...);
+        return detail::InterpolateImpl<Simplex::numNodes(_K, _Deg) - 1, _Deg>::run(*this, baryCoords...);
     }
 
     // Allow assignment between interpolants of the same class.
@@ -561,7 +606,7 @@ public:
     _T average()           const { return detail::_integrate(*this, 1.0); }
 };
 
-template<typename _T, size_t _K, size_t _Deg, 
+template<typename _T, size_t _K, size_t _Deg,
          template<typename, size_t, size_t> class _NS>
 std::ostream & operator<<(std::ostream &os, const Interpolant<_T, _K, _Deg, _NS> &f) {
     os << "Deg " << _Deg << " over " << _K << "-simplex:";

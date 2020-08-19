@@ -1,6 +1,6 @@
 ################################################################################
 
-add_library(MeshFEM
+add_library(MeshFEM SHARED
         Algebra.hh
         BaseCellType.hh
         BoundaryConditions.cc
@@ -50,6 +50,8 @@ add_library(MeshFEM
         OneForm.hh
         OrthotropicHomogenization.hh
         Parallelism.hh
+        Parallelism.cc
+        ParallelAssembly.hh
         PeriodicBoundaryMatcher.hh
         PeriodicHomogenization.hh
         PerturbMesh.hh
@@ -129,8 +131,8 @@ target_link_libraries(${PROJECT_NAME}
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
-        cholmod::cholmod
         umfpack::umfpack
+        cholmod::cholmod
         meshfem::boost
 #		CGAL::CGAL
     PRIVATE
@@ -139,6 +141,12 @@ target_link_libraries(${PROJECT_NAME}
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
 target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
+
+# Generate MeshFEM_export.h which provides the MESHFEM_EXPORT macro
+# for making our public API symbols visible.
+include(GenerateExportHeader)
+generate_export_header(${PROJECT_NAME} EXPORT_FILE_NAME ${CMAKE_BINARY_DIR}/exports/${PROJECT_NAME}_export.h)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_BINARY_DIR}/exports)
 
 ################################################################################
 # Configure manual compiler flags based on CMake options

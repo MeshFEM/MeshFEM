@@ -23,8 +23,10 @@
 #include <MeshFEM/function_traits.hh>
 #include <array>
 
+#include <MeshFEM_export.h>
+
 template<size_t _K, size_t _Deg>
-struct QuadratureTable {
+struct MESHFEM_EXPORT QuadratureTable {
     static constexpr size_t numPoints = 0;
     static constexpr std::array<EvalPt<_K>, numPoints> points{};
     // TODO: weights!
@@ -60,7 +62,7 @@ template<size_t _K, size_t _Deg>
 using QPArray = std::array<EvalPt<_K>, QuadratureTable<_K, _Deg>::numPoints>;
 
 template<>
-struct QuadratureTable<Simplex::Edge, 0> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Edge, 0> points{{
         {{0.5, 0.5}}
@@ -69,10 +71,10 @@ struct QuadratureTable<Simplex::Edge, 0> {
 
 // Linear rule is the same as constant
 template<>
-struct QuadratureTable<Simplex::Edge, 1> : public QuadratureTable<Simplex::Edge, 0> { };
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 1> : public QuadratureTable<Simplex::Edge, 0> { };
 
 template<>
-struct QuadratureTable<Simplex::Edge, 2> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 2> {
     static constexpr size_t numPoints = 2;
     static constexpr QPArray<Simplex::Edge, 2> points{{
         {{0.78867513459481288225, 0.21132486540518711775}},
@@ -82,10 +84,10 @@ struct QuadratureTable<Simplex::Edge, 2> {
 
 // Cubic rule is the same as quadratic
 template<>
-struct QuadratureTable<Simplex::Edge, 3> : public QuadratureTable<Simplex::Edge, 2> { };
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 3> : public QuadratureTable<Simplex::Edge, 2> { };
 
 template<>
-struct QuadratureTable<Simplex::Edge, 4> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 4> {
     static constexpr size_t numPoints = 3;
     static constexpr QPArray<Simplex::Edge, 4> points{{
         {{0.11270166537925831148, 0.88729833462074168852}},
@@ -96,7 +98,7 @@ struct QuadratureTable<Simplex::Edge, 4> {
 
 // Degree 5 rule is the same as degree 4
 template<>
-struct QuadratureTable<Simplex::Edge, 5> : public QuadratureTable<Simplex::Edge, 4> { };
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 5> : public QuadratureTable<Simplex::Edge, 4> { };
 
 template<size_t _Deg, typename F, typename std::enable_if<function_traits<F>::arity == 1, int>::type = 0>
 typename function_traits<F>::result_type integrate_edge(const F &f, Real vol = 1.0) {
@@ -194,7 +196,7 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 }
 
 template<>
-struct QuadratureTable<Simplex::Triangle, 0> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Triangle, 0> points{{
         {{1 / 3.0, 1 / 3.0, 1 / 3.0}}
@@ -203,10 +205,10 @@ struct QuadratureTable<Simplex::Triangle, 0> {
 
 // Linear rule is the same as constant
 template<>
-struct QuadratureTable<Simplex::Triangle, 1> : public QuadratureTable<Simplex::Triangle, 0> { };
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 1> : public QuadratureTable<Simplex::Triangle, 0> { };
 
 template<>
-struct QuadratureTable<Simplex::Triangle, 2> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 2> {
     static constexpr size_t numPoints = 3;
 
     static constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
@@ -218,7 +220,7 @@ struct QuadratureTable<Simplex::Triangle, 2> {
 };
 
 template<>
-struct QuadratureTable<Simplex::Triangle, 3> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 3> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 3 / 5.0,
                             c1 = 1 / 5.0;
@@ -231,7 +233,7 @@ struct QuadratureTable<Simplex::Triangle, 3> {
 };
 
 template<>
-struct QuadratureTable<Simplex::Triangle, 4> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 4> {
     static constexpr size_t numPoints = 6;
 
     static constexpr double c0_0 = 0.10810301816807022736,
@@ -250,7 +252,7 @@ struct QuadratureTable<Simplex::Triangle, 4> {
 };
 
 template<>
-struct QuadratureTable<Simplex::Triangle, 5> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 5> {
     static constexpr size_t numPoints = 7;
 
     static constexpr double c0_0 = 0.79742698535308732240,
@@ -341,7 +343,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
 }
 
 template<>
-struct QuadratureTable<Simplex::Tetrahedron, 0> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 0> {
     static constexpr size_t numPoints = 1;
     static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
         {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}}
@@ -350,10 +352,10 @@ struct QuadratureTable<Simplex::Tetrahedron, 0> {
 
 // Linear rule is the same as constant
 template<>
-struct QuadratureTable<Simplex::Tetrahedron, 1> : public QuadratureTable<Simplex::Tetrahedron, 0> { };
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 1> : public QuadratureTable<Simplex::Tetrahedron, 0> { };
 
 template<>
-struct QuadratureTable<Simplex::Tetrahedron, 2> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 2> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
                             c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
@@ -366,7 +368,7 @@ struct QuadratureTable<Simplex::Tetrahedron, 2> {
 };
 
 template<>
-struct QuadratureTable<Simplex::Tetrahedron, 3> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 3> {
     static constexpr size_t numPoints = 5;
     static constexpr double c0 = 0.5,
                             c1 = 1 / 6.0;
@@ -380,7 +382,7 @@ struct QuadratureTable<Simplex::Tetrahedron, 3> {
 };
 
 template<>
-struct QuadratureTable<Simplex::Tetrahedron, 4> {
+struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 4> {
     static constexpr size_t numPoints = 11;
 
     static constexpr double c0_0 = 11.0 / 14.0,

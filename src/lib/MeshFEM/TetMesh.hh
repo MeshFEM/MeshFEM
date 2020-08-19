@@ -13,7 +13,7 @@
 //
 //  We support levels 0 and 1, the vertex->half-face part of level 2, and an
 //  improved level 3 (boundary representation) where triangles' corner vertex
-//  indices aren't explicitly stored. Instead, we store an indices of the
+//  indices aren't explicitly stored. Instead, we store a indices of the
 //  opposite half-faces from which the vertex indices can be retrieved.
 //  Also, instead of using "O[hf] = -1" as the opposite to internal half-faces
 //  hf on the boundary, we store an encoded boundary half-face index, -1 - bhf,
@@ -47,7 +47,7 @@
 //  Face orientation:
 //  Differing from [1], we orient a tet's half-faces to point inward (so that
 //  their opposites point outward). In particular, by always reversing
-//  orientation accross half-faces, this ensures the correct orientation of
+//  orientation across half-faces, this ensures the correct orientation of
 //  boundary mesh triangles, whose opposites are the inward-pointing face of
 //  their incident tet.
 //  This convention is consistent with TriMesh, where a triangle's half-edges
@@ -159,6 +159,7 @@ private:
 public:
     HR<  VHandle> vertices()          { return HR<  VHandle>(*this); }
     HR< HFHandle> halfFaces()         { return HR< HFHandle>(*this); }
+    HR< HEHandle> halfEdges()         { return HR< HEHandle>(*this); }
     HR<  THandle> tets()              { return HR<  THandle>(*this); }
     HR< BVHandle> boundaryVertices()  { return HR< BVHandle>(*this); }
     HR<BHEHandle> boundaryHalfEdges() { return HR<BHEHandle>(*this); }
@@ -166,6 +167,7 @@ public:
 
     CHR<  VHandle> vertices()          const { return CHR<  VHandle>(*this); }
     CHR< HFHandle> halfFaces()         const { return CHR< HFHandle>(*this); }
+    CHR< HEHandle> halfEdges()         const { return CHR< HEHandle>(*this); }
     CHR<  THandle> tets()              const { return CHR<  THandle>(*this); }
     CHR< BVHandle> boundaryVertices()  const { return CHR< BVHandle>(*this); }
     CHR<BHEHandle> boundaryHalfEdges() const { return CHR<BHEHandle>(*this); }
@@ -174,6 +176,7 @@ public:
     // Explicit const handle ranges (for const iteration over nonconst mesh)
     CHR<  VHandle> constVertices()          const { return CHR<  VHandle>(*this); }
     CHR< HFHandle> constHalfFaces()         const { return CHR< HFHandle>(*this); }
+    CHR< HEHandle> constHalfEdges()         const { return CHR< HEHandle>(*this); }
     CHR<  THandle> constTets()              const { return CHR<  THandle>(*this); }
     CHR< BVHandle> constBoundaryVertices()  const { return CHR< BVHandle>(*this); }
     CHR<BHEHandle> constBoundaryHalfEdges() const { return CHR<BHEHandle>(*this); }
@@ -418,7 +421,7 @@ protected:
     struct _HERep;
     // Get the volume half-edge corresponding to this boundary he
     _HERep m_volHEOfBdryHE(int bhe) const {
-        if (bhe < 0) return -1;
+        if (bhe < 0) return _HERep(-1, -1, -1);
         int bf = m_bdryFaceOfBdryHE(bhe);
         int  c = bhe % 3;
         int vf = bO[bf];
@@ -515,7 +518,7 @@ protected:
             lhf2; // local index of tet corner in lhf1 opposite the half-edge
                   // (equivalently: half-face determining edge by intersection)
 
-        _HERep(int he) {
+        explicit _HERep(int he) {
             t = u_tetOfHE(he);
             int lhe = u_lhe(he);
             // The local indices of these half-faces in tet t are defined as
@@ -526,7 +529,8 @@ protected:
         _HERep(int _t, int _lhf1, int _lhf2) : t(_t), lhf1(_lhf1), lhf2(_lhf2) { }
 
         // Inverse of the constructor: determine local and global 1D indices
-        int index() const { return isBoundary() ? -1 : (lhe() + 12 * t); }
+        // For boundary halfedges, this is the boundary halfedge's index `bhe` encoded as `-2 - bhe`
+        int index() const { return isBoundary() ? -2 - bdryHE() : (lhe() + 12 * t); }
         int   lhe() const { return 3 * lhf1 + (lhf2 - lhf1 + 3) % 4; }
 
         // global half face indices
@@ -556,7 +560,7 @@ protected:
 
         // This _HERep can also represent a boundary halfedge. In this case:
         //   t = -1
-        //   lhf1 = bdryFaceIdx (global global boundary face index)
+        //   lhf1 = bdryFaceIdx (global boundary face index)
         //   lhf2 = halfedge index in bdryFace (0, 1, or 2)
         bool isBoundary() const { return (t < 0); }
         // Retrieve the encoded boundary half-edge information.
@@ -629,7 +633,7 @@ protected:
         _HERep rhe = u_radialHE(h);
         int bhe = -1;
         if (rhe.isBoundary()) {
-            rhe = rhe.bdryHE();
+            bhe = rhe.bdryHE();
             assert(size_t(bhe) < numBoundaryHalfEdges());
         }
         return bhe;
@@ -653,16 +657,14 @@ protected:
     int     m_prevHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return      _HERep(he2).prev().index(); }); }
     int     m_mateHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return      _HERep(he2).mate().index(); }); }
     int   m_radialHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return u_radialHE(_HERep(he2)).index(); }); }
-    int m_bdryHEOfHE(int he) const {
-        if (he == -1) return -1;
-        assert(size_t(he) < numHalfEdges());
-        _HERep rhe = u_radialHE(_HERep(he));
-        int bhe = -1;
-        if (rhe.isBoundary()) {
-            bhe = rhe.bdryHE();
-            assert(size_t(bhe) < numBoundaryHalfEdges());
-        }
-        return bhe;
+    int m_bdryHEOfHE(int he) const { return m_guardFuncHE(he, [=](int he2) { return       u_bdryHEOfHE(_HERep(he2)); }); }
+
+    int m_heOfHF(const int hf, const int lhe) const {
+        if (hf < 0) return -1;
+        assert(size_t(hf) < numHalfFaces() && lhe >= 0 && lhe < 3);
+        size_t tet = hf / 4;
+        size_t lhf = hf % 4;
+        return _HERep(tet, lhf, m_faceCornerToTetCorner(lhf, lhe)).index();
     }
 };
 

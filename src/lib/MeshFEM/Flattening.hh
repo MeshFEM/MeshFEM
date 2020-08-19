@@ -13,10 +13,12 @@
 #ifndef FLATTENING_HH
 #define FLATTENING_HH
 #include <cstddef>
+#include <array>
+#include <utility>
 
 // Length of a flattened rank 2 tensor in "dim" dimensions.
 // This is also the row and column size of the flattened rank 4 tensor.
-constexpr size_t flatLen(size_t dim) { return (dim == 3) ? 6 : 3; }
+constexpr size_t flatLen(size_t dim) { return (dim * (dim + 1)) / 2; }
 
 // Implements flattening of symmetric 2D indices into 1D indices
 constexpr size_t flattenIndices(size_t dim, size_t i, size_t j) {
@@ -28,6 +30,17 @@ constexpr size_t flattenIndices(size_t dim, size_t i, size_t j) {
 // Optimized version...
 template<size_t _Dim>
 inline constexpr size_t flattenIndices(size_t i, size_t j);
+
+using IdxPair = std::pair<size_t, size_t>;
+
+template<size_t _Dim>
+inline const IdxPair unflattenIndex(size_t i);
+
+// 0
+template<>
+inline constexpr size_t flattenIndices<1>(size_t /* i */, size_t /* j */) {
+    return 0;
+}
 
 // 02
 //  1
@@ -44,6 +57,29 @@ inline constexpr size_t flattenIndices<3>(size_t i, size_t j) {
     return (i == j) ? i :
             ((i < j) ? ((j == 2) ? 4 - i : 5)
                      : ((i == 2) ? 4 - j : 5));
+}
+
+// 0
+template<>
+inline const IdxPair unflattenIndex<1>(size_t /* i */) {
+    return IdxPair{0, 0};
+}
+
+// 02
+//  1
+template<>
+inline const IdxPair unflattenIndex<2>(size_t i) {
+    return (i < 2) ? IdxPair{i, i} : IdxPair{0, 1};
+}
+
+// 054
+// 513
+// 432
+template<>
+inline const IdxPair unflattenIndex<3>(size_t i) {
+    return (i < 3) ? IdxPair{i, i}
+                   : ((i == 3) ? IdxPair{1, 2}
+                               : ((i == 4) ? IdxPair{0, 2} : IdxPair{0, 1}));
 }
 
 #endif /* end of include guard: FLATTENING_HH */

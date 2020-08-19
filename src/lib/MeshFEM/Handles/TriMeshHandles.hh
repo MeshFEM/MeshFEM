@@ -42,7 +42,17 @@ public:
     BVH boundaryVertex() const { return BVH(   m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
     // Half-edge incident on this vertex; guaranteed to be opposite the boundary if v is on the boundary.
     HEH       halfEdge() const { return HEH(m_mesh.m_halfEdgeOfVertex(m_idx), m_mesh); }
+    // Range circulating counter-clockwise around this vertex.
     CirculatorRange<HEH> incidentHalfEdges() const { return CirculatorRange<HEH>(halfEdge()); }
+
+    // Call `visitor(ei)` for each incident element `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) {
+        for (const auto &he : incidentHalfEdges()) {
+            auto t = he.tri();
+            if (t) visitor(t.index());
+        }
+    }
 
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)
@@ -92,6 +102,7 @@ public:
 
      TH     tri() const { return TH(m_mesh.m_triOfHE(m_idx), m_mesh); }
      TH simplex() const { return tri(); }
+     TH element() const { return tri(); }
     HEH next() const {
         if (m_idx < 0) return boundaryEdge().next().m_volumeCast();
         return HEH(m_mesh.template m_HE<_Mesh::Direction::NEXT>(m_idx), m_mesh);
@@ -113,6 +124,13 @@ public:
         if (m_idx < 0) return false;           // boundary halfedges aren't primary
         if (opposite().m_idx < 0) return true; // the single interior halfedge on the boundary is primary
         return m_idx < opposite().m_idx;       // in the interior, the smaller indexed halfedge is primary
+    }
+
+    // Call `visitor(ei)` for each incident tri `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) const {
+        if (tri())            visitor(tri().index());
+        if (opposite().tri()) visitor(opposite().tri().index());
     }
 
     // Note: these are only correct because of the careful boundary-case
@@ -255,7 +273,7 @@ private:
     friend class HEHandle<_Mesh>;
 };
 
-}
+} // namespace _TriMeshHandles
 
 template<class _VertexData, class _HalfEdgeData, class _TriData, class _BoundaryVertexData, class _BoundaryEdgeData>
 struct HandleTraits<TriMesh<_VertexData, _HalfEdgeData, _TriData, _BoundaryVertexData, _BoundaryEdgeData>> {

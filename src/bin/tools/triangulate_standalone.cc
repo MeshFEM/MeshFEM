@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //  Debugging tool for standalone triangulation of the triangulateio struct's
-//  binary contents as dumped by triangulatePSLC.
+//  binary contents as dumped by triangulatePSLG.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  08/29/2017 19:31:23

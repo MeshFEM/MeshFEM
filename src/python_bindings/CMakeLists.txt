@@ -1,5 +1,5 @@
 # Pybind11 currently doesn't detect Intel's compilers' support of C++14.
-# We hack around this by definingDPYBIND11_CPP14 ourselves for the
+# We hack around this by defining PYBIND11_CPP14 ourselves for the
 # modules using py::overload_cast.
 add_library(intel_pybind_14_hack INTERFACE)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
@@ -18,9 +18,16 @@ pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(sparse_matrices PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(parallelism parallelism.cc)
+set_target_properties(parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(parallelism PUBLIC MeshFEM)
+
+pybind11_add_module(benchmark benchmark.cc)
+set_target_properties(benchmark PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(benchmark PUBLIC MeshFEM)
+
 pybind11_add_module(tensors tensors.cc)
 set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_compile_definitions(tensors PRIVATE)
 target_link_libraries(tensors PUBLIC MeshFEM intel_pybind_14_hack)
 
 pybind11_add_module(periodic_homogenization periodic_homogenization.cc)
@@ -36,7 +43,7 @@ set_target_properties(differential_operators PROPERTIES LIBRARY_OUTPUT_DIRECTORY
 target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack)
 
 # If it is used as submodule, deploy python scripts and libs
-if(NOT MeshFEM_MASTER_PROJECT)
+if(NOT MESHFEM_TOPLEVEL_PROJECT)
     set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
     file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
     configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")

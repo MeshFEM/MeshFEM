@@ -121,7 +121,7 @@ struct TripletMatrix {
     }
 
     // Sort and sum of repeated entries
-    bool needsSumRepated() const { return needs_sum_repeated; }
+    bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
         if (!needsSumRepated()) { return; }
 
@@ -711,8 +711,8 @@ struct CSCMatrix {
     template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
-    void fill(_Real val) { Ax.assign(nz, val); }
-    void setZero() { fill(0.0); }
+    void fill(_Real val) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setConstant(val); }
+    void setZero()       { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setZero(); }
 
     void setIdentity(bool preserveSparsity = false) {
         if (m != n) throw std::runtime_error("Only square matrices are supported");
@@ -759,6 +759,29 @@ struct CSCMatrix {
         }
         return findEntry<_detectMissing>(i, i);
     }
+
+    // Add the NxN block `B` to this matrix, placing its upper-left corner at (i, i).
+    // (Assumes the block already exists in the sparisty pattern)
+    // Only implemented for matrices with upper-triangle symmetry;
+    // we cannot achieve a performance advantage over the block version of
+    // addNZ for general sparse matrices.
+    template<typename Derived>
+    void addDiagBlock(_Index i, const Eigen::MatrixBase<Derived> &B) {
+        constexpr _Index N = Derived::ColsAtCompileTime;
+        static_assert((N == Derived::RowsAtCompileTime) && (N != Eigen::Dynamic), "Intended for fixed-size square blocks only");
+
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented/beneficial for UPPER_TRIANGLE matrices");
+
+        for (_Index l = 0; l < N; ++l) {
+            _Index idx = findDiagEntry(i + l); // bottom of column strip to add
+            for (SuiteSparse_long k = l; k >= 0; --k) { // upper triangle only
+                assert((Ai[idx] == i + k) && "Entry absent from sparsity pattern");
+                Ax[idx--] += B(k, l);
+            }
+        }
+    }
+
+    void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
     template<bool _detectMissing = false>
     _Index findEntry(_Index i, _Index j) const {
@@ -821,12 +844,12 @@ struct CSCMatrix {
     // return the index of the next nonzero entry after the written strip.
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values) {
+    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
         return addNZ(findEntry(i, j), values);
     }
 
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::EigenBase<Derived> &values, _Index hint) {
+    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values, _Index hint) {
         if ((hint < nz) && (Ai[hint] == i) && (hint < Ap[j + 1]) && (hint >= Ap[j]))
             return addNZ(hint, values);
         return addNZ(i, j, values);
@@ -834,9 +857,9 @@ struct CSCMatrix {
 
     // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
-    _Index addNZ(_Index idx, const Eigen::EigenBase<Derived> &values) {
-        static_assert(Derived::ColsAtCompileTime == 1, "Only row vectors can be added with addNZ");
-        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.size()) += values;
+    _Index addNZ(_Index idx, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZ");
+        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
 
@@ -882,14 +905,18 @@ struct CSCMatrix {
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
 
-    // (*this) += alpha * b, assuming b's sparsity pattern is a subset of ours.
+    // Perform the operation:
+    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    // Assumes RHS sparsity pattern is a subset of LHS.
     // offset: offset to be applied to the row and column indices of b
-    void addWithSubSparsity(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
+    void addWithSubSparsity(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
+        auto inRange = [&](_Index i) { return (i >= blockStart) && (i < blockEnd); };
         auto bi = [&]() { return offset + bit.get_i(); };
         auto bj = [&]() { return offset + bit.get_j(); };
         while ((it != ite) && (bit != bite)) {
+            if (!inRange(bit.get_i()) || !inRange(bit.get_j())) { ++bit; continue; }
             if ((it.get_j() == bj())) {
                 if (it.get_i() == bi()) {
                     Ax[it.get_idx()] += alpha * b.Ax[bit.get_idx()];
@@ -906,6 +933,71 @@ struct CSCMatrix {
             }
         }
         assert(bit == bite && "b's sparsity not a subset of ours");
+    }
+
+    // Perform the operation:
+    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    // Sparsity pattern of RHS can be arbitrary.
+    void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        _Index inputSize = std::min(b.m, blockEnd) - blockStart;
+        if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
+        if ((m != inputSize + offset) || (n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+        if (b.nz == 0) return;
+        if (nz == 0) { *this = b; return; }
+
+        auto it  = begin(), bit  = b.begin(),
+             ite = end(),   bite = b.end();
+        auto inRange = [&](_Index i) { return (i >= blockStart) && (i < blockEnd); };
+        auto bi   = [&]() { return offset + bit.get_i();   };
+        auto bj   = [&]() { return offset + bit.get_j();   };
+        auto bval = [&]() { return  alpha * bit.get_val(); };
+        std::vector<_Index> newAp, newAi;
+        std::vector<_Real>  newAx;
+        newAp.reserve(Ap.size());
+        newAi.reserve(Ai.size());
+        newAx.reserve(Ax.size());
+
+        // Merge sorted triplets into the new result
+        _Index currCol = 0;
+        newAp.push_back(0);
+        auto insertEntry = [&](_Index row, _Index col, _Real val) {
+            assert(col >= currCol);
+            // End all columns up to `col - 1`, begin column `col`
+            for (_Index c = currCol + 1; c <= col; ++c)
+                newAp.push_back(newAi.size());
+            currCol = col;
+            newAi.push_back(row);
+            newAx.push_back(val);
+        };
+
+        while ((it != ite) || (bit != bite)) {
+            if ((bit != bite) && (!inRange(bit.get_i()) || !inRange(bit.get_j()))) { ++bit; continue; } // filter entries outside the input block
+            bool takeA = ( it !=  ite);
+            bool takeB = (bit != bite);
+
+            // If both A and B entries are available, pick the first one in sorted order (or pick both and sum if they are at the same location).
+            if (takeA && takeB) {
+                std::pair<_Index, _Index> a_colrow{it.get_j(), it.get_i()}, b_colrow{bj(), bi()};
+                takeA = a_colrow <= b_colrow; // (col, row) lexicographic ordering
+                takeB = b_colrow <= a_colrow;
+            }
+
+            if ( takeA && !takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val()         ); ++it;        }
+            if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val() + bval()); ++it; ++bit; }
+            if (!takeA &&  takeB) { insertEntry(      bi(),       bj(),                bval());       ++bit; }
+        }
+        if (currCol >= n) throw std::runtime_error("Column index out of bounds");
+
+        // Terminate all remaining columns
+        for (_Index c = currCol; c < n; ++c)
+            newAp.push_back(newAi.size());
+
+        assert(newAp.size() == size_t(n + 1));
+
+        Ai = std::move(newAi);
+        Ap = std::move(newAp);
+        Ax = std::move(newAx);
+        nz = Ai.size();
     }
 
     // Set from a triplet matrix
@@ -1011,7 +1103,8 @@ struct CSCMatrix {
         return result;
     }
 
-    void applyRaw(const _Real *x, _Real *result, const bool transpose = false) const {
+    template<typename _Real2> // Templated to support, e.g., application of non-autodiff matrix to autodiff vector.
+    void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
         const bool swapIndices = transpose && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE);
 
         std::fill(result, result + (transpose ? n : m), 0.0);
@@ -1297,14 +1390,14 @@ class CholmodFactorizer {
 public:
     // Assumes matrix is stored in the upper triangle!
     template<typename _Triplet>
-    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll); }
+    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
 
     // Warning: modifies the passed triplet matrix, tmat!
     template<typename _Triplet>
-    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false) : m_AStorage(tmat)           { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(const SuiteSparseMatrix &mat,  bool forceSupernodal = false, bool force_ll = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll); }
-    CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll); }
+    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(tmat)           { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(const SuiteSparseMatrix &mat,  bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
 
     // Delete unsafe copy constructors/assignment.
     // This will also suppress creation of default move constructors/assignment.
@@ -1336,16 +1429,30 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
     }
 
+    // Update the symbolic factorization for with a different sparsity pattern.
+    template<typename Mat>
+    void updateSymbolicFactorization(Mat &&mat, int nmethods = 0) {
+        m_AStorage = std::forward<Mat>(mat);
+        m_matrixUpdated();
+        factorizeSymbolic(nmethods);
+    }
+
     // Recompute the numeric factorization using the new system matrix "tmat",
     // resuing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
-    // NOTE: The check of positive definite inside this function is not sufficient,
-    //       since it just uses CHOLMOD's return status. If the diagonal entry of L 
-    //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to 
+    // NOTE: The positive definiteness check inside this function is not sufficient,
+    //       since it just uses CHOLMOD's return status. If the diagonal entry of L
+    //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
     template<typename Mat>
     void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
-        if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) throw std::runtime_error("Wrong matrix size"); // necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+        if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) {
+            // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+            throw std::runtime_error("Wrong matrix size; " + std::to_string(int(m_L != nullptr))
+                    + ", " + std::to_string(m_L ? m_L->n : 0)
+                    + ", " + std::to_string(mat.m)
+                    + ", " + std::to_string(mat.n));
+        }
         if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
         if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
 
@@ -1512,6 +1619,10 @@ public:
     size_t m() const { return m_A.nrow; }
     size_t n() const { return m_A.ncol; }
 
+    void setSuppressWarnings(bool suppressWarnings) {
+        m_c->print = suppressWarnings ? 0 : 2;
+    }
+
 private:
     std::shared_ptr<cholmod_common> m_c;
     cholmod_sparse m_A;
@@ -1525,9 +1636,13 @@ private:
         m_A.p = m_AStorage.Ap.data();
         m_A.i = m_AStorage.Ai.data();
         m_A.x = m_AStorage.Ax.data();
+
+        m_A.nrow   = m_AStorage.m;
+        m_A.ncol   = m_AStorage.n;
+        m_A.nzmax  = m_AStorage.nnz();
     }
 
-    void m_init(bool forceSupernodal, bool force_ll) {
+    void m_init(bool forceSupernodal, bool force_ll, bool suppressWarnings = false) {
         if (m_c) { cholmod_l_finish(m_c.get()); }
         m_c = std::make_shared<cholmod_common>();
         cholmod_l_start(m_c.get());
@@ -1540,6 +1655,8 @@ private:
 
         if (forceSupernodal) m_c->supernodal = CHOLMOD_SUPERNODAL;
         m_c->final_ll = force_ll;
+
+        m_c->print = suppressWarnings ? 0 : 2;
 
         // Try many different orderings searching for the best.
         // m_c->nmethods = 9;
@@ -1561,9 +1678,6 @@ private:
         m_c->grow2 = 0; // We don't plan to use the modify routines
         m_c->quick_return_if_not_posdef = true;
 
-        m_A.nrow   = m_AStorage.m;
-        m_A.ncol   = m_AStorage.n;
-        m_A.nzmax  = m_AStorage.nnz();
         m_A.nz     = nullptr; /* not needed because m_A is packed. */
         m_A.z      = nullptr; /* not needed because m_A is real. */
         m_A.stype  = 1; // upper triangle stored.
@@ -1818,17 +1932,21 @@ public:
         // Allocate space for solution + Lagrange multipliers
         std::vector<_Real> uReduced(m_AUpper.m);
 
-        // {
-        //     m_AUpper.dump("A.txt");
-        //     static int solve = 0;
-        //     std::ofstream rhsOut("rhs_" + std::to_string(solve));
-        //     rhsOut << std::scientific << std::setprecision(16);
-        //     for (_Real val : bReduced) {
-        //         rhsOut << val << std::endl;
-        //     }
-        //     ++solve;
-        //     // exit(-1);
-        // }
+#if 0
+        {
+            std::cout << "Dumping " << m_AUpper.m << " x " << m_AUpper.n << " matrix" << std::endl;
+            std::cout << "rhs size " << bReduced.size() << std::endl;
+            m_AUpper.dump("A.txt");
+            static int solve = 0;
+            std::ofstream rhsOut("rhs_" + std::to_string(solve) + ".txt");
+            rhsOut << std::scientific << std::setprecision(19);
+            for (_Real val : bReduced) {
+                rhsOut << val << "\n";
+            }
+            ++solve;
+        }
+        exit(-1);
+#endif
 
         if (m_isSPD) {
             if (!m_LLT) {

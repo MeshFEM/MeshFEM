@@ -58,6 +58,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
 
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"))
+        .def_readonly("m",  &SuiteSparseMatrix::m)
+        .def_readonly("n",  &SuiteSparseMatrix::n)
+        .def_readonly("nz", &SuiteSparseMatrix::nz)
         .def("setZero",     &SuiteSparseMatrix::setZero)
         .def("fill",        &SuiteSparseMatrix::fill)
         .def("setIdentity", &SuiteSparseMatrix::setIdentity)
@@ -86,6 +89,16 @@ PYBIND11_MODULE(sparse_matrices, m) {
                         result.Ax = t[5].cast<std::vector<double>>();
                         return result;
                         }))
+        .def("toSciPy", [](const SuiteSparseMatrix &A) {
+                py::object matrix_type = py::module::import("scipy.sparse").attr("csc_matrix");
+                py::array data(A.Ax.size(), A.Ax.data());
+                py::array outerIndices(A.Ap.size(), A.Ap.data());
+                py::array innerIndices(A.Ai.size(), A.Ai.data());
+
+                return matrix_type(
+                    std::make_tuple(data, innerIndices, outerIndices),
+                    std::make_pair(A.m, A.n));
+            })
         .def("solve", [&](SuiteSparseMatrix &smat, const Eigen::VectorXd &b) {
                 if (smat.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
                     throw std::runtime_error("Only symmetric matrices are currently supported");

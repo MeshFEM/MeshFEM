@@ -15,6 +15,8 @@
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/ExpressionVector.hh>
+#include <MeshFEM/ComponentMask.hh>
+
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,7 +33,6 @@
 #include <cassert>
 #include <limits>
 #include <bitset>
-#include <MeshFEM/ComponentMask.hh>
 
 template<size_t _N>
 struct BoundaryCondition {
@@ -435,12 +436,12 @@ struct DeltaForceNodesCondition : public BoundaryCondition<_N> {
 ////////////////////////////////////////////////////////////////////////////////
 // Boundary Condition I/O
 ////////////////////////////////////////////////////////////////////////////////
-template<size_t _N> void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_N> > &conds);
-template<size_t _N> void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
-template<size_t _N> std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
+template<size_t _N> MESHFEM_EXPORT void writeBoundaryConditions(const std::string &cpath, const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> MESHFEM_EXPORT void writeBoundaryConditions(std::ostream &os,         const std::vector<ConstCondPtr<_N> > &conds);
+template<size_t _N> MESHFEM_EXPORT std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> MESHFEM_EXPORT std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion);
+template<size_t _N> MESHFEM_EXPORT std::vector<CondPtr<_N> > readBoundaryConditions(const std::string &cpath, const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
+template<size_t _N> MESHFEM_EXPORT std::vector<CondPtr<_N> > readBoundaryConditions(std::istream &is,         const BBox<VectorND<_N>> &bbox, bool &noRigidMotion, std::vector<PeriodicPairDirichletCondition<_N>> &pp, ComponentMask &pinTranslation);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Periodic boundary condition implementation
@@ -528,22 +529,28 @@ public:
         m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
         m_nodesForDoF.clear(), m_nodesForDoF.reserve(mesh.numInternalNodes() +
                                                      bdryNodeSets.size());
-        // Create a DoF with a single associated node for each internal node.
+
+        // Assign DoF indices to each node (and its identified nodes) in order.
         for (auto n : mesh.nodes()) {
-            if (n.boundaryNode()) continue;
-            assert(m_dofForNode.at(n.index()) == NO_DOF);
-            m_dofForNode.at(n.index()) = m_nodesForDoF.size();
-            m_nodesForDoF.emplace_back(1, n.index());
-        }
-        // Add DoFs for the boundary node sets, translating to volume indices
-        // Note: invalidates bdryNodeSets!!!
-        for (auto &ns : bdryNodeSets) {
-            for (size_t &n : ns) {
-                n = mesh.boundaryNode(n).volumeNode().index();
-                assert(m_dofForNode.at(n) == NO_DOF);
-                m_dofForNode.at(n) = m_nodesForDoF.size();
+            if (m_dofForNode[n.index()] != NO_DOF) continue;
+            auto bn = n.boundaryNode();
+            if (bn) {
+                // Create a DoF shared between bn and all its identified nodes.
+                // Note: invalidates entry of bdryNodeSets!!!
+                auto &ns = bdryNodeSets[bdryNodeSetForBdryNode[bn.index()]];
+                for (size_t &ni : ns) {
+                    ni = mesh.boundaryNode(ni).volumeNode().index();
+                    assert(m_dofForNode.at(ni) == NO_DOF);
+                    m_dofForNode[ni] = m_nodesForDoF.size();
+                }
+                m_nodesForDoF.emplace_back(std::move(ns));
             }
-            m_nodesForDoF.emplace_back(std::move(ns));
+            else {
+                // Create a DoF with a single associated node for each internal node.
+                assert(m_dofForNode.at(n.index()) == NO_DOF);
+                m_dofForNode.at(n.index()) = m_nodesForDoF.size();
+                m_nodesForDoF.emplace_back(1, n.index());
+            }
         }
 
         // All nodes should have been assigned valid DOFs
@@ -603,6 +610,7 @@ public:
         m_isPeriodicBoundaryElement.assign(mesh.numBoundaryElements(), false);
     }
 
+    // Guaranteed monotonically increasing with (lowest identified) node index
     const std::vector<size_t> &periodicDoFsForNodes() const {
         return m_dofForNode;
     }
@@ -654,7 +662,7 @@ private:
     std::vector<bool> m_isPeriodicBoundaryElement;
     // Which periodic boundaries is a boundary node on?
     std::vector<PeriodicBoundaryMatcher::FaceMembership<_N>> m_periodicBoundariesForBoundaryNode;
-    std::vector<size_t> m_dofForNode;
+    std::vector<size_t> m_dofForNode; // Guaranteed monotonically increasing with (lowest identified) node index
     std::vector<std::vector<size_t>> m_nodesForDoF;
     std::vector<size_t> m_ignoreDims;
 };

@@ -10,6 +10,7 @@ import itertools
 class DomainType(Enum):
     GUESS   = 0
     PER_TRI = 1
+    PER_ELEM = 1
     PER_VTX = 2
     PER_CORNER = 3
 
@@ -66,7 +67,9 @@ class ScalarField(VisualizationField):
         # fall back to data range if vmin/vmax are not specified
         if (vmin == None): vmin = np.min(self.data)
         if (vmax == None): vmax = np.max(self.data)
-        return np.clip((self.data - vmin) / (vmax - vmin), 0, 1)
+        den = vmax - vmin
+        if (den < 1e-10): den = 1
+        return np.clip((self.data - vmin) / den, 0, 1)
 
     def colors(self, vmin=None, vmax=None):
         return self.colormap(self.rescaledData(vmin, vmax).ravel())[:, 0:3] # strip alpha

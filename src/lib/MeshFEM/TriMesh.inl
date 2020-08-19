@@ -62,6 +62,10 @@ TriMesh(const Tris &tris, size_t nVertices) {
             auto it = res.first;
             int heO = it->second;
             assert(size_t(heO) < O.size());
+            if ((m_vertexOfHE<HEVertex::TIP >(he) != m_vertexOfHE<HEVertex::TAIL>(heO))  ||
+                (m_vertexOfHE<HEVertex::TAIL>(he) != m_vertexOfHE<HEVertex::TIP >(heO))) {
+                throw std::runtime_error("Inconsistent triangle orientations.");
+            }
             if (O[heO] == -1) {
                 O[heO] = he;
                 O[he] = heO;

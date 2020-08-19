@@ -40,7 +40,7 @@
 #include "Algebra.hh"
 
 typedef enum { FIELD_SCALAR, FIELD_VECTOR, FIELD_MATRIX} FieldType;
-enum class DomainType  { PER_ELEMENT = 0, PER_NODE = 1, ANY = 3, GUESS = 3, UNKNOWN = -1};
+enum class DomainType { PER_ELEMENT = 0, PER_NODE = 1, ANY = 3, GUESS = 3, UNKNOWN = -1};
 
 template<typename Real, size_t t_dim>
 class VectorField : public VectorSpace<Real, VectorField<Real, t_dim>> {

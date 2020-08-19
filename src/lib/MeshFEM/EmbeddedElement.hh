@@ -202,6 +202,7 @@ public:
     }
 
     Real volume() const { return m_volume; }
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -279,6 +280,7 @@ public:
     }
 
     Real volume() const { return m_volume; }
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 protected:
     Real m_volume;
     GradBarycentric m_gradBarycentric;
@@ -360,6 +362,7 @@ public:
         return contains(p, l, eps);
     }
 
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 protected:
     Vec m_p0;
 };

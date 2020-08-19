@@ -16,6 +16,7 @@
 #include <type_traits>
 #include <cassert>
 #include <vector>
+#include "../Types.hh"
 
 // Collection of the handle types for a particular mesh (to be specialized).
 // Should provide, e.g:
@@ -38,8 +39,8 @@ template<class _Handle> struct HandleRangeTraits;
 struct TMEmptyData { };
 
 template<class Data>
-struct DataStorage : public std::vector<Data> {
-    using Base = std::vector<Data>;
+struct DataStorage : public aligned_std_vector<Data> {
+    using Base = aligned_std_vector<Data>;
     using Base::Base;
           Data *getPtr(size_t i)       { return &((*this)[i]); }
     const Data *getPtr(size_t i) const { return &((*this)[i]); }

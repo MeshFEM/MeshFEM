@@ -44,11 +44,15 @@
 #include <MeshFEM/Utilities/RandomAccessIndexSet.hh>
 #include <MeshFEM/Geometry.hh>
 
+// Clean a closed polygonal curve.
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.
 // We take advantage of this representation to identify edge v0->v1 with vertex v0.
 // cellBdryEdgeLen: if set, determines the resolution at which the boundary is
 // meshed. Otherwise, the cell boundary edges are left unsubdivided.
+//
+// permitFeatureMerge: whether to allow a short edge connecting two feature
+// vertices to merge.
 template<size_t N>
 void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   const BBox<VectorND<int(N)>> &cell,
@@ -56,7 +60,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
                   Real featureAngleThreshold, bool periodic = false,
                   nonstd::optional<Real> cellBdryEdgeLen = nonstd::optional<Real>(),
                   const std::vector<Real> &variableMinLen = std::vector<Real>(),
-                  Real cellEpsilon = 1e-5) {
+                  Real cellEpsilon = 1e-5, const bool permitFeatureMerge = true) {
     // std::cout << "Simplifying curve of len " << curve.size() << std::endl;
     using Point = VectorND<N>;
     using FMembership = PeriodicBoundaryMatcher::FaceMembership<N>;
@@ -250,7 +254,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
             merge01 = !isFeature(v0);
             merge10 = !isFeature(v1);
             // If both vertices are features (or both are not) allow the merge
-            if (merge01 == merge10)
+            if ((merge01 == merge10) && permitFeatureMerge)
                 merge01  = merge10 = true;
         }
 

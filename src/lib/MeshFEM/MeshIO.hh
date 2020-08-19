@@ -26,6 +26,8 @@
 #include <iostream>
 #include <vector>
 
+#include <MeshFEM_export.h>
+
 namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_MSH_ASCII = 3, FMT_POLY = 4, FMT_NODE_ELE = 5, FMT_MEDIT = 6, FMT_STL = 7,
@@ -97,7 +99,7 @@ namespace MeshIO {
             static_assert(all_integer_parameters<Args...>(), "Vertex indices must all be integers");
             static_assert(is_valid_element_size(2 + sizeof...(Args)), "Index constructor only supports Lines, Triangles, Quads, Tet, and Hex-sized elements");
         }
-        
+
         IOElement(const std::pair<size_t, size_t> &e) : Base{e.first, e.second} { }
 
         template<typename PType>
@@ -214,7 +216,9 @@ namespace MeshIO {
                           &elements);
     };
 
-    class MeshIO_MSH : public MeshIO {
+    // In gcc/clang, it seems we need to export the entire class in our shared
+    // library in order for its vtable to be exported...
+    class MESHFEM_EXPORT MeshIO_MSH : public MeshIO {
         public:
             typedef IOVertex  Vertex;
             typedef IOElement Element;
@@ -254,11 +258,13 @@ namespace MeshIO {
                 throw std::runtime_error("Unsupported node count for MSH I/O");
             }
 
-            void save(std::ostream &os, const std::vector<Vertex> &nodes,
-                      const std::vector<Element> &elements, MeshType type);
+            virtual void save(std::ostream &os, const std::vector<Vertex> &nodes,
+                              const std::vector<Element> &elements, MeshType type) override;
 
-            MeshType load(std::istream &is, std::vector<Vertex> &nodes,
-                          std::vector<Element> &elements, MeshType type);
+            virtual MeshType load(std::istream &is, std::vector<Vertex> &nodes,
+                                  std::vector<Element> &elements, MeshType type) override;
+
+            virtual ~MeshIO_MSH() { }
 
             bool binary() const { return m_binary; }
             void setBinary(bool binary) { m_binary = binary; }
@@ -320,13 +326,14 @@ namespace MeshIO {
     //  @param[in]  path    mesh path
     //  @return     file format, or INVALID if the extension wasn't recognized
     *///////////////////////////////////////////////////////////////////////////
-    Format guessFormat(const std::string &path);
+    MESHFEM_EXPORT Format guessFormat(const std::string &path);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Gets a parser/writer that will work with a particular file format
     //  @param[in]  format  file format
     //  @return     format parser object
     *///////////////////////////////////////////////////////////////////////////
+    MESHFEM_EXPORT
     MeshIO *getMeshIO(const Format &format);
 
     ////////////////////////////////////////////////////////////////////////////
@@ -337,6 +344,7 @@ namespace MeshIO {
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
+    MESHFEM_EXPORT
     void save(std::ostream &os, const std::vector<IOVertex> &nodes,
               const std::vector<IOElement> &elements, Format format,
               MeshType type = MESH_GUESS);
@@ -349,9 +357,9 @@ namespace MeshIO {
     //  @param[in]  format    file format (default: guess from extension)
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
-    void save(const std::string &path, const std::vector<IOVertex> &nodes,
-              const std::vector<IOElement> &elements, Format format = FMT_GUESS,
-              MeshType type = MESH_GUESS);
+    MESHFEM_EXPORT void save(const std::string &path, const std::vector<IOVertex> &nodes,
+                             const std::vector<IOElement> &elements, Format format = FMT_GUESS,
+                             MeshType type = MESH_GUESS);
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Writes a mesh with per-vertex positions in vertex field "p"
@@ -413,6 +421,7 @@ namespace MeshIO {
     //  @param[in]  format    file format
     //  @param[in]  type      mesh element type (default: guess from first)
     *///////////////////////////////////////////////////////////////////////////
+    MESHFEM_EXPORT
     MeshType load(std::istream &is, std::vector<IOVertex> &nodes,
               std::vector<IOElement> &elements, Format format,
               MeshType type = MESH_GUESS);
@@ -426,6 +435,7 @@ namespace MeshIO {
     //  @param[in]  type      mesh element type (default: guess from first)
     //  @return     actual loaded MeshType
     *///////////////////////////////////////////////////////////////////////////
+    MESHFEM_EXPORT
     MeshType load(const std::string &path, std::vector<IOVertex> &nodes,
                   std::vector<IOElement> &elements, Format format = FMT_GUESS,
                   MeshType type = MESH_GUESS);

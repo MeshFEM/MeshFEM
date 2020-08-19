@@ -53,7 +53,7 @@
 #include <MeshFEM/SimplicialMesh.hh>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/VonMises.hh>
-
+#include <boost/algorithm/string.hpp>
 #include <iomanip>
 #include <regex>
 #include <vector>
@@ -851,11 +851,11 @@ int main(int argc, char *argv[])
     string mshFile;
     vector<FilterInvocation> filters;
     auto forcedDim = boost::make_optional(false, size_t()); // work around maybe-uninitialized GCC warning bug
-    tie(mshFile, filters, forcedDim) = parseCmdLine(argc, argv);
+    std::tie(mshFile, filters, forcedDim) = parseCmdLine(argc, argv);
 
     ifstream infile(mshFile);
     if (!infile.is_open()) throw runtime_error("Couldn't open " + mshFile);
-	MeshIO::MeshType type = io.load(infile, v, e, MeshIO::MESH_GUESS);
+    MeshIO::MeshType type = io.load(infile, v, e, MeshIO::MESH_GUESS);
     size_t meshDim = ::MeshIO::meshDimension(type);
 
     size_t dim = forcedDim ? *forcedDim : meshDim;

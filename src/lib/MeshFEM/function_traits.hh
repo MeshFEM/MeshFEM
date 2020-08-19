@@ -1,6 +1,9 @@
 #ifndef FUNCTION_TRAITS_HH
 #define FUNCTION_TRAITS_HH
 #include <tuple>
+#include "Future.hh"
+#include "TemplateHacks.hh"
+#include "NTuple.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Generalization of function_traits to work with lambda/functors. Allows
@@ -45,5 +48,37 @@ struct function_traits<ReturnType(ClassType::*)(Args...)>
 // Convenience metafunction to get F's return type.
 template<typename F>
 using return_type = typename function_traits<F>::result_type;
+
+////////////////////////////////////////////////////////////////////////////////
+// Convenience methods for detecting functions of N floating point arguments
+// or a single N-tuple of floating point values.
+////////////////////////////////////////////////////////////////////////////////
+template<class F, size_t... Idxs>
+constexpr bool args_all_floats(Future::index_sequence<Idxs...>) {
+    return all_floating_point_parameters<typename function_traits<F>::template arg<Idxs>::type...>();
+}
+
+template<class F, size_t N>
+struct AcceptsNDistinctReals {
+    using FT = function_traits<F>;
+    static constexpr bool value = (FT::arity == N) &&
+            args_all_floats<F>(Future::make_index_sequence<FT::arity>());
+};
+
+template<class F, size_t N>
+struct AcceptsRealNTuple {
+    using FT = function_traits<F>;
+    static constexpr bool value = (FT::arity == 1) &&
+            std::is_same<typename NTuple<Real, N>::type, typename std::decay<
+                typename FT::template arg<0>::type>::type>::value;
+};
+
+template<class F, size_t N>
+struct AcceptsVectorND {
+    using FT = function_traits<F>;
+    static constexpr bool value = (FT::arity == 1) &&
+            std::is_same<VectorND<N>, typename std::decay<
+                typename FT::template arg<0>::type>::type>::value;
+};
 
 #endif /* end of include guard: FUNCTION_TRAITS_HH */

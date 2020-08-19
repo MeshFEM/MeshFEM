@@ -4,6 +4,7 @@ import ipywidgets
 import ipywidgets.embed
 
 from vis.fields import DomainType, VisualizationField, ScalarField, VectorField
+import mesh_operations
 
 # Threejs apparently only supports square textures, so we need to add padding to rectangular textures.
 # The input UVs are assumed to take values in [0, 1]^2 where (0, 0) and (1, 1) are the lower left and upper right
@@ -57,10 +58,11 @@ def replicateAttributesPerTriCorner(attr, perTriColor = True):
 # Therefore, we will need different materials for all the combinations of
 # settings used in our viewer. We do that here, on demand.
 class MaterialLibrary:
-    def __init__(self, isLineMesh):
+    def __init__(self, isLineMesh, isPointCloud):
         self.materials = {}
         self.isLineMesh = isLineMesh
-        if (not isLineMesh):
+        self.isPointCloud = isPointCloud
+        if (not isLineMesh and not isPointCloud):
             self.commonArgs = {'side': 'DoubleSide', 'polygonOffset': True, 'polygonOffsetFactor': 1, 'polygonOffsetUnits': 1}
         else:
             self.commonArgs = {}
@@ -71,6 +73,9 @@ class MaterialLibrary:
             if (self.isLineMesh):
                 args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
                 self.materials[name] = pythreejs.LineBasicMaterial(**args, **self.commonArgs)
+            elif (self.isPointCloud):
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
+                self.materials[name] = pythreejs.PointsMaterial(**args, **self.commonArgs, size=5, sizeAttenuation=False)
             else:
                 args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
@@ -81,8 +86,9 @@ class MaterialLibrary:
         if name not in self.materials:
             args = {'transparent': True, 'opacity': 0.25}
             args.update(self._colorTexArgs(*self._extractMaterialDescriptors(origMaterial), solidColor))
-            if (self.isLineMesh): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
-            else:                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
+            if   (self.isLineMesh  ): self.materials[name] = pythreejs.  LineBasicMaterial(**args, **self.commonArgs)
+            elif (self.isPointCloud): self.materials[name] = pythreejs.     PointsMaterial(**args, **self.commonArgs, size=5, sizeAttenuation=False)
+            else:                 self.materials[name]     = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         else:
             # Update the existing ghost material's color (if a solid color is used)
             useVertexColors, textureMapDataTex = self._extractMaterialDescriptors(origMaterial)
@@ -129,12 +135,12 @@ class MaterialLibrary:
 
 # superView allows this viewer to add geometry to an existing viewer.
 class ViewerBase:
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
         # Note: subclass's constructor should define
         # self.MeshConstructor and self.isLineMesh, which will
         # determine how the geometry is interpreted.
-        if (self.isLineMesh is None):
-            self.isLineMesh = False
+        if (not hasattr(self, "isLineMesh"  )): self.isLineMesh   = False
+        if (not hasattr(self, "isPointCloud")): self.isPointCloud = False
         if (self.MeshConstructor is None):
             self.MeshConstructor = pythreejs.Mesh
 
@@ -150,7 +156,7 @@ class ViewerBase:
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
         self.ghostColor = 'red'
 
-        self.materialLibrary = MaterialLibrary(self.isLineMesh)
+        self.materialLibrary = MaterialLibrary(self.isLineMesh, self.isPointCloud)
 
         # Sometimes we do not use a particular attribute buffer, e.g. the index buffer when displaying
         # per-face scalar fields. But to avoid reallocating these buffers when
@@ -177,6 +183,7 @@ class ViewerBase:
             self.objects.add([self.meshes, self.ghostMeshes])
         else:
             superView.objects.add([self.meshes, self.ghostMeshes])
+        self.subviews = []
 
         self._arrowMaterial = None # Will hold this viewer's instance of the special vector field shader (shared/overridden by superView)
         self._arrowSize    = 60
@@ -197,7 +204,7 @@ class ViewerBase:
             self.controls = superView.controls
             self.renderer = superView.renderer
 
-        self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField)
+        self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         if (mesh != None):   self.mesh = mesh
@@ -213,6 +220,11 @@ class ViewerBase:
         if color is not None:
             self.ghostColor = color
         self.currMesh.material = self.materialLibrary.ghostMaterial(self.currMesh.material, self.ghostColor)
+
+    def makeOpaque(self, color=None):
+        self.currMesh.material = self.materialLibrary.material(False)
+        if (color is not None):
+            self.currMesh.material.color = color
 
     def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         self.scalarField = scalarField
@@ -236,17 +248,24 @@ class ViewerBase:
 
         useVertexColors = False
         if (self.scalarField is not None):
-            # Construct scalar field from raw data array if necessary
-            if (not isinstance(self.scalarField, ScalarField)):
-                self.scalarField = ScalarField(self.mesh, self.scalarField)
-            self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
+            # First, handle the case of directly specifying per-vertex colors:
+            if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
+                if (np.array(self.scalarField.shape) != np.array([len(vertices), 3])).any():
+                    raise Exception('Incorrect number of per-vertex colors')
+                attrRaw['color'] = np.array(self.scalarField, dtype=np.float32)
+            else:
+                # Handle input in the form of a ScalarField or a raw scalar data array.
+                # Construct scalar field from raw scalar data array if necessary.
+                if (not isinstance(self.scalarField, ScalarField)):
+                    self.scalarField = ScalarField(self.mesh, self.scalarField)
+                self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
 
-            attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
-            if (self.scalarField.domainType == DomainType.PER_TRI):
-                # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
-                # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
-                # since apparently indexed geometry doesn't support the 'FaceColors' option.
-                replicateAttributesPerTriCorner(attrRaw)
+                attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
+                if (self.scalarField.domainType == DomainType.PER_TRI):
+                    # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
+                    # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
+                    # since apparently indexed geometry doesn't support the 'FaceColors' option.
+                    replicateAttributesPerTriCorner(attrRaw)
             useVertexColors = True
 
         # Turn the current mesh into a ghost if preserveExisting
@@ -303,7 +322,9 @@ class ViewerBase:
 
         # Avoid flicker/partial redraws during updates
         if self.avoidRedrawFlicker:
-            self.renderer.pauseRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.pauseRendering()
+            except: pass
 
         if (self.currMesh is None):
             attr = {}
@@ -363,7 +384,9 @@ class ViewerBase:
 
         if self.avoidRedrawFlicker:
             # The scene is now complete; reenable rendering and redraw immediatley.
-            self.renderer.resumeRendering()
+            # This is allowed to fail in case the user doesn't have my pythreejs fork...
+            try: self.renderer.resumeRendering()
+            except: pass
 
     @property
     def arrowSize(self):
@@ -437,6 +460,10 @@ class ViewerBase:
         self.cam.position, self.cam.up, self.controls.target = params
         self.cam.lookAt(self.controls.target)
 
+    def resetCamera(self):
+        self.cam.position, self.cam.up, self.controls.target = [0.0, 0.0, 5.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]
+        self.cam.lookAt(self.controls.target)
+
     def show(self):
         return self.renderer
 
@@ -448,9 +475,33 @@ class ViewerBase:
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)
 
+    def setDarkMode(self, dark=True):
+        if (dark):
+            self.renderer.scene.background = '#111111'
+            self.materialLibrary.material(False).color = '#F49111' # 'orange'
+            self.wireframeMaterial().color = '#220022'
+        else:
+            self.renderer.scene.background = '#FFFFFF'
+            self.materialLibrary.material(False).color = 'lightgray'
+            self.wireframeMaterial().color = 'black'
+
     # Implemented here to give subclasses a chance to customize
     def getVisualizationGeometry(self):
         return self.mesh.visualizationGeometry()
+
+    def highlightTriangles(self, tris):
+        """
+        Add a subview highlighting a triangle or list of triangles.
+        """
+        if isinstance(tris, int):
+            tris = np.array([tris], dtype=np.int)
+        submesh = mesh_operations.removeDanglingVertices(self.mesh.vertices(), self.mesh.triangles()[tris])
+        subview = TriMeshViewer(submesh, superView=self)
+        subview.showPoints()
+        self.subviews.append(subview)
+
+    def clearSubviews(self):
+        self.subviews = []
 
     def __cleanMeshes(self, meshGroup):
         meshes = list(meshGroup.children)
@@ -499,7 +550,9 @@ class ViewerBase:
             self.renderer.close()
 
 class RawMesh():
-    def __init__(self, vertices, faces, normals):
+    def __init__(self, vertices, faces, normals = None):
+        if (normals is None):
+            normals = mesh_operations.getVertexNormalsRaw(vertices, faces)
         self.updateGeometry(vertices, faces, normals)
 
     def visualizationGeometry(self):
@@ -515,16 +568,27 @@ class RawMesh():
         return data
 
 class TriMeshViewer(ViewerBase):
-    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
-        self.isLineMesh = False
+    def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
+            trimesh = RawMesh(*trimesh)
         self.MeshConstructor = pythreejs.Mesh
-        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView)
+        super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView, transparent)
+        if wireframe: self.showWireframe(True)
 
 class LineMeshViewer(ViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+        if (isinstance(linemesh, tuple)):
+            linemesh = RawMesh(*linemesh)
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
+
+class PointCloudViewer(ViewerBase):
+    def __init__(self, points, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
+        pcmesh = RawMesh(points, np.zeros((0, 3), dtype=np.uint32), None)
+        self.isPointCloud = True
+        self.MeshConstructor = pythreejs.Points
+        super().__init__(pcmesh, width, height, textureMap, scalarField, vectorField, superView)
 
 # Visualize a parametrization by animating the flattening and unflattening of the mesh to the plane.
 class FlatteningAnimation:
@@ -568,19 +632,74 @@ class FlatteningAnimation:
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.layout)
 
+# Render a quad/hex mesh
+# TODO: we should really implement flat shading; this requires creating copies
+# for verties for each incident element.
+class QuadHexMeshWrapper:
+    def __init__(self, V, F):
+        V = np.array(V, dtype=np.float32)
+        F = np.array(F, dtype=np.uint32)
 
-# Render a elastic structure
-class ElasticStructureViewer(TriMeshViewer):
-    def __init__(self, elasticStructure, *args, **kwargs):
-        from MeshFEM import Mesh
-        self.elasticStructure = elasticStructure
-        mm = elasticStructure.mesh();
-        # Make a copy of the elasticStructure mesh that we can use
-        # to construct the deformed elasticStructure visualization geometry.
-        self.mesh = Mesh(mm.vertices(),
-                              mm.elements(), 1, mm.embeddingDimension)
-        super().__init__(self.mesh, *args, **kwargs)
+        outwardFaces = None
 
-    def getVisualizationGeometry(self):
-        self.mesh.setVertices(self.elasticStructure.deformedVertices())
-        return self.mesh.visualizationGeometry()
+        if (F.shape[1] == 4):
+            # 2 triangles per quad
+            outwardFaces = [[0, 1, 2, 3]]
+        elif (F.shape[1] == 8):
+            # 2 triangles for each of the 6 cube faces
+            # outward oriented faces:
+            outwardFaces = [[0, 3, 2, 1],
+                            [0, 4, 7, 3],
+                            [0, 1, 5, 4],
+                            [4, 5, 6, 7],
+                            [1, 2, 6, 5],
+                            [3, 7, 6, 2]]
+        else:
+            raise Exception('Only quads and hexahedra are supported')
+
+        FT = None # triangulated quads/hex faces
+        trisPerElem = 2 * len(outwardFaces)
+        FT = np.empty((trisPerElem * F.shape[0], 3), dtype=F.dtype)
+
+        outwardFaces = np.array(outwardFaces)
+        for i, q in enumerate(outwardFaces):
+            FT[2 * i    ::trisPerElem] = F[:, q[[0, 1, 2]]]
+            FT[2 * i + 1::trisPerElem] = F[:, q[[2, 3, 0]]]
+
+        # compute face normals per triangle
+        FN = np.cross(V[FT[:, 1]] - V[FT[:, 0]], V[FT[:, 2]] - V[FT[:, 0]])
+        FN /= np.linalg.norm(FN, axis=1)[:, np.newaxis]
+
+        # Average onto the vertices with uniform weights for now...
+        N = np.zeros_like(V)
+        np.add.at(N, FT, FN[:, np.newaxis, :]) # todo: incorporate weights?
+        # Normalize, guarding for zero-vector normals which occur for interior hex mesh vertices
+        # (assuming we do not replicate them per-face)
+        norms = np.linalg.norm(N, axis=1)
+        norms = np.where(norms > 1e-5, norms, 1.0)
+        N /= norms[:, np.newaxis]
+
+        self.numElems = F.shape[0]
+        self.numVerts = V.shape[0]
+
+        # Lookup table maping visualization vertices, triangles back to their originating vertex/element
+        # currently we do not replicate vertices...
+        self.origVertForVert = np.arange(V.shape[0])
+        self.elementForTri = np.empty(FT.shape[0], dtype=np.int)
+        eft = np.reshape(self.elementForTri, (F.shape[0], -1), order='C')
+        eft[:, :] = np.arange(F.shape[0])[:, np.newaxis]
+
+        self.V, self.F, self.N = V, FT, N
+
+    def visualizationGeometry(self):
+        return self.V, self.F, self.N
+
+    def visualizationField(self, data):
+        domainSize = data.shape[0]
+        if (domainSize == self.numVerts): return data[self.origVertForVert]
+        if (domainSize == self.numElems): return data[self.elementForTri]
+        raise Exception('Unrecognized data size')
+
+class QuadHexViewer(TriMeshViewer):
+    def __init__(self, V, F, *args, **kwargs):
+        super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)

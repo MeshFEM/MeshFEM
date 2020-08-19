@@ -35,6 +35,14 @@ struct DiffOpBindings {
             return M;
         }, py::arg("mesh"), py::arg("lumped") = false, py::arg("forceP1") = false, py::arg("upperTriOnly") = false);
 
+        m.def("mass_elasticity", [](const Mesh &mesh, bool lumped, bool forceP1, bool upperTriOnly) {
+            TripletMatrix<> M;
+            if (forceP1) M = MassMatrix::construct_vector_valued<1>(mesh, lumped);
+            else         M = MassMatrix::construct_vector_valued   (mesh, lumped);
+            if (!upperTriOnly) M.reflectUpperTriangle();
+            return M;
+        }, py::arg("mesh"), py::arg("lumped") = false, py::arg("forceP1") = false, py::arg("upperTriOnly") = false, "Mass matrix for vector-valued shape functions");
+
         m.def("bilaplacian", [](const Mesh &mesh, bool forceP1) {
                 TripletMatrix<> Ltrip;
                 using VXd = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
@@ -59,7 +67,7 @@ struct DiffOpBindings {
 
         m.def("gradient", [](const Mesh &mesh, const Eigen::VectorXd &scalarField) {
                 if (_Degree > 1) throw std::runtime_error("Interpolant type bindings unimplemented...");
-                if (scalarField.size() != mesh.numNodes()) throw std::runtime_error("Incorrect scalar field size");
+                if (size_t(scalarField.size()) != mesh.numNodes()) throw std::runtime_error("Incorrect scalar field size");
                 MXNd g(mesh.numElements(), int(N)); // the cast to int prevents an ODR-use-induced linking error.
                 g.setZero();
                 for (const auto &e : mesh.elements())

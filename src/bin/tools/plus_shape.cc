@@ -55,7 +55,7 @@ int main(int argc, const char *argv[]) {
     std::vector<MeshIO::IOVertex > outVertices;
     std::vector<MeshIO::IOElement> outElements;
 
-    triangulatePSLC(bdryPts, bdryEdges, std::vector<Vector2D>(),
+    triangulatePSLG(bdryPts, bdryEdges, std::vector<Vector2D>(),
                     outVertices, outElements, triArea, "Q");
     MeshIO::save(outPath, outVertices, outElements);
     

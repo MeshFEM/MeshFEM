@@ -20,6 +20,7 @@
 
 #include "Flattening.hh"
 #include <Eigen/Dense>
+#include <Eigen/src/Core/Matrix.h>
 #include <iostream>
 #include <type_traits>
 #include "utils.hh"
@@ -78,6 +79,10 @@ public:
                 mat(i, j) = operator()(i, j);
         return mat;
     }
+
+    // Note: this method provides the same conversion interface as Eigen::DenseBase::matrix();
+    // this allows generic code to call `.matrix()` on SymmetricMatrix or Eigen types.
+    Eigen::Matrix<_Real, N, N> matrix() const { return toMatrix(); }
 
     EigenvaluesType eigenvalues() const {
         Eigen::Matrix<_Real, N, N> mat;
@@ -224,13 +229,17 @@ public:
             operator[](i) = f[i];
     }
 
-    // Warning: template hidden by derived class's default operator=, preventing
+    // Warning: these templates will be hidden by derived class' default operator=, preventing
     // mixed derived assignments unless subclass has "using Base::operator="
-    // Note: this can work both for flatened data types and
+    // Note: `assign` can work both for flatened data types and
     // ConstSymmetricMatrixBase due to symmetric matrices' flattened access
     // operators.
-    template<typename FType>
+    template<class SMType, typename std::enable_if<is_symmetric_matrix<SMType>::value, int>::type = 0>
+    SymmetricMatrixBase &operator=(const SMType &sm) { assign(sm); return *this; }
+
+    template<class FType, typename std::enable_if<FType::IsVectorAtCompileTime, int>::type = 0>
     SymmetricMatrixBase &operator=(const FType &f) { assign(f); return *this; }
+
     SymmetricMatrixBase &operator=(const SymmetricMatrixBase  &b) { m_data =           b.m_data;  return *this; }
     SymmetricMatrixBase &operator=(      SymmetricMatrixBase &&b) { m_data = std::move(b.m_data); return *this; }
 
@@ -241,6 +250,26 @@ public:
         for (size_t i = 0; i < t_N; ++i) {
             for (size_t j = 0; j <= i; ++j)
                 (*this)(i, j) = b(i, j);
+        }
+        return *this;
+    }
+
+    // Assignment from a full matrix, validating symmetry
+    template<class Derived, typename std::enable_if<(Derived::RowsAtCompileTime == t_N) &&
+                                                    (Derived::ColsAtCompileTime == t_N), int>::type = 0>
+    SymmetricMatrixBase &operator=(const Eigen::MatrixBase<Derived> &mat) {
+        // Build symmetric matrix from upper triangle
+        for (size_t i = 0; i < t_N; ++i)
+            for (size_t j = i; j < t_N; ++j)
+                (*this)(i, j) = mat(i, j);
+
+        // Validate symmetry by checking lower triangle
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
+                    throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
         }
         return *this;
     }
@@ -346,15 +375,19 @@ public:
 
     template<typename _ST2, typename _CSRT2>
     SymmetricMatrix(const ConstSymmetricMatrixBase<_Real, t_N, _ST2, _CSRT2> &b) : Base(b.m_data) { }
+
     // Construction from general NxN matrix (validates symmetry)
     template<class Derived, typename std::enable_if<(Derived::RowsAtCompileTime == t_N) &&
                                                     (Derived::ColsAtCompileTime == t_N), int>::type = 0>
     SymmetricMatrix(const Eigen::MatrixBase<Derived> &mat) : SymmetricMatrix(mat, skip_validation()) {
         // Validate symmetry by checking lower triangle
-        for (size_t i = 0; i < t_N; ++i)
-            for (size_t j = 0; j < i; ++j)
-                if (std::abs((*this)(i, j) - mat(i, j)) > 1e-13)
+        for (size_t i = 1; i < t_N; ++i) {
+            for (size_t j = 0; j < i; ++j) {
+                _Real diff = std::abs((*this)(i, j) - mat(i, j));
+                if ((diff > 1e-10) && (diff > 1e-10 * std::abs(mat(i, j)))) // absolute and relative test
                     throw std::runtime_error("Attempted to construct SymmetricMatrix from asymmetric matrix");
+            }
+        }
     }
 
     // Construct a unit canonical basis symmetric matrix:
@@ -480,7 +513,7 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Assignment/compount assignment operator overloads.
     // These call the base operator after copying/checking dynamic size, but
-    // need a static cast to avoid calling Base's opeartor with
+    // need a static cast to avoid calling Base's operator with
     // DynamicSymmetricMatrix RHS (it would falsely throw a size mismatch).
     ////////////////////////////////////////////////////////////////////////////
     DynamicSymmetricMatrix &operator=(const DynamicSymmetricMatrix  &b) { m_dynamicSize = b.m_dynamicSize; Base::operator=(    static_cast<const Base &>(b) ); return *this; }
@@ -506,7 +539,6 @@ public:
 private:
     size_t m_dynamicSize;
 };
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Arithmetic operators--always have a storage-backed result.
@@ -543,6 +575,37 @@ DynamicSymmetricMatrix<_Real> operator*(const DynamicSymmetricMatrix<_Real> &mat
     DynamicSymmetricMatrix<_Real> result(mat);
     result *= s;
     return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Symmetric matrix view into a vector/vector slice.
+////////////////////////////////////////////////////////////////////////////////
+template<size_t t_N, class Derived>
+struct SliceType {
+    using type = decltype(std::declval<Eigen::MatrixBase<Derived>>().template segment<flatLen(t_N)>(0));
+};
+
+template<size_t t_N, class Derived>
+struct ConstSliceType {
+    using type = decltype(std::declval<const Eigen::MatrixBase<Derived>>().template segment<flatLen(t_N)>(0));
+};
+
+template<size_t t_N, class Derived>
+using SMViewSliceType = SymmetricMatrixRef<t_N, typename SliceType<t_N, Derived>::type, typename ConstSliceType<t_N, Derived>::type>;
+
+template<size_t t_N, class Derived>
+using ConstSMViewSliceType = ConstSymmetricMatrixRef<t_N, typename ConstSliceType<t_N, Derived>::type>;
+
+template<size_t t_N, class Derived>
+SMViewSliceType<t_N, Derived>
+symmetricMatrixViewSlice(Eigen::MatrixBase<Derived> &v, size_t offset) {
+    return SMViewSliceType<t_N, Derived>(v.template segment<flatLen(t_N)>(offset));
+}
+
+template<size_t t_N, class Derived>
+ConstSMViewSliceType<t_N, Derived>
+symmetricMatrixViewSlice(const Eigen::MatrixBase<Derived> &v, size_t offset) {
+    return ConstSMViewSliceType<t_N, Derived>(v.template segment<flatLen(t_N)>(offset));
 }
 
 #endif /* end of include guard: SYMMETRICMATRIX_HH */

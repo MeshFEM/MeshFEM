@@ -105,9 +105,9 @@ public:
         Real lambda = (nu * E) / ((1.0 + nu) * (1.0 - 2.0 * nu));
         Real mu = E / (2.0 + 2.0 * nu);
 
-        // For 2D (plane strain), lambda is actually different...
-        // This can be found by inverting 2D orthotropic tensor with equal
-        // Young's moduli
+        // For 2D (plane stress), lambda is actually different...
+        // This can be found by inverting the 2D orthotropic compliance
+        // tensor with Ex = Ey = E.
         if (_Dim == 2)
             lambda = (nu * E) / (1.0 - nu * nu);
 
@@ -359,7 +359,7 @@ public:
     template<class T>
     void leftApplyShearDoubler(T &val) const {
         // Applying on right doubles "shear rows" of a matrix or vector
-        assert(val.rows() == flatLen(_Dim));
+        assert(size_t(val.rows()) == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
             for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= 2.0;
@@ -368,7 +368,7 @@ public:
     template<class T>
     void rightApplyShearDoubler(T &val) const {
         // Applying on left doubles "shear columns" of a matrix or row vector
-        assert(val.cols() == flatLen(_Dim));
+        assert(size_t(val.cols()) == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
             for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= 2.0;
@@ -377,7 +377,7 @@ public:
     template<class T>
     void leftApplyShearDoublerInverse(T &val) const {
         // Applying on right halves "shear rows" of a matrix or vector
-        assert(val.rows() == flatLen(_Dim));
+        assert(size_t(val.rows()) == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
             for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= 0.5;
@@ -386,7 +386,7 @@ public:
     template<class T>
     void rightApplyShearDoublerInverse(T &val) const {
         // Applying on left halves "shear columns" of a matrix or row vector
-        assert(val.cols() == flatLen(_Dim));
+        assert(size_t(val.cols()) == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
             for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= 0.5;
@@ -398,7 +398,7 @@ public:
     template<class T>
     void leftApplySqrtShearDoubler(T &val) const {
         // Applying on right doubles "shear rows" of a matrix or vector
-        assert(val.rows() == flatLen(_Dim));
+        assert(size_t(val.rows()) == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
             for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= sqrt(2.0);
@@ -407,7 +407,7 @@ public:
     template<class T>
     void rightApplySqrtShearDoubler(T &val) const {
         // Applying on left doubles "shear columns" of a matrix or row vector
-        assert(val.cols() == flatLen(_Dim));
+        assert(size_t(val.cols()) == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
             for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= sqrt(2.0);
@@ -416,7 +416,7 @@ public:
     template<class T>
     void leftApplySqrtShearDoublerInverse(T &val) const {
         // Applying on right halves "shear rows" of a matrix or vector
-        assert(val.rows() == flatLen(_Dim));
+        assert(size_t(val.rows()) == flatLen(_Dim));
         for (size_t i = _Dim; i < flatLen(_Dim); ++i)
             for (size_t j = 0; j < (size_t) val.cols(); ++j)
                 val(i, j) *= sqrt(0.5);
@@ -425,7 +425,7 @@ public:
     template<class T>
     void rightApplySqrtShearDoublerInverse(T &val) const {
         // Applying on left halves "shear columns" of a matrix or row vector
-        assert(val.cols() == flatLen(_Dim));
+        assert(size_t(val.cols()) == flatLen(_Dim));
         for (size_t j = _Dim; j < flatLen(_Dim); ++j)
             for (size_t i = 0; i < (size_t) val.rows(); ++i)
                 val(i, j) *= sqrt(0.5);

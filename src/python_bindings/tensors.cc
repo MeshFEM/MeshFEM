@@ -18,7 +18,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
     using SMValue = SymmetricMatrixValue<_Real, N>;
     using SMF     = SymmetricMatrixField<_Real, N>;
 
-    auto py_et = py::class_<ETensor>(module, getElasticityTensorName<_Dimension>().c_str())
+    auto py_et = py::class_<ETensor>(module, NameMangler<ETensor>::name().c_str())
         .def(py::init<>())
         .def(py::init([](const std::string& material_file) { return Materials::Constant<_Dimension>(material_file).getTensor(); }), py::arg("material_file"))
         .def(py::init<_Real, _Real>(), py::arg("E"), py::arg("nu"))
@@ -57,6 +57,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("inverse",         &ETensor::inverse)
         .def("pseudoinverse",   &ETensor::inverse)
         .def("frobeniusNormSq", &ETensor::frobeniusNormSq)
+        .def("transform",       &ETensor::transform, py::arg("R"), "Apply a *orthogonal* change of coordinates to this tensor")
         .def("__sub__", [](const ETensor &E, const ETensor &Eother) { return E - Eother; })
         .def("__repr__", [](const ETensor &E) {
                 std::stringstream ss;
@@ -80,7 +81,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
             py::arg("nuYX"), py::arg("muXY"));
     }
 
-    py::class_<SMValue>(detail_module, ("SymmetricMatrix" + std::to_string(N) + "D" + floatingPointTypeSuffix<_Real>()).c_str())
+    py::class_<SMValue>(detail_module, NameMangler<SMValue>::name().c_str())
         .def(py::init<Eigen::Matrix<_Real, flatLen(N), 1>>(), py::arg("flatValues"))
         .def("__call__", [](const SMValue &sm, size_t i, size_t j) { if ((i >= N) || (j >= N)) throw std::runtime_error("Index out of bounds"); return sm(i, j); }, py::arg("i"), py::arg("j"))
         .def_property_readonly("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })

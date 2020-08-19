@@ -4,7 +4,7 @@
 /*! @file
 //      A few zero-overhead models of the "EdgeSoup" concept to provide
 //      uniform access to a set of points connected by edges. This concept is
-//      used as the input to triangulatePSLC.
+//      used as the input to triangulatePSLG.
 //
 //      The concept entails two ranges: points and edges. Edges can either be a
 //      collection of size_t pairs or a collection of MeshIO::IOElement.

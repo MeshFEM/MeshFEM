@@ -9,6 +9,8 @@
 #ifndef NAME_MANGLING_HH
 #define NAME_MANGLING_HH
 
+#include <string>
+#include <array>
 template<typename _Real>
 std::string floatingPointTypeSuffix() {
     if (std::is_same<_Real,      double>::value) return "";
@@ -39,5 +41,46 @@ getElasticityTensorName()
 {
     return "ElasticityTensor" + std::to_string(_Dimension) + "D";
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// More convenient unified interface based on template spcialization.
+// Use forward declarations of the templates for which we specialize to avoid
+// increasing compilation time.
+////////////////////////////////////////////////////////////////////////////////
+template<typename T>
+struct NameMangler;
+
+// FEMMesh
+template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
+class FEMMesh;
+
+template<size_t _K, size_t _Degree, class _EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
+struct NameMangler<FEMMesh<_K, _Degree, _EmbeddingSpace, _FEMData>> {
+    static std::string name() {
+        return getFEMName<_K, _Degree, _EmbeddingSpace>() + "Mesh" + floatingPointTypeSuffix<typename _EmbeddingSpace::Scalar>();
+    }
+};
+
+// ElasticityTensor
+template<typename _Real, size_t _Dim, bool _MajorSymmetry>
+class ElasticityTensor;
+
+template<typename _Real, size_t _Dim, bool _MajorSymmetry>
+struct NameMangler<ElasticityTensor<_Real, _Dim, _MajorSymmetry>> {
+    static std::string name() {
+        return getElasticityTensorName<_Dim>() + floatingPointTypeSuffix<_Real>();
+    }
+};
+
+// SymmetricMatrix
+template<size_t t_N, typename Storage>
+class SymmetricMatrix;
+
+template<size_t t_N, typename Storage>
+struct NameMangler<SymmetricMatrix<t_N, Storage>> {
+    static std::string name() {
+        return "SymmetricMatrix" + std::to_string(t_N) + "D" +  floatingPointTypeSuffix<typename Storage::Scalar>();
+    }
+};
 
 #endif /* end of include guard: NAME_MANGLING_HH */

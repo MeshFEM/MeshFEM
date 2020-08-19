@@ -1,6 +1,7 @@
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
 #include "Circulator.hh"
+#include <queue>
 
 namespace _TetMeshHandles {
 
@@ -28,12 +29,54 @@ protected:
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using BVH = typename _Mesh::template BVHandle<_Mesh>;
     using HFH = typename _Mesh::template HFHandle<_Mesh>;
+    using HEH = typename _Mesh::template HEHandle<_Mesh>;
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numVertices()); }
 
     bool    isBoundary() const { return m_mesh.m_bdryVertexIdx(m_idx) >= 0; }
     BVH boundaryVertex() const { return BVH(m_mesh.m_bdryVertexIdx(m_idx), m_mesh); }
+    // Arbitrary half face containing this vertex.
     HFH       halfFace() const { return HFH(m_mesh.m_halfFaceOfVertex(m_idx), m_mesh); }
+    // Half edge incident this vertex within halfFace().
+    HEH       halfEdge() const {
+        const auto &hf = halfFace();
+        HEH he = hf.halfEdge(0); if (he.tip().index() == m_idx) return he;
+            he = hf.halfEdge(1); if (he.tip().index() == m_idx) return he;
+            he = hf.halfEdge(2); if (he.tip().index() == m_idx) return he;
+        assert(false);
+        return HEH(-1, m_mesh);
+    }
+
+    // Call `visitor(ei)` for each incident element `ei`.
+    // We need a BFS algorithm to visit all incident elements since there is
+    // no simple strategy to visit each exactly once like for triangle meshes.
+    template<class F>
+    void visitIncidentElements(F &&visitor) {
+        auto startHE = halfEdge(); // start at an arbitrary incident half-edge
+        visitor(startHE.tet().index());
+        std::vector<size_t> visited{size_t(startHE.tet().index())};
+        auto isVisited = [&](size_t ti) { return std::find(visited.begin(), visited.end(), ti) != visited.end(); };
+
+        std::queue<size_t> bfsQueue;
+        bfsQueue.push(startHE.index());
+        while (!bfsQueue.empty()) {
+            size_t u = bfsQueue.front();
+            bfsQueue.pop();
+
+            // Circulate around the tet corner, adding half-edges in unvisited
+            // adjacent tets.
+            for (const auto &he : m_mesh.halfEdge(u).tipCirculator()) {
+                if (!he.isBoundary()) {
+                    const auto &r = he.radial().prev();
+                    size_t ti = r.tet().index();
+                    if (isVisited(ti)) continue;
+                    visited.push_back(ti);
+                    visitor(ti);
+                    bfsQueue.push(r.index());
+                }
+            }
+        }
+    }
 
     // Identity operation for unified writing of surface and volume meshes
     // (since point data is typically stored only on the volume vertex)
@@ -54,8 +97,9 @@ protected:
     // Make sure we use the derived handles when we traverse a derived mesh...
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using HFH = typename _Mesh::template HFHandle<_Mesh>;
-    using  TH = typename _Mesh::template HFHandle<_Mesh>;
+    using  TH = typename _Mesh::template  THandle<_Mesh>;
     using BFH = typename _Mesh::template BFHandle<_Mesh>;
+    using  HE = typename _Mesh::template HEHandle<_Mesh>;
 public:
     bool         valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
     bool    isBoundary() const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
@@ -68,6 +112,9 @@ public:
     VH vertex(size_t i) const { return VH(m_mesh.m_vertexOfHalfFace(i, m_idx), m_mesh); }
     TH            tet() const { return TH(m_mesh.m_tetOfHF(m_idx), m_mesh); }
     TH        simplex() const { return tet(); }
+    TH        element() const { return tet(); }
+
+    HE halfEdge(size_t lhe) const { return HE(m_mesh.m_heOfHF(m_idx, lhe), m_mesh); }
 
     // Support range-based for over vertices
     struct  VRangeTraits { using SEHType = VH; using EHType = HFHandle; static constexpr size_t count = numVertices(); static constexpr SEHType (EHType::*get)(size_t) const = &EHType::vertex; };
@@ -92,30 +139,60 @@ protected:
     using   TH = typename _Mesh::template   THandle<_Mesh>;
     using BHEH = typename _Mesh::template BHEHandle<_Mesh>;
 public:
-    bool      valid() const { return (m_idx >= 0) && (m_idx < m_mesh.numHalfEdges()); }
+    bool      valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numHalfEdges()); }
     // Is this (radially opposite) a boundary half-edge?
     bool isBoundary() const { return halfFace().isBoundary(); }
     // Boundary half-edge corresponding to this half-edge (only valid when isBoundary() is true).
-    BHEH boundaryHalfEdge() const { return BHEH(m_mesh.m_bdryHEOfHE(m_idx), m_mesh); }
+    BHEH boundaryHalfEdge() const { if (m_idx < -1) return BHEH(-2 - m_idx, m_mesh); // This is actually an encoded boundary half-edge
+                                    else            return BHEH(m_mesh.m_bdryHEOfHE(m_idx), m_mesh); }
 
     HFH halfFace() const { return HFH(m_mesh.m_faceOfHE(m_idx), m_mesh); }
-    TH       tet() const { return  TH(m_mesh. m_tetOfHE(m_idx), m_mesh); }
+    TH       tet() const { return (m_idx < -1) ? TH(-1, m_mesh) : TH(m_mesh. m_tetOfHE(m_idx), m_mesh); }
+    TH   simplex() const { return tet(); }
+    TH   element() const { return tet(); }
 
     // circulate in halfFace()
     HEH     next() const { return HEH(m_mesh.  m_nextHE(m_idx), m_mesh); }
     HEH     prev() const { return HEH(m_mesh.  m_prevHE(m_idx), m_mesh); }
 
     // Opposite within tet()
-    HEH     mate() const { return HEH(m_mesh.  m_mateHE(m_idx), m_mesh); }
+    HEH     mate() const { return (m_idx < -1) ? HEH(-1, m_mesh) : HEH(m_mesh.  m_mateHE(m_idx), m_mesh); }
     // Opposite within face halfFace()->opposite()
-    HEH   radial() const { return HEH(m_mesh.m_radialHE(m_idx), m_mesh); }
+    HEH   radial() const { return (m_idx < -1) ? boundaryHalfEdge().volumeHalfEdge() : HEH(m_mesh.m_radialHE(m_idx), m_mesh); }
+
+    // Circulate within tet() counter-clockwise around tip()'s (outward-pointing) normal
+    // Note: half-edges circulate *clockwise* when viewed from outside (half-faces are inward-oriented).
+    HEH ccw() const { return next().mate(); }
+    HEH  cw() const { return mate().prev(); }
+
+    // Range circulating counter-clockwise within this tet around the tip corner
+    CirculatorRange<HEH> tipCirculator() const { return CirculatorRange<HEH>(HEH(m_idx, m_mesh)); } // Must use HEH() instead of *this for correct derived type.
 
     // Dimension-independent terminology:
     BHEH boundaryEntity() const { return boundaryHalfEdge(); }
 
+    // Call `visitor(ei)` for each incident tet `ei`.
+    template<class F>
+    void visitIncidentElements(F &&visitor) const {
+        auto he = *this;
+        do {
+            visitor(he.tet().index());
+            he = he.mate().radial();
+        } while (he && (he != *this)); // Stop if we reach the boundary or return to where we started.
+
+        if (!he) {
+            // If we hit the boundary, also traverse in the opposite direction, in case we started from a non-boundary half-edge
+            he = *this;
+            while (!he.isBoundary()) {
+                he = he.radial().mate();
+                visitor(he.tet().index());
+            }
+        }
+    }
+
     static constexpr size_t numVertices() { return 2; }
-    VH  tip() const { return VH(m_mesh. m_tipOfHE(m_idx), m_mesh); }
-    VH tail() const { return VH(m_mesh.m_tailOfHE(m_idx), m_mesh); }
+    VH  tip() const { return (m_idx < -1) ? boundaryHalfEdge(). tip().volumeVertex() : VH(m_mesh. m_tipOfHE(m_idx), m_mesh); }
+    VH tail() const { return (m_idx < -1) ? boundaryHalfEdge().tail().volumeVertex() : VH(m_mesh.m_tailOfHE(m_idx), m_mesh); }
 
     // Warning: unguarded--only use if you know handle is valid and has data.
     typename _H::value_ptr dataPtr() const { return m_mesh.m_halfEdgeData.getPtr(m_idx); }
@@ -133,6 +210,7 @@ protected:
     using  TH = typename _Mesh::template  THandle<_Mesh>;
     using  VH = typename _Mesh::template  VHandle<_Mesh>;
     using HFH = typename _Mesh::template HFHandle<_Mesh>;
+    using HEH = typename _Mesh::template HEHandle<_Mesh>;
 public:
     bool valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numTets()); }
     bool isBoundary() const {
@@ -148,15 +226,18 @@ public:
      VH   vertex(size_t i) const { return  VH(m_mesh.m_vertexOfTet(i, m_idx), m_mesh); }
      TH neighbor(size_t i) const { return  TH(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
     HFH halfFace(size_t i) const { return HFH(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
+    HEH halfEdge(size_t i) const { return (valid() && (i < 12)) ? HEH(12 * m_idx + i, m_mesh) : HEH(-1, m_mesh); }
 
     // Support range-based for over vertices, neighboring tets, and half-faces (interfaces)
     struct  VRangeTraits { using SEHType =  VH; using EHType = THandle; static constexpr size_t count = numVertices() ; static constexpr auto get = &EHType::vertex  ; };
     struct NTRangeTraits { using SEHType =  TH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr auto get = &EHType::neighbor; };
     struct HFRangeTraits { using SEHType = HFH; using EHType = THandle; static constexpr size_t count = numNeighbors(); static constexpr auto get = &EHType::halfFace; };
+    struct HERangeTraits { using SEHType = HEH; using EHType = THandle; static constexpr size_t count =             12; static constexpr auto get = &EHType::halfEdge; };
     SubEntityHandleRange< VRangeTraits>   vertices() const { return SubEntityHandleRange< VRangeTraits>(*this); }
     SubEntityHandleRange<NTRangeTraits>  neighbors() const { return SubEntityHandleRange<NTRangeTraits>(*this); }
     SubEntityHandleRange<HFRangeTraits>  halfFaces() const { return SubEntityHandleRange<HFRangeTraits>(*this); }
     SubEntityHandleRange<HFRangeTraits> interfaces() const { return SubEntityHandleRange<HFRangeTraits>(*this); }
+    SubEntityHandleRange<HFRangeTraits>  halfEdges() const { return SubEntityHandleRange<HFRangeTraits>(*this); }
 
     // Dimension-independent terminology:
     //  interface of a tet is a half-face

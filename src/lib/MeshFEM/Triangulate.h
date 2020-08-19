@@ -79,15 +79,16 @@ void write_poly(const std::string &filename, const Vertices &v, const Edges &e) 
 }
 
 // Largely taken from Luigi/Nico's tessellator2d.h
-template<class _EdgeSoup, class HolePoint>
-void triangulatePSLC(const _EdgeSoup &edgeSoup,
-        const std::vector<HolePoint> &holes,
+template<class _EdgeSoup, class HolePoint, class HolePtAllocator>
+void triangulatePSLG(const _EdgeSoup &edgeSoup,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr)
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false)
 {
     const bool markedEdgesRequested = outMarkedEdges != nullptr;
 
@@ -135,7 +136,9 @@ void triangulatePSLC(const _EdgeSoup &edgeSoup,
     // write_poly("out.poly", edgeSoup.points(), edgeSoup.edges());
 
     std::stringstream flags_stream;
-    flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
+    flags_stream << "zp";
+    if (!omitQualityFlag) flags_stream << "q";
+    flags_stream << std::fixed << std::setprecision(19) << additionalFlags << "a" << area;
     if (markedEdgesRequested)
         flags_stream << "e"; // Make triangle output edges too...
     std::string flags = flags_stream.str();
@@ -234,34 +237,36 @@ void triangulatePoints(
 }
 
 // Convenience function for point/edge collections representation
-template<class Point, class HolePoint, class Edge, class PtAllocator>
-void triangulatePSLC(const std::vector<Point, PtAllocator> &inPoints,
+template<class Point, class HolePoint, class Edge, class PtAllocator, class HolePtAllocator>
+void triangulatePSLG(const std::vector<Point, PtAllocator> &inPoints,
         const std::vector<Edge> &inEdges,
-        const std::vector<HolePoint> &holes,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
-    triangulatePSLC(
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false) {
+    triangulatePSLG(
             EdgeSoup<std::vector<Point, PtAllocator>, std::vector<Edge>>(inPoints, inEdges),
             holes, outVertices, outTriangles, area, additionalFlags,
-            outPointMarkers, outMarkedEdges);
+            outPointMarkers, outMarkedEdges, omitQualityFlag);
 }
 
 // Convenience function for list of closed polygons representation
-template<class Point, class HolePoint>
-void triangulatePSLC(const std::list<std::list<Point>> &polygons,
-        const std::vector<HolePoint> &holes,
+template<class Point, class HolePoint, class HolePtAllocator>
+void triangulatePSLG(const std::list<std::list<Point>> &polygons,
+        const std::vector<HolePoint, HolePtAllocator> &holes,
         std::vector<MeshIO::IOVertex> &outVertices,
         std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::string additionalFlags = "",
         std::vector<int> *outPointMarkers = nullptr,
-        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr) {
-    triangulatePSLC(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
-            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges);
+        std::vector<std::array<int, 2>> *outMarkedEdges = nullptr,
+        bool omitQualityFlag = false) {
+    triangulatePSLG(EdgeSoupFromClosedPolygonCollection<decltype(polygons)>(polygons),
+            holes, outVertices, outTriangles, area, additionalFlags, outPointMarkers, outMarkedEdges, omitQualityFlag);
 }
 
 inline void refineTriangulation(
