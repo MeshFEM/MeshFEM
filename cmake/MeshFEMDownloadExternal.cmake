@@ -42,8 +42,8 @@ endfunction()
 ## Eigen
 function(meshfem_download_eigen)
     meshfem_download_project(eigen
-        URL     http://bitbucket.org/eigen/eigen/get/3.3.4.tar.bz2
-        URL_MD5 a7aab9f758249b86c93221ad417fbe18
+        URL     https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.gz
+        URL_MD5 9e30f67e8531477de4117506fe44669b
     )
 endfunction()
 
