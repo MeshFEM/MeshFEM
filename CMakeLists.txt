@@ -13,12 +13,6 @@ if(POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
 endif()
 
-# Check if MeshFEM is being used directly or via add_subdirectory
-set(MeshFEM_MASTER_PROJECT OFF)
-if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-  set(MeshFEM_MASTER_PROJECT ON)
-endif()
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -130,7 +124,7 @@ add_subdirectory(src/python_bindings)
 ################################################################################
 
 # Compile tests only if this is a top-level project
-if(MeshFEM_MASTER_PROJECT)
+if(MESHFEM_TOPLEVEL_PROJECT)
     # Unit tests
     enable_testing()
     add_subdirectory(tests)

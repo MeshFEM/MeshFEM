@@ -73,7 +73,7 @@ set_target_properties(field_sampler PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PR
 target_link_libraries(field_sampler PUBLIC MeshFEM intel_pybind_14_hack)
 
 # If it is used as submodule, deploy python scripts and libs
-if(NOT MeshFEM_MASTER_PROJECT)
+if(NOT MESHFEM_TOPLEVEL_PROJECT)
     set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
     file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
     configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
