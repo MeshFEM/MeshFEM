@@ -69,7 +69,7 @@ include(Warnings)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Helper function
-include(MeshFEMSingleApp)
+include(MeshFEMUtils)
 
 ################################################################################
 # Options

@@ -31,11 +31,19 @@ function(meshfem_download_catch)
     )
 endfunction()
 
+## Ceres
+function(meshfem_download_ceres)
+    meshfem_download_project(ceres
+        GIT_REPOSITORY https://github.com/jdumas/ceres-solver.git
+        GIT_TAG        2ba66a2c22959d9c455a8f2074dc7a605c4a92e8
+    )
+endfunction()
+
 ## Eigen
 function(meshfem_download_eigen)
     meshfem_download_project(eigen
-        URL     http://bitbucket.org/eigen/eigen/get/3.3.4.tar.bz2
-        URL_MD5 a7aab9f758249b86c93221ad417fbe18
+        URL     https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.gz
+        URL_MD5 9e30f67e8531477de4117506fe44669b
     )
 endfunction()
 
@@ -59,7 +67,7 @@ endfunction()
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
         GIT_REPOSITORY https://github.com/wjakob/tbb.git
-        GIT_TAG        4c3ffe5a5f37addef0dd6283c74c4402a3b4ebc9
+        GIT_TAG        20357d83871e4cb93b2c724fe0c337cd999fd14f
     )
 endfunction()
 
@@ -76,5 +84,13 @@ function(meshfem_download_triangle)
     meshfem_download_project(triangle
         GIT_REPOSITORY https://github.com/libigl/triangle.git
         GIT_TAG        d6761dd691e2e1318c83bf7773fea88d9437464a
+    )
+endfunction()
+
+## Spectra
+function(meshfem_download_spectra)
+    meshfem_download_project(spectra
+        GIT_REPOSITORY https://github.com/yixuan/spectra.git
+        GIT_TAG        ec27cfd2210a9b2322825c4cb8e5d47f014e1ac3
     )
 endfunction()

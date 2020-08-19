@@ -8,6 +8,12 @@
 set(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
 
+# Make MESHFEM_EXTERNAL path available also to parent projects.
+get_directory_property(hasParent PARENT_DIRECTORY)
+if (hasParent)
+    set(MESHFEM_EXTERNAL "${MESHFEM_EXTERNAL}" PARENT_SCOPE)
+endif()
+
 # Download and update 3rdparty libraries
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
@@ -25,14 +31,13 @@ find_package(Boost 1.54 REQUIRED COMPONENTS filesystem system program_options QU
 if(NOT TARGET meshfem::boost)
     add_library(meshfem_boost INTERFACE)
     if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
-		#target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
         target_link_libraries(meshfem_boost INTERFACE
             Boost::filesystem
             Boost::system
             Boost::program_options)
     else()
         # When CMake and Boost versions are not in sync, imported targets may not be available... (sigh)
-		target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
+        target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
         target_link_libraries(meshfem_boost INTERFACE ${Boost_LIBRARIES})
     endif()
     add_library(meshfem::boost ALIAS meshfem_boost)
@@ -72,21 +77,23 @@ endif()
 
 # TBB library
 if(NOT TARGET tbb::tbb)
-    set(TBB_BUILD_STATIC ON CACHE BOOL " " FORCE)
-    set(TBB_BUILD_SHARED OFF CACHE BOOL " " FORCE)
+    set(TBB_BUILD_STATIC OFF CACHE BOOL " " FORCE)
+    set(TBB_BUILD_SHARED ON CACHE BOOL " " FORCE)
     set(TBB_BUILD_TBBMALLOC ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
     set(TBB_BUILD_TBBMALLOC_PROXY OFF CACHE BOOL " " FORCE)
     set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 
     meshfem_download_tbb()
-    add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb)
-    set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
+    add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb EXCLUDE_FROM_ALL)
+    #set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
     #set_target_properties(tbb_static PROPERTIES COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter -Wno-keyword-macro")
 
-    add_library(meshfem_tbb INTERFACE)
-    target_include_directories(meshfem_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
-    target_link_libraries(meshfem_tbb INTERFACE tbb_static tbbmalloc_static)
-    add_library(tbb::tbb ALIAS meshfem_tbb)
+    add_library(tbb_tbb INTERFACE)
+    target_include_directories(tbb_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
+    target_link_libraries(tbb_tbb INTERFACE tbbmalloc tbb)
+    add_library(tbb::tbb ALIAS tbb_tbb)
+
+    meshfem_target_hide_warnings(tbb_tbb)
 endif()
 
 # Triangle library
@@ -95,6 +102,14 @@ if(NOT TARGET triangle::triangle)
     add_subdirectory(${MESHFEM_EXTERNAL}/triangle triangle)
     target_include_directories(triangle SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/triangle)
     add_library(triangle::triangle ALIAS triangle)
+endif()
+
+# Spectra library
+if(NOT TARGET spectra::spectra)
+    meshfem_download_spectra()
+    add_library(meshfem_spectra INTERFACE)
+    target_include_directories(meshfem_spectra SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/spectra/include)
+    add_library(meshfem::spectra ALIAS meshfem_spectra)
 endif()
 
 # TinyExpr library
@@ -106,21 +121,44 @@ if(NOT TARGET tinyexpr::tinyexpr)
 endif()
 
 # Cholmod solver
-find_package(Cholmod REQUIRED) # provides cholmod::cholmod
+find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
 
 # UmfPack solver
-find_package(Umfpack REQUIRED) # provides umfpack::umfpack
+find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
 
 ################################################################################
 # Optional libraries
 ################################################################################
 
-find_package(Ceres QUIET)
-if(CERES_FOUND)
-    add_library(ceres_lib INTERFACE)
-    target_include_directories(ceres_lib SYSTEM INTERFACE  ${CERES_INCLUDE_DIRS})
-    target_link_libraries(ceres_lib INTERFACE MeshFEM ${CERES_LIBRARIES})
-    add_library(ceres::ceres ALIAS ceres_lib)
-else()
+# Ceres
+if (MESHFEM_WITH_CERES AND NOT TARGET ceres::ceres)
+    if (MESHFEM_PREFER_SYSTEM_CERES)
+        find_package(Ceres QUIET)
+         if(CERES_FOUND)
+             add_library(ceres_lib INTERFACE)
+             target_include_directories(ceres_lib SYSTEM INTERFACE  ${CERES_INCLUDE_DIRS})
+             target_link_libraries(ceres_lib INTERFACE MeshFEM ${CERES_LIBRARIES})
+             add_library(ceres::ceres ALIAS ceres_lib)
+         endif()
+    endif()
+    if (NOT TARGET ceres::ceres)
+        meshfem_download_ceres()
+        option(MINIGLOG "" ON)
+        set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+        set(BUILD_DOCUMENTATION OFF CACHE BOOL " " FORCE)
+        set(BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
+        set(BUILD_BENCHMARKS OFF CACHE BOOL " " FORCE)
+        get_target_property(EIGEN_INCLUDE_DIR_HINTS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+        set(EIGEN_PREFER_EXPORTED_EIGEN_CMAKE_CONFIGURATION FALSE)
+        if("$ENV{CLUSTER}" STREQUAL "PRINCE")
+            # Hints for SuiteSparse on Prince cluster
+            set(SUITESPARSE_INCLUDE_DIR_HINTS "$ENV{SUITESPARSE_INC}")
+            set(SUITESPARSE_LIBRARY_DIR_HINTS "$ENV{SUITESPARSE_LIB}")
+        endif()
+        add_subdirectory(${MESHFEM_EXTERNAL}/ceres)
+        add_library(ceres::ceres ALIAS ceres)
+        meshfem_target_hide_warnings(ceres)
+    endif()
+elseif(NOT TARGET ceres::ceres)
     message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
 endif()
