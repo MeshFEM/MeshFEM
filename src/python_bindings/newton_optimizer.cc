@@ -10,6 +10,34 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     m.doc() = "Wrapper for Newton optimizer's types";
 
     ////////////////////////////////////////////////////////////////////////////////
+    // "Controllers" for customizing solver behavior
+    // (accessed through NewtonOptimizerOptions)
+    ////////////////////////////////////////////////////////////////////////////////
+    py::class_<HessianProjectionController>(m, "HessianProjectionController")
+        .def("shouldUseProjection", &HessianProjectionController::shouldUseProjection)
+        .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
+        ;
+    py::class_<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   ).def(py::init<>());
+    py::class_<HessianProjectionAlways,   HessianProjectionController>(m, "HessianProjectionAlways"  ).def(py::init<>());
+    py::class_<HessianProjectionAdaptive, HessianProjectionController>(m, "HessianProjectionAdaptive").def(py::init<>())
+        .def_readwrite("numProjectionStepsBeforeSwitch",            &HessianProjectionAdaptive::numProjectionStepsBeforeSwitch,            "Number of Hessian-projected steps to take before trying un-projected Hessian")
+        .def_readwrite("numConsecutiveIndefiniteStepsBeforeSwitch", &HessianProjectionAdaptive::numConsecutiveIndefiniteStepsBeforeSwitch, "Number of indefinite Hessians to allow before switching to applying the Hessian projection")
+        .def_readwrite("projectionActive",                          &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
+        .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
+        ;
+
+    py::class_<HessianUpdateController>(m, "HessianUpdateController")
+        .def("needsUpdate", &HessianUpdateController::needsUpdate)
+        .def("newHessian",  &HessianUpdateController::newHessian,  py::arg("isIndefinite"))
+        .def("reusedHessian",  &HessianUpdateController::reusedHessian)
+        ;
+    py::class_<HessianUpdateNever,    HessianUpdateController>(m, "HessianUpdateNever"   ).def(py::init<>());
+    py::class_<HessianUpdateAlways,   HessianUpdateController>(m, "HessianUpdateAlways"  ).def(py::init<>());
+    py::class_<HessianUpdatePeriodic, HessianUpdateController>(m, "HessianUpdatePeriodic").def(py::init<>())
+        .def_readwrite("period", &HessianUpdatePeriodic::period, "Number of times to reuse a Hessian factorization before computing a new one.")
+        ;
+
+    ////////////////////////////////////////////////////////////////////////////////
     // Newton solver options/convergence report
     ////////////////////////////////////////////////////////////////////////////////
     py::class_<NewtonOptimizerOptions>(m, "NewtonOptimizerOptions")
@@ -23,6 +51,12 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("feasibilitySolve",              &NewtonOptimizerOptions::feasibilitySolve)
         .def_readwrite("verbose",                       &NewtonOptimizerOptions::verbose)
         .def_readwrite("verboseNonPosDef",              &NewtonOptimizerOptions::verboseNonPosDef)
+        .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
+                                                     [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
+                                                     py::return_value_policy::reference)
+        .def_property("hessianUpdateController", [](const NewtonOptimizerOptions &opts) -> HessianUpdateController & { return opts.getHessianUpdateController(); },
+                                                     [](      NewtonOptimizerOptions &opts, const HessianUpdateController &h) { opts.setHessianUpdateController(h); },
+                                                     py::return_value_policy::reference)
         ;
 
     py::class_<ConvergenceReport>(m, "ConvergenceReport")

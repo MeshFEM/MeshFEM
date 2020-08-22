@@ -17,6 +17,8 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Eigensolver.hh>
 #include "ConvergenceReport.hh"
+#include "HessianProjectionController.hh"
+#include "HessianUpdateController.hh"
 
 #include <MeshFEM_export.h>
 
@@ -39,10 +41,10 @@ struct MESHFEM_EXPORT NewtonProblem {
     // For some problems, a less expensive gradient expression can be used in this case.
     virtual VXd gradient(bool freshIterate = false) const = 0;
 
-    const SuiteSparseMatrix &hessian() const {
+    const SuiteSparseMatrix &hessian(bool projectionMask = true) const {
         if (!m_cachedHessian) { m_cachedHessian = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern()); }
         if (disableCaching || !m_cachedHessianUpToDate) {
-            m_evalHessian(*m_cachedHessian);
+            m_evalHessian(*m_cachedHessian, projectionMask);
             m_cachedHessianUpToDate = true;
         }
         return *m_cachedHessian;
@@ -230,7 +232,7 @@ protected:
     // Called at the start of each new iteration (after line search has been performed)
     virtual void m_iterationCallback(size_t /* i */) { }
 
-    virtual void m_evalHessian(SuiteSparseMatrix &result) const = 0;
+    virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const = 0;
     virtual void m_evalMetric (SuiteSparseMatrix &result) const = 0;
 
     std::vector<BoundConstraint> m_boundConstraints;
@@ -299,7 +301,7 @@ private:
     std::vector<char> m_varFixed; // Whether a variable is fixed by one of the constraints in the working set
 };
 
-struct MESHFEM_EXPORT NewtonOptimizerOptions {
+struct NewtonOptimizerOptionsBase {
     Real gradTol = 2e-8,
          beta = 1e-8;
     bool hessianScaledBeta = true;
@@ -310,6 +312,32 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions {
     int verbose = 1;
     bool writeIterateFiles = false;
     bool verboseNonPosDef = false;              // Print CHOLMOD warning for non-pos-def matrices
+};
+
+// The part of the optimizer interface that is not trivially copyable.
+struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase {
+    NewtonOptimizerOptions() = default;
+    NewtonOptimizerOptions(const NewtonOptimizerOptions &b)
+        : NewtonOptimizerOptionsBase(b),
+          m_hessianProjectionController(b.m_hessianProjectionController->clone()),
+          m_hessianUpdateController(b.m_hessianUpdateController->clone())
+    { }
+
+    NewtonOptimizerOptions &operator=(const NewtonOptimizerOptions &b) {
+        NewtonOptimizerOptionsBase::operator=(b);
+        m_hessianProjectionController = b.m_hessianProjectionController->clone();
+        m_hessianUpdateController = b.m_hessianUpdateController->clone();
+        return *this;
+    }
+
+    HessianProjectionController &getHessianProjectionController() const { return *m_hessianProjectionController; }
+    void setHessianProjectionController(const HessianProjectionController &hpc) { m_hessianProjectionController = hpc.clone(); }
+
+    HessianUpdateController &getHessianUpdateController() const { return *m_hessianUpdateController; }
+    void setHessianUpdateController(const HessianUpdateController &huc) { m_hessianUpdateController = huc.clone(); }
+protected:
+    std::unique_ptr<HessianProjectionController> m_hessianProjectionController = std::make_unique<HessianProjectionAlways>();
+    std::unique_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_unique<HessianUpdateAlways>();
 };
 
 // Cache temporaries and solve the KKT system:

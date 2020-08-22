@@ -27,6 +27,7 @@
 #include <MeshFEM/Handles/FEMMeshHandles.hh>
 
 #include <MeshFEM/Utilities/VertexArrayAdaptor.hh>
+#include <MeshFEM/Utilities/MeshConversion.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -119,6 +120,11 @@ public:
     template<typename Elements, typename Vertices>
     FEMMesh(const Elements &elems, const Vertices &vertices);
     static std::unique_ptr<FEMMesh> load(const std::string &path);
+
+    // Copy/potentially degree-converting constructor
+    template<size_t _Deg2>
+    FEMMesh(const FEMMesh<_K, _Deg2, _EmbeddingSpace, _FEMData> &mesh2)
+        : FEMMesh(getF(mesh2), getV(mesh2)) { }
 
     // Entity handles (declared in Handles/FEMMeshHandles.hh).
     template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex

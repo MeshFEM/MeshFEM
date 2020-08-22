@@ -1,7 +1,8 @@
 #ifndef EDENSITYTESTUTILS_HH
 #define EDENSITYTESTUTILS_HH
 
-#include "MeshFEM/ElasticityTensor.hh"
+#include <MeshFEM/ElasticityTensor.hh>
+#include <MeshFEM/EnergyDensities/Tensor.hh>
 
 template<class A, class B>
 void requireApproxEqual(const A &a, const B &b) {

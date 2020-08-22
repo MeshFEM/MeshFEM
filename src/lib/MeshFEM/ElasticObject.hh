@@ -27,7 +27,7 @@ public:
     virtual void setVars(Eigen::Ref<const VXd> vars) = 0;
     virtual Real  energy() const = 0;
     virtual VXd gradient() const = 0;
-    virtual void hessian(SuiteSparseMatrix &Hout) const = 0;
+    virtual void hessian(SuiteSparseMatrix &Hout, bool projectionMask = false) const = 0;
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const = 0;
 
     // Optional interface

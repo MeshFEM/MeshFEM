@@ -17,6 +17,12 @@ namespace py = pybind11;
 #include "EquilibriumBinding.hh"
 #include "BindingInstantiations.hh"
 
+template<size_t NewDeg, class ES>
+py::object toDegree(const ES &es) {
+    return py::cast(new ElasticSolid<ES::K, NewDeg, typename ES::EmbeddingSpace, typename ES::Energy>(es),
+                    py::return_value_policy::take_ownership);
+}
+
 struct ElasticSolidBinder {
     template<class ES>
     static void bind(py::module &module, py::module &detail_module) {
@@ -27,8 +33,9 @@ struct ElasticSolidBinder {
         using Energy = typename ES::Energy;
         using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, N>;
         using Mesh = typename ES::Mesh;
+        using EmbeddingSpace = typename Mesh::EmbeddingSpace;
 
-        module.def("ElasticSolid", [](const Mesh &m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
+        module.def("ElasticSolid", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
         const std::string name = getElasticSolidName<Energy, K, Deg, Vector>();
         py::class_<ES, std::shared_ptr<ES>> pyEO(detail_module, name.c_str());
@@ -47,7 +54,7 @@ struct ElasticSolidBinder {
           .def("filterRMPinArtifacts",      &ES::filterRMPinArtifacts, py::arg("pinVertices"))
           .def("energy",                    &ES::energy)
           .def("gradient",                  &ES::gradient)
-          .def("hessian",                   py::overload_cast<>(&ES::hessian, py::const_))
+          .def("hessian",                   [](const ES &es, bool projectionMask) { return es.hessian(projectionMask); }, py::arg("projectionMask") = false)
           .def("hessianSparsityPattern",    &ES::hessianSparsityPattern)
           .def("massMatrix",                &ES::massMatrix, py::arg("lumped") = false)
           .def("sobolevInnerProductMatrix", &ES::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
@@ -56,11 +63,16 @@ struct ElasticSolidBinder {
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
           .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference)
           .def("visualizationGeometry", [](const ES &obj) {
-                FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
+                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
                 return getVisualizationGeometry(visMesh);
              })
           .def("visualizationField", [](const ES &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const ES &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("toDegree", [](const ES &es, const size_t degree) {
+                  if (degree == 1) return toDegree<1>(es);
+                  if (degree == 2) return toDegree<2>(es);
+                  throw std::runtime_error("Only degree 1 and 2 are supported");
+            }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
          ;
 
         addComputeEquilibriumBinding<ES>(pyEO, detail_module, name);

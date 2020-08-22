@@ -34,12 +34,6 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
     step.resize(g.size());
 
-    BENCHMARK_START_TIMER_SECTION("hessEval");
-    auto H_reduced = prob->hessian();
-    fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
-    H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
-    BENCHMARK_STOP_TIMER_SECTION("hessEval");
-
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
     // Nocedal and Wright 2006, pp 51.
@@ -57,6 +51,37 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
 
     auto gReduced = removeFixedEntries(g);
     Eigen::VectorXd x(gReduced.size());
+
+    auto postprocessSolution = [&]() {
+        extractFullSolution(x, step);
+        step *= -1;
+
+        if (prob->hasLEQConstraint()) {
+            // TODO: handle more than a single constraint...
+            Eigen::VectorXd a = removeFixedEntries(ws.getFreeComponent(prob->LEQConstraintMatrix()));
+            kkt_solver.update(solver, a);
+            const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
+            extractFullSolution(kkt_solver.solve(-x, r), step);
+        }
+    };
+
+    auto &hUpdtCtr = options.getHessianUpdateController();
+    auto &hProjCtr = options.getHessianProjectionController();
+
+    if (solver.hasFactorization()) {
+        if (!hUpdtCtr.needsUpdate()) {
+            hUpdtCtr.reusedHessian();
+            solver.solveExistingFactorization(gReduced, x);
+            postprocessSolution();
+            return NAN;
+        }
+    }
+
+    BENCHMARK_START_TIMER_SECTION("hessEval");
+    auto H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
+    fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
+    H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
+    BENCHMARK_STOP_TIMER_SECTION("hessEval");
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
     while (true) {
@@ -110,6 +135,10 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
             }
         }
     }
+
+    bool isIndefinite = tau != 0.0;
+    hProjCtr.notifyDefiniteness(isIndefinite);
+    hUpdtCtr.newHessian(isIndefinite);
 
     return tau;
 }
@@ -182,6 +211,9 @@ ConvergenceReport NewtonOptimizer::optimize() {
     // Kill off components of "v" in the span of the LEQ constraint vectors
     auto projectOutLEQConstrainedComponents = [&](Eigen::VectorXd &v) { if (prob->hasLEQConstraint()) v -= za * (v.dot(za) / za.squaredNorm()); };
 
+    options.getHessianProjectionController().reset();
+    options.getHessianUpdateController()    .reset();
+
     for (it = 1; it <= options.niter; ++it) {
         BENCHMARK_SCOPED_TIMER_SECTION it_timer("Newton iterate");
 
@@ -189,7 +221,9 @@ ConvergenceReport NewtonOptimizer::optimize() {
         { BENCHMARK_SCOPED_TIMER_SECTION t2("Preamble");
 
         // std::cout << "pre-update gradient: " << zeroOutFixedVars(prob->gradient(false)).norm() << std::endl;
+        BENCHMARK_START_TIMER_SECTION("Callback");
         prob->iterationCallback(it);
+        BENCHMARK_STOP_TIMER_SECTION("Callback");
         // Note: we allow the iteration callback to modify the variables!
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).

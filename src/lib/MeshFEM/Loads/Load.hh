@@ -29,7 +29,7 @@ struct Load {
     virtual VXd grad_X() const = 0;
 
     // Hessian with respect to deformed configuration (H_xx)
-    virtual void hessian(SuiteSparseMatrix &H) const = 0;
+    virtual void hessian(SuiteSparseMatrix &H, bool projectionMask = true) const = 0;
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const = 0;
     SuiteSparseMatrix constructHessian() const {

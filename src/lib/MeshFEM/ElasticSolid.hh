@@ -29,9 +29,10 @@
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
-template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
-class ElasticSolid : public ElasticObject<typename EmbeddingSpace::Scalar> {
+template<size_t _K, size_t _Deg, class _EmbeddingSpace, class _Energy>
+class ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 public:
+    using EmbeddingSpace = _EmbeddingSpace;
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
     static_assert(std::is_convertible<typename Energy::Real, Real>::value, "Incompatible real number types");
@@ -50,18 +51,45 @@ public:
     using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using Mesh = FEMMesh<K, Deg, Vector>;
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
+    using GradPhis = typename Mesh::ElementData::GradPhis;
 
-    ElasticSolid(const Energy &energy, const Mesh &mesh)
+    ElasticSolid(const Energy &energy, const std::shared_ptr<const Mesh> &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
 
+    // Degree-changing constructor
+    template<size_t Deg2>
+    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {
+        m_mesh = std::make_shared<Mesh>(es.mesh());
+        m_energyDensities = es.m_energyDensities;
+        auto oldDeformation = es.deformedPositions();
+
+        const auto &oldMesh = es.mesh();
+        const auto &m = mesh();
+        // Transfer/interpolate deformation field to our new mesh.
+        m_x.resize(mesh().numNodes(), size_t(N));
+        for (const auto &n : m.nodes()) {
+            const size_t ni = n.index();
+            if (n.isVertexNode()) m_x.row(ni) = oldDeformation.row(ni);
+            else if (n.isEdgeNode()) {
+                static_assert((Deg2 == 1) || (Deg2 == 2), "Only Degree 1 and 2 implemented");
+                if (Deg2 == 2) { m_x.row(ni) = oldDeformation.row(ni); }
+                else           { m_x.row(ni) = 0.5 * (oldDeformation.row(n.halfEdge().tail().index())
+                                                  + oldDeformation.row(n.halfEdge(). tip().index())); }
+            }
+            else throw std::runtime_error("Unimplemented");
+        }
+
+        setDeformedPositions(m_x);
+    }
+
     size_t numVars() const { return m_x.size(); }
-    size_t numElements() const { return m_mesh.numElements(); }
-    size_t numVertices() const { return m_mesh.numVertices(); }
+    size_t numElements() const { return mesh().numElements(); }
+    size_t numVertices() const { return mesh().numVertices(); }
     size_t numRestStateVars() const { return numVertices() * N; }
 
     void setIdentityDeformation() {
-        m_x.resize(m_mesh.numNodes(), size_t(N));
-        for (const auto &n : m_mesh.nodes())
+        m_x.resize(mesh().numNodes(), size_t(N));
+        for (const auto &n : mesh().nodes())
             m_x.row(n.index()) = n->p;
     }
 
@@ -80,12 +108,12 @@ public:
     void setRestState(const VXd &vertexPositions) {
         if (size_t(vertexPositions.size()) != N * numVertices())
             throw std::invalid_argument("Invalid vertexPositions size");
-        m_mesh.setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), size_t(N)));
+        mesh().setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), size_t(N)));
     }
 
     VXd getRestState() const {
         VXd rest_state(numRestStateVars());
-        for (const auto &v : m_mesh.vertices())
+        for (const auto &v : mesh().vertices())
             rest_state.template segment<N>(N * v.index()) = v.node()->p;
         return rest_state;
     }
@@ -97,27 +125,29 @@ public:
             [ei, &psi, this](const EvalPtN &x) {
                 psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
                 return psi.energy();
-            }, m_mesh.element(ei)->volume());
+            }, mesh().element(ei)->volume());
     }
 
     // Energy stored in the full object.
     virtual Real energy() const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("energy");
         return summation_parallel<Real>([this](size_t ei) { return elementEnergy(ei); },
-                                        m_mesh.numElements());
+                                        mesh().numElements());
     }
 
     // Gradient of a single element's energy with respect to its nodes' deformed positions..
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t ei) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &e = m_mesh.element(ei);
+        const auto &e = mesh().element(ei);
         return QuadratureRule::integrate([&](const EvalPtN& x) {
                   ElementGradient integrand;
-                  psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::Gradient);
+                  GradPhis gradPhis = e->gradPhis(x);
+                  psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
                   Matrix denergy = psi.denergy();
 
                   for (const auto &n : e.nodes()) {
-                      VSFJ gradPhi(0, e->gradPhi(n.localIndex())(x));
+                      VSFJ gradPhi(0, gradPhis.col(n.localIndex()));
                       for (size_t c = 0; c < N; ++c) {
                           gradPhi.c = c;
                           integrand[N * n.localIndex() + c] = doubleContract(gradPhi, denergy);
@@ -134,7 +164,7 @@ public:
 
         auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
             ElementGradient contrib = elementGradient(ei);
-            for (const auto &n : m_mesh.element(ei).nodes())
+            for (const auto &n : mesh().element(ei).nodes())
                 g_out.template segment<N>(N * n.index()) += contrib.template segment<N>(N * n.localIndex());
         };
 
@@ -143,9 +173,9 @@ public:
         return g;
     }
 
-    SuiteSparseMatrix hessian() const {
+    SuiteSparseMatrix hessian(bool projectionMask = false) const {
         SuiteSparseMatrix H(hessianSparsityPattern());
-        hessian(H);
+        hessian(H, projectionMask);
         return H;
     }
 
@@ -159,26 +189,22 @@ public:
     using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &m = m_mesh;
+        const auto &m = mesh();
         const auto &e = m.element(ei);
         return QuadratureRule::integrate([&](const EvalPtN &x) {
-                psi.setDeformationGradient(getDeformationGradient(ei, x), disableProjection ? EvalLevel::HessianWithDisabledProjection
-                                                                                            : EvalLevel::Hessian);
+                GradPhis gradPhis = e->gradPhis(x);
+                psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
+                                                                                                   : EvalLevel::Hessian);
                 Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
 
-
-                Eigen::Matrix<Real, N, numNodesPerElement> sfGrads;
-                for (const auto &n : e.nodes())
-                    sfGrads.col(n.localIndex()) = e->gradPhi(n.localIndex())(x);
-
                 for (const auto &n_b : e.nodes()) {
-                    VSFJ gradPhi_b(0, sfGrads.col(n_b.localIndex()));
+                    VSFJ gradPhi_b(0, gradPhis.col(n_b.localIndex()));
                     for (size_t c_b = 0; c_b < N; ++c_b) {
                         size_t var_b = N * n_b.localIndex() + c_b;
                         gradPhi_b.c = c_b;
                         Matrix delta_denergy = psi.delta_denergy(gradPhi_b);
                         for (const auto &n_a : e.nodes()) {
-                            VSFJ gradPhi_a(0, sfGrads.col(n_a.localIndex()));
+                            VSFJ gradPhi_a(0, gradPhis.col(n_a.localIndex()));
                             for (size_t c_a = 0; c_a < N; ++c_a) {
                                 size_t var_a = N * n_a.localIndex() + c_a;
                                 gradPhi_a.c = c_a;
@@ -193,12 +219,12 @@ public:
             e->volume());
     }
 
-    virtual void hessian(SuiteSparseMatrix& H) const override {
+    virtual void hessian(SuiteSparseMatrix& H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
         auto assembler_per_element_contrib = [&](size_t ei, SuiteSparseMatrix& Hout) {
-            const auto &m = m_mesh;
+            const auto &m = mesh();
             const auto &e = m.element(ei);
-            PerElementHessian contrib = elementHessian(ei);
+            PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
 
             // Accumulate vertical strips into the global Sparse matrix.
             for (const auto &n_b : e.nodes()) {
@@ -227,7 +253,7 @@ public:
         TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
 
-        for (const auto &e : m_mesh.elements()) {
+        for (const auto &e : mesh().elements()) {
             for (const auto &n_b : e.nodes()) {
                 for (size_t c_b = 0; c_b < N; ++c_b) {
                     for (const auto &n_a : e.nodes()) {
@@ -263,26 +289,31 @@ public:
     MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
     MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
     MXNd restPositions() const {
-        MXNd rpos(m_mesh.numNodes(), size_t(N));
-        for (const auto &n : m_mesh.nodes())
+        MXNd rpos(mesh().numNodes(), size_t(N));
+        for (const auto &n : mesh().nodes())
             rpos.row(n.index()) = n->p;
         return rpos;
     }
     MXNd nodeDisplacements() const { return deformedPositions() - restPositions(); }
 
-    const Mesh &mesh() const { return m_mesh; }
+    const Mesh &mesh() const { return *m_mesh; }
 
     const Energy &getEnergyDensity(size_t ei) const {
         if (m_energyDensities.size() == 1) return m_energyDensities.front();
         return m_energyDensities.at(ei);
     }
 
-    Matrix getDeformationGradient(size_t ei, const EvalPtN &x) const {
+    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
         Matrix F(Matrix::Zero());
-        const auto &e = m_mesh.element(ei);
-        for (const auto &n : e.nodes())
-            F += (e->gradPhi(n.localIndex())(x) * m_x.row(n.index())).transpose();
+        const auto &e = mesh().element(ei);
+        for (const auto &n : e.nodes()) {
+            F += (gradPhis.col(n.localIndex()) * m_x.row(n.index())).transpose();
+        }
         return F;
+    }
+
+    Matrix getDeformationGradient(size_t ei, const EvalPtN &x) const {
+        return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
     }
 
     VXd element3DVolumes() const {
@@ -316,13 +347,17 @@ public:
     }
 
 protected:
-    Mesh m_mesh;
+    std::shared_ptr<const Mesh> m_mesh;
     // Energy density for each element (with support for multi-material solids).
     // For single-material solids, this vector will contain only a single entry.
     std::vector<Energy> m_energyDensities;
 
     // Deformed positions for each node
     MXNd m_x;
+
+    // All template instantiations must be friends for the degree-converting constructor.
+    template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>
+    friend class ElasticSolid;
 };
 
 #endif /* end of include guard: ELASTICSOLID_HH */

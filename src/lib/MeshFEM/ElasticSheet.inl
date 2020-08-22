@@ -76,7 +76,7 @@ struct NormalInferenceProblem : public NewtonProblem {
     virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
 
 protected:
-    virtual void m_evalHessian(SuiteSparseMatrix &result) const override {
+    virtual void m_evalHessian(SuiteSparseMatrix &result, bool /* projectionMask */) const override {
         result.setZero();
         for (const auto &e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
@@ -445,7 +445,7 @@ typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::delta_d_A_gamma_div_len_d
 // Elastic Energy Hessian
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_C>
-void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype) const {
+void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool /* projectionMask */) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
     auto assembler_per_element_contrib = [&m, this, etype](size_t ei, SuiteSparseMatrix& Hout) {

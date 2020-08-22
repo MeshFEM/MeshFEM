@@ -19,7 +19,7 @@
 #ifndef GAUSSQUADRATURE_HH
 #define GAUSSQUADRATURE_HH
 #include <MeshFEM/Types.hh>
-#include <MeshFEM/Functions.hh>
+#include <MeshFEM/Simplex.hh>
 #include <MeshFEM/function_traits.hh>
 #include <array>
 

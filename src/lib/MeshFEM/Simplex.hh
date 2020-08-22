@@ -54,4 +54,11 @@ namespace Simplex {
     //                                     {1, 2}, {0, 1}, {0, 2} };
 }
 
+// Function evaluation point type (barycentric coordinate array) for a K-simplex
+template<size_t _K>
+using EvalPt = std::array<Real, Simplex::numVertices(_K)>; // typename NTuple<Real, Simplex::numVertices(_K)>::type;
+// Evaluation point as an Eigen vector type
+template<size_t _K>
+using EigenEvalPt = VectorND<Simplex::numVertices(_K)>;
+
 #endif /* end of include guard: SIMPLEX_HH */

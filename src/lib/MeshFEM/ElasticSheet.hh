@@ -179,13 +179,13 @@ public:
 
     Real energy(const EnergyType etype) const;
     VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
-    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype) const;
+    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype, bool projectionMask = false) const;
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
     virtual VXd gradient() const override { return gradient(false, EnergyType::Full); }
-    virtual void hessian(SuiteSparseMatrix &Hout) const override { hessian(Hout, EnergyType::Full); }
+    virtual void hessian(SuiteSparseMatrix &Hout, bool projectionMask = false) const override { hessian(Hout, EnergyType::Full, projectionMask); }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;

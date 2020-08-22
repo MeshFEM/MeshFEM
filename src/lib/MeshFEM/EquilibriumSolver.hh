@@ -92,11 +92,11 @@ struct EquilibriumProblem : public NewtonProblem {
     virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
 
 protected:
-    virtual void m_evalHessian(SuiteSparseMatrix &result) const override {
+    virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         result.setZero();
-        m_sys.hessian(result);
+        m_sys.hessian(result, projectionMask);
         for (const auto &l : m_loads)
-            l->hessian(result);
+            l->hessian(result, projectionMask);
     }
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
         // TODO: mass matrix?

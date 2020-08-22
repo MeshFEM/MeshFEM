@@ -8,26 +8,26 @@ using namespace Simplex;
 using namespace Degree;
 using namespace std;
 
-double randDouble() {
+static double randDouble() {
     return ((double)rand() / (double)RAND_MAX);
 }
 
 template<size_t K, class F, typename... Args>
 typename std::enable_if<(sizeof...(Args) == K + 1), double>::type
-evalAt(const VectorND<K + 1> &/* samplePt */, const F&f, Args&&... args) {
+static evalAt(const VectorND<K + 1> &/* samplePt */, const F&f, Args&&... args) {
     return f(args...);
 }
 
 template<size_t K, class F, typename... Args>
 typename std::enable_if<(sizeof...(Args) < K + 1), double>::type
-evalAt(const VectorND<K + 1> &samplePt, const F&f, Args&&... args) {
+static evalAt(const VectorND<K + 1> &samplePt, const F&f, Args&&... args) {
     return evalAt<K>(samplePt, f, args..., samplePt[sizeof...(Args)]);
 }
 
 // Test that all functions in "funcs" up to degree Deg are interpolated exactly by a Deg-degree interpolant.
 // Also, ensure that the integrate() methods obtain the same result as Gauss quadrature.
 template<size_t K, size_t Deg, typename F>
-void interpolant_test(const vector<vector<F>> &funcs) {
+static void interpolant_test(const vector<vector<F>> &funcs) {
     for (size_t d = 0; d <= Deg; ++d) {
         for (const auto &f : funcs.at(d)) {
             auto interp = Interpolation<K, Deg>::interpolant(f);
@@ -66,7 +66,7 @@ void interpolant_test(const vector<vector<F>> &funcs) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // The monomials systematically tested below generally don't include all
-// variables; silence the resuting warnings on GCC and Clang.
+// variables; silence the resulting warnings on GCC and Clang.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 

@@ -49,7 +49,7 @@ struct Gravity : public Load<3, typename Object::Real> {
     }
 
     // Gravity is linear ==> Hessian is zero.
-    virtual void hessian(SuiteSparseMatrix& /* H */) const override { }
+    virtual void hessian(SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
         const size_t nv = getObj().numVars();
@@ -77,13 +77,12 @@ private:
     void m_updateCache() {
         m_grad.setZero(getObj().numVars());
         const auto &m = getObj().mesh();
-        Interpolant<Real, K, Deg> phi;
-        phi = 0.0;
+        typename Object::Mesh::ElementData::Phis phiIntegrals;
+        auto integratedPhis = integratedShapeFunctions<Deg, K>();
         for (const auto &e : m.elements()) {
             for (const auto &n : e.nodes()) {
-                phi[n.localIndex()] = 1.0;
-                m_grad.template segment<3>(3 * n.index()) += m_g; //  * phi.integrate(e->volume());
-                phi[n.localIndex()] = 0.0;
+                m_grad.template segment<3>(3 * n.index()) +=
+                    m_g * (integratedPhis[n.localIndex()] * e->volume());
             }
         }
 
