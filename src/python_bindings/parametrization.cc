@@ -31,6 +31,10 @@ PYBIND11_MODULE(parametrization, m)
     m.def("conformalDistortion", &Parametrization::conformalDistortion, py::arg("mesh"), py::arg("uv"),
           "Get the (quasi-)conformal distortion strain measure (sigma_0 - sigma_1) / sigma_1 >= 0");
 
+    // Misc utilities
+    m.def("rescale", &Parametrization::rescale, py::arg("mesh"), py::arg("uv"),
+          "Globally scale the parametrization to minimise the total squared difference in triangle areas caused by flattening");
+
     // Matrix assembly
     m.def("assembleLSCMMatrix", &Parametrization::assembleLSCMMatrix, py::arg("mesh"), "Matrix defining the quadratic discrete least-squares conformal energy");
     m.def("assembleBMatrixSCP", &Parametrization::assembleBMatrixSCP, py::arg("mesh"), "\"boundary indicator\" B matrix defined in SCP");

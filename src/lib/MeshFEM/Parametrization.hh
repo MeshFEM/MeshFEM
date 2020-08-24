@@ -80,7 +80,7 @@ VXd scaleFactor(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
     auto F = jacobians(mesh, uv);
     VXd result(F.size());
     for (size_t i = 0; i < F.size(); ++i)
-        result[i] = 1.0 / std::sqrt((F[i] * F[i].transpose()).determinant());
+        result[i] = 1.0 / std::pow((F[i] * F[i].transpose()).determinant(), 0.25);
     return result;
 }
 
@@ -97,6 +97,11 @@ VXd conformalDistortion(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
     return result;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Misc utilities
+////////////////////////////////////////////////////////////////////////////////
+MESHFEM_EXPORT
+UVMap rescale(const Mesh &mesh, Eigen::Ref<const UVMap> uv);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Matrix assembly

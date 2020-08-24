@@ -17,7 +17,7 @@ struct SPSDSystemSolver : public SPSDSystem<Real> {
 //          ==>     s = (origArea . paramArea) / ||paramArea||^2
 // which corresponds to scaling the parametrization by sqrt(s).
 // Also translate it to put the (approximate) center of mass at the origin.
-static UVMap rescale(const Mesh &mesh, const UVMap &uv) {
+UVMap rescale(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
     // Compute per-triangle areas before and after parametrization
     Eigen::VectorXd origArea(mesh.numTris()), paramArea(mesh.numTris());
     for (const auto t : mesh.elements()) {
@@ -27,6 +27,9 @@ static UVMap rescale(const Mesh &mesh, const UVMap &uv) {
             poly[v.localIndex()] = uv.row(v.index()).transpose();
         paramArea[t.index()] = area(poly);
     }
+
+    // Eigen::VectorXd lengthScales = (origArea.array() / paramArea.array()).sqrt().matrix();
+    // std::cout << lengthScales.maxCoeff() << ", " << lengthScales.minCoeff() << std::endl;
 
     // Note: the mass-matrix version would need to use the *flattened* mesh!
     // It's probably not worth the expense of constructing these flat mesh quantities.
