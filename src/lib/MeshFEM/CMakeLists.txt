@@ -60,6 +60,8 @@ add_library(MeshFEM SHARED
         Parallelism.hh
         Parallelism.cc
         ParallelAssembly.hh
+        Parametrization.cc
+        Parametrization.hh
         PeriodicBoundaryMatcher.hh
         PeriodicHomogenization.hh
         PerturbMesh.hh

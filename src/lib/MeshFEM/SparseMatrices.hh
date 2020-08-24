@@ -783,6 +783,11 @@ struct CSCMatrix {
 
     void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
+    void addScaledIdentity(_Real v) {
+        for (_Index i = 0; i < m; ++i)
+            addDiagEntry(i, v);
+    }
+
     template<bool _detectMissing = false>
     _Index findEntry(_Index i, _Index j) const {
         // Find the entry in the sparsity pattern.

@@ -128,6 +128,7 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
 }
 
 // Construct the mass matrix for vector-valued shape functions
+// (assumes interleaved ordering of the unknown components (x0, y0, ...))
 template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, typename... Args>
 TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
     TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);
