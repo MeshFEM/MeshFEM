@@ -1,6 +1,6 @@
 ################################################################################
 
-add_library(MeshFEM SHARED
+add_library(MeshFEM
         Algebra.hh
         BaseCellType.hh
         BoundaryConditions.cc
@@ -140,7 +140,13 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
-target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
+
+# Compiler-specific options
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(${PROJECT_NAME} PUBLIC /bigobj)
+else()
+    target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
+endif()
 
 # Generate MeshFEM_export.h which provides the MESHFEM_EXPORT macro
 # for making our public API symbols visible.

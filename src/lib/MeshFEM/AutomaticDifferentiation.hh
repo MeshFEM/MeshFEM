@@ -109,17 +109,15 @@ struct safe_numeric_limits
 ////////////////////////////////////////////////////////////////////////////////
 // If "val" does not yet have a nonempty vector of derivatives, initialize it to
 // the appropriately sized vector of zeros.
-template<typename T>
-typename std::enable_if<isAutoDiffType<T>(), void>::type
-zeroInitializeEmptyDerivatives(T &val, const size_t numVars) {
+template<typename T, typename std::enable_if<isAutoDiffType<T>(), int>::type = 0>
+void zeroInitializeEmptyDerivatives(T &val, const size_t numVars) {
     auto &der = val.derivatives();
     if (der.rows() == 0) der.setZero(numVars);
     assert(der.rows() == numVars);
 }
 
-template<typename T>
-typename std::enable_if<!isAutoDiffType<T>(), void>::type
-zeroInitializeEmptyDerivatives(T &/* val */, const size_t /* numVars */) { }
+template<typename T, typename std::enable_if<!isAutoDiffType<T>(), int>::type = 0>
+void zeroInitializeEmptyDerivatives(T &/* val */, const size_t /* numVars */) { }
 
 inline VecX_T<Real> extractDirectionalDerivative(const VecX_T<ADReal> &a) {
     const int n = a.size();
@@ -220,9 +218,8 @@ log_cosh(const T val) {
 // Derivative debugging
 ////////////////////////////////////////////////////////////////////////////////
 // Check for Inf/NaN in derivative fields
-template<typename T>
-typename std::enable_if<isAutoDiffType<T>(), bool>::type
-hasInvalidDerivatives(const T &val) {
+template<typename T, typename std::enable_if<isAutoDiffType<T>(), int>::type = 0>
+bool hasInvalidDerivatives(const T &val) {
     const auto &der = val.derivatives();
     for (int i = 0; i < der.rows(); ++i)
         if (std::isnan(der[i]) || std::isinf(der[i])) return true;
@@ -230,21 +227,18 @@ hasInvalidDerivatives(const T &val) {
 }
 
 // Return false for non-autodiff types.
-template<typename T>
-typename std::enable_if<!isAutoDiffType<T>(), bool>::type
-hasInvalidDerivatives(const T &/* val */) { return false; }
+template<typename T, typename std::enable_if<!isAutoDiffType<T>(), int>::type = 0>
+bool hasInvalidDerivatives(const T &/* val */) { return false; }
 
-template<typename T>
-typename std::enable_if<isAutoDiffType<T>(), void>::type
-reportDerivatives(std::ostream &os, const T &val) {
+template<typename T, typename std::enable_if<isAutoDiffType<T>(), int>::type = 0>
+void reportDerivatives(std::ostream &os, const T &val) {
     auto prec = os.precision(5);
     os << val.derivatives().transpose();
     os.precision(prec);
 }
 
 // do nothing for non-autodiff types.
-template<typename T>
-typename std::enable_if<!isAutoDiffType<T>(), void>::type
-reportDerivatives(std::ostream &/* os */, const T &/* val */) { }
+template<typename T, typename std::enable_if<!isAutoDiffType<T>(), int>::type = 0>
+void reportDerivatives(std::ostream &/* os */, const T &/* val */) { }
 
 #endif /* end of include guard: AUTOMATICDIFFERENTIATION_HH */

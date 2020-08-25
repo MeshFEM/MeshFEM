@@ -10,12 +10,12 @@ static void test() {
     using Mesh = FEMMesh<N, _Deg, VNd>;
     std::vector<MeshIO::IOVertex > vertices;
     std::vector<MeshIO::IOElement> elements;
-    const std::string path = std::string(MESHFEM_DIR) + ((_Dim == 2) ? "/misc/examples/meshes/square_hole.off"
-                                                                     : "/misc/examples/meshes/ball.msh");
+    const std::string path = std::string(MESHFEM_DIR) + ((_Dim == 2) ? "/examples/meshes/square_hole.off"
+                                                                     : "/examples/meshes/ball.msh");
     // std::cout << "Using input file " << path << std::endl;
     MeshIO::load(path, vertices, elements);
     Mesh m(elements, vertices);
-    
+
     auto M = MassMatrix::construct_vector_valued(m);
 
     // Compare the L2 norm for a random velocity field computed directly
