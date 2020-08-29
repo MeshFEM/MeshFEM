@@ -49,6 +49,7 @@ struct ElasticSolidBinder {
           .def("setIdentityDeformation",    &ES::setIdentityDeformation)
           .def("getVars",                   &ES::getVars)
           .def("setVars",                   &ES::setVars, py::arg("vars"))
+          .def("setDeformedPositions",      &ES::setDeformedPositions)
           .def("applyRigidTransform",       &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",    &ES::prepareRigidMotionPins)
           .def("filterRMPinArtifacts",      &ES::filterRMPinArtifacts, py::arg("pinVertices"))

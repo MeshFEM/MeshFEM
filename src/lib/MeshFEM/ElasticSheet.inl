@@ -218,6 +218,9 @@ typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::energy(const EnergyType 
             result += m_h * psi.energy();
         }
 
+        if (m_disableBending)
+            return result * e->volume();
+
         // Bending energy contribution
         // (Only an approximation unless Psi_C is actually St Venant Kirchhoff...)
         if ((etype == EnergyType::Bending) || (etype == EnergyType::Full)) {
@@ -267,6 +270,9 @@ typename ElasticSheet<Psi_C>::VXd ElasticSheet<Psi_C>::gradient(bool updatedSour
                 }
             }
         }
+
+        if (m_disableBending)
+            return;
 
         // Bending energy contribution
         if ((etype == EnergyType::Bending) || (etype == EnergyType::Full)) {
@@ -488,7 +494,7 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
 
         // Bending energy contribution
         // This can be heavily optimized...
-        if ((etype == EnergyType::Bending) || (etype == EnergyType::Full)) {
+        if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
             psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
             const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
             const M2d stress = 1.0 * psi.PK2Stress();

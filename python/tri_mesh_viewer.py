@@ -207,7 +207,7 @@ class ViewerBase:
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        if (mesh != None):   self.mesh = mesh
+        if (mesh is not None):   self.mesh = mesh
         self.setGeometry(*self.getVisualizationGeometry(),
                           preserveExisting=preserveExisting,
                           updateModelMatrix=updateModelMatrix,

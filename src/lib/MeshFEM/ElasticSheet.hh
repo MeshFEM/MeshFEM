@@ -207,6 +207,15 @@ public:
         });
         return result;
     }
+    // To assist boundary conditions specification
+    MX3d restEdgeMidpoints() const {
+        MX3d result(m_numEdges, 3);
+        mesh().visitEdges([this, &result](CHEHandle he, size_t edgeIndex) {
+            result.row(edgeIndex) = 0.5 * (mesh().node(he. tip().index())->p +
+                                           mesh().node(he.tail().index())->p);
+        });
+        return result;
+    }
 
     // Apply an identity deformation and reset the source frame representation.
     // Note, we set the undeformed midedge normals by minimizing the bending energy
@@ -328,6 +337,9 @@ public:
         // ::filterRMPinArtifacts(*this, pinVertices);
     }
 
+    void setDisabledBending(bool yesno) { m_disableBending = yesno; }
+    bool getDisabledBending() const { return m_disableBending; }
+
 private:
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.
@@ -399,6 +411,7 @@ private:
     const size_t m_numVertices,
                  m_numEdges;
 
+    bool m_disableBending = false;
 };
 
 #include "ElasticSheet.inl"

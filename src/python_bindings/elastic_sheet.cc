@@ -68,6 +68,7 @@ struct ElasticSheetBinder {
           .def("midedgeReferenceFrames", &ES::midedgeReferenceFrames)
           .def("sourceReferenceFrames"  ,&ES::sourceReferenceFrames)
           .def("edgeMidpoints",          &ES::edgeMidpoints)
+          .def("restEdgeMidpoints",      &ES::restEdgeMidpoints)
           .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
           .def("visualizationGeometry", [](const ES &obj) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());
@@ -79,6 +80,8 @@ struct ElasticSheetBinder {
           .def("normalInferenceProblem", [](ES &es) -> std::unique_ptr<NewtonProblem> { return std::make_unique<NormalInferenceProblem<ES>>(es); })
 
           .def_property("thickness", &ES::getThickness, &ES::setThickness)
+          // For debugging purposes, drop the bending energy term.
+          .def_property("disableBending", &ES::getDisabledBending, &ES::setDisabledBending)
           ;
 
         const std::string name = NameMangler<ES>::name();

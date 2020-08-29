@@ -427,7 +427,7 @@ private:
     }
 
     // (re-)compute the bounding box (when vertex positions change)
-    void  m_computeBBox() {
+    void m_computeBBox() {
         if (BaseMesh::numVertices() == 0) {
             m_bbox = BBox<EmbeddingSpace>();
             return;

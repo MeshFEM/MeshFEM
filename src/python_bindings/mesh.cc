@@ -78,6 +78,18 @@ struct MeshBindingsBase {
                       for (const auto &e : m.elements()) result[e.index()] = e->volume();
                       return result;
                   })
+          .def("edgeLengths", [](const Mesh &m) {
+                std::map<UnorderedPair, Real> edgeLengths;
+                for (const auto &he : m.halfEdges()) {
+                    edgeLengths.emplace(UnorderedPair(he.tail().index(), he.tip().index()),
+                                        (he.tip().node()->p -he.tail().node()->p).norm());
+                }
+                Eigen::VectorXd result(edgeLengths.size());
+                int i = 0;
+                for (const auto &e : edgeLengths)
+                    result[i++] = e.second;
+                return result;
+          }, "Get the length of each mesh edge in arbitrary order")
           .def("barycenters", [](const Mesh &m) {
                 Eigen::MatrixXd result(m.numElements(), size_t(EmbeddingDimension));
                 for (const auto &e : m.elements()) {
