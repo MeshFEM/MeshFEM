@@ -172,7 +172,7 @@ namespace detail {
     shapeFunctionsImpl(const EvalPt<_K> &baryCoords, Future::index_sequence<NodeIdxs...>) {
         Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1> result
             = Eigen::Map<Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>>(
-                    std::array<Real, Simplex::numNodes(_K, _Deg)>{detail::shapeFunctionEvaluator<_Deg, NodeIdxs, _K>(baryCoords)...}.data());
+                    std::array<Real, Simplex::numNodes(_K, _Deg)>{{detail::shapeFunctionEvaluator<_Deg, NodeIdxs, _K>(baryCoords)...}}.data());
         return result;
     }
 
