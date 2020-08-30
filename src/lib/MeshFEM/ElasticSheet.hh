@@ -75,6 +75,8 @@ public:
     static constexpr size_t K   = 2;
     static constexpr size_t Deg = 1;
     static constexpr size_t N   = 3;
+    static constexpr size_t numNodesPerElement  = Simplex::numNodes(K, Deg);
+    static constexpr size_t numElementLocalVars = N * numNodesPerElement + 3;
     using  Mesh = FEMMesh<2, Deg, V3d>;
     using TMesh = typename Mesh::BaseMesh; // TriMesh data structure underlying FEMMesh
     using VSFJ = VectorizedShapeFunctionJacobian<3, V3d>;
@@ -177,8 +179,16 @@ public:
         return m_psi.at(ei);
     }
 
+    Real elementEnergy(size_t ei, const EnergyType etype) const;
     Real energy(const EnergyType etype) const;
+
+    using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
+    ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
     VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
+
+    // using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
+    // PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
+
     void hessian(SuiteSparseMatrix &Hout, const EnergyType etype, bool projectionMask = false) const;
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
 

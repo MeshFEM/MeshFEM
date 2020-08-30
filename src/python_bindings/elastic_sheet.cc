@@ -59,6 +59,8 @@ struct ElasticSheetBinder {
           .def("getSourceAlphas",          &ES::getSourceAlphas)
           .def("energy",                   [](const ES &es, EType etype) { return es.energy(etype); }, py::arg("etype") = EType::Full)
           .def("gradient",                 [](const ES &es, bool us, EType etype) { return es.gradient(us, etype); }, py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
+          .def("elementEnergy",            [](const ES &es, size_t ei, EType etype) { return es.elementEnergy(ei, etype); }, py::arg("ei"), py::arg("etype") = EType::Full)
+          .def("elementGradient",          [](const ES &es, size_t ei, bool us, EType etype) { return es.elementGradient(ei, us, etype); }, py::arg("ei"), py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
           .def("hessian",                  [](const ES &es, EType etype) { auto H = es.hessianSparsityPattern(); es.hessian(H, etype); return H; }, py::arg("etype") = EType::Full)
           .def("hessianSparsityPattern",   &ES::hessianSparsityPattern)
           // .def("massMatrix", [](const ES &e, bool lumped) {

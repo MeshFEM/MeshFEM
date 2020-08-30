@@ -479,7 +479,7 @@ class ViewerBase:
         if (dark):
             self.renderer.scene.background = '#111111'
             self.materialLibrary.material(False).color = '#F49111' # 'orange'
-            self.wireframeMaterial().color = '#220022'
+            self.wireframeMaterial().color = 'black' # '#220022'
         else:
             self.renderer.scene.background = '#FFFFFF'
             self.materialLibrary.material(False).color = 'lightgray'
@@ -583,9 +583,12 @@ class LineMeshViewer(ViewerBase):
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
 
+def PointCloudMesh(points):
+    return RawMesh(points, np.zeros((0, 3), dtype=np.uint32), None)
+
 class PointCloudViewer(ViewerBase):
     def __init__(self, points, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
-        pcmesh = RawMesh(points, np.zeros((0, 3), dtype=np.uint32), None)
+        pcmesh = PointCloudMesh(points)
         self.isPointCloud = True
         self.MeshConstructor = pythreejs.Points
         super().__init__(pcmesh, width, height, textureMap, scalarField, vectorField, superView)

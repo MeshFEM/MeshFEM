@@ -203,101 +203,110 @@ void ElasticSheet<Psi_C>::initializeMidedgeNormals(bool minimizeBending) {
 // Elastic Energy
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_C>
-typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::energy(const EnergyType etype) const {
+typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::elementEnergy(size_t ei, const EnergyType etype) const {
     const auto &m = mesh();
-    auto energy_summand = [&](size_t ei) {
-        Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &e = m.element(ei);
-        const M32d &B = m_B[ei];
-        Real result = 0.0;
 
-        // Membrane energy contribution
-        if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-            M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
-            psi.setC(FB.transpose() * FB);
-            result += m_h * psi.energy();
-        }
+    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
+    const auto &e = m.element(ei);
+    const M32d &B = m_B[ei];
+    Real result = 0.0;
 
-        if (m_disableBending)
-            return result * e->volume();
+    // Membrane energy contribution
+    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
+        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        psi.setC(FB.transpose() * FB);
+        result += m_h * psi.energy();
+    }
 
-        // Bending energy contribution
-        // (Only an approximation unless Psi_C is actually St Venant Kirchhoff...)
-        if ((etype == EnergyType::Bending) || (etype == EnergyType::Full)) {
-            // We obtain a 2x2 second fundamental form in the reference configuration
-            // using our orthonormal basis for the undeformed triangle.
-            psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
-            result += (std::pow(m_h, 3) / 12.0) * psi.energy();
-        }
+    // Bending energy contribution
+    // (Only an approximation unless Psi_C is actually St Venant Kirchhoff...)
+    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
+        // We obtain a 2x2 second fundamental form in the reference configuration
+        // using our orthonormal basis for the undeformed triangle.
+        psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
+        result += (std::pow(m_h, 3) / 12.0) * psi.energy();
+    }
 
-        return result * e->volume();
-    };
+    return result * e->volume();
+}
 
-    return summation_parallel<Real>(energy_summand, m.numElements());
+template <class Psi_C>
+typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::energy(const EnergyType etype) const {
+    return summation_parallel<Real>([this, etype](size_t ei) { return elementEnergy(ei, etype); },
+                                    mesh().numElements());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Elastic Energy Gradient
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_C>
+typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradient(size_t ei, bool updatedSource, const EnergyType etype) const {
+    ElementGradient g_e(ElementGradient::Zero());
+
+    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
+    const auto &m = mesh();
+    const auto &e = m.element(ei);
+    const M32d &B = m_B[ei];
+
+    // Membrane energy contribution
+    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
+        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        psi.setC(FB.transpose() * FB);
+
+        // Derivative of `h * A * psi` with respect to C
+        M2d two_dpsi_hA = psi.PK2Stress() * (e->volume() * m_h);
+
+        // C = B^T F^T F B
+        // delta C = B^T deltaF^T F B + B^T F^T deltaF B
+        // delta psi = dpsi_hA : delta C = 2 dpsi_hA : B^T F^T deltaF B
+        //           = FB * 2 dpsi_hA * B^T : deltaF
+        M3d d_psi_dF = FB * two_dpsi_hA * B.transpose();
+
+        // d_psi_dF : (e_c otimes grad lambda_v)
+        //      = e_c . d_psi_dF * (grad lambda_v)
+        //      = (d_psi_dF * (grad lambda_v))_c
+        Eigen::Map<M3d>(g_e.data()) = d_psi_dF * e->gradBarycentric();
+    }
+
+    // Bending energy contribution
+    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
+        psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
+        const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
+        const M2d stress = psi.PK2Stress();
+        constexpr size_t to = 3 * numNodesPerElement;
+        const Real A = m_deformedElements[ei].volume();
+
+        for (const auto &he : e.halfEdges()) {
+            const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
+            const Real sign = he.isPrimary() ? 1.0 : -1.0;
+            const Real len = deformedEdgeVector(he).norm();
+            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+            // The derivative with respect to the theta variables is simple.
+            g_e[to + he.localIndex()] = ((sign * (A / len))) * dE_d_A_gamma_div_len;
+
+            // Derivative with respect to the corner positions.
+            Eigen::Map<M3d>(g_e.data()) += dE_d_A_gamma_div_len * d_A_gamma_div_len_d_x(he, updatedSource);;
+        }
+    }
+
+    return g_e;
+}
+
+template <class Psi_C>
 typename ElasticSheet<Psi_C>::VXd ElasticSheet<Psi_C>::gradient(bool updatedSource, const EnergyType etype) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Gradient");
     const auto &m = mesh();
-    auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
-        Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
+    auto accumulate_per_element_contrib = [this, updatedSource, etype, &m](size_t ei, VXd &g_out) {
+        auto g_e = elementGradient(ei, updatedSource, etype);
         const auto &e = m.element(ei);
-        const M32d &B = m_B[ei];
 
-        // Membrane energy contribution
-        if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-            M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
-            psi.setC(FB.transpose() * FB);
+        g_out.template segment<3>(3 * e.vertex(0).index()) += g_e.template segment<3>(0);
+        g_out.template segment<3>(3 * e.vertex(1).index()) += g_e.template segment<3>(3);
+        g_out.template segment<3>(3 * e.vertex(2).index()) += g_e.template segment<3>(6);
 
-            // Derivative of `h * A * psi` with respect to C
-            M2d two_dpsi_hA = psi.PK2Stress() * (e->volume() * m_h);
-
-            // C = B^T F^T F B
-            // delta C = B^T deltaF^T F B + B^T F^T deltaF B
-            // delta psi = dpsi_hA : delta C = 2 dpsi_hA : B^T F^T deltaF B
-            //           = FB * 2 dpsi_hA * B^T : deltaF
-            M3d d_psi_dF = FB * two_dpsi_hA * B.transpose();
-
-            for (const auto &v : e.vertices()) {
-                VSFJ deltaF(0, e->gradBarycentric().col(v.localIndex()));
-                for (size_t c = 0; c < 3; ++c) {
-                    deltaF.c = c;
-                    g_out[3 * v.index() + c] += doubleContract(d_psi_dF, deltaF);
-                }
-            }
-        }
-
-        if (m_disableBending)
-            return;
-
-        // Bending energy contribution
-        if ((etype == EnergyType::Bending) || (etype == EnergyType::Full)) {
-            psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
-            const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-            const M2d stress = psi.PK2Stress();
-            const size_t to = thetaOffset();
-            const Real A = m_deformedElements[ei].volume();
-
-            for (const auto &he : e.halfEdges()) {
-                const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
-                const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
-                const Real sign = he.isPrimary() ? 1.0 : -1.0;
-                const Real len = deformedEdgeVector(he).norm();
-                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-                // The derivative with respect to the theta variables is simple
-                g_out[to + edgeIdx] += ((sign * (A / len))) * dE_d_A_gamma_div_len;
-
-                M3d gradCornerPos = dE_d_A_gamma_div_len * d_A_gamma_div_len_d_x(he, updatedSource);
-
-                g_out.template segment<3>(3 * e.vertex(0).index()) += gradCornerPos.col(0);
-                g_out.template segment<3>(3 * e.vertex(1).index()) += gradCornerPos.col(1);
-                g_out.template segment<3>(3 * e.vertex(2).index()) += gradCornerPos.col(2);
-            }
-        }
+        const size_t to = thetaOffset();
+        for (const auto &he : e.halfEdges())
+            g_out[to + m_edgeForHalfEdge[he.index()]] += g_e[9 + he.localIndex()];
     };
 
     VXd g(VXd::Zero(numVars()));

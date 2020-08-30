@@ -9,15 +9,17 @@ from io_redirection import suppress_stdout as so
 from sim_utils import getBBoxVars, BBoxFace
 
 # Test geometry: rectangular strip
-L = 4
-pts = [[0, 0], [0, 1], [L, 1], [L, 0]]
-edges = [[0, 1], [1, 2], [2, 3], [3, 0]]
+def stripBoundary(L = 4):
+    pts = [[0, 0], [0, 1], [L, 1], [L, 0]]
+    edges = [[0, 1], [1, 2], [2, 3], [3, 0]]
+    return pts, edges
 
 # Test deformations: x stretch or roll
 Phi = lambda X: np.column_stack((1.01 * X[:, 0], X[:, 1], X[:, 2]))
-R = L / (2 * np.pi)
 def Phi(X):
     x, y, z = X[:, 0], X[:, 1], X[:, 2]
+    L = x.max() - x.min()
+    R = L / (2 * np.pi)
     r = R + z
     theta = -(2 * np.pi / L) * x
     return np.column_stack((r * np.cos(theta), y, r * np.sin(theta)))
@@ -36,15 +38,19 @@ def runSimulation(obj):
     with so(): obj.computeEquilibrium([], leftEdgeVars + rightEdgeVars, opts=opts)
     return time.time() - start, obj
 
-def dirichletSheetSim(thickness, maxArea = 0.0001):
+def getSheet(thickness, maxArea = 0.0001, L = 4):
     psi = energy.StVenantKirchhoffCBased(tensors.ElasticityTensor2D(200, 0.3))
-    m = mesh.Mesh(*triangulation.triangulate(pts, edges, triArea=maxArea)[0:2], embeddingDimension=3)
+    m = mesh.Mesh(*triangulation.triangulate(*stripBoundary(L), triArea=maxArea)[0:2], embeddingDimension=3)
     plate = elastic_sheet.ElasticSheet(m, psi)
     plate.thickness = thickness
-    return runSimulation(plate)
+    return plate
 
-def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2):
+def dirichletSheetSim(thickness, maxArea = 0.0001):
+    return runSimulation(getSheet(thickness, maxArea))
+
+def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4):
     psi3d = energy.IsotropicStVenantKirchhoff(3, 200, 0.3)
+    pts, _ = stripBoundary(L)
     m3d = mesh.Mesh(*meshing.tetrahedralize_extruded_polylines([np.array(pts + [pts[0]])],
                                                                [], thickness=thickness, maxVol=maxVol),
                     degree=degree)
