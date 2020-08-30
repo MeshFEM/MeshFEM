@@ -19,7 +19,7 @@ void ElasticSheet<Psi_C>::setIdentityDeformation() {
 // minimize the squared Frobenius norm of the second fundamental form.
 // (This objective is proportional to the bending energy stored in an isotropic
 // plate with Young's modulus 1 and Poisson's ratio 0.)
-// For convenience we use our Newton sovler even though it should always
+// For convenience we use our Newton solver even though it should always
 // converge in a single iteration.
 //
 // In order to make the normals/curvature computed independent of the reference
@@ -213,7 +213,7 @@ typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::elementEnergy(size_t ei,
 
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         psi.setC(FB.transpose() * FB);
         result += m_h * psi.energy();
     }
@@ -250,7 +250,7 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
 
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         psi.setC(FB.transpose() * FB);
 
         // Derivative of `h * A * psi` with respect to C
@@ -260,12 +260,12 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
         // delta C = B^T deltaF^T F B + B^T F^T deltaF B
         // delta psi = dpsi_hA : delta C = 2 dpsi_hA : B^T F^T deltaF B
         //           = FB * 2 dpsi_hA * B^T : deltaF
-        M3d d_psi_dF = FB * two_dpsi_hA * B.transpose();
+        M32d d_psi_dFB = FB * two_dpsi_hA;
 
-        // d_psi_dF : (e_c otimes grad lambda_v)
-        //      = e_c . d_psi_dF * (grad lambda_v)
-        //      = (d_psi_dF * (grad lambda_v))_c
-        Eigen::Map<M3d>(g_e.data()) = d_psi_dF * e->gradBarycentric();
+        // d_psi_dFB : (e_c otimes B^T grad lambda_v)
+        //      = e_c . d_psi_dFB * (B^T grad lambda_v)
+        //      = (d_psi_dFB * (B^T grad lambda_v))_c
+        Eigen::Map<M3d>(g_e.data()) = d_psi_dFB * m_jacobianLambdaB[ei].transpose();
     }
 
     // Bending energy contribution
@@ -277,7 +277,7 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
         const Real A = m_deformedElements[ei].volume();
 
         for (const auto &he : e.halfEdges()) {
-            const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
+            const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
             const Real len = deformedEdgeVector(he).norm();
             const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
@@ -473,7 +473,7 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
 
         // Membrane energy contribution
         if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-            M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+            M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
             psi.setC(FB.transpose() * FB);
 
             for (const auto &v_b : e.vertices()) {
@@ -484,19 +484,10 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
                     M2d deltaC_b = FB.transpose() * deltaF_b * B;
                     deltaC_b = (deltaC_b + deltaC_b.transpose()).eval();
 
-                    //        d_psi_dF = FB * two_dpsi_hA * B.transpose();
-                    M3d delta_d_psi_dF = (((deltaF_b * B) * psi.PK2Stress() + FB * psi.delta_PK2Stress(deltaC_b)) * B.transpose()) * (e->volume() * m_h);
+                    //        d_psi_dFB = FB * two_dpsi_hA
+                    M32d delta_d_psi_dFB = ((deltaF_b * B) * psi.PK2Stress() + FB * psi.delta_PK2Stress(deltaC_b)) * (e->volume() * m_h);
 
-                    for (const auto &v_a : e.vertices()) {
-                        if (v_a.index() > v_b.index()) continue;
-                        VSFJ deltaF_a(0, e->gradBarycentric().col(v_a.localIndex()));
-                        for (size_t c_a = 0; c_a < 3; ++c_a) {
-                            if ((v_a.index() == v_b.index()) && c_a > c_b) continue;
-                            size_t var_a = 3 * v_a.localIndex() + c_a;
-                            deltaF_a.c = c_a;
-                            Hxx(var_a, var_b) += doubleContract(delta_d_psi_dF, deltaF_a);
-                        }
-                    }
+                    Eigen::Map<M3d>(Hxx.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
                 }
             }
         }
@@ -512,7 +503,7 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
             const auto &deformedElement = m_deformedElements[ei];
 
             for (const auto &he : e.halfEdges()) {
-                const V2d Bt_glambda_ref = B.transpose() * e->gradBarycentric().col(he.localIndex());
+                const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
                 const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
                 const V3d eVec = deformedEdgeVector(he);
@@ -524,7 +515,7 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
                 M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
 
                 for (const auto &he_b : e.halfEdges()) {
-                    const V2d Bt_glambda_ref_b = B.transpose() * e->gradBarycentric().col(he_b.localIndex());
+                    const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
                     const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
                     const Real len_b = deformedEdgeVector(he_b).norm();
                     const size_t edgeIdx_b = m_edgeForHalfEdge[he_b.index()];
@@ -682,7 +673,7 @@ typename ElasticSheet<Psi_C>::MX2d ElasticSheet<Psi_C>::getPrincipalCurvatures()
         // Sign conventions vary, but we take the (somewhat less common) convention that
         // a sphere's princinpal curvatures are positive.
         const size_t ei = e.index();
-        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         M2d S = (m_B[ei].transpose() * m_II[ei] * m_B[ei]) * (FB.transpose() * FB).inverse();
 
         Eigen::EigenSolver<M2d> esolver(S);
@@ -783,15 +774,20 @@ void ElasticSheet<Psi_C>::m_updateB() {
     if (std::abs(m.boundingBox().dimensions()[2]) < 1e-16) {
         M32d globalB(M32d::Identity());
         m_B.assign(nt, M32d::Identity().eval());
-        return;
+    }
+    else {
+        m_B.resize(nt);
+        for (auto tri : m.elements()) {
+            V3d b0 = (tri.node(1)->p - tri.node(0)->p).normalized();
+            V3d b1 = tri->normal().cross(b0);
+            const size_t ti = tri.index();
+            m_B[ti].col(0) = b0;
+            m_B[ti].col(1) = b1;
+        }
     }
 
-    m_B.resize(nt);
-    for (auto tri : m.elements()) {
-        V3d b0 = (tri.node(1)->p - tri.node(0)->p).normalized();
-        V3d b1 = tri->normal().cross(b0);
-        const size_t ti = tri.index();
-        m_B[ti].col(0) = b0;
-        m_B[ti].col(1) = b1;
-    }
+    m_jacobianLambdaB.reserve(nt);
+    m_jacobianLambdaB.clear();
+    for (const auto &e : m.elements())
+        m_jacobianLambdaB.push_back(e->gradBarycentric().transpose() * m_B[e.index()]);
 }

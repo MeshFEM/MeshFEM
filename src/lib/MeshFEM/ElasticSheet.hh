@@ -365,7 +365,7 @@ private:
     void m_updateShapeOperators();
 
     // Method to update the tangent space basis for each triangle
-    // (call when rest positions change)
+    // (call after rest positions change, after element embeddings have been updated)
     void m_updateB();
 
     ////////////////////////////////////////////////////////////////////////////
@@ -417,6 +417,7 @@ private:
 
     // Orthonormal basis for each reference triangle's tangent space
     std::vector<M32d> m_B;
+    std::vector<M32d> m_jacobianLambdaB;
 
     const size_t m_numVertices,
                  m_numEdges;
