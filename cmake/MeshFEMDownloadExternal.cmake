@@ -74,8 +74,8 @@ endfunction()
 ## Tinyexpr
 function(meshfem_download_tinyexpr)
     meshfem_download_project(tinyexpr
-        GIT_REPOSITORY https://github.com/codeplea/tinyexpr.git
-        GIT_TAG        ffb0d41b13e5f8d318db95feb071c220c134fe70
+        GIT_REPOSITORY https://github.com/MeshFEM/tinyexpr.git
+        GIT_TAG        9249ca6f40c340bb2cba1f005aa5c9436b0f62a2
     )
 endfunction()
 

@@ -1,5 +1,8 @@
 MeshFEM
 =======
+
+[![](https://github.com/MeshFEM/MeshFEM/workflows/Build/badge.svg?event=push)](https://github.com/MeshFEM/MeshFEM/actions?query=workflow%3ABuild+branch%3Amaster+event%3Apush)
+
 <img src='http://julianpanetta.com/MeshFEMIcon.png' width='229px' height='220px' />
 
 MeshFEM is a C++ finite element library supporting linear and quadratic

@@ -48,7 +48,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "RelWithAssert")
 endif()
 
-set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of build. Options are: None Debug Release RelWithDebInfo MinSizeRel RelWithAssert" FORCE)
+set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of build. Options are: None Debug Release RelWithDebInfo MinSizeRel RelWithAssert")
+
+################################################################################
 
 # Color output
 include(UseColors)
@@ -76,12 +78,23 @@ include(MeshFEMUtils)
 # Options
 ################################################################################
 
-option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
+option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
 option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
 option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
-option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
+option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system" ON)
+option(MESHFEM_FORCE_Z7              "Force /Z7 option on MSVC" OFF)
+
+if(MESHFEM_FORCE_Z7)
+    # Hard-coded string replace for now, until CMake provides a better way to do this:
+    # https://gitlab.kitware.com/cmake/cmake/-/issues/19084
+    string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHASSERT "${CMAKE_CXX_FLAGS_RELWITHASSERT}")
+endif()
 
 ################################################################################
 # Dependencies
@@ -105,7 +118,7 @@ if(NOT TARGET pybind11)
     include(MeshFEMDownloadExternal)
     meshfem_download_project(pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG 97784dad3e518ccb415d5db57ff9b933495d9024
+        GIT_TAG a2bb297b325827765853929ac6dc220ac5b15658
     )
     add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
 endif()
