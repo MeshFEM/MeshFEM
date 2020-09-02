@@ -31,16 +31,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EDENSITYADAPTORS_HH
 #define EDENSITYADAPTORS_HH
-#include <MeshFEM/EnergyDensities/Tensor.hh>
+#include "Tensor.hh"
 #include "EnergyTraits.hh"
+#include "../Geometry.hh"
 
-// Implement an F-based interface from a C-based interface
+// Implement an F-based interface from a C-based interface.
+// Manually specifying EmbeddingDimension = 3 when Psi_C is a 2D energy density
+// produces a membrane energy density (function of 3x2 deformation gradient).
 template<class Psi_C, size_t EmbeddingDimension = Psi_C::Dimension>
 struct EnergyDensityFBasedFromCBased : public Psi_C {
+    static_assert(Psi_C::EDType == EDensityType::CBased, "Psi_C must be C-based");
+
     using Base = Psi_C;
     static constexpr size_t Dimension = Base::Dimension;
     static constexpr size_t N         = Base::N; // "Reference space" dimension
     static constexpr size_t M         = EmbeddingDimension; // can differ from "N" for membrane energies...
+    static constexpr EDensityType EDType = ((N == 2) && (M == 3)) ? EDensityType::Membrane
+                                                                  : EDensityType::FBased;
     using Real    = typename Base::Real;
     using Matrix  = Eigen::Matrix<Real, M, N>;
 
@@ -94,6 +101,9 @@ private:
 
 template<class Psi_F>
 struct EnergyDensityCBasedFromFBased : public Psi_F {
+    static_assert(Psi_F::EDType == EDensityType::FBased, "Psi_F must be F-based");
+    static constexpr EDensityType EDType = EDensityType::CBased;
+
     using Base = Psi_F;
     static constexpr size_t Dimension = Base::Dimension;
     static constexpr size_t N         = Base::N;
@@ -140,8 +150,102 @@ private:
     FInvType m_Finv = Matrix::Identity();
 };
 
+// Create a membrane energy density (function of 3x2 deformation gradient)
+// from a 2D F-based energy density (function of a 2x2 deformation gradient).
+// We take advantage of the original density's invariance to post-rotation to
+// express the input 3D deformation gradient in an arbitrary orthonormal
+// basis for the deformed membrane's tangent plane.
+// We robustly pick an arbitrary frame adapted to the membrane's normal
+// and then, to compute derivatives, we define the frame for neighboring
+// configurations using parallel transport.
+template<class Psi_F>
+struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
+    static_assert((Psi_F::Dimension == 2) && (Psi_F::EDType == EDensityType::FBased),
+                  "We can only create a membrane from a 2D F-based material");
+    using Base = Psi_F;
+    static constexpr size_t Dimension          = 2;
+    static constexpr size_t EmbeddingDimension = 3;
+    static constexpr size_t N                  = Dimension;
+    static constexpr size_t M                  = EmbeddingDimension;
+    using Real   = typename Base::Real;
+    using Matrix = Eigen::Matrix<Real, M, N>;
+    using Vector = Eigen::Matrix<Real, M, 1>;
+
+    // Note: all Base constructors except the copy constructor initialize to
+    // the identity deformation; this is compatible with our default member
+    // initializer for m_F.
+    using Base::Base;
+    EnergyDensityFBasedMembraneFromFBased(const Base &b) : Base(b) { }
+
+    EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &) = default;
+    EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, const UninitializedDeformationTag &tag)
+        : Base(other, tag), m_B(other.m_B) { }
+
+    static std::string name() { return Base::name() + std::string("Membrane"); }
+
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
+        m_F32 = F;
+        m_n = F.col(0).cross(F.col(1));
+        m_detF = m_n.norm();
+        m_n /= m_detF;
+        m_B.col(0) = getPerpendicularVector(m_n);
+        m_B.col(1) = m_n.cross(m_B.col(0));
+        Base::setDeformationGradient(m_B.transpose() * F, elevel);
+    }
+    Matrix getDeformationGradient() const { return m_B * Base::getDeformationGradient(); }
+
+    Matrix denergy() const {
+        // Note: we can drop the term corresponding to `m_B * Base::denergy(dB.transpose() * F)` since
+        // rotations of the frame dB perturbing the vectors in the normal direction are orthogonal to F,
+        // and rotations of the frame that twist the vectors around the normal do not change the energy
+        // due to rotation invariance. The latter can be proved by showing the expression can be written
+        // as a double contraction of the symmetric PK2 stress with a skew symmetric matrix involving
+        // the skew symmetric 2x2 infinitesimal rotation matrix corresponding
+        // to the in-plane frame rotation.
+        return m_B * Base::denergy();
+    }
+
+    Real denergy(const Matrix &dF) const {
+        return doubleContract(dF, denergy());
+    }
+
+    template<class Mat_>
+    Matrix delta_denergy(const Mat_ &dF) const {
+        // Note: dn includes extraneous component along n that is projected out by where it is used...
+        Vector dn = (colCross(dF, 0, m_F32.col(1)) // Compound "colCross" operation specialized for VectorizedShapeFunctionJacobian...
+                   - colCross(dF, 1, m_F32.col(0))) / m_detF;
+        // Matrix dB = -m_n * (dn.transpose() * m_B);
+
+        // Intuitively, the commented out term should vanish even if we don't
+        // consider a torsion-free parallel transport of the frame: like in the
+        // `denergy` case, twisting of the frame should be irrelevant because of rotation invariance.
+        // Note: this expression seems consistent with the isotropic membrane analytic Hessian formulas;
+        // the second term corresponds to the 2D Hessian "padded" to 3D, while the first term
+        // captures the rotation of the normal.
+        // return dB * Base::denergy() + m_B * Base::delta_denergy(/* dB.transpose() * m_F32 + */ m_B.transpose() * dF);
+        return -m_n * ((dn.transpose() * m_B) * Base::denergy())
+              + m_B * Base::delta_denergy(m_B.transpose() * dF);
+    }
+
+    Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
+        return doubleContract(delta_denergy(dF_lhs), dF_rhs);
+    }
+
+    template<class Mat_, class Mat2_>
+    Matrix delta2_denergy(const Mat_ &/* dF_a */, const Mat2_ &/* dF_b */) const {
+        throw std::runtime_error("Unimplemented");
+        return Matrix::Zero();
+    }
+private:
+    Matrix m_B   = Matrix::Identity(), // Arbitrary basis for the tangent plane of the deformed membrane (normal-adapted frame)
+           m_F32 = Matrix::Identity();
+    Vector m_n = Vector(0, 0, 1);
+    Real m_detF = 1.0;
+};
+
 template<class Psi_F>
 struct AutoHessianProjection : Psi_F {
+    static_assert(Psi_F::EDType == EDensityType::FBased, "Psi_F must be F-based");
     using Base = Psi_F;
     static constexpr size_t Dimension = Base::Dimension;
     static constexpr size_t N         = Base::N;

@@ -662,6 +662,8 @@ public:
         is >> m_d;
     }
 
+    void setD(const DType &d) { m_d = d; }
+
 private:
     DType m_d;
 

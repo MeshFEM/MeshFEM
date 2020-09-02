@@ -21,6 +21,7 @@ template <typename _Real, size_t _Dim>
 struct IsoCRLEWithHessianProjection {
     static constexpr size_t Dimension = _Dim;
     static constexpr size_t N         = _Dim;
+    static constexpr EDensityType EDType = EDensityType::FBased;
     using Real    = _Real;
     using Matrix  = Eigen::Matrix<_Real, N, N>;
     using Vector  = Eigen::Matrix<_Real, N, 1>;

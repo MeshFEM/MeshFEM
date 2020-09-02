@@ -29,6 +29,7 @@ template <typename _Real, size_t _Dimension>
 struct StVenantKirchhoffEnergyCBased : public Concepts::StVKEnergy {
     static constexpr size_t Dimension = _Dimension;
     static constexpr size_t N         = _Dimension;
+    static constexpr EDensityType EDType = EDensityType::CBased;
     using Real    = _Real;
     using Matrix  = Eigen::Matrix<_Real, N, N>;
     using ETensor = ElasticityTensor<_Real, N>;
@@ -89,6 +90,7 @@ template <typename _Real>
 struct StVenantKirchhoffMembraneEnergy : public EnergyDensityFBasedFromCBased<StVenantKirchhoffEnergyCBased<_Real, 2>, 3> {
     using Base = EnergyDensityFBasedFromCBased<StVenantKirchhoffEnergyCBased<_Real, 2>, 3>;
     using Base::Base;
+    static constexpr EDensityType EDType = EDensityType::Membrane;
     static constexpr const char *name() { return "StVenantKirchhoffMembrane"; }
 };
 

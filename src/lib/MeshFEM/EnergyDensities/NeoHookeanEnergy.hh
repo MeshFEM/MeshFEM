@@ -22,6 +22,7 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
 {
     static constexpr size_t Dimension = _Dim;
     static constexpr size_t N         = _Dim;
+    static constexpr EDensityType EDType = EDensityType::FBased;
     using Real = _Real;
     using Derived = _Derived_T<Real, N>;
     using Matrix = Eigen::Matrix<Real, N, N>;
@@ -387,6 +388,7 @@ private:
 // constraint.
 template<typename _Real>
 struct IncompressibleNeoHookeanEnergyCBased {
+    static constexpr EDensityType EDType = EDensityType::CBased;
     static constexpr size_t Dimension = 2;
     static constexpr size_t N         = 2;
     using Real   = _Real;

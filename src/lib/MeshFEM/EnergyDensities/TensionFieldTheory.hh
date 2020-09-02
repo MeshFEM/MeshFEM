@@ -115,8 +115,11 @@ private:
 // Define a relaxed 2D C-based energy based on a given 2D C-based energy `Psi_C`
 template<class Psi_C>
 struct RelaxedEnergyDensity {
+    static_assert(Psi_C::EDType == EDensityType::CBased,
+                  "Tension field theory only works on C-based energy densities");
     static constexpr size_t N = Psi_C::N;
     static constexpr size_t Dimension = N;
+    static constexpr EDensityType EDType = EDensityType::CBased;
 
     using Matrix = typename Psi_C::Matrix;
     using Real   = typename Psi_C::Real;

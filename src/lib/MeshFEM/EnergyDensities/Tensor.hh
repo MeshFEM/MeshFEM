@@ -7,6 +7,7 @@
 #include "../Flattening.hh"
 #include "../SymmetricMatrix.hh"
 #include "../Types.hh"
+#include "EnergyTraits.hh"
 
 template<typename _Real,
          size_t t_N,
@@ -222,6 +223,7 @@ struct VectorizedShapeFunctionJacobian {
     static constexpr int ColsAtCompileTime = N;
     using Scalar     = typename GradType::Scalar;
     using MatrixType = Eigen::Matrix<Scalar, D, N>;
+    using ColVec     = Eigen::Matrix<Scalar, D, 1>;
     using Derived    = MatrixType;
 
     int c;
@@ -275,6 +277,16 @@ struct VectorizedShapeFunctionJacobian {
                       (ColsAtCompileTime == Derived::ColsAtCompileTime), "Size mismatch");
         MatrixType result(B);
         result.row(A.c) += A.g.transpose();
+        return result;
+    }
+
+    template<class Derived>
+    friend ColVec colCross(const VectorizedShapeFunctionJacobian &A, int j, const Eigen::MatrixBase<Derived> &v) {
+        // g[j] * e_c.cross(v)
+        ColVec result;
+        result[ A.c         ] = 0.0;
+        result[(A.c + 2) % D] =  A.g[j] * v[(A.c + 1) % D];
+        result[(A.c + 1) % D] = -A.g[j] * v[(A.c + 2) % D];
         return result;
     }
 
@@ -336,6 +348,14 @@ auto computeAtB(const VectorizedShapeFunctionJacobian<D, GradType> &A,
     if (A.c == B.c)
         return Result(A.g * B.g.transpose());
     return Result(Result::Zero());
+}
+
+template<class Derived1, class Derived2>
+Eigen::Matrix<typename Derived1::Scalar, 3, 1>
+colCross(const Eigen::MatrixBase<Derived1> &A, int j, const Eigen::MatrixBase<Derived2> &v) {
+    static_assert((Derived1::RowsAtCompileTime == 3) && (Derived2::RowsAtCompileTime == 3) && (Derived2::ColsAtCompileTime == 1),
+                  "Unexpected sizes for colCross");
+    return A.col(j).cross(v);
 }
 
 template<int D, class GradType>

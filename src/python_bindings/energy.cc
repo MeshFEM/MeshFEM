@@ -200,6 +200,10 @@ PYBIND11_MODULE(energy, m)
     bindEnergyFBased<StVenantKirchhoffMembraneEnergy<double>>(detail_module)
         .def(py::init<const ETensor2D &>(), py::arg("elasticity_tensor"))
         ;
+    using NeoHookeanMembrane = EnergyDensityFBasedMembraneFromFBased<NeoHookeanEnergy<double, 2>>;
+    bindEnergyFBased<NeoHookeanMembrane>(detail_module)
+        .def(py::init<double, double, double>(), py::arg("lambda"), py::arg("mu"), py::arg("finite_continuation_start") = -1);
+        ;
     using StVK_TFT = EnergyDensityFBasedFromCBased<RelaxedEnergyDensity<StVenantKirchhoffEnergyCBased<double, 2>>, 3>;
     bindEnergyFBased<StVK_TFT>(detail_module)
         .def(py::init<const ETensor2D &>(), py::arg("elasticity_tensor"))
@@ -236,6 +240,7 @@ PYBIND11_MODULE(energy, m)
 
     m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanMembrane", [](double lambda, double mu, double finiteContinuationStart) { return std::make_unique<NeoHookeanMembrane>(lambda, mu, finiteContinuationStart); }, py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("LinearElastic",             [](const ETensor3D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 3>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("LinearElastic",             [](const ETensor2D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 2>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("CorotatedLinearElastic",    [](const ETensor3D &etensor) { return std::make_unique<CorotatedLinearElasticity    <double, 3>>(etensor); }, py::arg("elasticity_tensor"));
@@ -267,8 +272,9 @@ PYBIND11_MODULE(energy, m)
     auto     muFromENu = [](double E, double nu)                   { return E / (2 * (1 + nu)); };
 
     // Convenience method for constructing a neo-Hookean material from a Young's modulus Poisson's ratio
-    m.def("NeoHookeanYoungPoisson", [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
-    m.def("NeoHookeanYoungPoisson", [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoisson",         [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoisson",         [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanMembraneYoungPoisson", [&](                  double E, double nu, double finiteContinuationStart) {                                                               return std::make_unique<NeoHookeanMembrane>(lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); },                       py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
 
     m.def("IsoCRLEWithHessianProjection", [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsoCRLEWithHessianProjection", [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));

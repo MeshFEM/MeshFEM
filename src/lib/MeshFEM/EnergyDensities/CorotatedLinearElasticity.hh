@@ -88,6 +88,7 @@ struct CRQuantities<_Real, 2> {
 template <typename _Real, size_t _Dimension>
 struct CorotatedLinearElasticity : public Concepts::CRLinearElaticEnergy {
     using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
+    static constexpr EDensityType EDType = EDensityType::FBased;
 
     static constexpr size_t Dimension = _Dimension;
     static constexpr size_t N         = Dimension;

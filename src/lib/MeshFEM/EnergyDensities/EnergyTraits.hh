@@ -11,6 +11,12 @@ struct UninitializedDeformationTag { }; // Tag used to avoid copying cached defo
 // quantities they need when setting the energy density's deformation.
 enum class EvalLevel : int { EnergyOnly = 0, Gradient = 1, Hessian = 3, Full = 3, HessianWithDisabledProjection = 4 };
 
+// We support three types of energy densities:
+//      F-based energies  psi(F  ) where F   is a 2x2 or 3x3 deformation gradient
+//      C-based energies  psi(C  ) where C   is a 2x2 or 3x3 Cauchy deformation tensor (F^T F)
+//      Membrane energies psi(F32) where F32 is a 3x2 deformation gradient.
+enum class EDensityType { FBased, CBased, Membrane };
+
 namespace Concepts {
     struct CRLinearElaticEnergy { static constexpr const char *name() { return "CorotatedLinearElasticity"; } };
     struct   LinearElaticEnergy { static constexpr const char *name() { return          "LinearElasticity"; } };
