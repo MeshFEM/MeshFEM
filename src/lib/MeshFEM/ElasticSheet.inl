@@ -2,8 +2,8 @@
 
 #define NORMAL_INFERENCE_PROBLEM_VERBOSITY 0
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::setIdentityDeformation() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
     const auto &m = mesh();
 
     // Set the deformed positions to the rest positions.
@@ -143,8 +143,8 @@ protected:
     std::vector<M3d> m_deformedII;
 };
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::initializeMidedgeNormals(bool minimizeBending) {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
     const auto &m = mesh();
 
     // Initialize the reference frames.
@@ -202,11 +202,10 @@ void ElasticSheet<Psi_C>::initializeMidedgeNormals(bool minimizeBending) {
 ////////////////////////////////////////////////////////////////////////////////
 // Elastic Energy
 ////////////////////////////////////////////////////////////////////////////////
-template <class Psi_C>
-typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::elementEnergy(size_t ei, const EnergyType etype) const {
+template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t ei, const EnergyType etype) const {
     const auto &m = mesh();
 
-    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
     const auto &e = m.element(ei);
     const M32d &B = m_B[ei];
     Real result = 0.0;
@@ -214,24 +213,25 @@ typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::elementEnergy(size_t ei,
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        psi.setC(FB.transpose() * FB);
+        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        psi.setDeformationGradient(FB);
         result += m_h * psi.energy();
     }
 
     // Bending energy contribution
-    // (Only an approximation unless Psi_C is actually St Venant Kirchhoff...)
+    // (Only an approximation unless Psi is actually St Venant Kirchhoff...)
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
         // We obtain a 2x2 second fundamental form in the reference configuration
         // using our orthonormal basis for the undeformed triangle.
-        psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
-        result += (std::pow(m_h, 3) / 12.0) * psi.energy();
+        SM2d e_b = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        result += (std::pow(m_h, 3) / 24.0) * m_etensor.doubleContract(e_b).doubleContract(e_b);
     }
 
     return result * e->volume();
 }
 
-template <class Psi_C>
-typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::energy(const EnergyType etype) const {
+template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::energy(const EnergyType etype) const {
     return summation_parallel<Real>([this, etype](size_t ei) { return elementEnergy(ei, etype); },
                                     mesh().numElements());
 }
@@ -239,11 +239,10 @@ typename ElasticSheet<Psi_C>::Real ElasticSheet<Psi_C>::energy(const EnergyType 
 ////////////////////////////////////////////////////////////////////////////////
 // Elastic Energy Gradient
 ////////////////////////////////////////////////////////////////////////////////
-template <class Psi_C>
-typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradient(size_t ei, bool updatedSource, const EnergyType etype) const {
+template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGradient(size_t ei, bool updatedSource, const EnergyType etype) const {
     ElementGradient g_e(ElementGradient::Zero());
 
-    Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
     const auto &m = mesh();
     const auto &e = m.element(ei);
     const M32d &B = m_B[ei];
@@ -251,16 +250,11 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        psi.setC(FB.transpose() * FB);
+        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        psi.setDeformationGradient(FB);
 
-        // Derivative of `h * A * psi` with respect to C
-        M2d two_dpsi_hA = psi.PK2Stress() * (e->volume() * m_h);
-
-        // C = B^T F^T F B
-        // delta C = B^T deltaF^T F B + B^T F^T deltaF B
-        // delta psi = dpsi_hA : delta C = 2 dpsi_hA : B^T F^T deltaF B
-        //           = FB * 2 dpsi_hA * B^T : deltaF
-        M32d d_psi_dFB = FB * two_dpsi_hA;
+        // Derivative of `h * A * psi` with respect to FB
+        M32d d_psi_dFB = psi.denergy() * (e->volume() * m_h);
 
         // d_psi_dFB : (e_c otimes B^T grad lambda_v)
         //      = e_c . d_psi_dFB * (B^T grad lambda_v)
@@ -270,9 +264,9 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
 
     // Bending energy contribution
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
         const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-        const M2d stress = psi.PK2Stress();
+        const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        const SM2d stress = m_etensor.doubleContract(bendingStrain);
         constexpr size_t to = 3 * numNodesPerElement;
         const Real A = m_deformedElements[ei].volume();
 
@@ -280,7 +274,7 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
             const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
             const Real len = deformedEdgeVector(he).norm();
-            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
             // The derivative with respect to the theta variables is simple.
             g_e[to + he.localIndex()] = ((sign * (A / len))) * dE_d_A_gamma_div_len;
 
@@ -292,8 +286,8 @@ typename ElasticSheet<Psi_C>::ElementGradient ElasticSheet<Psi_C>::elementGradie
     return g_e;
 }
 
-template <class Psi_C>
-typename ElasticSheet<Psi_C>::VXd ElasticSheet<Psi_C>::gradient(bool updatedSource, const EnergyType etype) const {
+template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updatedSource, const EnergyType etype) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Gradient");
     const auto &m = mesh();
     auto accumulate_per_element_contrib = [this, updatedSource, etype, &m](size_t ei, VXd &g_out) {
@@ -315,9 +309,9 @@ typename ElasticSheet<Psi_C>::VXd ElasticSheet<Psi_C>::gradient(bool updatedSour
     return g;
 }
 
-template <class Psi_C>
+template <class Psi_2x2>
 template <class SHEHandle>
-typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const {
+typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const {
     const Real sign = he.isPrimary() ? 1.0 : -1.0;
     const V3d eVec = deformedEdgeVector(he);
     const Real len = eVec.norm();
@@ -374,9 +368,9 @@ typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::d_A_gamma_div_len_d_x(con
     return gradCornerPos;
 }
 
-template <class Psi_C>
+template <class Psi_2x2>
 template <class SHEHandle>
-typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::d2_A_gamma_div_len_d_x_dtheta(const SHEHandle &he) const {
+typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d2_A_gamma_div_len_d_x_dtheta(const SHEHandle &he) const {
     // (Assumes an updated source frame since this is only called from `hessian`)
     const V3d eVec = deformedEdgeVector(he);
     const Real len = eVec.norm();
@@ -398,9 +392,9 @@ typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::d2_A_gamma_div_len_d_x_dt
 }
 
 // TODO reduce duplicated work by returning a 3rd order tensor of the derivatives wrt all three components of v_b?
-template <class Psi_C>
+template <class Psi_2x2>
 template <class SHEHandle, class SVHandle>
-typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::delta_d_A_gamma_div_len_d_x(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const {
+typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_len_d_x(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const {
     // (Assumes an updated source frame since this is only called from `hessian`)
     const Real sign = he.isPrimary() ? 1.0 : -1.0;
     const V3d eVec = deformedEdgeVector(he);
@@ -459,13 +453,12 @@ typename ElasticSheet<Psi_C>::M3d ElasticSheet<Psi_C>::delta_d_A_gamma_div_len_d
 ////////////////////////////////////////////////////////////////////////////////
 // Elastic Energy Hessian
 ////////////////////////////////////////////////////////////////////////////////
-template <class Psi_C>
-void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool /* projectionMask */) const {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool /* projectionMask */) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
     auto assembler_per_element_contrib = [&m, this, etype](size_t ei, SuiteSparseMatrix& Hout) {
         const auto &e = m.element(ei);
-        Psi_C psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const M32d &B = m_B[ei];
 
         Eigen::Matrix<Real, 9, 9> Hxx;
@@ -474,19 +467,16 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
         // Membrane energy contribution
         if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
             M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-            psi.setC(FB.transpose() * FB);
+            Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+            psi.setDeformationGradient(FB);
 
             for (const auto &v_b : e.vertices()) {
                 VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
                 for (size_t c_b = 0; c_b < 3; ++c_b) {
                     deltaF_b.c = c_b;
                     size_t var_b = 3 * v_b.localIndex() + c_b;
-                    M2d deltaC_b = FB.transpose() * deltaF_b * B;
-                    deltaC_b = (deltaC_b + deltaC_b.transpose()).eval();
 
-                    //        d_psi_dFB = FB * two_dpsi_hA
-                    M32d delta_d_psi_dFB = ((deltaF_b * B) * psi.PK2Stress() + FB * psi.delta_PK2Stress(deltaC_b)) * (e->volume() * m_h);
-
+                    M32d delta_d_psi_dFB = psi.delta_denergy(deltaF_b * B) * (e->volume() * m_h);
                     Eigen::Map<M3d>(Hxx.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
                 }
             }
@@ -495,9 +485,9 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
         // Bending energy contribution
         // This can be heavily optimized...
         if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-            psi.setC(2 * (B.transpose() * (m_II[ei] - m_restII[ei]) * B) + M2d::Identity());
             const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-            const M2d stress = 1.0 * psi.PK2Stress();
+            const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+            const SM2d stress = m_etensor.doubleContract(bendingStrain);
 
             const size_t to = thetaOffset();
             const auto &deformedElement = m_deformedElements[ei];
@@ -509,19 +499,22 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
                 const V3d eVec = deformedEdgeVector(he);
                 const Real len = eVec.norm();
                 const Real A = deformedElement.volume();
-                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (stress * Bt_glambda_ref).dot(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
                 const M3d d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x(he, true);
 
                 M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
+
+                // Optimized version of the following expression (we've hoisted the elasticity tensor's double contraction outside the following loop)
+                // const Real d2E_d2_A_gamma_div_len_ab = 2 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(m_etensor.doubleContract(SM2d(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose())).contract(Bt_glambda_ref));
+                SM2d val = m_etensor.doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
+                val *= 2 * (4 * 2 * dE_dpsi);
 
                 for (const auto &he_b : e.halfEdges()) {
                     const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
                     const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
                     const Real len_b = deformedEdgeVector(he_b).norm();
                     const size_t edgeIdx_b = m_edgeForHalfEdge[he_b.index()];
-                    // TODO: optimize this by factoring delta_PK2Stress call outside the loop and caching it -- taking advantage of major symmetry).
-                    const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(psi.delta_PK2Stress(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose()) * Bt_glambda_ref);
-
+                    const Real d2E_d2_A_gamma_div_len_ab = val.doubleContractRank1(Bt_glambda_ref_b);
                     {
                         // theta-theta block
                         //      (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
@@ -581,8 +574,8 @@ void ElasticSheet<Psi_C>::hessian(SuiteSparseMatrix &H, const EnergyType etype, 
     assemble_parallel(assembler_per_element_contrib, H, m.numElements());
 }
 
-template <class Psi_C>
-SuiteSparseMatrix ElasticSheet<Psi_C>::hessianSparsityPattern(Real val) const {
+template <class Psi_2x2>
+SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const {
     SuiteSparseMatrix Hsp(numVars(), numVars());
     Hsp.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
     Hsp.Ap.reserve(numVars() + 1);
@@ -663,8 +656,8 @@ SuiteSparseMatrix ElasticSheet<Psi_C>::hessianSparsityPattern(Real val) const {
 ////////////////////////////////////////////////////////////////////////////////
 // Geometric quantities
 ////////////////////////////////////////////////////////////////////////////////
-template <class Psi_C>
-typename ElasticSheet<Psi_C>::MX2d ElasticSheet<Psi_C>::getPrincipalCurvatures() const {
+template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatures() const {
     const auto &m = mesh();
     MX2d result(m.numElements(), 2);
     for (const auto &e : m.elements()) {
@@ -688,8 +681,8 @@ typename ElasticSheet<Psi_C>::MX2d ElasticSheet<Psi_C>::getPrincipalCurvatures()
 ////////////////////////////////////////////////////////////////////////////////
 // Internal state management
 ////////////////////////////////////////////////////////////////////////////////
-template <class Psi_C>
-void ElasticSheet<Psi_C>::m_adaptReferenceFrame() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
     if ((m_sourceReferenceFrame.size() != m_numEdges)
            || (m_referenceFrame.size() != m_numEdges)) {
         throw std::logic_error("Invalid reference frame sizes");
@@ -724,8 +717,8 @@ void ElasticSheet<Psi_C>::m_adaptReferenceFrame() {
     m_updateShapeOperators();
 }
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::m_updateMidedgeNormals() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::m_updateMidedgeNormals() {
     m_midedgeNormals.resize(m_numEdges, 3);
     for (size_t i = 0; i < m_numEdges; ++i) {
         m_midedgeNormals.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
@@ -733,8 +726,8 @@ void ElasticSheet<Psi_C>::m_updateMidedgeNormals() {
     }
 }
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::m_updateDeformedElements() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
     const auto &m = mesh();
     m_deformedElements.resize(m.numElements());
     for (const auto &e : m.elements()) {
@@ -744,8 +737,8 @@ void ElasticSheet<Psi_C>::m_updateDeformedElements() {
     }
 }
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::m_updateShapeOperators() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
     const auto &m = mesh();
     m_II.resize(m.numTris());
     auto gammas = getGammas();
@@ -762,8 +755,8 @@ void ElasticSheet<Psi_C>::m_updateShapeOperators() {
     }
 }
 
-template <class Psi_C>
-void ElasticSheet<Psi_C>::m_updateB() {
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::m_updateB() {
     // Generate an orthonormal basis for the tangent plane of each triangle.
     const auto &m = mesh();
     const size_t nt = m.numTris();

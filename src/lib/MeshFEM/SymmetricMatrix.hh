@@ -162,6 +162,18 @@ public:
         }
         return result;
     }
+
+    // Double contract with the rank-1 matrix v \otimes v
+    _Real doubleContractRank1(Eigen::Ref<const Eigen::Matrix<_Real, t_N, 1>> v) const {
+        _Real result(m_data[0] * v[0] * v[0]);
+        for (size_t fi = 1; fi < flatLen(t_N); ++fi) {
+            size_t i, j;
+            std::tie(i, j) = unflattenIndex<t_N>(fi);
+            result += ((fi < t_N) ? 1.0 : 2.0) * m_data[fi] * v[i] * v[j];
+        }
+
+        return result;
+    }
     
     // Applies an change of coordinates using the transformation rule:
     // s_ij' = s_pq R_ip R_jq

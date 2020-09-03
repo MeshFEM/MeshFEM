@@ -243,6 +243,29 @@ private:
     Real m_detF = 1.0;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// Convenience method for generating membrane energy densities.
+////////////////////////////////////////////////////////////////////////////////
+template<class Psi, typename /* Enable */ = void>
+struct MembraneEnergyDensityFrom2x2Density;
+
+template<class Psi_C>
+struct MembraneEnergyDensityFrom2x2Density<Psi_C, std::enable_if_t<Psi_C::EDType == EDensityType::CBased>>
+    : public EnergyDensityFBasedFromCBased<Psi_C, 3> {
+    using Base = EnergyDensityFBasedFromCBased<Psi_C, 3>;
+    using Base::Base;
+};
+
+template<class Psi_F>
+struct MembraneEnergyDensityFrom2x2Density<Psi_F, std::enable_if_t<Psi_F::EDType == EDensityType::FBased>>
+    : public EnergyDensityFBasedMembraneFromFBased<Psi_F> {
+    using Base = EnergyDensityFBasedMembraneFromFBased<Psi_F>;
+    using Base::Base;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Brute-force Hessian Projection for F-based energy densities.
+////////////////////////////////////////////////////////////////////////////////
 template<class Psi_F>
 struct AutoHessianProjection : Psi_F {
     static_assert(Psi_F::EDType == EDensityType::FBased, "Psi_F must be F-based");

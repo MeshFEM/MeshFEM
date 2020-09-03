@@ -16,7 +16,7 @@ namespace py = pybind11;
 struct ElasticSheetBinder {
     template<class ES>
     static void bind(py::module &module, py::module &detail_module) {
-        using Energy = typename ES::Psi_C;
+        using Energy = typename ES::Psi_2x2;
         using Mesh = typename ES::Mesh;
         using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
 
@@ -101,5 +101,4 @@ PYBIND11_MODULE(elastic_sheet, m)
     py::module::import("loads");
 
     generateElasticSheetBindings(m, detail_module, ElasticSheetBinder());
-    // bindElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>(m, detail_module);
 }

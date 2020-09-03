@@ -40,6 +40,8 @@
 #include "Types.hh"
 #include "EnergyDensities/Tensor.hh"
 #include "EnergyDensities/EnergyTraits.hh"
+#include "EnergyDensities/EDensityAdaptors.hh"
+#include "EnergyDensities/TangentElasticityTensor.hh"
 #include "Geometry.hh"
 
 #include "RigidMotionPins.hh"
@@ -53,15 +55,26 @@
 // expressed in terms of each triangle's distinct orthonormal coordinate system
 // m_B, which is probably quite inconvenient...
 //
-// TODO: option to disable midedge normals/bending energy.
-template <class _Psi_C>
-class ElasticSheet : public ElasticObject<typename _Psi_C::Real> {
+// The sheet's material model is specified by template parameter "Psi_2x2",
+// which can be an arbitrary 2x2 F-based or C-based *plane stress* energy
+// density. The membrane energy term is just the integral of Psi_2x2
+// over the sheet. The bending energy term is obtained by linearizing
+// "Psi_2x2" around the identity to obtain a St. Venant Kirchhoff model into
+// which the bending strain is inserted.
+// Note, when Psi_2x2 is not St. Venant Kirchhoff, this uses an additional
+// approximation/simplification compared to the standard nonlinear thin plate
+// energy (which would technically require a Taylor expansion in the thickness
+// direction).
+template <class _Psi_2x2>
+class ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
 public:
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
     using EvalPtN = EvalPt<3>;
 
-    using Psi_C = _Psi_C;
-    using Real  = typename Psi_C::Real;
+    using Psi_2x2 = _Psi_2x2;
+    using Psi     = MembraneEnergyDensityFrom2x2Density<Psi_2x2>;
+    using Real    = typename Psi::Real;
+
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;
     using M2d   = Eigen::Matrix<Real, 2, 2>;
@@ -71,6 +84,7 @@ public:
     using MX3d  = Eigen::Matrix<Real, Eigen::Dynamic, 3, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using MX2d  = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>;
     using Frame = M3d; // Columns are [tangent, d1, d2], a right-handed orthonormal frame adapted to a particular edge tangent.
+    using SM2d  = SymmetricMatrixValue<Real, 2>; // Symmetric matrix in the reference configuration
 
     static constexpr size_t K   = 2;
     static constexpr size_t Deg = 1;
@@ -87,9 +101,11 @@ public:
 
     enum class EnergyType { Full, Membrane, Bending };
 
-    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_C &psi) : m_mesh(m), m_psi{{psi}},
-                                                                     m_numVertices(m->numVertices()),
-                                                                     m_numEdges   (m->numEdges())
+    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi)
+        : m_mesh(m), m_psi{{psi}},
+          m_etensor(tangentElasticityTensor(psi)),
+          m_numVertices(m->numVertices()),
+          m_numEdges   (m->numEdges())
     {
         m_updateB();
 
@@ -174,7 +190,7 @@ public:
 
     MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
 
-    const Psi_C &getEnergyDensity(size_t ei) const {
+    const Psi &getEnergyDensity(size_t ei) const {
         if (m_psi.size() == 1) return m_psi.front();
         return m_psi.at(ei);
     }
@@ -241,7 +257,7 @@ public:
         m_sourceAlphas         = m_alphas;
     }
 
-    // Update our parametrizaton of the system's DoFs
+    // Update our parametrization of the system's DoFs
     // (currently this just means updating the source frames.)
     void updateParametrization() { updateSourceFrame(); }
 
@@ -270,7 +286,7 @@ public:
 
     // Get the per-element right Cauchy-Green deformation tensors/first
     // fundamentals form representing the deformation.
-    std::vector<M2d>  getC() const {
+    std::vector<M2d> getC() const {
         std::vector<M2d> C;
         const auto &m = mesh();
         C.reserve(m.numElements());
@@ -410,7 +426,8 @@ private:
 
     // Energy density for each element (with support for multi-material microstructures).
     // For single-material microstructures, this vector will contain only a single entry.
-    std::vector<Psi_C> m_psi;
+    std::vector<Psi> m_psi;
+    ElasticityTensor<Real, 2> m_etensor;
 
     // Sheet thickness
     Real m_h = 1.0;

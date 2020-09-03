@@ -35,7 +35,9 @@ void testTangentElasticityTensor() {
     static constexpr size_t N = Psi::N;
     for (size_t i = 0; i < 1000; ++i) {
         ElasticityTensor<Real, N> et;
-        et.setD(ElasticityTensor<Real, N>::DType::Random());
+        auto D = ElasticityTensor<Real, N>::DType::Random().eval();
+        symmetrize(D);
+        et.setD(D);
 
         auto etProbed = tangentElasticityTensor(Psi(et));
         REQUIRE((et - etProbed).frobeniusNormSq() < 1e-10);
@@ -48,47 +50,55 @@ TEST_CASE("Energy Density Adaptors", "[edensity_adaptors]") {
     Real lambda = E * nu / ((1 + nu) * (1 - 2 * nu));
     Real mu     = E / (2 * (1 + nu));
     Real lambdaPlaneStress = E * nu / (1.0 - nu * nu);
+    ElasticityTensor<Real, 2> et2d(E, nu);
+    ElasticityTensor<Real, 3> et3d(E, nu);
 
     SECTION("C Wrapper 2D")           { testCWrapper(            NeoHookeanEnergy<Real, 2>(lambdaPlaneStress, mu)); }
     SECTION("C Wrapper 3D")           { testCWrapper(            NeoHookeanEnergy<Real, 3>(lambda           , mu)); }
     SECTION("Composition F(C(F)) 2D") { testFCWrapperComposition(NeoHookeanEnergy<Real, 2>(lambdaPlaneStress, mu)); }
     SECTION("Composition F(C(F)) 3D") { testFCWrapperComposition(NeoHookeanEnergy<Real, 3>(lambda           , mu)); }
 
-    SECTION("F Wrapper 2D")           { testFWrapper(            StVenantKirchhoffEnergyCBased<Real, 2>(ElasticityTensor<Real, 2>(E, nu))); }
-    SECTION("F Wrapper 3D")           { testFWrapper(            StVenantKirchhoffEnergyCBased<Real, 3>(ElasticityTensor<Real, 3>(E, nu))); }
-    SECTION("Composition C(F(C)) 2D") { testCFWrapperComposition(StVenantKirchhoffEnergyCBased<Real, 2>(ElasticityTensor<Real, 2>(E, nu))); }
-    SECTION("Composition C(F(C)) 3D") { testCFWrapperComposition(StVenantKirchhoffEnergyCBased<Real, 3>(ElasticityTensor<Real, 3>(E, nu))); }
+    SECTION("F Wrapper 2D")           { testFWrapper(            StVenantKirchhoffEnergyCBased<Real, 2>(et2d)); }
+    SECTION("F Wrapper 3D")           { testFWrapper(            StVenantKirchhoffEnergyCBased<Real, 3>(et3d)); }
+    SECTION("Composition C(F(C)) 2D") { testCFWrapperComposition(StVenantKirchhoffEnergyCBased<Real, 2>(et2d)); }
+    SECTION("Composition C(F(C)) 3D") { testCFWrapperComposition(StVenantKirchhoffEnergyCBased<Real, 3>(et3d)); }
 
-    SECTION("C Wrapper 2D")           { testCWrapper(            CorotatedLinearElasticity<Real, 2>(ElasticityTensor<Real, 2>(E, nu))); }
-    SECTION("C Wrapper 3D")           { testCWrapper(            CorotatedLinearElasticity<Real, 3>(ElasticityTensor<Real, 3>(E, nu))); }
-    SECTION("Composition F(C(F)) 2D") { testFCWrapperComposition(CorotatedLinearElasticity<Real, 2>(ElasticityTensor<Real, 2>(E, nu))); }
-    SECTION("Composition F(C(F)) 3D") { testFCWrapperComposition(CorotatedLinearElasticity<Real, 3>(ElasticityTensor<Real, 3>(E, nu))); }
+    SECTION("C Wrapper 2D")           { testCWrapper(            CorotatedLinearElasticity<Real, 2>(et2d)); }
+    SECTION("C Wrapper 3D")           { testCWrapper(            CorotatedLinearElasticity<Real, 3>(et3d)); }
+    SECTION("Composition F(C(F)) 2D") { testFCWrapperComposition(CorotatedLinearElasticity<Real, 2>(et2d)); }
+    SECTION("Composition F(C(F)) 3D") { testFCWrapperComposition(CorotatedLinearElasticity<Real, 3>(et3d)); }
 
     SECTION("Membrane energy") {
         // Test the 2D C-based ==> Membrane wrapper
-        compareEnergies(StVenantKirchhoffEnergyCBased<Real, 2>(ElasticityTensor<Real, 2>(E, nu)),
-                        StVenantKirchhoffMembraneEnergy<Real> (ElasticityTensor<Real, 2>(E, nu)));
+        compareEnergies(StVenantKirchhoffEnergyCBased<Real, 2>(et2d),
+                        StVenantKirchhoffMembraneEnergy<Real> (et2d));
         // Test the 2D F-based  ==> Membrane wrapper against the 2D C-based ==> Membrane Wrapper
-        compareFEnergies(StVenantKirchhoffMembraneEnergy<Real> (ElasticityTensor<Real, 2>(E, nu)),
-                         EnergyDensityFBasedMembraneFromFBased<StVenantKirchhoffEnergy<Real, 2>>(ElasticityTensor<Real, 2>(E, nu)));
+        compareFEnergies(StVenantKirchhoffMembraneEnergy<Real> (et2d),
+                         EnergyDensityFBasedMembraneFromFBased<StVenantKirchhoffEnergy<Real, 2>>(et2d));
+
+        // The same tests, using the generic membrane adaptor interface.
+        compareEnergies(StVenantKirchhoffEnergyCBased<Real, 2>(et2d),
+                        MembraneEnergyDensityFrom2x2Density<StVenantKirchhoffEnergyCBased<Real, 2>>(et2d));
+        compareFEnergies(StVenantKirchhoffMembraneEnergy<Real> (et2d),
+                         MembraneEnergyDensityFrom2x2Density<StVenantKirchhoffEnergy<Real, 2>>(et2d));
     }
 
     SECTION("AutoHessianProjection 2D") {
-        AutoHessianProjection<CorotatedLinearElasticity<Real, 2>> psi(ElasticityTensor<Real, 2>(E, nu));
+        AutoHessianProjection<CorotatedLinearElasticity<Real, 2>> psi(et2d);
         psi.projectionEnabled = true;
         compareFEnergies(psi, IsoCRLEWithHessianProjection<Real, 2>(lambdaPlaneStress, mu));
 
         psi.projectionEnabled = false;
-        compareFEnergies(psi, CorotatedLinearElasticity<Real, 2>(ElasticityTensor<Real, 2>(E, nu)));
+        compareFEnergies(psi, CorotatedLinearElasticity<Real, 2>(et2d));
     }
 
     SECTION("AutoHessianProjection 3D") {
-        AutoHessianProjection<CorotatedLinearElasticity<Real, 3>> psi(ElasticityTensor<Real, 3>(E, nu));
+        AutoHessianProjection<CorotatedLinearElasticity<Real, 3>> psi(et3d);
         psi.projectionEnabled = true;
         compareFEnergies(psi, IsoCRLEWithHessianProjection<Real, 3>(lambda, mu));
 
         psi.projectionEnabled = false;
-        compareFEnergies(psi, CorotatedLinearElasticity<Real, 3>(ElasticityTensor<Real, 3>(E, nu)));
+        compareFEnergies(psi, CorotatedLinearElasticity<Real, 3>(et3d));
     }
 
     SECTION("TangentElasticityTensor 2D") {
