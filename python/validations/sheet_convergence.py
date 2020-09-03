@@ -38,18 +38,20 @@ def runSimulation(obj):
     with so(): obj.computeEquilibrium([], leftEdgeVars + rightEdgeVars, opts=opts)
     return time.time() - start, obj
 
-def getSheet(thickness, maxArea = 0.0001, L = 4):
-    psi = energy.StVenantKirchhoffCBased(tensors.ElasticityTensor2D(200, 0.3))
+def getSheet(thickness, maxArea = 0.0001, L = 4, useNeoHookean = False):
+    if useNeoHookean: psi = energy.NeoHookeanYoungPoisson (2, 200, 0.3)
+    else:             psi = energy.StVenantKirchhoffCBased(tensors.ElasticityTensor2D(200, 0.3))
     m = mesh.Mesh(*triangulation.triangulate(*stripBoundary(L), triArea=maxArea)[0:2], embeddingDimension=3)
     plate = elastic_sheet.ElasticSheet(m, psi)
     plate.thickness = thickness
     return plate
 
-def dirichletSheetSim(thickness, maxArea = 0.0001):
-    return runSimulation(getSheet(thickness, maxArea))
+def dirichletSheetSim(thickness, maxArea = 0.0001, useNeoHookean = False):
+    return runSimulation(getSheet(thickness, maxArea, useNeoHookean=useNeoHookean))
 
-def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4):
-    psi3d = energy.IsotropicStVenantKirchhoff(3, 200, 0.3)
+def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4, useNeoHookean = False):
+    if useNeoHookean: psi3d = energy.NeoHookeanYoungPoisson (3, 200, 0.3)
+    else:             psi3d = energy.IsotropicStVenantKirchhoff(3, 200, 0.3)
     pts, _ = stripBoundary(L)
     m3d = mesh.Mesh(*meshing.tetrahedralize_extruded_polylines([np.array(pts + [pts[0]])],
                                                                [], thickness=thickness, maxVol=maxVol),
@@ -57,7 +59,7 @@ def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4):
     sim = elastic_solid.ElasticSolid(m3d, psi3d)
     return runSimulation(sim)
 
-def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30)):
+def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30), useNeoHookean = False):
     result = { 'times':            [],
                'energies':         [],
                'bendingEnergies':  [],
@@ -66,7 +68,7 @@ def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30)):
                'elements':         []}
     for i, maxArea in enumerate(maxAreas):
         print(f'Sheet sim {i + 1}/{len(maxAreas)}', end='\r', flush=True)
-        t, sim = dirichletSheetSim(thickness, maxArea)
+        t, sim = dirichletSheetSim(thickness, maxArea, useNeoHookean=useNeoHookean)
         result['times'].append(t)
         result['energies'].append(sim.energy())
         result['bendingEnergies'].append(sim.EnergyType.Bending)
@@ -75,7 +77,7 @@ def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30)):
         result['edgeLens'].append(np.median(sim.mesh().edgeLengths()))
     return result
 
-def tetConvergenceSweep(thickness, maxVols = np.logspace(-3, -5.5, 30), includeDeg1=False):
+def tetConvergenceSweep(thickness, maxVols = np.logspace(-3, -5.5, 30), includeDeg1=False, useNeoHookean = False):
     energies = {1: [], 2: []}
     times    = {1: [], 2: []}
     elements = {1: [], 2: []}
@@ -84,7 +86,7 @@ def tetConvergenceSweep(thickness, maxVols = np.logspace(-3, -5.5, 30), includeD
         for deg in [1, 2] if includeDeg1 else [2]:
             print(f'Tet sim {i + 1}/{len(maxVols)} deg {deg}', end='\r', flush=True)
             maxVol = maxVolScale * (1 if deg == 2 else 0.1)
-            t, sim = dirichletTetSimulation(thickness, maxVol=maxVol, degree=deg)
+            t, sim = dirichletTetSimulation(thickness, maxVol=maxVol, degree=deg, useNeoHookean=useNeoHookean)
             energies[deg].append(sim.energy())
             times[deg].append(t)
             elements[deg].append(sim.mesh().numElements())
