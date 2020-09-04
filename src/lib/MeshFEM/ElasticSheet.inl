@@ -454,117 +454,124 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
 // Elastic Energy Hessian
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_2x2>
+typename ElasticSheet<Psi_2x2>::PerElementHessian
+ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool projectionMask) const {
+    const auto &m = mesh();
+    const auto &e = m.element(ei);
+    const M32d &B = m_B[ei];
+
+    PerElementHessian H_elem;
+    H_elem.setZero();
+
+    // Membrane energy contribution
+    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
+        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
+        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
+                                                      : EvalLevel::HessianWithDisabledProjection);
+
+        for (const auto &v_b : e.vertices()) {
+            VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
+            for (size_t c_b = 0; c_b < 3; ++c_b) {
+                deltaF_b.c = c_b;
+                size_t var_b = 3 * v_b.localIndex() + c_b;
+
+                M32d delta_d_psi_dFB = psi.delta_denergy(deltaF_b * B) * (e->volume() * m_h);
+                Eigen::Map<M3d>(H_elem.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
+            }
+        }
+    }
+
+    // Bending energy contribution
+    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
+        const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
+        const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        const SM2d stress = m_etensor.doubleContract(bendingStrain);
+        constexpr size_t lto = 9;
+
+        const auto &deformedElement = m_deformedElements[ei];
+        std::array<M3d, 3> d_A_gamma_div_len_d_x_for_he;
+        for (const auto &he : e.halfEdges())
+            d_A_gamma_div_len_d_x_for_he[he.localIndex()] = d_A_gamma_div_len_d_x(he, true);
+
+        for (const auto &he : e.halfEdges()) {
+            const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
+            const size_t edgeIdx = he.localIndex();
+            const Real sign = he.isPrimary() ? 1.0 : -1.0;
+            const V3d eVec = deformedEdgeVector(he);
+            const Real len = eVec.norm();
+            const Real A = deformedElement.volume();
+            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+            const M3d &d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x_for_he[he.localIndex()];
+
+            M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
+
+            // Optimized version of the following expression (we've hoisted the elasticity tensor's double contraction outside the following loop)
+            // const Real d2E_d2_A_gamma_div_len_ab = 2 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(m_etensor.doubleContract(SM2d(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose())).contract(Bt_glambda_ref));
+            SM2d val = m_etensor.doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
+            val *= 2 * (4 * 2 * dE_dpsi);
+
+            for (const auto &he_b : e.halfEdges()) {
+                const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
+                const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
+                const Real len_b = deformedEdgeVector(he_b).norm();
+                const size_t edgeIdx_b = he_b.localIndex();
+                const Real d2E_d2_A_gamma_div_len_ab = val.doubleContractRank1(Bt_glambda_ref_b);
+                {
+                    // theta-theta block
+                    //      (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
+                    const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
+
+                    if (edgeIdx <= edgeIdx_b)
+                        H_elem(lto + edgeIdx, lto + edgeIdx_b) += (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len;
+
+                    // x-theta block
+                    M3d delta_gradCornerPos = delta_b_dE_d_A_gamma_div_len * d_A_gamma_div_len_d_xa;
+                    if (he_b == he) // d_A_gamma_div_len_d_x for "he" is constant wrt. the other edges' thetas.
+                        delta_gradCornerPos += dE_d_A_gamma_div_len * d2_A_gamma_div_len_d_x_dtheta(he);
+
+                    H_elem.col(lto + edgeIdx_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
+                }
+
+                // Precompute quantities needed for x-x block
+                // (Effect of the full changing shape operator due to perturbing x).
+                d2_E_d_A_gamma_div_len_dx += d2E_d2_A_gamma_div_len_ab * d_A_gamma_div_len_d_x_for_he[he_b.localIndex()];
+            }
+
+            // x-x block
+            for (const auto &v_b : e.vertices()) {
+                for (size_t c_b = 0; c_b < 3; ++c_b) {
+                    M3d delta_gradCornerPos = d2_E_d_A_gamma_div_len_dx(c_b, v_b.localIndex()) * d_A_gamma_div_len_d_xa
+                                            +   dE_d_A_gamma_div_len * delta_d_A_gamma_div_len_d_x(he, v_b, c_b);
+                    H_elem.col(3 * v_b.localIndex() + c_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
+                }
+            }
+        }
+    }
+#if 0
+    // Symmetry test: the full H_elem must be constructed to run this (disable lower triangle skip in membrane term).
+    if ((H_elem - H_elem.transpose()).squaredNorm() / H_elem.squaredNorm() > 1e-10) {
+        std::cout << "Asymmetric hessian contrib:" << std::endl;
+        std::cout << H_elem;
+        std::cout << std::endl;
+        throw std::runtime_error("Asymmetric hessian contrib");
+    }
+#endif
+    if (projectionMask && (m_hessianProjectionType == HessianProjectionType::FullXBased)) {
+        using ESolver  = Eigen::SelfAdjointEigenSolver<PerElementHessian>;
+        ESolver Hes(H_elem.transpose()); // SelfAdjointEigenSolver uses only the lower triangle
+        H_elem = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+    }
+    return H_elem;
+}
+
+template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool projectionMask) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
     auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, SuiteSparseMatrix& Hout) {
+        auto H_elem = elementHessian(ei, etype, projectionMask);
         const auto &e = m.element(ei);
-        const M32d &B = m_B[ei];
-
-        using PerElemHessian = Eigen::Matrix<Real, 12, 12>;
-        PerElemHessian H_elem;
-        H_elem.setZero();
-
-        // Membrane energy contribution
-        if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-            M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-            Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
-            psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
-                                                          : EvalLevel::HessianWithDisabledProjection);
-
-            for (const auto &v_b : e.vertices()) {
-                VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
-                for (size_t c_b = 0; c_b < 3; ++c_b) {
-                    deltaF_b.c = c_b;
-                    size_t var_b = 3 * v_b.localIndex() + c_b;
-
-                    M32d delta_d_psi_dFB = psi.delta_denergy(deltaF_b * B) * (e->volume() * m_h);
-                    Eigen::Map<M3d>(H_elem.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
-                }
-            }
-        }
-
-        // Bending energy contribution
-        const size_t lto = 9;
-        if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-            const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-            const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-            const SM2d stress = m_etensor.doubleContract(bendingStrain);
-
-            const auto &deformedElement = m_deformedElements[ei];
-            std::array<M3d, 3> d_A_gamma_div_len_d_x_for_he;
-            for (const auto &he : e.halfEdges())
-                d_A_gamma_div_len_d_x_for_he[he.localIndex()] = d_A_gamma_div_len_d_x(he, true);
-
-            for (const auto &he : e.halfEdges()) {
-                const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
-                const size_t edgeIdx = he.localIndex();
-                const Real sign = he.isPrimary() ? 1.0 : -1.0;
-                const V3d eVec = deformedEdgeVector(he);
-                const Real len = eVec.norm();
-                const Real A = deformedElement.volume();
-                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-                const M3d &d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x_for_he[he.localIndex()];
-
-                M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
-
-                // Optimized version of the following expression (we've hoisted the elasticity tensor's double contraction outside the following loop)
-                // const Real d2E_d2_A_gamma_div_len_ab = 2 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(m_etensor.doubleContract(SM2d(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose())).contract(Bt_glambda_ref));
-                SM2d val = m_etensor.doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
-                val *= 2 * (4 * 2 * dE_dpsi);
-
-                for (const auto &he_b : e.halfEdges()) {
-                    const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
-                    const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
-                    const Real len_b = deformedEdgeVector(he_b).norm();
-                    const size_t edgeIdx_b = he_b.localIndex();
-                    const Real d2E_d2_A_gamma_div_len_ab = val.doubleContractRank1(Bt_glambda_ref_b);
-                    {
-                        // theta-theta block
-                        //      (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
-                        const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
-
-                        if (edgeIdx <= edgeIdx_b)
-                            H_elem(lto + edgeIdx, lto + edgeIdx_b) += (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len;
-
-                        // x-theta block
-                        M3d delta_gradCornerPos = delta_b_dE_d_A_gamma_div_len * d_A_gamma_div_len_d_xa;
-                        if (he_b == he) // d_A_gamma_div_len_d_x for "he" is constant wrt. the other edges' thetas.
-                            delta_gradCornerPos += dE_d_A_gamma_div_len * d2_A_gamma_div_len_d_x_dtheta(he);
-
-                        H_elem.col(lto + edgeIdx_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
-                    }
-
-                    // Precompute quantities needed for x-x block
-                    // (Effect of the full changing shape operator due to perturbing x).
-                    d2_E_d_A_gamma_div_len_dx += d2E_d2_A_gamma_div_len_ab * d_A_gamma_div_len_d_x_for_he[he_b.localIndex()];
-                }
-
-                // x-x block
-                for (const auto &v_b : e.vertices()) {
-                    for (size_t c_b = 0; c_b < 3; ++c_b) {
-                        M3d delta_gradCornerPos = d2_E_d_A_gamma_div_len_dx(c_b, v_b.localIndex()) * d_A_gamma_div_len_d_xa
-                                                +   dE_d_A_gamma_div_len * delta_d_A_gamma_div_len_d_x(he, v_b, c_b);
-                        H_elem.col(3 * v_b.localIndex() + c_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
-                    }
-                }
-            }
-        }
-#if 0
-        // Symmetry test: the full H_elem must be constructed to run this (disable lower triangle skip in membrane term).
-        if ((H_elem - H_elem.transpose()).squaredNorm() / H_elem.squaredNorm() > 1e-10) {
-            std::cout << "Asymmetric hessian contrib:" << std::endl;
-            std::cout << H_elem;
-            std::cout << std::endl;
-            throw std::runtime_error("Asymmetric hessian contrib");
-        }
-#endif
-        if (projectionMask && (m_hessianProjectionType == HessianProjectionType::FullXBased)) {
-            using ESolver  = Eigen::SelfAdjointEigenSolver<PerElemHessian>;
-            ESolver Hes(H_elem.transpose()); // SelfAdjointEigenSolver uses only the lower triangle
-            H_elem = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
-        }
-
         for (const auto &v_b : e.vertices()) {
             for (size_t c_b = 0; c_b < 3; ++c_b) {
                 const size_t var_b = 3 * v_b.index() + c_b;
@@ -576,6 +583,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
         }
 
         const size_t to = thetaOffset();
+        constexpr size_t lto = 9;
         for (const auto &he_b : e.halfEdges()) {
             const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
             for (const auto &v_a : e.vertices())

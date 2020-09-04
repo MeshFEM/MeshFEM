@@ -203,8 +203,8 @@ public:
     ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
     VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
 
-    // using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
-    // PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
+    using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
+    PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
     void hessian(SuiteSparseMatrix &Hout, const EnergyType etype, bool projectionMask = false) const;
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
