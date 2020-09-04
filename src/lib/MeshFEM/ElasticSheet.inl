@@ -461,9 +461,9 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
         const auto &e = m.element(ei);
         const M32d &B = m_B[ei];
 
-        using PerElemHessian = Eigen::Matrix<Real, 9, 9>;
-        PerElemHessian Hxx;
-        Hxx.setZero();
+        using PerElemHessian = Eigen::Matrix<Real, 12, 12>;
+        PerElemHessian H_elem;
+        H_elem.setZero();
 
         // Membrane energy contribution
         if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
@@ -479,30 +479,32 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                     size_t var_b = 3 * v_b.localIndex() + c_b;
 
                     M32d delta_d_psi_dFB = psi.delta_denergy(deltaF_b * B) * (e->volume() * m_h);
-                    Eigen::Map<M3d>(Hxx.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
+                    Eigen::Map<M3d>(H_elem.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
                 }
             }
         }
 
         // Bending energy contribution
-        // This can be heavily optimized...
+        const size_t lto = 9;
         if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
             const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
             const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
             const SM2d stress = m_etensor.doubleContract(bendingStrain);
 
-            const size_t to = thetaOffset();
             const auto &deformedElement = m_deformedElements[ei];
+            std::array<M3d, 3> d_A_gamma_div_len_d_x_for_he;
+            for (const auto &he : e.halfEdges())
+                d_A_gamma_div_len_d_x_for_he[he.localIndex()] = d_A_gamma_div_len_d_x(he, true);
 
             for (const auto &he : e.halfEdges()) {
                 const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
-                const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
+                const size_t edgeIdx = he.localIndex();
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
                 const V3d eVec = deformedEdgeVector(he);
                 const Real len = eVec.norm();
                 const Real A = deformedElement.volume();
                 const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-                const M3d d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x(he, true);
+                const M3d &d_A_gamma_div_len_d_xa = d_A_gamma_div_len_d_x_for_he[he.localIndex()];
 
                 M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
 
@@ -515,7 +517,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                     const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
                     const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
                     const Real len_b = deformedEdgeVector(he_b).norm();
-                    const size_t edgeIdx_b = m_edgeForHalfEdge[he_b.index()];
+                    const size_t edgeIdx_b = he_b.localIndex();
                     const Real d2E_d2_A_gamma_div_len_ab = val.doubleContractRank1(Bt_glambda_ref_b);
                     {
                         // theta-theta block
@@ -523,22 +525,19 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                         const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
 
                         if (edgeIdx <= edgeIdx_b)
-                            Hout.addNZ(to + edgeIdx, to + edgeIdx_b, (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len);
+                            H_elem(lto + edgeIdx, lto + edgeIdx_b) += (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len;
 
                         // x-theta block
                         M3d delta_gradCornerPos = delta_b_dE_d_A_gamma_div_len * d_A_gamma_div_len_d_xa;
                         if (he_b == he) // d_A_gamma_div_len_d_x for "he" is constant wrt. the other edges' thetas.
                             delta_gradCornerPos += dE_d_A_gamma_div_len * d2_A_gamma_div_len_d_x_dtheta(he);
 
-                        Hout.addNZ(3 * e.vertex(0).index(), to + edgeIdx_b, delta_gradCornerPos.col(0));
-                        Hout.addNZ(3 * e.vertex(1).index(), to + edgeIdx_b, delta_gradCornerPos.col(1));
-                        Hout.addNZ(3 * e.vertex(2).index(), to + edgeIdx_b, delta_gradCornerPos.col(2));
+                        H_elem.col(lto + edgeIdx_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
                     }
 
                     // Precompute quantities needed for x-x block
                     // (Effect of the full changing shape operator due to perturbing x).
-                    // TODO: hoist this out of the loop too...
-                    d2_E_d_A_gamma_div_len_dx += d2E_d2_A_gamma_div_len_ab * d_A_gamma_div_len_d_x(he_b, true);
+                    d2_E_d_A_gamma_div_len_dx += d2E_d2_A_gamma_div_len_ab * d_A_gamma_div_len_d_x_for_he[he_b.localIndex()];
                 }
 
                 // x-x block
@@ -546,26 +545,24 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                     for (size_t c_b = 0; c_b < 3; ++c_b) {
                         M3d delta_gradCornerPos = d2_E_d_A_gamma_div_len_dx(c_b, v_b.localIndex()) * d_A_gamma_div_len_d_xa
                                                 +   dE_d_A_gamma_div_len * delta_d_A_gamma_div_len_d_x(he, v_b, c_b);
-                        Hxx.col(3 * v_b.localIndex() + c_b) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
-
+                        H_elem.col(3 * v_b.localIndex() + c_b).template segment<9>(0) += Eigen::Map<Eigen::Matrix<Real, 9, 1>>(delta_gradCornerPos.data());
                     }
                 }
             }
-
         }
 #if 0
-        // Symmetry test: the full Hxx must be constructed to run this (disable lower triangle skip in membrane term).
-        if ((Hxx - Hxx.transpose()).squaredNorm() / Hxx.squaredNorm() > 1e-10) {
+        // Symmetry test: the full H_elem must be constructed to run this (disable lower triangle skip in membrane term).
+        if ((H_elem - H_elem.transpose()).squaredNorm() / H_elem.squaredNorm() > 1e-10) {
             std::cout << "Asymmetric hessian contrib:" << std::endl;
-            std::cout << Hxx;
+            std::cout << H_elem;
             std::cout << std::endl;
             throw std::runtime_error("Asymmetric hessian contrib");
         }
 #endif
         if (projectionMask && (m_hessianProjectionType == HessianProjectionType::FullXBased)) {
             using ESolver  = Eigen::SelfAdjointEigenSolver<PerElemHessian>;
-            ESolver Hes(Hxx.transpose()); // SelfAdjointEigenSolver uses only the lower triangle
-            Hxx = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            ESolver Hes(H_elem.transpose()); // SelfAdjointEigenSolver uses only the lower triangle
+            H_elem = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
         }
 
         for (const auto &v_b : e.vertices()) {
@@ -573,8 +570,21 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                 const size_t var_b = 3 * v_b.index() + c_b;
                 for (const auto &v_a : e.vertices()) {
                     if (v_a.index() > v_b.index()) continue;
-                    Hout.addNZ(3 * v_a.index(), var_b, Hxx.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
+                    Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
                 }
+            }
+        }
+
+        const size_t to = thetaOffset();
+        for (const auto &he_b : e.halfEdges()) {
+            const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
+            for (const auto &v_a : e.vertices())
+                Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+            for (const auto &he_a : e.halfEdges()) {
+                const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
+                if (var_a > var_b) continue;
+                Hout.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
+                                                lto + std::max(he_a.localIndex(), he_b.localIndex())));
             }
         }
     };
