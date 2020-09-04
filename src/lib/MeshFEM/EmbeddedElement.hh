@@ -22,6 +22,7 @@
 #define EMBEDDEDELEMENT_HH
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
+#include <MeshFEM/GaussQuadrature.hh>
 
 // The *EmbeddedSimplex classes store the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the

@@ -50,7 +50,6 @@
 #include <MeshFEM/function_traits.hh>
 #include <MeshFEM/TemplateHacks.hh>
 #include <MeshFEM/Future.hh>
-#include <MeshFEM/GaussQuadrature.hh>
 #include <vector>
 #include <array>
 #include <functional>
@@ -456,13 +455,6 @@ Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
 shapeFunctions(const EvalPt<_K> &baryCoords) {
     return detail::shapeFunctionsImpl<_Deg, _K>(baryCoords,
                                                 Future::make_index_sequence<Simplex::numNodes(_K, _Deg)>());
-}
-
-// Shape functions integrated over an element of volume 1.
-template<size_t _Deg, size_t _K>
-Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
-integratedShapeFunctions() {
-    return Quadrature<_K, _Deg>::integrate([](const EvalPt<_K> &x) { return shapeFunctions<_Deg, _K>(x); });
 }
 
 // Interpolation on a _K simplex (runs the implementations above).
