@@ -214,7 +214,7 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        psi.setDeformationGradient(FB);
+        psi.setDeformationGradient(FB, EvalLevel::EnergyOnly);
         result += m_h * psi.energy();
     }
 
@@ -251,7 +251,7 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        psi.setDeformationGradient(FB);
+        psi.setDeformationGradient(FB, EvalLevel::Gradient);
 
         // Derivative of `h * A * psi` with respect to FB
         M32d d_psi_dFB = psi.denergy() * (e->volume() * m_h);
@@ -454,21 +454,23 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
 // Elastic Energy Hessian
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool /* projectionMask */) const {
+void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool projectionMask) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
-    auto assembler_per_element_contrib = [&m, this, etype](size_t ei, SuiteSparseMatrix& Hout) {
+    auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, SuiteSparseMatrix& Hout) {
         const auto &e = m.element(ei);
         const M32d &B = m_B[ei];
 
-        Eigen::Matrix<Real, 9, 9> Hxx;
+        using PerElemHessian = Eigen::Matrix<Real, 9, 9>;
+        PerElemHessian Hxx;
         Hxx.setZero();
 
         // Membrane energy contribution
         if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
             M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
             Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
-            psi.setDeformationGradient(FB);
+            psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
+                                                          : EvalLevel::HessianWithDisabledProjection);
 
             for (const auto &v_b : e.vertices()) {
                 VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
@@ -560,6 +562,12 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
             throw std::runtime_error("Asymmetric hessian contrib");
         }
 #endif
+        if (projectionMask && (m_hessianProjectionType == HessianProjectionType::FullXBased)) {
+            using ESolver  = Eigen::SelfAdjointEigenSolver<PerElemHessian>;
+            ESolver Hes(Hxx.transpose()); // SelfAdjointEigenSolver uses only the lower triangle
+            Hxx = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        }
+
         for (const auto &v_b : e.vertices()) {
             for (size_t c_b = 0; c_b < 3; ++c_b) {
                 const size_t var_b = 3 * v_b.index() + c_b;

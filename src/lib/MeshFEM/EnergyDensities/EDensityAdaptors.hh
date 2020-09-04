@@ -268,16 +268,18 @@ struct MembraneEnergyDensityFrom2x2Density<Psi_F, std::enable_if_t<Psi_F::EDType
 ////////////////////////////////////////////////////////////////////////////////
 template<class Psi_F>
 struct AutoHessianProjection : Psi_F {
-    static_assert(Psi_F::EDType == EDensityType::FBased, "Psi_F must be F-based");
+    static_assert(Psi_F::EDType == EDensityType::FBased
+               || Psi_F::EDType == EDensityType::Membrane, "Psi_F must be F-based or Membrane");
     using Base = Psi_F;
+    using Real     = typename Base::Real;
+    using Matrix   = typename Base::Matrix;
     static constexpr size_t Dimension = Base::Dimension;
     static constexpr size_t N         = Base::N;
-    using Real     = typename Base::Real;
-    using Matrix   = Eigen::Matrix<Real, N, N>;
+    static constexpr size_t M         = Matrix::RowsAtCompileTime; // Embedding dimension (may differ from N)
+
     using Vector   = Eigen::Matrix<Real, N, 1>;
     using VXd      = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
-    using FInvType = std::remove_const_t<decltype(typename Base::Matrix().inverse().eval())>;
-    using Hessian  = Eigen::Matrix<Real, N * N, N * N>;
+    using Hessian  = Eigen::Matrix<Real, M * N, M * N>;
     using ESolver  = Eigen::SelfAdjointEigenSolver<Hessian>;
 
     using Base::Base;
@@ -301,14 +303,14 @@ struct AutoHessianProjection : Psi_F {
 
         // Evaluate the full Hessian by probing it on a basis with delta_denergy.
         Hessian H;
-        VectorizedShapeFunctionJacobian<N, Vector> probe(0, Vector::Zero());
+        VectorizedShapeFunctionJacobian<M, Vector> probe(0, Vector::Zero());
         for (size_t j = 0; j < N; ++j) {
             probe.g[j] = 1.0;
-            for (size_t i = 0; i < N; ++i) {
+            for (size_t i = 0; i < M; ++i) {
                 probe.c = i;
                 auto delta_de = Base::delta_denergy(probe);
                 // Column major flattening order to match `Matrix`!
-                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
+                H.col(i + j * M) = Eigen::Map<const Eigen::Matrix<double, M * N, 1>>(delta_de.data());
             }
             probe.g[j] = 0.0;
         }

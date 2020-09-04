@@ -72,7 +72,7 @@ public:
     using EvalPtN = EvalPt<3>;
 
     using Psi_2x2 = _Psi_2x2;
-    using Psi     = MembraneEnergyDensityFrom2x2Density<Psi_2x2>;
+    using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
     using Real    = typename Psi::Real;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
@@ -100,6 +100,7 @@ public:
     using  CTHandle = typename TMesh::template  THandle<const TMesh>;
 
     enum class EnergyType { Full, Membrane, Bending };
+    enum class HessianProjectionType { Off, MembraneFBased, FullXBased };
 
     ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi)
         : m_mesh(m), m_psi{{psi}},
@@ -366,6 +367,17 @@ public:
     void setDisabledBending(bool yesno) { m_disableBending = yesno; }
     bool getDisabledBending() const { return m_disableBending; }
 
+    void setHessianProjectionType(HessianProjectionType hp) {
+        m_hessianProjectionType = hp;
+        bool projectPsi = (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
+        for (auto &psi : m_psi)
+            psi.projectionEnabled = projectPsi;
+    }
+
+    HessianProjectionType getHessianProjectionType() const {
+        return m_hessianProjectionType;
+    }
+
 private:
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.
@@ -440,6 +452,8 @@ private:
                  m_numEdges;
 
     bool m_disableBending = false;
+
+    HessianProjectionType m_hessianProjectionType = HessianProjectionType::MembraneFBased;
 };
 
 #include "ElasticSheet.inl"

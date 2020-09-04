@@ -31,6 +31,13 @@ struct ElasticSheetBinder {
             .value("Bending",   EType::Bending)
             ;
 
+        using HPType = typename ES::HessianProjectionType;
+        py::enum_<HPType>(pyES, "HPType")
+            .value("Off"    ,         HPType::Off)
+            .value("MembraneFBased" , HPType::MembraneFBased)
+            .value("FullXBased",      HPType::FullXBased)
+            ;
+
         pyES
           .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
           .def("numVars",                  &ES::numVars)
@@ -84,6 +91,7 @@ struct ElasticSheetBinder {
           .def_property("thickness", &ES::getThickness, &ES::setThickness)
           // For debugging purposes, drop the bending energy term.
           .def_property("disableBending", &ES::getDisabledBending, &ES::setDisabledBending)
+          .def_property("hessianProjectionType", &ES::getHessianProjectionType, &ES::setHessianProjectionType)
           ;
 
         const std::string name = NameMangler<ES>::name();
