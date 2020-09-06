@@ -1,6 +1,7 @@
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 namespace py = pybind11;
 
 #include "BindingInstantiations.hh"
@@ -109,6 +110,7 @@ struct MeshBindingsBase {
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
           .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
           .def("is_tet_mesh",  [](const Mesh &) { return K == 3; })
+          .def_property_readonly(       "bbox", [](const Mesh& m) { const auto bb = m.boundingBox(); return std::make_pair(bb.minCorner, bb.maxCorner); })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
           .def_property_readonly_static("degree",             [](py::object) { return Mesh::Deg; })
@@ -128,6 +130,8 @@ struct MeshBindings;
 template<size_t _Deg, class _EmbeddingSpace>
 struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase<FEMMesh<2, _Deg, _EmbeddingSpace>> {
     using Mesh = FEMMesh<2, _Deg, _EmbeddingSpace>;
+    using TMesh = typename Mesh::BaseMesh; // TriMesh data structure underlying FEMMesh
+    using CHEHandle = typename TMesh::template HEHandle<const TMesh>;
     using Base = MeshBindingsBase<Mesh>;
     using Real = typename Mesh::Real;
     using V3d  = Eigen::Matrix<Real, 3, 1>;
@@ -193,6 +197,11 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
                     }
                     return result;
                 }, "Get the lists of *boundary vertex indices* making up each boundary loop")
+            .def("visitEdges", [](const Mesh &m, const std::function<void(std::pair<size_t, size_t>, size_t)> &pyvisitor) {
+                    m.visitEdges([&pyvisitor](const CHEHandle &he, size_t edgeIdx) {
+                            pyvisitor(std::make_pair(he.tail().index(), he.tip().index()), edgeIdx);
+                    });
+                }, py::arg("visitor"))
         ;
         return mesh_bindings;
     }

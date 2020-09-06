@@ -43,6 +43,8 @@ struct ElasticSheetBinder {
         pyES
           .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
           .def("numVars",                  &ES::numVars)
+          .def("numThetas",                &ES::numThetas)
+          .def("numCreases",               &ES::numCreases)
           .def("thetaOffset",              &ES::thetaOffset)
           .def("creaseAngleOffset",        &ES::creaseAngleOffset)
           .def("setIdentityDeformation",   &ES::setIdentityDeformation)

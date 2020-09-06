@@ -161,7 +161,8 @@ public:
                  + m_numEdges
                  + m_numCreases;
     }
-    size_t numThetas() const { return m_numEdges; }
+    size_t numThetas()  const { return m_numEdges;   }
+    size_t numCreases() const { return m_numCreases; }
 
     static constexpr size_t xOffset(){ return 0; }
     size_t       thetaOffset() const { return xOffset() + 3 * m_numVertices; }

@@ -79,20 +79,20 @@ using StVenantKirchhoffEnergyHP = AutoHessianProjection<StVenantKirchhoffEnergy<
 
 template<class ESBinder>
 void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
-    // // For each energy, generate an elastic solid binding
-    // // for each mesh we bind (neglecting meshes embedded in higher dimensions).
-    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,          LinearElasticEnergy>(b));
-    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,             NeoHookeanEnergy>(b));
-    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    CorotatedLinearElasticity>(b));
-    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,      StVenantKirchhoffEnergy>(b));
+    // For each energy, generate an elastic solid binding
+    // for each mesh we bind (neglecting meshes embedded in higher dimensions).
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,          LinearElasticEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,             NeoHookeanEnergy>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    CorotatedLinearElasticity>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,      StVenantKirchhoffEnergy>(b));
 
-    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
 }
 
 template<class ESBinder>
 void generateElasticSheetBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
-    // b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
+    b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
     b.template bind<ElasticSheet<             NeoHookeanEnergy<double, 2>>>(m, detail_module);
 }
 
