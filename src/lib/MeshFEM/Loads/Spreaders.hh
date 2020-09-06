@@ -54,8 +54,9 @@ struct Spreaders : public Load<3, typename Object::Real> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+    virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = false) const override {
         if (m_disableHessian) return;
+        // if (projectionMask) return; // The Hessian is negative semidefinite (I think...), so we drop the whole thing when Hessian projection is applied.
 
         for (int i = 0; i < m_connectivity.rows(); ++i) { // loop over spreaders (edges)
             const V3d a = m_axis.row(i);

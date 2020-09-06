@@ -133,6 +133,13 @@ public:
         if (opposite().tri()) visitor(opposite().tri().index());
     }
 
+    // Index within tri()
+    size_t localIndex() const {
+        for (const auto &he_b : tri().halfEdges())
+            if (he_b.index() == m_idx) return he_b.localIndex();
+        throw std::logic_error("Halfedge not found within its triangle");
+    }
+
     // Note: these are only correct because of the careful boundary-case
     // handling above.
     HEH ccw() const { return opposite().prev(); }

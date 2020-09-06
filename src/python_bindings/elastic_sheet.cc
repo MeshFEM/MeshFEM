@@ -20,7 +20,9 @@ struct ElasticSheetBinder {
         using Mesh = typename ES::Mesh;
         using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
 
-        module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e) { return std::make_shared<ES>(m, e); }, py::arg("mesh"), py::arg("energy"));
+        using CreaseEdges = typename ES::CreaseEdges;
+        module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e, const CreaseEdges &creases) {
+                return std::make_shared<ES>(m, e, creases); }, py::arg("mesh"), py::arg("energy"), py::arg("creaseEdges") = CreaseEdges());
 
         py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, NameMangler<ES>::name().c_str());
 
@@ -42,10 +44,13 @@ struct ElasticSheetBinder {
           .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
           .def("numVars",                  &ES::numVars)
           .def("thetaOffset",              &ES::thetaOffset)
+          .def("creaseAngleOffset",        &ES::creaseAngleOffset)
           .def("setIdentityDeformation",   &ES::setIdentityDeformation)
           .def("getVars",                  &ES::getVars)
           .def("getThetas",                &ES::getThetas)
           .def("setThetas",                &ES::setThetas)
+          .def("getCreaseAngles",          &ES::getCreaseAngles)
+          .def("setCreaseAngles",          &ES::setCreaseAngles)
           .def("setDeformedPositions",     &ES::setDeformedPositions)
           .def("getDeformedPositions",     &ES::deformedPositions)
           .def("getRestPositions",         &ES::restPositions)

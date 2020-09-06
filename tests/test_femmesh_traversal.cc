@@ -43,6 +43,10 @@ void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
 
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &m) {
+    // Ensure each half-edge can find itself within its triangle.
+    for (const auto &he : m.halfEdges())
+        REQUIRE(he.tri().halfEdge(he.localIndex()).index() == he.index());
+
     // Visit each boundary loop: clockwise traversal
     const size_t nbe = m.numBoundaryElements();
     auto traverse_boundary_loop = [&](auto next) {

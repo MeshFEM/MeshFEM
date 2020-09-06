@@ -33,7 +33,8 @@ struct NormalInferenceProblem : public NewtonProblem {
     NormalInferenceProblem(ESheet &sheet) : m_sheet(sheet) {
         m_hessianSparsity = sheet.hessianSparsityPattern();
         const size_t to = sheet.thetaOffset();
-        m_hessianSparsity.rowColRemoval([to](size_t i) { return i < to; });
+        const size_t numThetas = sheet.numThetas();
+        m_hessianSparsity.rowColRemoval([to, numThetas](size_t i) { return (i < to) || (i >= to + numThetas); });
 
         m_updateDeformedII();
     }
@@ -299,8 +300,12 @@ typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updated
         g_out.template segment<3>(3 * e.vertex(2).index()) += g_e.template segment<3>(6);
 
         const size_t to = thetaOffset();
-        for (const auto &he : e.halfEdges())
+        const size_t co = creaseAngleOffset();
+        for (const auto &he : e.halfEdges()) {
             g_out[to + m_edgeForHalfEdge[he.index()]] += g_e[9 + he.localIndex()];
+            int ci = creaseForHalfEdge(he.index());
+            if (ci >= 0) g_out[co + ci] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
+        }
     };
 
     VXd g(VXd::Zero(numVars()));
@@ -312,10 +317,9 @@ typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updated
 template <class Psi_2x2>
 template <class SHEHandle>
 typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const {
-    const Real sign = he.isPrimary() ? 1.0 : -1.0;
     const V3d eVec = deformedEdgeVector(he);
     const Real len = eVec.norm();
-    const Real gamma = m_thetas[m_edgeForHalfEdge[he.index()]] - m_alphas[he.index()];
+    const Real gamma = getGamma(he.index());
     const auto &deformedElement = m_deformedElements[he.tri().index()];
     const Real A = deformedElement.volume();
     const Real A_div_len = A / len;
@@ -342,7 +346,7 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x
                           - (ds2.dot(t) * d1.dot(ts) * inv_chi_hat * inv_chi_hat) * ts
                           + d2.cross(ds2);
         // When d1 rotates ccw, alpha decreases ==> gamma increases
-        dcoeff_dedge += sign * (A / (len * len)) * (neg_dalpha_dt - t.dot(neg_dalpha_dt) * t);
+        dcoeff_dedge += (A / (len * len)) * (neg_dalpha_dt - t.dot(neg_dalpha_dt) * t);
     }
     gradCornerPos.col((he.localIndex() + 2) % 3) += dcoeff_dedge; // local tip
     gradCornerPos.col((he.localIndex() + 1) % 3) -= dcoeff_dedge; // local tail
@@ -358,13 +362,9 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x
     gradCornerPos -= ((A / len) * deformedElement.normal()) * (eperp_hat.transpose() * deformedElement.gradBarycentric());
 #else
     // Equivalent, easier-to-differentiate version
-    gradCornerPos -= (2 * sign * deformedElement.normal()) * (A_div_len_gradLambdas.col(he.localIndex()).transpose()
-                                                           *  A_div_len_gradLambdas);
+    gradCornerPos -= (2 * deformedElement.normal()) * (A_div_len_gradLambdas.col(he.localIndex()).transpose()
+                                                    *  A_div_len_gradLambdas);
 #endif
-    gradCornerPos *= sign;
-
-    // gradCornerPos = deformedElement.gradBarycentric();
-
     return gradCornerPos;
 }
 
@@ -399,7 +399,7 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
     const Real sign = he.isPrimary() ? 1.0 : -1.0;
     const V3d eVec = deformedEdgeVector(he);
     const Real len = eVec.norm();
-    const Real gamma = m_thetas[m_edgeForHalfEdge[he.index()]] - m_alphas[he.index()];
+    const Real gamma = getGamma(he.index());
     const auto &deformedElement = m_deformedElements[he.tri().index()];
     const M3d &gradLambdas = deformedElement.gradBarycentric();
     const V3d &n = deformedElement.normal();
@@ -420,32 +420,28 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
                                           - n * (delta_n.transpose() * A_div_len_gradLambdas);
 
     // Gamma increases (alpha decreases) as the triangle normal rotates towards eperp
-    const Real delta_gamma = sign * 2 * A_div_len_gradLambdas.col(he.localIndex()).dot(delta_n);
-
-    // delta_gamma = 0.0;
+    const Real delta_gamma = 2 * A_div_len_gradLambdas.col(he.localIndex()).dot(delta_n);
 
     M3d delta_gradCornerPos(delta_gamma * A_div_len_gradLambdas + gamma * delta_A_div_len_gradLambdas);  // Derivative of area term
 
     V3d delta_dcoeff_dedge = - (delta_gamma * A_div_len / (len * len)) * eVec
-                       - (gamma * delta_A_div_len / (len * len)) * eVec
-                   + 2 * (gamma * (A_div_len / (len * len * len)) * deltaLen) * eVec;
-    delta_dcoeff_dedge[c_b] -=       (gamma * (A_div_len / (len * len))) * d_eVec_dv_b;
+                             - (gamma * delta_A_div_len / (len * len)) * eVec
+                         + 2 * (gamma * (A_div_len / (len * len * len)) * deltaLen) * eVec;
+    delta_dcoeff_dedge[c_b] -= (gamma * (A_div_len / (len * len))) * d_eVec_dv_b;
 
     // Parallel transport term Hessian (assuming updated source)
     if (d_eVec_dv_b != 0.0) {
         const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
         const auto &t = m_referenceFrame[edgeIdx].col(0);
-        // Note: edge signs cancel!
-        delta_dcoeff_dedge -= d_eVec_dv_b * (A_div_len / (2 * len * len)) * t.cross(M3d::Identity().col(c_b));
+        delta_dcoeff_dedge -= sign * d_eVec_dv_b * (A_div_len / (2 * len * len)) * t.cross(M3d::Identity().col(c_b));
     }
 
     delta_gradCornerPos.col((he.localIndex() + 2) % 3) += delta_dcoeff_dedge; // local tip
     delta_gradCornerPos.col((he.localIndex() + 1) % 3) -= delta_dcoeff_dedge; // local tail
 
-    delta_gradCornerPos -= (2 * sign * delta_n) * (      A_div_len_gradLambdas.col(he.localIndex()).transpose() *       A_div_len_gradLambdas);
-    delta_gradCornerPos -= (2 * sign *       n) * (delta_A_div_len_gradLambdas.col(he.localIndex()).transpose() *       A_div_len_gradLambdas);
-    delta_gradCornerPos -= (2 * sign *       n) * (      A_div_len_gradLambdas.col(he.localIndex()).transpose() * delta_A_div_len_gradLambdas);
-    delta_gradCornerPos *= sign;
+    delta_gradCornerPos -= (2 * delta_n) * (      A_div_len_gradLambdas.col(he.localIndex()).transpose() *       A_div_len_gradLambdas);
+    delta_gradCornerPos -= (2 *       n) * (delta_A_div_len_gradLambdas.col(he.localIndex()).transpose() *       A_div_len_gradLambdas);
+    delta_gradCornerPos -= (2 *       n) * (      A_div_len_gradLambdas.col(he.localIndex()).transpose() * delta_A_div_len_gradLambdas);
 
     return delta_gradCornerPos;
 }
@@ -582,6 +578,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
             }
         }
 
+        // Theta vars
         const size_t to = thetaOffset();
         constexpr size_t lto = 9;
         for (const auto &he_b : e.halfEdges()) {
@@ -593,6 +590,37 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                 if (var_a > var_b) continue;
                 Hout.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
                                                 lto + std::max(he_a.localIndex(), he_b.localIndex())));
+            }
+        }
+
+        // Crease angles (if they exist)
+        const size_t co = creaseAngleOffset();
+        for (const auto &he_b : e.halfEdges()) {
+            int ci_b = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[he_b.index()]];
+            if (ci_b < 0) continue;
+            const size_t var_b = co + ci_b;
+
+            // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
+            const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
+            for (const auto &v_a : e.vertices())
+                Hout.addNZ(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+            for (const auto &he_a : e.halfEdges()) {
+                size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
+                // First, extract the derivative with respect to the midedge normal angles for he_a and he_b
+                Real Hentry = H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
+                                     lto + std::max(he_a.localIndex(), he_b.localIndex()));
+                { // Interaction with theta var
+                    const size_t var_a = to + edgeIdx_a;
+                    Hout.addNZ(var_a, var_b, coeff_b * Hentry);
+                }
+                { // Interaction with crease angle var
+                    int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
+                    const size_t var_a = (ci_a >= 0) ? co + ci_a : std::numeric_limits<size_t>::max();
+                    if (var_a > var_b) continue;
+
+                    const Real coeff_a = he_a.isPrimary() ? -0.5 : 0.5;
+                    Hout.addNZ(var_a, var_b, coeff_a * coeff_b * Hentry);
+                }
             }
         }
     };
@@ -672,6 +700,44 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
         });
         finalizeCol();
     });
+
+    // Each crease angle interacts with the vertices and midedge normal angles in its attached triangles.
+    const size_t co = creaseAngleOffset();
+    for (size_t ci = 0; ci < m_numCreases; ++ci) {
+        const auto &he = m.halfEdge(m_halfEdgeForCreaseAngle[ci]);
+        // Note: by construction, `he` must be an interior half edge
+        assert(!he.isBoundary());
+
+        // Vertices in this triangle
+        for (const auto &v : he.tri().vertices()) {
+            for (size_t c = 0; c < 3; ++c)
+                Ai.push_back(3 * v.index() + c);
+        }
+
+        // Single opposite vertex in opposite triangle
+        // (don't add edge endpoints twice)
+        {
+            size_t vopp = he.opposite().next().tip().index();
+            for (size_t c = 0; c < 3; ++c)
+                Ai.push_back(3 * vopp + c);
+        }
+
+        // Variables on the edges of both attached triangles
+        // We avoid double-adding the variables on the edge to which "he" belongs
+        // by skipping "he" in the loop below (so only variables on its
+        // opposite half-edge are added)
+        he.visitIncidentElements([&](size_t ti) {
+            for (const auto &he_a : m.tri(ti).halfEdges()) {
+                if (he_a.index() == he.index()) continue; // don't double-add vars on this edge
+                size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
+                Ai.push_back(to + edgeIdx_a);
+                int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
+                if ((ci_a >= 0) && (ci_a <= ci)) // existent crease vars in Hessian's upper tri
+                    Ai.push_back(co + ci_a);
+            }
+        });
+        finalizeCol();
+    }
 
     Hsp.nz = Ai.size();
     Hsp.Ax.assign(Hsp.nz, val);

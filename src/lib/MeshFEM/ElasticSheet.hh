@@ -85,12 +85,17 @@ public:
     using MX2d  = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>;
     using Frame = M3d; // Columns are [tangent, d1, d2], a right-handed orthonormal frame adapted to a particular edge tangent.
     using SM2d  = SymmetricMatrixValue<Real, 2>; // Symmetric matrix in the reference configuration
+    using CreaseEdges = Eigen::Matrix<int, Eigen::Dynamic, 2>;
 
     static constexpr size_t K   = 2;
     static constexpr size_t Deg = 1;
     static constexpr size_t N   = 3;
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(K, Deg);
+    // The local vars for an element are the corner positions and 3 midedge
+    // normal rotation angles; for non-crease edges, this is just the edge's
+    // theta, while for crease-edges this is (theta - creaseAngle / 2).
     static constexpr size_t numElementLocalVars = N * numNodesPerElement + 3;
+
     using  Mesh = FEMMesh<2, Deg, V3d>;
     using TMesh = typename Mesh::BaseMesh; // TriMesh data structure underlying FEMMesh
     using VSFJ = VectorizedShapeFunctionJacobian<3, V3d>;
@@ -102,11 +107,12 @@ public:
     enum class EnergyType { Full, Membrane, Bending };
     enum class HessianProjectionType { Off, MembraneFBased, FullXBased };
 
-    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi)
+    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
         : m_mesh(m), m_psi{{psi}},
           m_etensor(tangentElasticityTensor(psi)),
           m_numVertices(m->numVertices()),
-          m_numEdges   (m->numEdges())
+          m_numEdges   (m->numEdges()),
+          m_numCreases(creases.rows())
     {
         m_updateB();
 
@@ -118,24 +124,48 @@ public:
             if (hopp) m_edgeForHalfEdge.at(hopp.index()) = edgeIndex;
         });
 
+        {
+            m_creaseEdgeIndexForEdge.assign(m_numEdges, -1);
+            m_halfEdgeForCreaseAngle.reserve(m_numCreases);
+            for (size_t i = 0; i < m_numCreases; ++i) {
+                size_t a = creases(i, 0),
+                       b = creases(i, 1);
+                int hidx = std::max<int>(m->halfEdgeIndex(a, b),
+                                         m->halfEdgeIndex(b, a));
+                if (hidx < 0) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " not in mesh");
+                if (m->halfEdge(hidx).isBoundary()) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " is on the boundary.");
+                int &creaseIdx = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]];
+                if (creaseIdx >= 0) throw std::runtime_error("Duplicate crease edge " + std::to_string(a) + ", " + std::to_string(b));
+                m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]] = m_halfEdgeForCreaseAngle.size();
+                m_halfEdgeForCreaseAngle.push_back(hidx);
+            }
+            m_creaseAngles.setZero(m_numCreases);
+            assert(m_halfEdgeForCreaseAngle.size() == m_numCreases);
+        }
+
         setIdentityDeformation();
 
         // Apply this resulting shape operator as the rest shape operator
         // (To handle curved shells.)
         m_restII = m_II;
+
+        setHessianProjectionType(HessianProjectionType::Off);
     }
 
     const Mesh &mesh() const { return *m_mesh; }
           Mesh &mesh()       { return *m_mesh; }
 
-    // The variables consist of deformed vertex positions and midedge normal angles.
+    // The variables consist of deformed vertex positions and midedge normal rotation angles.
     size_t numVars() const {
         return 3 * m_numVertices
-                 + m_numEdges;
+                 + m_numEdges
+                 + m_numCreases;
     }
     size_t numThetas() const { return m_numEdges; }
 
-    size_t thetaOffset() const { return 3 * m_numVertices; }
+    static constexpr size_t xOffset(){ return 0; }
+    size_t       thetaOffset() const { return xOffset() + 3 * m_numVertices; }
+    size_t creaseAngleOffset() const { return thetaOffset() + m_numEdges; }
 
     void setThickness(Real thickness) {
         m_h = thickness;
@@ -143,10 +173,12 @@ public:
 
     Real getThickness() const { return m_h; }
     size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
+    int  creaseForHalfEdge(size_t hei) const { return m_creaseEdgeIndexForEdge[edgeForHalfEdge(hei)]; }
 
     virtual void setVars(Eigen::Ref<const VXd> vars) override {
         if (size_t(vars.rows()) != numVars()) throw std::runtime_error("Invalid vars size");
-        m_thetas = vars.tail(m_numEdges);
+        m_thetas = vars.segment(thetaOffset(), m_numEdges);
+        m_creaseAngles = vars.segment(creaseAngleOffset(), m_numCreases);
         setDeformedPositions(Eigen::Map<const MX3d>(vars.data(), m_numVertices, 3));
     }
 
@@ -159,7 +191,8 @@ public:
         this->m_deformedConfigUpdated();
     }
 
-    const VXd &getThetas() const { return m_thetas; }
+    const VXd &getThetas()       const { return m_thetas;       }
+    const VXd &getCreaseAngles() const { return m_creaseAngles; }
 
     void setThetas(Eigen::Ref<const VXd> thetas) {
         if (size_t(thetas.rows()) != m_numEdges) throw std::runtime_error("Invalid thetas size");
@@ -171,15 +204,23 @@ public:
         this->m_deformedConfigUpdated();
     }
 
+    void setCreaseAngles(Eigen::Ref<const VXd> creaseAngles) {
+        if (size_t(creaseAngles.rows()) != m_numCreases) throw std::runtime_error("Invalid creaseAngles size");
+        m_creaseAngles = creaseAngles;
+        setThetas(m_thetas);
+    }
+
     VXd getVars() const {
         VXd result(numVars());
-        result.head(3 * m_numVertices) = Eigen::Map<const VXd>(m_deformedPositions.data(), 3 * m_numVertices);
-        result.tail(m_numEdges) = m_thetas;
+        result.segment(          xOffset(), 3 * m_numVertices) = Eigen::Map<const VXd>(m_deformedPositions.data(), 3 * m_numVertices);
+        result.segment(      thetaOffset(),        m_numEdges) = m_thetas;
+        result.segment(creaseAngleOffset(),      m_numCreases) = m_creaseAngles;
         return result;
     }
 
-    MX3d deformedPositions() const { return m_deformedPositions; }
-    VXd  thetas()            const { return m_thetas;            }
+    const MX3d &deformedPositions() const { return m_deformedPositions; }
+    const VXd  &thetas()            const { return m_thetas;            }
+    const VXd  &creaseAngles()      const { return m_creaseAngles;      }
 
     MX3d restPositions() const {
         const auto &m = mesh();
@@ -199,10 +240,17 @@ public:
     Real elementEnergy(size_t ei, const EnergyType etype) const;
     Real energy(const EnergyType etype) const;
 
+    // Gradient with respect to an individual element's corner positions and midedge normal angles.
+    // (Note, we don't separately differentiate with respect to local crease angle vars;
+    //  this dependence accounted for by chain rule in `gradient`)
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
+
     VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
 
+    // Hessian with respect to an individual element's corner positions and midedge normal angles.
+    // (Note, we don't separately differentiate with respect to local crease angle vars;
+    //  this dependence accounted for by chain rule in `hessian`)
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
@@ -234,7 +282,7 @@ public:
         });
         return result;
     }
-    // To assist boundary conditions specification
+    // To assist boundary condition specification
     MX3d restEdgeMidpoints() const {
         MX3d result(m_numEdges, 3);
         mesh().visitEdges([this, &result](CHEHandle he, size_t edgeIndex) {
@@ -250,7 +298,8 @@ public:
     // specified).
     void setIdentityDeformation();
 
-    // (Re-)initialize the midedge normals, inferring them from the midsurface.
+    // (Re-)initialize the midedge normals (thetas), inferring them from the midsurface.
+    // TODO: possibly make this infer crease angle as well?
     void initializeMidedgeNormals(bool minimizeBending = true);
 
     void updateSourceFrame() {
@@ -281,9 +330,9 @@ public:
     }
 
     // Get the deformed/rest second fundamental forms
-    const std::vector<M3d>   &getII()     const { return m_II;     }
-    const std::vector<M3d>   &getRestII() const { return m_restII; }
-    const std::vector<M32d>  &getB()      const { return m_B;      }
+    const std::vector<M3d>  &getII()     const { return m_II;     }
+    const std::vector<M3d>  &getRestII() const { return m_restII; }
+    const std::vector<M32d> &getB()      const { return m_B;      }
 
     // Get the per-element right Cauchy-Green deformation tensors/first
     // fundamentals form representing the deformation.
@@ -301,19 +350,33 @@ public:
 
     const VXd &getAlphas()       const { return m_alphas;       }
     const VXd &getSourceAlphas() const { return m_sourceAlphas; }
-    VXd        getGammas() const {
-        const auto &m = mesh();
-        VXd gammas(m.numHalfEdges());
-        for (const auto &he : m.halfEdges()) {
-            // The current triangle's shape operator is defined in terms of the
-            // angle gamma between the triangle normal and midedge normal
-            // ***around the oriented edge vectors***. But thetas/alphas are
-            // defined as angles around the primary halfedge vector (which may
-            // point in the opposite direction). Therefore we must negate gamma
-            // for non-primary half edges.
-            double sign = he.isPrimary() ? 1.0 : -1.0;
-            gammas[he.index()] = sign * (m_thetas[m_edgeForHalfEdge[he.index()]] - m_alphas[he.index()]);
+
+    Real getGamma(size_t hei) const {
+        Real result;
+        // The current triangle's shape operator is defined in terms of the
+        // angle gamma between the triangle normal and midedge normal
+        // ***around the oriented edge vectors***. But thetas/alphas are
+        // defined as angles around the primary halfedge vector (which may
+        // point in the opposite direction). Therefore we must negate gamma
+        // for non-primary half edges.
+        double sign = mesh().halfEdge(hei).isPrimary() ? 1.0 : -1.0;
+        result = sign * (m_thetas[m_edgeForHalfEdge[hei]] - m_alphas[hei]);
+
+        int ci = creaseForHalfEdge(hei);
+        if (ci >= 0) {
+            // Positive crease angles rotate the midedge normal towards the
+            // triangle (decreasing gamma)
+            result -= 0.5 * m_creaseAngles[ci];
         }
+        return result;
+    }
+
+    VXd getGammas() const {
+        const auto &m = mesh();
+        const size_t nhe = m.numHalfEdges();
+        VXd gammas(nhe);
+        for (size_t hei = 0; hei < nhe; ++hei)
+            gammas[hei] = getGamma(hei);
         return gammas;
     }
 
@@ -403,9 +466,12 @@ private:
 
     MX3d m_deformedPositions;
     VXd  m_thetas; // per-edge thetas
+    VXd  m_creaseAngles; // per-crease-edge angles
 
     // Map from the half edge index to our edge indices.
     std::vector<size_t> m_edgeForHalfEdge;
+    std::vector<int>    m_creaseEdgeIndexForEdge; // -1 for non-crease edges
+    std::vector<size_t> m_halfEdgeForCreaseAngle; // Arbitrary half-edge of the edge associated with each crease angle var
 
     // The reference frame with respect to which the midedge normals are expressed.
     // This frame is updated by parallel transport from the source configuration,
@@ -449,11 +515,12 @@ private:
     std::vector<M32d> m_jacobianLambdaB;
 
     const size_t m_numVertices,
-                 m_numEdges;
+                 m_numEdges,
+                 m_numCreases;
 
     bool m_disableBending = false;
 
-    HessianProjectionType m_hessianProjectionType = HessianProjectionType::MembraneFBased;
+    HessianProjectionType m_hessianProjectionType = HessianProjectionType::Off;
 };
 
 #include "ElasticSheet.inl"

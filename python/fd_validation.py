@@ -45,7 +45,7 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
 
     return (fd_delta_E, analytic_delta_E)
 
-def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = []):
+def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None):
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
     def gradAt(x):
@@ -56,12 +56,16 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
     h = evalWithCustomArgs(obj.hessian, customArgs)
     fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
     if isinstance(h, np.ndarray): # Dense case
-        analytic_delta_grad = h @ perturb
-    else: analytic_delta_grad = h.apply(perturb)
+        an_delta_grad = h @ perturb
+    else: an_delta_grad = h.apply(perturb)
+
+    if indexInterval is not None:
+        fd_delta_grad = fd_delta_grad[indexInterval[0]:indexInterval[1]]
+        an_delta_grad = an_delta_grad[indexInterval[0]:indexInterval[1]]
 
     obj.setVars(xold)
 
-    return (norm(analytic_delta_grad - fd_delta_grad) / norm(fd_delta_grad), fd_delta_grad, analytic_delta_grad)
+    return (norm(an_delta_grad - fd_delta_grad) / norm(fd_delta_grad), fd_delta_grad, an_delta_grad)
 
 def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
     epsilons = np.logspace(-9, -3, 100)
@@ -85,22 +89,22 @@ def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = []):
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
-def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
+def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
     epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
     for eps in epsilons:
-        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars = fixedVars)
+        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars, indexInterval=indexInterval)
         errors.append(err)
     return (epsilons, errors, an)
 
-def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars)
+def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
+    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
     plt.loglog(eps, errors, label='hess')
     plt.grid()
 
-def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = []):
-    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars)
+def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
+    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
     plt.title('Directional derivative fd test for Hessian')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
