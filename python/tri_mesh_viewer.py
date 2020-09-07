@@ -2,6 +2,8 @@ import numpy as np
 import pythreejs
 import ipywidgets
 import ipywidgets.embed
+from reflection import hasArg
+from enum import Enum
 
 from vis.fields import DomainType, VisualizationField, ScalarField, VectorField
 import mesh_operations
@@ -36,16 +38,20 @@ class TextureMap:
 
         self.uv *= np.array([float(w) / s, float(h) / s])
 
-# Replicate per-vertex attributes to per-tri-corner attributes (as indicated by the index array).
-# Input colors may be expressed instead as per-triangle, in which case, these
-# are replicated 3x (once for each corner).
-def replicateAttributesPerTriCorner(attr, perTriColor = True):
+# Replicate per-vertex, per-triangle, or per-corner attributes to per-tri-corner attributes (as indicated by the index array).
+def replicateAttributesPerTriCorner(attr):
     idxs = attr['index']
+    numVerts = attr['position'].shape[0]
+    numTris = len(idxs) // 3
     for key in attr:
-        if (perTriColor and key == 'color'):
-            attr['color'] = np.repeat(attr['color'], 3, axis=0)
-            continue
-        attr[key] = attr[key][idxs]
+        attrSize = attr[key].shape[0]
+        if attrSize == numTris:
+            attr[key] = np.repeat(attr[key], 3, axis=0)
+        elif attrSize == numVerts:
+            attr[key] = attr[key][idxs]
+        elif attrSize == 3 * numTris:
+            pass
+        else: raise Exception('Unexpected attribute size')
     # We unfortunately still need to use an index array after replication because of this commit in three.js
     # breaking the update of wireframe index buffers when not using index buffers for our mesh:
     #   https://github.com/mrdoob/three.js/pull/15198/commits/ea0db1988cd908167b1a24967cfbad5099bf644f
@@ -133,6 +139,12 @@ class MaterialLibrary:
         for k, mat in self.materials.items():
             mat.close()
 
+
+class ShadingType(Enum):
+    FLAT = 0
+    SMOOTH = 1
+    SMOOTH_CREASE = 2
+
 # superView allows this viewer to add geometry to an existing viewer.
 class ViewerBase:
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
@@ -157,6 +169,13 @@ class ViewerBase:
         self.ghostColor = 'red'
 
         self.materialLibrary = MaterialLibrary(self.isLineMesh, self.isPointCloud)
+
+        # Turning angle between normals below which we treat an edge as smooth.
+        # Note, setting this to zero should give per-face normals, while setting
+        # it to >= pi should give per-vertex normals, though the actual behavior
+        # depends on the implementation of `obj.visualizationGeometry`.
+        self.normalCreaseAngle = np.pi
+        self.setShadingType(ShadingType.SMOOTH_CREASE, doUpdate=False)
 
         # Sometimes we do not use a particular attribute buffer, e.g. the index buffer when displaying
         # per-face scalar fields. But to avoid reallocating these buffers when
@@ -247,6 +266,7 @@ class ViewerBase:
         if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
 
         useVertexColors = False
+        needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals
         if (self.scalarField is not None):
             # First, handle the case of directly specifying per-vertex colors:
             if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
@@ -262,11 +282,15 @@ class ViewerBase:
 
                 attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)
                 if (self.scalarField.domainType == DomainType.PER_TRI):
-                    # Replicate vertex data in the per-face case (positions, normal, uv) and remove index buffer; replicate colors x3
-                    # This is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
+                    # Replication is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
                     # since apparently indexed geometry doesn't support the 'FaceColors' option.
-                    replicateAttributesPerTriCorner(attrRaw)
+                    needsReplication = True
             useVertexColors = True
+
+        # There are two cases that trigger conversion of all attributes to per-corner:
+        #       per-corner normals and per-triangle colors.
+        if needsReplication:
+            replicateAttributesPerTriCorner(attrRaw)
 
         # Turn the current mesh into a ghost if preserveExisting
         if (preserveExisting and (self.currMesh is not None)):
@@ -487,7 +511,21 @@ class ViewerBase:
 
     # Implemented here to give subclasses a chance to customize
     def getVisualizationGeometry(self):
+        if (hasArg(self.mesh.visualizationGeometry, 'normalCreaseAngle')):
+            return self.mesh.visualizationGeometry(normalCreaseAngle=self.normalCreaseAngle)
         return self.mesh.visualizationGeometry()
+
+    def setNormalCreaseAngle(self, normalCreaseAngle, doUpdate = True):
+        self.normalCreaseAngle = normalCreaseAngle
+        if doUpdate: self.update()
+
+    def setShadingType(self, shadingType, doUpdate = True):
+        creaseAngle = None
+        if shadingType == ShadingType.FLAT:            creaseAngle = 0.0
+        elif shadingType == ShadingType.SMOOTH:        creaseAngle = np.pi
+        elif shadingType == ShadingType.SMOOTH_CREASE: creaseAngle = np.pi / 4
+        else: raise Exception('Unexpected shading type')
+        self.setNormalCreaseAngle(creaseAngle, doUpdate)
 
     def highlightTriangles(self, tris):
         """
@@ -636,8 +674,6 @@ class FlatteningAnimation:
         ipywidget_embedder.embed(path, self.layout)
 
 # Render a quad/hex mesh
-# TODO: we should really implement flat shading; this requires creating copies
-# for verties for each incident element.
 class QuadHexMeshWrapper:
     def __init__(self, V, F):
         V = np.array(V, dtype=np.float32)

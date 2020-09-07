@@ -86,10 +86,10 @@ struct ElasticSheetBinder {
           .def("edgeMidpoints",          &ES::edgeMidpoints)
           .def("restEdgeMidpoints",      &ES::restEdgeMidpoints)
           .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
-          .def("visualizationGeometry", [](const ES &obj) {
+          .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());
-                return getVisualizationGeometry(visMesh);
-             })
+                return getVisualizationGeometry(visMesh, normalCreaseAngle);
+             }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const ES &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const ES &es, const MX3d            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
 

@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg import norm
 import sparse_matrices
+from reflection import hasArg
 
 def preamble(obj, xeval, perturb, fixedVars = []):
     if (xeval   is None): xeval = obj.getVars()
@@ -9,11 +10,6 @@ def preamble(obj, xeval, perturb, fixedVars = []):
     perturb = np.copy(perturb)
     perturb[fixedVars] = 0.0
     return (xold, xeval, perturb)
-
-# Pybind11 methods/funcs apparently don't support `inspect.signature`,
-# but at least their arg names are guaranteed to appear in the docstring... :(
-def hasArg(func, argName):
-    return argName in func.__doc__
 
 def evalWithCustomArgs(f, customArgs):
     if (customArgs is not None):

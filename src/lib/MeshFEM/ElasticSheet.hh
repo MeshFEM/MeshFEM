@@ -14,16 +14,16 @@
 //
 //  However, our bending energy implementation is only really justified for
 //  sheets made of a St. Venant-Kirchhoff material, where membrane and bending
-//  strains neatly decouple as a fortunate consequence of the linear
+//  strains neatly decouple as a nice consequence of the linear
 //  constitutive law. For other material models, the bending energy term should
 //  technically plug the shape operator into a quadratic form defined by the
 //  tangent elasticity tensor evaluated at the current membrane strain (for
 //  St.VK, this is just the energy density quadratic form itself).
 //  Unfortunately, that means the elastic energy gradient and Hessian would
 //  involve third and fourth derivatives of psi.
-//  Note that the derivation of the  shell energy expression assumes small
-//  strain to drop certain terms, so our simplified implementation should not
-//  be a significant additional source of error.
+//  Note that the derivation of the shell energy expression already assumes
+//  small strain to drop certain terms, so our simplified implementation should
+//  not be a significant additional source of error.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  07/16/2020 18:16:58

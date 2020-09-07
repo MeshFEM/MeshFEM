@@ -51,6 +51,13 @@ struct RigidMotionPins<Object, std::integral_constant<bool, Object::N == 3>> {
         auto y_hat = (P.row(q_idx).transpose() - x_hat.dot(P.row(q_idx)) * x_hat).normalized().eval();
         auto z_hat = x_hat.cross(y_hat).normalized().eval();
 
+        // Detect cases where points p and q lie the XY plane but the rotation ends up
+        // flipping this plane over; we undo this by flipping the y (and z) axis vectors.
+        if (std::abs(z_hat[2] - (-1)) < 1e-9) {
+            y_hat *= -1;
+            z_hat *= -1;
+        }
+
         M3d R; // inverse of the [xhat, yhat, zhat] frame matrix, rotating these vectors to the global coordinate axes.
         R << x_hat.transpose(),
              y_hat.transpose(),

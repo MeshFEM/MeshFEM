@@ -88,9 +88,59 @@ getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) {
 }
 
 template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 3,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getPerCornerNormals(const HandleRange<_Mesh, _HType> &erange, double normalCreaseAngle) {
+    const size_t numCorners = 3 * erange.size();
+    Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N(numCorners, 3);
+    using V3d = Vec3_T<typename _Mesh::Real>;
+    for (auto e : erange) {
+        // Loop over vertices by looping over their incident halfEdges (if we
+        // looped over vertices, we'd need to search for the incident halfedge
+        // *within* `e`.)
+        // Note: the local index of tip vertex `he` is
+        // `(he.localIndex() + 2) % 3` since half-edges are indexed the same as
+        // their opposite corner vertices.
+        for (const auto &he : e.halfEdges()) {
+            const auto &v = he.next().tip();
+
+            V3d n = e->volume() * e->normal();
+            // Traverse ccw until hitting a crease/boundary/complete circle
+            auto he_circ = he.rawHandle();
+            auto he_prev = he_circ;
+            while ((he_circ = he_circ.ccw()) != he) {
+                if (!he_circ.tri()) break;
+                if (angle(he_prev.tri()->normal(), he_circ.tri()->normal()) > normalCreaseAngle) break;
+                n += he_circ.tri()->volume() * he_circ.tri()->normal();
+                he_prev = he_circ;
+            }
+            if (he_circ != he) {
+                // If we didn't traverse the entire one-ring, circulate
+                // clockwise until the blocking crease/boundary
+                he_circ = he.rawHandle(); he_prev = he_circ;
+                while (true) {
+                    he_circ = he_circ.cw();
+                    if (!he_circ.tri()) break;
+                    if (angle(he_prev.tri()->normal(), he_circ.tri()->normal()) > normalCreaseAngle) break;
+                    n += he_circ.tri()->volume() * he_circ.tri()->normal();
+                    he_prev = he_circ;
+                }
+            }
+            N.row(3 * e.index() + (he.localIndex() + 2) % 3) = n.normalized();
+        }
+    }
+    return N;
+}
+
+// Normals for meshes embedded in 2D: always return +z unit vector
+template<class _Mesh, template<class> class _HType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 2,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getAreaWeightedNormals(const HandleRange<_Mesh, _HType> &vrange) { return getNormals(vrange); }
+template<class _Mesh, template<class> class _HType>
+typename std::enable_if<_Mesh::EmbeddingDimension == 2,
+                        Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getPerCornerNormals(const HandleRange<_Mesh, _HType> &vrange, double /* normalCreaseAngle */) { return getNormals(vrange); }
 
 // Normals for tri meshes
 template<class _Mesh>
@@ -99,6 +149,9 @@ getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.vertice
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getNormals(const _Mesh &m) { return getNormals(m.elements()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 2, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getPerCornerNormals(const _Mesh &m, double normalCreaseAngle) { return getPerCornerNormals(m.elements(), normalCreaseAngle); }
 
 // Surface normals for tet meshes
 template<class _Mesh>
@@ -107,6 +160,9 @@ getAreaWeightedNormals(const _Mesh &m) { return getAreaWeightedNormals(m.boundar
 template<class _Mesh>
 typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getNormals(const _Mesh &m) { return getNormals(m.boundaryElements()); }
+template<class _Mesh>
+typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
+getPerCornerNormals(const _Mesh &m, double normalCreaseAngle) { return getPerCornerNormals(m.boundaryElements(), normalCreaseAngle); }
 
 template<class Mesh>
 using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
@@ -173,10 +229,24 @@ Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, 3> getVisualizationVertices(c
 }
 
 template<class Mesh>
-VisualizationGeometry getVisualizationGeometry(const Mesh &m) {
+Eigen::MatrixX3d getVisualizationNormals(const Mesh &m, double normalCreaseAngle) {
+    if (normalCreaseAngle > M_PI - 1e-6) {
+        // Always smoothed
+        return getAreaWeightedNormals(m);
+    }
+    if (normalCreaseAngle < 1e-6) {
+        // Always per-triangle
+        return getNormals(m);
+    }
+    // Adaptive
+    return getPerCornerNormals(m, normalCreaseAngle);
+}
+
+template<class Mesh>
+VisualizationGeometry getVisualizationGeometry(const Mesh &m, double normalCreaseAngle = M_PI) {
     return VisualizationGeometry{getVisualizationVertices (m).template cast<float>(),
                                  getVisualizationTriangles(m).template cast<uint32_t>(),
-                                 getAreaWeightedNormals   (m).template cast<float>()};
+                                 getVisualizationNormals(m, normalCreaseAngle).template cast<float>()};
 }
 
 #endif /* end of include guard: MESHENTITIES_HH */

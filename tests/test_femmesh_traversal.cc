@@ -3,8 +3,16 @@
 // after MeshFEM.
 #include <catch2/catch.hpp>
 
+// Tet mesh tests
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
+    // Verify that boundary half-edges are opposite their corresponding vertex
+    for (const auto &be : m.boundaryElements()) {
+        for (const auto &he : be.halfEdges()) {
+            REQUIRE(he.next().tip().index() == be.vertex(he.localIndex()).index());
+        }
+    }
+
     for (const auto &he : m.halfEdges()) {
         const auto &mate = he.mate();
         REQUIRE(mate.mate().index() == he.index());
@@ -41,11 +49,19 @@ void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
     }
 }
 
+// Tri mesh tests
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &m) {
     // Ensure each half-edge can find itself within its triangle.
     for (const auto &he : m.halfEdges())
         REQUIRE(he.tri().halfEdge(he.localIndex()).index() == he.index());
+
+    // Verify that half-edges are opposite their corresponding vertex
+    for (const auto &e : m.elements()) {
+        for (const auto &he : e.halfEdges()) {
+            REQUIRE(he.next().tip().index() == e.vertex(he.localIndex()).index());
+        }
+    }
 
     // Visit each boundary loop: clockwise traversal
     const size_t nbe = m.numBoundaryElements();

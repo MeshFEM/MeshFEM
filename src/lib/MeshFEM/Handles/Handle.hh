@@ -172,6 +172,7 @@ public:
         : SEHType(h), m_localIndex(localIndex) { }
 
     size_t localIndex() const { return m_localIndex; }
+    SEHType rawHandle() const { return SEHType(this->m_idx, this->m_mesh); }
 private:
     size_t m_localIndex;
 };
