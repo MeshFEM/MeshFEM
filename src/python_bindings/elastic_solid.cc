@@ -63,10 +63,10 @@ struct ElasticSolidBinder {
           .def("getRestPositions",          &ES::restPositions)
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
           .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference)
-          .def("visualizationGeometry", [](const ES &obj) {
+          .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
-                return getVisualizationGeometry(visMesh);
-             })
+                return getVisualizationGeometry(visMesh, normalCreaseAngle);
+             }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const ES &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const ES &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("toDegree", [](const ES &es, const size_t degree) {
