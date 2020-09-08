@@ -219,6 +219,8 @@ struct VectorizedShapeFunctionJacobian {
     static constexpr int N = GradType::RowsAtCompileTime;
 
     // Emulate part of Eigen's interface.
+    // This also allows VectorizedShapeFunctionJacobian to
+    // masquerade as a DxN matrix in metaprogramming type checks (e.g., isMatrixOfSize).
     static constexpr int RowsAtCompileTime = D;
     static constexpr int ColsAtCompileTime = N;
     using Scalar     = typename GradType::Scalar;
@@ -295,11 +297,6 @@ struct VectorizedShapeFunctionJacobian {
         return B + A;
     }
 };
-
-// Let VectorizedShapeFunctionJacobian masquerade as a DxN matrix in metaprogramming type checks
-template<int D, class GradType, int RowSize, int ColSize>
-struct isMatrixOfSize<VectorizedShapeFunctionJacobian<D, GradType>, RowSize, ColSize,
-                      typename std::enable_if<(D == RowSize) && (GradType::RowsAtCompileTime == ColSize), void>::type> : std::true_type { };
 
 // A : (B.c otimes B.g)
 template<class Derived, int D, class GradType>

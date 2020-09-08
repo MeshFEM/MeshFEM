@@ -92,7 +92,7 @@ struct MeshBindingsBase {
                 return result;
           }, "Get the length of each mesh edge in arbitrary order")
           .def("barycenters", [](const Mesh &m) {
-                Eigen::MatrixXd result(m.numElements(), size_t(EmbeddingDimension));
+                Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, EmbeddingDimension> result(m.numElements(), size_t(EmbeddingDimension));
                 for (const auto &e : m.elements()) {
                     auto b = result.row(e.index());
                     b.setZero();

@@ -63,7 +63,6 @@ public:
         m_energyDensities = es.m_energyDensities;
         auto oldDeformation = es.deformedPositions();
 
-        const auto &oldMesh = es.mesh();
         const auto &m = mesh();
         // Transfer/interpolate deformation field to our new mesh.
         m_x.resize(mesh().numNodes(), size_t(N));
@@ -269,7 +268,7 @@ public:
         }
 
         SuiteSparseMatrix result(std::move(triplet_result));
-        result.fill(0.);
+        result.fill(val);
         return result;
     }
 

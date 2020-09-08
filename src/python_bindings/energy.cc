@@ -36,7 +36,7 @@ bindEnergyFBased(py::module &detail_module)
 }
 
 template<class Energy>
-py::class_<Energy>
+py::class_<AutoHessianProjection<Energy>>
 bindEnergyFBasedAutoProjected(py::module &detail_module)
 {
     using HPE = AutoHessianProjection<Energy>;
@@ -113,7 +113,6 @@ template<size_t _Dimension>
 void bindIsoCRLEWithHP(py::module &detail_module)
 {
     using CRLE = IsoCRLEWithHessianProjection<double, _Dimension>;
-    using Mat  = typename CRLE::Matrix;
     auto ebind = bindEnergyFBased<CRLE>(detail_module);
     ebind.def(py::init<double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"))
          .def("R",     &CRLE::R)

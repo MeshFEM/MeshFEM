@@ -164,7 +164,7 @@ struct SingleVertexOptProblem {
             const auto g = m_obj.elementGradient(ei);
             bool found = false;
             for (const auto &v : e.vertices()) {
-                if (v.index() == m_vi) {
+                if (size_t(v.index()) == m_vi) {
                     result += g.template segment<N>(N * v.localIndex());
                     found = true;
                 }
@@ -181,7 +181,7 @@ struct SingleVertexOptProblem {
             const auto H = m_obj.elementHessian(ei, /* disable Hessian projection (Dense newton solver can deal with indefiniteness better) */ true);
             bool found = false;
             for (const auto &v : e.vertices()) {
-                if (v.index() == m_vi) {
+                if (size_t(v.index()) == m_vi) {
                     const size_t vo = N * v.localIndex();
                     for (size_t c_a = 0; c_a < N; ++c_a) {
                         for (size_t c_b = 0; c_b < N; ++c_b)
@@ -230,7 +230,7 @@ rotationZeroingPins(const std::array<size_t, 3> &pinVertices, const Eigen::Matri
 
 template<class Derived, class V2d>
 std::enable_if_t<Derived::ColsAtCompileTime == 2, Eigen::Matrix<typename Derived::Scalar, 2, 2>>
-rotationZeroingPins(const std::array<size_t, 2> &/* pinVertices */, const Eigen::MatrixBase<Derived> &P, const V2d &c_pos, const V2d &x_hat) {
+rotationZeroingPins(const std::array<size_t, 2> &/* pinVertices */, const Eigen::MatrixBase<Derived> &/* P */, const V2d &/* c_pos */, const V2d &x_hat) {
     using M2d = Eigen::Matrix<typename Derived::Scalar, 2, 2>;
     V2d y_hat(-x_hat[1], x_hat[0]);
     M2d R; // inverse of the [xhat, yhat, zhat] frame matrix, rotating these vectors to the global coordinate axes.
@@ -248,7 +248,6 @@ void filterRMPinArtifacts(Object &obj, const typename RigidMotionPins<Object>::P
         SingleVertexOptProblem<Object>(obj, pinVertices[i]).solve();
 
     using VNd = Eigen::Matrix<typename Object::Real, N, 1>;
-    using MNd = Eigen::Matrix<typename Object::Real, N, N>;
     auto P = obj.deformedPositions();
 
     VNd c_pos = P.row(pinVertices[0]);

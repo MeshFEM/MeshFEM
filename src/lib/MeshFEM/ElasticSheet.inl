@@ -51,7 +51,7 @@ struct NormalInferenceProblem : public NewtonProblem {
         return result;
     }
 
-    virtual VXd gradient(bool freshIterate = false) const override {
+    virtual VXd gradient(bool /* freshIterate */ = false) const override {
         VXd g(VXd::Zero(numVars()));
         for (const auto &e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
@@ -81,7 +81,6 @@ protected:
         result.setZero();
         for (const auto &e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
-            const auto &II = m_deformedII[ei];
             const auto &de = m_sheet.deformedElement(ei);
             const Real A = de.volume();
             const Real dE_dpsi = A;
@@ -91,8 +90,6 @@ protected:
                 const Real len = m_sheet.deformedEdgeVector(he).norm();
 
                 const auto &glambda = de.gradBarycentric().col(he.localIndex());
-                const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (II * glambda).dot(glambda); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
-
                 for (const auto &he_b : e.halfEdges()) {
                     const size_t edgeIdx_b = m_sheet.edgeForHalfEdge(he_b.index());
                     if (edgeIdx > edgeIdx_b) continue;
@@ -151,7 +148,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
     // Initialize the reference frames.
     // We pick the averaged edge normals as the initial d1 frame vector and midedge normal.
     m_referenceFrame.resize(m_numEdges);
-    m.visitEdges([this, &m](CHEHandle he, size_t edgeIndex) {
+    m.visitEdges([this](CHEHandle he, size_t edgeIndex) {
         V3d t  = (deformedEdgeVector(he)).normalized().transpose();
         V3d d1 = m_deformedElements[he.tri().index()].normal();
         if (!he.isBoundary()) d1 += m_deformedElements[he.opposite().tri().index()].normal();
@@ -338,7 +335,7 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x
         const auto &srcFrame = m_sourceReferenceFrame[edgeIdx];
         const auto &curFrame =       m_referenceFrame[edgeIdx];
         const auto &t   = curFrame.col(0), &ts  = srcFrame.col(0),
-                   &d1  = curFrame.col(1), &ds1 = srcFrame.col(1),
+                   &d1  = curFrame.col(1),
                    &d2  = curFrame.col(2), &ds2 = srcFrame.col(2);
 
         const Real inv_chi_hat = 1.0 / (1.0 + ts.dot(t));
@@ -703,7 +700,7 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
 
     // Each crease angle interacts with the vertices and midedge normal angles in its attached triangles.
     const size_t co = creaseAngleOffset();
-    for (size_t ci = 0; ci < m_numCreases; ++ci) {
+    for (int ci = 0; ci < int(m_numCreases); ++ci) {
         const auto &he = m.halfEdge(m_halfEdgeForCreaseAngle[ci]);
         // Note: by construction, `he` must be an interior half edge
         assert(!he.isBoundary());

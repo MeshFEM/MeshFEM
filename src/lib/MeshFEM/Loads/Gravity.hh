@@ -32,7 +32,7 @@ struct Gravity : public Load<3, typename Object::Real> {
     }
 
     void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
-    Real get_rho(Real rho) { return m_rho; }
+    Real get_rho()         { return m_rho; }
 
     virtual Real energy() const override {
         return m_grad.dot(getObj().getVars());
@@ -51,7 +51,7 @@ struct Gravity : public Load<3, typename Object::Real> {
     // Gravity is linear ==> Hessian is zero.
     virtual void hessian(SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
         const size_t nv = getObj().numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;

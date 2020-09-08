@@ -423,7 +423,7 @@ public:
         return RMPins::run(*this);
     }
 
-    void filterRMPinArtifacts(const typename RMPins::PinVertices &pinVertices) {
+    void filterRMPinArtifacts(const typename RMPins::PinVertices &/* pinVertices */) {
         throw std::runtime_error("Unimplemented");
         // ::filterRMPinArtifacts(*this, pinVertices);
     }

@@ -176,7 +176,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         const int np = P.rows();
         Eigen::MatrixXd outSamples(np, fieldValues.cols());
 
-        if (fieldValues.rows() == m.numVertices()) {
+        if (size_t(fieldValues.rows()) == m.numVertices()) {
             for (int p = 0; p < np; ++p) {
                 auto ele = m_F.row(I[p]);
                 auto b   = B.row(p);
@@ -185,11 +185,11 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                     outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
             }
         }
-        else if (fieldValues.rows() == m.numElements()) {
+        else if (size_t(fieldValues.rows()) == m.numElements()) {
             for (int p = 0; p < np; ++p)
                 outSamples.row(p) = fieldValues.row(I[p]);
         }
-        else if (fieldValues.rows() == m.numNodes()) {
+        else if (size_t(fieldValues.rows()) == m.numNodes()) {
             using T = Eigen::Matrix<double, 1, Eigen::Dynamic>;
             constexpr size_t K = FEMMesh_::K;
             Interpolant<T, K, FEMMesh_::Deg> interp;

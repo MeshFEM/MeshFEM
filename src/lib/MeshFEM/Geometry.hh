@@ -658,8 +658,8 @@ Point pointCloudCentroid(const std::vector<Point> &points) {
 }
 
 // Unsigned angle between a and b (in [0, pi])
-inline Real angle(const Vector2D &a, const Vector2D &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
-inline Real angle(const Vector3D &a, const Vector3D &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
+template<class Derived1, class Derived2> EnableIfVectorOfSize<Derived1, 2, typename Derived1::Scalar> angle(const Eigen::MatrixBase<Derived1> &a, const Eigen::MatrixBase<Derived2> &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
+template<class Derived1, class Derived2> EnableIfVectorOfSize<Derived1, 3, typename Derived1::Scalar> angle(const Eigen::MatrixBase<Derived1> &a, const Eigen::MatrixBase<Derived2> &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
 
 // Signed angle from a to b. The 3D version requires a normal to define sign,
 // while the 2D uses the standard sign convention.

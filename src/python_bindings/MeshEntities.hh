@@ -102,8 +102,6 @@ getPerCornerNormals(const HandleRange<_Mesh, _HType> &erange, double normalCreas
         // `(he.localIndex() + 2) % 3` since half-edges are indexed the same as
         // their opposite corner vertices.
         for (const auto &he : e.halfEdges()) {
-            const auto &v = he.next().tip();
-
             V3d n = e->volume() * e->normal();
             // Traverse ccw until hitting a crease/boundary/complete circle
             auto he_circ = he.rawHandle();
@@ -228,8 +226,9 @@ Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, 3> getVisualizationVertices(c
     return result;
 }
 
-template<class Mesh>
-Eigen::MatrixX3d getVisualizationNormals(const Mesh &m, double normalCreaseAngle) {
+template<class _Mesh>
+Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>
+getVisualizationNormals(const _Mesh &m, double normalCreaseAngle) {
     if (normalCreaseAngle > M_PI - 1e-6) {
         // Always smoothed
         return getAreaWeightedNormals(m);
