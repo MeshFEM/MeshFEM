@@ -79,12 +79,13 @@ include(MeshFEMUtils)
 ################################################################################
 
 option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
-option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
-option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
-option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
-option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
+option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code"                                                OFF)
+option(MESHFEM_BUILD_BINARIES        "Build executable programs"                                                   ${MESHFEM_TOPLEVEL_PROJECT})
+option(MESHFEM_BUILD_PYTHON_BINDINGS "Build python bindings"                                                       ON)
+option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations"                            OFF)
+option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"                                                  OFF)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system" ON)
-option(MESHFEM_FORCE_Z7              "Force /Z7 option on MSVC" OFF)
+option(MESHFEM_FORCE_Z7              "Force /Z7 option on MSVC"                                                    OFF)
 
 if(MESHFEM_FORCE_Z7)
     # Hard-coded string replace for now, until CMake provides a better way to do this:
@@ -113,17 +114,19 @@ if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
 endif()
 
-# Download pybind dependency when pybind11 is missing
-if(NOT TARGET pybind11)
-    include(MeshFEMDownloadExternal)
-    meshfem_download_project(pybind11
-        GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG a2bb297b325827765853929ac6dc220ac5b15658
-    )
-    add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
-endif()
+if(MESHFEM_BUILD_PYTHON_BINDINGS)
+    # Download pybind dependency when pybind11 is missing
+    if(NOT TARGET pybind11)
+        include(MeshFEMDownloadExternal)
+        meshfem_download_project(pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG a2bb297b325827765853929ac6dc220ac5b15658
+        )
+        add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
+    endif()
 
-add_subdirectory(src/python_bindings)
+    add_subdirectory(src/python_bindings)
+endif()
 
 ################################################################################
 # Unit tests
