@@ -64,6 +64,17 @@ struct MESHFEM_EXPORT FieldSampler {
                                              Eigen::VectorXi &I,
                                              Eigen::MatrixXd &B) const = 0;
 
+    ////////////////////////////////////////////////////////////////////////////
+    /*! Get the closest node to each query point and the distance from the query
+    //  point to this node.
+    //  @param[in]  P (#P x dim)     stacked query point row vectors
+    //  @param[out] NI (#P)          index of closest node for each query point
+    //  @param[out] sqDist (#P)      squared distance to closest pt
+    *///////////////////////////////////////////////////////////////////////////
+    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P,
+                                      Eigen::VectorXi &NI,
+                                      Eigen::VectorXd &sqDist) const = 0;
+
     // Check whether the sampler mesh contains each query point.
     // Note: even if the point lies within the mesh, the distance libigl computes may be
     // slightly nonzero; we use the `eps` to get around this.
@@ -147,6 +158,13 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
 
         return outSamples;
     }
+
+    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P,
+                                      Eigen::VectorXi &NI,
+                                      Eigen::VectorXd &sqDist) const override {
+        throw std::runtime_error("Unsupported for raw meshes");
+    }
+
 protected:
     using Base::m_V;
     using Base::m_F;
@@ -208,12 +226,30 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         return outSamples;
     }
 
+    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P, Eigen::VectorXi &NI, Eigen::VectorXd &sqDist) const override {
+        Eigen::VectorXi I;
+        Eigen::MatrixXd B;
+        this->closestElementAndBaryCoords(P, I, B);
+        const size_t np = P.rows();
+        NI.resize(np);
+        sqDist.resize(np);
+        for (size_t i = 0; i < np; ++i) {
+            static constexpr size_t K = FEMMesh_::K;
+            EvalPt<K> b;
+            Eigen::Map<EigenEvalPt<K>>(b.data(), b.size()) = B.row(i);
+            int lni;
+            shapeFunctions<FEMMesh_::Deg, K>(b).maxCoeff(&lni);
+            const auto &n = m_mesh.element(I[i]).node(lni);
+            NI[i] = n.index();
+            sqDist[i] = (n->p - P.row(i).transpose()).squaredNorm();
+        }
+    }
+
 protected:
     const FEMMesh_ &m_mesh;
     using Base::m_V;
     using Base::m_F;
 };
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Templated Factory Function Definitions

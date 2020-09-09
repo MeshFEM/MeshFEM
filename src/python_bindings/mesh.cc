@@ -58,6 +58,12 @@ struct MeshBindingsBase {
                         result(bv.index()) = bv.volumeVertex().index();
                     return result;
                })
+          .def("boundaryNodes", [](const Mesh &m) {
+                    Eigen::VectorXi result(m.numBoundaryNodes());
+                    for (const auto &bn : m.boundaryNodes())
+                        result(bn.index()) = bn.volumeNode().index();
+                    return result;
+               })
           .def("elementsAdjacentBoundary", [](const Mesh &m) {
                   Eigen::VectorXi result(m.numBoundaryElements());
                   for (const auto &be : m.boundaryElements())

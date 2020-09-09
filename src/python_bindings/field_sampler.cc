@@ -46,6 +46,13 @@ PYBIND11_MODULE(field_sampler, m)
                 s.closestElementAndBaryCoords(P, std::get<0>(result), std::get<1>(result));
                 return result;
             }, py::arg("P"))
+        .def("closestNodeAndSqDist", [](const FieldSampler &s, Eigen::Ref<const Eigen::MatrixXd> P) {
+                using RType = std::tuple<Eigen::VectorXi,  // NI
+                                         Eigen::VectorXd>; // sqDist
+                RType result;
+                s.closestNodeAndSqDist(P, std::get<0>(result), std::get<1>(result));
+                return result;
+            }, py::arg("P"))
         .def("contains", [](const FieldSampler &s,
                           Eigen::Ref<const Eigen::MatrixXd> P, double eps) {
                 return s.contains(P, eps);
