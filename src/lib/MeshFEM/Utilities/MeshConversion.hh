@@ -18,7 +18,10 @@ VType<Mesh> getV(const Mesh &m) {
 }
 
 template<class Mesh>
-Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> getF(const Mesh &m) {
+using FType = Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1>;
+
+template<class Mesh>
+FType<Mesh> getF(const Mesh &m) {
     Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> F(m.numElements(), Mesh::K + 1);
     for (auto e : m.elements()) {
         for (auto v : e.vertices())

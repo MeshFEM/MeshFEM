@@ -159,9 +159,9 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
         return outSamples;
     }
 
-    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P,
-                                      Eigen::VectorXi &NI,
-                                      Eigen::VectorXd &sqDist) const override {
+    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> /* P */,
+                                      Eigen::VectorXi &/* NI */,
+                                      Eigen::VectorXd &/* sqDist */) const override {
         throw std::runtime_error("Unsupported for raw meshes");
     }
 

@@ -143,3 +143,26 @@ TriMesh(const Tris &tris, size_t nVertices) {
     m_boundaryVertexData.resize(bV.size());
     m_boundaryEdgeData  .resize(nBoundaryEdges);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+template<class VertexData, class HalfEdgeData, class TriData,
+         class BoundaryVertexData, class BoundaryEdgeData>
+std::vector<std::vector<size_t>>
+TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
+boundaryLoops() const {
+    std::vector<std::vector<size_t>> result;
+    std::vector<bool> visited(numBoundaryEdges(), false);
+    for (const auto &be : boundaryEdges()) {
+        if (visited[be.index()]) continue;
+        result.emplace_back();
+        std::vector<size_t> &loop = result.back();
+
+        auto curr_be = be;
+        while ((curr_be = curr_be.next()) && !visited[curr_be.index()]) {
+            visited[curr_be.index()] = true;
+            loop.push_back(curr_be.tip().volumeVertex().index());
+        }
+    }
+    return result;
+}

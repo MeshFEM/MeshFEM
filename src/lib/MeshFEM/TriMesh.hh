@@ -132,6 +132,10 @@ public:
             if (he.isPrimary()) { f(he, i); ++i; }
     }
 
+    // Get the list of (volume) vertex indices making up the boundary loops
+    // (traversed in order with mesh on the right).
+    std::vector<std::vector<size_t>> boundaryLoops() const;
+
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
     // Note that

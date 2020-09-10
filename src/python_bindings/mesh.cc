@@ -124,6 +124,14 @@ struct MeshBindingsBase {
           .def_property_readonly_static("embeddingDimension", [](py::object) { return EmbeddingDimension; })
 
           .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })
+
+          .def(py::pickle([](const Mesh &m) { return py::make_tuple(getV(m), getF(m)); },
+                          [](const py::tuple &t) {
+                              if (t.size() != 2)  throw std::runtime_error("Invalid pickled state!");
+                              auto V = t[0].cast<VType<Mesh>>();
+                              auto F = t[1].cast<FType<Mesh>>();
+                              return std::make_shared<Mesh>(F, V);
+                          }));
           ;
       return mb;
     }
