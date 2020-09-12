@@ -3,6 +3,7 @@
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -14,6 +15,7 @@ template<class VertexData, class HalfEdgeData, class TriData,
 template<typename Tris>
 TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
 TriMesh(const Tris &tris, size_t nVertices) {
+    // BENCHMARK_SCOPED_TIMER_SECTION timer("Halfedge Mesh Construction");
     using EAA = ElementArrayAdaptor<Tris>;
     const size_t nt = EAA::numElements(tris);
     // Corner Creation
@@ -51,7 +53,6 @@ TriMesh(const Tris &tris, size_t nVertices) {
         for (const auto &p : incidentTris)
             if (p.second > 2) throw std::runtime_error("Non-manifold edge detected");
     }
-
 
     for (size_t he = 0; he < nHalfEdges; ++he) {
         UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),

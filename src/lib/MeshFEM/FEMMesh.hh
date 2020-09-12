@@ -28,6 +28,7 @@
 
 #include <MeshFEM/Utilities/VertexArrayAdaptor.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/Parallelism.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -44,10 +45,14 @@ struct Embedder;
 template<> struct Embedder<2> {
     template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
     static void embed(FEMMesh<2, _Deg, EmbeddingSpace, _FEMData> &mesh) {
-        for (auto e : mesh.elements())
-            e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p);
-        for (auto be : mesh.boundaryElements())
-            be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p);
+        parallel_for_range(mesh.numElements(), [&mesh](size_t ei) {
+                auto e = mesh.element(ei);
+                e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p);
+            });
+        parallel_for_range(mesh.numBoundaryElements(), [&mesh](size_t bei) {
+                auto be = mesh.boundaryElement(bei);
+                be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p);
+            });
     }
 };
 template<> struct Embedder<3> {

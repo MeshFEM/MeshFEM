@@ -438,6 +438,10 @@ struct UnorderedPair {
         return vmax < b.vmax;
     }
 
+    friend std::ostream &operator<<(std::ostream &os, const UnorderedPair &p) {
+        os << p.vmin << ", " << p.vmax;
+        return os;
+    }
 private:
     int vmin, vmax;
 };
