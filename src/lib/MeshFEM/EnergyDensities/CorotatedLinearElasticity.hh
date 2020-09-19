@@ -105,7 +105,7 @@ struct CorotatedLinearElasticity : public Concepts::CRLinearElaticEnergy {
     }
 
     // Constructor copying material properties only, not the current deformation
-    CorotatedLinearElasticity(const CorotatedLinearElasticity &other, const UninitializedDeformationTag &)
+    CorotatedLinearElasticity(const CorotatedLinearElasticity &other, UninitializedDeformationTag &&)
         : m_elasticity_tensor(other.m_elasticity_tensor), m_isotropic(other.m_isotropic) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {

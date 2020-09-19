@@ -57,5 +57,4 @@ private:
     std::string m_name;
 };
 
-
 #endif /* end of include guard: GLOBALBENCHMARK_HH */

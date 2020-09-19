@@ -242,16 +242,16 @@ ConvergenceReport NewtonOptimizer::optimize() {
             break; // TODO: termination criterion when bounds are active at the optimum
         }
 
-        } // End of 'Preamble' timer
-
-        BENCHMARK_START_TIMER_SECTION("Compute descent direction");
-
         // Free variables in the working set from their bound constraints, if necessary
         workingSet.remove_if([&](size_t bc_idx) {
                 bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free);
                 if (shouldRemove) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
                 return shouldRemove;
             });
+
+        } // End of 'Preamble' timer
+
+        { BENCHMARK_SCOPED_TIMER_SECTION t2("Compute descent direction");
 
         Real old_beta = beta;
         Real tau;
@@ -260,7 +260,6 @@ ConvergenceReport NewtonOptimizer::optimize() {
         }
         catch (std::exception &e) {
             // Tau ran away
-            BENCHMARK_STOP_TIMER_SECTION("Compute descent direction");
             break;
         }
         isIndefinite = (tau != 0.0);
@@ -298,11 +297,11 @@ ConvergenceReport NewtonOptimizer::optimize() {
             }
         }
 
+        } // End of 'Compute descent direction' timer
+
         Real directionalDerivative = g_free.dot(step);
         // if (options.verbose)
         //     std::cout << "Found step with directional derivative: " << directionalDerivative << std::endl;
-
-        BENCHMARK_STOP_TIMER_SECTION("Compute descent direction");
 
         BENCHMARK_START_TIMER_SECTION("Backtracking");
         // Simple backtracking line search to ensure a sufficient decrease
@@ -325,10 +324,19 @@ ConvergenceReport NewtonOptimizer::optimize() {
             steppedVars = vars + alpha * step;
             prob->applyBoundConstraintsInPlace(steppedVars);
             prob->setVars(steppedVars);
-            Real steppedEnergy = prob->energy();
-
-            if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
+            const Real steppedEnergy = prob->energy();
+            const Real sufficientDecrease = -c_1 * alpha * directionalDerivative;
+            const Real decrease = currEnergy - steppedEnergy;
+            // Terminate line search successfully if a sufficient decrease is achieved
+            // (or if we cannot expect to evaluate the energy decrease accurately
+            // enough to measure a sufficient decrease--and the energy does not
+            // increase significantly)
+            if  ((decrease >= sufficientDecrease)
+                    || (std::abs(sufficientDecrease) < 1e-10 * std::abs(currEnergy)
+                            && (decrease > -1e-16 * std::abs(currEnergy)))) {
                 break;
+            }
+
             if (alpha > feasible_alpha) {
                 // It's possible that our slight overshooting and clamping to the bounds did not achieve a sufficient
                 // decrease whereas a step to the first violated bound would; make sure we try this exact step too

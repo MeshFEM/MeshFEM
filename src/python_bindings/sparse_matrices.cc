@@ -107,5 +107,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
                 factors.solve(b, x);
                 return x;
             })
+        .def("dump",       &SuiteSparseMatrix::dump)
+        .def("dumpBinary", &SuiteSparseMatrix::dumpBinary)
+        .def("readBinary", &SuiteSparseMatrix::readBinary)
         ;
 }

@@ -17,8 +17,9 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
     using VType = typename Problem::VarType;
     using Real_  = typename Problem::Real;
 
+    if (verbose) std::cout.precision(19);
+
     auto printReport = [](size_t it, Real e, const VType &g, bool indefinite) {
-        std::cout.precision(19);
         std::cout << it
                   << '\t' << e
                   << '\t' << g.norm()
@@ -28,19 +29,21 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
 
     bool isIndefinite = false;
     size_t it;
-    for (it = 1; it <= maxIter; ++it) {
+    for (it = 0; it <= maxIter; ++it) {
         auto vars = prob.getVars();
         auto g = prob.gradient();
 
         // Robust eigendecomposition-based Hessian modification + solver.
         auto H_es = Eigen::SelfAdjointEigenSolver<HType>(prob.hessian());
         auto Hinv_lambda = H_es.eigenvalues();
+        // std::cout << "Hessian: " << prob.hessian() << std::endl;
+        // std::cout << "Hessian eigenvalues: " << H_es.eigenvalues().transpose() << std::endl;
         for (int i = 0; i < Hinv_lambda.rows(); ++i) {
             if (Hinv_lambda[i] < 0) {
                 isIndefinite = true;
                 Hinv_lambda[i] *= -1;
             }
-            if (Hinv_lambda[i] > 1e-10) // Avoid divide by zero in nearly singular case
+            if (Hinv_lambda[i] > 1e-10) // Avoid division by zero in nearly singular case
                 Hinv_lambda[i] = 1.0 / Hinv_lambda[i];
         }
 
@@ -53,7 +56,7 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
         Real_ directionalDerivative = g.dot(step);
 
         Real_ alpha = 1.0;
-        const Real_ c_1 = 1e-2;
+        const Real_ c_1 = 1e-4;
         const size_t nbacktrack_iter = 15;
         size_t bit;
         Eigen::VectorXd steppedVars;
@@ -62,8 +65,17 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
             prob.setVars(steppedVars);
             Real_ steppedEnergy = prob.energy();
 
-            if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
+            const Real_ sufficientDecrease = -c_1 * alpha * directionalDerivative;
+            const Real_ decrease = currEnergy - steppedEnergy;
+            // Terminate line search successfully if a sufficient decrease is achieved
+            // (or if we cannot expect to evaluate the energy decrease accurately
+            // enough to measure a sufficient decrease--and the energy does not
+            // increase significantly)
+            if  ((decrease >= sufficientDecrease)
+                    || (std::abs(sufficientDecrease) < 1e-10 * std::abs(currEnergy)
+                            && (decrease > -1e-16 * std::abs(currEnergy)))) {
                 break;
+            }
             alpha *= 0.5;
         }
 
@@ -74,7 +86,7 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
         }
     }
 
-    if (verbose) printReport(it, prob.energy(), prob.gradient(), isIndefinite);
+    if (verbose) printReport(it + 1, prob.energy(), prob.gradient(), isIndefinite);
 }
 
 #endif /* end of include guard: DENSE_NEWTON_HH */

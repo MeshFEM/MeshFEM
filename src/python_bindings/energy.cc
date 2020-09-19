@@ -237,6 +237,9 @@ PYBIND11_MODULE(energy, m)
     bindWrinkleStrainProblem<  IsotropicWrinkleStrainProblem<StVenantKirchhoffEnergyCBased<double, 2>>>(m,   "IsotropicWrinkleStrainProblem");
     bindWrinkleStrainProblem<AnisotropicWrinkleStrainProblem<StVenantKirchhoffEnergyCBased<double, 2>>>(m, "AnisotropicWrinkleStrainProblem");
 
+    bindWrinkleStrainProblem<  IsotropicWrinkleStrainProblem<INeo_C>>(m,   "IsotropicWrinkleStrainProblemINeo");
+    bindWrinkleStrainProblem<AnisotropicWrinkleStrainProblem<INeo_C>>(m, "AnisotropicWrinkleStrainProblemINeo");
+
     m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookeanMembrane", [](double lambda, double mu, double finiteContinuationStart) { return std::make_unique<NeoHookeanMembrane>(lambda, mu, finiteContinuationStart); }, py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);

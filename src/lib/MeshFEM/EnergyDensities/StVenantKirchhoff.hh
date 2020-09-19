@@ -45,7 +45,7 @@ struct StVenantKirchhoffEnergyCBased : public Concepts::StVKEnergy {
 
     // Constructor copying material properties only, not the current deformation
     StVenantKirchhoffEnergyCBased(const StVenantKirchhoffEnergyCBased &other,
-                                  const UninitializedDeformationTag &)
+                                  UninitializedDeformationTag &&)
         : m_elasticity_tensor(other.m_elasticity_tensor) { }
 
     void setC(const Matrix &C) {

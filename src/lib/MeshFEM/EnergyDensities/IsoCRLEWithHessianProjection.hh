@@ -36,7 +36,7 @@ struct IsoCRLEWithHessianProjection {
     }
 
     // Constructor copying material properties and settings only, not the current deformation
-    IsoCRLEWithHessianProjection(const IsoCRLEWithHessianProjection &other, const UninitializedDeformationTag &)
+    IsoCRLEWithHessianProjection(const IsoCRLEWithHessianProjection &other, UninitializedDeformationTag &&)
         : projectionEnabled(other.projectionEnabled), m_lambda(other.m_lambda), m_mu(other.m_mu)
     { }
 

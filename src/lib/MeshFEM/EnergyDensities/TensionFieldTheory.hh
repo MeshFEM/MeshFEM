@@ -51,7 +51,7 @@ struct IsotropicWrinkleStrainProblem {
     VarType gradient() const { return  VarType(0.5 * doubleContract(m_nn, m_psi.PK2Stress())          ); }
     HessType hessian() const { return HessType(0.5 * doubleContract(m_psi.delta_PK2Stress(m_nn), m_nn)); }
 
-    void solve() { dense_newton(*this); }
+    void solve() { dense_newton(*this, /* maxIter = */ 100, /*gradTol = */1e-14, /* verbose = */ false); }
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 private:
@@ -98,12 +98,13 @@ struct AnisotropicWrinkleStrainProblem {
         dnn.col(0).setZero();
         dnn.col(1) = m_ntilde;
         h.row(1) += m_ntilde.transpose() * m_psi.delta_PK2Stress(symmetrized_x2(dnn));
-        assert((std::abs(h(0, 1) - h(1, 0)) < 1e-10 * std::abs(h(1, 0)) ||
-                std::abs(h(0, 1) - h(1, 0)) < 1e-10) && "Asymmetric Hessian");
+        if (h.array().isNaN().any()) throw std::runtime_error("NaN Hessian");
+        if (std::abs(h(0, 1) - h(1, 0)) > 1e-10 * std::abs(h(1, 0)) + 1e-10)
+            throw std::runtime_error("Asymmetric Hessian");
         return h;
     }
 
-    void solve() { dense_newton(*this); }
+    void solve() { dense_newton(*this, /* maxIter = */ 100, /*gradTol = */1e-14, /* verbose = */ false); }
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 private:
@@ -141,6 +142,17 @@ struct RelaxedEnergyDensity {
     // reference to this->m_psi
     RelaxedEnergyDensity(const RelaxedEnergyDensity &b)
         : m_psi(b.m_psi),
+          m_anisoProb(m_psi, Matrix::Identity(), V2d::Zero()) {
+        setC(b.m_C);
+    }
+
+    // Note: UninitializedDeformationTag argument must be a rvalue reference so it exactly
+    // matches the type passed by the constructor call
+    // RelaxedEnergyDensity(b, UninitializedDeformationTag()); otherwise the
+    // perfect forwarding constructor above will be preferred for this call,
+    // incorrectly forwarding b to Psi's constructor.
+    RelaxedEnergyDensity(const RelaxedEnergyDensity &b, UninitializedDeformationTag &&)
+        : m_psi(b.m_psi, UninitializedDeformationTag()),
           m_anisoProb(m_psi, Matrix::Identity(), V2d::Zero()) {
         setC(b.m_C);
     }
@@ -183,6 +195,7 @@ struct RelaxedEnergyDensity {
         V2d n = S_eigs.eigenvectors().col(0);
         using IWSP = IsotropicWrinkleStrainProblem<Psi_C>;
         IWSP isoProb(m_psi, C, n);
+        // std::cout << "Solving isotropic wrinkle strain problem" << std::endl;
         isoProb.setVars(typename IWSP::VarType{0.0});
         isoProb.solve();
         Real a = isoProb.getVars()[0];
@@ -193,6 +206,7 @@ struct RelaxedEnergyDensity {
         //      n_tilde n_tilde^T
         // with a 2D vector n_tilde as the unknown.
         m_anisoProb.setC(C);
+        // std::cout << "Solving anisotropic wrinkle strain problem" << std::endl;
         m_anisoProb.setVars(std::sqrt(a) * n);
         m_anisoProb.solve();
         auto ntilde = m_anisoProb.getVars();

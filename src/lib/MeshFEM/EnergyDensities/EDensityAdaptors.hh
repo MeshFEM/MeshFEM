@@ -58,8 +58,8 @@ struct EnergyDensityFBasedFromCBased : public Psi_C {
     EnergyDensityFBasedFromCBased(const Base &b) : Base(b) { }
 
     EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &) = default;
-    EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &other, const UninitializedDeformationTag &tag)
-        : Base(other, tag), m_F(other.m_F) { }
+    EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &other, UninitializedDeformationTag &&)
+        : Base(other, UninitializedDeformationTag()), m_F(other.m_F) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel /* elevel */ = EvalLevel::Full) {
         m_F = F;
@@ -123,8 +123,8 @@ struct EnergyDensityCBasedFromFBased : public Psi_F {
     EnergyDensityCBasedFromFBased(const Base &b) : Base(b) { }
 
     EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &) = default;
-    EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &other, const UninitializedDeformationTag &tag)
-        : Base(other, tag), m_Finv(other.m_Finv) { }
+    EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &other, UninitializedDeformationTag &&)
+        : Base(other, UninitializedDeformationTag()), m_Finv(other.m_Finv) { }
 
     // d psi / d E,     E := 0.5 (C - I)
     Matrix PK2Stress() const { return m_Finv * Base::denergy(); }
@@ -178,8 +178,8 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     EnergyDensityFBasedMembraneFromFBased(const Base &b) : Base(b) { }
 
     EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &) = default;
-    EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, const UninitializedDeformationTag &tag)
-        : Base(other, tag), m_B(other.m_B) { }
+    EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, UninitializedDeformationTag &&)
+        : Base(other, UninitializedDeformationTag()), m_B(other.m_B) { }
 
     static std::string name() { return Base::name() + std::string("Membrane"); }
 
@@ -283,8 +283,8 @@ struct AutoHessianProjection : Psi_F {
     using ESolver  = Eigen::SelfAdjointEigenSolver<Hessian>;
 
     using Base::Base;
-    AutoHessianProjection(const AutoHessianProjection &b, const UninitializedDeformationTag &tag)
-        : Base(b, tag), projectionEnabled(b.projectionEnabled) { }
+    AutoHessianProjection(const AutoHessianProjection &b, UninitializedDeformationTag &&)
+        : Base(b, UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
 
     using Base::energy;
     using Base::denergy;

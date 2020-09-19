@@ -695,7 +695,7 @@ struct CSCMatrix {
 
     // Rudimentary support for tagging symmetric/nonsymmetric matrices (used by CSCMatrix::apply). This
     // effects, e.g., the interpretation of matrix multiplication.
-    enum class SymmetryMode { NONE, UPPER_TRIANGLE };
+    enum class SymmetryMode : uint32_t { NONE = 0, UPPER_TRIANGLE = 1, LOWER_TRIANGLE = 2 };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
@@ -706,6 +706,8 @@ struct CSCMatrix {
 
     CSCMatrix(const CSCMatrix  &b) : Ap(b.Ap), Ai(b.Ai), Ax(b.Ax), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
     CSCMatrix(      CSCMatrix &&b) : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
+
+    CSCMatrix(const std::string &path) { readBinary(path); }
 
     template<typename T> CSCMatrix(TripletMatrix<T>  &mat) { setFromTMatrix(mat); }
     template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
@@ -1051,6 +1053,52 @@ struct CSCMatrix {
             cscout << Ai[i] << "\t" << Ax[i] << "\n";
         for (size_t i = 0; i < Ap.size(); ++i)
             cscout << Ap[i] << "\n";
+    }
+
+    // More efficient binary output format:
+    //      number of rows     (_Index)
+    //      number of column   (_Index)
+    //      number of nonzeros (_Index)
+    //      symmetry mode      (uint32_t)
+    //      Ap                 (#cols + 1 items of type _Index)
+    //      Ai                 (nz        items of type _Index)
+    //      Ax                 (nz        items of type _Real)
+    // Note, output files are not portable across architectures (e.g., byte order)
+    void dumpBinary(const std::string &path) const {
+        std::ofstream os(path);
+        if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+
+        if ((Ap.size() != size_t(n + 1)) || (Ai.size() != size_t(nz)) || (Ax.size() != size_t(nz)))
+                throw std::runtime_error("Inconsistent matrix size metadata");
+
+        os.write((char *) & m, sizeof(_Index));
+        os.write((char *) & n, sizeof(_Index));
+        os.write((char *) &nz, sizeof(_Index));
+        os.write((char *) &symmetry_mode, sizeof(uint32_t));
+        os.write((char *) Ap.data(), Ap.size() * sizeof(_Index));
+        os.write((char *) Ai.data(), Ai.size() * sizeof(_Index));
+        os.write((char *) Ax.data(), Ax.size() * sizeof( _Real));
+    }
+
+    void readBinary(const std::string &path) {
+        std::ifstream is(path);
+        if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+
+        is.read((char *) & m, sizeof(_Index));
+        is.read((char *) & n, sizeof(_Index));
+        is.read((char *) &nz, sizeof(_Index));
+        is.read((char *) &symmetry_mode, sizeof(uint32_t));
+
+        if ((symmetry_mode != SymmetryMode::NONE) || (symmetry_mode != SymmetryMode::UPPER_TRIANGLE))
+            throw std::runtime_error("Invalid symmetry_mode");
+
+        Ap.resize(n + 1);
+        Ai.resize(nz);
+        Ax.resize(nz);
+
+        is.read((char *) Ap.data(), Ap.size() * sizeof(_Index));
+        is.read((char *) Ai.data(), Ai.size() * sizeof(_Index));
+        is.read((char *) Ax.data(), Ax.size() * sizeof( _Real));
     }
 
     ////////////////////////////////////////////////////////////////////////////

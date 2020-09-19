@@ -30,7 +30,7 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
 
     // Constructor copying material properties only, not the current deformation
-    NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other, const UninitializedDeformationTag &)
+    NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other, UninitializedDeformationTag &&)
         : m_lambda(other.m_lambda), m_mu(other.m_mu), m_finite_continuation_start(other.m_finite_continuation_start)
     { }
 
@@ -397,7 +397,11 @@ struct IncompressibleNeoHookeanEnergyCBased {
 
     static constexpr const char *name() { return "IncompressibleNeoHookean"; }
 
-    IncompressibleNeoHookeanEnergyCBased(Real E = 6) {
+    IncompressibleNeoHookeanEnergyCBased(const IncompressibleNeoHookeanEnergyCBased &other, UninitializedDeformationTag &&) {
+        setYoungModulus(other.youngModulus());
+    }
+
+    IncompressibleNeoHookeanEnergyCBased(Real E = 6 /* corresponds to "stiffness"  of 1 */) {
         setYoungModulus(E);
     }
 
