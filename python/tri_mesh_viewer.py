@@ -145,6 +145,35 @@ class ShadingType(Enum):
     SMOOTH = 1
     SMOOTH_CREASE = 2
 
+# I couldn't get an async/await solution to work (awaiting
+# an ipywidgdet event captured with an observe callback
+# based on https://github.com/jupyter-widgets/ipywidgets/blob/master/docs/source/examples/Widget%20Asynchronous.ipynb
+# just hangs), and
+# explicitly calling the kernel's event loop is unreliable messes up the cell
+# output/execution order. The following implementation based on jupyter_ui_poll
+# seems to work well.
+class ScreenshotWriter():
+    def __init__(self, widget):
+        import ipywebrtc
+        stream = ipywebrtc.WidgetStream(widget=widget)
+        self.rec = ipywebrtc.ImageRecorder(format='png', stream=stream)
+        self._i = 0
+
+    def capture(self, path):
+        from jupyter_ui_poll import ui_events
+        import time
+        self.rec.recording = False # shouldn't be necessary: attempt to unstick
+        self.rec.image.value = b''
+        self.rec.recording = True
+        with ui_events() as poll:
+            for i in range(20): # Wait for at most 2s for this screenshot before giving up.
+                if self.rec.image.value: break
+                poll(10)
+                time.sleep(0.1)
+        if self.rec.image.value:
+            self.rec.save(path)
+        self._i += 1
+
 # superView allows this viewer to add geometry to an existing viewer.
 class ViewerBase:
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False):
@@ -268,10 +297,11 @@ class ViewerBase:
         useVertexColors = False
         needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals
         if (self.scalarField is not None):
-            # First, handle the case of directly specifying per-vertex colors:
+            # First, handle the case of directly specifying per-vertex or per-tri colors:
             if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
-                if (np.array(self.scalarField.shape) != np.array([len(vertices), 3])).any():
-                    raise Exception('Incorrect number of per-vertex colors')
+                if (self.scalarField.shape[1] != 3) or self.scalarField.shape[0] not in [len(vertices), len(idxs)]:
+                    raise Exception('Incorrect shape of per-vertex/per-tri colors')
+                if self.scalarField.shape[0] == len(idxs): needsReplication = True
                 attrRaw['color'] = np.array(self.scalarField, dtype=np.float32)
             else:
                 # Handle input in the form of a ScalarField or a raw scalar data array.
@@ -498,6 +528,11 @@ class ViewerBase:
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)
+
+    def writeScreenshot(self, path):
+        if not hasattr(self, 'screenshotWriter'):
+            self.screenshotWriter = ScreenshotWriter(self.renderer)
+        self.screenshotWriter.capture(path)
 
     def setDarkMode(self, dark=True):
         if (dark):
