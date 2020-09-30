@@ -221,9 +221,10 @@ ConvergenceReport NewtonOptimizer::optimize() {
         { BENCHMARK_SCOPED_TIMER_SECTION t2("Preamble");
 
         // std::cout << "pre-update gradient: " << zeroOutFixedVars(prob->gradient(false)).norm() << std::endl;
-        BENCHMARK_START_TIMER_SECTION("Callback");
-        prob->iterationCallback(it);
-        BENCHMARK_STOP_TIMER_SECTION("Callback");
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION cbTimer("Callback");
+            prob->iterationCallback(it);
+        }
         // Note: we allow the iteration callback to modify the variables!
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).

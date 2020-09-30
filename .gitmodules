@@ -1,0 +1,3 @@
+[submodule "3rdparty/OffscreenRenderer"]
+	path = 3rdparty/OffscreenRenderer
+	url = https://github.com/MeshFEM/OffscreenRenderer

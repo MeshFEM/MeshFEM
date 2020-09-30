@@ -77,13 +77,13 @@ class MaterialLibrary:
         name = self._mangledMaterialName(False, useVertexColors, textureMapDataTex)
         if name not in self.materials:
             if (self.isLineMesh):
-                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, '#000000')
                 self.materials[name] = pythreejs.LineBasicMaterial(**args, **self.commonArgs)
             elif (self.isPointCloud):
-                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'black')
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, '#000000')
                 self.materials[name] = pythreejs.PointsMaterial(**args, **self.commonArgs, size=5, sizeAttenuation=False)
             else:
-                args = self._colorTexArgs(useVertexColors, textureMapDataTex, 'lightgray')
+                args = self._colorTexArgs(useVertexColors, textureMapDataTex, '#D3D3D3') # "light gray"
                 self.materials[name] = pythreejs.MeshLambertMaterial(**args, **self.commonArgs)
         return self.materials[name]
 
@@ -534,6 +534,29 @@ class ViewerBase:
             self.screenshotWriter = ScreenshotWriter(self.renderer)
         self.screenshotWriter.capture(path)
 
+    def offscreenRenderer(self):
+        import OffscreenRenderer
+        width, height = self.renderer.width, self.renderer.height
+        mr = OffscreenRenderer.MeshRenderer(width, height)
+
+        # TODO: draw more than the first mesh...
+        attr = self.meshes.children[0].geometry.attributes
+        P = attr['position'].array
+        N = attr['normal'].array
+        C = attr['color'].array if 'color' in attr else self.materialLibrary.material(False).color
+        F = attr['index'].array if 'index' in attr else None
+        mr.setMesh(P, F, N, C)
+
+        mr.setCameraParams(self.getCameraParams())
+        mr.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
+        mr.perspective(50, width / height, 0.1, 2000)
+
+        mr.alpha = 1.0
+        mr.lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
+        mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
+
+        return mr
+
     def setDarkMode(self, dark=True):
         if (dark):
             self.renderer.scene.background = '#111111'
@@ -541,7 +564,7 @@ class ViewerBase:
             self.wireframeMaterial().color = 'black' # '#220022'
         else:
             self.renderer.scene.background = '#FFFFFF'
-            self.materialLibrary.material(False).color = 'lightgray'
+            self.materialLibrary.material(False).color = '#D3D3D3' # 'light gray'
             self.wireframeMaterial().color = 'black'
 
     # Implemented here to give subclasses a chance to customize
