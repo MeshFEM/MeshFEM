@@ -144,7 +144,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
 }
 
 ConvergenceReport NewtonOptimizer::optimize() {
-    const size_t nbacktrack_iter = 25;
+    const size_t nbacktrack_iter = 15;
     size_t ngd_fallback_steps = 3; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
 
     prob->setUseIdentityMetric(options.useIdentityMetric);
