@@ -695,7 +695,7 @@ struct CSCMatrix {
 
     // Rudimentary support for tagging symmetric/nonsymmetric matrices (used by CSCMatrix::apply). This
     // effects, e.g., the interpretation of matrix multiplication.
-    enum class SymmetryMode : uint32_t { NONE = 0, UPPER_TRIANGLE = 1, LOWER_TRIANGLE = 2 };
+    enum class SymmetryMode : uint32_t { NONE = 0, UPPER_TRIANGLE = 1 };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
@@ -1089,7 +1089,7 @@ struct CSCMatrix {
         is.read((char *) &nz, sizeof(_Index));
         is.read((char *) &symmetry_mode, sizeof(uint32_t));
 
-        if ((symmetry_mode != SymmetryMode::NONE) || (symmetry_mode != SymmetryMode::UPPER_TRIANGLE))
+        if ((symmetry_mode != SymmetryMode::NONE) && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE))
             throw std::runtime_error("Invalid symmetry_mode");
 
         Ap.resize(n + 1);

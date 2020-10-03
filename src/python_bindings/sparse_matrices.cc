@@ -57,10 +57,15 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
 
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
-        .def(py::init<TMatrix>(), py::arg("tripletMatrix"))
-        .def_readonly("m",  &SuiteSparseMatrix::m)
-        .def_readonly("n",  &SuiteSparseMatrix::n)
-        .def_readonly("nz", &SuiteSparseMatrix::nz)
+        .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")
+        .def(py::init<std::string>(), py::arg("bin_dump_path"), "Load from binary dump file")
+        .def(py::init<>(),                                      "Construct empty matrix")
+        .def_readwrite("m",  &SuiteSparseMatrix::m)
+        .def_readwrite("n",  &SuiteSparseMatrix::n)
+        .def_readwrite("nz", &SuiteSparseMatrix::nz)
+        .def_readwrite("Ap", &SuiteSparseMatrix::Ap)
+        .def_readwrite("Ai", &SuiteSparseMatrix::Ai)
+        .def_readwrite("Ax", &SuiteSparseMatrix::Ax)
         .def("setZero",     &SuiteSparseMatrix::setZero)
         .def("fill",        &SuiteSparseMatrix::fill)
         .def("setIdentity", &SuiteSparseMatrix::setIdentity)
@@ -73,9 +78,6 @@ PYBIND11_MODULE(sparse_matrices, m) {
                     for (size_t i : indices) shouldRemove[i] = true;
                     smat.rowColRemoval([&shouldRemove](size_t i) { return shouldRemove[i]; });
                 })
-        .def_readwrite("Ap", &SuiteSparseMatrix::Ap)
-        .def_readwrite("Ai", &SuiteSparseMatrix::Ai)
-        .def_readwrite("Ax", &SuiteSparseMatrix::Ax)
         .def("apply", [](const SuiteSparseMatrix &mat, const Eigen::VectorXd &vec, bool transpose) {
                     return mat.apply(vec, transpose);
                 }, py::arg("vec"), py::arg("transpose") = false)

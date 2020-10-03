@@ -792,8 +792,8 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
 
         auto hop = he.opposite();
         // Measure the ccw angle around the edge tangent from reference director d1 to the triangle normal.
-        if (hop.tri()) m_alphas[hop.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[hop.tri().index()].normal());
-                       m_alphas[ he.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[he .tri().index()].normal());
+        if (hop.tri()) { m_alphas[hop.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[hop.tri().index()].normal()); }
+                       { m_alphas[ he.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[he .tri().index()].normal()); }
     });
 
     // Use the source alphas to resolve the 2 * Pi ambiguity in alpha
