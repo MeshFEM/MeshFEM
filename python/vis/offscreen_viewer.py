@@ -16,12 +16,12 @@ class OffscreenViewerBase(ViewerBase):
         self.renderer.setMesh(P, F, N, C)
 
     # Start recording to an image sequence/video
-    def recordStart(self, path, codec = None):
+    def recordStart(self, path, codec = None, writeFirstFrame=False, outWidth=None, outHeight=None):
         if codec is None:
             if path[-4:] == '.mp4': codec = vw.Codec.H264
             else: codec = vw.Codec.ImgSeq
-        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec)
-        self.recorder.writeFrame()
+        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, outWidth=outWidth, outHeight=outHeight)
+        if writeFirstFrame: self.recorder.writeFrame()
 
     def isRecording(self): return hasattr(self, 'recorder')
 
@@ -49,6 +49,17 @@ class OffscreenViewerBase(ViewerBase):
 
     def getCameraParams(self):  return self.renderer.getCameraParams()
     def setCameraParams(self, params): self.renderer.setCameraParams(params)
+
+    def setInterpolatedCameraParams(self, params1, params2, alpha):
+        mat1 = OffscreenRenderer.lookAtMatrix(params1[0], params1[2], params1[1])
+        mat2 = OffscreenRenderer.lookAtMatrix(params2[0], params2[2], params2[1])
+        import scipy.spatial.transform as xf
+        R = xf.Slerp([0.0, 1.0], xf.Rotation.from_matrix([mat1[0:3, 0:3],
+                                                          mat2[0:3, 0:3]]))(alpha)
+        matView = np.identity(4)
+        matView[0:3, 0:3] = R.as_matrix()
+        matView[0:3,   3] = (1 - alpha) * mat1[0:3, 3] + alpha * mat2[0:3, 3]
+        self.renderer.setViewMatrix(matView)
 
     def resize(self, width, height): self.renderer.resize(width, height)
 

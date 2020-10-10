@@ -82,9 +82,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
     }
 
     py::class_<SMValue>(detail_module, NameMangler<SMValue>::name().c_str())
-        .def(py::init<Eigen::Matrix<_Real, flatLen(N), 1>>(), py::arg("flatValues"))
         .def("__call__", [](const SMValue &sm, size_t i, size_t j) { if ((i >= N) || (j >= N)) throw std::runtime_error("Index out of bounds"); return sm(i, j); }, py::arg("i"), py::arg("j"))
-        .def_property_readonly("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })
+        .def("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })
         .def("eigenvalues",        &SMValue::eigenvalues)
         .def("eigenDecomposition", &SMValue::eigenDecomposition)
         ;
@@ -107,7 +106,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("__call__", [](const SMF &smf, size_t i) { if (i >= smf.domainSize()) throw std::runtime_error("Index out of bounds."); return SMValue(smf(i)); })
         ;
 
-    module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); });
+    module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); }, py::arg("flatValues"));
+    module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, N, N>          &mat)        { return SMValue(       mat); }, py::arg("mat"));
 }
 
 template<typename _Real>

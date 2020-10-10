@@ -455,7 +455,7 @@ public:
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
 
     template<typename Mesh>
-    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, std::vector<size_t> ignoreDims = std::vector<size_t>()) 
+    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, std::vector<size_t> ignoreDims = std::vector<size_t>())
         : m_ignoreDims(ignoreDims)
     {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
