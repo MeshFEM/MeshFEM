@@ -3,7 +3,7 @@
 ################################################################################
 import sys as _sys
 _sys.path.insert(0, '@PROJECT_SOURCE_DIR@/python')
-_sys.path.insert(0, '@PROJECT_SOURCE_DIR@/3rdParty/OffscreenRenderer/python')
+_sys.path.insert(0, '@PROJECT_SOURCE_DIR@/3rdparty/OffscreenRenderer/python')
 
 import sparse_matrices
 import energy
