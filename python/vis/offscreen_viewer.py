@@ -5,7 +5,6 @@ from OffscreenRenderer import video_writer as vw
 class OffscreenViewerBase(ViewerBase):
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         self.renderer = OffscreenRenderer.MeshRenderer(width, height) 
-        self.hexColorToFloat = OffscreenRenderer.hexColorToFloat
         super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def _setGeometryImpl(self, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
@@ -62,6 +61,9 @@ class OffscreenViewerBase(ViewerBase):
         self.renderer.setViewMatrix(matView)
 
     def resize(self, width, height): self.renderer.resize(width, height)
+
+    def getSize(self):
+        return (self.renderer.ctx.width, self.renderer.ctx.height)
 
     def writeScreenshot(self, path):
         self.renderer.render()

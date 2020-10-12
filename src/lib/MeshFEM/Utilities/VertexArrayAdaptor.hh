@@ -22,7 +22,7 @@ struct VertexArrayAdaptor {
     }
 };
 
-// Version for X by N Eigen types
+// Version for X by N Eigen types (one row per vertex)
 template<class EigenType>
 struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, Eigen::Dynamic, 2>::value ||
                                                              isMatrixOfSize<EigenType, Eigen::Dynamic, 3>::value, void>::type> {
@@ -32,7 +32,7 @@ struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<Eige
     }
 };
 
-// Version for N by X Eigen types
+// Version for N by X Eigen types (one col per vertex)
 template<class EigenType>
 struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, 2, Eigen::Dynamic>::value ||
                                                              isMatrixOfSize<EigenType, 3, Eigen::Dynamic>::value, void>::type> {

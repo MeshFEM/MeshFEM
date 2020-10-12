@@ -457,6 +457,9 @@ class PythreejsViewerBase(ViewerBase):
         self.renderer.width = width
         self.renderer.height = height
 
+    def getSize(self):
+        return (self.renderer.width, self.renderer.height)
+
     def exportHTML(self, path):
         import ipywidget_embedder
         ipywidget_embedder.embed(path, self.renderer)

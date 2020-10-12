@@ -311,7 +311,7 @@ struct NewtonOptimizerOptionsBase {
     bool feasibilitySolve = true;              // Whether to solve for a feasible starting point or rely on the problem to jump to feasible parameters.
     int verbose = 1;
     bool writeIterateFiles = false;
-    bool verboseNonPosDef = false;              // Print CHOLMOD warning for non-pos-def matrices
+    bool verboseNonPosDef = false;             // Print CHOLMOD warning for non-pos-def matrices
 };
 
 // The part of the optimizer interface that is not trivially copyable.
@@ -326,7 +326,7 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
     NewtonOptimizerOptions &operator=(const NewtonOptimizerOptions &b) {
         NewtonOptimizerOptionsBase::operator=(b);
         m_hessianProjectionController = b.m_hessianProjectionController->clone();
-        m_hessianUpdateController = b.m_hessianUpdateController->clone();
+        m_hessianUpdateController     = b.m_hessianUpdateController->clone();
         return *this;
     }
 
@@ -335,9 +335,40 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
 
     HessianUpdateController &getHessianUpdateController() const { return *m_hessianUpdateController; }
     void setHessianUpdateController(const HessianUpdateController &huc) { m_hessianUpdateController = huc.clone(); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Serialization + cloning support (for pickling)
+    ////////////////////////////////////////////////////////////////////////////
+    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>>;
+    static State serialize(const NewtonOptimizerOptions &opts) {
+        return std::make_tuple(opts.gradTol,  opts.beta,
+                               opts.hessianScaledBeta, opts.niter, opts.useIdentityMetric,
+                               opts.useNegativeCurvatureDirection, opts.feasibilitySolve,
+                               opts.verbose, opts.writeIterateFiles, opts.verboseNonPosDef,
+                               opts.m_hessianProjectionController, opts.m_hessianUpdateController);
+    }
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
+        auto opts = std::make_unique<NewtonOptimizerOptions>();
+        opts->gradTol                       = std::get<0 >(state);
+        opts->beta                          = std::get<1 >(state);
+        opts->hessianScaledBeta             = std::get<2 >(state);
+        opts->niter                         = std::get<3 >(state);
+        opts->useIdentityMetric             = std::get<4 >(state);
+        opts->useNegativeCurvatureDirection = std::get<5 >(state);
+        opts->feasibilitySolve              = std::get<6 >(state);
+        opts->verbose                       = std::get<7 >(state);
+        opts->writeIterateFiles             = std::get<8 >(state);
+        opts->verboseNonPosDef              = std::get<9 >(state);
+        opts->m_hessianProjectionController = std::get<10>(state);
+        opts->m_hessianUpdateController     = std::get<11>(state);
+        return opts;
+    }
+    std::unique_ptr<NewtonOptimizerOptions> clone() { return deserialize(serialize(*this)); }
+
 protected:
-    std::unique_ptr<HessianProjectionController> m_hessianProjectionController = std::make_unique<HessianProjectionAlways>();
-    std::unique_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_unique<HessianUpdateAlways>();
+    // `shared_ptr` to support pickling
+    std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAlways>();
+    std::shared_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_shared<HessianUpdateAlways>();
 };
 
 // Cache temporaries and solve the KKT system:

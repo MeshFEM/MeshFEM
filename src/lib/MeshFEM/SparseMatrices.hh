@@ -1474,9 +1474,8 @@ public:
     // Perform only the symbolic factorization with the current system matrix
     // (useful this matrix holds the sparsity pattern that will be used for
     // many numeric factorizations).
-    void factorizeSymbolic(int nmethods = 0 /* Cholmod's default */) {
+    void factorizeSymbolic() {
         BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
-        m_c->nmethods = nmethods;
         clearFactors();
         m_L = cholmod_l_analyze(&m_A, m_c.get());
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
@@ -1484,10 +1483,10 @@ public:
 
     // Update the symbolic factorization for with a different sparsity pattern.
     template<typename Mat>
-    void updateSymbolicFactorization(Mat &&mat, int nmethods = 0) {
+    void updateSymbolicFactorization(Mat &&mat) {
         m_AStorage = std::forward<Mat>(mat);
         m_matrixUpdated();
-        factorizeSymbolic(nmethods);
+        factorizeSymbolic();
     }
 
     // Recompute the numeric factorization using the new system matrix "tmat",
@@ -1711,8 +1710,14 @@ private:
 
         m_c->print = suppressWarnings ? 0 : 2;
 
+#if 0
         // Try many different orderings searching for the best.
-        // m_c->nmethods = 9;
+        m_c->nmethods = 9;
+#else
+        // NESDIS seems to give best performance...
+        m_c->nmethods = 1;
+        m_c->method[0].ordering = CHOLMOD_NESDIS;
+#endif
 
         // Completely bypass Metis/NESDIS (for large matrices, this fails...)
         // Note: this shouldn't be done for smaller matrices because it results in slower solves.
@@ -1948,13 +1953,13 @@ public:
         assert(m_fixedVarRHSContribution.size() == m_AUpper.m);
     }
 
-    void factorizeSymbolic(int nmethods = 0 /* Cholmod's default */) {
+    void factorizeSymbolic() {
         if (m_isSPD) {
             BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
             m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper, m_forceSupernodal));
             BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
 
-            m_LLT->factorizeSymbolic(nmethods);
+            m_LLT->factorizeSymbolic();
             m_needsNumericFactorization = true;
         }
         else { throw std::runtime_error("Unimplemented"); }

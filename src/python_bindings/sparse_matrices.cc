@@ -56,6 +56,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
                 return soln;})
         ;
 
+    using SymmetryModePicklingType = std::underlying_type_t<SuiteSparseMatrix::SymmetryMode>;
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")
         .def(py::init<std::string>(), py::arg("bin_dump_path"), "Load from binary dump file")
@@ -81,16 +82,26 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("apply", [](const SuiteSparseMatrix &mat, const Eigen::VectorXd &vec, bool transpose) {
                     return mat.apply(vec, transpose);
                 }, py::arg("vec"), py::arg("transpose") = false)
-        .def(py::pickle([](const SuiteSparseMatrix &mat) { return py::make_tuple(mat.m, mat.n, mat.nz, mat.Ap, mat.Ai, mat.Ax); },
+        .def(py::pickle([](const SuiteSparseMatrix &mat) { return py::make_tuple(mat.m, mat.n, mat.nz, mat.Ap, mat.Ai, mat.Ax, static_cast<SymmetryModePicklingType>(mat.symmetry_mode)); },
                         [](const py::tuple &t) {
-                        if (t.size() != 6) throw std::runtime_error("Invalid state!");
+                        if ((t.size() != 6) && (t.size() != 7)) throw std::runtime_error("Invalid state!");
                         SuiteSparseMatrix result(t[0].cast<SuiteSparse_long>(), t[1].cast<SuiteSparse_long>());
                         result.nz = t[2].cast<SuiteSparse_long>();
                         result.Ap = t[3].cast<std::vector<SuiteSparse_long>>();
                         result.Ai = t[4].cast<std::vector<SuiteSparse_long>>();
                         result.Ax = t[5].cast<std::vector<double>>();
+                        // For backwards compatibility with pickled files
+                        // written before we fixed the missing symmetry mode...
+                        // TODO: remove
+                        if (t.size() == 6) {
+                            std::cerr << "WARNING: symmetry mode was not pickled; assuming upper triangle symmetry." << std::endl;
+                            result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+                        }
+                        else {
+                            result.symmetry_mode = static_cast<SuiteSparseMatrix::SymmetryMode>(t[6].cast<SymmetryModePicklingType>());
+                        }
                         return result;
-                        }))
+                    }))
         .def("toSciPy", [](const SuiteSparseMatrix &A) {
                 py::object matrix_type = py::module::import("scipy.sparse").attr("csc_matrix");
                 py::array data(A.Ax.size(), A.Ax.data());

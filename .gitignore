@@ -58,5 +58,6 @@ compile_commands.json
 # Dependencies
 /3rdparty
 
-# Mac garbage
+# Mac/ntfs garbage
 .DS_Store
+.nfs*

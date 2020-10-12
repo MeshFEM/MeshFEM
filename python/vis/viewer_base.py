@@ -80,7 +80,7 @@ class ViewerBase:
         if (self.scalarField is not None):
             # First, handle the case of directly specifying per-vertex or per-tri colors:
             if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
-                if (self.scalarField.shape[1] != 3) or self.scalarField.shape[0] not in [len(vertices), len(idxs)]:
+                if (self.scalarField.shape[1] not in [3, 4]) or self.scalarField.shape[0] not in [len(vertices), len(idxs)]:
                     raise Exception('Incorrect shape of per-vertex/per-tri colors')
                 if self.scalarField.shape[0] == len(idxs): needsReplication = True
                 attrRaw['color'] = np.array(self.scalarField, dtype=np.float32)
@@ -111,6 +111,7 @@ class ViewerBase:
     def getCameraParams(self):                             raise Exception('Unimplemented')
     def setCameraParams(self, params):                     raise Exception('Unimplemented')
     def resize(self, width, height):                       raise Exception('Unimplemented')
+    def getSize(self):                                     raise Exception('Unimplemented')
     def writeScreenshot(self, path):                       raise Exception('Unimplemented')
     def transformModel(self, position, scale, quaternion): raise Exception('Unimplemented')
 

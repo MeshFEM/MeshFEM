@@ -33,6 +33,10 @@ struct HessianUpdateAlways: public HessianUpdateController {
     virtual std::unique_ptr<HessianUpdateController> clone() const override {
         return std::make_unique<HessianUpdateAlways>(*this);
     }
+
+    using State = std::tuple<>;
+    static State serialize(const HessianUpdateAlways &) { return std::make_tuple(); }
+    static std::unique_ptr<HessianUpdateAlways> deserialize(const State &) { return std::make_unique<HessianUpdateAlways>(); }
 };
 
 // Never update the Hessian factorization
@@ -41,6 +45,10 @@ struct HessianUpdateNever: public HessianUpdateController {
     virtual std::unique_ptr<HessianUpdateController> clone() const override {
         return std::make_unique<HessianUpdateNever>(*this);
     }
+
+    using State = std::tuple<>;
+    static State serialize(const HessianUpdateNever &) { return std::make_tuple(); }
+    static std::unique_ptr<HessianUpdateNever> deserialize(const State &) { return std::make_unique<HessianUpdateNever>(); }
 };
 
 // Update the Hessian factorization every `period` iterations
@@ -60,8 +68,16 @@ struct HessianUpdatePeriodic: public HessianUpdateController {
         return std::make_unique<HessianUpdatePeriodic>(*this);
     }
 
+    using State = std::tuple<size_t>; // Only store external state (internal state will be reset before next Newton solve anyway...)
+    static State serialize(const HessianUpdatePeriodic &hup) { return std::make_tuple(hup.period); }
+    static std::unique_ptr<HessianUpdatePeriodic> deserialize(const State &s) {
+        auto hup = std::make_unique<HessianUpdatePeriodic>();
+        hup->period = std::get<0>(s);
+        return hup;
+    }
+
 protected:
-    size_t m_counter = period; // countdown until a new Hessian is needed.
+    size_t m_counter = 0; // countdown until a new Hessian is needed.
 };
 
 #endif /* end of include guard: HESSIANUPDATECONTROLLER_HH */

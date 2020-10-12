@@ -29,6 +29,10 @@ struct HessianProjectionAlways : public HessianProjectionController {
     virtual std::unique_ptr<HessianProjectionController> clone() const override {
         return std::make_unique<HessianProjectionAlways>();
     }
+
+    using State = std::tuple<>;
+    static State serialize(const HessianProjectionAlways &) { return std::make_tuple(); }
+    static std::unique_ptr<HessianProjectionAlways> deserialize(const State &) { return std::make_unique<HessianProjectionAlways>(); }
 };
 
 // Never use Hessian projection
@@ -37,6 +41,10 @@ struct HessianProjectionNever : public HessianProjectionController {
     virtual std::unique_ptr<HessianProjectionController> clone() const override {
         return std::make_unique<HessianProjectionNever>();
     }
+
+    using State = std::tuple<>;
+    static State serialize(const HessianProjectionNever &) { return std::make_tuple(); }
+    static std::unique_ptr<HessianProjectionNever> deserialize(const State &) { return std::make_unique<HessianProjectionNever>(); }
 };
 
 // Use a simple hysteresis strategy to select between using a
@@ -88,9 +96,18 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
         return std::make_unique<HessianProjectionAdaptive>(*this);
     }
 
-    // Internal (not intended to be modified directly, but still exposed to Python for experimentation)
+    // Internal state (not intended to be modified directly, but still exposed to Python for experimentation)
     bool projectionActive;
     size_t switchCounter;
+
+    using State = std::tuple<size_t, size_t>; // Only store external state (internal state will be reset before next Newton solve anyway...)
+    static State serialize(const HessianProjectionAdaptive &hpa) { return std::make_tuple(hpa.numProjectionStepsBeforeSwitch, hpa.numConsecutiveIndefiniteStepsBeforeSwitch); }
+    static std::unique_ptr<HessianProjectionAdaptive> deserialize(const State &s) {
+        auto hpa = std::make_unique<HessianProjectionAdaptive>();
+        hpa->numProjectionStepsBeforeSwitch            = std::get<0>(s);
+        hpa->numConsecutiveIndefiniteStepsBeforeSwitch = std::get<1>(s);
+        return hpa;
+    }
 };
 
 #endif /* end of include guard: HESSIANPROJECTIONCONTROLLER_HH */

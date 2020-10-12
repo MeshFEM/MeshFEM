@@ -5,6 +5,16 @@
 namespace py = pybind11;
 
 #include <MeshFEM/newton_optimizer/newton_optimizer.hh>
+#include "BindingUtils.hh"
+
+template<class DerivedController, class BaseController>
+auto bindController(py::module &m, const char *name) {
+    py::class_<DerivedController, BaseController, std::shared_ptr<DerivedController>> binding(m, name);
+    binding.def(py::init<>());
+    addSerializationBindings<DerivedController>(binding);
+
+    return binding;
+}
 
 PYBIND11_MODULE(py_newton_optimizer, m) {
     m.doc() = "Wrapper for Newton optimizer's types";
@@ -13,34 +23,37 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     // "Controllers" for customizing solver behavior
     // (accessed through NewtonOptimizerOptions)
     ////////////////////////////////////////////////////////////////////////////////
-    py::class_<HessianProjectionController>(m, "HessianProjectionController")
-        .def("shouldUseProjection", &HessianProjectionController::shouldUseProjection)
-        .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
+    py::class_<HessianProjectionController, std::shared_ptr<HessianProjectionController>> pyHPC(m, "HessianProjectionController");
+    pyHPC.def("shouldUseProjection", &HessianProjectionController::shouldUseProjection)
+         .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
         ;
-    py::class_<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   ).def(py::init<>());
-    py::class_<HessianProjectionAlways,   HessianProjectionController>(m, "HessianProjectionAlways"  ).def(py::init<>());
-    py::class_<HessianProjectionAdaptive, HessianProjectionController>(m, "HessianProjectionAdaptive").def(py::init<>())
+
+    bindController<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   );
+    bindController<HessianProjectionAlways,   HessianProjectionController>(m, "HessianProjectionAlways"  );
+    bindController<HessianProjectionAdaptive, HessianProjectionController>(m, "HessianProjectionAdaptive")
         .def_readwrite("numProjectionStepsBeforeSwitch",            &HessianProjectionAdaptive::numProjectionStepsBeforeSwitch,            "Number of Hessian-projected steps to take before trying un-projected Hessian")
         .def_readwrite("numConsecutiveIndefiniteStepsBeforeSwitch", &HessianProjectionAdaptive::numConsecutiveIndefiniteStepsBeforeSwitch, "Number of indefinite Hessians to allow before switching to applying the Hessian projection")
         .def_readwrite("projectionActive",                          &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
         .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
         ;
 
-    py::class_<HessianUpdateController>(m, "HessianUpdateController")
+    py::class_<HessianUpdateController, std::shared_ptr<HessianUpdateController>>(m, "HessianUpdateController")
         .def("needsUpdate", &HessianUpdateController::needsUpdate)
         .def("newHessian",  &HessianUpdateController::newHessian,  py::arg("isIndefinite"))
         .def("reusedHessian",  &HessianUpdateController::reusedHessian)
         ;
-    py::class_<HessianUpdateNever,    HessianUpdateController>(m, "HessianUpdateNever"   ).def(py::init<>());
-    py::class_<HessianUpdateAlways,   HessianUpdateController>(m, "HessianUpdateAlways"  ).def(py::init<>());
-    py::class_<HessianUpdatePeriodic, HessianUpdateController>(m, "HessianUpdatePeriodic").def(py::init<>())
+
+    bindController<HessianUpdateNever,    HessianUpdateController>(m, "HessianUpdateNever"   );
+    bindController<HessianUpdateAlways,   HessianUpdateController>(m, "HessianUpdateAlways"  );
+    bindController<HessianUpdatePeriodic, HessianUpdateController>(m, "HessianUpdatePeriodic")
         .def_readwrite("period", &HessianUpdatePeriodic::period, "Number of times to reuse a Hessian factorization before computing a new one.")
         ;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Newton solver options/convergence report
     ////////////////////////////////////////////////////////////////////////////////
-    py::class_<NewtonOptimizerOptions>(m, "NewtonOptimizerOptions")
+    py::class_<NewtonOptimizerOptions, std::shared_ptr<NewtonOptimizerOptions>> pyNewtonOptimizerOptions(m, "NewtonOptimizerOptions");
+    pyNewtonOptimizerOptions
         .def(py::init<>())
         .def_readwrite("gradTol",                       &NewtonOptimizerOptions::gradTol)
         .def_readwrite("beta",                          &NewtonOptimizerOptions::beta)
@@ -54,10 +67,11 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference)
-        .def_property("hessianUpdateController", [](const NewtonOptimizerOptions &opts) -> HessianUpdateController & { return opts.getHessianUpdateController(); },
+        .def_property("hessianUpdateController",     [](const NewtonOptimizerOptions &opts) -> HessianUpdateController & { return opts.getHessianUpdateController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianUpdateController &h) { opts.setHessianUpdateController(h); },
                                                      py::return_value_policy::reference)
         ;
+    addSerializationBindings<NewtonOptimizerOptions>(pyNewtonOptimizerOptions);
 
     py::class_<ConvergenceReport>(m, "ConvergenceReport")
         .def_readonly("success",          &ConvergenceReport::success)
