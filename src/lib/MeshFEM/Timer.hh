@@ -188,14 +188,14 @@ public:
     void report(std::ostream &os) {
         for (SectionIterator it = m_sections.begin(); it != m_sections.end(); ++it) {
             if (it->first != "") { // Skip global section... this is reported at the end
-                os << displayName(it->first) << "\t" << it->second.elapsed()
-                   << "\t" << it->second.invocations << std::endl;
+                os << displayName(it->first) << '\t' << it->second.elapsed()
+                   << '\t' << it->second.invocations << '\n';
                 it->second.report(os);
             }
         }
 
         m_sections.at("").report(os);
-        os << "Full time\t" << m_sections.at("").elapsed() << std::endl;
+        os << "Full time\t" << m_sections.at("").elapsed() << '\n';
     }
 };
 

@@ -123,11 +123,11 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
         catch (std::exception &e) {
             tau  = std::max(  4 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
-            if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << std::endl;
+            if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << "\n";
             if (currentTauScale == 0) currentTauScale = tauScale();
             if (tau > 1e80) {
                 // prob->writeDebugFiles("tau_runaway");
-                std::cout << "Tau running away" << std::endl;
+                std::cout << "Tau running away\n";
                 std::cout << "||H||_2: "    << prob->hessianL2Norm() << std::endl;
                 std::cout << "||M||_2: "    << prob->metricL2Norm()  << std::endl;
                 std::cout << "Scaled tau: " << tau * currentTauScale << std::endl;
@@ -269,7 +269,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
         if (options.useNegativeCurvatureDirection && ((tau > old_beta) || (tau == betaMin)) && (g_free.norm() < 100 * options.gradTol)) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Negative curvature dir");
             // std::cout.precision(19);
-            std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << std::endl;
+            std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << '\n';
             auto M_reduced = prob->metric();
             fixVariablesInWorkingSet(*prob, M_reduced, g, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
@@ -358,7 +358,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
             if (alpha >= prob->boundConstraint(bci).feasibleStepLength(vars, step)) {
                 if (workingSet.contains(bci)) throw std::logic_error("Re-encountered bound in working set");
                 workingSet.add(bci);
-                std::cout << "Added constraint " << bci << " to working set" << std::endl;
+                std::cout << "Added constraint " << bci << " to working set\n";
             }
         }
 
@@ -403,9 +403,10 @@ ConvergenceReport NewtonOptimizer::optimize() {
     projectOutLEQConstrainedComponents(zg);
     prob->customIterateReport(report);
     reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg));
+    std::cout << std::flush;
 
     if (workingSet.size()) {
-        std::cout << "Terminated with working set:" << std::endl;
+        std::cout << "Terminated with working set:\n";
         vars = prob->getVars();
         for (size_t bci = 0; bci < prob->numBoundConstraints(); ++bci) {
             if (workingSet.contains(bci)) prob->boundConstraint(bci).report(vars, g);

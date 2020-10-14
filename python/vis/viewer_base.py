@@ -114,6 +114,7 @@ class ViewerBase:
     def getSize(self):                                     raise Exception('Unimplemented')
     def writeScreenshot(self, path):                       raise Exception('Unimplemented')
     def transformModel(self, position, scale, quaternion): raise Exception('Unimplemented')
+    def isRecording(self):                                 return False
 
     def makeTransparent(self, color=None): raise Exception('Unimplemented')
     def makeOpaque     (self, color=None): raise Exception('Unimplemented')

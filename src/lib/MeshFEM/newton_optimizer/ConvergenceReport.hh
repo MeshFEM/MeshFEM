@@ -33,7 +33,7 @@ struct ConvergenceReport {
                       << '\t' << gradientNorm[entry]
                       << '\t' << freeGradientNorm[entry]
                       << '\t' << stepLength[entry] << '\t' << indefinite[entry]
-                      << std::endl;
+                      << '\n';
         }
     }
 };

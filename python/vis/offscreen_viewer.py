@@ -4,7 +4,7 @@ from OffscreenRenderer import video_writer as vw
 
 class OffscreenViewerBase(ViewerBase):
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        self.renderer = OffscreenRenderer.MeshRenderer(width, height) 
+        self.renderer = OffscreenRenderer.MeshRenderer(width, height)
         super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def _setGeometryImpl(self, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
@@ -15,17 +15,18 @@ class OffscreenViewerBase(ViewerBase):
         self.renderer.setMesh(P, F, N, C)
 
     # Start recording to an image sequence/video
-    def recordStart(self, path, codec = None, writeFirstFrame=False, outWidth=None, outHeight=None):
+    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None):
         if codec is None:
             if path[-4:] == '.mp4': codec = vw.Codec.H264
             else: codec = vw.Codec.ImgSeq
-        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, outWidth=outWidth, outHeight=outHeight)
+        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, streaming=streaming, outWidth=outWidth, outHeight=outHeight)
         if writeFirstFrame: self.recorder.writeFrame()
 
     def isRecording(self): return hasattr(self, 'recorder')
 
     def recordStop(self):
         if self.isRecording():
+            self.recorder.finish()
             del self.recorder
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
