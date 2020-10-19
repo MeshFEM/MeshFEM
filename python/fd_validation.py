@@ -104,3 +104,34 @@ def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], inde
     plt.title('Directional derivative fd test for Hessian')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
+
+def allEnergies(obj):
+    if hasattr(obj, 'EnergyType'):
+        return {name: obj.energy(etype) for name, etype in obj.EnergyType.__members__.items()}
+    else:
+        return {'Energy': obj.energy()}
+
+def linesearchValidationPlot(obj, direction, alphaMax = 1e-5, width=12, height=6):
+    """
+    Help diagnose issues with the backtracking linesearch by plotting the
+    energy along the linesearch direction `direction`.
+    """
+    x = obj.getVars()
+    alphas = np.linspace(0, 1e-5, 100)
+    energies = []
+    for alpha in alphas:
+        obj.setVars(x + alpha * direction)
+        energies.append(allEnergies(obj))
+    obj.setVars(x)
+    keys = list(energies[0].keys())
+    nplots = len(keys)
+    plt.figure(figsize=(width, height))
+    for i, k in enumerate(keys):
+        cols = int(np.ceil(np.sqrt(nplots)))
+        rows = int(np.ceil(nplots / cols))
+        plt.subplot(rows, cols, i + 1)
+        if k is None: plt.plot(alphas, energies)
+        else: plt.plot(alphas, [e[k] for e in energies])
+        if k is not None: plt.title(k)
+        plt.grid()
+    plt.tight_layout()
