@@ -144,8 +144,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
 }
 
 ConvergenceReport NewtonOptimizer::optimize() {
-    const size_t nbacktrack_iter = 15;
-    size_t ngd_fallback_steps = 3; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
+    size_t ngd_fallback_steps = options.ngd_fallback_steps; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
 
     prob->setUseIdentityMetric(options.useIdentityMetric);
     prob->writeIterates = options.writeIterateFiles;
@@ -321,7 +320,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
         size_t bit;
 
         Eigen::VectorXd steppedVars;
-        for (bit = 0; bit < nbacktrack_iter; ++bit) {
+        for (bit = 0; bit < options.nbacktrack_iter; ++bit) {
             steppedVars = vars + alpha * step;
             prob->applyBoundConstraintsInPlace(steppedVars);
             prob->setVars(steppedVars);
@@ -362,7 +361,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
             }
         }
 
-        if (bit == nbacktrack_iter) {
+        if (bit == options.nbacktrack_iter) {
             if (options.verbose) std::cout << "Initial backtracking failed; attempting gradient descent.\n";
 
             if (ngd_fallback_steps-- == 0) {
@@ -375,7 +374,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
             directionalDerivative = -g_free.squaredNorm();
             alpha *= step.norm() / g_free.norm(); // Start with the same step magnitude where the Newton step backtracking failed....
             step = -g_free;
-            for (gd_bit = 0; gd_bit < 2 * nbacktrack_iter; ++gd_bit) {
+            for (gd_bit = 0; gd_bit < options.nbacktrack_iter; ++gd_bit) {
                 steppedVars = vars + alpha * step;
                 prob->applyBoundConstraintsInPlace(steppedVars);
                 prob->setVars(steppedVars);
@@ -384,12 +383,6 @@ ConvergenceReport NewtonOptimizer::optimize() {
                 if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
                     break;
                 alpha *= 0.5;
-            }
-
-            if (gd_bit == nbacktrack_iter) {
-                if (options.verbose) std::cout << "Gradient descent backtracking failed.\n";
-                prob->setVars(vars);
-                break;
             }
         }
     }

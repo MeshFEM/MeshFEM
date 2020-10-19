@@ -312,6 +312,9 @@ struct NewtonOptimizerOptionsBase {
     int verbose = 1;
     bool writeIterateFiles = false;
     bool verboseNonPosDef = false;             // Print CHOLMOD warning for non-pos-def matrices
+    // Warning: the following fields are NOT serialized for reasons of backwards compatibility
+    size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
+    size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
 };
 
 // The part of the optimizer interface that is not trivially copyable.
@@ -339,15 +342,18 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
     ////////////////////////////////////////////////////////////////////////////
     // Serialization + cloning support (for pickling)
     ////////////////////////////////////////////////////////////////////////////
-    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>>;
+    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t>;
+    using StateBackwardCompat = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>>; // before nbacktrack_iter and ngd_fallback_steps were added
     static State serialize(const NewtonOptimizerOptions &opts) {
         return std::make_tuple(opts.gradTol,  opts.beta,
                                opts.hessianScaledBeta, opts.niter, opts.useIdentityMetric,
                                opts.useNegativeCurvatureDirection, opts.feasibilitySolve,
                                opts.verbose, opts.writeIterateFiles, opts.verboseNonPosDef,
-                               opts.m_hessianProjectionController, opts.m_hessianUpdateController);
+                               opts.m_hessianProjectionController, opts.m_hessianUpdateController,
+                               opts.nbacktrack_iter, opts.ngd_fallback_steps);
     }
-    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
+    template<typename State_>
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize_(const State_ &state) {
         auto opts = std::make_unique<NewtonOptimizerOptions>();
         opts->gradTol                       = std::get<0 >(state);
         opts->beta                          = std::get<1 >(state);
@@ -361,6 +367,13 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
         opts->verboseNonPosDef              = std::get<9 >(state);
         opts->m_hessianProjectionController = std::get<10>(state);
         opts->m_hessianUpdateController     = std::get<11>(state);
+        return opts;
+    }
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const StateBackwardCompat &state) { return deserialize_(state); }
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
+        auto opts = deserialize_(state);
+        opts->nbacktrack_iter    = std::get<12>(state);
+        opts->ngd_fallback_steps = std::get<13>(state);
         return opts;
     }
     std::unique_ptr<NewtonOptimizerOptions> clone() { return deserialize(serialize(*this)); }

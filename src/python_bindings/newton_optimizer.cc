@@ -52,7 +52,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     ////////////////////////////////////////////////////////////////////////////////
     // Newton solver options/convergence report
     ////////////////////////////////////////////////////////////////////////////////
-    py::class_<NewtonOptimizerOptions, std::shared_ptr<NewtonOptimizerOptions>> pyNewtonOptimizerOptions(m, "NewtonOptimizerOptions");
+    using PyNOO = py::class_<NewtonOptimizerOptions, std::shared_ptr<NewtonOptimizerOptions>>;
+    PyNOO pyNewtonOptimizerOptions(m, "NewtonOptimizerOptions");
     pyNewtonOptimizerOptions
         .def(py::init<>())
         .def_readwrite("gradTol",                       &NewtonOptimizerOptions::gradTol)
@@ -64,6 +65,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("feasibilitySolve",              &NewtonOptimizerOptions::feasibilitySolve)
         .def_readwrite("verbose",                       &NewtonOptimizerOptions::verbose)
         .def_readwrite("verboseNonPosDef",              &NewtonOptimizerOptions::verboseNonPosDef)
+        .def_readwrite("nbacktrack_iter",               &NewtonOptimizerOptions::nbacktrack_iter)
+        .def_readwrite("ngd_fallback_steps",            &NewtonOptimizerOptions::ngd_fallback_steps)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference)
@@ -71,7 +74,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                                                      [](      NewtonOptimizerOptions &opts, const HessianUpdateController &h) { opts.setHessianUpdateController(h); },
                                                      py::return_value_policy::reference)
         ;
-    addSerializationBindings<NewtonOptimizerOptions>(pyNewtonOptimizerOptions);
+    addSerializationBindings<NewtonOptimizerOptions, PyNOO, NewtonOptimizerOptions::StateBackwardCompat>(pyNewtonOptimizerOptions);
 
     py::class_<ConvergenceReport>(m, "ConvergenceReport")
         .def_readonly("success",          &ConvergenceReport::success)
@@ -98,7 +101,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     py::class_<NewtonProblem>(m, "NewtonProblem")
         .def("energy",                 &NewtonProblem::energy)
         .def("gradient",               &NewtonProblem::gradient, py::arg("freshIterate") = false)
-        .def("hessian",                &NewtonProblem::hessian, py::arg("projectionMask") = true)
+        .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = true)
         .def("hessianSparsityPattern", &NewtonProblem::hessianSparsityPattern)
         .def("metric",                 &NewtonProblem::metric)
         .def("fixedVars",              &NewtonProblem::fixedVars)
