@@ -24,6 +24,9 @@
 #include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
 template<class MeshBinder>
 void generateMeshSpecificBindings(py::module &m, py::module &detail_module, MeshBinder &&b) {
     using V3d = Eigen::Matrix<double, 3, 1>;

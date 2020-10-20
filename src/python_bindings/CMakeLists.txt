@@ -42,6 +42,10 @@ pybind11_add_module(triangulation triangulation.cc)
 set_target_properties(triangulation PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(triangulation PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(filters filters.cc)
+set_target_properties(filters PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(filters PUBLIC MeshFEM intel_pybind_14_hack)
+
 pybind11_add_module(differential_operators differential_operators.cc)
 set_target_properties(differential_operators PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack)

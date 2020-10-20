@@ -629,14 +629,18 @@ Point centroid(const std::vector<Point> &p) {
 }
 
 // Compute the signed area of a polygon in 2D (ccw = positive)
-//     A = int 1 dV
+//     A = int 1 dA
 // Assumes that the polygon is non-self-intersecting.
 // The formula used below follows from Green's theorem.
-//     A = int div [x, 0] dV = int [x, 0] . n dA
-//       = sum_{e in edges} int_e [x, 0] dA . n_e
-//       = sum_{e in edges} 1/2 * [x0 + x1, 0] * |e| . n_e
-//       = sum_{e in edges} 1/2 * [x0 + x1, 0] . [y1 - y0, x0 - x1]
-//       = sum_{e in edges} 1/2 * (x0 + x1) * (y1 - y0)
+//     A = int div [x, 0] dA = int [x, 0] . n ds
+//       = sum_{e in edges} int_e [x, 0] ds . n_e
+//       = sum_{e in edges} (1/2 * [x0 + x1, 0] * |e|) . n_e
+//       = sum_{e in edges}  1/2 * [x0 + x1, 0] . [y1 - y0, x0 - x1]
+//       = sum_{e in edges}  1/2 * (x0 + x1) * (y1 - y0)
+inline Real signedAreaContribution(const Point2D &p0, const Point2D &p1) {
+    return 0.5 * (p0[0] + p1[0]) * (p1[1] - p0[1]);
+}
+
 template<class Polygon>
 Real area(const Polygon &poly) {
     assert(poly.size() >= 3);
@@ -647,7 +651,7 @@ Real area(const Polygon &poly) {
         if (next == poly.end()) next = poly.begin();
         const auto &p0 = *it;
         const auto &p1 = *next;
-        area += 0.5 * (p0[0] + p1[0]) * (p1[1] - p0[1]);
+        area += signedAreaContribution(p0, p1);
     }
     return area;
 }
