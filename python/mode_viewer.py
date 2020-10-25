@@ -6,6 +6,15 @@ from tri_mesh_viewer import TriMeshViewer
 
 class ModeViewer(TriMeshViewer):
     def __init__(self, structure, modeDoF = None, eigenvalues = None, width=512, height=512, numSteps=8, amplitude = 0.05, normalize = True, wireframe = False):
+        """
+        numSteps
+            Number of deformation amplitude increments at which to sample the
+            visualization geometry to create "morph targets" (keyframes). When
+            the visualization geometry is a linear function of the DoF, this
+            can just be 2 (creating a keyframe at amplitude +/- 1).
+            For a nonlinear state parametrization (e.g., for elastic rods),
+            using around 8 steps seems to work well.
+        """
         super().__init__(structure, width, height, wireframe=wireframe)
         self.normalize = normalize
         self.amplitude = amplitude

@@ -1,4 +1,3 @@
-
 ////////////////////////////////////////////////////////////////////////////////
 // IsoCRLEWithHessianProjection.hh
 ////////////////////////////////////////////////////////////////////////////////
@@ -110,7 +109,7 @@ struct IsoCRLEWithHessianProjection {
 
     template<class Mat_, class Mat2_>
     Matrix delta2_denergy(const Mat_ &/* dF_a */, const Mat2_ &/* dF_b */) const {
-        throw std::runtime_error("Unimplemneted.");
+        throw std::runtime_error("Unimplemented.");
     }
 
     bool usingProjection() const { return projectionEnabled && m_projectionMask; }

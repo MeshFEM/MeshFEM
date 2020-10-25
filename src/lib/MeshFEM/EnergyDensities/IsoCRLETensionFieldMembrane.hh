@@ -1,0 +1,222 @@
+////////////////////////////////////////////////////////////////////////////////
+// IsoCRLETensionFieldMembrane.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//  Implements an isotropic F-based corotated linear elasticity 2D membrane model
+//  with an optional tension field theory relaxation, and optional
+//  smoothing for this relaxation.
+//  Note, for 2D problems, the user must be careful to to set the moduli
+//  properly, e.g., for plane stress or plane strain according to their
+//  application. This differs from `NeoHookeanEnergy`, which always expects
+//  moduli for the 3D volumetric material and implements plane stress
+//  assumptions internally to implement the 2D energy density.
+*/
+//  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
+//  Created:  10/23/2020 15:45:32
+////////////////////////////////////////////////////////////////////////////////
+#ifndef ISOCRLETENSIONFIELD_HH
+#define ISOCRLETENSIONFIELD_HH
+
+template <typename _Real>
+struct IsoCRLETensionFieldMembrane {
+    static constexpr size_t Dimension          = 2;
+    static constexpr size_t EmbeddingDimension = 3;
+    static constexpr size_t N                  = Dimension;
+    static constexpr size_t M                  = EmbeddingDimension;
+    using Real = _Real;
+    using M32d = Eigen::Matrix<Real, 3, 2>;
+    using M3d  = Eigen::Matrix<Real, 3, 3>;
+    using M2d  = Eigen::Matrix<Real, 2, 2>;
+    using V3d  = Eigen::Matrix<Real, 3, 1>;
+    using V2d  = Eigen::Matrix<Real, 2, 1>;
+    using Matrix = M32d;
+
+    static constexpr const char *name() { return "IsoCRLETensionFieldMembrane"; }
+
+    // Construct from Young's moduli
+    IsoCRLETensionFieldMembrane(Real E, Real nu) {
+        setYoungPoisson(E, nu, false);
+        setDeformationGradient(M32d::Identity());
+    }
+
+    // Constructor copying material properties and settings only, not the current deformation
+    IsoCRLETensionFieldMembrane(const IsoCRLETensionFieldMembrane &other, UninitializedDeformationTag &&)
+        : relaxationEnabled(other.relaxationEnabled),
+          smoothingEnabled(other.smoothingEnabled) {
+          setYoungPoisson(other.m_E, other.m_nu, false);
+    }
+
+    void setYoungPoisson(Real E, Real nu, bool updateCache = true) {
+        m_E  = E;
+        m_nu = nu;
+        m_lambda_div_nu = m_E / (1 - m_nu * m_nu);
+        if (updateCache) setDeformationGradient(getDeformationGradient());
+    }
+
+    void setDeformationGradient(const M32d &F, const EvalLevel elevel = EvalLevel::Full) {
+        m_F = F;
+        Eigen::JacobiSVD<M32d> svd;
+        svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
+        m_U = svd.matrixU();
+        m_V = svd.matrixV();
+
+        m_sigma  = svd.singularValues();
+        m_strain = m_sigma.array() - 1.0;
+        m_excessStrain = m_strain[1] + m_nu * m_strain[0];
+
+        if (elevel < EvalLevel::Hessian) return;
+    }
+
+    Real c(Real x) const {
+        if (!relaxationEnabled || (x > smoothingEps)) return 0.5 * x * x;
+        if (!smoothingEnabled) return 0.5 * std::pow(std::max<Real>(x, 0), 2);
+        if (x < -smoothingEps) return -std::pow(smoothingEps, 2) / 6.0;
+        return std::pow(smoothingEps, 2) / 12.0 * (std::pow(x / smoothingEps + 1, 3) - 2);
+    }
+
+    Real dc(Real x) const {
+        if (!relaxationEnabled || (x > smoothingEps)) return x;
+        if (!smoothingEnabled) return std::max<Real>(x, 0);
+        if (x < -smoothingEps) return 0.0;
+        return smoothingEps / 4.0 * std::pow(x / smoothingEps + 1, 2);
+    }
+
+    Real d2c(Real x) const {
+        if (!relaxationEnabled || (x > smoothingEps)) return 1;
+        if (!smoothingEnabled) return (x >= 0) ? 1 : 0;
+        if (x < -smoothingEps) return 0.0;
+        return 1.0 / 2.0 * (x / smoothingEps + 1);
+    }
+
+    const M32d &getDeformationGradient() const { return m_F; }
+
+    _Real energy() const { return m_E * c(m_strain[0]) + m_lambda_div_nu * c(m_excessStrain); }
+
+    // PK1 stress
+    _Real denergy(const M32d& dF) const { return doubleContract(denergy(), dF); }
+    M32d denergy() const {
+        Real dPsi_dExcessStrain = m_lambda_div_nu * dc(m_excessStrain);
+        return (m_E * dc(m_strain[0]) + m_nu * dPsi_dExcessStrain) * m_U.col(0) * m_V.col(0).transpose()
+                                             + dPsi_dExcessStrain  * m_U.col(1) * m_V.col(1).transpose();
+    }
+
+    M2d PK2Stress() const { throw std::runtime_error("Unimplemented"); }
+
+    template<class Mat_>
+    M32d delta_denergy(const Mat_ &dF) const {
+        const M32d UtdFV = m_U.transpose() * dF * m_V; // dF in the singular vector basis
+        M32d result; // Result ***in the singular vector basis***
+
+        const bool isRelaxed = relaxationEnabled && (m_excessStrain < (smoothingEnabled ? smoothingEps : 0));
+        const bool isFullyRelaxed = relaxationEnabled && (m_strain[0] < (smoothingEnabled ? -smoothingEps : 0));
+
+        if (isFullyRelaxed) {
+            // Add a small artificial stiffness to avoid a singular Hessian in regions of full compression
+            return relaxedStiffnessEps * unrelaxed_delta_denergy_undeformed(dF);
+        }
+
+        // G (Eigenvalue always nonnegative)
+        {
+            const Real excessStrainStiffness = m_lambda_div_nu * d2c(m_excessStrain);
+            const Real dexcessStrainCoeff = excessStrainStiffness * (UtdFV(1, 1) + m_nu * UtdFV(0, 0));
+            result(0, 0) = m_E * d2c(m_strain[0]) * UtdFV(0, 0) + m_nu * dexcessStrainCoeff;
+            result(1, 1) = dexcessStrainCoeff;
+            if (excessStrainStiffness < relaxedStiffnessEps) {
+                // Add a small artificial stiffness to avoid a singular Hessian in regions of partial compression
+                result(1, 1) += (relaxedStiffnessEps - excessStrainStiffness) * UtdFV(1, 1);
+            }
+        }
+
+        const Real dc_e0_term = m_E * dc(m_strain(0)),
+               dc_excess_term = m_lambda_div_nu * dc(m_strain[1] + m_nu * m_strain[0]);
+        // L (Eigenvalue always nonnegative)
+        Real Lcoeff = 0.5 * (UtdFV(1, 0) + UtdFV(0, 1)); // 0.5 is from the 1/sqrt(2) normalization of each L
+        if (isRelaxed) {
+            Lcoeff *= dc_e0_term + (m_nu - 1) * dc_excess_term;
+            Real den = m_sigma[0] - m_sigma[1];
+            if (den < 1e-16) den = 1e-16;
+            Lcoeff = std::min(Lcoeff / den, 1e5); // clamp to finite value. Very large values should not be problematic since we only use the inverse Hessian...
+        }
+        else {
+            Lcoeff *= m_E / (1 + m_nu); // Use robust formula avoiding 0/0 in unrelaxed case
+        }
+        result(0, 1) = result(1, 0) = Lcoeff;
+
+        // T
+        Real Tcoeff = 0.5 * (dc_e0_term + (m_nu + 1) * dc_excess_term) / (m_sigma[0] + m_sigma[1]);
+        if (hessianProjectionEnabled && Tcoeff < 0.0) Tcoeff = 0.0; // In-plane twisting instability only happens under full compression
+        Tcoeff *= (UtdFV(1, 0) - UtdFV(0, 1));
+        result(1, 0) +=  Tcoeff;
+        result(0, 1) += -Tcoeff;
+
+        // Omega_y
+        Real Omega_y_coeff = (dc_e0_term + m_nu * dc_excess_term) / m_sigma[0];
+        if (hessianProjectionEnabled && Omega_y_coeff < 0.0) Omega_y_coeff = 0.0; // Rotational stability around y happens when element experiences compression in the x (0th) direction
+        result(2, 0) = UtdFV(2, 0) * Omega_y_coeff;
+
+        // Omega_x
+        Real Omega_x_coeff = dc_excess_term / m_sigma[1];
+        if (hessianProjectionEnabled && Omega_x_coeff < 0.0) Omega_x_coeff = 0.0; // Rotational stability around x happens when element experiences compression in the y (1st) direction
+        result(2, 1) = UtdFV(2, 1) * Omega_x_coeff;
+
+        return m_U * result * m_V.transpose(); // Change back to the standard basis
+    }
+
+    _Real d2energy(const M32d &dF_lhs, const M32d &dF_rhs) const {
+        return doubleContract(delta_denergy(dF_lhs), dF_rhs);
+    }
+
+    // Second derivatives evaluated at the corotated reference configuration
+    template<class Mat_>
+    M32d unrelaxed_delta_denergy_undeformed(const Mat_ &dF) const {
+        const M32d UtdFV = m_U.transpose() * dF * m_V; // dF in the singular vector basis
+        const Real PLcoeff = 0.5 * m_E / (1 + m_nu);
+        M32d result; // Result ***in the singular vector basis***
+        Real Pcoeff = PLcoeff * (UtdFV(0, 0) - UtdFV(1, 1));
+        Real Lcoeff = PLcoeff * (UtdFV(1, 0) + UtdFV(0, 1));
+        Real Rcoeff = 0.5 * (m_E / (1 - m_nu)) * (UtdFV(0, 0) + UtdFV(1, 1));
+        result(0, 0) =  Pcoeff + Rcoeff;
+        result(0, 1) =  Lcoeff;
+        result(1, 0) =  Lcoeff;
+        result(1, 1) = -Pcoeff + Rcoeff;
+        result.row(2).setZero();
+        return m_U * result * m_V.transpose(); // Change back to the standard basis
+    }
+
+    template<class Mat_, class Mat2_>
+    M32d delta2_denergy(const Mat_ &/* dF_a */, const Mat2_ &/* dF_b */) const {
+        throw std::runtime_error("Unimplemented.");
+    }
+
+    bool relaxationEnabled = true,
+         smoothingEnabled = true,
+         hessianProjectionEnabled = false;
+    Real smoothingEps = 1 / 256.0;
+    Real relaxedStiffnessEps = 0.0;
+
+    const M3d &U() const { return m_U; }
+    const M2d &V() const { return m_V; }
+    const V2d &principalStrains() const { return m_strain; }
+
+    size_t tensionState() const {
+        if (m_strain[0] < 0)     return 0; // compression in both directions
+        if (m_excessStrain < 0)  return 1; //     tension in one  direction
+        return 2;                          //     tension in both directions
+    }
+
+private:
+    Real m_E = 1.0;   // Young's modulus
+    Real m_nu = 0.5;  // Poisson's ratio
+    Real m_lambda_div_nu = 0.0;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Deformed state quantities
+    ////////////////////////////////////////////////////////////////////////////
+    M3d m_U;
+    M2d m_V;
+    V2d m_sigma, m_strain; // principal stretches (sigma) and strains
+    Real m_excessStrain;
+    M32d m_F;
+};
+
+#endif /* end of include guard: ISOCRLETENSIONFIELD_HH */
