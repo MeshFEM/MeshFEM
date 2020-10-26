@@ -33,17 +33,18 @@ struct IsoCRLETensionFieldMembrane {
 
     static constexpr const char *name() { return "IsoCRLETensionFieldMembrane"; }
 
-    // Construct from Young's moduli
-    IsoCRLETensionFieldMembrane(Real E, Real nu) {
+    // Construct from Young's modulus, Poisson's ratio, defaulting
+    // to values that correspond to a "stiffness" of 1 (in Skouras 2014's
+    // incompressible neo-Hookean model).
+    IsoCRLETensionFieldMembrane(Real E = 6, Real nu = 0.5) {
         setYoungPoisson(E, nu, false);
         setDeformationGradient(M32d::Identity());
     }
 
     // Constructor copying material properties and settings only, not the current deformation
     IsoCRLETensionFieldMembrane(const IsoCRLETensionFieldMembrane &other, UninitializedDeformationTag &&)
-        : relaxationEnabled(other.relaxationEnabled),
-          smoothingEnabled(other.smoothingEnabled) {
-          setYoungPoisson(other.m_E, other.m_nu, false);
+    {
+        copyMaterialProperties(other);
     }
 
     void setYoungPoisson(Real E, Real nu, bool updateCache = true) {
@@ -53,7 +54,16 @@ struct IsoCRLETensionFieldMembrane {
         if (updateCache) setDeformationGradient(getDeformationGradient());
     }
 
-    void setDeformationGradient(const M32d &F, const EvalLevel elevel = EvalLevel::Full) {
+    void copyMaterialProperties(const IsoCRLETensionFieldMembrane &other) {
+        relaxationEnabled        = other.relaxationEnabled;
+        smoothingEnabled         = other.smoothingEnabled;
+        hessianProjectionEnabled = other.hessianProjectionEnabled;
+        smoothingEps             = other.smoothingEps;
+        relaxedStiffnessEps      = other.relaxedStiffnessEps;
+        setYoungPoisson(other.m_E, other.m_nu, false);
+    }
+
+    void setDeformationGradient(const M32d &F, const EvalLevel /* elevel */ = EvalLevel::Full) {
         m_F = F;
         Eigen::JacobiSVD<M32d> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
@@ -63,8 +73,6 @@ struct IsoCRLETensionFieldMembrane {
         m_sigma  = svd.singularValues();
         m_strain = m_sigma.array() - 1.0;
         m_excessStrain = m_strain[1] + m_nu * m_strain[0];
-
-        if (elevel < EvalLevel::Hessian) return;
     }
 
     Real c(Real x) const {
@@ -107,8 +115,8 @@ struct IsoCRLETensionFieldMembrane {
         const M32d UtdFV = m_U.transpose() * dF * m_V; // dF in the singular vector basis
         M32d result; // Result ***in the singular vector basis***
 
-        const bool isRelaxed = relaxationEnabled && (m_excessStrain < (smoothingEnabled ? smoothingEps : 0));
-        const bool isFullyRelaxed = relaxationEnabled && (m_strain[0] < (smoothingEnabled ? -smoothingEps : 0));
+        const bool isRelaxed      = relaxationEnabled && (m_excessStrain < (smoothingEnabled ?  smoothingEps : 0));
+        const bool isFullyRelaxed = relaxationEnabled && (   m_strain[0] < (smoothingEnabled ? -smoothingEps : 0));
 
         if (isFullyRelaxed) {
             // Add a small artificial stiffness to avoid a singular Hessian in regions of full compression
@@ -130,17 +138,17 @@ struct IsoCRLETensionFieldMembrane {
         const Real dc_e0_term = m_E * dc(m_strain(0)),
                dc_excess_term = m_lambda_div_nu * dc(m_strain[1] + m_nu * m_strain[0]);
         // L (Eigenvalue always nonnegative)
-        Real Lcoeff = 0.5 * (UtdFV(1, 0) + UtdFV(0, 1)); // 0.5 is from the 1/sqrt(2) normalization of each L
+        Real Lcoeff;
         if (isRelaxed) {
-            Lcoeff *= dc_e0_term + (m_nu - 1) * dc_excess_term;
+            Lcoeff = dc_e0_term + (m_nu - 1) * dc_excess_term;
             Real den = m_sigma[0] - m_sigma[1];
             if (den < 1e-16) den = 1e-16;
-            Lcoeff = std::min(Lcoeff / den, 1e5); // clamp to finite value. Very large values should not be problematic since we only use the inverse Hessian...
+            Lcoeff = std::min<Real>(std::abs(Lcoeff / den), 1e4); // clamp to moderate finite value. Largish values should not be problematic since we only use the inverse Hessian...
         }
         else {
-            Lcoeff *= m_E / (1 + m_nu); // Use robust formula avoiding 0/0 in unrelaxed case
+            Lcoeff = m_E / (1 + m_nu); // Use robust formula avoiding 0/0 in unrelaxed case
         }
-        result(0, 1) = result(1, 0) = Lcoeff;
+        result(0, 1) = result(1, 0) = 0.5 * Lcoeff * (UtdFV(1, 0) + UtdFV(0, 1)); // 0.5 is from the 1/sqrt(2) normalization of each L
 
         // T
         Real Tcoeff = 0.5 * (dc_e0_term + (m_nu + 1) * dc_excess_term) / (m_sigma[0] + m_sigma[1]);
@@ -191,8 +199,8 @@ struct IsoCRLETensionFieldMembrane {
     bool relaxationEnabled = true,
          smoothingEnabled = true,
          hessianProjectionEnabled = false;
-    Real smoothingEps = 1 / 256.0;
-    Real relaxedStiffnessEps = 0.0;
+    Real smoothingEps = 1 / 512.0;
+    Real relaxedStiffnessEps = 1e-8;
 
     const M3d &U() const { return m_U; }
     const M2d &V() const { return m_V; }
@@ -204,7 +212,19 @@ struct IsoCRLETensionFieldMembrane {
         return 2;                          //     tension in both directions
     }
 
-private:
+    // Legacy interface for compatibility with incompressible neo-Hookean material
+    // from Skouras 2014 (which uses a Poisson's ratio of 0.5 and has just has
+    // a single "stiffness" parameter corresponding to mu / 2)
+    void setStiffness(Real val) {
+        this->m_E = 6.0 * val;
+        this->m_nu = 0.5;
+    }
+    Real stiffness() const { return this->m_E / 6.0; }
+    void setRelaxedStiffnessEpsilon(Real val) { relaxedStiffnessEps = val; }
+    void setRelaxationEnabled(bool enabled)       { relaxationEnabled = enabled; }
+    bool getRelaxationEnabled()             const { return relaxationEnabled; }
+
+protected:
     Real m_E = 1.0;   // Young's modulus
     Real m_nu = 0.5;  // Poisson's ratio
     Real m_lambda_div_nu = 0.0;

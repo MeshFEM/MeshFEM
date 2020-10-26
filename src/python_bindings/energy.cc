@@ -220,6 +220,7 @@ PYBIND11_MODULE(energy, m)
         .def_property_readonly("U",                &IsoCRLETensionFieldMembrane::U)
         .def_property_readonly("V",                &IsoCRLETensionFieldMembrane::V)
         .def_property_readonly("principalStrains", &IsoCRLETensionFieldMembrane::principalStrains)
+        .def("principalBiotStrains", &IsoCRLETensionFieldMembrane::principalStrains)
         .def("tensionState", &IsoCRLETensionFieldMembrane::tensionState)
         ;
 
