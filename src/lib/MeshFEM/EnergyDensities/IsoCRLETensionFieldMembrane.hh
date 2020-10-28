@@ -143,7 +143,7 @@ struct IsoCRLETensionFieldMembrane {
             Lcoeff = dc_e0_term + (m_nu - 1) * dc_excess_term;
             Real den = m_sigma[0] - m_sigma[1];
             if (den < 1e-16) den = 1e-16;
-            Lcoeff = std::min<Real>(std::abs(Lcoeff / den), 1e4); // clamp to moderate finite value. Largish values should not be problematic since we only use the inverse Hessian...
+            Lcoeff = std::min<Real>(std::abs(Lcoeff / den), 1e6); // clamp to moderate finite value. Largish values should not be problematic since we only use the inverse Hessian...
         }
         else {
             Lcoeff = m_E / (1 + m_nu); // Use robust formula avoiding 0/0 in unrelaxed case

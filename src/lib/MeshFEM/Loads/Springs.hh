@@ -32,7 +32,7 @@ struct AttachmentPointCoordinate {
         : varIndices(0), coefficients(VXd::Constant(1, c)) { }
 
     bool isFixedAnchor() const { return varIndices.size() == 0; }
-    void validate(size_t N) const {
+    void validate() const {
         if (isFixedAnchor())  {
             if (size_t(coefficients.size()) != 1) throw std::runtime_error("Anchor point component should have only one coefficent");
         }
@@ -77,8 +77,8 @@ struct Springs : public Load<Object::N, typename Object::Real> {
     {
         if (coordsA.size() != coordsB.size()) throw std::runtime_error("Attachment point size mismatch");
         if (size_t(stiffnesses.size()) != coordsA.size()) throw std::runtime_error("Spring stiffnesses size mismatch");
-        for (const auto &p : coordsA) p.validate(N);
-        for (const auto &p : coordsB) p.validate(N);
+        for (const auto &p : coordsA) p.validate();
+        for (const auto &p : coordsB) p.validate();
 
         m_updateCache();
         m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
@@ -103,7 +103,7 @@ struct Springs : public Load<Object::N, typename Object::Real> {
     virtual VXd grad_X() const override { return VXd::Zero(m_grad.size()); }
 
     // Hessian with respect to deformed configuration (H_xx)
-    virtual void hessian(SuiteSparseMatrix &H, bool projectionMask = true) const override {
+    virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
         const size_t ns = numSprings();
 
         auto addInteractions = [&](const APC &coords1, const APC &coords2, Real stiffness, bool crossTerms) {
@@ -117,8 +117,6 @@ struct Springs : public Load<Object::N, typename Object::Real> {
             }
         };
         for (size_t s = 0; s < ns; ++s) {
-            const auto &varIdxsA = m_coordsA[s].varIndices;
-            const auto &varIdxsB = m_coordsB[s].varIndices;
             addInteractions(m_coordsA[s], m_coordsA[s], m_k[s], false);
             addInteractions(m_coordsB[s], m_coordsB[s], m_k[s], false);
             addInteractions(m_coordsA[s], m_coordsB[s], m_k[s],  true);
@@ -132,7 +130,6 @@ struct Springs : public Load<Object::N, typename Object::Real> {
         const size_t ns = numSprings();
 
         auto addInteractions = [&](const APC &coords1, const APC &coords2, bool crossTerms) {
-            Real sign = crossTerms ? -1.0 : 1.0;
             for (int ii = 0; ii < coords1.varIndices.size(); ++ii) {
                 for (int jj = (crossTerms ? 0 : ii); jj < coords2.varIndices.size(); ++jj) { // Visit each unordered pair once
                     int i = coords1.varIndices[ii],
@@ -142,8 +139,6 @@ struct Springs : public Load<Object::N, typename Object::Real> {
             }
         };
         for (size_t s = 0; s < ns; ++s) {
-            const auto &varIdxsA = m_coordsA[s].varIndices;
-            const auto &varIdxsB = m_coordsB[s].varIndices;
             addInteractions(m_coordsA[s], m_coordsA[s], false);
             addInteractions(m_coordsB[s], m_coordsB[s], false);
             addInteractions(m_coordsA[s], m_coordsB[s],  true);
