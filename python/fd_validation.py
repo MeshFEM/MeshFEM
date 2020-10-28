@@ -38,10 +38,59 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
     analytic_delta_E = g.dot(perturb)
 
     fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
+    obj.setVars(xold)
 
     return (fd_delta_E, analytic_delta_E)
 
+def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars = [], nprobes = 3):
+    """
+    Use a simple binary search to hone in on bad components of the gradient.
+    This isn't guaranteed to find the worst component, but it should find one
+    of the worse ones.
+    """
+    xold, xeval, perturb = preamble(obj, xeval, None, fixedVars)
+    obj.setVars(xeval)
+
+    obj.setVars(xeval)
+    g = evalWithCustomArgs(obj.gradient, customArgs)
+
+    # Determine the total error across `nprobes` perturbations of interval
+    # the [lowIdx, upIdx] (inclusive)
+    def errForRange(lowIdx, upIdx):
+        if lowIdx > upIdx: return 0
+        err = 0
+        for i in range(nprobes):
+            perturb = np.random.uniform(low=-1, high=1, size=obj.numVars())
+            perturb[fixedVars] = 0
+            perturb[0:lowIdx] = 0
+            perturb[upIdx + 1:] = 0
+
+            fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
+            analytic_delta_E = g.dot(perturb)
+            err += np.abs(analytic_delta_E - fd_delta_E)
+        return err
+
+    lowIdx, upIdx = 0, len(perturb)
+    while upIdx > lowIdx:
+        # print([lowIdx, upIdx])
+        mid = (lowIdx + upIdx) // 2
+        if errForRange(lowIdx, mid) > errForRange(mid + 1, upIdx):
+            upIdx = mid
+        else:
+            lowIdx = mid + 1
+
+    obj.setVars(xold)
+
+    return lowIdx
+
 def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None):
+    """
+    Returns
+    -------
+        relative error (in l2 norm)
+        finite difference delta gradient
+        analytic delta gradient
+    """
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
     def gradAt(x):
