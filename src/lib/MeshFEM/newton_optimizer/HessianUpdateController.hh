@@ -52,6 +52,7 @@ struct HessianUpdateNever: public HessianUpdateController {
 };
 
 // Update the Hessian factorization every `period` iterations
+// (Setting period to 0 means the Hessian is always updated.)
 struct HessianUpdatePeriodic: public HessianUpdateController {
     size_t period = 2;
 

@@ -131,6 +131,13 @@ void bindNeoHookeanEnergy(py::module& detail_module)
 }
 
 template<size_t _Dimension>
+void bindNeoHookeanEnergyHP(py::module& detail_module)
+{
+    auto ebind = bindEnergyFBasedAutoProjected<NeoHookeanEnergy<double, _Dimension>>(detail_module);
+    ebind.def(py::init<double, double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"), py::arg("finite_continuation_start") = -1);
+}
+
+template<size_t _Dimension>
 void bindStVKEnergy(py::module &detail_module)
 {
     using STVK = StVenantKirchhoffEnergy<double, _Dimension>;
@@ -146,9 +153,15 @@ void bindStVKEnergyHP(py::module &detail_module)
     ebind.def(py::init<const typename STVK::ETensor&>(), py::arg("elasticity_tensor"));
 }
 
-py::object constructNeoHookean(size_t dimension, double lambda, double mu, double finiteContinuationStart) {
-    if (dimension == 2) return py::cast(new NeoHookeanEnergy<double, 2>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
-    if (dimension == 3) return py::cast(new NeoHookeanEnergy<double, 3>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+py::object constructNeoHookean(bool autoprojected, size_t dimension, double lambda, double mu, double finiteContinuationStart) {
+    if (autoprojected) {
+        if (dimension == 2) return py::cast(new AutoHessianProjection<NeoHookeanEnergy<double, 2>>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+        if (dimension == 3) return py::cast(new AutoHessianProjection<NeoHookeanEnergy<double, 3>>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+    }
+    else {
+        if (dimension == 2) return py::cast(new NeoHookeanEnergy<double, 2>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+        if (dimension == 3) return py::cast(new NeoHookeanEnergy<double, 3>(lambda, mu, finiteContinuationStart), py::return_value_policy::take_ownership);
+    }
     throw std::runtime_error("Argument 'dimension' must be 2 or 3");
 }
 
@@ -185,6 +198,8 @@ PYBIND11_MODULE(energy, m)
     bindLinearElasticEnergy<3>  (detail_module);
     bindNeoHookeanEnergy<2>     (detail_module);
     bindNeoHookeanEnergy<3>     (detail_module);
+    bindNeoHookeanEnergyHP<2>   (detail_module);
+    bindNeoHookeanEnergyHP<3>   (detail_module);
     bindCRLinearElasticEnergy<2>(detail_module);
     bindCRLinearElasticEnergy<3>(detail_module);
     bindStVKEnergy<2>           (detail_module);
@@ -261,8 +276,8 @@ PYBIND11_MODULE(energy, m)
     bindWrinkleStrainProblem<  IsotropicWrinkleStrainProblem<INeo_C>>(m,   "IsotropicWrinkleStrainProblemINeo");
     bindWrinkleStrainProblem<AnisotropicWrinkleStrainProblem<INeo_C>>(m, "AnisotropicWrinkleStrainProblemINeo");
 
-    m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
-    m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, double finiteContinuationStart) {                                                                     return constructNeoHookean(false, dimension, lambda, mu, finiteContinuationStart); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(false, dimension, lambda, mu, finiteContinuationStart); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookeanMembrane", [](double lambda, double mu, double finiteContinuationStart) { return std::make_unique<NeoHookeanMembrane>(lambda, mu, finiteContinuationStart); }, py::arg("lambda"), py::arg("mu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("LinearElastic",             [](const ETensor3D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 3>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("LinearElastic",             [](const ETensor2D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 2>>(etensor); }, py::arg("elasticity_tensor"));
@@ -295,9 +310,11 @@ PYBIND11_MODULE(energy, m)
     auto     muFromENu = [](double E, double nu)                   { return E / (2 * (1 + nu)); };
 
     // Convenience method for constructing a neo-Hookean material from a Young's modulus Poisson's ratio
-    m.def("NeoHookeanYoungPoisson",         [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
-    m.def("NeoHookeanYoungPoisson",         [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoisson",         [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(false, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoisson",         [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(false, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookeanMembraneYoungPoisson", [&](                  double E, double nu, double finiteContinuationStart) {                                                               return std::make_unique<NeoHookeanMembrane>(lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); },                       py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoissonAutoProjected", [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(true, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
+    m.def("NeoHookeanYoungPoissonAutoProjected", [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(true, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
 
     m.def("IsoCRLEWithHessianProjection",   [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsoCRLEWithHessianProjection",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));

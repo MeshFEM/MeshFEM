@@ -65,6 +65,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("feasibilitySolve",              &NewtonOptimizerOptions::feasibilitySolve)
         .def_readwrite("verbose",                       &NewtonOptimizerOptions::verbose)
         .def_readwrite("verboseNonPosDef",              &NewtonOptimizerOptions::verboseNonPosDef)
+        .def_readwrite("stdoutFlushInterval",           &NewtonOptimizerOptions::stdoutFlushInterval)
         .def_readwrite("nbacktrack_iter",               &NewtonOptimizerOptions::nbacktrack_iter)
         .def_readwrite("ngd_fallback_steps",            &NewtonOptimizerOptions::ngd_fallback_steps)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },

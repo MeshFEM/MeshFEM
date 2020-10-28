@@ -80,6 +80,9 @@ namespace impl {
 template<typename _Real, size_t _N>
 using StVenantKirchhoffEnergyHP = AutoHessianProjection<StVenantKirchhoffEnergy<_Real, _N>>;
 
+template<typename _Real, size_t _N>
+using NeoHookeanEnergyHP = AutoHessianProjection<NeoHookeanEnergy<_Real, _N>>;
+
 template<class ESBinder>
 void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
     // For each energy, generate an elastic solid binding
@@ -91,6 +94,7 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
 
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,           NeoHookeanEnergyHP>(b));
 }
 
 template<class ESBinder>

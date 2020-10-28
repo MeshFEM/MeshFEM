@@ -310,8 +310,9 @@ struct NewtonOptimizerOptionsBase {
     bool useNegativeCurvatureDirection = true; // Whether to compute and move in negative curvature directions to escape from saddle points.
     bool feasibilitySolve = true;              // Whether to solve for a feasible starting point or rely on the problem to jump to feasible parameters.
     int verbose = 1;
-    bool writeIterateFiles = false;
     bool verboseNonPosDef = false;             // Print CHOLMOD warning for non-pos-def matrices
+    int stdoutFlushInterval = 1;               // How often to flush stdout (e.g., for immediate updates in Jupyter notebook or for reduced disk i/o when redirecting to a file in a HPC setting)
+    bool writeIterateFiles = false;
     // Warning: the following fields are NOT serialized for reasons of backwards compatibility
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction

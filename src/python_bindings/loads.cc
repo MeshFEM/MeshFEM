@@ -10,6 +10,9 @@ namespace py = pybind11;
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
+#include <MeshFEM/Loads/Springs.hh>
+
+using APC = Loads::AttachmentPointCoordinate<double>;
 
 template<size_t N>
 void bind(py::module &m) {
@@ -57,6 +60,31 @@ struct LoadBinder {
                     return std::make_shared<SLoad>(obj, clusterVtxs, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("clusterVtxs"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
              ;
+
+        ////////////////////////////////////////////////////////////////////////
+        // Springs
+        ////////////////////////////////////////////////////////////////////////
+        using Springs = Loads::Springs<Object>;
+        using VXd  = Eigen::VectorXd;
+        py::class_<Springs, Load, std::shared_ptr<Springs>>(detail_module, ("Springs" + NameMangler<Object>::name()).c_str())
+            .def("getStiffnesses", &Springs::getStiffnesses)
+            .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
+            .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
+            ;
+        module.def("Springs", [&](const std::shared_ptr<Object> &obj,
+                                  const std::vector<APC> &coordsA,
+                                  const std::vector<APC> &coordsB,
+                                  Eigen::Ref<const VXd> stiffnesses) {
+                    return std::make_shared<Springs>(obj, coordsA, coordsB, stiffnesses);
+                }, py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffnesses"))
+             ;
+        module.def("Springs", [&](const std::shared_ptr<Object> &obj,
+                                  const std::vector<APC> &coordsA,
+                                  const std::vector<APC> &coordsB,
+                                  typename Springs::Real stiffness) {
+                    return std::make_shared<Springs>(obj, coordsA, coordsB, stiffness);
+                }, py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffness"))
+             ;
     }
 
     template<class Object>
@@ -72,4 +100,13 @@ PYBIND11_MODULE(loads, m)
 
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());
+
+    py::class_<APC>(m, "AttachmentPointCoordinate")
+        .def(py::init<Eigen::Ref<const typename APC::VXi>, Eigen::Ref<const typename APC::VXd>>(), py::arg("varIndices"), py::arg("coefficients"), "Material attachment point coordinate")
+        .def(py::init<typename APC::Real                                                      >(), py::arg("coordinate"),                          "Fixed anchor point coordinate")
+        .def("isFixedAnchor", &APC::isFixedAnchor)
+        .def("getPosition",   &APC::getPosition, py::arg("vars"))
+        .def_readwrite("varIndices",   &APC::varIndices)
+        .def_readwrite("coefficients", &APC::coefficients)
+        ;
 }

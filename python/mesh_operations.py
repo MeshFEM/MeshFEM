@@ -56,6 +56,22 @@ def polylineToLineMesh(polyline):
     idxs = np.arange(polyline.shape[0] - 1)
     return polyline, np.column_stack([idxs, idxs + 1])
 
+def closedPolylinesToLineMesh(polylines):
+    """
+    Convert a list of closed polylines (list of 2D arrays each containing a
+    sequence of points with identical first and last rows) into a (V, E)
+    indexed line mesh.
+    """
+    V = np.vstack([V[0:-1] for V in polylines])
+    E = []
+    idxOffset = 0
+    for p in polylines:
+        npts = len(p) - 1 # discard duplicate last point
+        idxs = np.arange(npts)
+        E.append(idxOffset + np.column_stack([idxs, (idxs + 1) % npts]))
+        idxOffset += npts
+    return V, np.vstack(E)
+
 def removeDanglingVertices(V, F):
     """
     Remove vertices unreferenced by `F` and renumber the remaining vertices.

@@ -198,6 +198,8 @@ ConvergenceReport NewtonOptimizer::optimize() {
         if (options.verbose && ((i % options.verbose) == 0)) {
             std::cout << i << '\t';
             report.printEntry();
+            if (i % options.stdoutFlushInterval == 0)
+                std::cout << std::flush;
         }
     };
 
