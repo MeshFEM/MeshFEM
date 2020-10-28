@@ -2,7 +2,7 @@ import numpy as np
 import pythreejs
 import ipywidgets
 import ipywidgets.embed
-from tri_mesh_viewer import TriMeshViewer
+from tri_mesh_viewer import TriMeshViewer, replicateAttributesPerTriCorner
 
 class ModeViewer(TriMeshViewer):
     def __init__(self, structure, modeDoF = None, eigenvalues = None, width=512, height=512, numSteps=8, amplitude = 0.05, normalize = True, wireframe = False):
@@ -50,7 +50,6 @@ class ModeViewer(TriMeshViewer):
     def setModes(self, modeDoF, eigenvalues = None, amplitude = None):
         if (amplitude is None): amplitude = self.amplitude
         self.amplitude = amplitude
-
 
         if (len(modeDoF) != self.numVars): raise Exception(f'Invalid mode size: {len(modeDoF)} vs {self.numVars}')
 
@@ -100,9 +99,16 @@ class ModeViewer(TriMeshViewer):
 
         for modulation in modulations:
             self.varSetter(currVars + modulation * normalizedOffset)
-            pts, tris, normals = self.mesh.visualizationGeometry()
-            morphTargetPositionsRaw.append(pts)
-            morphTargetNormalsRaw  .append(normals)
+            pts, tris, normals = super().getVisualizationGeometry()
+
+            needsReplication = normals.shape[0] != pts.shape[0] # detect non-vertex normals
+            attrRaw = {'position': pts,
+                       'index':    tris.ravel(),
+                       'normal':   normals}
+            if needsReplication: replicateAttributesPerTriCorner(attrRaw)
+
+            morphTargetPositionsRaw.append(attrRaw['position'])
+            morphTargetNormalsRaw  .append(attrRaw['normal'])
         self.varSetter(currVars)
 
         if self.modeMesh is None:
@@ -110,6 +116,7 @@ class ModeViewer(TriMeshViewer):
             # (instead of reusing the viewer's mesh object, otherwise the mesh
             # does not display).
             geom = self.currMesh.geometry
+            geom.attributes
             geom.morphAttributes = {'position': tuple(map(pythreejs.BufferAttribute, morphTargetPositionsRaw)),
                                     'normal':   tuple(map(pythreejs.BufferAttribute, morphTargetNormalsRaw))}
             self.modeMesh = pythreejs.Mesh(geometry=geom, material=self.morphMaterial)
@@ -118,7 +125,7 @@ class ModeViewer(TriMeshViewer):
             self.currMesh = self.modeMesh
             self.meshes.add(self.currMesh)
         else:
-            # Update the exisitng morph position/normal attribute arrays
+            # Update the existing morph position/normal attribute arrays
             geom = self.currMesh.geometry
             assert(len(geom.morphAttributes['position']) == self.numSteps)
             assert(len(geom.morphAttributes['normal'  ]) == self.numSteps)

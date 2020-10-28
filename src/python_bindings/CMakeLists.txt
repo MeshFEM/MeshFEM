@@ -80,9 +80,8 @@ pybind11_add_module(parametrization parametrization.cc)
 set_target_properties(parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(parametrization PUBLIC MeshFEM intel_pybind_14_hack)
 
-# If it is used as submodule, deploy python scripts and libs
-if(NOT MESHFEM_TOPLEVEL_PROJECT)
-    set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
-    file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
-    configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
-endif()
+# Create a `MeshFEM` python module that just sets the correct paths for
+# importing MeshFEM's individual pybind11 modules
+set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
+file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
+configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
