@@ -22,21 +22,21 @@ FieldSamplerImpl<N>::FieldSamplerImpl(const Eigen::MatrixXd &V, const Eigen::Mat
 }
 
 template<size_t N>
-void FieldSamplerImpl<N>::closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
-                                                 Eigen::VectorXd &sq_dists,
-                                                 Eigen::VectorXi &I,
-                                                 Eigen::MatrixXd &C) const {
+void FieldSamplerImpl<N>::m_closestElementAndPointImpl(Eigen::Ref<const Eigen::MatrixXd> P,
+                                                       Eigen::VectorXd &sq_dists,
+                                                       Eigen::VectorXi &I,
+                                                       Eigen::MatrixXd &C) const {
     if (P.cols() != m_V.cols()) throw std::runtime_error("Query points of wrong dimension.");
     m_samplerAABB->squared_distance(m_V, m_F, P, sq_dists, I, C);
 }
 
 template<size_t N>
-void FieldSamplerImpl<N>::closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
-                                                      Eigen::VectorXi &I,
-                                                      Eigen::MatrixXd &B) const {
-    Eigen::VectorXd dists;
-    Eigen::MatrixXd C; // closest points in 3D
-    closestElementAndPoint(P, dists, I, C);
+void FieldSamplerImpl<N>::m_closestElementAndBaryCoordsImpl(Eigen::Ref<const Eigen::MatrixXd> P,
+                                                            Eigen::VectorXd &sq_dists,
+                                                            Eigen::VectorXi &I,
+                                                            Eigen::MatrixXd &B,
+                                                            Eigen::MatrixXd &C) const {
+    m_closestElementAndPointImpl(P, sq_dists, I, C);
 
     const size_t np = P.rows();
     B.resize(np, m_F.cols());

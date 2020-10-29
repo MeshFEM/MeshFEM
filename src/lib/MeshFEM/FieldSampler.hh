@@ -110,15 +110,34 @@ struct MESHFEM_EXPORT FieldSamplerImpl : public FieldSampler {
     virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
                                         Eigen::VectorXd &sq_dists,
                                         Eigen::VectorXi &I,
-                                        Eigen::MatrixXd &C) const override;
+                                        Eigen::MatrixXd &C) const override {
+        m_closestElementAndPointImpl(P, sq_dists, I, C);
+    }
 
     virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
                                              Eigen::VectorXi &I,
-                                             Eigen::MatrixXd &B) const override;
+                                             Eigen::MatrixXd &B) const override {
+        Eigen::VectorXd sq_dists;
+        Eigen::MatrixXd C; // closest points in 3D
+        m_closestElementAndBaryCoordsImpl(P, sq_dists, I, B, C);
+    }
 
     // Need out-of-line destructor since SamplerAABB is an incomplete type
     virtual ~FieldSamplerImpl();
 protected:
+    void m_closestElementAndPointImpl(Eigen::Ref<const Eigen::MatrixXd> P,
+                                      Eigen::VectorXd &sq_dists,
+                                      Eigen::VectorXi &I,
+                                      Eigen::MatrixXd &C) const;
+
+    // Our implementation for getting barycentric coordinates needs to compute
+    // the closest point information anyway, so we expose it too...
+    void m_closestElementAndBaryCoordsImpl(Eigen::Ref<const Eigen::MatrixXd> P,
+                                           Eigen::VectorXd &sq_dists,
+                                           Eigen::VectorXi &I,
+                                           Eigen::MatrixXd &B,
+                                           Eigen::MatrixXd &C) const;
+
     std::unique_ptr<SamplerAABB<N>> m_samplerAABB;
     Eigen::MatrixXd m_V;
     Eigen::MatrixXi m_F;
@@ -240,7 +259,9 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                                              Eigen::VectorXi &I,
                                              Eigen::MatrixXd &B) const override {
         // Get the closest points in the triangles/half-faces of the mesh
-        Base::closestElementAndBaryCoords(P, I, B);
+        Eigen::VectorXd sq_dists;
+        Eigen::MatrixXd C;
+        Base::m_closestElementAndBaryCoordsImpl(P, sq_dists, I, B, C);
         if (!isTetMesh()) return;
 
         // For tet meshes, we still must figure out which tet the closest point
@@ -255,7 +276,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         using AES = AffineEmbeddedSimplex<FEMMesh_::K, typename FEMMesh_::EmbeddingSpace>;
         typename AES::BaryCoords lambda;
         for (size_t i = 0; i < np; ++i) {
-            std::cout << i << std::endl;
             auto hf = detail::getHalfFace(m, halfFaceForFace.at(I[i]));
             auto curr = hf;
             bool inside = false;
@@ -269,7 +289,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                 }
                 curr = curr.opposite();
             } while (curr.valid() && (curr != hf));
-            std::cout << "inside: " << inside << std::endl;
 
             if (!inside) {
                 // If the point is not inside one of the closest face's incident tets
@@ -279,11 +298,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                 t = m.element(curr.element().index());
                 AES simplex(*t, t.vertex(0).node()->p);
                 Eigen::Vector3i closestTri = Ftri.row(I[i]);
-                Eigen::Matrix<double, Dim, 1> projectedPt =
-                    Vtri.row(closestTri[0]) * B(i, 0) +
-                    Vtri.row(closestTri[1]) * B(i, 1) +
-                    Vtri.row(closestTri[2]) * B(i, 2);
-                if (!simplex.contains(projectedPt, lambda, 1e-12))
+                if (!simplex.contains(C.row(i).transpose(), lambda, 1e-12))
                     throw std::runtime_error("Projected point not inside closest tet");
             }
             B.row(i) = lambda.transpose();
@@ -296,7 +311,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                                         Eigen::VectorXi &I,
                                         Eigen::MatrixXd &C) const override {
         // Get the closest points in the triangles/half-faces of the mesh
-        Base::closestElementAndPoint(P, sq_dists, I, C);
+        Base::m_closestElementAndPointImpl(P, sq_dists, I, C);
         if (!isTetMesh()) return;
 
         // Get barycentric coordinates of the closest point in the *tets*
@@ -312,6 +327,8 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                        t.vertex(2).node()->p * B(i, 2) +
                        t.vertex(3).node()->p * B(i, 3);
         }
+
+        sq_dists = (P - C).rowwise().squaredNorm();
     }
 
     // Sample a piecewise polynomial field defined on a FEMMesh. This field is
@@ -390,8 +407,7 @@ protected:
 
 private:
     MeshFieldSampler(const detail::TrisOfMesh &tris, std::shared_ptr<const FEMMesh_> m)
-        : Base(getV(*m), tris.F), m_mesh(m), halfFaceForFace(tris.halfFaceForFace) {
-    }
+        : Base(getV(*m), tris.F), m_mesh(m), halfFaceForFace(tris.halfFaceForFace) { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
