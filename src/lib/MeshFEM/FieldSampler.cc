@@ -16,6 +16,7 @@ struct SamplerAABB : public iglaabb::AABB<Eigen::MatrixXd, int(N)> {
 template<size_t N>
 FieldSamplerImpl<N>::FieldSamplerImpl(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
         : m_V(V), m_F(F) {
+    if (F.cols() > 3) throw std::runtime_error("Raw mesh sampler only works on point/edge/triangle soups; use FEMMesh sampler for tet meshes.");
     m_samplerAABB = std::make_unique<SamplerAABB<N>>();
     m_samplerAABB->init(m_V, m_F);
 }

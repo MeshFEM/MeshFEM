@@ -114,6 +114,17 @@ public:
     TH        simplex() const { return tet(); }
     TH        element() const { return tet(); }
 
+    HFH primary() const {
+        if (isPrimary()) return this;
+        return opposite();
+    }
+
+    bool isPrimary() const {
+        if (m_idx < 0) return false;     // encoded boundary faces aren't primary
+        if (isBoundary()) return true;   // the single interior halfface on the boundary is primary
+        return m_idx < opposite().m_idx; // in the interior, the smaller indexed halfface is primary
+    }
+
     HE halfEdge(size_t lhe) const { return HE(m_mesh.m_heOfHF(m_idx, lhe), m_mesh); }
 
     // Support range-based for over vertices

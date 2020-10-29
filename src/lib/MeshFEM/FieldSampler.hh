@@ -21,6 +21,9 @@
 #include "Functions.hh"
 #include "Utilities/MeshConversion.hh"
 
+#include "TetMesh.hh"
+#include "EmbeddedElement.hh"
+
 #include <MeshFEM_export.h>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +35,7 @@ std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(Eigen::Ref<const Eigen::
                                                         Eigen::Ref<const Eigen::MatrixXi> F);
 template<class FEMMesh_>
 MESHFEM_EXPORT
-std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh);
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FEMMesh_> mesh);
 
 struct MESHFEM_EXPORT FieldSampler {
     template<typename... Args>
@@ -129,7 +132,6 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
 
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
                                    Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
-
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
         this->closestElementAndBaryCoords(P, I, B);
@@ -170,19 +172,154 @@ protected:
     using Base::m_F;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// Triangle/Tet FEMMesh Sampler
+// The MeshFieldSampler provides two features that libigl's AABB does not
+// give directly: sampling higher degree fields and querying tet meshes.
+// Since libigl's AABB only supports simplices up to triangles, we use the hack
+// of constructing an AABB from all internal/boundary faces of a tet mesh.
+// Then, to determine the closest/containing tet for a given query point q, we
+// check which of the (up to) two tets containing the closest face is
+// closest/containing q.
+////////////////////////////////////////////////////////////////////////////////
+namespace detail {
+    struct TrisOfMesh {
+        Eigen::MatrixXi F;
+        std::vector<size_t> halfFaceForFace;
+    };
+
+    template<class FEMMesh_>
+    std::enable_if_t<FEMMesh_::K == 3, TrisOfMesh> getAllTriangles(const FEMMesh_ &m) {
+        TrisOfMesh result;
+        // Get the primary half-faces
+        for (const auto &hf : m.halfFaces()) {
+            if (hf.isPrimary())
+                result.halfFaceForFace.push_back(hf.index());
+        }
+
+        auto &hfff = result.halfFaceForFace;
+        result.F.resize(hfff.size(), 3);
+        for (size_t i = 0; i < hfff.size(); ++i) {
+            auto hf = m.halfFace(hfff[i]);
+            result.F(i, 0) = hf.vertex(0).index();
+            result.F(i, 1) = hf.vertex(1).index();
+            result.F(i, 2) = hf.vertex(2).index();
+        }
+
+        return result;
+    }
+
+    // Triangle mesh version just gets the mesh's elements, returning an empty halfFaceForFace
+    template<class FEMMesh_>
+    std::enable_if_t<FEMMesh_::K == 2, TrisOfMesh> getAllTriangles(const FEMMesh_ &m) {
+        TrisOfMesh result;
+        result.F = getF(m);
+        return result;
+    }
+
+    template<class FEMMesh_, typename = std::enable_if_t<FEMMesh_::K == 3>>
+    auto getHalfFace(const FEMMesh_ &m, int i) -> decltype(m.halfFace(0)) { return m.halfFace(i); }
+
+    template<class FEMMesh_, typename = std::enable_if_t<FEMMesh_::K == 2>>
+    auto getHalfFace(const FEMMesh_ &m, int i) -> typename TetMesh<>::template HFHandle<TetMesh<>> { throw std::logic_error("This should not run!"); }
+}
+
+
 template<class FEMMesh_>
 struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
-    using Base = FieldSamplerImpl<FEMMesh_::EmbeddingDimension>;
+    static constexpr size_t Dim = FEMMesh_::EmbeddingDimension;
+    using Base = FieldSamplerImpl<Dim>;
 
-    MeshFieldSampler(const FEMMesh_ &m)
-        : Base(getV(m), getF(m)), m_mesh(m) { }
+    static std::unique_ptr<FieldSampler> construct(std::shared_ptr<const FEMMesh_> m) {
+        return std::unique_ptr<MeshFieldSampler>(new MeshFieldSampler(detail::getAllTriangles(*m), m)); // Can't use make_unique because of private constructor
+    }
+
+    static constexpr bool isTetMesh() { return FEMMesh_::K == 3; }
+
+    virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
+                                             Eigen::VectorXi &I,
+                                             Eigen::MatrixXd &B) const override {
+        // Get the closest points in the triangles/half-faces of the mesh
+        Base::closestElementAndBaryCoords(P, I, B);
+        if (!isTetMesh()) return;
+
+        // For tet meshes, we still must figure out which tet the closest point
+        // lies in (and its barycentric coordinates in that tet).
+        auto &Vtri = this->m_V;
+        auto &Ftri = this->m_F;
+
+        B.conservativeResize(P.rows(), 4); // first three columns still hold the half-face barycentric coordinates
+        const size_t np = I.rows();
+        const auto &m = *m_mesh;
+        auto t = m.element(0);
+        using AES = AffineEmbeddedSimplex<FEMMesh_::K, typename FEMMesh_::EmbeddingSpace>;
+        typename AES::BaryCoords lambda;
+        for (size_t i = 0; i < np; ++i) {
+            std::cout << i << std::endl;
+            auto hf = detail::getHalfFace(m, halfFaceForFace.at(I[i]));
+            auto curr = hf;
+            bool inside = false;
+            do {
+                t = m.element(curr.element().index());
+                assert(t.valid());
+                AES simplex(*t, t.vertex(0).node()->p);
+                if (simplex.contains(P.row(0).transpose(), lambda, 1e-12)) {
+                    inside = true;
+                    break;
+                }
+                curr = curr.opposite();
+            } while (curr.valid() && (curr != hf));
+            std::cout << "inside: " << inside << std::endl;
+
+            if (!inside) {
+                // If the point is not inside one of the closest face's incident tets
+                // it must be outside the mesh. Find the barycentric coordinates of the
+                // closest point in the mesh, which must lie in the primary tet of
+                // the closest face.
+                t = m.element(curr.element().index());
+                AES simplex(*t, t.vertex(0).node()->p);
+                Eigen::Vector3i closestTri = Ftri.row(I[i]);
+                Eigen::Matrix<double, Dim, 1> projectedPt =
+                    Vtri.row(closestTri[0]) * B(i, 0) +
+                    Vtri.row(closestTri[1]) * B(i, 1) +
+                    Vtri.row(closestTri[2]) * B(i, 2);
+                if (!simplex.contains(projectedPt, lambda, 1e-12))
+                    throw std::runtime_error("Projected point not inside closest tet");
+            }
+            B.row(i) = lambda.transpose();
+            I[i] = t.index();
+        }
+    }
+
+    virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
+                                        Eigen::VectorXd &sq_dists,
+                                        Eigen::VectorXi &I,
+                                        Eigen::MatrixXd &C) const override {
+        // Get the closest points in the triangles/half-faces of the mesh
+        Base::closestElementAndPoint(P, sq_dists, I, C);
+        if (!isTetMesh()) return;
+
+        // Get barycentric coordinates of the closest point in the *tets*
+        Eigen::MatrixXd B;
+        closestElementAndBaryCoords(P, I, B);
+
+        const size_t np = I.rows();
+        const auto &m = *m_mesh;
+        for (size_t i = 0; i < np; ++i) {
+            auto t = m.element(I[i]);
+            C.row(i) = t.vertex(0).node()->p * B(i, 0) +
+                       t.vertex(1).node()->p * B(i, 1) +
+                       t.vertex(2).node()->p * B(i, 2) +
+                       t.vertex(3).node()->p * B(i, 3);
+        }
+    }
 
     // Sample a piecewise polynomial field defined on a FEMMesh. This field is
     // auto-detected based on its size as either per-vertex, per-element, or
     // per-node.
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
                                    Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
-        const auto &m = m_mesh;
+        const auto &m = *m_mesh;
 
         // Look up the sample points' closest elements and barycentric coordinates
         Eigen::VectorXi I;
@@ -239,25 +376,30 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
             Eigen::Map<EigenEvalPt<K>>(b.data(), b.size()) = B.row(i);
             int lni;
             shapeFunctions<FEMMesh_::Deg, K>(b).maxCoeff(&lni);
-            const auto &n = m_mesh.element(I[i]).node(lni);
+            const auto &n = m_mesh->element(I[i]).node(lni);
             NI[i] = n.index();
             sqDist[i] = (n->p - P.row(i).transpose()).squaredNorm();
         }
     }
 
 protected:
-    const FEMMesh_ &m_mesh;
+    std::shared_ptr<const FEMMesh_> m_mesh;
+    std::vector<size_t> halfFaceForFace;
     using Base::m_V;
     using Base::m_F;
+
+private:
+    MeshFieldSampler(const detail::TrisOfMesh &tris, std::shared_ptr<const FEMMesh_> m)
+        : Base(getV(*m), tris.F), m_mesh(m), halfFaceForFace(tris.halfFaceForFace) {
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Templated Factory Function Definitions
 ////////////////////////////////////////////////////////////////////////////////
 template<class FEMMesh_>
-std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh) {
-    return std::unique_ptr<FieldSampler>(static_cast<FieldSampler *>(new MeshFieldSampler<FEMMesh_>(mesh)));
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FEMMesh_> mesh) {
+    return MeshFieldSampler<FEMMesh_>::construct(mesh);
 }
-
 
 #endif /* end of include guard: FIELDSAMPLER_HH */

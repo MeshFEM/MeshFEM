@@ -14,7 +14,7 @@ struct SamplingMeshBinder {
 
     template<class Mesh>
     void bind(py::module &/* m */, py::module &/* detail_module */) {
-        m_pyFS.def(py::init([](const Mesh &mesh) {
+        m_pyFS.def(py::init([](std::shared_ptr<const Mesh> mesh) {
                         return FieldSampler::construct(mesh);
                     }), py::arg("mesh"))
         ;
