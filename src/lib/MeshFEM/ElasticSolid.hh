@@ -53,7 +53,7 @@ public:
     using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
     using GradPhis = typename Mesh::ElementData::GradPhis;
 
-    ElasticSolid(const Energy &energy, const std::shared_ptr<const Mesh> &mesh)
+    ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
 
     // Degree-changing constructor
@@ -345,8 +345,38 @@ public:
         ::filterRMPinArtifacts(*this, pinVertices);
     }
 
+    virtual std::unique_ptr<FieldSampler> referenceConfigSampler() const override {
+        return FieldSampler::construct(std::shared_ptr<const Mesh>(m_mesh)); // work around template parameter deduction issue
+    }
+
+    virtual SuiteSparseMatrix deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
+        if (size_t(P.cols()) != N) throw std::runtime_error("Incorrect sample point dimension");
+        size_t np = P.rows();
+
+        TripletMatrix<Triplet<Real>> triplet_result(N * np, numVars());
+
+        auto fs = referenceConfigSampler();
+        Eigen::VectorXi I;
+        Eigen::MatrixXd B;
+        fs->closestElementAndBaryCoords(P, I, B);
+
+        for (size_t i = 0; i < np; ++i) {
+            const auto &e = mesh().element(I[i]);
+            EvalPtN x;
+            for (size_t j = 0; j < x.size(); ++j)
+                x[j] = B(i, j);
+            auto phis = e->phis(x);
+            for (size_t j = 0; j < numNodesPerElement; ++j) {
+                for (size_t c = 0; c < N; ++c)
+                    triplet_result.addNZ(N * i + c, N * e.node(j).index() + c, phis[j]);
+            }
+        }
+
+        return SuiteSparseMatrix(triplet_result);
+    }
+
 protected:
-    std::shared_ptr<const Mesh> m_mesh;
+    std::shared_ptr<Mesh> m_mesh;
     // Energy density for each element (with support for multi-material solids).
     // For single-material solids, this vector will contain only a single entry.
     std::vector<Energy> m_energyDensities;

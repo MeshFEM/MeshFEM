@@ -442,6 +442,10 @@ public:
         return m_hessianProjectionType;
     }
 
+    virtual std::unique_ptr<FieldSampler> referenceConfigSampler() const override {
+        return FieldSampler::construct(std::shared_ptr<const Mesh>(m_mesh)); // work around template parameter deduction issue
+    }
+
 private:
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.

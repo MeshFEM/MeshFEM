@@ -31,6 +31,31 @@ struct AttachmentPointCoordinate {
     AttachmentPointCoordinate(Real c)
         : varIndices(0), coefficients(VXd::Constant(1, c)) { }
 
+    static std::vector<AttachmentPointCoordinate> fromDeformationSamplerMatrix(const SuiteSparseMatrix &dsm) {
+        std::vector<AttachmentPointCoordinate> result;
+        result.reserve(dsm.m);
+        // The rows of dsm give the indices/coefficients defining each attachment point coordinate.
+        // We must work with the transpose so that these rows are contiguous in our compressed column format.
+        auto dsm_t = dsm.transpose();
+        using Index = decltype(dsm_t.n);
+        using IndexVec = Eigen::Matrix<Index, Eigen::Dynamic, 1>;
+        for (Index c = 0; c < dsm_t.n; ++c) {
+            Index begin = dsm_t.Ap[c], end = dsm_t.Ap[c + 1];
+            result.emplace_back(Eigen::Map<const IndexVec>(&dsm_t.Ai[begin], end - begin).template cast<typename VXi::Scalar>(),
+                                Eigen::Map<const VXd>(&dsm_t.Ax[begin], end - begin));
+        }
+        return result;
+    }
+
+    static std::vector<AttachmentPointCoordinate> fromTargetPositions(Eigen::Ref<const Eigen::VectorXd> targetPositions) {
+        std::vector<AttachmentPointCoordinate> result;
+        const size_t n = targetPositions.size();
+        result.reserve(n);
+        for (size_t i = 0; i < n; ++i)
+            result.emplace_back(targetPositions[i]);
+        return result;
+    }
+
     bool isFixedAnchor() const { return varIndices.size() == 0; }
     void validate() const {
         if (isFixedAnchor())  {
@@ -89,6 +114,14 @@ struct Springs : public Load<Object::N, typename Object::Real> {
             const std::vector<APC> &coordsB,
             Real stiffness)
         : Springs(obj, coordsA, coordsB, Eigen::VectorXd::Constant(coordsA.size(), stiffness)) { }
+
+    template<typename Stiffnesses>
+    Springs(std::weak_ptr<const Object> obj,
+            const SuiteSparseMatrix &deformationSamplerMatrix,
+            Eigen::Ref<const Eigen::VectorXd> targetPositions,
+            Stiffnesses stiffness)
+        : Springs(obj, APC::fromDeformationSamplerMatrix(deformationSamplerMatrix),
+                       APC::fromTargetPositions(targetPositions), stiffness) { }
 
     void setStiffnesses(Eigen::Ref<const Eigen::VectorXd> ks) { m_k = ks; }
     void setStiffnesses(Real k) { setStiffnesses(Eigen::VectorXd::Constant(m_coordsA.size(), k)); }

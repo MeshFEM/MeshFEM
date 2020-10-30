@@ -243,7 +243,6 @@ namespace detail {
     auto getHalfFace(const FEMMesh_ &m, int i) -> typename TetMesh<>::template HFHandle<TetMesh<>> { throw std::logic_error("This should not run!"); }
 }
 
-
 template<class FEMMesh_>
 struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
     static constexpr size_t Dim = FEMMesh_::EmbeddingDimension;
@@ -265,12 +264,12 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         if (!isTetMesh()) return;
 
         // For tet meshes, we still must figure out which tet the closest point
-        // lies in (and its barycentric coordinates in that tet).
+        // lies in (and its barycentric coordinates within that tet).
         auto &Vtri = this->m_V;
         auto &Ftri = this->m_F;
 
-        B.conservativeResize(P.rows(), 4); // first three columns still hold the half-face barycentric coordinates
         const size_t np = I.rows();
+        B.conservativeResize(np, 4); // first three columns still hold the half-face barycentric coordinates
         const auto &m = *m_mesh;
         auto t = m.element(0);
         using AES = AffineEmbeddedSimplex<FEMMesh_::K, typename FEMMesh_::EmbeddingSpace>;
@@ -282,8 +281,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
             do {
                 t = m.element(curr.element().index());
                 assert(t.valid());
-                AES simplex(*t, t.vertex(0).node()->p);
-                if (simplex.contains(P.row(0).transpose(), lambda, 1e-12)) {
+                if (AES(*t, t.vertex(0).node()->p).contains(P.row(i).transpose(), lambda, 1e-12)) {
                     inside = true;
                     break;
                 }
@@ -322,10 +320,10 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         const auto &m = *m_mesh;
         for (size_t i = 0; i < np; ++i) {
             auto t = m.element(I[i]);
-            C.row(i) = t.vertex(0).node()->p * B(i, 0) +
-                       t.vertex(1).node()->p * B(i, 1) +
-                       t.vertex(2).node()->p * B(i, 2) +
-                       t.vertex(3).node()->p * B(i, 3);
+            C.row(i) = t.vertex(0).node()->p.transpose() * B(i, 0) +
+                       t.vertex(1).node()->p.transpose() * B(i, 1) +
+                       t.vertex(2).node()->p.transpose() * B(i, 2) +
+                       t.vertex(3).node()->p.transpose() * B(i, 3);
         }
 
         sq_dists = (P - C).rowwise().squaredNorm();

@@ -16,6 +16,8 @@
 #include <cstdlib>
 #include <functional>
 
+#include "FieldSampler.hh"
+
 template<class _Real>
 class ElasticObject {
 public:
@@ -33,6 +35,10 @@ public:
     // Optional interface
     virtual SuiteSparseMatrix massMatrix(bool /* lumped */ = false)              const { throw std::runtime_error("Unimplemented"); }
     virtual SuiteSparseMatrix sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
+
+    // Get a FieldSampler for sampling FEM fields defined on the reference configuration mesh.
+    virtual std::unique_ptr<FieldSampler> referenceConfigSampler()                                      const { throw std::runtime_error("Unimplemented"); }
+    virtual SuiteSparseMatrix             deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const { throw std::runtime_error("Unimplemented"); }
 
     // The callback interface is not considered part of the elastic object's
     // state and therefore the register/deregister methods are marked const.

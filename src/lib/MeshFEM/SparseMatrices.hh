@@ -744,6 +744,47 @@ struct CSCMatrix {
         return result;
     }
 
+    // Note: assumes entries within each column are sorted and unique.
+    // Produces a sorted, unique output matrix.
+    CSCMatrix transpose() const {
+        if (symmetry_mode != SymmetryMode::NONE) return *this;
+        CSCMatrix result(n, m);
+        result.nz = nz;
+
+        // We use a trick to avoid using any additional storage to hold
+        // the partial column end pointers as we fill in the new matrix:
+        // We initially construct the column *start* pointer for column i in Ap[i + 1]
+        // Then we increment these as we fill in the columns until Ap[i + 1] becomes
+        // the column *end* pointer for column i as desired.
+
+        // First, compute size of output column i in Ap[i + 1]
+        result.Ap.assign(m + 1, 0);
+        for (_Index i : Ai) ++result.Ap[i + 1];
+
+        // Next calculate the start pointer for column i in Ap[i + 1]; this is
+        // the cumulative size of the previous output columns, which we
+        // maintain in `accum`
+        for (_Index accum = 0, i_plus_1 = 1; i_plus_1 < m + 1; ++i_plus_1) {
+            _Index colSize_i = result.Ap[i_plus_1];
+            result.Ap[i_plus_1] = accum;
+            accum += colSize_i;
+        }
+
+        result.Ax.resize(nz);
+        result.Ai.resize(nz);
+
+        // Add entries into the transposed matrix in sorted order
+        for (_Index c = 0; c < n; ++c) {
+            for (_Index inLoc = Ap[c]; inLoc < Ap[c + 1]; ++inLoc) {
+                _Index outLoc = result.Ap[Ai[inLoc] + 1]++; // get and increment partial column end pointer
+                result.Ai[outLoc] = c;
+                result.Ax[outLoc] = Ax[inLoc];
+            }
+        }
+
+        return result;
+    }
+
     // Set this matrix to have the same sparsity pattern as b, but with zeros
     void zeros_like(const CSCMatrix &b) {
         m = b.m; n = b.n; nz = b.nz;

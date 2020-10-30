@@ -404,7 +404,7 @@ public:
     BaryCoords barycentricCoords(Eigen::Ref<const Vec> p) const {
         // Integrate barycentric coordinate function gradients from p0
         BaryCoords lambda = m_gradBarycentric.transpose() * (p - m_p0);
-        lambda[0] = 1.0 - lambda.tail(K - 1).sum(); // equivalent to lambda[0] += 1.0, but more robust?
+        lambda[0] = 1.0 - lambda.tail(K).sum(); // equivalent to lambda[0] += 1.0, but more robust?
         return lambda;
     }
 

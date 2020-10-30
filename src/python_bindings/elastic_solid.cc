@@ -38,8 +38,8 @@ struct ElasticSolidBinder {
         module.def("ElasticSolid", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
         const std::string name = getElasticSolidName<Energy, K, Deg, Vector>();
-        py::class_<ES, std::shared_ptr<ES>> pyEO(detail_module, name.c_str());
-        pyEO
+        py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
+        pyES
           .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
           .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })
           .def_property_readonly_static("energy_name", [](py::object /* self */) { return getEnergyName<Energy>(); })
@@ -74,9 +74,11 @@ struct ElasticSolidBinder {
                   if (degree == 2) return toDegree<2>(es);
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
+          .def("referenceConfigSampler",   &ES::referenceConfigSampler)
+          .def("deformationSamplerMatrix", &ES::deformationSamplerMatrix)
          ;
 
-        addComputeEquilibriumBinding<ES>(pyEO, detail_module, name);
+        addComputeEquilibriumBinding<ES>(pyES, detail_module, name);
 
 #if 0 // For debugging
         using SVP = SingleVertexOptProblem<ES>;
