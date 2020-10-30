@@ -12,8 +12,8 @@ except Exception as e:
 
 import mesh_operations
 class RawMesh():
-    def __init__(self, vertices, faces, normals = None):
-        if (normals is None):
+    def __init__(self, vertices, faces, normals = None, omitNormals = False):
+        if normals is None and (not omitNormals):
             normals = mesh_operations.getVertexNormalsRaw(vertices, faces)
         self.updateGeometry(vertices, faces, normals)
 
@@ -23,7 +23,7 @@ class RawMesh():
     def updateGeometry(self, vertices, faces, normals):
         self.vertices = np.array(vertices, dtype = np.float32)
         self.faces    = np.array(faces,    dtype = np. uint32)
-        self.normals  = np.array(normals,  dtype = np.float32)
+        self.normals  = np.array(normals,  dtype = np.float32) if normals is not None else None
 
     # No decoding needed for per-entity fields on raw meshes.
     def visualizationField(self, data):
@@ -40,13 +40,13 @@ class TriMeshViewer(PythreejsViewerBase):
 class LineMeshViewer(PythreejsViewerBase):
     def __init__(self, linemesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):
         if (isinstance(linemesh, tuple)):
-            linemesh = RawMesh(*linemesh)
+            linemesh = RawMesh(*linemesh, omitNormals=True)
         self.isLineMesh = True
         self.MeshConstructor = pythreejs.LineSegments
         super().__init__(linemesh, width, height, textureMap, scalarField, vectorField, superView)
 
 def PointCloudMesh(points):
-    return RawMesh(points, np.zeros((0, 3), dtype=np.uint32), None)
+    return RawMesh(points, np.arange(points.shape[0], dtype=np.uint32), None, omitNormals=True)
 
 class PointCloudViewer(PythreejsViewerBase):
     def __init__(self, points, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None):

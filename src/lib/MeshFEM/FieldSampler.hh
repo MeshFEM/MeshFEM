@@ -290,13 +290,12 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 
             if (!inside) {
                 // If the point is not inside one of the closest face's incident tets
-                // it must be outside the mesh. Find the barycentric coordinates of the
-                // closest point in the mesh, which must lie in the primary tet of
+                // it must lie outside the mesh. Find the barycentric coordinates of the
+                // closest point in the mesh, which must fall inside the primary tet of
                 // the closest face.
-                t = m.element(curr.element().index());
-                AES simplex(*t, t.vertex(0).node()->p);
+                t = m.element(hf.element().index());
                 Eigen::Vector3i closestTri = Ftri.row(I[i]);
-                if (!simplex.contains(C.row(i).transpose(), lambda, 1e-12))
+                if (!AES(*t, t.vertex(0).node()->p).contains(C.row(i).transpose(), lambda, 1e-12))
                     throw std::runtime_error("Projected point not inside closest tet");
             }
             B.row(i) = lambda.transpose();

@@ -71,12 +71,15 @@ class ViewerBase:
         # Construct the raw attributes describing the new mesh.
         ########################################################################
         attrRaw = {'position': vertices,
-                   'index':    idxs.ravel(),
-                   'normal':   normals}
+                   'index':    idxs.ravel()}
 
         if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
 
-        needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals
+        if normals is not None:
+            needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals
+            attrRaw['normal'] = normals
+        else:
+            needsReplication = False
         if (self.scalarField is not None):
             # First, handle the case of directly specifying per-vertex or per-tri colors:
             if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):

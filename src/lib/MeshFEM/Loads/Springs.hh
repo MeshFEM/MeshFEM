@@ -123,7 +123,7 @@ struct Springs : public Load<Object::N, typename Object::Real> {
         : Springs(obj, APC::fromDeformationSamplerMatrix(deformationSamplerMatrix),
                        APC::fromTargetPositions(targetPositions), stiffness) { }
 
-    void setStiffnesses(Eigen::Ref<const Eigen::VectorXd> ks) { m_k = ks; }
+    void setStiffnesses(Eigen::Ref<const Eigen::VectorXd> ks) { m_k = ks; m_updateCache(); }
     void setStiffnesses(Real k) { setStiffnesses(Eigen::VectorXd::Constant(m_coordsA.size(), k)); }
     VXd getStiffnesses() const { return m_k; }
 
