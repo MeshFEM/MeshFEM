@@ -75,24 +75,26 @@ We include some example Jupyter notebooks to demonstrate some of the bound
 functionality. Please follow the instructions below to get these notebooks and
 the visualization code running.
 
-### JuptyerLab and Extensions
+### JuptyterLab and Extensions
+
 To run the Jupyter notebooks, you will need to install JupyterLab and
 [my fork](https://github.com/jpanetta/pythreejs) of the `pythreejs` library.
 JupyterLab can be installed through `pip`, and the following commands should
 work on both macOS and Ubuntu:
 
 ```bash
-pip3 install --user jupyterlab
+pip3 install wheel # Needed if installing in a virtual environment
+pip3 install jupyterlab==1.2.6 traitlets==4.3.3
 # If necessary, follow the instructions in the warnings to add the Python user
 # bin directory (containing the 'jupyter' binary) to your PATH...
-jupyter labextension install @jupyter-widgets/jupyterlab-manager
+jupyter labextension install @jupyter-widgets/jupyterlab-manager@1.1.0
 
 git clone https://github.com/jpanetta/pythreejs
 cd pythreejs
-pip3 install -e . --user
+pip3 install -e .
 jupyter labextension link ./js
 
-pip3 install matplotlib scipy --user
+pip3 install matplotlib scipy
 ```
 
 Launch Jupyter lab from the root python directory:
