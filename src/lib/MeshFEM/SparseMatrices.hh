@@ -1148,7 +1148,7 @@ struct CSCMatrix {
     struct TripletIterator {
         TripletIterator(const CSCMatrix &mat_, _Index idx_) : mat(mat_) {
             idx = idx_;
-            if (idx < mat.nz) {
+            if ((idx >= 0) && idx < mat.nz) {
                 // Find the column immediately AFTER the one containing "idx"; this is the first holding a greater nnz index than "idx".
                 // This ensures that empty columns are skipped properly.
                 auto nextCol = std::upper_bound(mat.Ap.begin(), mat.Ap.end(), idx);
@@ -1177,14 +1177,38 @@ struct CSCMatrix {
             assert((j < mat.n) || (idx == mat.nz)); // We should only run out of column pointers when we reach the end of the triplets.
             return *this;
         }
-    private:
-        _Index idx, j; // nonzero and column index
+    protected:
+        TripletIterator(const CSCMatrix &mat_) : mat(mat_) { }
+        _Index idx, j; // nonzero entry and column index
                        // (column index is cached/updated for efficiency to avoid a search on each dereference)
         const CSCMatrix &mat;
     };
 
-    TripletIterator begin() const{ return TripletIterator(*this,  0); }
-    TripletIterator   end() const{ return TripletIterator(*this, nz); }
+    struct ColumnTripletIterator : public TripletIterator {
+        ColumnTripletIterator(const CSCMatrix &mat_, _Index j_) : TripletIterator(mat_) {
+            j = j_;
+            if ((j < 0) || (j > mat.n)) throw std::runtime_error("Column index out of bounds");
+            idx = mat.Ap[j];
+        }
+    protected:
+        using TripletIterator::j;
+        using TripletIterator::mat;
+        using TripletIterator::idx;
+    };
+
+    struct ColumnRange {
+        ColumnRange(const CSCMatrix &mat_, _Index j_) : mat(mat_), j(j_) { }
+        ColumnTripletIterator begin() { return ColumnTripletIterator(mat,     j); }
+        ColumnTripletIterator   end() { return ColumnTripletIterator(mat, j + 1); }
+    private:
+        _Index j;
+        const CSCMatrix &mat;
+    };
+
+    TripletIterator begin() const { return TripletIterator(*this,  0); }
+    TripletIterator   end() const { return TripletIterator(*this, nz); }
+
+    ColumnRange col(_Index j) const { return ColumnRange(*this, j); }
 
     // Matrix-vector multiply
     template<typename _Vector>
