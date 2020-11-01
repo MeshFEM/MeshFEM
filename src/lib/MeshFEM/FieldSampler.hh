@@ -24,6 +24,8 @@
 #include "TetMesh.hh"
 #include "EmbeddedElement.hh"
 
+#include "TemplateHacks.hh"
+
 #include <MeshFEM_export.h>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -243,13 +245,18 @@ namespace detail {
     auto getHalfFace(const FEMMesh_ &m, int i) -> typename TetMesh<>::template HFHandle<TetMesh<>> { throw std::logic_error("This should not run!"); }
 }
 
-template<class FEMMesh_>
+template<typename T> std::enable_if_t<!is_dereferenceable<T>::value, T> &accessHolderContents(T &x) { return x; }
+template<typename T> T &accessHolderContents(const std::shared_ptr<T> &x) { return *x; }
+
+// MeshHolderType can be, e.g., `std::shared_ptr<const FEMMesh_` for ownernship or `const FEMMesh_ &`
+// if the user knows the mesh's lifetime will exceed the sampler's.
+template<class FEMMesh_, class MeshHolderType = std::shared_ptr<const FEMMesh_>>
 struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
     static constexpr size_t Dim = FEMMesh_::EmbeddingDimension;
     using Base = FieldSamplerImpl<Dim>;
 
-    static std::unique_ptr<FieldSampler> construct(std::shared_ptr<const FEMMesh_> m) {
-        return std::unique_ptr<MeshFieldSampler>(new MeshFieldSampler(detail::getAllTriangles(*m), m)); // Can't use make_unique because of private constructor
+    static std::unique_ptr<FieldSampler> construct(MeshHolderType m) {
+        return std::unique_ptr<MeshFieldSampler>(new MeshFieldSampler(detail::getAllTriangles(accessHolderContents(m)), m)); // Can't use make_unique because of private constructor
     }
 
     static constexpr bool isTetMesh() { return FEMMesh_::K == 3; }
@@ -270,7 +277,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 
         const size_t np = I.rows();
         B.conservativeResize(np, 4); // first three columns still hold the half-face barycentric coordinates
-        const auto &m = *m_mesh;
+        const auto &m = mesh();
         auto t = m.element(0);
         using AES = AffineEmbeddedSimplex<FEMMesh_::K, typename FEMMesh_::EmbeddingSpace>;
         typename AES::BaryCoords lambda;
@@ -316,7 +323,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         closestElementAndBaryCoords(P, I, B);
 
         const size_t np = I.rows();
-        const auto &m = *m_mesh;
+        const auto &m = mesh();
         for (size_t i = 0; i < np; ++i) {
             auto t = m.element(I[i]);
             C.row(i) = t.vertex(0).node()->p.transpose() * B(i, 0) +
@@ -333,7 +340,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
     // per-node.
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
                                    Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
-        const auto &m = *m_mesh;
+        const auto &m = mesh();
 
         // Look up the sample points' closest elements and barycentric coordinates
         Eigen::VectorXi I;
@@ -384,27 +391,30 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         const size_t np = P.rows();
         NI.resize(np);
         sqDist.resize(np);
+        const auto &m = mesh();
         for (size_t i = 0; i < np; ++i) {
             static constexpr size_t K = FEMMesh_::K;
             EvalPt<K> b;
             Eigen::Map<EigenEvalPt<K>>(b.data(), b.size()) = B.row(i);
             int lni;
             shapeFunctions<FEMMesh_::Deg, K>(b).maxCoeff(&lni);
-            const auto &n = m_mesh->element(I[i]).node(lni);
+            const auto &n = m.element(I[i]).node(lni);
             NI[i] = n.index();
             sqDist[i] = (n->p - P.row(i).transpose()).squaredNorm();
         }
     }
 
+    const FEMMesh_ &mesh() const { return accessHolderContents(m_meshHolder); }
+
 protected:
-    std::shared_ptr<const FEMMesh_> m_mesh;
+    MeshHolderType m_meshHolder;
     std::vector<size_t> halfFaceForFace;
     using Base::m_V;
     using Base::m_F;
 
 private:
-    MeshFieldSampler(const detail::TrisOfMesh &tris, std::shared_ptr<const FEMMesh_> m)
-        : Base(getV(*m), tris.F), m_mesh(m), halfFaceForFace(tris.halfFaceForFace) { }
+    MeshFieldSampler(const detail::TrisOfMesh &tris, MeshHolderType m)
+        : Base(getV(accessHolderContents(m)), tris.F), m_meshHolder(m), halfFaceForFace(tris.halfFaceForFace) { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -413,6 +423,11 @@ private:
 template<class FEMMesh_>
 std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FEMMesh_> mesh) {
     return MeshFieldSampler<FEMMesh_>::construct(mesh);
+}
+
+template<class FEMMesh_>
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh) {
+    return MeshFieldSampler<FEMMesh_, const FEMMesh_ &>::construct(mesh);
 }
 
 #endif /* end of include guard: FIELDSAMPLER_HH */
