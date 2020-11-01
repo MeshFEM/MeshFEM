@@ -59,6 +59,10 @@ struct LoadBinder {
                                    const MX2i &connectivity, Real force, bool disableHessian) {
                     return std::make_shared<SLoad>(obj, clusterVtxs, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("clusterVtxs"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
+              .def("Spreaders", [&](const std::shared_ptr<Object> &obj, const SuiteSparseMatrix &S,
+                                   const MX2i &connectivity, Real force, bool disableHessian) {
+                    return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
+                }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
              ;
 
         ////////////////////////////////////////////////////////////////////////

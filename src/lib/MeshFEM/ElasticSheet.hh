@@ -446,6 +446,10 @@ public:
         return FieldSampler::construct(std::shared_ptr<const Mesh>(m_mesh)); // work around template parameter deduction issue
     }
 
+    virtual SuiteSparseMatrix deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
+        return fieldSamplerMatrix(mesh(), N, P, 0, numVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
+    }
+
 private:
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.

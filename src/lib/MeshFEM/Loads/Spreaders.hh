@@ -15,31 +15,65 @@
 
 namespace Loads {
 
+namespace detail {
+    using VXi  = Eigen::VectorXi;
+    template<class Object>
+    SuiteSparseMatrix pointPositionerFromVertexClusters(const Object &obj, const std::vector<VXi> &clusterVtxs) {
+        static constexpr size_t N = Object::N;
+        const size_t nc = clusterVtxs.size();
+        TripletMatrix<> result(N * nc, obj.numVars());
+        for (size_t i = 0; i < nc; ++i) {
+            int clusterSize = clusterVtxs[i].size();
+            for (int j = 0; j < clusterSize; ++j) {
+                for (size_t c = 0; c < N; ++c)
+                    result.addNZ(N * i + c, N * clusterVtxs[i][j] + c, 1.0 / clusterSize);
+            }
+        }
+
+        return SuiteSparseMatrix(result);
+    }
+}
+
 template<class Object>
-struct Spreaders : public Load<3, typename Object::Real> {
+struct Spreaders : public Load<Object::N, typename Object::Real> {
+    static constexpr size_t N = Object::N;
+
     using Real = typename Object::Real;
     using VXd  = typename Object::VXd;
-    using V3d  = Eigen::Matrix<Real, 3, 1>;
-    using M3d  = Eigen::Matrix<Real, 3, 3>;
-    using MX3d = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
+    using VNd  = Eigen::Matrix<Real, N, 1>;
+    using MNd  = Eigen::Matrix<Real, N, N>;
+    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N>;
     using MX2i = Eigen::MatrixX2i;
     using VXi  = Eigen::VectorXi;
-    static constexpr size_t N = 3;
+
+    Spreaders(std::weak_ptr<const Object> obj,
+              const SuiteSparseMatrix &materialPointPositioner,
+              const MX2i &connectivity,
+              Real magnitude,
+              bool disableHessian = false)
+        : m_obj(obj),
+          m_materialPointPositioner(materialPointPositioner),
+          m_connectivity(connectivity),
+          m_magnitude(magnitude),
+          m_disableHessian(disableHessian)
+    {
+        if (m_materialPointPositioner.m % N != 0) throw std::runtime_error("Number of rows in materialPointPositioner should be divisible by " + std::to_string(N));
+        m_materialPointPositionerTranspose = materialPointPositioner.transpose();
+        if (N * size_t(connectivity.maxCoeff()) >= m_materialPointPositioner.m)
+            throw std::runtime_error("Edge index out of bounds");
+        m_updateCache();
+        m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
+        // Spreader force is const wrt. X (no rest config update callback need be registered)
+    }
 
     Spreaders(std::weak_ptr<const Object> obj,
               const std::vector<VXi> &clusterVtxs,
               const MX2i &connectivity,
               Real magnitude,
               bool disableHessian = false)
-        : m_obj(obj),
-          m_clusterVtxs(clusterVtxs), m_connectivity(connectivity),
-          m_magnitude(magnitude), m_disableHessian(disableHessian) {
-        if (size_t(connectivity.maxCoeff()) >= clusterVtxs.size())
-            throw std::runtime_error("Edge index out of bounds");
-        m_updateCache();
-        m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
-        // Spreader force is const wrt. X
-    }
+        : Spreaders(obj, detail::pointPositionerFromVertexClusters(*obj.lock(), clusterVtxs), connectivity, magnitude, disableHessian) { }
+
+    size_t numPoints() const { return m_materialPointPositioner.m / N; }
 
     void setMagnitude(Real mag) { m_magnitude = mag; m_updateCache(); }
     Real getMagnitude() const   { return m_magnitude; }
@@ -56,29 +90,33 @@ struct Spreaders : public Load<3, typename Object::Real> {
 
     virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = false) const override {
         if (m_disableHessian) return;
-        // if (projectionMask) return; // The Hessian is negative semidefinite (I think...), so we drop the whole thing when Hessian projection is applied.
 
-        for (int i = 0; i < m_connectivity.rows(); ++i) { // loop over spreaders (edges)
-            const V3d a = m_axis.row(i);
-            M3d da_de = (M3d::Identity() - a * a.transpose()) / m_dist[i];
+        // H = sum_e P_e^T [ H_e -H_e] P_e
+        //                 [-H_e  H_e]
+        //   = sum_e sum_ij sign(ij) * P_e,i^T H_e P_e,j
+        //  where P_{e,i} contains the rows of materialPointPositioner corresponding to the material points at the ith end of the eth spreader,
+        //  and sign(ij) is 1 if i == j, 0 otherwise.
+        // Note, to efficiently access rows of P_e, we must actually access the columns of P_e^T.
+        for (int e = 0; e < m_connectivity.rows(); ++e) { // loop over spreaders (edges)
+            const VNd a = m_axis.row(e);
+            MNd da_de = (MNd::Identity() - a * a.transpose()) * (-m_magnitude / m_dist[e]);
 
-            const int nv0 = m_clusterVtxs[m_connectivity(i, 0)].rows(),
-                      nv1 = m_clusterVtxs[m_connectivity(i, 1)].rows();
-            const size_t ncv = nv0 + nv1;
-            VXi coupledVertices(ncv);
-            coupledVertices << m_clusterVtxs[m_connectivity(i, 0)],
-                               m_clusterVtxs[m_connectivity(i, 1)];
-            VXd scale(ncv);
-            scale << VXd::Constant(nv0,  1.0 / nv0),
-                     VXd::Constant(nv1, -1.0 / nv1);
-
-            for (size_t vb = 0; vb < ncv; ++vb) {
-                for (size_t c_b = 0; c_b < 3; ++c_b) {
-                    const size_t var_b = 3 * coupledVertices[vb] + c_b;
-                    for (size_t va = 0; va < ncv; ++va) {
-                        const size_t var_a_offset = 3 * coupledVertices[va];
-                        if (var_a_offset > var_b) continue;
-                        H.addNZ(var_a_offset, var_b, -m_magnitude * (scale[va] * scale[vb]) * da_de.col(c_b).head(std::min<size_t>(3, var_b - var_a_offset + 1)));
+            // Loop over entries of H_e = da_de
+            for (size_t cb = 0; cb < N; ++cb) {
+                for (size_t ca = 0; ca < N; ++ca) {
+                    // Loop over combinations of [startEndpoint, endEndpoint]
+                    for (int i = 0; i < 2; ++i) {
+                        for (int j = 0; j < 2; ++j) {
+                            double sign = (i == j) ? 1.0 : -1.0;
+                            // Accumulate contribution of H_e(ca, cb) to the global Hessian
+                            for (const auto &tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
+                                size_t hint = -1;
+                                for (const auto &ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
+                                    if (ta.i > tb.i) continue;
+                                    hint = H.addNZ(ta.i, tb.i, sign * ta.v * tb.v * da_de(ca, cb), hint);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -91,42 +129,20 @@ struct Spreaders : public Load<3, typename Object::Real> {
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
 
         if (!m_disableHessian) {
-            // Interactions within cluster
-            for (const auto &cluster : m_clusterVtxs) {
-                const int nv = cluster.rows();
-                for (int va = 0; va < nv; ++va) {
-                    for (int vb = 0; vb < nv; ++vb) {
-                        for (size_t ca = 0; ca < 3; ++ca) {
-                            for (size_t cb = 0; cb < 3; ++cb) {
-                                size_t var_a = 3 * cluster[va] + ca,
-                                       var_b = 3 * cluster[vb] + cb;
-                                if (var_a > var_b) continue;
-                                Hsp.addNZ(var_a, var_b, 1.0);
-                            }
-                        }
-                    }
-                }
-            }
-            // Cross-cluster interactions
-            for (int i = 0; i < m_connectivity.rows(); ++i) {
-                if (m_connectivity(i, 0) == m_connectivity(i, 1))
-                    throw std::runtime_error("Loop edge detected");
-                const auto &cluster_a = m_clusterVtxs[m_connectivity(i, 0)];
-                const auto &cluster_b = m_clusterVtxs[m_connectivity(i, 1)];
-                const int nva = cluster_a.rows(),
-                          nvb = cluster_b.rows();
-                // std::cout << "Adding interactions between " << m_connectivity.row(i) << std::endl;
-                // std::cout << "cluster_a = " << cluster_a.head(3).transpose() << ", ..." << std::endl;
-                // std::cout << "cluster_b = " << cluster_b.head(3).transpose() << ", ..." << std::endl;
-                for (int va = 0; va < nva; ++va) {
-                    for (int vb = 0; vb < nvb; ++vb) {
-                        for (size_t ca = 0; ca < 3; ++ca) {
-                            for (size_t cb = 0; cb < 3; ++cb) {
-                                size_t var_a = 3 * cluster_a[va] + ca,
-                                       var_b = 3 * cluster_b[vb] + cb;
-                                if (var_a == var_b) throw std::runtime_error("Non-disjoint clusters");
-                                if (var_a > var_b) std::swap(var_a, var_b);
-                                Hsp.addNZ(var_a, var_b, 1.0);
+            for (int e = 0; e < m_connectivity.rows(); ++e) { // loop over spreaders (edges)
+                // Loop over entries of H_e = da_de
+                for (size_t cb = 0; cb < N; ++cb) {
+                    for (size_t ca = 0; ca < N; ++ca) {
+                        // Loop over combinations of [startEndpoint, endEndpoint]
+                        for (int i = 0; i < 2; ++i) {
+                            for (int j = 0; j < 2; ++j) {
+                                // Accumulate contribution of H_e(ca, cb) to the global Hessian
+                                for (const auto &tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
+                                    for (const auto &ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
+                                        if (ta.i > tb.i) continue;
+                                        Hsp.addNZ(ta.i, tb.i, 1.0);
+                                    }
+                                }
                             }
                         }
                     }
@@ -146,7 +162,7 @@ struct Spreaders : public Load<3, typename Object::Real> {
 
 private:
     std::weak_ptr<const Object> m_obj;
-    std::vector<VXi> m_clusterVtxs;
+    SuiteSparseMatrix m_materialPointPositioner, m_materialPointPositionerTranspose;
     MX2i m_connectivity;
     Real m_magnitude;
     const bool m_disableHessian;
@@ -159,21 +175,14 @@ private:
 
     void m_updateCache() {
         m_dist.resize(m_connectivity.rows());
-        m_axis.resize(m_connectivity.rows(), 3);
+        m_axis.resize(m_connectivity.rows(), N);
         const auto &x = getObj().deformedPositions();
 
-        MX3d clusterMeans(MX3d::Zero(m_clusterVtxs.size(), 3));
-        for (size_t i = 0; i < m_clusterVtxs.size(); ++i) {
-            const VXi &cluster = m_clusterVtxs[i];
-            const int n = cluster.rows();
-            for (int ii = 0; ii < n; ++ii)
-                clusterMeans.row(i) += x.row(cluster[ii]);
-            clusterMeans.row(i) /= n;
-        }
+        VXd materialPointsFlat = m_materialPointPositioner.apply(getObj().getVars());
 
         for (int i = 0; i < m_connectivity.rows(); ++i) {
-            m_axis.row(i) = clusterMeans.row(m_connectivity(i, 0)) -
-                            clusterMeans.row(m_connectivity(i, 1));
+            m_axis.row(i) = materialPointsFlat.template segment<N>(N * m_connectivity(i, 0)) -
+                            materialPointsFlat.template segment<N>(N * m_connectivity(i, 1));
         }
         m_dist = m_axis.rowwise().norm();
         m_axis = m_dist.asDiagonal().inverse() * m_axis;
@@ -181,24 +190,22 @@ private:
         m_energy = -m_magnitude * m_dist.sum();
 
         m_grad.setZero(getObj().numVars());
-        for (int i = 0; i < m_connectivity.rows(); ++i) {
-            for (size_t j = 0; j < 2; ++j) {
-                const VXi &cluster = m_clusterVtxs[m_connectivity(i, j)];
-                const size_t nv = cluster.rows();
-                V3d contrib = (((j == 0) ? 1.0 : -1.0) / nv) * m_axis.row(i);
-                for (size_t vi = 0; vi < nv; ++vi)
-                    m_grad.template segment<3>(3 * cluster[vi]) += contrib;
-            }
-        }
 
-        m_grad *= -m_magnitude;
+        VXd gradMaterialPointsFlat(VXd::Zero(materialPointsFlat.size()));
+
+        for (int i = 0; i < m_connectivity.rows(); ++i) {
+            gradMaterialPointsFlat.template segment<N>(N * m_connectivity(i, 0)) += m_axis.row(i);
+            gradMaterialPointsFlat.template segment<N>(N * m_connectivity(i, 1)) -= m_axis.row(i);
+        }
+        gradMaterialPointsFlat *= -m_magnitude;
+        m_grad = m_materialPointPositionerTranspose.apply(gradMaterialPointsFlat);
     }
 
     // Cached state
     Real m_energy;
     VXd m_grad;
     VXd m_dist;
-    MX3d m_axis; // unit vector pointing from cluster 1 to cluster 0
+    MXNd m_axis; // unit vector pointing from cluster 1 to cluster 0
 };
 
 }
