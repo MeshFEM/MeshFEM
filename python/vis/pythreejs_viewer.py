@@ -253,7 +253,7 @@ class PythreejsViewerBase(ViewerBase):
         if (color is not None):
             self.currMesh.material.color = color
 
-    def _setGeometryImpl(self, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def _setGeometryImpl(self, vertices, idxs, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         """
         Backend-specific parts of ViewerBase::setGeometry
         """
@@ -356,8 +356,8 @@ class PythreejsViewerBase(ViewerBase):
             # Construct vector field from raw data array if necessary
             if (not isinstance(self.vectorField, VectorField)):
                 self.vectorField = VectorField(self.mesh, self.vectorField)
-            self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
 
+            self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
             self.vectorFieldMesh = self.vectorField.getArrows(vertices, idxs, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
 
             self.arrowMaterial = self.vectorFieldMesh.material

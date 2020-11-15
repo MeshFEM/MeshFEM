@@ -121,6 +121,14 @@ template<typename T>
 typename std::enable_if<!isAutoDiffType<T>(), void>::type
 zeroInitializeEmptyDerivatives(T &/* val */, const size_t /* numVars */) { }
 
+template<typename T>
+typename std::enable_if<isAutoDiffType<T>(), size_t>::type
+derivativeSize(const T &val) { return val.derivatives().size(); }
+
+template<typename T>
+typename std::enable_if<!isAutoDiffType<T>(), size_t>::type
+derivativeSize(const T &) { return 0; }
+
 inline VecX_T<Real> extractDirectionalDerivative(const VecX_T<ADReal> &a) {
     const int n = a.size();
     VecX_T<Real> result(n);

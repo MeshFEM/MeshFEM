@@ -22,9 +22,13 @@ class VertexMerger:
             V[idx, :] = pt_tuple
         return V
 
-# Construct a single mesh including a copy of all the triangles of the input meshes,
-# but with duplicate vertices merged and dangling vertices removed.
 def mergedMesh(meshes):
+    """
+    Construct a single mesh including a copy of all the triangles of the input meshes,
+    but with duplicate vertices merged and dangling vertices removed.
+
+    `meshes`: list of meshes
+    """
     vm = VertexMerger()
     mergedTris = []
     for mesh in meshes:

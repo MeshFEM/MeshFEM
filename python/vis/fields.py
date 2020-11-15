@@ -49,6 +49,7 @@ class VisualizationField:
     def validateSize(self, numVertices, numFaces):
         domainSize = len(self.data)
         numCorners = 3 * numFaces
+        # print(f'domainSize: {domainSize}, numVertices: {numVertices}, numFaces: {numFaces}')
         if (self.domainType == DomainType.GUESS):
             if   (domainSize == numVertices): self.domainType = DomainType.PER_VTX
             elif (domainSize == numFaces)   : self.domainType = DomainType.PER_TRI
