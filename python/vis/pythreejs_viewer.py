@@ -165,7 +165,7 @@ class PythreejsViewerBase(ViewerBase):
         self.objects      = pythreejs.Group()
         self.meshes       = pythreejs.Group()
         self.ghostMeshes  = pythreejs.Group() # Translucent meshes kept around by preserveExisting
-        self.ghostColor = 'red'
+        self.ghostColor = '#FF0000'
 
         self.materialLibrary = MaterialLibrary(self.isLineMesh, self.isPointCloud)
 
@@ -469,12 +469,12 @@ class PythreejsViewerBase(ViewerBase):
             self.screenshotWriter = ScreenshotWriter(self.renderer)
         self.screenshotWriter.capture(path)
 
-    def offscreenRenderer(self):
+    def offscreenRenderer(self, width = None, height = None):
         import OffscreenRenderer
-        width, height = self.renderer.width, self.renderer.height
+        if width  is None: width  = self.renderer.width
+        if height is None: height = self.renderer.height
         mr = OffscreenRenderer.MeshRenderer(width, height)
 
-        # TODO: draw more than the first mesh...
         attr = self.meshes.children[0].geometry.attributes
         P = attr['position'].array
         N = attr['normal'].array
@@ -482,12 +482,23 @@ class PythreejsViewerBase(ViewerBase):
         F = attr['index'].array if 'index' in attr else None
         mr.setMesh(P, F, N, C)
 
+        mr.meshes[0].alpha = 1.0
+        mr.meshes[0].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
+
+        for gm in self.ghostMeshes.children:
+            attr = gm.geometry.attributes
+            P = attr['position'].array
+            N = attr['normal'].array
+            C = attr['color'].array if 'color' in attr else self.materialLibrary.ghostMaterial(self.materialLibrary.material(False), self.ghostColor).color
+            F = attr['index'].array if 'index' in attr else None
+            mr.addMesh(P, F, N, C, makeDefault=False)
+            mr.meshes[-1].alpha = 0.25
+            mr.meshes[-1].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
+
         mr.setCameraParams(self.getCameraParams())
-        mr.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
+        for m in mr.meshes: m.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
         mr.perspective(50, width / height, 0.1, 2000)
 
-        mr.alpha = 1.0
-        mr.lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
         mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
 
         return mr

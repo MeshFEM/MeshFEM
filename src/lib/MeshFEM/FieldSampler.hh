@@ -347,18 +347,17 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         Eigen::MatrixXd B;
         this->closestElementAndBaryCoords(P, I, B);
         const int numCorners = B.cols();
-        if (B.cols() != m_F.cols()) throw std::logic_error("Barycentric coordinates size mismatch");
+        if (B.cols() != FEMMesh_::K + 1) throw std::logic_error("Barycentric coordinates size mismatch");
 
         const int np = P.rows();
         Eigen::MatrixXd outSamples(np, fieldValues.cols());
 
         if (size_t(fieldValues.rows()) == m.numVertices()) {
             for (int p = 0; p < np; ++p) {
-                auto ele = m_F.row(I[p]);
-                auto b   = B.row(p);
-                outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
-                for (int j = 1; j < numCorners; ++j)
-                    outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
+                auto e = m.element(I[p]);
+				outSamples.row(p).setZero();
+                for (const auto &v : e.vertices())
+                    outSamples.row(p) += B(p, v.localIndex()) * fieldValues.row(v.index());
             }
         }
         else if (size_t(fieldValues.rows()) == m.numElements()) {
