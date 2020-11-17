@@ -7,7 +7,7 @@ class OffscreenViewerBase(ViewerBase):
         self.renderer = OffscreenRenderer.MeshRenderer(width, height)
         super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
-    def _setGeometryImpl(self, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def _setGeometryImpl(self, vertices, idxs, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         P = attrRaw['position']
         N = attrRaw['normal']
         C = attrRaw['color'] if 'color' in attrRaw else OffscreenRenderer.hexColorToFloat('#D3D3D3')

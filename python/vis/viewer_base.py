@@ -105,7 +105,7 @@ class ViewerBase:
         if needsReplication:
             replicateAttributesPerTriCorner(attrRaw)
 
-        self._setGeometryImpl(attrRaw, preserveExisting, updateModelMatrix, textureMap, scalarField, vectorField, transparent)
+        self._setGeometryImpl(vertices, idxs, attrRaw, preserveExisting, updateModelMatrix, textureMap, scalarField, vectorField, transparent)
 
     def setCamera(self, position, up, fovy, aspect, near, far): raise Exception('Unimplemented')
     def setPointLight(self, color, position): raise Exception('Unimplemented')
