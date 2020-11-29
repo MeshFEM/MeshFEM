@@ -60,13 +60,6 @@ class ViewerBase:
         self.scalarField = scalarField
         self.vectorField = vectorField
 
-        if (updateModelMatrix):
-            center = np.mean(vertices, axis=0)
-            bbSize = np.max(np.abs(vertices - center))
-            scaleFactor = 2.0 / bbSize
-            quaternion = [0, 0, 0, 1]
-            self.transformModel(-scaleFactor * center, scaleFactor, quaternion)
-
         ########################################################################
         # Construct the raw attributes describing the new mesh.
         ########################################################################
@@ -106,6 +99,13 @@ class ViewerBase:
             replicateAttributesPerTriCorner(attrRaw)
 
         self._setGeometryImpl(vertices, idxs, attrRaw, preserveExisting, updateModelMatrix, textureMap, scalarField, vectorField, transparent)
+
+        if (updateModelMatrix):
+            center = np.mean(vertices, axis=0)
+            bbSize = np.max(np.abs(vertices - center))
+            scaleFactor = 2.0 / bbSize
+            quaternion = [0, 0, 0, 1]
+            self.transformModel(-scaleFactor * center, scaleFactor, quaternion)
 
     def setCamera(self, position, up, fovy, aspect, near, far): raise Exception('Unimplemented')
     def setPointLight(self, color, position): raise Exception('Unimplemented')
