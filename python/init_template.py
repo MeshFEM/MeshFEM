@@ -13,7 +13,7 @@ from mesh import Mesh, PeriodicCondition
 
 from energy_building import *
 
-import importlib
+import importlib.util
 if importlib.util.find_spec('pythreejs') is not None:
     import tri_mesh_viewer
 

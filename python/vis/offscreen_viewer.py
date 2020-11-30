@@ -46,7 +46,7 @@ class OffscreenViewerBase(ViewerBase):
         r.diffuseIntensity = OffscreenRenderer.hexColorToFloat(color)
 
     def showWireframe(self, shouldShow = True):
-        self.renderer.lineWidth = 1.0 if shouldShow else 0.0
+        self.renderer.setWireframe(1.0 if shouldShow else 0.0)
 
     def getCameraParams(self):  return self.renderer.getCameraParams()
     def setCameraParams(self, params): self.renderer.setCameraParams(params)
