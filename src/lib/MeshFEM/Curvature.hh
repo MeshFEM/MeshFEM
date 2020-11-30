@@ -81,9 +81,9 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
 
     VXd voronoiAreas() const {
         VXd result = VXd::Zero(mesh().numVertices());
-        for (const auto &tri : mesh().elements()) {
+        for (const auto tri : mesh().elements()) {
             V3d contrib = voronoiAreaContribs(tri);
-            for (const auto &v : tri.vertices())
+            for (const auto v : tri.vertices())
                 result[v.index()] += contrib[v.localIndex()];
         }
         return result;
@@ -91,7 +91,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
 
     VXd mixedVoronoiAreas() const {
         VXd result = VXd::Zero(mesh().numVertices());
-        for (const auto &tri : mesh().elements()) {
+        for (const auto tri : mesh().elements()) {
             V3d angles = cornerAngles(tri);
             int maxCorner;
             Real maxAngle = angles.maxCoeff(&maxCorner);
@@ -103,7 +103,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
                 contrib[(maxCorner + 2) % 3] = 0.25 * A;
             }
             else { contrib = voronoiAreaContribs(tri); }
-            for (const auto &v : tri.vertices())
+            for (const auto v : tri.vertices())
                 result[v.index()] += contrib[v.localIndex()];
         }
         return result;
@@ -115,12 +115,12 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
     VXd integratedK() const {
         const auto &m = mesh();
         VXd result = VXd::Constant(m.numVertices(), 2 * M_PI);
-        for (const auto &bv : m.boundaryVertices())
+        for (const auto bv : m.boundaryVertices())
             result[bv.volumeVertex().index()] = M_PI;
 
-        for (const auto &tri : m.elements()) {
+        for (const auto tri : m.elements()) {
             V3d angles = cornerAngles(tri);
-            for (const auto &v : tri.vertices())
+            for (const auto v : tri.vertices())
                 result[v.index()] -= angles[v.localIndex()];
         }
 
@@ -132,7 +132,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
     // Mostly for debugging...
     VXd deltaVoronoiAreas(Eigen::Ref<const VXd> deltaP, bool mixed = false) const {
         VXd result = VXd::Zero(mesh().numVertices());
-        for (const auto &tri : mesh().elements()) {
+        for (const auto tri : mesh().elements()) {
             M3d corners;
             corners << tri.node(0)->p, tri.node(1)->p, tri.node(2)->p;
 
@@ -145,7 +145,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
                             deltaP.segment<3>(3 * tri.vertex(1).index()),
                             deltaP.segment<3>(3 * tri.vertex(2).index());
 
-            for (const auto &v : tri.vertices())
+            for (const auto v : tri.vertices())
                 result[v.index()] += (gradContrib[v.localIndex()].transpose() * deltaCorners).trace();
         }
         return result;
@@ -156,7 +156,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
     // On boundary vertices: discrete geodesic curvature.
     VXd deltaIntegratedK(Eigen::Ref<const VXd> deltaP) const {
         VXd result = VXd::Zero(mesh().numVertices());
-        for (const auto &tri : mesh().elements()) {
+        for (const auto tri : mesh().elements()) {
             M3d corners;
             corners << tri.node(0)->p, tri.node(1)->p, tri.node(2)->p;
 
@@ -167,7 +167,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
                             deltaP.segment<3>(3 * tri.vertex(1).index()),
                             deltaP.segment<3>(3 * tri.vertex(2).index());
 
-            for (const auto &v : tri.vertices())
+            for (const auto v : tri.vertices())
                 result[v.index()] -= (gradAngles[v.localIndex()].transpose() * deltaCorners).trace();
         }
 
@@ -179,7 +179,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
 
         const VXd Kint = integratedK();
         const VXd va   = mixedVoronoiAreas();
-        for (const auto &tri : mesh().elements()) {
+        for (const auto tri : mesh().elements()) {
             M3d corners;
             corners << tri.node(0)->p, tri.node(1)->p, tri.node(2)->p;
 
@@ -191,7 +191,7 @@ struct GaussianCurvatureSensitivity<FEMMesh<2, Deg, Point3D>> {
                             deltaP.segment<3>(3 * tri.vertex(1).index()),
                             deltaP.segment<3>(3 * tri.vertex(2).index());
 
-            for (const auto &v : tri.vertices()) {
+            for (const auto v : tri.vertices()) {
                 size_t li = v.localIndex();
                 size_t vi = v.index();
                 M3d negGradKContrib = (Kint[vi] / (va[vi] * va[vi])) * gradVA[li]

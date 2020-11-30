@@ -8,7 +8,7 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
 
     // Set the deformed positions to the rest positions.
     m_deformedPositions.resize(m_numVertices, 3);
-    for (const auto &v : m.vertices())
+    for (const auto v : m.vertices())
         m_deformedPositions.row(v.index()) = v.node()->p.transpose();
     m_updateDeformedElements();
 
@@ -53,13 +53,13 @@ struct NormalInferenceProblem : public NewtonProblem {
 
     virtual VXd gradient(bool /* freshIterate */ = false) const override {
         VXd g(VXd::Zero(numVars()));
-        for (const auto &e : m_sheet.mesh().elements()) {
+        for (const auto e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
             const auto &II = m_deformedII[ei];
             const auto &de = m_sheet.deformedElement(ei);
             const Real A = de.volume();
             const Real dE_dpsi = A;
-            for (const auto &he : e.halfEdges()) {
+            for (const auto he : e.halfEdges()) {
                 const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
                 const Real len = m_sheet.deformedEdgeVector(he).norm();
@@ -79,18 +79,18 @@ struct NormalInferenceProblem : public NewtonProblem {
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool /* projectionMask */) const override {
         result.setZero();
-        for (const auto &e : m_sheet.mesh().elements()) {
+        for (const auto e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
             const auto &de = m_sheet.deformedElement(ei);
             const Real A = de.volume();
             const Real dE_dpsi = A;
-            for (const auto &he : e.halfEdges()) {
+            for (const auto he : e.halfEdges()) {
                 const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
                 const Real len = m_sheet.deformedEdgeVector(he).norm();
 
                 const auto &glambda = de.gradBarycentric().col(he.localIndex());
-                for (const auto &he_b : e.halfEdges()) {
+                for (const auto he_b : e.halfEdges()) {
                     const size_t edgeIdx_b = m_sheet.edgeForHalfEdge(he_b.index());
                     if (edgeIdx > edgeIdx_b) continue;
 
@@ -119,12 +119,12 @@ protected:
         const auto &II = m_sheet.getII();
         const auto &gammas = m_sheet.getGammas();
 
-        for (const auto &e : m.elements()) {
+        for (const auto e : m.elements()) {
             const size_t ei = e.index();
             auto &II_d = m_deformedII[ei];
             II_d.setZero();
             const auto &de = m_sheet.deformedElement(e.index());
-            for (const auto &he : e.halfEdges()) {
+            for (const auto he : e.halfEdges()) {
                 auto glambda = de.gradBarycentric().col(he.localIndex());
                 Real len = m_sheet.deformedEdgeVector(he).norm();
                 II_d += ((4 * gammas[he.index()] * (de.volume() / len)) * glambda) * glambda.transpose();
@@ -162,7 +162,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
     // Measure the angle around the edge tangent from reference director d1 to the triangle normal.
     // (ccw with tip pointing toward us)
     m_alphas.resize(m.numHalfEdges());
-    for (const auto &he : m.halfEdges()) {
+    for (const auto he : m.halfEdges()) {
         const auto &frame = m_referenceFrame[m_edgeForHalfEdge[he.index()]];
 
         const auto &n = m_deformedElements[he.tri().index()].normal();
@@ -268,7 +268,7 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
         constexpr size_t to = 3 * numNodesPerElement;
         const Real A = m_deformedElements[ei].volume();
 
-        for (const auto &he : e.halfEdges()) {
+        for (const auto he : e.halfEdges()) {
             const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
             const Real len = deformedEdgeVector(he).norm();
@@ -298,7 +298,7 @@ typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updated
 
         const size_t to = thetaOffset();
         const size_t co = creaseAngleOffset();
-        for (const auto &he : e.halfEdges()) {
+        for (const auto he : e.halfEdges()) {
             g_out[to + m_edgeForHalfEdge[he.index()]] += g_e[9 + he.localIndex()];
             int ci = creaseForHalfEdge(he.index());
             if (ci >= 0) g_out[co + ci] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
@@ -463,7 +463,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
         psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
                                                       : EvalLevel::HessianWithDisabledProjection);
 
-        for (const auto &v_b : e.vertices()) {
+        for (const auto v_b : e.vertices()) {
             VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
             for (size_t c_b = 0; c_b < 3; ++c_b) {
                 deltaF_b.c = c_b;
@@ -484,10 +484,10 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 
         const auto &deformedElement = m_deformedElements[ei];
         std::array<M3d, 3> d_A_gamma_div_len_d_x_for_he;
-        for (const auto &he : e.halfEdges())
+        for (const auto he : e.halfEdges())
             d_A_gamma_div_len_d_x_for_he[he.localIndex()] = d_A_gamma_div_len_d_x(he, true);
 
-        for (const auto &he : e.halfEdges()) {
+        for (const auto he : e.halfEdges()) {
             const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
             const size_t edgeIdx = he.localIndex();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
@@ -504,7 +504,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             SM2d val = m_etensor.doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
             val *= 2 * (4 * 2 * dE_dpsi);
 
-            for (const auto &he_b : e.halfEdges()) {
+            for (const auto he_b : e.halfEdges()) {
                 const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
                 const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
                 const Real len_b = deformedEdgeVector(he_b).norm();
@@ -532,7 +532,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             }
 
             // x-x block
-            for (const auto &v_b : e.vertices()) {
+            for (const auto v_b : e.vertices()) {
                 for (size_t c_b = 0; c_b < 3; ++c_b) {
                     M3d delta_gradCornerPos = d2_E_d_A_gamma_div_len_dx(c_b, v_b.localIndex()) * d_A_gamma_div_len_d_xa
                                             +   dE_d_A_gamma_div_len * delta_d_A_gamma_div_len_d_x(he, v_b, c_b);
@@ -565,10 +565,10 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
     auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, SuiteSparseMatrix& Hout) {
         auto H_elem = elementHessian(ei, etype, projectionMask);
         const auto &e = m.element(ei);
-        for (const auto &v_b : e.vertices()) {
+        for (const auto v_b : e.vertices()) {
             for (size_t c_b = 0; c_b < 3; ++c_b) {
                 const size_t var_b = 3 * v_b.index() + c_b;
-                for (const auto &v_a : e.vertices()) {
+                for (const auto v_a : e.vertices()) {
                     if (v_a.index() > v_b.index()) continue;
                     Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
                 }
@@ -578,11 +578,11 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
         // Theta vars
         const size_t to = thetaOffset();
         constexpr size_t lto = 9;
-        for (const auto &he_b : e.halfEdges()) {
+        for (const auto he_b : e.halfEdges()) {
             const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
-            for (const auto &v_a : e.vertices())
+            for (const auto v_a : e.vertices())
                 Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-            for (const auto &he_a : e.halfEdges()) {
+            for (const auto he_a : e.halfEdges()) {
                 const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
                 if (var_a > var_b) continue;
                 Hout.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
@@ -592,16 +592,16 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
 
         // Crease angles (if they exist)
         const size_t co = creaseAngleOffset();
-        for (const auto &he_b : e.halfEdges()) {
+        for (const auto he_b : e.halfEdges()) {
             int ci_b = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[he_b.index()]];
             if (ci_b < 0) continue;
             const size_t var_b = co + ci_b;
 
             // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
             const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
-            for (const auto &v_a : e.vertices())
+            for (const auto v_a : e.vertices())
                 Hout.addNZ(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-            for (const auto &he_a : e.halfEdges()) {
+            for (const auto he_a : e.halfEdges()) {
                 size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
                 // First, extract the derivative with respect to the midedge normal angles for he_a and he_b
                 Real Hentry = H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
@@ -647,14 +647,14 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
     };
 
     // Each vertex DoF interacts with the vertices in its one-ring
-    for (const auto &v : m.vertices()) {
+    for (const auto v : m.vertices()) {
         const size_t vi = v.index();
 
         for (size_t v_comp = 0; v_comp < 3; ++v_comp) {
             // Self-interaction (upper triangle)
             for (size_t c = 0; c <= v_comp; ++c)
                 Ai.push_back(3 * vi + c);
-            for (const auto &he : v.incidentHalfEdges()) {
+            for (const auto he : v.incidentHalfEdges()) {
                 const size_t ui = he.tail().index();
                 if (ui < vi) {
                     for (size_t c = 0; c < 3; ++c)
@@ -689,7 +689,7 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
         he.visitIncidentElements([&](size_t ti) {
             const auto t = m.tri(ti);
             // *Other* theta variables
-            for (const auto &he : t.halfEdges()) {
+            for (const auto he : t.halfEdges()) {
                 size_t otherEdgeIdx = m_edgeForHalfEdge[he.index()];
                 if (otherEdgeIdx < edgeIndex)
                     Ai.push_back(to + otherEdgeIdx);
@@ -706,7 +706,7 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
         assert(!he.isBoundary());
 
         // Vertices in this triangle
-        for (const auto &v : he.tri().vertices()) {
+        for (const auto v : he.tri().vertices()) {
             for (size_t c = 0; c < 3; ++c)
                 Ai.push_back(3 * v.index() + c);
         }
@@ -724,7 +724,7 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
         // by skipping "he" in the loop below (so only variables on its
         // opposite half-edge are added)
         he.visitIncidentElements([&](size_t ti) {
-            for (const auto &he_a : m.tri(ti).halfEdges()) {
+            for (const auto he_a : m.tri(ti).halfEdges()) {
                 if (he_a.index() == he.index()) continue; // don't double-add vars on this edge
                 size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
                 Ai.push_back(to + edgeIdx_a);
@@ -749,7 +749,7 @@ template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatures() const {
     const auto &m = mesh();
     MX2d result(m.numElements(), 2);
-    for (const auto &e : m.elements()) {
+    for (const auto e : m.elements()) {
         // Principal curvatures are the eigenvalues of the (asymmetric) shape operator h g^{-1},
         // where h and g are the first and second fundamental forms, respectively.
         // Sign conventions vary, but we take the (somewhat less common) convention that
@@ -819,7 +819,7 @@ template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
     const auto &m = mesh();
     m_deformedElements.resize(m.numElements());
-    for (const auto &e : m.elements()) {
+    for (const auto e : m.elements()) {
         m_deformedElements[e.index()].embed(m_deformedPositions.row(e.vertex(0).index()).transpose(),
                                             m_deformedPositions.row(e.vertex(1).index()).transpose(),
                                             m_deformedPositions.row(e.vertex(2).index()).transpose());
@@ -832,11 +832,11 @@ void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
     m_II.resize(m.numTris());
     auto gammas = getGammas();
 
-    for (const auto &e : m.elements()) {
+    for (const auto e : m.elements()) {
         auto &result = m_II[e.index()];
         result.setZero();
         const auto &deformedElement = m_deformedElements[e.index()];
-        for (const auto &he : e.halfEdges()) {
+        for (const auto he : e.halfEdges()) {
             auto glambda_ref = e->gradBarycentric().col(he.localIndex());
             Real len = deformedEdgeVector(he).norm();
             result += ((4 * gammas[he.index()] * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
@@ -870,6 +870,6 @@ void ElasticSheet<Psi_2x2>::m_updateB() {
 
     m_jacobianLambdaB.reserve(nt);
     m_jacobianLambdaB.clear();
-    for (const auto &e : m.elements())
+    for (const auto e : m.elements())
         m_jacobianLambdaB.push_back(e->gradBarycentric().transpose() * m_B[e.index()]);
 }

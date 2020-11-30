@@ -38,14 +38,14 @@ HomogenizationResult<_Mesh> runHomogenization(
         const _Mesh &mesh, const ETensor<_Mesh> &Cbase, bool orthotropicCell,
         const std::string &manualPeriodicVerticesFile, bool centerFluctuationDisplacements,
         bool ignorePeriodicMismatch) {
-    using Real = typename _Mesh::Real;
+    using _Real = typename _Mesh::Real;
     static constexpr size_t N = _Mesh::EmbeddingDimension;
     using LEMesh = LinearElasticity::Mesh<N, _Mesh::Deg, HMG>;
     HMG<N>::material.setTensor(Cbase);
     LinearElasticity::Simulator<LEMesh> sim(getF(mesh), getV(mesh));
 
     HomogenizationResult<_Mesh> result;
-    std::vector<VectorField<Real, N>> w_ij;
+    std::vector<VectorField<_Real, N>> w_ij;
 
     // Compute fluctuation displacements and homogenized elasticity tensor
     std::unique_ptr<PeriodicCondition<N>> pc;
@@ -145,10 +145,10 @@ getProbeResult(const _Mesh &mesh, const HR &homogenizationResult, const SMValue 
 
 template<typename _Mesh>
 void bindHomogenization(py::module &m, py::module &detail_module) {
-    using Real = typename _Mesh::Real;
+    using _Real = typename _Mesh::Real;
     static constexpr size_t N = _Mesh::EmbeddingDimension;
     using HR = HomogenizationResult<_Mesh>;
-    using SMValue = SymmetricMatrixValue<Real, N>;
+    using SMValue = SymmetricMatrixValue<_Real, N>;
 
     py::class_<HR>(detail_module, ("HomogenizationResult" + NameMangler<_Mesh>::name()).c_str())
         .def_readonly("Ch",          &HR::Ch)

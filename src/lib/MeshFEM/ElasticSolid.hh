@@ -67,7 +67,7 @@ public:
         const auto &m = mesh();
         // Transfer/interpolate deformation field to our new mesh.
         m_x.resize(mesh().numNodes(), size_t(N));
-        for (const auto &n : m.nodes()) {
+        for (const auto n : m.nodes()) {
             const size_t ni = n.index();
             if (n.isVertexNode()) m_x.row(ni) = oldDeformation.row(ni);
             else if (n.isEdgeNode()) {
@@ -89,7 +89,7 @@ public:
 
     void setIdentityDeformation() {
         m_x.resize(mesh().numNodes(), size_t(N));
-        for (const auto &n : mesh().nodes())
+        for (const auto n : mesh().nodes())
             m_x.row(n.index()) = n->p;
     }
 
@@ -113,7 +113,7 @@ public:
 
     VXd getRestState() const {
         VXd rest_state(numRestStateVars());
-        for (const auto &v : mesh().vertices())
+        for (const auto v : mesh().vertices())
             rest_state.template segment<N>(N * v.index()) = v.node()->p;
         return rest_state;
     }
@@ -146,7 +146,7 @@ public:
                   psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
                   Matrix denergy = psi.denergy();
 
-                  for (const auto &n : e.nodes()) {
+                  for (const auto n : e.nodes()) {
                       VSFJ gradPhi(0, gradPhis.col(n.localIndex()));
                       for (size_t c = 0; c < N; ++c) {
                           gradPhi.c = c;
@@ -164,7 +164,7 @@ public:
 
         auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
             ElementGradient contrib = elementGradient(ei);
-            for (const auto &n : mesh().element(ei).nodes())
+            for (const auto n : mesh().element(ei).nodes())
                 g_out.template segment<N>(N * n.index()) += contrib.template segment<N>(N * n.localIndex());
         };
 
@@ -197,13 +197,13 @@ public:
                                                                                                    : EvalLevel::Hessian);
                 Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
 
-                for (const auto &n_b : e.nodes()) {
+                for (const auto n_b : e.nodes()) {
                     VSFJ gradPhi_b(0, gradPhis.col(n_b.localIndex()));
                     for (size_t c_b = 0; c_b < N; ++c_b) {
                         size_t var_b = N * n_b.localIndex() + c_b;
                         gradPhi_b.c = c_b;
                         Matrix delta_denergy = psi.delta_denergy(gradPhi_b);
-                        for (const auto &n_a : e.nodes()) {
+                        for (const auto n_a : e.nodes()) {
                             VSFJ gradPhi_a(0, gradPhis.col(n_a.localIndex()));
                             for (size_t c_a = 0; c_a < N; ++c_a) {
                                 size_t var_a = N * n_a.localIndex() + c_a;
@@ -227,11 +227,11 @@ public:
             PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
 
             // Accumulate vertical strips into the global Sparse matrix.
-            for (const auto &n_b : e.nodes()) {
+            for (const auto n_b : e.nodes()) {
                 for (size_t c_b = 0; c_b < N; ++c_b) {
                     size_t  var_b = N * n_b.localIndex() + c_b;
                     size_t gvar_b = N * n_b.index() + c_b;
-                    for (const auto &n_a : e.nodes()) {
+                    for (const auto n_a : e.nodes()) {
                         size_t  var_a = N * n_a.localIndex();
                         size_t gvar_a = N * n_a.index();
                         if (gvar_a > gvar_b) continue;
@@ -253,10 +253,10 @@ public:
         TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
 
-        for (const auto &e : mesh().elements()) {
-            for (const auto &n_b : e.nodes()) {
+        for (const auto e : mesh().elements()) {
+            for (const auto n_b : e.nodes()) {
                 for (size_t c_b = 0; c_b < N; ++c_b) {
-                    for (const auto &n_a : e.nodes()) {
+                    for (const auto n_a : e.nodes()) {
                         for (size_t c_a = 0; c_a < N; ++c_a) {
                             size_t var_b = N * n_b.index() + c_b,
                                    var_a = N * n_a.index() + c_a;
@@ -290,7 +290,7 @@ public:
     MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
     MXNd restPositions() const {
         MXNd rpos(mesh().numNodes(), size_t(N));
-        for (const auto &n : mesh().nodes())
+        for (const auto n : mesh().nodes())
             rpos.row(n.index()) = n->p;
         return rpos;
     }
@@ -306,7 +306,7 @@ public:
     Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
         Matrix F(Matrix::Zero());
         const auto &e = mesh().element(ei);
-        for (const auto &n : e.nodes()) {
+        for (const auto n : e.nodes()) {
             F += (gradPhis.col(n.localIndex()) * m_x.row(n.index())).transpose();
         }
         return F;
@@ -321,7 +321,7 @@ public:
         // For a tet mesh, the 3D volume associated with a tetrahedron is simply the tet's volume.
         const auto &m = mesh();
         VXd result(m.numElements());
-        for (const auto &e : m.elements())
+        for (const auto e : m.elements())
             result[e.index()] = e->volume();
         return result;
     }

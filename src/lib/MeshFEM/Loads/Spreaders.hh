@@ -59,7 +59,7 @@ struct Spreaders : public Load<Object::N, typename Object::Real> {
     {
         if (m_materialPointPositioner.m % N != 0) throw std::runtime_error("Number of rows in materialPointPositioner should be divisible by " + std::to_string(N));
         m_materialPointPositionerTranspose = materialPointPositioner.transpose();
-        if (N * size_t(connectivity.maxCoeff()) >= m_materialPointPositioner.m)
+        if (long(N) * connectivity.maxCoeff() >= m_materialPointPositioner.m)
             throw std::runtime_error("Edge index out of bounds");
         m_updateCache();
         m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });

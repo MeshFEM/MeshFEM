@@ -226,7 +226,7 @@ public:
     MX3d restPositions() const {
         const auto &m = mesh();
         MX3d rpos(m.numNodes(), 3);
-        for (const auto &n : m.nodes())
+        for (const auto n : m.nodes())
             rpos.row(n.index()) = n->p;
         return rpos;
     }
@@ -388,7 +388,7 @@ public:
     VXd element3DVolumes() const {
         const auto &m = mesh();
         VXd result(m.numElements());
-        for (const auto &e : m.elements())
+        for (const auto e : m.elements())
             result[e.index()] = e->volume() * m_h;
         return result;
     }

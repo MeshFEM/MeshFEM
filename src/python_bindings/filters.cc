@@ -34,7 +34,7 @@ PYBIND11_MODULE(filters, m) {
     // Row major for compatibility with numpy
     using VType = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using FType = Eigen::Matrix<int,    Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-    m.def("reflect", [](const VType &V, const VType &F, const std::string &components) {
+    m.def("reflect", [](const VType &V, const FType &F, const std::string &components) {
             std::vector<MeshIO::IOVertex > rvertices;
             std::vector<MeshIO::IOElement> relements;
             ComponentMask mask(components);

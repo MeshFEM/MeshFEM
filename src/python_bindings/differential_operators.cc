@@ -70,8 +70,8 @@ struct DiffOpBindings {
                 if (size_t(scalarField.size()) != mesh.numNodes()) throw std::runtime_error("Incorrect scalar field size");
                 MXNd g(mesh.numElements(), int(N)); // the cast to int prevents an ODR-use-induced linking error.
                 g.setZero();
-                for (const auto &e : mesh.elements())
-                    for (const auto &n : e.nodes())
+                for (const auto e : mesh.elements())
+                    for (const auto n : e.nodes())
                         g.row(e.index()) += scalarField[n.index()] * e->gradPhi(n.localIndex()).average();
                 return g;
           }, py::arg("mesh"), py::arg("scalarField").noconvert());
@@ -81,8 +81,8 @@ struct DiffOpBindings {
                 if (size_t(vectorField.rows()) != mesh.numElements()) throw std::runtime_error("Incorrect vector field size");
                 Eigen::VectorXd result(mesh.numNodes());
                 result.setZero();
-                for (const auto &e : mesh.elements())
-                    for (const auto &n : e.nodes())
+                for (const auto e : mesh.elements())
+                    for (const auto n : e.nodes())
                         result[n.index()] += vectorField.row(e.index()).dot(e->gradPhi(n.localIndex()).integrate(e->volume()));
                 return result;
           }, py::arg("mesh"), py::arg("vectorField").noconvert());

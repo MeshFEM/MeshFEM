@@ -157,7 +157,7 @@ target_link_libraries(${PROJECT_NAME}
         meshfem::boost
         meshfem::spectra
 #		CGAL::CGAL
-    PRIVATE
+#   PRIVATE
         warnings::all
 )
 

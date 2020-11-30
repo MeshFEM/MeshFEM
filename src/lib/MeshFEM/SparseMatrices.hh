@@ -1112,13 +1112,13 @@ struct CSCMatrix {
         if ((Ap.size() != size_t(n + 1)) || (Ai.size() != size_t(nz)) || (Ax.size() != size_t(nz)))
                 throw std::runtime_error("Inconsistent matrix size metadata");
 
-        os.write((char *) & m, sizeof(_Index));
-        os.write((char *) & n, sizeof(_Index));
-        os.write((char *) &nz, sizeof(_Index));
-        os.write((char *) &symmetry_mode, sizeof(uint32_t));
-        os.write((char *) Ap.data(), Ap.size() * sizeof(_Index));
-        os.write((char *) Ai.data(), Ai.size() * sizeof(_Index));
-        os.write((char *) Ax.data(), Ax.size() * sizeof( _Real));
+        os.write((const char *) & m, sizeof(_Index));
+        os.write((const char *) & n, sizeof(_Index));
+        os.write((const char *) &nz, sizeof(_Index));
+        os.write((const char *) &symmetry_mode, sizeof(uint32_t));
+        os.write((const char *) Ap.data(), Ap.size() * sizeof(_Index));
+        os.write((const char *) Ai.data(), Ai.size() * sizeof(_Index));
+        os.write((const char *) Ax.data(), Ax.size() * sizeof( _Real));
     }
 
     void readBinary(const std::string &path) {

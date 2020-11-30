@@ -163,7 +163,7 @@ struct SingleVertexOptProblem {
             const auto &e = m_obj.mesh().element(ei);
             const auto g = m_obj.elementGradient(ei);
             bool found = false;
-            for (const auto &v : e.vertices()) {
+            for (const auto v : e.vertices()) {
                 if (size_t(v.index()) == m_vi) {
                     result += g.template segment<N>(N * v.localIndex());
                     found = true;
@@ -180,7 +180,7 @@ struct SingleVertexOptProblem {
             const auto &e = m_obj.mesh().element(ei);
             const auto H = m_obj.elementHessian(ei, /* disable Hessian projection (Dense newton solver can deal with indefiniteness better) */ true);
             bool found = false;
-            for (const auto &v : e.vertices()) {
+            for (const auto v : e.vertices()) {
                 if (size_t(v.index()) == m_vi) {
                     const size_t vo = N * v.localIndex();
                     for (size_t c_a = 0; c_a < N; ++c_a) {

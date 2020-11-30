@@ -65,7 +65,7 @@ public:
 
             // Circulate around the tet corner, adding half-edges in unvisited
             // adjacent tets.
-            for (const auto &he : m_mesh.halfEdge(u).tipCirculator()) {
+            for (const auto he : m_mesh.halfEdge(u).tipCirculator()) {
                 if (!he.isBoundary()) {
                     const auto &r = he.radial().prev();
                     size_t ti = r.tet().index();
@@ -101,7 +101,7 @@ protected:
     using BFH = typename _Mesh::template BFHandle<_Mesh>;
     using  HE = typename _Mesh::template HEHandle<_Mesh>;
 public:
-    bool         valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
+    bool         valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numHalfFaces()); }
     bool    isBoundary() const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
     BFH   boundaryFace() const { return BFH(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
     HFH       opposite() const { return HFH(m_mesh.m_oppFaceIdx(m_idx), m_mesh); }

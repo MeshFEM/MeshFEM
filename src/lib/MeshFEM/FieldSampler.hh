@@ -213,7 +213,7 @@ namespace detail {
     std::enable_if_t<FEMMesh_::K == 3, TrisOfMesh> getAllTriangles(const FEMMesh_ &m) {
         TrisOfMesh result;
         // Get the primary half-faces
-        for (const auto &hf : m.halfFaces()) {
+        for (const auto hf : m.halfFaces()) {
             if (hf.isPrimary())
                 result.halfFaceForFace.push_back(hf.index());
         }
@@ -272,7 +272,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 
         // For tet meshes, we still must figure out which tet the closest point
         // lies in (and its barycentric coordinates within that tet).
-        auto &Vtri = this->m_V;
         auto &Ftri = this->m_F;
 
         const size_t np = I.rows();
@@ -356,7 +355,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
             for (int p = 0; p < np; ++p) {
                 auto e = m.element(I[p]);
 				outSamples.row(p).setZero();
-                for (const auto &v : e.vertices())
+                for (const auto v : e.vertices())
                     outSamples.row(p) += B(p, v.localIndex()) * fieldValues.row(v.index());
             }
         }
@@ -369,7 +368,7 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
             constexpr size_t K = FEMMesh_::K;
             Interpolant<T, K, FEMMesh_::Deg> interp;
             for (int p = 0; p < np; ++p) {
-                for (const auto &n : m.element(I[p]).nodes())
+                for (const auto n : m.element(I[p]).nodes())
                     interp[n.localIndex()] = fieldValues.row(n.index());
                 EvalPt<K> evalPt;
                 for (size_t i = 0; i < evalPt.size(); ++i) evalPt[i] = B(p, i);

@@ -54,8 +54,8 @@ struct EquilibriumProblem : public NewtonProblem {
     using Real = typename EQSystem::Real;
     using LC = LoadCollection<EQSystem>;
 
-    EquilibriumProblem(EQSystem &sys, const LC &l = LC())
-        : m_sys(sys), m_loads(l),
+    EquilibriumProblem(EQSystem &sys, const LC &lc = LC())
+        : m_sys(sys), m_loads(lc),
           m_hessianSparsity(sys.hessianSparsityPattern()) {
         for (const auto &l : m_loads)
             m_hessianSparsity.addWithDistinctSparsityPattern(l->hessianSparsityPattern(1.0));
