@@ -26,7 +26,7 @@ std::string getFEMName() {
     std::array<std::string, 2>  degreeNames{{"Linear", "Quadratic"}};
     std::array<std::string, 2> simplexNames{{"Tri", "Tet"}};
 
-    std::string dimName = std::to_string(_EmbeddingSpace::RowsAtCompileTime);
+    std::string dimName = std::to_string(int(_EmbeddingSpace::RowsAtCompileTime));
 
     return degreeNames.at(_Degree - 1) + dimName + "D" + simplexNames.at(_K - 2);
 }

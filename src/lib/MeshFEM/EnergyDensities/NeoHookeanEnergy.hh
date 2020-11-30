@@ -272,11 +272,11 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
     Matrix delta_d_I3_d_F(const Mat_ &dF) const {
         Matrix dC33 = d_C33_d_F();
         Matrix d_unpaddedI3 = d_unpaddedI3_d_F();
-        Real delta_unpaddedI3 = doubleContract(d_unpaddedI3, dF);
+        Real delta_unpaddedI3_val = doubleContract(d_unpaddedI3, dF);
 
         return delta_d_unpaddedI3_d_F(dF) * m_C33                    +
                d_unpaddedI3               * doubleContract(dC33, dF) +
-               delta_unpaddedI3           * dC33                     +
+               delta_unpaddedI3_val       * dC33                     +
                unpaddedI3()               * delta_d_C33_d_F(dF);
     }
 

@@ -69,9 +69,8 @@ bindEnergyCBased(py::module &detail_module)
 template<class WSP>
 py::class_<WSP>
 bindWrinkleStrainProblem(py::module &m, const std::string &name) {
-    using Real = typename WSP::Real;
     auto wsp = py::class_<WSP>(m, name.c_str())
-        .def(py::init<typename WSP::Psi &, const typename WSP::M2d &, const Vec2_T<Real> &>(), py::arg("psi"), py::arg("C"), py::arg("n"))
+        .def(py::init<typename WSP::Psi &, const typename WSP::M2d &, const Vec2_T<typename WSP::Real> &>(), py::arg("psi"), py::arg("C"), py::arg("n"))
         .def("getC",     &WSP::getC)
         .def("setC",     &WSP::setC, py::arg("C"))
         .def("numVars",  &WSP::numVars)

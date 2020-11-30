@@ -23,7 +23,7 @@ set(MY_FLAGS
         -Wformat=2
         -Wuninitialized
         -Wcast-qual
-        -Wmissing-noreturn
+        # -Wmissing-noreturn # this is super annoying and sometimes buggy, it seems
         -Wmissing-format-attribute
         -Wredundant-decls
 

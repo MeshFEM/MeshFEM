@@ -28,7 +28,7 @@ void bindCurvature(py::module &m, py::module &detail_module) {
         .def("deltaK",            &GCS::deltaK,            py::arg("deltaP"))
         ;
 
-    m.def("GaussianCurvatureSensitivity", [](const Mesh &m) { return std::make_unique<GCS>(m); });
+    m.def("GaussianCurvatureSensitivity", [](const Mesh &mesh) { return std::make_unique<GCS>(mesh); });
 }
 
 PYBIND11_MODULE(curvature, m) {

@@ -300,7 +300,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
                 // closest point in the mesh, which must fall inside the primary tet of
                 // the closest face.
                 t = m.element(hf.element().index());
-                Eigen::Vector3i closestTri = Ftri.row(I[i]);
                 if (!AES(*t, t.vertex(0).node()->p).contains(C.row(i).transpose(), lambda, 1e-12))
                     throw std::runtime_error("Projected point not inside closest tet");
             }

@@ -689,8 +689,8 @@ SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const 
         he.visitIncidentElements([&](size_t ti) {
             const auto t = m.tri(ti);
             // *Other* theta variables
-            for (const auto he : t.halfEdges()) {
-                size_t otherEdgeIdx = m_edgeForHalfEdge[he.index()];
+            for (const auto he_other : t.halfEdges()) {
+                size_t otherEdgeIdx = m_edgeForHalfEdge[he_other.index()];
                 if (otherEdgeIdx < edgeIndex)
                     Ai.push_back(to + otherEdgeIdx);
             }

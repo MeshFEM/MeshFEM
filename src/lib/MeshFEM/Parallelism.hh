@@ -4,9 +4,9 @@
 #ifdef MESHFEM_WITH_TBB
 #define TBB_PREVIEW_GLOBAL_CONTROL 1
 #include <tbb/global_control.h>
-#include <tbb/tbb.h>
 #include <tbb/parallel_for.h>
-#include <tbb/task_scheduler_init.h>
+#include <tbb/enumerable_thread_specific.h>
+#include <tbb/combinable.h>
 
 #include <memory>
 
