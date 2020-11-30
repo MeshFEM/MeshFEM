@@ -67,7 +67,7 @@ extract_component_polygons(const Mesh &m, Eigen::Ref<const Eigen::VectorXi> indi
     std::queue<int> bfsTriQueue;
     std::vector<int> componentBdryHEs;
 
-    for (const auto &t : m.tris()) {
+    for (const auto t : m.tris()) {
         if (triVisited[t.index()] || (indicator[t.index()] < 0)) continue;
         componentBdryHEs.clear();
         // Use a dual BFS to find the connected component this containing
@@ -79,7 +79,7 @@ extract_component_polygons(const Mesh &m, Eigen::Ref<const Eigen::VectorXi> indi
             int u = bfsTriQueue.front();
             bfsTriQueue.pop();
 
-            for (const auto &he : m.tri(u).halfEdges()) {
+            for (const auto he : m.tri(u).halfEdges()) {
                 if (isPolyBoundaryHE(HEH(he.index(), m))) {
                     componentBdryHEs.push_back(he.index());
                 }

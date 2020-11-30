@@ -48,7 +48,7 @@ public:
     // Call `visitor(ei)` for each incident element `ei`.
     template<class F>
     void visitIncidentElements(F &&visitor) {
-        for (const auto &he : incidentHalfEdges()) {
+        for (const auto he : incidentHalfEdges()) {
             auto t = he.tri();
             if (t) visitor(t.index());
         }
@@ -135,7 +135,7 @@ public:
 
     // Index within tri()
     size_t localIndex() const {
-        for (const auto &he_b : tri().halfEdges())
+        for (const auto he_b : tri().halfEdges())
             if (he_b.index() == m_idx) return he_b.localIndex();
         throw std::logic_error("Halfedge not found within its triangle");
     }

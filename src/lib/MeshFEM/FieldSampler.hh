@@ -242,7 +242,7 @@ namespace detail {
     auto getHalfFace(const FEMMesh_ &m, int i) -> decltype(m.halfFace(0)) { return m.halfFace(i); }
 
     template<class FEMMesh_, typename = std::enable_if_t<FEMMesh_::K == 2>>
-    auto getHalfFace(const FEMMesh_ &m, int i) -> typename TetMesh<>::template HFHandle<TetMesh<>> { throw std::logic_error("This should not run!"); }
+    auto getHalfFace(const FEMMesh_ &/* m */, int /* i */) -> typename TetMesh<>::template HFHandle<TetMesh<>> { throw std::logic_error("This should not run!"); }
 }
 
 template<typename T> std::enable_if_t<!is_dereferenceable<T>::value, T> &accessHolderContents(T &x) { return x; }
@@ -272,8 +272,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 
         // For tet meshes, we still must figure out which tet the closest point
         // lies in (and its barycentric coordinates within that tet).
-        auto &Ftri = this->m_F;
-
         const size_t np = I.rows();
         B.conservativeResize(np, 4); // first three columns still hold the half-face barycentric coordinates
         const auto &m = mesh();
@@ -344,7 +342,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
         this->closestElementAndBaryCoords(P, I, B);
-        const int numCorners = B.cols();
         if (B.cols() != FEMMesh_::K + 1) throw std::logic_error("Barycentric coordinates size mismatch");
 
         const int np = P.rows();

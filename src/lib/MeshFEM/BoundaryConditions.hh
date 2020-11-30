@@ -588,7 +588,7 @@ public:
         m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
         m_nodesForDoF.reserve(mesh.numNodes());
         m_nodesForDoF.clear();
-        for (const auto &n : mesh.nodes()) {
+        for (const auto n : mesh.nodes()) {
             if (m_dofForNode[n.index()] != NO_DOF) continue;
             size_t dof = m_nodesForDoF.size();
             m_nodesForDoF.emplace_back(1, n.index());

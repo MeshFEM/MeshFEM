@@ -79,8 +79,8 @@ private:
         const auto &m = getObj().mesh();
         typename Object::Mesh::ElementData::Phis phiIntegrals;
         auto integratedPhis = integratedShapeFunctions<Deg, K>();
-        for (const auto &e : m.elements()) {
-            for (const auto &n : e.nodes()) {
+        for (const auto e : m.elements()) {
+            for (const auto n : e.nodes()) {
                 m_grad.template segment<3>(3 * n.index()) +=
                     m_g * (integratedPhis[n.localIndex()] * e->volume());
             }

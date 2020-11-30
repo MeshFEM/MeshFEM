@@ -54,19 +54,19 @@ struct MeshBindingsBase {
           .def("boundaryElements", [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
           .def("boundaryVertices", [](const Mesh &m) {
                     Eigen::VectorXi result(m.numBoundaryVertices());
-                    for (const auto &bv : m.boundaryVertices())
+                    for (const auto bv : m.boundaryVertices())
                         result(bv.index()) = bv.volumeVertex().index();
                     return result;
                })
           .def("boundaryNodes", [](const Mesh &m) {
                     Eigen::VectorXi result(m.numBoundaryNodes());
-                    for (const auto &bn : m.boundaryNodes())
+                    for (const auto bn : m.boundaryNodes())
                         result(bn.index()) = bn.volumeNode().index();
                     return result;
                })
           .def("elementsAdjacentBoundary", [](const Mesh &m) {
                   Eigen::VectorXi result(m.numBoundaryElements());
-                  for (const auto &be : m.boundaryElements())
+                  for (const auto be : m.boundaryElements())
                       result[be.index()] = be.opposite().simplex().index();
                   return result;
               })
@@ -82,12 +82,12 @@ struct MeshBindingsBase {
                                                       : "Boundary triangle normals")
           .def("elementVolumes", [](const Mesh &m) {
                       Eigen::VectorXd result(m.numElements());
-                      for (const auto &e : m.elements()) result[e.index()] = e->volume();
+                      for (const auto e : m.elements()) result[e.index()] = e->volume();
                       return result;
                   })
           .def("edgeLengths", [](const Mesh &m) {
                 std::map<UnorderedPair, Real> edgeLengths;
-                for (const auto &he : m.halfEdges()) {
+                for (const auto he : m.halfEdges()) {
                     edgeLengths.emplace(UnorderedPair(he.tail().index(), he.tip().index()),
                                         (he.tip().node()->p -he.tail().node()->p).norm());
                 }
@@ -99,7 +99,7 @@ struct MeshBindingsBase {
           }, "Get the length of each mesh edge in arbitrary order")
           .def("barycenters", [](const Mesh &m) {
                 Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, EmbeddingDimension> result(m.numElements(), size_t(EmbeddingDimension));
-                for (const auto &e : m.elements()) {
+                for (const auto e : m.elements()) {
                     auto b = result.row(e.index());
                     b.setZero();
                     for (const auto v : e.vertices()) {
@@ -157,7 +157,7 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
             .def("trisAdjTri", [](const Mesh &m, size_t ti) {
                     std::vector<int> result;
                     if (ti >= m.numTris()) throw std::runtime_error("Triangle index out of bounds");
-                    for (const auto &tri_j : m.tri(ti).neighbors()) {
+                    for (const auto tri_j : m.tri(ti).neighbors()) {
                         if (!tri_j) continue;
                         result.push_back(tri_j.index());
                     }
@@ -166,24 +166,24 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
             .def("vtsAdjVtx", [](const Mesh &m, size_t vi) {
                     std::vector<int> result;
                     if (vi >= m.numVertices()) throw std::runtime_error("Vertex index out of bounds");
-                    for (const auto &he : m.vertex(vi).incidentHalfEdges())
+                    for (const auto he : m.vertex(vi).incidentHalfEdges())
                         result.push_back(he.tail().index());
                     return result;
                 })
             .def("valences", [](const Mesh &m) {
                     std::vector<int> result(m.numVertices());
-                    for (const auto &tri : m.elements()) {
-                        for (const auto &v : tri.vertices())
+                    for (const auto tri : m.elements()) {
+                        for (const auto v : tri.vertices())
                             ++result[v.index()];
                     }
                     return result;
                 })
             .def("angleDeficits", [](const Mesh &m) {
                         Eigen::VectorXd result(m.numVertices());
-                        for (const auto &v : m.vertices()) {
+                        for (const auto v : m.vertices()) {
                             Real deficit = 2 * M_PI;
                             if (v.isBoundary()) { result[v.index()] = 0.0; continue; }
-                            for (const auto &he : v.incidentHalfEdges()) {
+                            for (const auto he : v.incidentHalfEdges()) {
                                 if (!he.tri()) continue;
                                 V3d  p = padTo3D(he.tip().node()->p);
                                 V3d e1 = padTo3D(he.next().tip().node()->p) - p,
@@ -197,7 +197,7 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
             .def("boundaryLoops", [](const Mesh &m) {
                     std::vector<bool> visited(m.numBoundaryVertices());
                     std::vector<std::vector<size_t>> result;
-                    for (const auto &be : m.boundaryEdges()) {
+                    for (const auto be : m.boundaryEdges()) {
                         if (visited[be.tip().index()]) continue;
                         auto curr = be;
                         result.emplace_back();

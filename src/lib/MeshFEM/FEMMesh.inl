@@ -67,7 +67,7 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
         // For tet meshes, we guarantee this half-edge is adjacent the boundary
         // so that a (mate->radial) circulation will visit all incident tets.
         m_halfEdgeForEdgeNode.assign(numEdgeNodes_, -1);
-        for (const auto &he : halfEdges()) {
+        for (const auto he : halfEdges()) {
             size_t eni = edgeNodes.at(UnorderedPair(he.tail().index(), he.tip().index()));
             if (he.isBoundary() || (m_halfEdgeForEdgeNode[eni] == -1))
                 m_halfEdgeForEdgeNode[eni] = he.index();

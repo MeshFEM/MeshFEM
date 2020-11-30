@@ -23,7 +23,7 @@ template<class _HandleRange>
 Eigen::Matrix<int, Eigen::Dynamic, _HandleRange::HType::numVertices()> getElementCorners(const _HandleRange &range, bool volumeIndices = true) {
     constexpr size_t nvPerElem = _HandleRange::HType::numVertices();
     Eigen::Matrix<int, Eigen::Dynamic, nvPerElem> elements(range.size(), nvPerElem);
-    for (const auto& e : range)
+    for (const auto e : range)
         elements.row(e.index()) = getElementCorners(e, volumeIndices, Future::make_index_sequence<nvPerElem>());
     return elements;
 }
@@ -32,7 +32,7 @@ template<class _Mesh, template<class> class _HType>
 Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension>
 getVertices(const HandleRange<_Mesh, _HType> &vrange) {
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(vrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t cast to prevent undefined symbol due to ODR-use
-    for (const auto& v : vrange)
+    for (const auto v : vrange)
         V.row(v.index()) = v.volumeVertex().node()->p;
     return V;
 }
@@ -41,7 +41,7 @@ template<class _Mesh, template<class> class _HType>
 Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension>
 getNodes(const HandleRange<_Mesh, _HType> &nrange) {
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, _Mesh::EmbeddingDimension> V(nrange.size(), size_t(_Mesh::EmbeddingDimension)); // size_t cast to prevent undefined symbol due to ODR-use
-    for (const auto& n : nrange)
+    for (const auto n : nrange)
         V.row(n.index()) = n.volumeNode()->p;
     return V;
 }
@@ -101,7 +101,7 @@ getPerCornerNormals(const HandleRange<_Mesh, _HType> &erange, double normalCreas
         // Note: the local index of tip vertex `he` is
         // `(he.localIndex() + 2) % 3` since half-edges are indexed the same as
         // their opposite corner vertices.
-        for (const auto &he : e.halfEdges()) {
+        for (const auto he : e.halfEdges()) {
             V3d n = e->volume() * e->normal();
             // Traverse ccw until hitting a crease/boundary/complete circle
             auto he_circ = he.rawHandle();
@@ -188,12 +188,12 @@ getVisualizationField(const Mesh &m, const FieldType &field) {
     if (Mesh::K == 3) {
         if (size_t(field.rows()) == m.numVertices() || (size_t(field.rows()) == m.numNodes())) {
             result.resize(m.numBoundaryVertices(), field.cols());
-            for (const auto &bv : m.boundaryVertices())
+            for (const auto bv : m.boundaryVertices())
                 result.row(bv.index()) = field.row(bv.volumeVertex().index());
         }
         else if (size_t(field.rows()) == m.numElements()) {
             result.resize(m.numBoundaryElements(), field.cols());
-            for (const auto &be : m.boundaryElements()) {
+            for (const auto be : m.boundaryElements()) {
                 if (size_t(be.opposite().simplex().index()) >= size_t(field.rows()))  throw std::runtime_error("out of bounds field");
                 if (size_t(be.                     index()) >= size_t(result.rows())) throw std::runtime_error("out of bounds result");
                 result.row(be.index()) = field.row(be.opposite().simplex().index());

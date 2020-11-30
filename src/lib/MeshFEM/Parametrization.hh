@@ -64,8 +64,8 @@ std::vector<M23d> jacobians(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
     std::vector<M23d> result;
 
     result.assign(mesh.numElements(), M23d::Zero());
-    for (const auto &e : mesh.elements()) {
-        for (const auto &v : e.vertices()) {
+    for (const auto e : mesh.elements()) {
+        for (const auto v : e.vertices()) {
             result[e.index()] += (e->gradBarycentric().col(v.localIndex())
                                     * uv.row(v.index())).transpose();
         }

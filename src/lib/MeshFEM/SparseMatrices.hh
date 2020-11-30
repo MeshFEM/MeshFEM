@@ -1197,7 +1197,7 @@ struct CSCMatrix {
     };
 
     struct ColumnRange {
-        ColumnRange(const CSCMatrix &mat_, _Index j_) : mat(mat_), j(j_) { }
+        ColumnRange(const CSCMatrix &mat_, _Index j_) : j(j_), mat(mat_) { }
         ColumnTripletIterator begin() { return ColumnTripletIterator(mat,     j); }
         ColumnTripletIterator   end() { return ColumnTripletIterator(mat, j + 1); }
     private:
@@ -1333,7 +1333,7 @@ struct CSCMatrix {
         TM result(m, n);
         result.symmetry_mode = static_cast<typename TM::SymmetryMode>(symmetry_mode);
         result.reserve(nz);
-        for (const auto &t : (*this)) result.nz.emplace_back(t);
+        for (const auto t : (*this)) result.nz.emplace_back(t);
         return result;
     }
 };

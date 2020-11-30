@@ -109,9 +109,9 @@ struct Spreaders : public Load<Object::N, typename Object::Real> {
                         for (int j = 0; j < 2; ++j) {
                             double sign = (i == j) ? 1.0 : -1.0;
                             // Accumulate contribution of H_e(ca, cb) to the global Hessian
-                            for (const auto &tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
+                            for (const auto tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
                                 size_t hint = -1;
-                                for (const auto &ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
+                                for (const auto ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
                                     if (ta.i > tb.i) continue;
                                     hint = H.addNZ(ta.i, tb.i, sign * ta.v * tb.v * da_de(ca, cb), hint);
                                 }
@@ -137,8 +137,8 @@ struct Spreaders : public Load<Object::N, typename Object::Real> {
                         for (int i = 0; i < 2; ++i) {
                             for (int j = 0; j < 2; ++j) {
                                 // Accumulate contribution of H_e(ca, cb) to the global Hessian
-                                for (const auto &tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
-                                    for (const auto &ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
+                                for (const auto tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
+                                    for (const auto ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
                                         if (ta.i > tb.i) continue;
                                         Hsp.addNZ(ta.i, tb.i, 1.0);
                                     }
@@ -176,7 +176,6 @@ private:
     void m_updateCache() {
         m_dist.resize(m_connectivity.rows());
         m_axis.resize(m_connectivity.rows(), N);
-        const auto &x = getObj().deformedPositions();
 
         VXd materialPointsFlat = m_materialPointPositioner.apply(getObj().getVars());
 
