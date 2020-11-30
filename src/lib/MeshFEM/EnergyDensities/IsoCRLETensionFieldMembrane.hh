@@ -75,37 +75,82 @@ struct IsoCRLETensionFieldMembrane {
         m_excessStrain = m_strain[1] + m_nu * m_strain[0];
     }
 
+    Real eps() const {
+        if (!strainDependentSmoothing) return smoothingEps;
+        return smoothingEps * (m_sigma[0] - m_sigma[1]);
+    }
+
+    // We avoid a near divide by zero when the smoothing amount becomes extremely small
+    bool smoothingActive() const {
+        return smoothingEnabled && eps() > 1e-10;
+    }
+
     Real c(Real x) const {
-        if (!relaxationEnabled || (x > smoothingEps)) return 0.5 * x * x;
-        if (!smoothingEnabled) return 0.5 * std::pow(std::max<Real>(x, 0), 2);
-        if (x < -smoothingEps) return -std::pow(smoothingEps, 2) / 6.0;
-        return std::pow(smoothingEps, 2) / 12.0 * (std::pow(x / smoothingEps + 1, 3) - 2);
+        const Real e = eps();
+        if (!relaxationEnabled || (x > e)) return 0.5 * x * x;
+        if (!smoothingActive()) return 0.5 * std::pow(std::max<Real>(x, 0), 2);
+        if (x < -e) return -std::pow(e, 2) / 6.0;
+        return std::pow(e, 2) / 12.0 * (std::pow(x / e + 1, 3) - 2);
     }
 
-    Real dc(Real x) const {
-        if (!relaxationEnabled || (x > smoothingEps)) return x;
-        if (!smoothingEnabled) return std::max<Real>(x, 0);
-        if (x < -smoothingEps) return 0.0;
-        return smoothingEps / 4.0 * std::pow(x / smoothingEps + 1, 2);
+    Real dc_dx(Real x) const {
+        const Real e = eps();
+        if (!relaxationEnabled || (x > e)) return x;
+        if (!smoothingActive()) return std::max<Real>(x, 0);
+        if (x < -e) return 0.0;
+        return e / 4.0 * std::pow(x / e + 1, 2);
     }
 
-    Real d2c(Real x) const {
-        if (!relaxationEnabled || (x > smoothingEps)) return 1;
-        if (!smoothingEnabled) return (x >= 0) ? 1 : 0;
-        if (x < -smoothingEps) return 0.0;
-        return 1.0 / 2.0 * (x / smoothingEps + 1);
+    Real d2c_dx2(Real x) const {
+        const Real e = eps();
+        if (!relaxationEnabled || (x > e)) return 1;
+        if (!smoothingActive()) return (x >= 0) ? 1 : 0;
+        if (x < -e) return 0.0;
+        return 1.0 / 2.0 * (x / e + 1);
+    }
+
+    Real dc_de(Real x) const {
+        const Real e = eps();
+        if (!relaxationEnabled || !smoothingActive()) return 0.0;
+        if (x < -e) return -e / 3;
+        if (x <  e) return -e * std::pow(x / e - 1, 2) * (x / e + 2) / 12;
+        return 0.0;
+    }
+
+    Real d2c_dxde(Real x) const {
+        const Real e = eps();
+        if (!relaxationEnabled || !smoothingActive()) return 0.0;
+        if (x < -e) return 0.0;
+        if (x <  e) return 0.25 * (1 - std::pow(x / e, 2));
+        return 0.0;
+    }
+
+    Real d2c_de2(Real x) const {
+        const Real e = eps();
+        if (!relaxationEnabled || !smoothingActive()) return 0.0;
+        if (x < -e) return -1 / 3;
+        if (x <  e) return (1 / 6) * (std::pow(x / e, 3) - 1);
+        return 0.0;
     }
 
     const M32d &getDeformationGradient() const { return m_F; }
 
-    _Real energy() const { return m_E * c(m_strain[0]) + m_lambda_div_nu * c(m_excessStrain); }
+    V2d dPsi_dSigma() const {
+        Real dPsi_dExcessStrain = m_lambda_div_nu * dc_dx(m_excessStrain);
+        V2d result(m_E * dc_dx(m_strain[0]) + m_nu * dPsi_dExcessStrain, dPsi_dExcessStrain);
+        if (smoothingActive() && strainDependentSmoothing) {
+            Real dPsi_deps = m_E * dc_de(m_strain[0]) + m_lambda_div_nu * dc_de(m_excessStrain);
+            result += V2d(dPsi_deps, -dPsi_deps);
+        }
+        return result;
+    }
+
+    Real energy() const { return m_E * c(m_strain[0]) + m_lambda_div_nu * c(m_excessStrain); }
 
     // PK1 stress
     _Real denergy(const M32d& dF) const { return doubleContract(denergy(), dF); }
     M32d denergy() const {
-        Real dPsi_dExcessStrain = m_lambda_div_nu * dc(m_excessStrain);
-        return (m_E * dc(m_strain[0]) + m_nu * dPsi_dExcessStrain) * m_U.col(0) * m_V.col(0).transpose()
-                                             + dPsi_dExcessStrain  * m_U.col(1) * m_V.col(1).transpose();
+        return  m_U.leftCols(2) * dPsi_dSigma().asDiagonal() * m_V.transpose();
     }
 
     M2d PK2Stress() const { throw std::runtime_error("Unimplemented"); }
@@ -115,8 +160,10 @@ struct IsoCRLETensionFieldMembrane {
         const M32d UtdFV = m_U.transpose() * dF * m_V; // dF in the singular vector basis
         M32d result; // Result ***in the singular vector basis***
 
-        const bool isRelaxed      = relaxationEnabled && (m_excessStrain < (smoothingEnabled ?  smoothingEps : 0));
-        const bool isFullyRelaxed = relaxationEnabled && (   m_strain[0] < (smoothingEnabled ? -smoothingEps : 0));
+        Real e = eps();
+
+        const bool isRelaxed      = relaxationEnabled && (m_excessStrain < (smoothingActive() ?  e : 0));
+        const bool isFullyRelaxed = relaxationEnabled && (   m_strain[0] < (smoothingActive() ? -e : 0));
 
         if (isFullyRelaxed) {
             // Add a small artificial stiffness to avoid a singular Hessian in regions of full compression
@@ -125,9 +172,9 @@ struct IsoCRLETensionFieldMembrane {
 
         // G (Eigenvalue always nonnegative)
         {
-            const Real excessStrainStiffness = m_lambda_div_nu * d2c(m_excessStrain);
-            const Real dexcessStrainCoeff = excessStrainStiffness * (UtdFV(1, 1) + m_nu * UtdFV(0, 0));
-            result(0, 0) = m_E * d2c(m_strain[0]) * UtdFV(0, 0) + m_nu * dexcessStrainCoeff;
+            const Real excessStrainStiffness = m_lambda_div_nu * d2c_dx2(m_excessStrain);
+            const Real dexcessStrainCoeff    = excessStrainStiffness * (UtdFV(1, 1) + m_nu * UtdFV(0, 0));
+            result(0, 0) = m_E * d2c_dx2(m_strain[0]) * UtdFV(0, 0) + m_nu * dexcessStrainCoeff;
             result(1, 1) = dexcessStrainCoeff;
             if (excessStrainStiffness < relaxedStiffnessEps) {
                 // Add a small artificial stiffness to avoid a singular Hessian in regions of partial compression
@@ -135,8 +182,8 @@ struct IsoCRLETensionFieldMembrane {
             }
         }
 
-        const Real dc_e0_term = m_E * dc(m_strain(0)),
-               dc_excess_term = m_lambda_div_nu * dc(m_strain[1] + m_nu * m_strain[0]);
+        const Real dc_e0_term = m_E * dc_dx(m_strain(0)),
+               dc_excess_term = m_lambda_div_nu * dc_dx(m_strain[1] + m_nu * m_strain[0]);
         // L (Eigenvalue always nonnegative)
         Real Lcoeff;
         if (isRelaxed) {
@@ -159,12 +206,12 @@ struct IsoCRLETensionFieldMembrane {
 
         // Omega_y
         Real Omega_y_coeff = (dc_e0_term + m_nu * dc_excess_term) / m_sigma[0];
-        if (hessianProjectionEnabled && Omega_y_coeff < 0.0) Omega_y_coeff = 0.0; // Rotational stability around y happens when element experiences compression in the x (0th) direction
+        if (hessianProjectionEnabled && Omega_y_coeff < 0.0) Omega_y_coeff = 0.0; // Rotational instability around y happens when element experiences compression in the x (0th) direction
         result(2, 0) = UtdFV(2, 0) * Omega_y_coeff;
 
         // Omega_x
         Real Omega_x_coeff = dc_excess_term / m_sigma[1];
-        if (hessianProjectionEnabled && Omega_x_coeff < 0.0) Omega_x_coeff = 0.0; // Rotational stability around x happens when element experiences compression in the y (1st) direction
+        if (hessianProjectionEnabled && Omega_x_coeff < 0.0) Omega_x_coeff = 0.0; // Rotational instability around x happens when element experiences compression in the y (1st) direction
         result(2, 1) = UtdFV(2, 1) * Omega_x_coeff;
 
         return m_U * result * m_V.transpose(); // Change back to the standard basis
@@ -198,6 +245,7 @@ struct IsoCRLETensionFieldMembrane {
 
     bool relaxationEnabled = true,
          smoothingEnabled = true,
+         strainDependentSmoothing = false,
          hessianProjectionEnabled = false;
     Real smoothingEps = 1 / 512.0;
     Real relaxedStiffnessEps = 1e-8;
@@ -224,6 +272,7 @@ struct IsoCRLETensionFieldMembrane {
     void setRelaxationEnabled(bool enabled)       { relaxationEnabled = enabled; }
     bool getRelaxationEnabled()             const { return relaxationEnabled; }
 
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 protected:
     Real m_E = 1.0;   // Young's modulus
     Real m_nu = 0.5;  // Poisson's ratio
