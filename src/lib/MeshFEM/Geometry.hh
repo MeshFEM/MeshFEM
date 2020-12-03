@@ -816,7 +816,7 @@ Vec3_T<Real_> parallelTransport(Vec3_T<Real_> t0, Vec3_T<Real_> t1,
                                 Eigen::Ref<const Vec3_T<Real_>> v) {
     t0.normalize();
     t1.normalize();
-    return parallelTransportNormalized(t0, t1, v);
+    return parallelTransportNormalized<Real_>(t0, t1, v);
 }
 
 #endif // GEOMETRY_HH
