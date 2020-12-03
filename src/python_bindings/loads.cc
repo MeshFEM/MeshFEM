@@ -11,6 +11,7 @@ namespace py = pybind11;
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
+#include <MeshFEM/Loads/Traction.hh>
 
 using APC = Loads::AttachmentPointCoordinate<double>;
 
@@ -44,6 +45,19 @@ struct LoadBinder {
         module.def("Gravity", [&](const std::shared_ptr<Object> &obj, double rho, const V3d &g) {
                     return std::make_shared<GLoad>(obj, rho, g);
                 }, py::arg("obj"), py::arg("rho"), py::arg("g") = V3d(0.0, 0.0, 9.80635))
+             ;
+
+        ////////////////////////////////////////////////////////////////////////
+        // Traction
+        ////////////////////////////////////////////////////////////////////////
+        using TLoad = Loads::Traction<Object>;
+        py::class_<TLoad, Load, std::shared_ptr<TLoad>>(detail_module, ("Traction" + NameMangler<Object>::name()).c_str())
+           .def_property("boundaryTractions", &TLoad::getBoundaryTractions, &TLoad::setBoundaryTractions)
+           ;
+
+        module.def("Traction", [&](const std::shared_ptr<Object> &obj) {
+                    return std::make_shared<TLoad>(obj);
+                }, py::arg("obj"))
              ;
 
         ////////////////////////////////////////////////////////////////////////

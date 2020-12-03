@@ -73,7 +73,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
             hUpdtCtr.reusedHessian();
             solver.solveExistingFactorization(gReduced, x);
             postprocessSolution();
-            return NAN;
+            return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
         }
     }
 
@@ -136,6 +136,8 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
         }
     }
 
+    // Notify controllers that we have factorized a new Hessian
+    // and whether or not it was indefinite.
     bool isIndefinite = tau != 0.0;
     hProjCtr.notifyDefiniteness(isIndefinite);
     hUpdtCtr.newHessian(isIndefinite);

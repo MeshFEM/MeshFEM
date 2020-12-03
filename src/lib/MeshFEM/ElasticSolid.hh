@@ -44,7 +44,7 @@ public:
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
-    using QuadratureRule = Quadrature<N, 2 * (Deg - 1)>; // Exact for linear elasticity...
+    using QuadratureRule = Quadrature<N, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
     using EvalPtN = EvalPt<N>;
     using Vector = Eigen::Matrix<Real, N, 1>;
     using Matrix = Eigen::Matrix<Real, N, N>;
@@ -314,6 +314,18 @@ public:
 
     Matrix getDeformationGradient(size_t ei, const EvalPtN &x) const {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
+    }
+
+    // Get the Green strain tensor at a particular point in element `ei`
+    Matrix greenStrain(size_t ei, const EvalPtN &x) const {
+        Matrix F = getDeformationGradient(ei, x);
+        return 0.5 * (F.transpose() * F - Matrix::Identity());
+    }
+
+    // Get the average Green strain tensor over element `ei`
+    Matrix greenStrain(size_t ei) const {
+        return Quadrature<N, 2 * (Deg - 1)>::integrate( // This quadrature rule is always exact
+            [ei, this](const EvalPtN &x) { return greenStrain(ei, x); }, 1.0);
     }
 
     VXd element3DVolumes() const {
