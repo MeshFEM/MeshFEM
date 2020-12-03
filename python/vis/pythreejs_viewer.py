@@ -334,7 +334,8 @@ class PythreejsViewerBase(ViewerBase):
             # Update the current mesh...
             attr = self.currMesh.geometry.attributes.copy()
             attr['position'].array = attrRaw['position']
-            attr['normal'  ].array = attrRaw['normal']
+            if 'normal' in attr:
+                attr['normal'  ].array = attrRaw['normal']
 
             for key in stashableKeys:
                 allocateUpdateOrStashBufferAttribute(attr, key)
