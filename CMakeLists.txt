@@ -107,11 +107,11 @@ if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
 endif()
 
-
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
 # we compile for (without making them pass `-DPYTHON_EXECUTABLE=...` to `cmake`
 if (DEFINED ENV{PYTHON_EXECUTABLE})
-    set(PYTHON_EXECUTABLE $ENV{PYTHON_EXECUTABLE})
+    set(PYTHON_EXECUTABLE "$ENV{PYTHON_EXECUTABLE}" CACHE INTERNAL "Python executable for which to build pybind11 bindings")
+    #message("Set python executable to ${PYTHON_EXECUTABLE}")
 endif()
 
 # Download pybind dependency when pybind11 is missing
