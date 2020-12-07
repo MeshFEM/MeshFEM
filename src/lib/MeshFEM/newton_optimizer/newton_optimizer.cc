@@ -77,11 +77,12 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
         }
     }
 
-    BENCHMARK_START_TIMER_SECTION("hessEval");
-    auto H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
-    fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
-    H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
-    BENCHMARK_STOP_TIMER_SECTION("hessEval");
+    SuiteSparseMatrix H_reduced;
+    { BENCHMARK_SCOPED_TIMER_SECTION("hessEval");
+        H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
+        fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
+        H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
+    }
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
     while (true) {
