@@ -224,7 +224,7 @@ public:
         }
         for (auto n : nodes()) {
             if (n.isEdgeNode()) {
-                const auto &he = halfEdgeForEdgeNode(n.edgeNodeIndex());
+                const auto he = halfEdgeForEdgeNode(n.edgeNodeIndex());
                 n->p = 0.5 * (he.tip().node()->p + he.tail().node()->p);
             }
         }
@@ -263,10 +263,10 @@ public:
 
     EmbeddingSpace centerOfMass() const {
         EmbeddingSpace result(EmbeddingSpace::Zero());
-        for (const auto &e : elements()) {
+        for (const auto e : elements()) {
             // Center of mass of each element is just its barycenter...
             EmbeddingSpace contrib(EmbeddingSpace::Zero());
-            for (const auto &v : e.vertices())
+            for (const auto v : e.vertices())
                 contrib += v.node()->p;
             result += contrib * (e->volume() / e.numVertices());
         }

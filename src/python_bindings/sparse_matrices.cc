@@ -93,10 +93,15 @@ PYBIND11_MODULE(sparse_matrices, m) {
                         result.Ax = t[5].cast<std::vector<double>>();
                         // For backwards compatibility with pickled files
                         // written before we fixed the missing symmetry mode...
-                        // TODO: remove
                         if (t.size() == 6) {
-                            std::cerr << "WARNING: symmetry mode was not pickled; assuming upper triangle symmetry." << std::endl;
-                            result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+                            if (result.m == result.n) {
+                                std::cerr << "WARNING: symmetry mode was not pickled; assuming upper triangle symmetry for square matrix" << std::endl;
+                                result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+                            }
+                            else {
+                                std::cerr << "WARNING: symmetry mode was not pickled; assuming no symmetry for rectangular matrix" << std::endl;
+                                result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::NONE;
+                            }
                         }
                         else {
                             result.symmetry_mode = static_cast<SuiteSparseMatrix::SymmetryMode>(t[6].cast<SymmetryModePicklingType>());

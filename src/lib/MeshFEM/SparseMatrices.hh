@@ -1215,7 +1215,7 @@ struct CSCMatrix {
     _Vector apply(const _Vector &x, const bool transpose = false) const {
         const size_t local_m = transpose ? n : m;
         const size_t local_n = transpose ? m : n;
-        if (size_t(x.size()) != size_t(local_n)) throw std::runtime_error("Sparse matvec size mismatch.");
+        if (size_t(x.size()) != local_n) throw std::runtime_error("Sparse matvec size mismatch.");
         _Vector result(local_m);
         applyRaw(x.data(), result.data(), transpose);
         return result;
