@@ -67,6 +67,8 @@ struct ElasticSheetBinder {
           .def("getRestII",                &ES::getRestII)
           .def("getB",                     &ES::getB)
           .def("getC",                     &ES::getC)
+          .def("getMembraneGreenStrains",  &ES::getMembraneGreenStrains)
+          .def("vertexGreenStrains",       &ES::vertexGreenStrains)
           .def("getPrincipalCurvatures",   &ES::getPrincipalCurvatures)
           .def("getAlphas",                &ES::getAlphas)
           .def("getGammas",                &ES::getGammas)

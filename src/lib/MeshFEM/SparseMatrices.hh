@@ -952,6 +952,7 @@ struct CSCMatrix {
     }
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
+    CSCMatrix &operator*=(_Real alpha) { scale(alpha); return *this; }
 
     // Perform the operation:
     //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]

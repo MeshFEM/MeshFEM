@@ -78,7 +78,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     }
 
     SuiteSparseMatrix H_reduced;
-    { BENCHMARK_SCOPED_TIMER_SECTION("hessEval");
+    { BENCHMARK_SCOPED_TIMER_SECTION hevalTimer("hessEval");
         H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
         fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
         H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });

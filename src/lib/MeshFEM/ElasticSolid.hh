@@ -22,6 +22,7 @@
 #include <Eigen/Sparse>
 
 #include "RigidMotionPins.hh"
+#include "FieldPostProcessing.hh"
 
 #include "ElasticObject.hh"
 #include "MassMatrix.hh"
@@ -326,6 +327,10 @@ public:
     Matrix greenStrain(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // This quadrature rule is always exact
             [ei, this](const EvalPtN &x) { return greenStrain(ei, x); }, 1.0);
+    }
+
+    std::vector<Matrix> vertexGreenStrains() const {
+        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtN &x) { return greenStrain(ei, x); });
     }
 
     VXd element3DVolumes() const {

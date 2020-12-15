@@ -134,8 +134,9 @@ def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = []):
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
-def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    epsilons = np.logspace(-9, -3, 100)
+def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    if epsilons is None:
+        epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
     for eps in epsilons:
@@ -143,13 +144,13 @@ def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInt
         errors.append(err)
     return (epsilons, errors, an)
 
-def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
+def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
     plt.loglog(eps, errors, label='hess')
     plt.grid()
 
-def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
+def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
     plt.title('Directional derivative fd test for Hessian')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
