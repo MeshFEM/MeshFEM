@@ -19,6 +19,7 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, E
         const auto start = H.Ap[var    ],
                    end   = H.Ap[var + 1];
         Eigen::Map<Eigen::VectorXd>(H.Ax.data() + start, end - start).setZero();
+        assert(H.Ai[end - 1] == var);
         H.Ax[end - 1] = 1.0; // Diagonal should be the column's last entry; we assume it exists in the sparsity pattern!
     }
 
@@ -49,12 +50,12 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     // the reduced version (if it is ever needed).
     std::unique_ptr<SuiteSparseMatrix> M_reduced;
 
-    auto gReduced = removeFixedEntries(g);
-    Eigen::VectorXd x(gReduced.size());
+    Eigen::VectorXd x, gReduced;
 
     auto postprocessSolution = [&]() {
         extractFullSolution(x, step);
         step *= -1;
+        // ws.validateStep(step);
 
         if (prob->hasLEQConstraint()) {
             // TODO: handle more than a single constraint...
@@ -69,8 +70,9 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     auto &hProjCtr = options.getHessianProjectionController();
 
     if (solver.hasFactorization()) {
-        if (!hUpdtCtr.needsUpdate()) {
+        if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
             hUpdtCtr.reusedHessian();
+            gReduced = removeFixedEntries(g);
             solver.solveExistingFactorization(gReduced, x);
             postprocessSolution();
             return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
@@ -105,19 +107,10 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
 
             BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
 
+            gReduced = removeFixedEntries(g);
             solver.solve(gReduced, x);
             if (!solver.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
-
-            extractFullSolution(x, step);
-            step *= -1;
-
-            if (prob->hasLEQConstraint()) {
-                // TODO: handle more than a single constraint...
-                Eigen::VectorXd a = removeFixedEntries(ws.getFreeComponent(prob->LEQConstraintMatrix()));
-                kkt_solver.update(solver, a);
-                const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
-                extractFullSolution(kkt_solver.solve(-x, r), step);
-            }
+            postprocessSolution();
 
             break;
         }
@@ -360,7 +353,15 @@ ConvergenceReport NewtonOptimizer::optimize() {
         // Add to the working set all bounds encountered by the step of length "alpha"
         for (size_t bci = 0; bci < prob->numBoundConstraints(); ++bci) {
             if (alpha >= prob->boundConstraint(bci).feasibleStepLength(vars, step)) {
-                if (workingSet.contains(bci)) throw std::logic_error("Re-encountered bound in working set");
+                if (workingSet.contains(bci)) {
+                    const auto &bc = prob->boundConstraint(bci);
+                    std::cerr << "Bound constraint on variable " << bc.idx << " reencountered";
+                    std::cerr << "step component: " << step[bc.idx] << std::endl;
+                    std::cerr << "g_free component: " << g_free[bc.idx] << std::endl;
+
+                    std::cerr << "throwing logic error (this freezes Knitro!!!)" << std::endl;
+                    throw std::logic_error("Re-encountered bound in working set");
+                }
                 workingSet.add(bci);
                 std::cout << "Added constraint " << bci << " to working set\n";
             }

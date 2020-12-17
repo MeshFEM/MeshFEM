@@ -3,6 +3,7 @@ import numpy as np
 class VertexMerger:
     def __init__(self):
         self.mergedVertices = {}
+        self.originVertexIdx = []
 
     def add(self, pt):
         '''
@@ -14,6 +15,13 @@ class VertexMerger:
             idx = len(self.mergedVertices)
             self.mergedVertices[key] = idx
         return idx
+
+    def add_and_set_origin_idx(self, pt, originIdx):
+        idx = self.add(pt)
+        if (idx == len(self.originVertexIdx)): self.originVertexIdx.append(originIdx)
+        else: self.originVertexIdx[idx] = originIdx
+        return idx
+
     def numVertices(self): return len(self.mergedVertices)
     def vertices(self):
         dim = len(next(iter(self.mergedVertices))) # dimension of arbitrary point
@@ -22,22 +30,33 @@ class VertexMerger:
             V[idx, :] = pt_tuple
         return V
 
-def mergedMesh(meshes):
+def mergedMesh(meshes, vtxData = None):
     """
     Construct a single mesh including a copy of all the triangles of the input meshes,
     but with duplicate vertices merged and dangling vertices removed.
 
-    `meshes`: list of meshes
+    `meshes`:  list of meshes
+    `vtxData`: list of per-vertex scalar fields on each mesh to transfer to the output mesh.
+               If different two vertices with different data values are merged,
+               an arbitrary one of these values is selected.
     """
     vm = VertexMerger()
     mergedTris = []
-    for mesh in meshes:
+    mergedData = None
+    outData = None if vtxData is None else []
+    for mi, mesh in enumerate(meshes):
         if isinstance(mesh, list) or isinstance(mesh, tuple):
             V, F = mesh
         else:
             V, F = mesh.vertices(), mesh.triangles()
-        mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
-    return vm.vertices(), np.vstack(mergedTris)
+        if vtxData is None:
+            mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
+        else:
+            offset = vm.numVertices()
+            mergedTris.append(np.vectorize(lambda i: vm.add_and_set_origin_idx(V[i], i))(F))
+            outData.append(vtxData[mi][np.array(vm.originVertexIdx[offset:])])
+    if outData is None: return vm.vertices(), np.vstack(mergedTris)
+    else:               return vm.vertices(), np.vstack(mergedTris), outData
 
 # Concatenate a collection of meshes, dropping dangling vertices.
 def concatenateMeshes(meshes):
