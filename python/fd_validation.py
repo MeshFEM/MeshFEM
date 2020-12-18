@@ -112,8 +112,9 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
 
     return (norm(an_delta_grad - fd_delta_grad) / norm(fd_delta_grad), fd_delta_grad, an_delta_grad)
 
-def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
-    epsilons = np.logspace(-9, -3, 100)
+def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    if epsilons is None:
+        epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
     for eps in epsilons:
@@ -123,13 +124,13 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
     return (epsilons, errors, an)
 
 from matplotlib import pyplot as plt
-def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars)
+def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
     plt.loglog(eps, errors, label='grad')
     plt.grid()
 
-def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = []):
-    gradConvergencePlotRaw(obj, perturb, customArgs, fixedVars)
+def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    gradConvergencePlotRaw(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
     plt.title('Directional derivative fd test for gradient')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
