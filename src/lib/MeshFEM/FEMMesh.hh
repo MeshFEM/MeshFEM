@@ -176,6 +176,9 @@ public:
     BNHandle<const FEMMesh>    boundaryNode(size_t i) const { return BNHandle<const FEMMesh>(i, *this); }
     BEHandle<const FEMMesh> boundaryElement(size_t i) const { return BEHandle<const FEMMesh>(i, *this); }
 
+    HEHandle<      FEMMesh> halfEdge(size_t s, size_t e)       { return HEHandle<      FEMMesh>(BaseMesh::halfEdge(s, e).index(), *this); }
+    HEHandle<const FEMMesh> halfEdge(size_t s, size_t e) const { return HEHandle<const FEMMesh>(BaseMesh::halfEdge(s, e).index(), *this); }
+
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
     // (We must overload the ones provided by the base mesh or else we'll get

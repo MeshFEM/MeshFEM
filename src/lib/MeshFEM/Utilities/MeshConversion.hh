@@ -89,6 +89,19 @@ std::vector<MeshIO::IOVertex> getMeshIOVertices(const Eigen::MatrixBase<Derived>
     return result;
 }
 
+template<class Mesh>
+enable_if_models_concept_t<Concepts::ElementMesh, Mesh, std::vector<MeshIO::IOVertex>>
+getMeshIOVertices(const Mesh &m) {
+    std::vector<MeshIO::IOVertex> result;
+    const size_t nv = m.numVertices();
+    result.reserve(nv);
+
+    for (auto v : m.vertices())
+        result.emplace_back(padTo3D(v.node()->p));
+
+    return result;
+}
+
 template<class Derived>
 std::vector<MeshIO::IOElement> getMeshIOElements(const Eigen::MatrixBase<Derived> &F) {
     std::vector<MeshIO::IOElement> result;

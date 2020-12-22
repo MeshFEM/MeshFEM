@@ -38,7 +38,10 @@ template<class C, class PyC, class... BackwardsCompatibilityStates>
 void addSerializationBindings(PyC &pyClass) {
     pyClass.def(py::pickle([](const C &opts) { return py::cast(C::serialize(opts)); },
                            &DeserializeBackwardsCompatible<C, PyC, typename C::State, BackwardsCompatibilityStates...>::run))
-           .def("clone", [](const C &obj) { return typename PyC::holder_type(C::deserialize(C::serialize(obj))); })
+           // This clone operation is actually quite dangerous since it does *not* necessarily perform a deep copy
+           // unlike pickling/unpickling: if the serialized state contains pointers, the pointed-to objects will
+           // be shared across clones.
+           // .def("clone", [](const C &obj) { return typename PyC::holder_type(C::deserialize(C::serialize(obj))); })
            ;
 }
 
