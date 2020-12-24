@@ -56,7 +56,7 @@ def mergedMesh(meshes, vtxData = None):
             mergedTris.append(np.vectorize(lambda i: vm.add_and_set_origin_idx(V[i], i))(F))
             outData.append(vtxData[mi][np.array(vm.originVertexIdx[offset:])])
     if outData is None: return vm.vertices(), np.vstack(mergedTris)
-    else:               return vm.vertices(), np.vstack(mergedTris), outData
+    else:               return vm.vertices(), np.vstack(mergedTris), np.concatenate(outData)
 
 # Concatenate a collection of meshes, dropping dangling vertices.
 def concatenateMeshes(meshes):
@@ -95,7 +95,7 @@ def closedPolylinesToLineMesh(polylines):
         idxOffset += npts
     return V, np.vstack(E)
 
-def removeDanglingVertices(V, F):
+def removeDanglingVertices(V, F, vtxData = None):
     """
     Remove vertices unreferenced by `F` and renumber the remaining vertices.
 
@@ -105,6 +105,8 @@ def removeDanglingVertices(V, F):
         NVxD matrix of vertex positions
     F
         NFxK matrix of indices into V, where NF is the number of elements and K is the number of element corners
+    vtxData
+        Optional per-vertex data to propagate to the renumbered vertices
     """
     nv = V.shape[0]
     Vkeep = np.zeros(nv, dtype=np.bool)
@@ -113,7 +115,15 @@ def removeDanglingVertices(V, F):
     renumber = np.zeros(nv, dtype=np.int)
     renumber[Vkeep] = np.arange(Vkept.shape[0])
     Frenumbered = renumber[F]
+    if vtxData is not None: return Vkept, Frenumbered, np.array(vtxData)[Vkeep]
     return Vkept, Frenumbered
+
+def submesh(V, F, keepElement, vtxData = None):
+    """
+    Get a subset of a mesh (V, F) including only the elements in `keepElement`
+    (which is either a list of indices or a boolean mask array)
+    """
+    return removeDanglingVertices(V, F[keepElement], vtxData=vtxData)
 
 def boundaryLoops(m):
     """
