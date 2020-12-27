@@ -23,6 +23,11 @@ def evalWithCustomArgs(f, customArgs):
         return f(customArgs)
     return f()
 
+def basisDirection(obj, c):
+    e_c = np.zeros(obj.numVars())
+    e_c[c] = 1.0
+    return e_c
+
 def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
