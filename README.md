@@ -30,11 +30,11 @@ Dependencies
 ------------
 Dependencies *not* included (must be installed separately):
 
-- Boost
 - CHOLMOD/UMFPACK (SuiteSparse)
 
 Dependencies included directly as external projects:
 
+- [Boost](https://github.com/Orphis/boost-cmake)
 - [json](https://github.com/nlohmann/json)
 - [triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [tinyexpr](https://github.com/codeplea/tinyexpr)
@@ -108,7 +108,7 @@ Example Usage (Python Bindings)
 ===============================
 In the future, I hope to expose all MeshFEM functionality with Python wrappers.
 For now, only a few high-level portions of the code have been bound.
-To see what is possible with the current bindings, 
+To see what is possible with the current bindings,
 please check out the included notebooks
 [`python/examples/Homogenization.ipynb`](https://github.com/jpanetta/MeshFEM/blob/master/python/examples/Homogenization.ipynb), and
 [`python/examples/GeodesicsInHeat.ipynb`](https://github.com/jpanetta/MeshFEM/blob/master/python/examples/GeodesicsInHeat.ipynb).
