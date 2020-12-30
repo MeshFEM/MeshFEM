@@ -134,12 +134,24 @@ target_link_libraries(${PROJECT_NAME}
         umfpack::umfpack
         cholmod::cholmod
         meshfem::boost
-#		CGAL::CGAL
+        # CGAL::CGAL
     PRIVATE
         warnings::all
 )
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
+option(MESHFEM_WITH_TBB "Compile MeshFEM with TBB support" OFF)
+if(MESHFEM_WITH_TBB)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
+endif()
+
+if(MSVC)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC
+        -DNOMINMAX
+        -D_ENABLE_EXTENDED_ALIGNED_STORAGE
+        -D_USE_MATH_DEFINES
+        -DWIN32_LEAN_AND_MEAN
+    )
+endif()
 
 # Compiler-specific options
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")

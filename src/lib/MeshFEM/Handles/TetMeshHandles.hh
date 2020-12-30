@@ -1,3 +1,5 @@
+#pragma once
+
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
 #include "Circulator.hh"

@@ -27,20 +27,15 @@ include(MeshFEMDownloadExternal)
 find_package(Threads REQUIRED) # provides Threads::Threads
 
 # Boost library
-find_package(Boost 1.54 REQUIRED COMPONENTS filesystem system program_options QUIET)
 if(NOT TARGET meshfem::boost)
+    include(boost)
     add_library(meshfem_boost INTERFACE)
-    if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
-        target_link_libraries(meshfem_boost INTERFACE
-            Boost::filesystem
-            Boost::system
-            Boost::program_options)
-    else()
-        # When CMake and Boost versions are not in sync, imported targets may not be available... (sigh)
-        target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
-        target_link_libraries(meshfem_boost INTERFACE ${Boost_LIBRARIES})
-    endif()
     add_library(meshfem::boost ALIAS meshfem_boost)
+    target_link_libraries(meshfem_boost INTERFACE
+        Boost::filesystem
+        Boost::system
+        Boost::program_options
+    )
 endif()
 
 # Catch2

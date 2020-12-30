@@ -40,6 +40,8 @@ tbb::task_arena &get_gradient_assembly_arena() {
 
 #else // !MESHFEM_WITH_TBB
 
+#include <stdexcept>
+
 void set_max_num_tbb_threads(int num_threads) {
     throw std::runtime_error("TBB Disabled");
 }

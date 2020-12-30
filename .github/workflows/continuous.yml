@@ -40,10 +40,6 @@ jobs:
         if: runner.os == 'Linux'
         run: |
             sudo apt-get install \
-            libboost-program-options-dev \
-            libboost-filesystem-dev \
-            libboost-system-dev \
-            libboost-thread-dev \
             libsuitesparse-dev \
             libglu1-mesa-dev \
             xorg-dev \
@@ -51,7 +47,7 @@ jobs:
 
       - name: Dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install boost suite-sparse ccache
+        run: brew install suite-sparse ccache
 
       - name: Cache Build
         id: cache-build
@@ -101,14 +97,11 @@ jobs:
           fetch-depth: 10
       - uses: seanmiddleditch/gha-setup-ninja@master
 
-        # https://github.com/actions/cache/issues/101
-      - name: Set env
-        run: |
-          echo "::set-env name=appdata::$($env:LOCALAPPDATA)"
-          echo "::set-env name=BOOST_ROOT::$env:BOOST_ROOT_1_69_0"
+      - name: Setup env
+        run: echo "appdata=$env:LOCALAPPDATA" >> ${env:GITHUB_ENV}
 
       - name: Setup conda
-        uses: goanpeca/setup-miniconda@v1
+        uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: meshfem
           environment-file: conda.yml
@@ -125,8 +118,8 @@ jobs:
         run: |
           Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')
           scoop install sccache --global
-          # Scoop modifies the PATH so we make the modified PATH global.
-          echo "::set-env name=PATH::$env:PATH"
+          # Scoop modifies the PATH so we make it available for the next steps of the job
+          echo "C:\ProgramData\scoop\shims;C:\Users\runneradmin\scoop\shims" >> ${env:GITHUB_PATH}
 
         # We run configure + build in the same step, since they both need to call VsDevCmd
         # Also, cmd uses ^ to break commands into multiple lines (in powershell this is `)
@@ -140,6 +133,9 @@ jobs:
             -DMESHFEM_FORCE_Z7=ON ^
             -DMESHFEM_WITH_CERES=ON ^
             -DMESHFEM_PREFER_SYSTEM_CERES=OFF ^
+            -DCMAKE_JOB_POOLS="pool-linking=1;pool-compilation=2" ^
+            -DCMAKE_JOB_POOL_COMPILE:STRING=pool-compilation ^
+            -DCMAKE_JOB_POOL_LINK:STRING=pool-linking ^
             -B build ^
             -S .
           cmake --build build
