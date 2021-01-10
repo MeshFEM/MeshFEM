@@ -17,9 +17,12 @@
 
 template<class EdgeType>
 struct EdgeAccessAdaptor {
-    static constexpr size_t   size(const EdgeType &e) { return e.size(); }
-    static constexpr size_t  first(const EdgeType &e) { return e[0]; }
-    static constexpr size_t second(const EdgeType &e) { return e[1]; }
+    static constexpr size_t   size(const EdgeType &e)           { return e.size(); }
+    static constexpr size_t  first(const EdgeType &e)           { return e[0]; }
+    static constexpr size_t second(const EdgeType &e)           { return e[1]; }
+
+    static constexpr size_t  get(const EdgeType &e, size_t i) { return e[i]; }
+    static constexpr size_t &get(      EdgeType &e, size_t i) { return e[i]; }
 };
 
 template<>
@@ -27,6 +30,9 @@ struct EdgeAccessAdaptor<std::pair<size_t, size_t>> {
     static constexpr size_t   size(const std::pair<size_t, size_t> & ) { return        2; }
     static constexpr size_t  first(const std::pair<size_t, size_t> &e) { return  e.first; }
     static constexpr size_t second(const std::pair<size_t, size_t> &e) { return e.second; }
+
+    static constexpr size_t    get(const std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; throw std::runtime_error("Index out of bounds: " + std::to_string(i));  }
+    static constexpr size_t   &get(      std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; throw std::runtime_error("Index out of bounds: " + std::to_string(i));  }
 };
 
 #endif /* end of include guard: EDGEACCESSADAPTOR_HH */
