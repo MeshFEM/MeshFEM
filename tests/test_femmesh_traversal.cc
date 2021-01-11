@@ -7,13 +7,13 @@
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
     // Verify that boundary half-edges are opposite their corresponding vertex
-    for (const auto &be : m.boundaryElements()) {
-        for (const auto &he : be.halfEdges()) {
+    for (const auto be : m.boundaryElements()) {
+        for (const auto he : be.halfEdges()) {
             REQUIRE(he.next().tip().index() == be.vertex(he.localIndex()).index());
         }
     }
 
-    for (const auto &he : m.halfEdges()) {
+    for (const auto he : m.halfEdges()) {
         const auto &mate = he.mate();
         REQUIRE(mate.mate().index() == he.index());
         REQUIRE(he.tip().index() == mate.tail().index());
@@ -40,7 +40,7 @@ void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
         }
     }
 
-    for (const auto &bhe : m.boundaryHalfEdges() ) {
+    for (const auto bhe : m.boundaryHalfEdges() ) {
         REQUIRE(bhe.volumeHalfEdge().boundaryHalfEdge().index() == bhe.index());
         const auto &opp = bhe.opposite();
         REQUIRE(bhe.tip().index() == opp.tail().index());
@@ -53,12 +53,16 @@ void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &m) {
     // Ensure each half-edge can find itself within its triangle.
-    for (const auto &he : m.halfEdges())
+    for (const auto he : m.halfEdges())
         REQUIRE(he.tri().halfEdge(he.localIndex()).index() == he.index());
+    
+    // Verify half-edges can be looked up by indices
+    for (const auto he : m.halfEdges())
+        REQUIRE(he.index() == m.halfEdge(he.tail().index(), he.tip().index()).index());
 
     // Verify that half-edges are opposite their corresponding vertex
-    for (const auto &e : m.elements()) {
-        for (const auto &he : e.halfEdges()) {
+    for (const auto e : m.elements()) {
+        for (const auto he : e.halfEdges()) {
             REQUIRE(he.next().tip().index() == e.vertex(he.localIndex()).index());
         }
     }
@@ -68,7 +72,7 @@ void dimensionSpecificTests(const FEMMesh<2, _Deg, VectorND<2>> &m) {
     auto traverse_boundary_loop = [&](auto next) {
         std::vector<size_t> component(nbe);
         size_t numComponents = 0;
-        for (const auto &be : m.boundaryElements()) {
+        for (const auto be : m.boundaryElements()) {
             if (component[be.index()] > 0) continue;
             ++numComponents;
             auto be_curr = be;
@@ -110,12 +114,12 @@ static void test() {
 
     dimensionSpecificTests(m);
 
-    for (const auto &e : m.elements()) {
-        for (const auto &he : e.halfEdges())
+    for (const auto e : m.elements()) {
+        for (const auto he : e.halfEdges())
             REQUIRE(he.element().index() == e.index());
     }
 
-    for (const auto &v : m.vertices()) {
+    for (const auto v : m.vertices()) {
         REQUIRE(v.node().halfEdge().tip().index() == v.index());
     }
 
@@ -123,15 +127,15 @@ static void test() {
         // Test iteration over elements incident a node.
         // First, use traversal operations
         std::vector<std::vector<size_t>> elemsIncidentNode(m.numNodes());
-        for (const auto &n : m.nodes() ) {
+        for (const auto n : m.nodes() ) {
             auto &elems = elemsIncidentNode[n.index()];
             n.visitIncidentElements([&](size_t ei) { elems.push_back(ei); });
         }
 
         // Check using loop over elements
         std::vector<std::vector<size_t>> elemsIncidentNodeGroundTruth(m.numNodes());
-        for (const auto &e : m.elements()) {
-            for (const auto &n : e.nodes()) {
+        for (const auto e : m.elements()) {
+            for (const auto n : e.nodes()) {
                 elemsIncidentNodeGroundTruth[n.index()].push_back(e.index());
             }
         }

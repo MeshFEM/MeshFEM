@@ -69,7 +69,7 @@ template <class _Psi_2x2>
 class ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
 public:
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
-    using EvalPtN = EvalPt<3>;
+    using EvalPtK = EvalPt<2>;
 
     using Psi_2x2 = _Psi_2x2;
     using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
@@ -347,6 +347,23 @@ public:
             C.push_back(FB.transpose() * FB);
         }
         return C;
+    }
+
+    std::vector<M2d> getMembraneGreenStrains() const {
+        auto result = getC();
+        for (auto &r : result) {
+            r = 0.5 * (r - M2d::Identity());
+        }
+        return result;
+    }
+
+    // Membrane green strains averaged onto the vertices.
+    std::vector<M2d> vertexGreenStrains() const {
+        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &) {
+                auto e = mesh().element(ei);
+                M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+                return (0.5 * (FB.transpose() * FB - M2d::Identity())).eval();
+            });
     }
 
     const VXd &getAlphas()       const { return m_alphas;       }

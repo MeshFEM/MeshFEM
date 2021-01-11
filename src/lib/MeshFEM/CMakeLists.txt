@@ -182,3 +182,7 @@ endif()
 if(MESHFEM_ENABLE_BENCHMARKING)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
 endif()
+
+if(MESHFEM_WITH_UMFPACK)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
+endif()

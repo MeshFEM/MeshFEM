@@ -49,4 +49,25 @@ PYBIND11_MODULE(triangulation, m) {
             }
             return py::tuple(l);
         }, py::arg("pts"), py::arg("edges"), py::arg("holePts") = std::vector<Point2D>(), py::arg("triArea") = 0.01, py::arg("omitQualityFlag") = false, py::arg("flags") = "", py::arg("outputPointMarkers") = true, py::arg("outputEdgeMarkers") = false);
+
+    m.def("refineTriangulation",
+            [](Eigen::Ref<const Eigen::MatrixX2d> V,
+               Eigen::Ref<const Eigen::MatrixX3i> F,
+               const double triArea,
+               const std::vector<double> &perTriangleArea,
+               const std::string &additionalFlags,
+               const std::string &overrideFlags) {
+            auto inVertices =  getMeshIOVertices(V);
+            auto inTriangles = getMeshIOElements(F);
+            std::vector<MeshIO::IOVertex > outVertices;
+            std::vector<MeshIO::IOElement> outTriangles;
+
+            refineTriangulation(inVertices, inTriangles,
+                                outVertices, outTriangles,
+                                triArea, perTriangleArea, additionalFlags, overrideFlags);
+            auto outV = getV(outVertices);
+            auto outF = getF(outTriangles);
+            return std::make_pair(outV, outF);
+        }, py::arg("V"), py::arg("F"), py::arg("triArea"), py::arg("perTriangleArea") = std::vector<double>(),
+           py::arg("additionalFlags") = "", py::arg("overrideFlags") = "");
 }

@@ -285,6 +285,15 @@ struct MESHFEM_EXPORT WorkingSet {
 
     size_t size() const { return m_count; }
 
+    void validateStep(const Eigen::VectorXd &s) const {
+        for (size_t vidx = 0; vidx < m_varFixed.size(); ++vidx) {
+            if (m_varFixed[vidx] && (s[vidx] != 0.0)) {
+                std::cerr << "Working set not enforced properly";
+                throw std::logic_error("Working set not enforced properly");
+            }
+        }
+    }
+
     // Zero out the components for variables fixed by the working set. E.g., if "g" is the gradient,
     // compute the gradient with respect to the "free" variables (without resizing)
     Eigen::VectorXd getFreeComponent(Eigen::VectorXd g /* copy modified inside */) const {

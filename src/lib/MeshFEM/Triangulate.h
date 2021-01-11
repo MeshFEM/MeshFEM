@@ -276,14 +276,13 @@ inline void refineTriangulation(
               std::vector<MeshIO::IOElement> &outTriangles,
         double area = 0.01,
         const std::vector<double> &perTriangleArea = std::vector<double>(),
-        const std::string additionalFlags = "",
-        const std::string overrideFlags = "")
+        const std::string &additionalFlags = "",
+        const std::string &overrideFlags = "")
 {
     // create in and out structs for triangle
     triangulateio in, out;
     memset(&in , 0, sizeof(triangulateio));
     memset(&out, 0, sizeof(triangulateio));
-
 
     const size_t nt = inTriangles.size();
     const size_t nv = inVertices.size();
@@ -315,10 +314,11 @@ inline void refineTriangulation(
             in.trianglearealist[i] = perTriangleArea[i];
     }
 
-
     // Build flags string
     std::stringstream flags_stream;
-    flags_stream << "zqp" << std::fixed << std::setprecision(19) << additionalFlags;
+    // 'r' instead of 'p' in the flags means we are refining an existing
+    // triangulation instead of triangulating a new PSLG
+    flags_stream << "zqr" << std::fixed << std::setprecision(19) << additionalFlags;
     if (hasPerTriangleArea)
         flags_stream << "a";
     flags_stream << "a" << area;
@@ -327,9 +327,10 @@ inline void refineTriangulation(
     // But override it if requested
     if (overrideFlags.size()) flags = overrideFlags;
 
+    // std::cout << "Running triangulate on mesh with " << nv << " vertices and " << nt << " triangles" << std::endl;
+
     // std::cout << "Running triangulate with flags " << flags << std::endl;
     triangulate(const_cast<char *>(flags.c_str()), &in, &out, /* vorout = */ NULL);
-    // std::cout << "Triangulate finished." << std::endl;
 
     // convert to MeshIO format
     outVertices. clear(), outVertices. reserve(out.numberofpoints);

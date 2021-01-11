@@ -11,6 +11,11 @@ def preamble(obj, xeval, perturb, fixedVars = []):
     perturb[fixedVars] = 0.0
     return (xold, xeval, perturb)
 
+def setVars(obj, x, customArgs = None):
+    if (customArgs is not None):
+        obj.setVars(x, **{k: v for k, v in customArgs.items() if hasArg(obj.setVars, k)})
+    obj.setVars(x)
+
 def evalWithCustomArgs(f, customArgs):
     if (customArgs is not None):
         if (isinstance(customArgs, list)): return f(*customArgs)
@@ -18,27 +23,32 @@ def evalWithCustomArgs(f, customArgs):
         return f(customArgs)
     return f()
 
+def basisDirection(obj, c):
+    e_c = np.zeros(obj.numVars())
+    e_c[c] = 1.0
+    return e_c
+
 def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
     def evalAt(x):
-        obj.setVars(x)
+        setVars(obj, x, customArgs)
         return evalWithCustomArgs(obj.energy, customArgs)
 
     fd_delta_E = (evalAt(xeval + perturb * fd_eps) - evalAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
-    obj.setVars(xold)
+    setVars(obj, xold, customArgs)
 
     return fd_delta_E
 
-def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = []):
+def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], g = None):
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
-    obj.setVars(xeval)
-    g = evalWithCustomArgs(obj.gradient, customArgs)
+    setVars(obj, xeval, customArgs)
+    if g is None: g = evalWithCustomArgs(obj.gradient, customArgs)
     analytic_delta_E = g.dot(perturb)
 
     fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
-    obj.setVars(xold)
+    setVars(obj, xold, customArgs)
 
     return (fd_delta_E, analytic_delta_E)
 
@@ -49,9 +59,8 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
     of the worse ones.
     """
     xold, xeval, perturb = preamble(obj, xeval, None, fixedVars)
-    obj.setVars(xeval)
 
-    obj.setVars(xeval)
+    setVars(obj, xeval, customArgs)
     g = evalWithCustomArgs(obj.gradient, customArgs)
 
     # Determine the total error across `nprobes` perturbations of interval
@@ -79,11 +88,11 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
         else:
             lowIdx = mid + 1
 
-    obj.setVars(xold)
+    setVars(obj, xold, customArgs)
 
     return lowIdx
 
-def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None):
+def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None, H = None):
     """
     Returns
     -------
@@ -94,62 +103,67 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
     xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
 
     def gradAt(x):
-        obj.setVars(x)
+        setVars(obj, x, customArgs)
         return evalWithCustomArgs(obj.gradient, customArgs)
 
-    obj.setVars(xeval)
-    h = evalWithCustomArgs(obj.hessian, customArgs)
+    setVars(obj, xeval, customArgs)
+    if H is None: H = evalWithCustomArgs(obj.hessian, customArgs)
     fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
-    if isinstance(h, np.ndarray): # Dense case
-        an_delta_grad = h @ perturb
-    else: an_delta_grad = h.apply(perturb)
+    if isinstance(H, np.ndarray): # Dense case
+        an_delta_grad = H @ perturb
+    else: an_delta_grad = H.apply(perturb)
 
     if indexInterval is not None:
         fd_delta_grad = fd_delta_grad[indexInterval[0]:indexInterval[1]]
         an_delta_grad = an_delta_grad[indexInterval[0]:indexInterval[1]]
 
-    obj.setVars(xold)
+    setVars(obj, xold, customArgs)
 
     return (norm(an_delta_grad - fd_delta_grad) / norm(fd_delta_grad), fd_delta_grad, an_delta_grad)
 
-def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = []):
-    epsilons = np.logspace(-9, -3, 100)
+def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    if epsilons is None:
+        epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
+    g = evalWithCustomArgs(obj.gradient, customArgs)
     for eps in epsilons:
-        fd, an = validateGrad(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars = fixedVars)
+        fd, an = validateGrad(obj, g=g, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars)
         err = np.abs(an - fd) / np.abs(an)
         errors.append(err)
     return (epsilons, errors, an)
 
 from matplotlib import pyplot as plt
-def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = []):
-    eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars)
+def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    eps, errors, ignore = gradConvergence(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
     plt.loglog(eps, errors, label='grad')
     plt.grid()
 
-def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = []):
-    gradConvergencePlotRaw(obj, perturb, customArgs, fixedVars)
+def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    gradConvergencePlotRaw(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
     plt.title('Directional derivative fd test for gradient')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
-def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    epsilons = np.logspace(-9, -3, 100)
+def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    if epsilons is None:
+        epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
+
+    H = evalWithCustomArgs(obj.hessian, customArgs)
     for eps in epsilons:
-        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars, indexInterval=indexInterval)
+        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars, indexInterval=indexInterval, H=H)
         errors.append(err)
     return (epsilons, errors, an)
 
-def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
+def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
     plt.loglog(eps, errors, label='hess')
     plt.grid()
 
-def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None):
-    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval)
+def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
     plt.title('Directional derivative fd test for Hessian')
     plt.ylabel('Relative error')
     plt.xlabel('Step size')

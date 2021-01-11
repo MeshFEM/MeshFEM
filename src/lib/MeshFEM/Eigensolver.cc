@@ -20,7 +20,7 @@ private:
 };
 
 Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
-    BENCHMARK_START_TIMER_SECTION("largestMagnitudeEigenvalue");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("largestMagnitudeEigenvalue");
     if (A.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only symmetric matrices are supported");
     SuiteSparseMatrixProd op(A);
     Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, SuiteSparseMatrixProd> eigs(&op, 1, 5);
@@ -32,7 +32,6 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         std::cout << "Using " << ((A.symmetry_mode == SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE) ? "symmetric" : "asymmetric") << " matrix" << std::endl;
     }
-    BENCHMARK_STOP_TIMER_SECTION("largestMagnitudeEigenvalue");
     return eigs.eigenvalues()[0];
 }
 

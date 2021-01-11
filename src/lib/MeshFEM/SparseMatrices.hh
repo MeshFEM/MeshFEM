@@ -952,6 +952,7 @@ struct CSCMatrix {
     }
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
+    CSCMatrix &operator*=(_Real alpha) { scale(alpha); return *this; }
 
     // Perform the operation:
     //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
@@ -1340,6 +1341,7 @@ struct CSCMatrix {
 
 using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 
+#ifdef MESHFEM_WITH_UMFPACK
 class UmfpackFactorizer {
 public:
     template<typename _Triplet>
@@ -1443,6 +1445,35 @@ private:
     double Control[UMFPACK_CONTROL], Info[UMFPACK_INFO];
     double m_factorizationMemoryBytes;
 };
+
+using DefaultLUFactorizer = UmfpackFactorizer;
+#else
+class LUFactorizerStub {
+public:
+    const std::runtime_error no_lu_support = std::runtime_error("MeshFEM was compiled without LU factorization support");
+    template<typename _Triplet>
+    LUFactorizerStub(TripletMatrix<_Triplet> &/* tmat */) { }
+
+    [[ noreturn ]] void factorize() { throw no_lu_support; }
+    [[ noreturn ]] void factorizeSymbolic(int /* nmethods */) { throw no_lu_support; }
+    template<typename _Triplet>
+    [[ noreturn ]] void updateFactorization(const TripletMatrix<_Triplet> &/* tmat */) { throw no_lu_support; }
+
+    template<typename _Vec1, typename _Vec2>
+    void solve(const _Vec1 &, _Vec2 &) { throw no_lu_support; }
+
+    double peakMemoryMB() const { throw no_lu_support; }
+
+    void clear() { throw no_lu_support; }
+
+    // Size of the factorized matrix.
+    size_t m() const { return 0; }
+    size_t n() const { return 0; }
+};
+
+using DefaultLUFactorizer = LUFactorizerStub;
+
+#endif
 
 inline cholmod_dense cholmod_dense_wrap_vector_ptr(const size_t n, double *data) {
     cholmod_dense result;
@@ -1837,7 +1868,7 @@ private:
 //  Calls to fixVariables() result in a smaller system for "reduced variables."
 //  However, solve() takes and returns the full, unreduced RHS and solution.
 *///////////////////////////////////////////////////////////////////////////////
-template<typename _Real, class _LUFactorizer = UmfpackFactorizer,
+template<typename _Real, class _LUFactorizer = DefaultLUFactorizer,
                          class _LLTFactorizer = CholmodFactorizer>
 class SPSDSystem {
 public:
