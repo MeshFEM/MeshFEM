@@ -76,10 +76,12 @@ class ViewerBase:
         if (self.scalarField is not None):
             # First, handle the case of directly specifying per-vertex or per-tri colors:
             if (isinstance(self.scalarField, (np.ndarray, np.generic)) and len(self.scalarField.shape) == 2):
-                if (self.scalarField.shape[1] not in [3, 4]) or self.scalarField.shape[0] not in [len(vertices), len(idxs)]:
-                    raise Exception('Incorrect shape of per-vertex/per-tri colors')
-                if self.scalarField.shape[0] == len(idxs): needsReplication = True
-                attrRaw['color'] = np.array(self.scalarField, dtype=np.float32)
+                vis_field = self.mesh.visualizationField(self.scalarField)
+                shape = vis_field.shape
+                if (shape[1] not in [3, 4]) or shape[0] not in [len(vertices), len(idxs)]:
+                    raise Exception('Incorrect shape of per-vertex/per-tri colors: ' + str(shape) + ', num vertices: ' + str(len(vertices)) + ', num tris: ' + str(len(idxs)))
+                if shape[0] == len(idxs): needsReplication = True
+                attrRaw['color'] = np.array(vis_field, dtype=np.float32)
             else:
                 # Handle input in the form of a ScalarField or a raw scalar data array.
                 # Construct scalar field from raw scalar data array if necessary.

@@ -179,3 +179,10 @@ if HAS_OFFSCREEN:
     class QuadHexViewer(OffscreenTriMeshViewer):
         def __init__(self, V, F, *args, **kwargs):
             super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
+
+def concatVisGeometries(A, B):
+    return (np.vstack([A[0], B[0]]), # Stacked V
+            np.vstack([A[1], B[1] + len(A[0])]), # Stacked F
+            np.vstack([A[2], B[2]])) # Stacked N
+def concatWithColors(A, colorA, B, colorB):
+    return concatVisGeometries(A, B), np.vstack([np.tile(colorA, [len(A[0]), 1]), np.tile(colorB, [len(B[0]), 1])])

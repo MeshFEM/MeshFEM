@@ -12,8 +12,13 @@ class OffscreenViewerBase(ViewerBase):
         N = attrRaw['normal']
         C = attrRaw['color'] if 'color' in attrRaw else OffscreenRenderer.hexColorToFloat('#D3D3D3')
         F = attrRaw['index'] if 'index' in attrRaw else None
-        if preserveExisting: self.renderer.addMesh(P, F, N, C)
-        else:                self.renderer.setMesh(P, F, N, C)
+        if preserveExisting:
+            self.renderer.addMesh(P, F, N, C)
+            if (len(self.renderer.meshes) > 1):
+                prevMesh = self.renderer.meshes[1]
+                self.renderer.meshes[0].matModel = prevMesh.matModel
+                prevMesh.color = [1.0, 0.0, 0.0, 0.5]
+        else: self.renderer.setMesh(P, F, N, C)
 
     # Start recording to an image sequence/video
     def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None):
