@@ -103,6 +103,13 @@ std::vector<size_t> sortPermutation(const Container &values,
     return result;
 }
 
+// Alias of sortPermutation
+template<typename Container>
+std::vector<size_t> argsort(const Container &values,
+                            bool descend = false) {
+    return sortPermutation(values, descend);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Create a name with the pattern "suggestion (#)" that is distinct from all
 //  names in the collection "names"

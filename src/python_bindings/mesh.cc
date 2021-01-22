@@ -316,27 +316,27 @@ PYBIND11_MODULE(mesh, m)
             return MeshFactory<double>(elements, vertices, K, degree, embeddingDimension);
         }, py::arg("V"), py::arg("F"), py::arg("degree") = 1, py::arg("embeddingDimension") = 0);
 
-    using PSetTriangulation = PolygonSetTriangulation<
+    using PST = PolygonSetTriangulation<
         double, Eigen::Vector2d, std::pair<size_t, size_t>>;
 
-    py::class_<PSetTriangulation>(m, "PolygonSetTriangulation")
-        .def(py::init<
-                const std::vector<Eigen::Vector2d>&,
-                const std::vector<std::vector<std::pair<size_t, size_t>>>&,
-                const std::vector<Eigen::Vector2d>&,
-                double, double>())
-        .def("getLinearMesh", [](const PSetTriangulation& triangulation)
-                {
+    py::class_<PST>(m, "PolygonSetTriangulation")
+        .def(py::init<const std::vector<Eigen::Vector2d>&,
+                      const std::vector<std::vector<std::pair<size_t, size_t>>>&,
+                      const std::vector<Eigen::Vector2d>&,
+                      double, double>(), py::arg("points"), py::arg("polygons"), py::arg("holes"), py::arg("target_area"), py::arg("min_hinge_radius") = 0.0)
+        .def_property_readonly("V", [](const PST &pst) { return getV(pst.getVertices()); })
+        .def_property_readonly("F", [](const PST &pst) { return getF(pst.getElements()); })
+        .def_readonly("updatedInputPoints",   &PST::updatedInputPoints)
+        .def_readonly("updatedInputPolygons", &PST::updatedInputPolygons)
+        .def("getLinearMesh", [](const PST &pst) {
                     return std::make_shared<FEMMesh<2, 1, Eigen::Vector2d>>(
-                            triangulation.getElements(),
-                            triangulation.getVertices());
+                            pst.getElements(), pst.getVertices());
                 })
-        .def("getQuadraticMesh", [](const PSetTriangulation& triangulation)
-                {
+        .def("getQuadraticMesh", [](const PST &pst) {
                     return std::make_shared<FEMMesh<2, 2, Eigen::Vector2d>>(
-                            triangulation.getElements(),
-                            triangulation.getVertices());
-                });
+                            pst.getElements(), pst.getVertices());
+                })
+        ;
 
     ////////////////////////////////////////////////////////////////////////////
     // Free-standing utility functions

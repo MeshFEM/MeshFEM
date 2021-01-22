@@ -39,9 +39,9 @@ inline Eigen::MatrixX3d getV(const std::vector<MeshIO::IOVertex> &vertices) {
 }
 
 inline Eigen::MatrixXi getF(const std::vector<MeshIO::IOElement> &elements) {
-    if (elements.empty()) throw std::runtime_error("elements array is empty");
-    const size_t K = elements.at(0).size();
     const size_t ne = elements.size();
+    if (ne == 0) return Eigen::MatrixXi();
+    const size_t K = elements.at(0).size();
     Eigen::MatrixXi F(ne, K);
     for (size_t i = 0; i < ne; ++i) {
         const auto &e = elements[i];
