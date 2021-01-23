@@ -14,7 +14,7 @@ template<class VertexData, class HalfEdgeData, class TriData,
          class BoundaryVertexData, class BoundaryEdgeData>
 template<typename Tris>
 TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
-TriMesh(const Tris &tris, size_t nVertices) {
+TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
     // BENCHMARK_SCOPED_TIMER_SECTION timer("Halfedge Mesh Construction");
     using EAA = ElementArrayAdaptor<Tris>;
     const size_t nt = EAA::numElements(tris);
@@ -118,7 +118,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
         bTipTail.push_back(Vb[tailVV]);
     }
 
-    if (bV.size() != nBoundaryEdges) {
+    if ((bV.size() != nBoundaryEdges) && !suppressNonmanifoldWarning) {
         std::cerr << "Boundary edge count: "   << nBoundaryEdges << std::endl;
         std::cerr << "Boundary vertex count: " << bV.size()      << std::endl;
         std::cerr << "WARNING: Boundary is non-manifold; this will break certain traversal operations" << std::endl;

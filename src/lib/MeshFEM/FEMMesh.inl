@@ -11,8 +11,8 @@
 template<size_t _K, size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
 template<typename Elements, typename Vertices>
 FEMMesh<_K, _Deg, EmbeddingSpace, _FEMData>::
-FEMMesh(const Elements &elems, const Vertices &vertices)
-    : BaseMesh(elems, VertexArrayAdaptor<Vertices>::numVertices(vertices)) {
+FEMMesh(const Elements &elems, const Vertices &vertices, bool suppressNonmanifoldWarning)
+    : BaseMesh(elems, VertexArrayAdaptor<Vertices>::numVertices(vertices), suppressNonmanifoldWarning) {
     // BENCHMARK_SCOPED_TIMER_SECTION timer("FEMMesh constructor");
     if (_Deg == 2) {
         std::map<UnorderedPair, size_t> edgeNodes;
@@ -60,7 +60,7 @@ FEMMesh(const Elements &elems, const Vertices &vertices)
         size_t numNonmanifoldEdges = 0;
         for (size_t nc : numCoincidingBdryEdges)
             numNonmanifoldEdges += nc > 2;
-        if (numNonmanifoldEdges > 0)
+        if ((numNonmanifoldEdges > 0) && !suppressNonmanifoldWarning)
             std::cerr << "WARNING: " << numNonmanifoldEdges << " non-manifold tetmesh edge(s) detected." << std::endl;
 
         // Build map from edge nodes to one of the half edges of the node's edge.

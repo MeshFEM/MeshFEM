@@ -100,6 +100,15 @@ class ViewerBase:
         if needsReplication:
             replicateAttributesPerTriCorner(attrRaw)
 
+        # save a copy of the data we've displayed for, e.g., saveColorizedObj
+        def demoted_dtype(dtype):
+            if np.issubdtype(dtype, np.floating):        return np.float32
+            if np.issubdtype(dtype, np.unsignedinteger): return np.uint32
+            if np.issubdtype(dtype, np.signedinteger):   return np.int32
+            raise Exception('Unexpected type')
+
+        self.displayedData = { k: np.array(v, dtype=demoted_dtype(v.dtype)) for k, v in attrRaw.items() }
+
         self._setGeometryImpl(vertices, idxs, attrRaw, preserveExisting, updateModelMatrix, textureMap, scalarField, vectorField, transparent)
 
         if (updateModelMatrix):
@@ -144,3 +153,18 @@ class ViewerBase:
         elif shadingType == ShadingType.SMOOTH_CREASE: creaseAngle = np.pi / 4
         else: raise Exception('Unexpected shading type')
         self.setNormalCreaseAngle(creaseAngle, doUpdate)
+
+    def saveColorizedObj(self, path):
+        d = self.displayedData
+        if 'color' not in d: raise Exception('Data is not colorized')
+        C = d['color']
+        V = d['position']
+        N = d['normal']
+        F = d['index'].reshape((-1, 3))
+        if len(C) != len(V): raise Exception('Color data is not per-vertex')
+        if len(N) != len(V): raise Exception('Normal data is not per-vertex')
+
+        of = open(path, 'w')
+        for v, c in zip(V, C): print(f'v  {v[0]:0.16} {v[1]:0.16} {v[2]:0.16} {c[0]:0.16} {c[1]:0.16} {c[2]:0.16}', file=of)
+        for n    in N        : print(f'vn {n[0]:0.16} {n[1]:0.16} {n[2]:0.16}', file=of)
+        for f    in F        : print(f'f  {f[0] + 1} {f[1] + 1} {f[2] + 1}', file=of)

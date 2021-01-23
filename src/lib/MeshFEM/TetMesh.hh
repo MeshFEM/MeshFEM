@@ -103,7 +103,7 @@ public:
 
     // Constructor from tetrahedron soup.
     template<typename Tets>
-    TetMesh(const Tets &tets, size_t nVertices);
+    TetMesh(const Tets &tets, size_t nVertices, bool suppressNonmanifoldWarning = false);
 
     size_t numVertices()  const { return      VH.size(); }
     size_t numHalfFaces() const { return       O.size(); }

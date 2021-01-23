@@ -281,7 +281,6 @@ private:
                          std::vector<Edge>& out_edges) const
     {
         std::vector<size_t> new_indices(points.size(), size_t(NO_INDEX));
-        size_t first_point_index, second_point_index;
 
         for (Edge edge : edges) {
             // Look up/generate output output at the edge endpoints

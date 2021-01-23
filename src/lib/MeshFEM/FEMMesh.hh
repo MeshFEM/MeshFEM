@@ -123,7 +123,7 @@ public:
     size_t numElements()     const { return BaseMesh::numSimplices(); }
 
     template<typename Elements, typename Vertices>
-    FEMMesh(const Elements &elems, const Vertices &vertices);
+    FEMMesh(const Elements &elems, const Vertices &vertices, bool suppressNonmanifoldWarning = false);
     static std::unique_ptr<FEMMesh> load(const std::string &path);
 
     // Copy/potentially degree-converting constructor

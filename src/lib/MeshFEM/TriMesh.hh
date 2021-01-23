@@ -54,7 +54,7 @@ public:
 
     // Constructor from triangle soup
     template<typename Tris>
-    TriMesh(const Tris &tris, size_t nVertices);
+    TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning = false);
 
     size_t numVertices()      const { return VH.size(); }
     size_t numHalfEdges()     const { return O.size(); }
