@@ -300,10 +300,12 @@ class PythreejsViewerBase(ViewerBase):
                     self.bufferAttributeStash.pop(key)
 
                 # Update existing attribute or allocate it for the first time
+                val = attrRaw[key]
+                if key == 'color': val = val[:, 0:3] # pythreejs only supports RGB color arrays, not RGBA
                 if key in attr:
-                    attr[key].array = attrRaw[key]
+                    attr[key].array = val
                 else:
-                    attr[key] = pythreejs.BufferAttribute(attrRaw[key])
+                    attr[key] = pythreejs.BufferAttribute(val)
             else:
                 if key in attr:
                     # Stash the existing, unneeded attribute
