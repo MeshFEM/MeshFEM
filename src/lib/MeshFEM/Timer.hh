@@ -45,7 +45,7 @@ private:
         int invocations;
         _Timer() : running(false), time(0), invocations(0) { start(); }
         // gets elapsed time (even if currently running)
-        double elapsed() { return running ? time + (Time() - startTime) : time; }
+        double elapsed() const { return running ? time + (Time() - startTime) : time; }
         void stop()  { assert(running); time += Time() - startTime; running = false; }
         void start() {
             if (running) {
@@ -127,6 +127,8 @@ private:
 
 public:
     Timer() { reset(); }
+
+    const SectionMap &sections() { return m_sections; }
 
     void startSection(std::string name) {
         if (!m_sectionStack.empty())
