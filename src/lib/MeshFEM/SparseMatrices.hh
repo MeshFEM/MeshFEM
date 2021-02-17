@@ -715,6 +715,7 @@ struct CSCMatrix {
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setConstant(val); }
     void setZero()       { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setZero(); }
+    void clear() { Ap.clear(); Ai.clear(); Ax.clear(); nz = 0; }
 
     void setIdentity(bool preserveSparsity = false) {
         if (m != n) throw std::runtime_error("Only square matrices are supported");

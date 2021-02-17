@@ -176,7 +176,7 @@ if HAS_OFFSCREEN:
             super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, transparent)
             if wireframe: self.showWireframe(True)
 
-    class QuadHexViewer(OffscreenTriMeshViewer):
+    class OffscreenQuadHexViewer(OffscreenTriMeshViewer):
         def __init__(self, V, F, *args, **kwargs):
             super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
 
