@@ -558,7 +558,7 @@ struct TripletMatrix {
         if (size_t(x.size()) != n) throw std::runtime_error("Sparse matvec size mismatch.");
         _Vector result(m);
         // Some _Vector types don't zero-initialize.
-        for (size_t i = 0; i < size_t(result.size()); ++i) result[i] = 0.0;
+        Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 1>>(result.data(), result.size()).setZero();
         if (symmetry_mode == SymmetryMode::NONE) {
             for (const Triplet &t: nz)
                 result[t.i] += t.v * x[t.j];
@@ -695,7 +695,7 @@ struct CSCMatrix {
 
     // Rudimentary support for tagging symmetric/nonsymmetric matrices (used by CSCMatrix::apply). This
     // effects, e.g., the interpretation of matrix multiplication.
-    enum class SymmetryMode : uint32_t { NONE = 0, UPPER_TRIANGLE = 1 };
+    enum class SymmetryMode : uint32_t { NONE = 0, UPPER_TRIANGLE = 1, LOWER_TRIANGLE = 2 };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
@@ -712,9 +712,13 @@ struct CSCMatrix {
     template<typename T> CSCMatrix(TripletMatrix<T>  &mat) { setFromTMatrix(mat); }
     template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
 
+    using DataType = Eigen::Matrix<_Real, Eigen::Dynamic, 1>;
+    Eigen::Map<      DataType> data()       { return Eigen::Map<      DataType>(Ax.data(), Ax.size()); }
+    Eigen::Map<const DataType> data() const { return Eigen::Map<const DataType>(Ax.data(), Ax.size()); }
+
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
-    void fill(_Real val) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setConstant(val); }
-    void setZero()       { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).setZero(); }
+    void fill(_Real val) { data().setConstant(val); }
+    void setZero()       { data().setZero(); }
     void clear() { Ap.clear(); Ai.clear(); Ax.clear(); nz = 0; }
 
     void setIdentity(bool preserveSparsity = false) {
@@ -745,45 +749,167 @@ struct CSCMatrix {
         return result;
     }
 
-    // Note: assumes entries within each column are sorted and unique.
-    // Produces a sorted, unique output matrix.
-    CSCMatrix transpose() const {
-        if (symmetry_mode != SymmetryMode::NONE) return *this;
-        CSCMatrix result(n, m);
-        result.nz = nz;
+    struct InOrderBuilder {
+        // Construct a CSCMatrix with a known number of nonzeros in each column by
+        // inserting each in sorted order exactly once.
+        // This is convenient for cases like transposing a CSCMatrix.
+        template<typename SizeCalculator>
+        InOrderBuilder(CSCMatrix &mat, SizeCalculator &&columnSizeCalculator)
+            : m_result(mat)
+        {
+            const _Index out_n = mat.n;
+            m_result.Ap.assign(out_n + 1, 0);
+            // We use a trick to avoid using any additional storage to hold
+            // the partial column end pointers as we fill in the new matrix:
+            // We initially construct the column *start* pointer for column i in Ap[i + 1]
+            // Then we increment these as we fill in the columns until Ap[i + 1] becomes
+            // the column *end* pointer for column i as desired.
 
-        // We use a trick to avoid using any additional storage to hold
-        // the partial column end pointers as we fill in the new matrix:
-        // We initially construct the column *start* pointer for column i in Ap[i + 1]
-        // Then we increment these as we fill in the columns until Ap[i + 1] becomes
-        // the column *end* pointer for column i as desired.
+            // Compute the size of output column j in Ap[j + 1];
+            _Index *colSizes = m_result.Ap.data() + 1;
+            columnSizeCalculator(colSizes);
 
-        // First, compute size of output column i in Ap[i + 1]
-        result.Ap.assign(m + 1, 0);
-        for (_Index i : Ai) ++result.Ap[i + 1];
+            // Next calculate the start pointer for column i in Ap[i + 1]; this is
+            // the cumulative size of the previous output columns, which we
+            // maintain in `accum_nz`
+            _Index accum_nz = 0;
+            {
+                _Index *colBegin = m_result.Ap.data() + 1;
+                for (_Index j = 0; j < out_n; ++j) {
+                    _Index colsize_j = colSizes[j];
+                    colBegin[j] = accum_nz;
+                    accum_nz += colsize_j;
+                }
+            }
+            m_result.Ai.resize(accum_nz);
+            m_result.Ax.resize(accum_nz);
+            m_result.nz = accum_nz;
 
-        // Next calculate the start pointer for column i in Ap[i + 1]; this is
-        // the cumulative size of the previous output columns, which we
-        // maintain in `accum`
-        for (_Index accum = 0, i_plus_1 = 1; i_plus_1 < m + 1; ++i_plus_1) {
-            _Index colSize_i = result.Ap[i_plus_1];
-            result.Ap[i_plus_1] = accum;
-            accum += colSize_i;
+            // Current column end pointers for each incomplete column bucket.
+            m_colEnd = m_result.Ap.data() + 1;
         }
 
-        result.Ax.resize(nz);
-        result.Ai.resize(nz);
+        void insert(_Index i, _Index j, _Real v) {
+            _Index entry = m_colEnd[j];
+            m_result.Ai[entry] = i;
+            m_result.Ax[entry] = v;
+            ++m_colEnd[j];
+        }
+    private:
+        _Index *m_colEnd;
+        CSCMatrix &m_result;
+    };
+
+    // Note: assumes entries within each column are sorted and unique.
+    // Produces a sorted, unique output matrix.
+    CSCMatrix transpose(bool force = false) const {
+        if ((symmetry_mode != SymmetryMode::NONE) && !force) return *this;
+        CSCMatrix result(n, m);
+
+        InOrderBuilder builder(result, [this](_Index *colSizes) { for (_Index i : Ai) ++colSizes[i]; });
+        assert(result.nz == nz);
 
         // Add entries into the transposed matrix in sorted order
         for (_Index c = 0; c < n; ++c) {
-            for (_Index inLoc = Ap[c]; inLoc < Ap[c + 1]; ++inLoc) {
-                _Index outLoc = result.Ap[Ai[inLoc] + 1]++; // get and increment partial column end pointer
-                result.Ai[outLoc] = c;
-                result.Ax[outLoc] = Ax[inLoc];
-            }
+            for (_Index inLoc = Ap[c]; inLoc < Ap[c + 1]; ++inLoc)
+                builder.insert(c, Ai[inLoc], Ax[inLoc]);
         }
 
         return result;
+    }
+
+    // Construct a new CSCMatrix with a different symmetry mode. Currently
+    // only conversions between upper- and lower-triangle symmetric matrix
+    // representations are supported.
+    CSCMatrix toSymmetryMode(SymmetryMode newMode) const {
+        if (newMode == symmetry_mode) return *this;
+        if (m != n) throw std::runtime_error("Matrix is not symmetric");
+
+        // Replicating an upper/lower triangle matrix to a full matrix.
+        if (newMode == SymmetryMode::NONE) {
+            CSCMatrix result(m, n);
+            InOrderBuilder builder(result, [this](_Index *colSizes) {
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                        const _Index i = Ai[inLoc];
+                        if (((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i > j)) ||
+                            ((symmetry_mode == SymmetryMode::LOWER_TRIANGLE) && (i < j))) throw std::runtime_error("Symmetry mode violation");
+                        ++colSizes[j];
+                        if (i != j) ++colSizes[i];
+                    }
+                }
+            });
+
+            // Accumulate entries in the output matrix in sorted order.
+            // Note: from our requirement that this->Ai be sorted, we can
+            // assume input triplets are are looped over in lexicographically
+            // sorted (j, i) order.
+            // Therefore, entries will be added to the output matrix columns in sorted
+            // order as well. However, we must make sure in the LOWER_TRIANGLE
+            // case that all transposed (upper tri) entries are added first.
+            if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
+                // Insert upper triangle entries of each column followed by
+                // strict lower triangle entries (in the reflected part)
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                        const _Index i = Ai[inLoc];
+                        builder.insert(i, j, Ax[inLoc]);
+                        if (i != j) builder.insert(j, i, Ax[inLoc]);
+                    }
+                }
+            }
+            else {
+                // Insert strict upper triangle (reflected part) first...
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                        const _Index i = Ai[inLoc];
+                        if (i != j) builder.insert(j, i, Ax[inLoc]);
+                    }
+                }
+                // Followed by lower triangle
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                        const _Index i = Ai[inLoc];
+                        builder.insert(i, j, Ax[inLoc]);
+                    }
+                }
+            }
+            return result;
+        }
+        // Discard the strict lower or upper triangle of a symmetric matrix
+        // with both parts explicitly stored.
+        if (symmetry_mode == SymmetryMode::NONE) {
+            CSCMatrix result(m, n);
+            result.symmetry_mode = newMode;
+            InOrderBuilder builder(result, [this, newMode](_Index *colSizes) {
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                        const _Index i = Ai[inLoc];
+                        colSizes[j] += (i == j) || ((i < j) == (newMode == SymmetryMode::UPPER_TRIANGLE));
+                    }
+                }
+            });
+
+            for (_Index j = 0; j < n; ++j) {
+                for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
+                    const _Index i = Ai[inLoc];
+                    if ((i == j) || ((i < j) == (newMode == SymmetryMode::UPPER_TRIANGLE)))
+                        builder.insert(i, j, Ax[inLoc]);
+                }
+            }
+
+            return result;
+        }
+
+        // Transpose the triangular part stored into the opposite triangle.
+        CSCMatrix result = transpose(/* force = */ true);
+        result.symmetry_mode = newMode;
+        return result;
+    }
+
+    void reflectUpperTriangle() {
+        if (symmetry_mode == SymmetryMode::NONE) throw std::runtime_error("Matrix is not in symmetric lower/upper triangle respresentation");
+        *this = convertSymmetryMode(SymmetryMode::NONE);
     }
 
     // Set this matrix to have the same sparsity pattern as b, but with zeros
@@ -801,12 +927,18 @@ struct CSCMatrix {
             assert((idx >= Ap[i]) && (Ai[idx] == i));
             return idx;
         }
+        else if (symmetry_mode == SymmetryMode::LOWER_TRIANGLE) {
+            _Index idx = Ap[i]; // Diagonal element is the first entry in the column "i"
+            if (_detectMissing && ((idx >= Ap[i + 1]) || (Ai[idx] != i))) return INDEX_NONE;
+            assert((idx < Ap[i + 1]) && (Ai[idx] == i));
+            return idx;
+        }
         return findEntry<_detectMissing>(i, i);
     }
 
     // Add the NxN block `B` to this matrix, placing its upper-left corner at (i, i).
     // (Assumes the block already exists in the sparisty pattern)
-    // Only implemented for matrices with upper-triangle symmetry;
+    // Only implemented for matrices with upper- or lower-triangle symmetry mode;
     // we cannot achieve a performance advantage over the block version of
     // addNZ for general sparse matrices.
     template<typename Derived>
@@ -814,7 +946,8 @@ struct CSCMatrix {
         constexpr _Index N = Derived::ColsAtCompileTime;
         static_assert((N == Derived::RowsAtCompileTime) && (N != Eigen::Dynamic), "Intended for fixed-size square blocks only");
 
-        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented/beneficial for UPPER_TRIANGLE matrices");
+        if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
+        // TODO: LOWER_TRIANGLE version
 
         for (_Index l = 0; l < N; ++l) {
             _Index idx = findDiagEntry(i + l); // bottom of column strip to add
@@ -1132,8 +1265,11 @@ struct CSCMatrix {
         is.read((char *) &nz, sizeof(_Index));
         is.read((char *) &symmetry_mode, sizeof(uint32_t));
 
-        if ((symmetry_mode != SymmetryMode::NONE) && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE))
+        if ((symmetry_mode != SymmetryMode::NONE) &&
+            (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) &&
+            (symmetry_mode != SymmetryMode::LOWER_TRIANGLE)) {
             throw std::runtime_error("Invalid symmetry_mode");
+        }
 
         Ap.resize(n + 1);
         Ai.resize(nz);
@@ -1225,7 +1361,7 @@ struct CSCMatrix {
 
     template<typename _Real2> // Templated to support, e.g., application of non-autodiff matrix to autodiff vector.
     void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
-        const bool swapIndices = transpose && (symmetry_mode != SymmetryMode::UPPER_TRIANGLE);
+        const bool swapIndices = transpose && (symmetry_mode == SymmetryMode::NONE);
 
         std::fill(result, result + (transpose ? n : m), 0.0);
 
@@ -1234,7 +1370,7 @@ struct CSCMatrix {
             _Index i = it.get_i(), j = it.get_j();
             if (swapIndices) std::swap(i, j);
             result[i] += it.get_val() * x[j];
-            if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i != j))
+            if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
                 result[j] += it.get_val() * x[i];
         }
     }

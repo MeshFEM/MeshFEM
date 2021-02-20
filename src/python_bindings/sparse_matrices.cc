@@ -56,22 +56,30 @@ PYBIND11_MODULE(sparse_matrices, m) {
                 return soln;})
         ;
 
-    using SymmetryModePicklingType = std::underlying_type_t<SuiteSparseMatrix::SymmetryMode>;
+    using SMode = SuiteSparseMatrix::SymmetryMode;
+    py::enum_<SMode>(m, "SymmetryMode")
+        .value("NONE",           SMode::NONE)
+        .value("UPPER_TRIANGLE", SMode::UPPER_TRIANGLE)
+        .value("LOWER_TRIANGLE", SMode::LOWER_TRIANGLE)
+        ;
+
+    using SymmetryModePicklingType = std::underlying_type_t<SMode>;
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")
         .def(py::init<std::string>(), py::arg("bin_dump_path"), "Load from binary dump file")
         .def(py::init<>(),                                      "Construct empty matrix")
-        .def_readwrite("m",  &SuiteSparseMatrix::m)
-        .def_readwrite("n",  &SuiteSparseMatrix::n)
-        .def_readwrite("nz", &SuiteSparseMatrix::nz)
-        .def_readwrite("Ap", &SuiteSparseMatrix::Ap)
-        .def_readwrite("Ai", &SuiteSparseMatrix::Ai)
-        .def_readwrite("Ax", &SuiteSparseMatrix::Ax)
-        .def("setZero",      &SuiteSparseMatrix::setZero)
-        .def("fill",         &SuiteSparseMatrix::fill)
-        .def("setIdentity",  &SuiteSparseMatrix::setIdentity)
-        .def("trace",        &SuiteSparseMatrix::trace)
-        .def("transpose",    &SuiteSparseMatrix::transpose)
+        .def_readwrite("m",    &SuiteSparseMatrix::m)
+        .def_readwrite("n",    &SuiteSparseMatrix::n)
+        .def_readwrite("nz",   &SuiteSparseMatrix::nz)
+        .def_readwrite("Ap",   &SuiteSparseMatrix::Ap)
+        .def_readwrite("Ai",   &SuiteSparseMatrix::Ai)
+        .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
+        .def("setZero",        &SuiteSparseMatrix::setZero)
+        .def("fill",           &SuiteSparseMatrix::fill)
+        .def("setIdentity",    &SuiteSparseMatrix::setIdentity)
+        .def("trace",          &SuiteSparseMatrix::trace)
+        .def("transpose",      &SuiteSparseMatrix::transpose)
+        .def("toSymmetryMode", &SuiteSparseMatrix::toSymmetryMode)
         .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, double))(&SuiteSparseMatrix::addNZ), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
         .def("setFromTMatrix", [&](SuiteSparseMatrix &smat, TMatrix &tmat) { smat.setFromTMatrix(tmat); } /* work around pybind11 error */ )
         .def("getTripletMatrix", &SuiteSparseMatrix::getTripletMatrix)
@@ -80,6 +88,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
                     for (size_t i : indices) shouldRemove[i] = true;
                     smat.rowColRemoval([&shouldRemove](size_t i) { return shouldRemove[i]; });
                 })
+        .def_readwrite("symmetry_mode", &SuiteSparseMatrix::symmetry_mode)
         .def("apply", [](const SuiteSparseMatrix &mat, const Eigen::VectorXd &vec, bool transpose) {
                     return mat.apply(vec, transpose);
                 }, py::arg("vec"), py::arg("transpose") = false)
