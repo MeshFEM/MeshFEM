@@ -246,6 +246,8 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
     NeoHookeanEnergy(const NeoHookeanEnergy &other)
         : Base(other), m_C33(other.m_C33) { }
 
+    NeoHookeanEnergy &operator=(const NeoHookeanEnergy &other) = default; // Silence deprecation warning.
+
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         Base::setDeformationGradient(F, elevel);
         m_C33 = (m_lambda + 2 * m_mu) / (m_lambda * unpaddedI3() + 2 * m_mu);
