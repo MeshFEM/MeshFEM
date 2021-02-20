@@ -68,4 +68,33 @@ TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
             REQUIRE((Cv3 - Cv2).norm() / Cv1.norm() < 5e-16);
         }
     }
+
+    // Test transpose of asymmetric matrix
+    srandom(0);
+    for (size_t test = 0; test < ntests; ++test) {
+        size_t m   = 1000 + 1000 * (random() % 10);
+        size_t n   = 1000 + 1000 * (random() % 10);
+        size_t ntriplets = 6000 + 6000 * (random() % 10);
+        TripletMatrix<> Ctrip(m, n);
+        Ctrip.reserve(ntriplets);
+        for (size_t t = 0; t < ntriplets; ++t) {
+            size_t i = random() % m;
+            size_t j = random() % n;
+            double v = random() / double(RAND_MAX);
+            Ctrip.addNZ(i, j, v);
+        }
+
+        SuiteSparseMatrix C(Ctrip);
+        auto C_t = C.transpose();
+        REQUIRE(C_t.nz == C.nz);
+
+        // Test the matvec implementations all agree.
+        const size_t nmatvec_tests = 10;
+        for (size_t tt = 0; tt < nmatvec_tests; ++tt) {
+            Eigen::VectorXd v = Eigen::VectorXd::Random(n);
+            Eigen::VectorXd Cv1 = C.apply(v),
+                            Cv2 = C_t.apply(v, /* transpose = */ true);
+            REQUIRE((Cv2 - Cv1).norm() / Cv1.norm() < 5e-16);
+        }
+    }
 }
