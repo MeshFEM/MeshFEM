@@ -101,6 +101,12 @@ struct NDArrayIndexer<N, Dim, Dims...> {
                NDArrayIndexer<N - 1, Dims...>::index(args...);
     }
 
+    template<typename NDIndex, size_t offset = 0>
+    static size_t flatIndex(const NDIndex &idx) {
+        return NDArrayIndexer<N - 1, Dims...>::size() * idx[offset] +
+               NDArrayIndexer<N - 1, Dims...>::template flatIndex<NDIndex, offset + 1>(idx);
+    }
+
     // Compile-time linear index generation.
     template<size_t i, size_t... I>
     static constexpr size_t index() {
@@ -135,6 +141,13 @@ template<>
 struct NDArrayIndexer<0> {
     template<size_t... I>
     static constexpr size_t       index() { static_assert(sizeof...(I) == 0, "Invalid number of indices"); return 0; }
+
+    template<typename NDIndex, size_t offset>
+    static size_t flatIndex(const NDIndex &idx) {
+        if (idx.size() != offset) throw std::runtime_error("Invalid number of indices");
+        return 0;
+    }
+
     static constexpr size_t        size() { return 1; }
     static constexpr size_t centerIndex() { return 0; }
     constexpr static std::array<size_t, 0> unflattenIndex(size_t i) { return std::array<size_t, 0>(); }
