@@ -140,8 +140,8 @@ add_library(MeshFEM SHARED
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
 
-# Use C++11
-target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
+# Use C++14
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_14)
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
