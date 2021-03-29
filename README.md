@@ -105,7 +105,7 @@ jupyter lab
 
 <a name="python-bindings"></a>
 Example Usage (Python Bindings)
-===============================
+-------------------------------
 In the future, I hope to expose all MeshFEM functionality with Python wrappers.
 For now, only a few high-level portions of the code have been bound.
 To see what is possible with the current bindings,
@@ -114,7 +114,7 @@ please check out the included notebooks
 [`python/examples/GeodesicsInHeat.ipynb`](https://github.com/jpanetta/MeshFEM/blob/master/python/examples/GeodesicsInHeat.ipynb).
 
 Example Usage (C++ Binaries)
-============================
+----------------------------
 The traditional way to interact with the library is by implementing and running C++ binaries.
 Several pre-made C++ binaries have been provided to solve linear elasticity problems and run
 periodic homogenization.
@@ -295,7 +295,7 @@ approaches give identical results up to roundoff error.
   0; 0\; 1] Rot(\theta)^T$$.
 
 Notes for Windows (Thanks to [Christopher Brandt](https://people.epfl.ch/christopher.brandt))
-================================================
+---------------------------------------------
 Getting MeshFEM to run in Visual Studio 2019:
 
 1) This is specifically for VS2019; older versions would need significant changes in the code
@@ -344,6 +344,6 @@ Getting MeshFEM to run in Visual Studio 2019:
            ```
 
 Acknowledgements
-================
+----------------
 Thanks to [Jeremie Dumas](https://www.jdumas.org) for reorganizing the codebase
 and transitioning it to a CMake build system.
