@@ -946,7 +946,7 @@ struct CSCMatrix {
         constexpr _Index N = Derived::ColsAtCompileTime;
         static_assert((N == Derived::RowsAtCompileTime) && (N != Eigen::Dynamic), "Intended for fixed-size square blocks only");
 
-        if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
         // TODO: LOWER_TRIANGLE version
 
         for (_Index l = 0; l < N; ++l) {
