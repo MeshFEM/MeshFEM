@@ -91,6 +91,7 @@ public:
     using value_ptr = typename DataAccessPolicy<_Mesh, Subtype, Data>::value_ptr;
 
     Handle(int idx, Mesh &mesh) : m_idx(idx), m_mesh(mesh) { }
+    Handle(const Handle &h) = default;
 
     explicit operator bool() const { return static_cast<const SubHandle *>(this)->valid(); }
 
