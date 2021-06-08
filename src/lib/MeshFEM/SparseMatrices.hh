@@ -909,7 +909,7 @@ struct CSCMatrix {
 
     void reflectUpperTriangle() {
         if (symmetry_mode == SymmetryMode::NONE) throw std::runtime_error("Matrix is not in symmetric lower/upper triangle respresentation");
-        *this = convertSymmetryMode(SymmetryMode::NONE);
+        *this = toSymmetryMode(SymmetryMode::NONE);
     }
 
     // Set this matrix to have the same sparsity pattern as b, but with zeros

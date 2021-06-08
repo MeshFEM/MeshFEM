@@ -3,9 +3,12 @@ from numpy.linalg import norm
 import sparse_matrices
 from reflection import hasArg
 
+def genPerturbation(x):
+    return np.random.uniform(low=-1,high=1, size=x.shape)
+
 def preamble(obj, xeval, perturb, fixedVars = []):
     if (xeval   is None): xeval = obj.getVars()
-    if (perturb is None): perturb = np.random.uniform(low=-1,high=1, size=obj.numVars())
+    if (perturb is None): perturb = genPerturbation(xeval)
     xold = obj.getVars()
     perturb = np.copy(perturb)
     perturb[fixedVars] = 0.0
