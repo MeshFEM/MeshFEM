@@ -29,8 +29,10 @@ struct SPSDSystemSolver; // Forward declaration; defined in parametrization.cc
 ////////////////////////////////////////////////////////////////////////////////
 // Compute a least-squares conformal parametrization with the global scale factor
 // chosen to minimize the L2 norm of the pointwise area distortion.
+// The optional "initial parametrization" `initParam` is used only for picking
+// locations for the fixed vertices.
 MESHFEM_EXPORT
-UVMap lscm(const Mesh &mesh);
+UVMap lscm(const Mesh &mesh, const UVMap &initParam = UVMap());
 
 // Compute a harmonic map with prescribed boundary positions (in 2D or 3D)
 MESHFEM_EXPORT

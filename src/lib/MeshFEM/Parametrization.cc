@@ -46,20 +46,23 @@ UVMap rescale(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
 ////////////////////////////////////////////////////////////////////////////////
 // Compute a least-squares conformal parametrization with the global scale factor
 // chosen to minimize the L2 norm of the pointwise area distortion.
-UVMap lscm(const Mesh &mesh) {
+UVMap lscm(const Mesh &mesh, const UVMap &initParam) {
     const size_t nv = mesh.numVertices();
     UVMap uv(nv, 2);
 
     SPSDSystemSolver Ksys(assembleLSCMMatrix(mesh));
 
-    // Pin down the null-space (translation) and avoid the trivial solution
-    // by fixing two vertices' UVs: vertex 0 and the vertex furthest from it.
+    // Pin down the null-space (translation, rotation) and avoid the trivial
+    // zero solution by fixing two vertices' UVs: boundary vertex 0 and the vertex
+    // furthest from it.
     {
-        Point3D p0 = mesh.node(0)->p;
+        Point3D p0 = mesh.boundaryNode(0).volumeNode()->p;
+        size_t idx0 = mesh.boundaryNode(0).volumeNode().index();
         Real furthestDist = 0;
         size_t furthestIdx = 0;
 
-        for (auto n : mesh.nodes()) {
+        for (auto bn : mesh.boundaryNodes()) {
+            auto n = bn.volumeNode();
             Real dist = (n->p - p0).norm();
             if (dist > furthestDist) {
                 furthestDist = dist;
@@ -67,8 +70,15 @@ UVMap lscm(const Mesh &mesh) {
             }
         }
 
-        std::vector<size_t>    fixedVars = {0, furthestIdx, nv, nv + furthestIdx};
+        std::vector<size_t>    fixedVars = {idx0, furthestIdx, nv + idx0, nv + furthestIdx};
         std::vector<Real> fixedVarValues = {0.0, furthestDist, 0.0, 0.0};
+
+        if (size_t(initParam.rows()) == nv) {
+            fixedVarValues[0] = initParam(       idx0, 0);
+            fixedVarValues[1] = initParam(furthestIdx, 0);
+            fixedVarValues[2] = initParam(       idx0, 1);
+            fixedVarValues[3] = initParam(furthestIdx, 1);
+        }
 
         Ksys.fixVariables(fixedVars, fixedVarValues);
     }
