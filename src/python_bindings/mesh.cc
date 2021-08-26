@@ -328,14 +328,7 @@ PYBIND11_MODULE(mesh, m)
         .def_property_readonly("F", [](const PST &pst) { return getF(pst.getElements()); })
         .def_readonly("updatedInputPoints",   &PST::updatedInputPoints)
         .def_readonly("updatedInputPolygons", &PST::updatedInputPolygons)
-        .def("getLinearMesh", [](const PST &pst) {
-                    return std::make_shared<FEMMesh<2, 1, Eigen::Vector2d>>(
-                            pst.getElements(), pst.getVertices());
-                })
-        .def("getQuadraticMesh", [](const PST &pst) {
-                    return std::make_shared<FEMMesh<2, 2, Eigen::Vector2d>>(
-                            pst.getElements(), pst.getVertices());
-                })
+        .def("getMesh", [](const PST &pst, size_t deg) { return MeshFactory<double>(pst.getElements(), pst.getVertices(), /* K = */ 2, deg, /* N = */ 2); }, py::arg("deg"))
         ;
 
     ////////////////////////////////////////////////////////////////////////////
