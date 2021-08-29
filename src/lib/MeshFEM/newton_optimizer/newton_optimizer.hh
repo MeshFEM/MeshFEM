@@ -269,9 +269,11 @@ struct MESHFEM_EXPORT WorkingSet {
         return true;
     }
 
+    // Return "true" if entries are removed.
     template<class Predicate>
-    void remove_if(const Predicate &p) {
+    bool remove_if(const Predicate &p) {
         const size_t nbc = m_contains.size();
+        size_t old_count = m_count;
         for (size_t bci = 0; bci < nbc; ++bci) {
             if (m_contains[bci] && p(bci)) {
                 m_contains[bci] = false;
@@ -281,6 +283,7 @@ struct MESHFEM_EXPORT WorkingSet {
                 --m_count;
             }
         }
+        return m_count < old_count;
     }
 
     size_t size() const { return m_count; }
@@ -296,10 +299,14 @@ struct MESHFEM_EXPORT WorkingSet {
 
     // Zero out the components for variables fixed by the working set. E.g., if "g" is the gradient,
     // compute the gradient with respect to the "free" variables (without resizing)
-    Eigen::VectorXd getFreeComponent(Eigen::VectorXd g /* copy modified inside */) const {
+    void getFreeComponentInPlace(Eigen::VectorXd &g) const {
         if (size_t(g.size()) != m_varFixed.size()) throw std::runtime_error("Gradient size mismatch");
         for (size_t vidx = 0; vidx < m_varFixed.size(); ++vidx)
             if (m_varFixed[vidx]) g[vidx] = 0.0;
+    }
+
+    Eigen::VectorXd getFreeComponent(Eigen::VectorXd g /* copy modified inside */) const {
+        getFreeComponentInPlace(g);
         return g;
     }
 
@@ -458,7 +465,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
 
     ConvergenceReport optimize();
 
-    Real newton_step(Eigen::VectorXd &step, /* copy modified inside */ Eigen::VectorXd g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
+    Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
 
     // Calculate a Newton step with empty working set and default beta/betaMin.
     Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g) {

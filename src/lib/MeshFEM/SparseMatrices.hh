@@ -1081,6 +1081,7 @@ struct CSCMatrix {
 
     // (*this) += alpha * b, assuming b's sparsity pattern is identical to ours.
     void addWithIdenticalSparsity(const CSCMatrix &b, _Real alpha = 1.0) {
+        if (b.Ax.size() != Ax.size()) throw std::runtime_error("nnz mismatch");
         if (alpha == 1.0) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
         else              { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
     }

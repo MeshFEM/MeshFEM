@@ -1,9 +1,9 @@
 #include "newton_optimizer.hh"
 
-// In order to preserve the sparsity pattern, we enforce the active bound constraints by
-// zeroing out the rows/cols corresponding to the variable, placing a 1 on its diagonal, and zeroing
-// out its component of the gradient (instead of removing these rows/columns).
-void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, Eigen::VectorXd &grad, const WorkingSet &ws) {
+// Modify `H` to enforce the active bound constraints (which are of the form d_i = 0 when solving H d = -g).
+// In order to preserve H's sparsity pattern, instead of removing the rows/columns for pinned variables `i`,
+// we replace these rows/columns with rows/columns of the identity.
+void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, const WorkingSet &ws) {
     if (ws.size() == 0) return;
 
     BENCHMARK_START_TIMER("fixVariablesInWorkingSet");
@@ -15,7 +15,6 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, E
     const SuiteSparseMatrix::index_type nv = prob.numVars();
     for (SuiteSparseMatrix::index_type var = 0; var < nv; ++var) {
         if (!ws.fixesVariable(var)) continue;
-        grad[var] = 0;
         const auto start = H.Ap[var    ],
                    end   = H.Ap[var + 1];
         Eigen::Map<Eigen::VectorXd>(H.Ax.data() + start, end - start).setZero();
@@ -26,12 +25,13 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, E
     BENCHMARK_STOP_TIMER("fixVariablesInWorkingSet");
 }
 
+// Solve the Newton system `H d = -g`, modifying H to be pos. def. if it is indefinite.
 // Returns "tau", the coefficient of the metric term that was added to make the Hessian positive definite.
 // "-tau" can be interpreted as an estimate (lower bound) for the smallest generalized eigenvalue for "H d = lambda M d"
 // (Returns 0 if the Hessian is already positive definite).
 // Upon return, "solver" holds a factorization of the matrix:
 //     (H + tau (M / ||M||_2))
-Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside */ Eigen::VectorXd g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
+Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
     BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
     step.resize(g.size());
 
@@ -69,10 +69,12 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     auto &hUpdtCtr = options.getHessianUpdateController();
     auto &hProjCtr = options.getHessianProjectionController();
 
+    Eigen::VectorXd g_free = ws.getFreeComponent(g); // Zero out the entries with active bound constraints.
+
     if (solver.hasFactorization()) {
         if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
             hUpdtCtr.reusedHessian();
-            gReduced = removeFixedEntries(g);
+            gReduced = removeFixedEntries(g_free);
             solver.solveExistingFactorization(gReduced, x);
             postprocessSolution();
             return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
@@ -82,7 +84,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
     SuiteSparseMatrix H_reduced;
     { BENCHMARK_SCOPED_TIMER_SECTION hevalTimer("hessEval");
         H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
-        fixVariablesInWorkingSet(*prob, H_reduced, g, ws);
+        fixVariablesInWorkingSet(*prob, H_reduced, ws);
         H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
     }
 
@@ -93,7 +95,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
             if (tau != 0) {
                 if (!M_reduced) {
                     M_reduced = std::make_unique<SuiteSparseMatrix>(prob->metric());
-                    fixVariablesInWorkingSet(*prob, *M_reduced, g, ws);
+                    fixVariablesInWorkingSet(*prob, *M_reduced, ws);
                     M_reduced->rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
                 }
 
@@ -107,7 +109,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, /* copy modified inside
 
             BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
 
-            gReduced = removeFixedEntries(g);
+            gReduced = removeFixedEntries(g_free);
             solver.solve(gReduced, x);
             if (!solver.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
             postprocessSolution();
@@ -241,20 +243,23 @@ ConvergenceReport NewtonOptimizer::optimize() {
         }
 
         // Free variables in the working set from their bound constraints, if necessary
-        workingSet.remove_if([&](size_t bc_idx) {
+        bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
                 bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free);
                 if (shouldRemove) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
                 return shouldRemove;
             });
 
+        if (ws_updated) g_free = workingSet.getFreeComponent(zg);
+
         } // End of 'Preamble' timer
+
 
         { BENCHMARK_SCOPED_TIMER_SECTION t2("Compute descent direction");
 
         Real old_beta = beta;
         Real tau;
         try {
-            tau = newton_step(step, g, workingSet, beta, betaMin);
+            tau = newton_step(step, g_free, workingSet, beta, betaMin);
         }
         catch (std::exception &e) {
             // Tau ran away
@@ -268,7 +273,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
             // std::cout.precision(19);
             std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << '\n';
             auto M_reduced = prob->metric();
-            fixVariablesInWorkingSet(*prob, M_reduced, g, workingSet);
+            fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
             auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
             {
