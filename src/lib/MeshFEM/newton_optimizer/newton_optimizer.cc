@@ -1,4 +1,5 @@
 #include "newton_optimizer.hh"
+#include "../AutomaticDifferentiation.hh"
 
 // Modify `H` to enforce the active bound constraints (which are of the form d_i = 0 when solving H d = -g).
 // In order to preserve H's sparsity pattern, instead of removing the rows/columns for pinned variables `i`,
@@ -329,14 +330,16 @@ ConvergenceReport NewtonOptimizer::optimize() {
             prob->setVars(steppedVars);
             const Real steppedEnergy = prob->energy();
             const Real sufficientDecrease = -c_1 * alpha * directionalDerivative;
-            const Real decrease = currEnergy - steppedEnergy;
+            Real decrease = currEnergy - steppedEnergy;
+            if (std::isfinite(steppedEnergy) && !std::isfinite(currEnergy))
+                decrease = safe_numeric_limits<Real>::max(); // always accept steps from invalid to valid states.
             // Terminate line search successfully if a sufficient decrease is achieved
             // (or if we cannot expect to evaluate the energy decrease accurately
             // enough to measure a sufficient decrease--and the energy does not
             // increase significantly)
             if  ((decrease >= sufficientDecrease)
-                    || (std::abs(sufficientDecrease) < 1e-10 * std::abs(currEnergy)
-                            && (decrease > -1e-16 * std::abs(currEnergy)))) {
+                    || (std::abs(sufficientDecrease) < 1e-8 * std::abs(currEnergy)
+                            && (decrease > -1e-10 * std::abs(currEnergy)))) {
                 break;
             }
 

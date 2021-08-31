@@ -1075,7 +1075,7 @@ struct CSCMatrix {
     // Entries that are zero in both matrices are left zero (even if they exist
     // in the sparsity pattern).
     void cwiseDivide(const CSCMatrix &b) {
-        if (nz != b.nz) throw std::runtime_error("Mismatched sparisty patterns");
+        if (nz != b.nz) throw std::runtime_error("Mismatched sparsity patterns");
         for (_Index i = 0; i < nz; ++i) { if ((Ax[i] != 0) || (b.Ax[i] != 0)) Ax[i] /= b.Ax[i]; }
     }
 
