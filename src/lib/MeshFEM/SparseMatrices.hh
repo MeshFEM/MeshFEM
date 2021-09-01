@@ -705,7 +705,7 @@ struct CSCMatrix {
         : m(mm), n(nn), nz(0) { }
 
     CSCMatrix(const CSCMatrix  &b) : Ap(b.Ap), Ai(b.Ai), Ax(b.Ax), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
-    CSCMatrix(      CSCMatrix &&b) : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
+    CSCMatrix(      CSCMatrix &&b) noexcept : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
 
     CSCMatrix(const std::string &path) { readBinary(path); }
 
