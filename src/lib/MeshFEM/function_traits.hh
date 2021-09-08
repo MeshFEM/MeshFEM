@@ -4,6 +4,7 @@
 #include "Future.hh"
 #include "TemplateHacks.hh"
 #include "NTuple.hh"
+#include "Types.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Generalization of function_traits to work with lambda/functors. Allows

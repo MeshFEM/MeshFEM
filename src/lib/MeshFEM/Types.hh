@@ -34,6 +34,13 @@ template<typename Real_> using MatX3_T = Eigen::Matrix<Real_, Eigen::Dynamic, 3>
 
 extern Eigen::IOFormat pointFormatter;
 
+// Very general detection of Eigen types.
+// Detect if T is an Eigen type (or evaluates to an Eigen type).
+template<class T, class = void> struct IsEigenType : public std::false_type { };
+template<class T> using EigenEvalType = std::decay_t<decltype(std::declval<T>().eval())>; // Work around the issue that `Eigen::Block` does not inherit from `Eigen::EigenBase`.
+template<class T> struct IsEigenType<T, std::enable_if_t<std::is_base_of<Eigen::EigenBase<EigenEvalType<T>>, EigenEvalType<T>>::value>> : public std::true_type { };
+template<class T> constexpr bool isEigenType() { return IsEigenType<T>::value; }
+
 template<class EmbeddingSpace, class Enable = void> struct Padder;
 template<class EmbeddingSpace, class Enable = void> struct Truncator;
 
@@ -121,7 +128,7 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
 
 // Work around alignment issues for C++ versions before C++17:
 // http://eigen.tuxfamily.org/dox-devel/group__TopicStlContainers.html
-#include <Eigen/StdVector>
+// #include <Eigen/StdVector> // <-- not needed in C++11 and above
 #include <vector>
 template<typename T>
 using aligned_std_vector = std::vector<T, Eigen::aligned_allocator<T>>;

@@ -49,7 +49,7 @@ Real_ summation_parallel(const PerElemSummand& summand, const size_t numElems) {
 template<class DenseMatrixType>
 struct DenseAssemblerData {
     DenseMatrixType A;
-    bool constructed = false;
+    bool needs_reset = true;
 };
 
 template<class DenseMatrixType>
@@ -57,36 +57,58 @@ using DALocalData = tbb::enumerable_thread_specific<DenseAssemblerData<DenseMatr
 
 template<typename F, class DenseMatrixType>
 struct DenseAssembler {
-    DenseAssembler(F &f, const size_t nrows, const size_t ncols, DALocalData<DenseMatrixType>& locals)
-        : m_f(f), m_nrows(nrows), m_ncols(ncols), m_locals(locals) { }
+    template<class Derived>
+    DenseAssembler(F &f, Eigen::MatrixBase<Derived> &A, DALocalData<DenseMatrixType>& locals)
+        : m_f(f), m_nrows(A.rows()), m_ncols(A.cols()), m_locals(locals), m_A(A.derived()) { }
 
     void operator()(const tbb::blocked_range<size_t> &r) const {
+        // First thread accumulates directly to m_A
+        if (tbb::this_task_arena::current_thread_index() == 0) {
+            for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, m_A); }
+            return;
+        }
+
+        // Other threads accumulate to thread-local storage
         DenseAssemblerData<DenseMatrixType> &data = m_locals.local();
-        if (!data.constructed) { data.A.setZero(m_nrows, m_ncols); data.constructed = true; }
+        if (data.needs_reset) {
+            data.A.setZero(m_nrows, m_ncols);
+            data.needs_reset = false;
+        }
         for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.A); }
     }
 private:
     F &m_f;
     size_t m_nrows, m_ncols;
     DALocalData<DenseMatrixType> &m_locals;
+    DenseMatrixType &m_A;
 };
 
-template<typename F, class DenseMatrixType>
-DenseAssembler<F, DenseMatrixType> make_dense_assembler(F &f, size_t nrows, size_t ncols, DALocalData<DenseMatrixType> &locals) {
-    return DenseAssembler<F, DenseMatrixType>(f, nrows, ncols, locals);
+template<typename F, class DenseMatrixType, class Derived>
+DenseAssembler<F, DenseMatrixType> make_dense_assembler(F &f, Eigen::MatrixBase<Derived> &A, DALocalData<DenseMatrixType> &locals) {
+    return DenseAssembler<F, DenseMatrixType>(f, A, locals);
 }
 
-template<typename PerElemAssembler, class Derived>
-void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
-    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
-    DALocalData<DenseMatrixType> daLocalData;
+template<typename PerElemAssembler, class Derived, class Locals>
+auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, Locals &localData) {
+    for (auto &d : localData)
+        d.needs_reset = true;
+
     get_gradient_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-                          make_dense_assembler(assembler, A.rows(), A.cols(), daLocalData));
+                          make_dense_assembler(assembler, A, localData));
     });
 
-    for (const auto &data : daLocalData)
-        A += data.A;
+    for (const auto &d : localData)
+        if (!d.needs_reset) A += d.A; // this if statement will skip thread 0's unused storage.
+}
+
+// Returns thread local storage collection so that it might be re-used.
+template<typename PerElemAssembler, class Derived>
+auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
+    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
+    auto daLocalData = std::make_unique<DALocalData<DenseMatrixType>>();
+    assemble_parallel(assembler, A, numElems, *daLocalData);
+    return daLocalData;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
