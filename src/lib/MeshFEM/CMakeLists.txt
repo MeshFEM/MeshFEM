@@ -163,7 +163,9 @@ target_link_libraries(${PROJECT_NAME}
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
 #target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+if(MESHFEM_VECTORIZE)
 target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden -march=native -ffast-math)
+endif()
 
 # Generate MeshFEM_export.h which provides the MESHFEM_EXPORT macro
 # for making our public API symbols visible.
