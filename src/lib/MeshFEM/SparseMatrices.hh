@@ -207,6 +207,15 @@ struct TripletMatrix {
         addNZUnpruned(i, j, v);
     }
 
+    // Add a vertical strip of contiguous nonzero values starting at (i, j),
+    // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
+    template<class Derived>
+    int addNZStrip(long i, long j, const Eigen::DenseBase<Derived> &values, int hint = -1) {
+        for (int ii = 0; ii < values.rows(); ++ii)
+            addNZ(i + ii, j, values[ii]);
+        return hint;
+    }
+
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
