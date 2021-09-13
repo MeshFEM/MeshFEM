@@ -222,7 +222,7 @@ public:
 
     virtual void hessian(SuiteSparseMatrix& H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
-        auto assembler_per_element_contrib = [&](size_t ei, SuiteSparseMatrix& Hout) {
+        auto assembler_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
             const auto &e = m.element(ei);
             PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
