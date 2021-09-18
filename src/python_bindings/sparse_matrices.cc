@@ -74,7 +74,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def_readwrite("Ap",   &SuiteSparseMatrix::Ap)
         .def_readwrite("Ai",   &SuiteSparseMatrix::Ai)
         .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
-        .def("setZero",        &SuiteSparseMatrix::setZero)
+        .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
         .def("fill",           &SuiteSparseMatrix::fill)
         .def("setIdentity",    &SuiteSparseMatrix::setIdentity)
         .def("trace",          &SuiteSparseMatrix::trace)

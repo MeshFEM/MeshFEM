@@ -128,16 +128,19 @@ struct SPMatType<T, PerElemAssembler, decltype(std::declval<PerElemAssembler>()(
     using type = CSCMatrix<SuiteSparse_long, T, const std::vector<SuiteSparse_long> &>;
 };
 
-template<typename Real_, class PerElemAssembler, class CustomData_ = CTLDEmpty>
+template<typename T, class PerElemAssembler>
+using SPMatType_t = typename SPMatType<T, PerElemAssembler>::type;
+
+template<class SPMat_, class CustomData_ = CTLDEmpty>
 struct HessianAssemblerData {
-    using SPMat = typename SPMatType<Real_, PerElemAssembler>::type;
+    using SPMat = SPMat_;
     std::unique_ptr<SPMat> H;
     bool constructed = false;
     CustomData_ customData;
 };
 
-template<typename Real_, class PerElemAssembler, class CustomData_ = CTLDEmpty>
-using HALocalData = tbb::enumerable_thread_specific<HessianAssemblerData<Real_, PerElemAssembler, CustomData_>>;
+template<class SPMat_, class CustomData_ = CTLDEmpty>
+using HALocalData = tbb::enumerable_thread_specific<HessianAssemblerData<SPMat_, CustomData_>>;
 
 template<class CustomData_>
 struct HAFunctionCaller {
@@ -152,7 +155,7 @@ struct HAFunctionCaller {
 template<>
 struct HAFunctionCaller<CTLDEmpty> {
     template<class F, class SPMat, class HAD>
-    static void run(F &f, size_t si, SPMat &H, HAD &data) {
+    static void run(F &f, size_t si, SPMat &H, HAD &/* data */) {
         f(si, H);
     }
 };
@@ -160,8 +163,8 @@ struct HAFunctionCaller<CTLDEmpty> {
 template<class CustomData_, class F, typename Real_>
 struct HessianAssembler {
     using CSCMat = CSCMatrix<SuiteSparse_long, Real_>;
-    using HAD    = HessianAssemblerData<Real_, F, CustomData_>;
-    using HALD   = HALocalData         <Real_, F, CustomData_>;
+    using HAD    = HessianAssemblerData<SPMatType_t<Real_, F>, CustomData_>;
+    using HALD   = HALocalData         <SPMatType_t<Real_, F>, CustomData_>;
     using SPMat  = typename HAD::SPMat;
     HessianAssembler(const F &f, CSCMat &H, HALD &locals) : m_H(H), m_f(f), m_locals(locals) { }
 
@@ -199,7 +202,7 @@ private:
 // Assemble a Hessian in parallel
 template<class CustomData_ = CTLDEmpty, class PerElemAssembler, typename Real_>
 void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_long, Real_> &H, const size_t numElems) {
-    HALocalData<Real_, PerElemAssembler, CustomData_> haLocalData;
+    HALocalData<SPMatType_t<Real_, PerElemAssembler>, CustomData_> haLocalData;
     get_hessian_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
                           HessianAssembler<CustomData_, PerElemAssembler, Real_>(assembler, H, haLocalData));
@@ -219,7 +222,7 @@ void assemble_parallel(const PerElemAssembler1 &assembler1, const size_t numElem
                        CSCMatrix<SuiteSparse_long, Real_> &H,
                        const std::string benchmarkTimerName1 = std::string(),
                        const std::string benchmarkTimerName2 = std::string()) {
-    HALocalData<Real_, PerElemAssembler1, CustomData_> haLocalData;
+    HALocalData<SPMatType_t<Real_, PerElemAssembler1>, CustomData_> haLocalData;
     get_hessian_assembly_arena().execute([&]() {
         if (numElems1 > 0) {
             if (!benchmarkTimerName1.empty()) BENCHMARK_START_TIMER(benchmarkTimerName1);
@@ -236,8 +239,10 @@ void assemble_parallel(const PerElemAssembler1 &assembler1, const size_t numElem
         }
     });
 
-    for (const auto &data : haLocalData)
-        H.addWithIdenticalSparsity(data.H);
+    for (const auto &data : haLocalData) {
+        if (data.H != nullptr)
+            H.addWithIdenticalSparsity(*(data.H));
+    }
 }
 
 #else
