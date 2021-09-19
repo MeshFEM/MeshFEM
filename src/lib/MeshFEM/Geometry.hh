@@ -438,6 +438,10 @@ struct UnorderedPair {
         return vmax < b.vmax;
     }
 
+    friend std::ostream &operator<<(std::ostream &os, const UnorderedPair &p) {
+        os << p.vmin << ", " << p.vmax;
+        return os;
+    }
 private:
     int vmin, vmax;
 };
@@ -625,14 +629,18 @@ Point centroid(const std::vector<Point> &p) {
 }
 
 // Compute the signed area of a polygon in 2D (ccw = positive)
-//     A = int 1 dV
+//     A = int 1 dA
 // Assumes that the polygon is non-self-intersecting.
 // The formula used below follows from Green's theorem.
-//     A = int div [x, 0] dV = int [x, 0] . n dA
-//       = sum_{e in edges} int_e [x, 0] dA . n_e
-//       = sum_{e in edges} 1/2 * [x0 + x1, 0] * |e| . n_e
-//       = sum_{e in edges} 1/2 * [x0 + x1, 0] . [y1 - y0, x0 - x1]
-//       = sum_{e in edges} 1/2 * (x0 + x1) * (y1 - y0)
+//     A = int div [x, 0] dA = int [x, 0] . n ds
+//       = sum_{e in edges} int_e [x, 0] ds . n_e
+//       = sum_{e in edges} (1/2 * [x0 + x1, 0] * |e|) . n_e
+//       = sum_{e in edges}  1/2 * [x0 + x1, 0] . [y1 - y0, x0 - x1]
+//       = sum_{e in edges}  1/2 * (x0 + x1) * (y1 - y0)
+inline Real signedAreaContribution(const Point2D &p0, const Point2D &p1) {
+    return 0.5 * (p0[0] + p1[0]) * (p1[1] - p0[1]);
+}
+
 template<class Polygon>
 Real area(const Polygon &poly) {
     assert(poly.size() >= 3);
@@ -643,7 +651,7 @@ Real area(const Polygon &poly) {
         if (next == poly.end()) next = poly.begin();
         const auto &p0 = *it;
         const auto &p1 = *next;
-        area += 0.5 * (p0[0] + p1[0]) * (p1[1] - p0[1]);
+        area += signedAreaContribution(p0, p1);
     }
     return area;
 }
@@ -658,8 +666,8 @@ Point pointCloudCentroid(const std::vector<Point> &points) {
 }
 
 // Unsigned angle between a and b (in [0, pi])
-inline Real angle(const Vector2D &a, const Vector2D &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
-inline Real angle(const Vector3D &a, const Vector3D &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
+template<class Derived1, class Derived2> EnableIfVectorOfSize<Derived1, 2, typename Derived1::Scalar> angle(const Eigen::MatrixBase<Derived1> &a, const Eigen::MatrixBase<Derived2> &b) { return atan2(std::abs(a[0] * b[1] - a[1] * b[0]), a.dot(b)); }
+template<class Derived1, class Derived2> EnableIfVectorOfSize<Derived1, 3, typename Derived1::Scalar> angle(const Eigen::MatrixBase<Derived1> &a, const Eigen::MatrixBase<Derived2> &b) { return atan2(a.cross(b).norm(),                   a.dot(b)); }
 
 // Signed angle from a to b. The 3D version requires a normal to define sign,
 // while the 2D uses the standard sign convention.
@@ -808,7 +816,7 @@ Vec3_T<Real_> parallelTransport(Vec3_T<Real_> t0, Vec3_T<Real_> t1,
                                 Eigen::Ref<const Vec3_T<Real_>> v) {
     t0.normalize();
     t1.normalize();
-    return parallelTransportNormalized(t0, t1, v);
+    return parallelTransportNormalized<Real_>(t0, t1, v);
 }
 
 #endif // GEOMETRY_HH

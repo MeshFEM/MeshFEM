@@ -1,128 +1,135 @@
 #ifndef MESHING_HH
 #define MESHING_HH
 
-#include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/Triangulate.h>
-#include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
+#include "MeshIO.hh"
+#include "Triangulate.h"
+#include "Utilities/EdgeAccessAdaptor.hh"
+#include "utils.hh"
 
 #include <map>
 
-/**
- *  Triangulate the given polygons, points are added so that the triangulation approaches a
- *  delaunay triangulation with triangles area approaching the given target area. The points along
- *  the edge of the polygons are added through the function split.
- */
+// Triangulates either a set of simple polygons connected by hinge vertices or
+// a single non-simple polygon.
 template<typename _Real, typename _Point, typename _Edge>
 class PolygonSetTriangulation
 {
   public:
     using Point = _Point;
+    using V2d = Eigen::Matrix<_Real, 2, 1>;
     using Edge = _Edge;
     using Real = _Real;
 
     static constexpr size_t NO_INDEX = std::numeric_limits<size_t>::max();
     static constexpr Edge NO_EDGE = Edge{ NO_INDEX, NO_INDEX };
 
-    /**
-     *  The polygons are described by a list of list of edge, each list of edge represent a polygon.
-     *  The edges should be a pair or an indexable (an object with a defined operator[](size_t)) of
-     *  indexes into the list of point.
-     */
+    // Polygons are passed in an indexed set representation (list of index pairs that index into `points`).
     PolygonSetTriangulation(const std::vector<Point>& points,
                             const std::vector<std::vector<Edge>>& polygons,
                             const std::vector<Point>& holes,
                             Real target_area,
-                            Real strong_connections = 0.0)
+                            Real min_hinge_radius = 0.0)
       : m_points_new_indices(points.size())
     {
-        triangularizePolygonSet(points, polygons, holes, target_area, strong_connections);
+        triangulatePolygonSet(points, polygons, holes, target_area, min_hinge_radius);
     }
 
-    /**
-     *  Returns a vector v such that the vertex getVertices()[i] belongs to the
-     *  original polygon edge v[i]. If getVertices()[i] does not belong to an edge (internal
-     *  vertices) or belongs to two of the edges (original vertices) v[i] is
-     *  NO_EDGE.
-     */
-    const std::vector<Edge>& getVerticesPolygonEdges() const { return m_vertices_polygon_edges; }
+    // Modified version of user's polygon accounting for min_hinge_radius (for debugging)
+    std::vector<Point>             updatedInputPoints;
+    std::vector<std::vector<Edge>> updatedInputPolygons;
 
-    /**
-     *  Return the indices in the triangulation of the points given to the constructor. Meaning
-     *  that getPointsNewIndices()[i] is the index of points[i] in getVertices().
-     */
+    // Return an array mapping from the triangulation's vertices to the input
+    // polygon edge that generated them. Vertices not originating from an input
+    // edge (i.e., that do not lie on an edge *interior*) are mapped to NO_EDGE.
+    const std::vector<Edge> &getVerticesPolygonEdges() const { return m_vertices_polygon_edges; }
+
+    // Get the vertex indices of the original input points (passed to the
+    // constructor) in the output triangulation.
     const std::vector<size_t>& getPointsNewIndices() const { return m_points_new_indices; }
 
     const std::vector<MeshIO::IOVertex>& getVertices() const { return m_vertices; }
 
     const std::vector<MeshIO::IOElement>& getElements() const { return m_elements; }
 
-  private:
-    template<typename _Vertex>
-    struct PolygonLink
-    {
-        _Vertex point;
-        std::vector<size_t> polygons_indices;
+private:
+    struct PolygonLink {
+        Point point;
+        std::vector<size_t> polygon_indices;
     };
 
     /**
      * Stores a point and the polygon edge index it belongs to.
      */
-    struct PointsEdgeIndex
-    {
+    struct PointsEdgeIndex {
         Point point;
         size_t edge_index;
     };
 
-    /**
-    * Triangulates a polygon set by triangulating each polygon in isolation and then linking
-    * the polygons.
-    * The final triangulation can be accesessed via getVertices() and getElements().
-    * If makeSinglePolygon is true, as a pre-processing step, vertices that connect
-    * two or more polygons, will be made into multiple points in a way that turns all
-    * polygons into a single polygon.
-    */
-    void triangularizePolygonSet(const std::vector<Point>& points,
-                                 const std::vector<std::vector<Edge>>& polygons,
-                                 const std::vector<Point>& holes,
-                                 Real target_area,
-                                 Real strong_connections = 0.0)
+    // Triangulates either a set of simple polygons connected by hinge vertices
+    // or a single non-simple polygon.
+    //
+    // In the simple polygon case (empty `holes`), this works by separately
+    // triangulating each simple polygon and then linking all triangulations
+    // together by merging the duplicated hinge vertices.
+    //
+    // In the case of a single non-simple polygon, we triangulate the full set
+    // of polygon edges at once, using hole points `holes` to eat away the hole
+    // triangles.
+    //
+    // If `min_hinge_radius > 0`, hinge vertices that connect two or more
+    // simple polygons, will be thickened into connections of "radius" `min_hinge_radius`.
+    // The result is a non-simple polygon for which the user must manually specify `holes`.
+    //
+    // TODO: in the future, we should support generating points inside the hole polygons that are
+    // produced when linking together polygons; this would allow us to always
+    // triangulate all polygon segments at once and avoid the `linkPolygons` step. It would
+    // also make it so the user needn't pass hole points when `min_hinge_radius > 0`.
+    void triangulatePolygonSet(std::vector<Point> points,               // potentially modified inside
+                               std::vector<std::vector<Edge>> polygons, // potentially modified inside
+                               const std::vector<Point> &holes,
+                               Real target_area,
+                               Real min_hinge_radius = 0.0)
     {
-        
-        if (strong_connections > 0) {
-            std::vector<Point> new_points(points);
-            std::vector<std::vector<Edge>> new_polygons = joinPolygons(new_points, polygons, strong_connections);
-            m_points_new_indices.resize(new_points.size());
-            triangularizePolygonSet(new_points, new_polygons, holes, target_area, 0);
-            return;
+        if (min_hinge_radius > 0) {
+            if (polygons.size() == 1) throw std::runtime_error("Thickening is only supported for collections of simple polygons; set min_hinge_radius = 0");
+            if (holes.empty())        throw std::runtime_error("Must manually specify hole points if when polygons are connected with min_hinge_radius > 0");
+            thickenHingeVertices(points, polygons, min_hinge_radius * 2);
+            // WARNING: getPointsNewIndices() will no longer correspond to the
+            // user's original input polygons since we modified them; rather,
+            // they correspond to `updatedInputPoints`.
+            m_points_new_indices.resize(points.size());
         }
-        
-        // Triangulate each polygon.
-        std::vector<Point> current_points;
-        std::vector<Edge> current_edges;
-        std::vector<std::vector<MeshIO::IOVertex>> triangulation_vertices(polygons.size());
-        std::vector<std::vector<MeshIO::IOElement>> triangulation_triangles(polygons.size());
-        std::vector<std::vector<PointsEdgeIndex>> points_polygon_edges_indices(polygons.size());
-        for (size_t polygon_index = 0; polygon_index < polygons.size(); ++polygon_index)
-        {
-            current_points.clear();
-            current_edges.clear();
 
-            // Strip points that do not belong to the current polygon.
-            restrictToEdges(points, polygons[polygon_index], current_points, current_edges);
+        updatedInputPoints   = points;
+        updatedInputPolygons = polygons;
+
+        const size_t npolys = polygons.size();
+        if (!holes.empty() && (npolys > 1)) {
+            throw std::runtime_error("When hole points are specified, only a single (non-simple) polygon is accepted.");
+        }
+
+        // Triangulate each polygon.
+        std::vector<std::vector<MeshIO::IOVertex>>     triangulation_vertices (npolys);
+        std::vector<std::vector<MeshIO::IOElement>>    triangulation_triangles(npolys);
+        std::vector<std::vector<PointsEdgeIndex>> points_polygon_edges_indices(npolys);
+        for (size_t pi = 0; pi < npolys; ++pi) {
+            // Strip points not belonging to the current polygon.
+            std::vector<Point> current_points;
+            std::vector<Edge>  current_edges;
+            restrictToEdges(points, polygons[pi], current_points, current_edges);
 
             // Triangulate current polygon.
-            triangularizePolygon(current_points,
-                                 current_edges,
-                                 holes,
-                                 target_area,
-                                 triangulation_vertices[polygon_index],
-                                 triangulation_triangles[polygon_index],
-                                 points_polygon_edges_indices[polygon_index]);
+            triangulatePolygon(current_points,
+                               current_edges,
+                               holes,
+                               target_area,
+                               triangulation_vertices[pi],
+                               triangulation_triangles[pi],
+                               points_polygon_edges_indices[pi]);
         }
 
-        // Maintaing point-polygon-edges map
+        // Maintain point-polygon-edges map
         std::vector<std::vector<Edge>> current_vertices_polygon_edges =
-          getVerticesPolygonEdges(triangulation_vertices, polygons, points_polygon_edges_indices);
+              getVerticesPolygonEdges(triangulation_vertices, polygons, points_polygon_edges_indices);
 
         // Link all polygons by unifying vertices that correspond to the same point in multiple
         // polygons. Creates the final list of vertices and triangles.
@@ -133,224 +140,174 @@ class PolygonSetTriangulation
                      current_vertices_polygon_edges);
     }
 
-    std::vector<std::vector<Edge>> joinPolygons(std::vector<Point>& points, 
-        const std::vector<std::vector<Edge>>& polygons,
-        Real alpha) {
-
-        // Get polygon crossings (points where more than 2 edges and more than one polygon meet)
-        auto polygonLinks = getPolyCrossings(points.size(), polygons);
-        // If there's no more crossings, we can assume that what is left is
-        // a single connected polygon, so we join all edges and order them
-        // properly.
-        if (polygonLinks.empty()) {
-            std::vector<Edge> all_edges;
-            for (const std::vector<Edge>& poly : polygons) {
-                for (const Edge& e : poly) {
-                    all_edges.push_back(e);
-                }
-            }
-            std::vector<std::vector<Edge>> new_polygons = tidyPolygon(all_edges);
-            return new_polygons;
-        }
-
-        // Initialize empty list of polygons.
-        std::vector<std::vector<Edge>> new_polygons(polygons.size());
-
-        // Otherwise, we make a list of edges incident to the first crossing,
-        // order them in a counter-clockwise fashion, and create new points 
-        // and join them accordingly.
-        const auto& link = polygonLinks[0];
-        size_t link_ind = link.point.first;
-        std::vector< std::pair< std::pair<Edge, size_t>, Real> > incident_edges;
-        for (size_t poly_ind : link.polygons_indices) {
-            const auto& cur_poly = polygons[poly_ind];
-            size_t edge_ind = 0;
-            for (const Edge& e : cur_poly) {
-                if (EdgeAccessAdaptor<Edge>::first(e) == link_ind || EdgeAccessAdaptor<Edge>::second(e) == link_ind) {
-                    Edge edge = e;
-                    // Swap edge entries to ensure the current edge will have the polygon link point in its first entry
-                    if (EdgeAccessAdaptor<Edge>::first(edge) != link_ind) {
-                        edge = { EdgeAccessAdaptor<Edge>::second(e), EdgeAccessAdaptor<Edge>::first(e) };
-                    }
-                    // Compute angle associated to the edge (used to sort the edges counter-clockwise later
-                    Point p1 = points[EdgeAccessAdaptor<Edge>::first(edge)];
-                    Point p2 = points[EdgeAccessAdaptor<Edge>::second(edge)];
-                    p2 -= p1;
-                    Real angle = std::atan2(p2[1], p2[0]);  
-                    // Push back processed edge in list of incident edges
-                    std::pair<Edge, size_t> edge_in_poly = std::pair<Edge, size_t> (e, poly_ind);
-                    incident_edges.push_back(std::pair<std::pair<Edge, size_t>, Real>(edge_in_poly, angle));
-                }
-                else {
-                    new_polygons[poly_ind].push_back(e);
-                }
-                edge_ind++;
+    // Replace all hinge vertex connections between polygons
+    // with a weld of finite width `thickness`:
+    //  +--+         +--+
+    //  |  |         |  |
+    //  +--*--+  ==> +-. '-+
+    //     | -|         | -|
+    //     +--+         +--+
+    // The result should be a single connected, non-simple polygon.
+    // This works by, for each hinge vertex, circulating around the incident edges in clockwise order
+    // and, for each adjacent pair of edges belonging to different polygons, creating a new
+    // copy of the vertex that is offset outward along the angle bisector.
+    struct IncidentEdge {
+        // Indices recording which edge of which polygon is incident on a vertex, as well
+        // as the vertex's index within the edge (0 or 1).
+        size_t polygonIdx, edgeIdx, cornerIdx;
+        Point outwardEdgeVector;
+    };
+    using EAA = EdgeAccessAdaptor<Edge>;
+    static void thickenHingeVertices(std::vector<Point> &points,
+                                     std::vector<std::vector<Edge>> &polygons, Real thickness) {
+        // Get information about the edges incident each vertex.
+        const size_t numInputPoints = points.size();
+        std::vector<std::vector<IncidentEdge>> incidentEdgesForPoint(numInputPoints);
+        const size_t npolys = polygons.size();
+        for (size_t pi = 0; pi < npolys; ++pi) {
+            const auto &poly = polygons[pi];
+            const size_t ne = poly.size();
+            for (size_t ei = 0; ei < ne; ++ei) {
+                size_t u = EAA:: first(poly[ei]);
+                size_t v = EAA::second(poly[ei]);
+                Point vec = points.at(v) - points.at(u);
+                incidentEdgesForPoint.at(u).push_back({pi, ei, 0,  vec});
+                incidentEdgesForPoint.at(v).push_back({pi, ei, 1, (-vec).eval()});
             }
         }
 
-        // Sort the incident edges counter-clockwise
-        std::sort(incident_edges.begin(), incident_edges.end(),
-            [](auto const& a, auto const& b) { return a.second < b.second;});
-        
-        // Create new points and re-connect incident edges correctly
-        bool oldPointReplaced = false;
-        Point linkPoint = points[link_ind];
-        for (size_t i = 0; i < incident_edges.size(); i++) {
-            // For each neighbouring pair of edges not belonging to the same polygon,
-            // we create a new point, and connect both to it.
-            size_t poly1_ind = incident_edges[i].first.second;
-            size_t poly2_ind = incident_edges[(i + 1) % incident_edges.size()].first.second;
-            if (poly1_ind != poly2_ind) {
-                Edge e1 = incident_edges[i].first.first;
-                Edge e2 = incident_edges[(i + 1) % incident_edges.size()].first.first;
-                size_t e1_second = (EdgeAccessAdaptor<Edge>::first(e1) != link_ind) ? EdgeAccessAdaptor<Edge>::first(e1) : EdgeAccessAdaptor<Edge>::second(e1);
-                size_t e2_second = (EdgeAccessAdaptor<Edge>::first(e2) != link_ind) ? EdgeAccessAdaptor<Edge>::first(e2) : EdgeAccessAdaptor<Edge>::second(e2);
-                /*
-                // The new point is computed by moving the current link point a little bit in the direction of the
-                // point in the middle between the two other endpoints of the edges.
-                Point new_point = (1. - alpha) * linkPoint +
-                    alpha * ((points[e1_second] + points[e2_second]) / 2.);
-                */
-                // We create a new point by pushing the current link point a little bit into the direction
-                // of the angle between the two edges.
-                Real phi1 = incident_edges[i].second;
-                Real phi2 = incident_edges[(i + 1) % incident_edges.size()].second;
-                if (phi2 < phi1) phi2 += 2 * (std::atan(1) * 4);
-                Real angle = (phi1 + phi2) / 2.;
-                Point new_point = linkPoint;
-                new_point[0] += alpha * std::cos(angle);
-                new_point[1] += alpha * std::sin(angle);
-                
-                size_t new_point_ind = NO_INDEX;
-                // We first replace the old point and then append new points at the end.
-                // This way we end up without unused points in the list.
-                if (oldPointReplaced) {
-                    points.push_back(new_point);
-                    new_point_ind = points.size() - 1;
-                }
-                else {
-                    points[link_ind] = new_point;
-                    new_point_ind = link_ind;
-                    oldPointReplaced = true;
-                }
-                // Create new edges connecting that new point to the rest of the polygon
-                new_polygons[poly1_ind].push_back({ new_point_ind, e1_second });
-                new_polygons[poly2_ind].push_back({ new_point_ind, e2_second });
+        // Validate valences and detect hinges.
+        std::vector<size_t> hinges;
+        for (size_t i = 0; i < numInputPoints; ++i) {
+            const auto &incidentEdges = incidentEdgesForPoint[i];
+            const size_t nie = incidentEdges.size();
+            if (nie     == 0) throw std::runtime_error("Vertex " + std::to_string(i) + " is dangling");
+            if (nie % 2 == 1) throw std::runtime_error("Vertex " + std::to_string(i) + " has an odd number of incident edges");
+            size_t numIncidentPolygons = nie / 2;
+            for (size_t pi = 0; pi < numIncidentPolygons; ++pi) {
+                size_t valence_within_poly = 1 + (incidentEdges[2 * pi + 0].polygonIdx == incidentEdges[2 * pi + 1].polygonIdx);
+                valence_within_poly += (pi < numIncidentPolygons - 1) && (incidentEdges[2 * pi + 0].polygonIdx == incidentEdges[2 * pi + 2].polygonIdx);
+                if (valence_within_poly != 2) throw std::runtime_error("Vertex " + std::to_string(i) + " has non-2 valence in polygon " + std::to_string(incidentEdges[2 * pi + 0].polygonIdx));
+            }
+            if (numIncidentPolygons > 1) hinges.push_back(i);
+        }
+
+        if (hinges.empty())
+            return;
+
+        // Thicken each hinge vertex
+        for (size_t hinge_vi : hinges) {
+            auto &incidentEdges = incidentEdgesForPoint[hinge_vi];
+            // Sort the incident edges counter-clockwise by their outward edge vector.
+            std::vector<Real> angles;
+            for (const auto &ie : incidentEdges) {
+                angles.push_back(std::atan2(ie.outwardEdgeVector[1],
+                                            ie.outwardEdgeVector[0]));
+            }
+            auto order = argsort(angles);
+            bool first = true;
+            auto hinge_pt = points[hinge_vi];
+            for (size_t curr_i = 0; curr_i < order.size(); ++curr_i) {
+                const size_t next_i = (curr_i + 1) % order.size();
+                const auto &curr = incidentEdges[order[curr_i]],
+                           &next = incidentEdges[order[next_i]];
+
+                if (curr.polygonIdx == next.polygonIdx) continue;
+                // curr and next edges belong to distinct polygons;
+                // create a new copy of the hinge vertex offset along the angle bisector.
+                // Note, the angle in question is always the ccw angle from `curr` to `next`,
+                // which may be obtuse! `angles` are always in [-pi, pi].
+                Real phi_curr = angles[order[curr_i]];
+                Real phi_bis = 0.5 * (phi_curr + angles[order[next_i]]);
+                if (phi_bis < phi_curr) phi_bis += M_PI; // make sure we get the right bisector (ccw from curr)
+                V2d bisector(cos(phi_bis), sin(phi_bis));
+
+                // We overwrite the original hinge vertex with the first offset copy so that we don't
+                // end up with dangling vertices.
+                size_t new_vi;
+                if (first) { new_vi = hinge_vi;      first = false;         }
+                else       { new_vi = points.size(); points.emplace_back(); }
+                points[new_vi] = hinge_pt + (0.5 * thickness) * bisector;
+                EAA::get(polygons[curr.polygonIdx][curr.edgeIdx], curr.cornerIdx) = new_vi;
+                EAA::get(polygons[next.polygonIdx][next.edgeIdx], next.cornerIdx) = new_vi;
             }
         }
 
-        // We need to copy the rest of the polygons, which were not part of the crossings
-        for (size_t poly_ind = 0; poly_ind < polygons.size(); poly_ind++) {
-            if (std::find(link.polygons_indices.begin(), link.polygons_indices.end(), poly_ind) == link.polygons_indices.end()) {
-                new_polygons[poly_ind] = polygons[poly_ind];
+        // Merge and order all resulting polygons contiguously and consistently (either cw or ccw)
+        // using a BFS on the points.
+        std::vector<std::vector<Edge>> merged_polygons;
+        const size_t numOutputPoints = points.size();
+        std::vector<std::vector<size_t>> pointsAdj(numOutputPoints);
+        for (const std::vector<Edge> &poly : polygons) {
+            for (const Edge& e : poly) {
+                pointsAdj[EAA:: first(e)].push_back(EAA::second(e));
+                pointsAdj[EAA::second(e)].push_back(EAA:: first(e));
             }
         }
 
-        // Recursively proceed with this procedure
-        return joinPolygons(points, new_polygons, alpha);
+        std::vector<bool> visited(numOutputPoints);
+        for (size_t i = 0; i < numOutputPoints; ++i) {
+            if (pointsAdj[i].size() != 2) throw std::runtime_error("Non-valence-2 output point generated");
+            if (visited[i]) continue;
+
+            size_t curr = pointsAdj[i][0];
+            if (visited[curr]) throw std::logic_error("Unvisited component contains a visited vertex...");
+
+            // Generate full polygon connected to vertex `i`
+            // Invariant: vertices are marked visited iff their outgoing edge is generated.
+            if (merged_polygons.empty()) // we dump all edges into a single non-simple polygon...
+                merged_polygons.emplace_back();
+            auto &new_poly = merged_polygons.back();
+            new_poly.push_back({i, curr});
+            visited[i] = true;
+            size_t prev = i; // used to maintain consistent traversal direction.
+            while (!visited[curr]) {
+                size_t next = (pointsAdj[curr][0] == prev) ? pointsAdj[curr][1] : pointsAdj[curr][0];
+                visited[curr] = true;
+                new_poly.push_back({curr, next});
+                prev = curr;
+                curr = next;
+            }
+        }
+        polygons.swap(merged_polygons);
     }
 
-    // Enforces the same orientation for each edge and ensures that consecutive edges
-    // are connected in the polygon (as well as the last and first edge)
-    std::vector<std::vector<Edge>> tidyPolygon(const std::vector<Edge>& polygon) {
-        std::vector<Edge> new_polygon;
-        std::vector<std::vector<Edge>> new_polygons;
-        std::vector<Edge> remaining_edges(polygon);
-        Edge curEdge = remaining_edges[0];
-        remaining_edges.erase(remaining_edges.begin());
-        new_polygon.push_back(curEdge);
-
-        while (!remaining_edges.empty()) {
-            bool found = false;
-            for (Edge e : remaining_edges) {
-                if (EdgeAccessAdaptor<Edge>::first(e) == EdgeAccessAdaptor<Edge>::second(curEdge)) {
-                    remaining_edges.erase(std::find(remaining_edges.begin(), remaining_edges.end(), e));
-                    new_polygon.push_back(e);
-                    curEdge = e;
-                    found = true;
-                    break;
-                }
-                else if (EdgeAccessAdaptor<Edge>::second(e) == EdgeAccessAdaptor<Edge>::second(curEdge)) {
-                    remaining_edges.erase(std::find(remaining_edges.begin(), remaining_edges.end(), e));
-                    e = { EdgeAccessAdaptor<Edge>::second(e), EdgeAccessAdaptor<Edge>::first(e) };
-                    new_polygon.push_back(e);
-                    curEdge = e;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found && !remaining_edges.empty()) {
-                //new_polygons.push_back(new_polygon);
-                //new_polygon.clear();
-                curEdge = remaining_edges[0];
-                remaining_edges.erase(remaining_edges.begin());
-                new_polygon.push_back(curEdge);
-            }
-            else if (remaining_edges.empty()) {
-                //new_polygons.push_back(new_polygon);
-            }
-        }
-
-        new_polygons.push_back(new_polygon);
-        return new_polygons;
-    }
-
-    /**
-    * For a given sets of points and edges, creates a new set of points (out_points) which only
-    * contains points that were present on the original edges, and creates a new set of edges
-    * (out_edges) which references the points as indexed in out_points.
-    */
+    // Get the "edge induced subgraph" of a polygon set induced by edges in
+    // `edges`. I.e., output only the points that are referenced by `edges`,
+    // and reindex `edges` to index into this new point set.
     void restrictToEdges(const std::vector<Point>& points,
                          const std::vector<Edge>& edges,
                          std::vector<Point>& out_points,
                          std::vector<Edge>& out_edges) const
     {
-        std::vector<size_t> new_indices(points.size(), NO_INDEX);
-        size_t next_new_index = 0;
-        size_t first_point_index, second_point_index;
+        std::vector<size_t> new_indices(points.size(), size_t(NO_INDEX));
 
-        for (const auto& edge : edges)
-        {
-            first_point_index = EdgeAccessAdaptor<Edge>::first(edge);
-            second_point_index = EdgeAccessAdaptor<Edge>::second(edge);
-
-            if (new_indices[first_point_index] == NO_INDEX)
-            {
-                out_points.push_back(points[first_point_index]);
-                new_indices[first_point_index] = next_new_index;
-                ++next_new_index;
+        for (Edge edge : edges) {
+            // Look up/generate output output at the edge endpoints
+            for (size_t i = 0; i < 2; ++i) {
+                size_t &idx = EAA::get(edge, i);
+                if (new_indices[idx] == NO_INDEX) {
+                    new_indices[idx] = out_points.size();
+                    out_points.push_back(points[idx]);
+                }
+                idx = new_indices[idx];
             }
-
-            if (new_indices[second_point_index] == NO_INDEX)
-            {
-                out_points.push_back(points[second_point_index]);
-                new_indices[second_point_index] = next_new_index;
-                ++next_new_index;
-            }
-
-            out_edges.push_back(
-              Edge{ new_indices[first_point_index], new_indices[second_point_index] });
+            out_edges.push_back(edge);
         }
     }
 
-    /**
-     *  Return the mapping of getVerticesPolygonEdges on each given vectors.
-     */
-    std::vector<std::vector<Edge>> getVerticesPolygonEdges(
-      const std::vector<std::vector<MeshIO::IOVertex>>& polygons_triangulation,
-      const std::vector<std::vector<Edge>>& polygons,
-      const std::vector<std::vector<PointsEdgeIndex>>& points_polygon_edges_indices) const
+    // For each polygon, get a map from its vertices to their originating edges.
+    std::vector<std::vector<Edge>> getVerticesPolygonEdges(const std::vector<std::vector<MeshIO::IOVertex>>& polygons_triangulation,
+                                                           const std::vector<std::vector<Edge>>& polygons,
+                                                           const std::vector<std::vector<PointsEdgeIndex>>& points_polygon_edges_indices) const
     {
-        std::vector<std::vector<Edge>> vertices_polygon_edges(polygons_triangulation.size());
-        for (size_t polygon_index = 0; polygon_index < polygons_triangulation.size();
-             ++polygon_index)
-        {
-            vertices_polygon_edges[polygon_index] =
-              getVerticesPolygonEdges(polygons_triangulation[polygon_index],
-                                      polygons[polygon_index],
-                                      points_polygon_edges_indices[polygon_index]);
+        std::vector<std::vector<Edge>> result(polygons_triangulation.size());
+        for (size_t pi = 0; pi < polygons_triangulation.size(); ++pi) {
+            result[pi] = getVerticesPolygonEdges(polygons_triangulation[pi],
+                                                 polygons[pi],
+                                                 points_polygon_edges_indices[pi]);
         }
-        return vertices_polygon_edges;
+        return result;
     }
 
     /**
@@ -362,10 +319,9 @@ class PolygonSetTriangulation
      *  polygon edge. Meaning that for an element p_e in points_polygon_edges the vertex p_e.point
      *  must belong to the original polygon edge p_e.edge.
      */
-    std::vector<Edge> getVerticesPolygonEdges(
-      const std::vector<MeshIO::IOVertex>& polygon_triangulation_vertices,
-      const std::vector<Edge> polygon,
-      const std::vector<PointsEdgeIndex>& points_polygon_edges_indices) const
+    std::vector<Edge> getVerticesPolygonEdges(const std::vector<MeshIO::IOVertex>& polygon_triangulation_vertices,
+                                              const std::vector<Edge> polygon,
+                                              const std::vector<PointsEdgeIndex>& points_polygon_edges_indices) const
     {
         // Note: Here points_polygon_edges should be copied then sorted for asymptotically improved
         // performance and use a binary search on it. (going from O(n^2) to O(nlogn))
@@ -392,77 +348,65 @@ class PolygonSetTriangulation
         return vertices_polygon_edges;
     }
 
-    /**
-     * Two points are close if their chebyshev distance is less than the given error.
-     */
-    template<typename _Point1, typename _Point2>
-    bool areClose(const _Point1& point1, const _Point2& point2, double error = 1e-7) const
-    {
-        return std::abs(point1[0] - point2[0]) < error && std::abs(point1[1] - point2[1]) < error;
+    // Two points are close if their l_inf distance is less than the given error.
+    bool areClose(const Eigen::Vector2d &p1, const Eigen::Vector2d &p2, double error = 1e-7) const {
+        return (p1 - p2).cwiseAbs().maxCoeff() < error;
     }
 
-    /**
-     *  Triangularize the given polygon. Points are added so that the triangles area match as close
-     *  as possible the given target area.The points along the edge of the polygons are added
-     *  through the function split.
-     *
-     *  The polygon is given by the list of its edges that are either pair or indexable (such as
-     *  std::vector) of indexes into the list of points.
-     *
-     *  \param out_vertices Contains the vertices of the triangulation.
-     *
-     *  \param out_elements Containes the elements of the triangulation.
-     *
-     *  \param points_polygon_edges Each new point added along the polygon edges is matched to
-     *  their polygon edge index through points_polygon_edges. If there is an element
-     *  point_polygon_edge in points_polygon_edges then the point point_polygon_edge.point was added
-     *  to the polygon edge edges[point_polygon_edge.edge_index]. If you want to have a vector v
-     *  that has at index i the edge associated to the vertex with index i, meaning the edge
-     *  associated to out_vertices[i] would be v[i], see getVerticesPolygonEdges.
-     */
-    void triangularizePolygon(const std::vector<Point>& points,
-                              const std::vector<Edge>& edges,
-                              const std::vector<Point>& holes,
-                              Real target_area,
-                              std::vector<MeshIO::IOVertex>& out_vertices,
-                              std::vector<MeshIO::IOElement>& out_elements,
-                              std::vector<PointsEdgeIndex>& points_polygon_edges) const
+    // Tessellate a polygon with triangles roughly of size `target_area`. To
+    // ensure periodic boundaries have matching vertices, vertices are
+    // inserted along edges in a deterministic way that depends
+    // only on the total edge length and `target_area` (and that results in
+    // boundary edges of roughly the same length as the interior edges of the
+    // output triangulation).
+    // \param[out] out_vertices         vertices of the triangulation.
+    // \param[out] out_elements         elements of the triangulation.
+    // \param[out] points_polygon_edges list of associations tying each point
+    //                                  generated on the *interior* of an edge
+    //                                  to that originating edge.
+    void triangulatePolygon(const std::vector<Point> &points,
+                            const std::vector<Edge>  &edges,
+                            const std::vector<Point> &holes,
+                            Real target_area,
+                            std::vector<MeshIO::IOVertex> &out_vertices,
+                            std::vector<MeshIO::IOElement> &out_elements,
+                            std::vector<PointsEdgeIndex> &points_polygon_edges) const
     {
-        std::vector<Point> new_points;
-        std::vector<Edge> new_edges;
+        // Split all edges to have length approximately equal to the side
+        // length of an equilateral triangle with area `target_area`
+        const Real target_length = std::sqrt(4.0 / std::sqrt(3) * target_area);
+        std::vector<Point> new_points = points;
+        std::vector<Edge > new_edges;
+        points_polygon_edges.clear();
 
-        std::unique_ptr<std::vector<size_t>> current_points_polygon_edge_indices;
-        std::vector<size_t> points_polygon_edge_indices;
-        
-        // All polygon edges are split, such that they have approximately length sqrt(2*targetArea).
-        // This creates a new set of points and edges
-        split(points,
-              edges,
-              std::sqrt(2 * target_area),
-              new_points,
-              new_edges,
-              points_polygon_edge_indices);
+        for (size_t edge_index = 0; edge_index < edges.size(); ++edge_index) {
+            const auto &edge = edges[edge_index];
 
-        // Extend the points-polygon-edges map to the newly added points
-        for (size_t new_point_index = 0; new_point_index < new_points.size(); ++new_point_index)
-        {
-            points_polygon_edges.push_back(
-              { new_points[new_point_index], points_polygon_edge_indices[new_point_index] });
+            Point pt0 = points[EAA::get(edge, 0)],
+                  pt1 = points[EAA::get(edge, 1)];
+
+            auto e = (pt1 - pt0).eval();
+            Real edge_length = e.norm();
+            size_t num_new_points = std::round(edge_length / target_length);
+
+            size_t tail_idx = EAA::get(edge, 0);
+            for (size_t i = 0; i < num_new_points; ++i) {
+                Real alpha = (i + 1.0) / (num_new_points + 1);
+                const size_t tip_idx = new_points.size();
+                new_points.push_back(pt0 + (e * alpha));
+                new_edges.push_back({tail_idx, tip_idx});
+                tail_idx = tip_idx;
+
+                // link split points back to their originating edge
+                points_polygon_edges.push_back({new_points.back(), edge_index});
+            }
+            new_edges.push_back({tail_idx, EAA::get(edge, 1)});
         }
 
-        // The split function does not append the original points to the new_points list,
-        // so we'll have to do this here.
-        new_points.insert(new_points.begin(), points.begin(), points.end());
-
-        // Use "triangle" to create a Delunay triangulation of the final set of points.
-        // The Y flag is to avoid the addition of points to the boundary edges.
-        triangulatePSLG(new_points,
-                        new_edges,
-                        holes,
-                        out_vertices,
-                        out_elements,
-                        target_area,
-                        "Y");
+        // Create a quality triangulation of the subdivided polygon edges;
+        // the Y flag prevents `triangle` from inserting additional points on the boundary edges.
+        triangulatePSLG(new_points, new_edges, holes, out_vertices, out_elements,
+                        target_area, "Y");
     }
 
     /**
@@ -475,45 +419,39 @@ class PolygonSetTriangulation
     void linkPolygons(const std::vector<Point>& points,
                       const std::vector<std::vector<MeshIO::IOVertex>>& polygons_vertices,
                       const std::vector<std::vector<MeshIO::IOElement>>& polygons_triangles,
-                      const std::vector<PolygonLink<Point>>& links,
+                      const std::vector<PolygonLink>& links,
                       const std::vector<std::vector<Edge>>& vertices_polygon_edges)
     {
-        // We will maintain a list of all vertices that have been visited and taken care of
-        // in the first round (linking polygon corners).
-        std::vector<std::vector<bool>> is_in_out_vertices(polygons_vertices.size());
-        for (size_t polygon_index = 0; polygon_index < polygons_vertices.size(); ++polygon_index)
-        {
-            is_in_out_vertices[polygon_index].resize(polygons_vertices[polygon_index].size(),
-                                                     false);
-        }
+        if (links.size() != points.size()) throw std::runtime_error("Unexpected links size: " + std::to_string(links.size()) + " vs " + std::to_string(points.size()));
+        // Has a given vertex of a given polygon been visited (added to m_vertices)?
+        const size_t numPolys = polygons_vertices.size();
+        std::vector<std::vector<bool>> visited(numPolys);
+        for (size_t i = 0; i < numPolys; ++i)
+            visited[i].assign(polygons_vertices[i].size(), false);
 
         // A new list of triangles for each polygon will be created by initializing it as a copy
         // of the current triangles for each polygon, and updating it by creating a new list of
         // vertices, which unifies all points that appear in multiple polygons.
         std::vector<std::vector<MeshIO::IOElement>> new_polygons_triangles(polygons_triangles);
 
-        // First, for each original point, take its corresponding vertex in each of its linked 
-        // polygon's triangulations and unite all their indices to a new index.
-        // Update the triangles accordingly. Mark the vertices in the polygons as visited.
+        // Generate new output vertices for each hinge vertex that links polygons together.
+        // The incident polygons' triangulations are then updated so they all
+        // share this new output vertex.
         size_t link_point_index;
         size_t new_index = 0;
-        for (size_t original_vertex_index = 0; original_vertex_index < points.size();
-             ++original_vertex_index)
-        {
-
-            const auto& link = links[original_vertex_index];
-            for (size_t polygon_index : link.polygons_indices)
-            {
+        for (size_t original_vertex_index = 0; original_vertex_index < points.size(); ++original_vertex_index) {
+            const auto &link = links[original_vertex_index];
+            for (size_t polygon_index : link.polygon_indices) {
                 // The local vertex index in the current triangulation is found by searching
                 // for a vertex whose coordinates match those of the current original point.
-                link_point_index =
-                  getIndex(MeshIO::IOVertex(link.point), polygons_vertices[polygon_index]);
+                link_point_index = getIndex(MeshIO::IOVertex(link.point), polygons_vertices[polygon_index]);
+
                 changeVertexIndex(link_point_index,
                                   new_index,
                                   polygons_triangles[polygon_index],
                                   new_polygons_triangles[polygon_index]);
 
-                is_in_out_vertices[polygon_index][link_point_index] = true;
+                visited[polygon_index][link_point_index] = true;
             }
 
             m_points_new_indices[original_vertex_index] = new_index;
@@ -526,21 +464,13 @@ class PolygonSetTriangulation
         // create a new final vertex, and update the polygon's triangles accordingly.
         // Finally collect all the polygon's fully updated triangles and put them into a unified
         // list that will be the element list of the mesh.
-        for (size_t polygon_index = 0; polygon_index < polygons_vertices.size(); ++polygon_index)
-        {
-            for (size_t vertex_index = 0; vertex_index < polygons_vertices[polygon_index].size();
-                 ++vertex_index)
-            {
-                if (is_in_out_vertices[polygon_index][vertex_index])
-                {
-                    continue;
-                }
-                changeVertexIndex(vertex_index,
-                                  new_index,
+        for (size_t polygon_index = 0; polygon_index < polygons_vertices.size(); ++polygon_index) {
+            for (size_t vertex_index = 0; vertex_index < polygons_vertices[polygon_index].size(); ++vertex_index) {
+                if (visited[polygon_index][vertex_index]) continue;
+                changeVertexIndex(vertex_index, new_index,
                                   polygons_triangles[polygon_index],
                                   new_polygons_triangles[polygon_index]);
-                m_vertices_polygon_edges.push_back(
-                  vertices_polygon_edges[polygon_index][vertex_index]);
+                m_vertices_polygon_edges.push_back(vertices_polygon_edges[polygon_index][vertex_index]);
                 m_vertices.push_back(polygons_vertices[polygon_index][vertex_index]);
                 ++new_index;
             }
@@ -551,226 +481,60 @@ class PolygonSetTriangulation
         }
     }
 
-    /**
-     *  Return the index in the given points of the point which is close to the given point. See
-     *  isClose.
-     */
-    size_t getIndex(const MeshIO::IOVertex& point,
-                    const std::vector<MeshIO::IOVertex>& points,
+    // Return the index in the given points of the first point which is close
+    // to the query point.
+    size_t getIndex(const MeshIO::IOVertex &query,
+                    const std::vector<MeshIO::IOVertex> &points,
                     double error = 1e-7) const
     {
-        auto it =
-          std::find_if(points.begin(), points.end(), [&point, this, error](const Point& other) {
-              return areClose(other, point, error);
-          });
+        auto it = std::find_if(points.begin(), points.end(),
+                [&query, this, error](const Point &p) { return areClose(p, query, error); });
 
-        if (it == points.end())
-        {
-            return NO_INDEX;
-        }
-
-        return std::distance(points.begin(), it);
+        return (it == points.end()) ? NO_INDEX
+                                    : std::distance(points.begin(), it);
     }
 
     /**
-     *  For each old elements find the old index and change the corresponding
+     *  For each old element find the old index and change the corresponding
      *  index in the new element to the new index. The vector of old elements should have the
      *  same size as the vector of new elements.
      */
-    void changeVertexIndex(size_t old_index,
-                           size_t new_index,
+    void changeVertexIndex(size_t old_index, size_t new_index,
                            const std::vector<MeshIO::IOElement>& old_elements,
-                           std::vector<MeshIO::IOElement>& new_elements) const
+                           std::vector<MeshIO::IOElement> &new_elements) const
     {
-        for (size_t element_index = 0; element_index < old_elements.size(); ++element_index)
-        {
-            const auto& old_element = old_elements[element_index];
-            auto old_index_it = std::find(old_element.begin(), old_element.end(), old_index);
-
-            if (old_index_it != old_element.end())
-            {
-                new_elements[element_index][std::distance(old_element.begin(), old_index_it)] =
-                  new_index;
+        if (new_elements.size() != old_elements.size()) throw std::runtime_error("Size mismatch");
+        for (size_t ei = 0; ei < old_elements.size(); ++ei) {
+            const auto &e_old = old_elements[ei];
+            for (size_t c = 0; c < e_old.size(); ++c) {
+                if (e_old[c] == old_index)
+                    new_elements[ei][c] = new_index;
             }
         }
     }
 
     // Creates a list of polygon links, that is, a structure that associates to each point
     // all polygons that meet at that point.
-    std::vector<PolygonLink<Point>> getPointPolygonLink(
-      const std::vector<Point>& points,
-      const std::vector<std::vector<Edge>>& polygons) const
+    std::vector<PolygonLink> getPointPolygonLink(const std::vector<Point>& points,
+                                                 const std::vector<std::vector<Edge>>& polygons) const
     {
-        std::vector<PolygonLink<size_t>> index_links = getIndexPolygonLink(points.size(), polygons);
+        std::vector<PolygonLink> links;
+        links.reserve(points.size());
 
-        std::vector<PolygonLink<Point>> point_links;
-        point_links.reserve(index_links.size());
-        for (const auto& link : index_links)
-        {
-            point_links.push_back(PolygonLink<Point>{ points[link.point], link.polygons_indices });
+        for (const auto &p : points)
+            links.push_back(PolygonLink{p, std::vector<size_t>()});
+
+        for (size_t pi = 0; pi < polygons.size(); ++pi) {
+            for (const auto &edge : polygons[pi])
+                links[EAA::first(edge)].polygon_indices.push_back(pi);
         }
 
-        return point_links;
-    }
-
-    // Creates a list of polygon links, that is, a structure that associates to each point_index
-    // all polygons that meet at that point.
-    std::vector<PolygonLink<size_t>> getIndexPolygonLink(
-      size_t number_points,
-      const std::vector<std::vector<Edge>>& polygons) const
-    {
-        std::vector<PolygonLink<size_t>> links(number_points);
-        for (size_t point_index = 0; point_index < number_points; ++point_index)
-        {
-            links[point_index].point = point_index;
+        for (size_t li = 0; li < links.size(); ++li) {
+            if (links[li].polygon_indices.empty())
+                throw std::runtime_error("Point " + std::to_string(li) + " is not referenced by any polygon! (Make sure polygon edges are oriented consistently and all polygons have been added)");
         }
-
-        for (size_t polygon_index = 0; polygon_index < polygons.size(); ++polygon_index)
-        {
-            for (const auto& edge : polygons[polygon_index])
-            {
-                links[EdgeAccessAdaptor<Edge>::first(edge)].polygons_indices.push_back(
-                  polygon_index);
-            }
-        }
-
-        auto to_remove_begin =
-          std::remove_if(links.begin(), links.end(), [](const PolygonLink<size_t>& link) {
-              return link.polygons_indices.empty();
-          });
-        links.erase(to_remove_begin, links.end());
 
         return links;
-    }
-
-    // Creates a list of points where more than two edges of more than one polygon meet.
-    // The point data contains a pair (point index, #seen edges).
-    std::vector<PolygonLink<std::pair<size_t, size_t>>> getPolyCrossings(
-        size_t number_points,
-        const std::vector<std::vector<Edge>>& polygons) const
-    {
-        std::vector<PolygonLink<std::pair<size_t,size_t>>> links(number_points);
-        for (size_t point_index = 0; point_index < number_points; ++point_index)
-        {
-            links[point_index].point.first = point_index;
-            links[point_index].point.second = 0;
-        }
-
-        // List all polygons that meet at the points and count edges
-        for (size_t polygon_index = 0; polygon_index < polygons.size(); ++polygon_index)
-        {
-            for (const auto& edge : polygons[polygon_index])
-            {
-                links[EdgeAccessAdaptor<Edge>::first(edge)].polygons_indices.push_back(
-                    polygon_index);
-                links[EdgeAccessAdaptor<Edge>::second(edge)].polygons_indices.push_back(
-                    polygon_index);
-                links[EdgeAccessAdaptor<Edge>::first(edge)].point.second++;
-                links[EdgeAccessAdaptor<Edge>::second(edge)].point.second++;
-            }
-        }
-
-        // Remove duplicate entries in polygon indices list
-        for (PolygonLink<std::pair<size_t, size_t>>& link : links) {
-            std::sort(link.polygons_indices.begin(), link.polygons_indices.end());
-            link.polygons_indices.erase(std::unique(link.polygons_indices.begin(), link.polygons_indices.end()), link.polygons_indices.end());
-        }
-
-        // Remove all points from the list where only one polygon meets or where there are two or less edges
-        auto to_remove_begin =
-            std::remove_if(links.begin(), links.end(), [](const PolygonLink<std::pair<size_t, size_t>>& link) {
-            return (link.polygons_indices.size() <= 1 || link.point.second <= 2);
-        });
-        links.erase(to_remove_begin, links.end());
-
-        return links;
-    }
-
-    /**
-     *  Split the given edges using the other overload of the split function. As the other overload
-     *  of the function split, the points given to the function are not present in new_points.
-     *
-     *  \param points_polygon_edges_indices Contains the index of the original edge of each added
-     *  points. Meaning that new_points[i] was added to the edge
-     *  edges[points_polygon_edges_indices[i]]
-     */
-    void split(const std::vector<Point>& points,
-               const std::vector<Edge>& edges,
-               Real target_length,
-               std::vector<Point>& /*out*/ new_points,
-               std::vector<Edge>& /*out*/ new_edges,
-               std::vector<size_t>& /*out*/ points_polygon_edges_indices) const
-    {
-        std::vector<Edge> current_new_edges;
-        std::vector<Point> current_new_points;
-        for (size_t edge_index = 0; edge_index < edges.size(); ++edge_index)
-        {
-            const auto& edge = edges[edge_index];
-            current_new_edges.clear();
-            current_new_points.clear();
-
-            split(points,
-                  edge,
-                  target_length,
-                  points.size() + new_points.size(),
-                  current_new_points,
-                  current_new_edges);
-
-            new_points.insert(
-              new_points.end(), current_new_points.begin(), current_new_points.end());
-            new_edges.insert(new_edges.end(), current_new_edges.begin(), current_new_edges.end());
-
-            points_polygon_edges_indices.insert(
-              points_polygon_edges_indices.end(), current_new_points.size(), edge_index);
-        }
-    }
-
-    /**
-     *  Split the given edge into smaller edge whose distances is as close as possible to the given
-     *  target length. The final length will be greater or smaller or equal to the target length.
-     *
-     *  \param points All the points in the space. If you are spliting multiple edges you need to
-     * pass also the points added by the previous splits, but you might prefer to use the overload
-     * of split which takes a std::vector of edges.
-     *
-     * \param edge The edge to split, stores the indices of its end points.
-     *
-     * \param new_points The points added to the edge. They should be inserted in the same order at
-     * the end of the vector containing the points in the space.
-     *
-     *  \param new_edges The new edges, they should replace the given edge after the function has
-     *  been executed.
-     */
-    void split(const std::vector<Point>& points,
-               const Edge& edge,
-               Real target_length,
-               size_t new_points_index_offset,
-               std::vector<Point>& /*out*/ new_points,
-               std::vector<Edge>& /*out*/ new_edges) const
-    {
-        size_t first_point_index, second_point_index;
-        first_point_index = EdgeAccessAdaptor<Edge>::first(edge);
-        second_point_index = EdgeAccessAdaptor<Edge>::second(edge);
-
-        Point first_point, second_point;
-        first_point = points[first_point_index];
-        second_point = points[second_point_index];
-
-        Real edge_length = (first_point - second_point).norm();
-        if (edge_length < target_length) return;
-        size_t new_points_number = std::ceil(edge_length / target_length) - 1;
-
-
-        size_t last_index = first_point_index;
-        for (size_t new_point_index = 0; new_point_index < new_points_number; ++new_point_index)
-        {
-            new_points.push_back(first_point +
-                                 ((second_point - first_point) * (new_point_index + 1)) /
-                                   (new_points_number + 1));
-            new_edges.push_back({ last_index, new_points_index_offset + new_point_index });
-            last_index = new_points_index_offset + new_point_index;
-        }
-        new_edges.push_back({ last_index, second_point_index });
     }
 
     std::vector<MeshIO::IOVertex> m_vertices;
@@ -779,33 +543,26 @@ class PolygonSetTriangulation
     std::vector<Edge> m_vertices_polygon_edges;
 };
 
-// NO_EDGE and NO_INDEX needs a definition in namescape scope because it is odr-used (its value is
-// read).
+// NO_EDGE needs a definition in namescape scope because it is ODR-used.
 template<typename _Real, typename _Point, typename _Edge>
 constexpr _Edge PolygonSetTriangulation<_Real, _Point, _Edge>::NO_EDGE;
-template<typename _Real, typename _Point, typename _Edge>
-constexpr size_t PolygonSetTriangulation<_Real, _Point, _Edge>::NO_INDEX;
 
-
-/*
-    Given a set of connected polygons, create a connected triangulation of their interior.
-    target_area - specify the target average area of the triangles
-    strong_connections - choosing this parameter larger than 0.0 will turn all connected
-        polygons into a single connected polygon, by widening single point connections
-        between polygons into widened connections, by introducing new points, that are
-        placed along a ratio of the incident edges, specified by this parameter.
-        In particular, it should be chosen between 0 and 1, and the size of the
-        connections is larger the greater this value is.
-*/
+// Given a set of connected polygons, create a connected triangulation of their interior.
+// target_area - specify the target average area of the triangles
+// min_hinge_radius - choosing this parameter larger than 0.0 will turn all connected
+//     polygons into a single connected polygon, by widening single point connections
+//     between polygons into widened connections, by introducing new points, that are
+//     placed along a ratio of the incident edges, specified by this parameter.
+//     In particular, it should be chosen between 0 and 1, and the size of the
+//     connections is larger the greater this value is.
 template<typename _Real, typename _Point, typename _Edge>
-auto
-make_polygon_set_triangulation(const std::vector<_Point>& points,
-                               const std::vector<std::vector<_Edge>>& polygons,
-                               const std::vector<_Point>& holes,
-                               _Real target_area,
-                               _Real strong_connections = 0.0)
+auto make_polygon_set_triangulation(const std::vector<_Point>& points,
+                                    const std::vector<std::vector<_Edge>>& polygons,
+                                    const std::vector<_Point>& holes,
+                                    _Real target_area,
+                                    _Real min_hinge_radius = 0.0)
 {
-    return PolygonSetTriangulation<_Real, _Point, _Edge>(points, polygons, holes, target_area, strong_connections);
+    return PolygonSetTriangulation<_Real, _Point, _Edge>(points, polygons, holes, target_area, min_hinge_radius);
 }
 
 #endif

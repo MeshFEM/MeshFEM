@@ -34,7 +34,7 @@ Dependencies *not* included (must be installed separately):
 
 Dependencies included directly as external projects:
 
-- [Boost](https://github.com/Orphis/boost-cmake)
+- [Boost](https://github.com/Orphis/boost-cmake) ** Note: installing this separately is recommended to avoid a large download **
 - [json](https://github.com/nlohmann/json)
 - [triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [tinyexpr](https://github.com/codeplea/tinyexpr)

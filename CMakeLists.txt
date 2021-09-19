@@ -85,7 +85,11 @@ option(MESHFEM_BUILD_PYTHON_BINDINGS "Build python bindings"                    
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations"                            OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"                                                  OFF)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system" ON)
+option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)"            OFF)
+option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"               ON)
 option(MESHFEM_FORCE_Z7              "Force /Z7 option on MSVC"                                                    OFF)
+option(MESHFEM_WITH_TBB              "Compile MeshFEM with TBB support"                                            ON)
+option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
 
 if(MESHFEM_FORCE_Z7)
     # Hard-coded string replace for now, until CMake provides a better way to do this:
@@ -115,17 +119,27 @@ if(MESHFEM_BUILD_BINARIES)
 endif()
 
 if(MESHFEM_BUILD_PYTHON_BINDINGS)
+    # we compile for (without making them pass `-DPYTHON_EXECUTABLE=...` to `cmake`
+    if (DEFINED ENV{PYTHON_EXECUTABLE})
+        set(PYTHON_EXECUTABLE "$ENV{PYTHON_EXECUTABLE}" CACHE INTERNAL "Python executable for which to build pybind11 bindings")
+        #message("Set python executable to ${PYTHON_EXECUTABLE}")
+    endif()
+
     # Download pybind dependency when pybind11 is missing
-    if(NOT TARGET pybind11)
+    if(NOT TARGET pybind11::module)
         include(MeshFEMDownloadExternal)
         meshfem_download_project(pybind11
             GIT_REPOSITORY https://github.com/pybind/pybind11.git
-            GIT_TAG a2bb297b325827765853929ac6dc220ac5b15658
+            GIT_TAG v2.6.1
         )
         add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
     endif()
 
     add_subdirectory(src/python_bindings)
+endif()
+
+if (MESHFEM_WITH_OFFSCREEN_RENDER)
+add_subdirectory(3rdparty/OffscreenRenderer)
 endif()
 
 ################################################################################

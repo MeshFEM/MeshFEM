@@ -1,9 +1,9 @@
 #ifndef COMPONENTMASK_HH
 #define COMPONENTMASK_HH
 #include <bitset>
+#include "Types.hh"
 
-class ComponentMask {
-public:
+struct ComponentMask {
     ComponentMask(const std::string &components = "") {
         setComponentString(components);
     }
@@ -35,6 +35,21 @@ public:
     void clear()         { m_active.reset(); }
     void clear(size_t c) { m_active.reset(c); }
 
+    template<class Derived>
+    void setArray(const Eigen::DenseBase<Derived> &a) {
+        if (a.size() > 3) throw std::runtime_error("Unexpected array size");
+        for (size_t c = 0; c < a.size(); ++c)
+            m_active[c] = a[c];
+    }
+
+    template<size_t N>
+    Eigen::Array<bool, N, 1> getArray() const {
+        Eigen::Array<bool, N, 1> result;
+        for (size_t c = 0; c < N; ++c)
+            result[c] = m_active[c];
+        return result;
+    }
+
     bool operator==(const ComponentMask &b) const { return m_active == b.m_active; }
     bool operator!=(const ComponentMask &b) const { return m_active != b.m_active; }
 
@@ -61,6 +76,8 @@ public:
         if (cm.hasZ()) os << "z";
         return os;
     }
+
+    const std::bitset<3> &data() const { return m_active; }
 
 private:
     std::bitset<3> m_active;

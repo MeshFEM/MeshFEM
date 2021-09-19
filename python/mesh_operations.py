@@ -3,6 +3,7 @@ import numpy as np
 class VertexMerger:
     def __init__(self):
         self.mergedVertices = {}
+        self.originVertexIdx = []
 
     def add(self, pt):
         '''
@@ -14,6 +15,13 @@ class VertexMerger:
             idx = len(self.mergedVertices)
             self.mergedVertices[key] = idx
         return idx
+
+    def add_and_set_origin_idx(self, pt, originIdx):
+        idx = self.add(pt)
+        if (idx == len(self.originVertexIdx)): self.originVertexIdx.append(originIdx)
+        else: self.originVertexIdx[idx] = originIdx
+        return idx
+
     def numVertices(self): return len(self.mergedVertices)
     def vertices(self):
         dim = len(next(iter(self.mergedVertices))) # dimension of arbitrary point
@@ -22,18 +30,33 @@ class VertexMerger:
             V[idx, :] = pt_tuple
         return V
 
-# Construct a single mesh including a copy of all the triangles of the input meshes,
-# but with duplicate vertices merged and dangling vertices removed.
-def mergedMesh(meshes):
+def mergedMesh(meshes, vtxData = None):
+    """
+    Construct a single mesh including a copy of all the triangles of the input meshes,
+    but with duplicate vertices merged and dangling vertices removed.
+
+    `meshes`:  list of meshes
+    `vtxData`: list of per-vertex scalar fields on each mesh to transfer to the output mesh.
+               If different two vertices with different data values are merged,
+               an arbitrary one of these values is selected.
+    """
     vm = VertexMerger()
     mergedTris = []
-    for mesh in meshes:
+    mergedData = None
+    outData = None if vtxData is None else []
+    for mi, mesh in enumerate(meshes):
         if isinstance(mesh, list) or isinstance(mesh, tuple):
             V, F = mesh
         else:
             V, F = mesh.vertices(), mesh.triangles()
-        mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
-    return vm.vertices(), np.vstack(mergedTris)
+        if vtxData is None:
+            mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
+        else:
+            offset = vm.numVertices()
+            mergedTris.append(np.vectorize(lambda i: vm.add_and_set_origin_idx(V[i], i))(F))
+            outData.append(vtxData[mi][np.array(vm.originVertexIdx[offset:])])
+    if outData is None: return vm.vertices(), np.vstack(mergedTris)
+    else:               return vm.vertices(), np.vstack(mergedTris), np.concatenate(outData)
 
 # Concatenate a collection of meshes, dropping dangling vertices.
 def concatenateMeshes(meshes):
@@ -56,7 +79,23 @@ def polylineToLineMesh(polyline):
     idxs = np.arange(polyline.shape[0] - 1)
     return polyline, np.column_stack([idxs, idxs + 1])
 
-def removeDanglingVertices(V, F):
+def closedPolylinesToLineMesh(polylines):
+    """
+    Convert a list of closed polylines (list of 2D arrays each containing a
+    sequence of points with identical first and last rows) into a (V, E)
+    indexed line mesh.
+    """
+    V = np.vstack([V[0:-1] for V in polylines])
+    E = []
+    idxOffset = 0
+    for p in polylines:
+        npts = len(p) - 1 # discard duplicate last point
+        idxs = np.arange(npts)
+        E.append(idxOffset + np.column_stack([idxs, (idxs + 1) % npts]))
+        idxOffset += npts
+    return V, np.vstack(E)
+
+def removeDanglingVertices(V, F, vtxData = None):
     """
     Remove vertices unreferenced by `F` and renumber the remaining vertices.
 
@@ -66,6 +105,8 @@ def removeDanglingVertices(V, F):
         NVxD matrix of vertex positions
     F
         NFxK matrix of indices into V, where NF is the number of elements and K is the number of element corners
+    vtxData
+        Optional per-vertex data to propagate to the renumbered vertices
     """
     nv = V.shape[0]
     Vkeep = np.zeros(nv, dtype=np.bool)
@@ -74,7 +115,15 @@ def removeDanglingVertices(V, F):
     renumber = np.zeros(nv, dtype=np.int)
     renumber[Vkeep] = np.arange(Vkept.shape[0])
     Frenumbered = renumber[F]
+    if vtxData is not None: return Vkept, Frenumbered, np.array(vtxData)[Vkeep]
     return Vkept, Frenumbered
+
+def submesh(V, F, keepElement, vtxData = None):
+    """
+    Get a subset of a mesh (V, F) including only the elements in `keepElement`
+    (which is either a list of indices or a boolean mask array)
+    """
+    return removeDanglingVertices(V, F[keepElement], vtxData=vtxData)
 
 def boundaryLoops(m):
     """
@@ -147,3 +196,14 @@ def getVertexNormalsRaw(V, F):
     norms = np.linalg.norm(N, axis=1)
     norms[norms < 1e-8] = 1.0
     return N / norms[:, np.newaxis]
+
+from regions import *
+
+def clippedMesh(m, region):
+    """
+    Get the elements falling within a particular region
+    """
+    import mesh
+    bcs = m.barycenters()
+    keep = [bc in region for bc in m.barycenters()]
+    return mesh.Mesh(*removeDanglingVertices(m.vertices(), m.elements()[keep]))

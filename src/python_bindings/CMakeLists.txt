@@ -18,9 +18,9 @@ pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(sparse_matrices PUBLIC MeshFEM intel_pybind_14_hack)
 
-pybind11_add_module(parallelism parallelism.cc)
-set_target_properties(parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(parallelism PUBLIC MeshFEM)
+pybind11_add_module(_parallelism parallelism.cc)
+set_target_properties(_parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(_parallelism PUBLIC MeshFEM)
 
 pybind11_add_module(benchmark benchmark.cc)
 set_target_properties(benchmark PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
@@ -38,13 +38,34 @@ pybind11_add_module(triangulation triangulation.cc)
 set_target_properties(triangulation PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(triangulation PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(filters filters.cc)
+set_target_properties(filters PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(filters PUBLIC MeshFEM intel_pybind_14_hack)
+
 pybind11_add_module(differential_operators differential_operators.cc)
 set_target_properties(differential_operators PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(differential_operators PUBLIC MeshFEM intel_pybind_14_hack)
 
-# If it is used as submodule, deploy python scripts and libs
-if(NOT MESHFEM_TOPLEVEL_PROJECT)
-    set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
-    file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
-    configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
-endif()
+pybind11_add_module(curvature curvature.cc)
+set_target_properties(curvature PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(curvature PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(py_newton_optimizer newton_optimizer.cc)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD 14)
+set_target_properties(py_newton_optimizer PROPERTIES CXX_STANDARD_REQUIRED ON)
+set_target_properties(py_newton_optimizer PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/python)
+target_link_libraries(py_newton_optimizer PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(field_sampler field_sampler.cc)
+set_target_properties(field_sampler PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(field_sampler PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(parametrization parametrization.cc)
+set_target_properties(parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(parametrization PUBLIC MeshFEM intel_pybind_14_hack)
+
+# Create a `MeshFEM` python module that just sets the correct paths for
+# importing MeshFEM's individual pybind11 modules
+set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
+file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
+configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")

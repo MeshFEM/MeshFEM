@@ -45,7 +45,7 @@ private:
         int invocations;
         _Timer() : running(false), time(0), invocations(0) { start(); }
         // gets elapsed time (even if currently running)
-        double elapsed() { return running ? time + (Time() - startTime) : time; }
+        double elapsed() const { return running ? time + (Time() - startTime) : time; }
         void stop()  { assert(running); time += Time() - startTime; running = false; }
         void start() {
             if (running) {
@@ -128,6 +128,8 @@ private:
 public:
     Timer() { reset(); }
 
+    const SectionMap &sections() { return m_sections; }
+
     void startSection(std::string name) {
         if (!m_sectionStack.empty())
             name = m_sectionStack.back() + ':' + name;
@@ -188,14 +190,14 @@ public:
     void report(std::ostream &os) {
         for (SectionIterator it = m_sections.begin(); it != m_sections.end(); ++it) {
             if (it->first != "") { // Skip global section... this is reported at the end
-                os << displayName(it->first) << "\t" << it->second.elapsed()
-                   << "\t" << it->second.invocations << std::endl;
+                os << displayName(it->first) << '\t' << it->second.elapsed()
+                   << '\t' << it->second.invocations << '\n';
                 it->second.report(os);
             }
         }
 
         m_sections.at("").report(os);
-        os << "Full time\t" << m_sections.at("").elapsed() << std::endl;
+        os << "Full time\t" << m_sections.at("").elapsed() << '\n';
     }
 };
 

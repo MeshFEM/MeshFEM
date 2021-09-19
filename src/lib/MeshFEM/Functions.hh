@@ -50,7 +50,6 @@
 #include <MeshFEM/function_traits.hh>
 #include <MeshFEM/TemplateHacks.hh>
 #include <MeshFEM/Future.hh>
-// #include <MeshFEM/NTuple.hh>
 #include <vector>
 #include <array>
 #include <functional>
@@ -67,13 +66,6 @@ class DefaultNodalStoragePolicy;
 template<typename _T, size_t _K, size_t _Deg,
     template<typename, size_t, size_t> class NodalStoragePolicy = DefaultNodalStoragePolicy>
 class Interpolant;
-
-// Function evaluation point type (barycentric coordinate array)
-template<size_t _K>
-using EvalPt = std::array<Real, Simplex::numVertices(_K)>; // typename NTuple<Real, Simplex::numVertices(_K)>::type;
-// Evaluation point as an Eigen vector type
-template<size_t _K>
-using EigenEvalPt = VectorND<Simplex::numVertices(_K)>;
 
 // Hidden implementations of interpolated functions
 // (Not easily implemented in the interpolant class because member function
@@ -171,6 +163,16 @@ namespace detail {
     template<size_t _Deg, size_t _NodeIdx, size_t _K>
     Real shapeFunctionEvaluator(const EvalPt<_K> &baryCoords) {
         return shapeFunctionEvaluatorImpl<_Deg, _NodeIdx, _K>(baryCoords, Future::make_index_sequence<Simplex::numVertices(_K)>());
+    }
+
+    // Evaluate all shape functions at a vector of barycentric coordinates.
+    template<size_t _Deg, size_t _K, size_t... NodeIdxs>
+    Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
+    shapeFunctionsImpl(const EvalPt<_K> &baryCoords, Future::index_sequence<NodeIdxs...>) {
+        Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1> result
+            = Eigen::Map<Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>>(
+                    std::array<Real, Simplex::numNodes(_K, _Deg)>{{detail::shapeFunctionEvaluator<_Deg, NodeIdxs, _K>(baryCoords)...}}.data());
+        return result;
     }
 
     // Evaluate a runtime-selected shape function at a vector of barycentric coordinates.
@@ -446,6 +448,13 @@ template<size_t _Deg, size_t _K>
 Real shapeFunction(size_t ni, const EvalPt<_K> &baryCoords) {
     return detail::shapeFunctionImpl<_Deg, _K>(ni, baryCoords,
                                                Future::make_index_sequence<Simplex::numNodes(_K, _Deg)>());
+}
+
+template<size_t _Deg, size_t _K>
+Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
+shapeFunctions(const EvalPt<_K> &baryCoords) {
+    return detail::shapeFunctionsImpl<_Deg, _K>(baryCoords,
+                                                Future::make_index_sequence<Simplex::numNodes(_K, _Deg)>());
 }
 
 // Interpolation on a _K simplex (runs the implementations above).

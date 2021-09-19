@@ -30,10 +30,14 @@ def register_points(P, Q, allowReflection = False):
         R = U @ Vh
     return R, Pcm - R @ Qcm
 
-def align_points_with_axes_xform(V):
+def align_points_with_axes_xform(V, diagonal = False):
     '''
-    Get the rigid transformation (R, t) point cloud `V` at the origin and
-    orient its longest axis along X, medium along y and shortest along Z.
+    Get the rigid transformation (R, t) that positions the point cloud `V` at
+    the origin and orients its longest axis along X, medium along y and
+    shortest along Z.
+
+    If `diagonal` is True, the longest axis is oriented along the diagonal of
+    the XY plane (2D)
 
     Returns
     -------
@@ -44,9 +48,13 @@ def align_points_with_axes_xform(V):
     Vcentered = V - c
     R = np.linalg.eig(Vcentered.T @ Vcentered)[1]
     if (np.linalg.det(R) < 0): R[:, 2] *= -1
+    if diagonal:
+        if (V.shape[1] != 2): raise Exception('Only 2D is implemented')
+        R = [[np.sqrt(2), np.sqrt(2)], [-np.sqrt(2), np.sqrt(2)]] @ R
+
     return R, -c
 
-def align_points_with_axes(V, alignmentSubset = None):
+def align_points_with_axes(V, alignmentSubset = None, diagonal = False):
     '''
     Center the point cloud `V` at the origin and orient its longest axis along X, medium along y and shortest along Z.
 
@@ -56,13 +64,16 @@ def align_points_with_axes(V, alignmentSubset = None):
         Points to align
     alignmentSubset
         Subset of the points used to compute alignment transformation
+    diagonal
+        If true, the longest axis is instead oriented along the diagonal of the
+        XY plane (2D)
 
     Returns
     -------
     The rigidly transformed point cloud.
     '''
     if (alignmentSubset is None):
-        R, t = align_points_with_axes_xform(V)
+        R, t = align_points_with_axes_xform(V, diagonal)
     else:
-        R, t = align_points_with_axes_xform(V[alignmentSubset])
+        R, t = align_points_with_axes_xform(V[alignmentSubset], diagonal)
     return (V + t) @ R

@@ -42,4 +42,24 @@ using CopyCV_t = typename CopyCV<_CVType, _NonCVType>::type;
 template<typename... Types>
 using FirstType = typename std::tuple_element<0, std::tuple<Types...>>::type;
 
+////////////////////////////////////////////////////////////////////////////////
+// Determine whether a type supports dereferencing
+// from  https://stackoverflow.com/a/55377775
+////////////////////////////////////////////////////////////////////////////////
+namespace detail {
+    // If `*(object of type T)` is valid, this is selected and
+    // the return type is `std::true_type`
+    template<class T>
+    decltype(static_cast<void>(*std::declval<T>()), std::true_type{})
+    is_dereferenceable_impl(int);
+
+    // Otherwise the less specific function is selected,
+    // and the return type is `std::false_type`
+    template<class>
+    std::false_type is_dereferenceable_impl(...);
+}
+
+template<class T>
+struct is_dereferenceable : decltype(detail::is_dereferenceable_impl<T>(0)) {};
+
 #endif /* end of include guard: TEMPLATE_HACKS_HH */

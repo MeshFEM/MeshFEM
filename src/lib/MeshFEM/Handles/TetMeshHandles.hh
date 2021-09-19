@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TETMESHHANDLES_HH
+#define TETMESHHANDLES_HH
 
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
@@ -67,7 +68,7 @@ public:
 
             // Circulate around the tet corner, adding half-edges in unvisited
             // adjacent tets.
-            for (const auto &he : m_mesh.halfEdge(u).tipCirculator()) {
+            for (const auto he : m_mesh.halfEdge(u).tipCirculator()) {
                 if (!he.isBoundary()) {
                     const auto &r = he.radial().prev();
                     size_t ti = r.tet().index();
@@ -103,7 +104,7 @@ protected:
     using BFH = typename _Mesh::template BFHandle<_Mesh>;
     using  HE = typename _Mesh::template HEHandle<_Mesh>;
 public:
-    bool         valid() const { return m_idx >= 0 && m_idx < m_mesh.numHalfFaces(); }
+    bool         valid() const { return (m_idx >= 0) && (size_t(m_idx) < m_mesh.numHalfFaces()); }
     bool    isBoundary() const { return m_mesh.m_oppFaceIdx(m_idx) < 0; }
     BFH   boundaryFace() const { return BFH(m_mesh.m_bdryFaceOfVolumeFace(m_idx), m_mesh); }
     HFH       opposite() const { return HFH(m_mesh.m_oppFaceIdx(m_idx), m_mesh); }
@@ -115,6 +116,17 @@ public:
     TH            tet() const { return TH(m_mesh.m_tetOfHF(m_idx), m_mesh); }
     TH        simplex() const { return tet(); }
     TH        element() const { return tet(); }
+
+    HFH primary() const {
+        if (isPrimary()) return this;
+        return opposite();
+    }
+
+    bool isPrimary() const {
+        if (m_idx < 0) return false;     // encoded boundary faces aren't primary
+        if (isBoundary()) return true;   // the single interior halfface on the boundary is primary
+        return m_idx < opposite().m_idx; // in the interior, the smaller indexed halfface is primary
+    }
 
     HE halfEdge(size_t lhe) const { return HE(m_mesh.m_heOfHF(m_idx, lhe), m_mesh); }
 
@@ -379,3 +391,5 @@ template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::  THandle<_Mesh>
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryFaces()    ; } };
+
+#endif /* end of include guard: TETMESHHANDLES_HH */

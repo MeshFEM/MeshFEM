@@ -27,6 +27,8 @@
 #include <MeshFEM/Handles/FEMMeshHandles.hh>
 
 #include <MeshFEM/Utilities/VertexArrayAdaptor.hh>
+#include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/Parallelism.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -43,10 +45,14 @@ struct Embedder;
 template<> struct Embedder<2> {
     template<size_t _Deg, class EmbeddingSpace, template <size_t, size_t, class> class _FEMData>
     static void embed(FEMMesh<2, _Deg, EmbeddingSpace, _FEMData> &mesh) {
-        for (auto e : mesh.elements())
-            e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p);
-        for (auto be : mesh.boundaryElements())
-            be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p);
+        parallel_for_range(mesh.numElements(), [&mesh](size_t ei) {
+                auto e = mesh.element(ei);
+                e->embed(e.node(0)->p, e.node(1)->p, e.node(2)->p);
+            });
+        parallel_for_range(mesh.numBoundaryElements(), [&mesh](size_t bei) {
+                auto be = mesh.boundaryElement(bei);
+                be->embed(be.node(0).volumeNode()->p, be.node(1).volumeNode()->p);
+            });
     }
 };
 template<> struct Embedder<3> {
@@ -117,8 +123,13 @@ public:
     size_t numElements()     const { return BaseMesh::numSimplices(); }
 
     template<typename Elements, typename Vertices>
-    FEMMesh(const Elements &elems, const Vertices &vertices);
+    FEMMesh(const Elements &elems, const Vertices &vertices, bool suppressNonmanifoldWarning = false);
     static std::unique_ptr<FEMMesh> load(const std::string &path);
+
+    // Copy/potentially degree-converting constructor
+    template<size_t _Deg2>
+    FEMMesh(const FEMMesh<_K, _Deg2, _EmbeddingSpace, _FEMData> &mesh2)
+        : FEMMesh(getF(mesh2), getV(mesh2)) { }
 
     // Entity handles (declared in Handles/FEMMeshHandles.hh).
     template<class _Mesh> using  VHandle = typename HandleTraits<FEMMesh>::template  VHandle<_Mesh>; // Vertex
@@ -164,6 +175,9 @@ public:
     BVHandle<const FEMMesh>  boundaryVertex(size_t i) const { return BVHandle<const FEMMesh>(i, *this); }
     BNHandle<const FEMMesh>    boundaryNode(size_t i) const { return BNHandle<const FEMMesh>(i, *this); }
     BEHandle<const FEMMesh> boundaryElement(size_t i) const { return BEHandle<const FEMMesh>(i, *this); }
+
+    HEHandle<      FEMMesh> halfEdge(size_t s, size_t e)       { return HEHandle<      FEMMesh>(BaseMesh::halfEdge(s, e).index(), *this); }
+    HEHandle<const FEMMesh> halfEdge(size_t s, size_t e) const { return HEHandle<const FEMMesh>(BaseMesh::halfEdge(s, e).index(), *this); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
@@ -213,7 +227,7 @@ public:
         }
         for (auto n : nodes()) {
             if (n.isEdgeNode()) {
-                const auto &he = halfEdgeForEdgeNode(n.edgeNodeIndex());
+                const auto he = halfEdgeForEdgeNode(n.edgeNodeIndex());
                 n->p = 0.5 * (he.tip().node()->p + he.tail().node()->p);
             }
         }
@@ -252,10 +266,10 @@ public:
 
     EmbeddingSpace centerOfMass() const {
         EmbeddingSpace result(EmbeddingSpace::Zero());
-        for (const auto &e : elements()) {
+        for (const auto e : elements()) {
             // Center of mass of each element is just its barycenter...
             EmbeddingSpace contrib(EmbeddingSpace::Zero());
-            for (const auto &v : e.vertices())
+            for (const auto v : e.vertices())
                 contrib += v.node()->p;
             result += contrib * (e->volume() / e.numVertices());
         }
@@ -421,7 +435,7 @@ private:
     }
 
     // (re-)compute the bounding box (when vertex positions change)
-    void  m_computeBBox() {
+    void m_computeBBox() {
         if (BaseMesh::numVertices() == 0) {
             m_bbox = BBox<EmbeddingSpace>();
             return;

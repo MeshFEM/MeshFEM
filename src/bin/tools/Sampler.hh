@@ -26,10 +26,10 @@ template<>
 struct EmbedSimplexImpl<3> {
     template<class ESimplex, class Vertices, class NodeIndices>
     static void run(ESimplex &e,  const Vertices &verts, const NodeIndices &nidx) {
-        e.embed(verts.at(nidx[0]),
-                verts.at(nidx[1]),
-                verts.at(nidx[2]),
-                verts.at(nidx[3]));
+        e.embed(VectorND<3>(verts.at(nidx[0])),
+                VectorND<3>(verts.at(nidx[1])),
+                VectorND<3>(verts.at(nidx[2])),
+                VectorND<3>(verts.at(nidx[3])));
     }
 };
 

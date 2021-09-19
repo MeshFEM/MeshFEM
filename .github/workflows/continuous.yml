@@ -34,6 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
         with:
+          submodules: 'true'
           fetch-depth: 10
 
       - name: Dependencies (Linux)
@@ -70,6 +71,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DMESHFEM_WITH_CERES=ON \
             -DMESHFEM_PREFER_SYSTEM_CERES=OFF \
+            -DMESHFEM_WITH_OFFSCREEN_RENDER=OFF \
+            -DMESHFEM_WITH_TBB=OFF \
 
       - name: Build
         run: cd build; make -j2; ccache --show-stats
@@ -94,6 +97,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
         with:
+          submodules: 'true'
           fetch-depth: 10
       - uses: seanmiddleditch/gha-setup-ninja@master
 
@@ -133,6 +137,8 @@ jobs:
             -DMESHFEM_FORCE_Z7=ON ^
             -DMESHFEM_WITH_CERES=ON ^
             -DMESHFEM_PREFER_SYSTEM_CERES=OFF ^
+            -DMESHFEM_WITH_TBB=OFF ^
+            -DMESHFEM_WITH_OFFSCREEN_RENDER=OFF ^
             -DCMAKE_JOB_POOLS="pool-linking=1;pool-compilation=2" ^
             -DCMAKE_JOB_POOL_COMPILE:STRING=pool-compilation ^
             -DCMAKE_JOB_POOL_LINK:STRING=pool-linking ^

@@ -1,6 +1,6 @@
 ################################################################################
 
-add_library(MeshFEM
+add_library(MeshFEM SHARED
         Algebra.hh
         BaseCellType.hh
         BoundaryConditions.cc
@@ -16,6 +16,8 @@ add_library(MeshFEM
         ElasticityTensor.hh
         EmbeddedElement.hh
         ExpressionVector.hh
+        Eigensolver.cc
+        Eigensolver.hh
         FEMMesh.hh
         FEMMesh.inl
         Fields.hh
@@ -23,6 +25,8 @@ add_library(MeshFEM
         function_traits.hh
         Functions.hh
         Future.hh
+        FieldSampler.cc
+        FieldSampler.hh
         GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
@@ -52,6 +56,8 @@ add_library(MeshFEM
         Parallelism.hh
         Parallelism.cc
         ParallelAssembly.hh
+        Parametrization.cc
+        Parametrization.hh
         PeriodicBoundaryMatcher.hh
         PeriodicHomogenization.hh
         PerturbMesh.hh
@@ -114,34 +120,46 @@ add_library(MeshFEM
         Utilities/RandomAccessIndexSet.hh
         Utilities/NameMangling.hh
         wrappers/meshfem_triangle.h
+
+        newton_optimizer/newton_optimizer.cc
+        newton_optimizer/newton_optimizer.hh
+        newton_optimizer/ConvergenceReport.hh
 )
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
 
-# Use C++11
-target_compile_features(${PROJECT_NAME} PUBLIC ${CXX11_FEATURES})
+# Use C++14
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_14)
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
         Threads::Threads
         Eigen3::Eigen
         json::json
-        tbb::tbb
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
         umfpack::umfpack
         cholmod::cholmod
         meshfem::boost
-        # CGAL::CGAL
+        meshfem::spectra
+#		CGAL::CGAL
     PRIVATE
         warnings::all
 )
 
-option(MESHFEM_WITH_TBB "Compile MeshFEM with TBB support" OFF)
 if(MESHFEM_WITH_TBB)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB)
+    target_link_libraries(${PROJECT_NAME}      PUBLIC tbb::tbb)
+endif()
+if(MESHFEM_VECTORIZE)
+    CHECK_CXX_COMPILER_FLAG(-march=native COMPILER_SUPPORTS_MARCH_NATIVE)
+    if(COMPILER_SUPPORTS_MARCH_NATIVE)
+        target_compile_options(${PROJECT_NAME} PUBLIC -march=native -ffast-math)
+    else()
+        target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math)
+    endif()
 endif()
 
 if(MSVC)
@@ -176,4 +194,8 @@ endif()
 
 if(MESHFEM_ENABLE_BENCHMARKING)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
+endif()
+
+if(MESHFEM_WITH_UMFPACK)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
 endif()

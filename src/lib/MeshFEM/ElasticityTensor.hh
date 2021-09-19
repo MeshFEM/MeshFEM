@@ -593,7 +593,7 @@ public:
     // Same as above, but also approximate the algebraic multiplicity of the
     // maximum eigenvalue (within the specified tolerance) and also return the
     // second largest eigenvalue.
-    std::tuple<SMatrix, Real, int, Real>  maxEigenstrainMultiplicity(Real tol = 1e-3) const {
+    std::tuple<SMatrix, Real, int, Real> maxEigenstrainMultiplicity(Real tol = 1e-3) const {
         auto eigs = computeEigenstrains();
 
         // Eigenvalues sorted in increasing order
@@ -660,6 +660,17 @@ public:
 
     void readD(std::istream &is) const {
         is >> m_d;
+    }
+
+    void setD(const DType &d) {
+        if (_MajorSymmetry) {
+            Real diffSq = (d.transpose() - d).squaredNorm();
+            if ((diffSq > 1e-9) && (diffSq > 1e-9 * d.squaredNorm())) {
+                std::cout << d << std::endl;
+                throw std::runtime_error("Attempted to assign a non-major-symmetric value to a major-symmetric ElasticityTensor.");
+            }
+        }
+        m_d = d;
     }
 
 private:

@@ -61,19 +61,15 @@ struct Impl {
         size_t nen = NG::numElementNodes();
         M.init(nn, nn);
         M.reserve(mesh.numElements() * (nen * (nen + 1)) / 2);
-        Interpolant<Real, K, Deg> phi_i, phi_j;
         for (auto e : mesh.elements()) {
             if (skipping && skipElem[e.index()]) continue;
             for (auto ni : NG::nodes(e)) {
-                phi_i = 0;
-                phi_i[ni.localIndex()] = 1;
                 for (auto nj : NG::nodes(e)) {
                     if (nj.index() < ni.index()) continue; // upper tri only
-                    phi_j = 0;
-                    phi_j[nj.localIndex()] = 1;
                     Real val = Quadrature<K, 2 * Deg>::integrate(
                             [&](const EvalPt<K> &pt) {
-                                return phi_i(pt) * phi_j(pt);
+                                return shapeFunction<Deg, K>(ni.localIndex(), pt) *
+                                       shapeFunction<Deg, K>(nj.localIndex(), pt);
                             }, e->volume());
                     M.addNZ(ni.index(), nj.index(), val);
                 }
@@ -132,6 +128,7 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
 }
 
 // Construct the mass matrix for vector-valued shape functions
+// (assumes interleaved ordering of the unknown components (x0, y0, ...))
 template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, typename... Args>
 TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
     TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);

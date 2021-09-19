@@ -26,8 +26,8 @@ endfunction()
 ## Catch2
 function(meshfem_download_catch)
     meshfem_download_project(Catch2
-        URL     https://github.com/catchorg/Catch2/archive/v2.3.0.tar.gz
-        URL_MD5 1fc90ff3b7b407b83057537f4136489e
+	URL     https://github.com/catchorg/Catch2/archive/v2.13.3.tar.gz
+        URL_MD5 57612324e1e0b49dfc8eab68c03f8473
     )
 endfunction()
 
@@ -67,15 +67,15 @@ endfunction()
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
         GIT_REPOSITORY https://github.com/wjakob/tbb.git
-        GIT_TAG        20357d83871e4cb93b2c724fe0c337cd999fd14f
+        GIT_TAG        141b0e310e1fb552bdca887542c9c1a8544d6503
     )
 endfunction()
 
 ## Tinyexpr
 function(meshfem_download_tinyexpr)
     meshfem_download_project(tinyexpr
-        GIT_REPOSITORY https://github.com/MeshFEM/tinyexpr.git
-        GIT_TAG        9249ca6f40c340bb2cba1f005aa5c9436b0f62a2
+        GIT_REPOSITORY https://github.com/codeplea/tinyexpr.git
+        GIT_TAG        ffb0d41b13e5f8d318db95feb071c220c134fe70
     )
 endfunction()
 

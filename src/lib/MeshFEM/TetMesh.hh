@@ -103,7 +103,7 @@ public:
 
     // Constructor from tetrahedron soup.
     template<typename Tets>
-    TetMesh(const Tets &tets, size_t nVertices);
+    TetMesh(const Tets &tets, size_t nVertices, bool suppressNonmanifoldWarning = false);
 
     size_t numVertices()  const { return      VH.size(); }
     size_t numHalfFaces() const { return       O.size(); }
@@ -137,11 +137,14 @@ public:
 
       VHandle<const TetMesh>           vertex(size_t i) const { return   VHandle<const TetMesh>(i, *this); }
      HFHandle<const TetMesh>         halfFace(size_t i) const { return  HFHandle<const TetMesh>(i, *this); }
-     HFHandle<const TetMesh>         halfEdge(size_t i) const { return  HEHandle<const TetMesh>(i, *this); }
+     HEHandle<const TetMesh>         halfEdge(size_t i) const { return  HEHandle<const TetMesh>(i, *this); }
       THandle<const TetMesh>              tet(size_t i) const { return   THandle<const TetMesh>(i, *this); }
      BVHandle<const TetMesh>   boundaryVertex(size_t i) const { return  BVHandle<const TetMesh>(i, *this); }
     BHEHandle<const TetMesh> boundaryHalfEdge(size_t i) const { return BHEHandle<const TetMesh>(i, *this); }
      BFHandle<const TetMesh>     boundaryFace(size_t i) const { return  BFHandle<const TetMesh>(i, *this); }
+
+     HEHandle<      TetMesh> halfEdge(size_t /* s */, size_t /* e */)       { throw std::runtime_error("Not implemented"); }
+     HEHandle<const TetMesh> halfEdge(size_t /* s */, size_t /* e */) const { throw std::runtime_error("Not implemented"); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).

@@ -54,7 +54,7 @@ public:
 
     // Constructor from triangle soup
     template<typename Tris>
-    TriMesh(const Tris &tris, size_t nVertices);
+    TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning = false);
 
     size_t numVertices()      const { return VH.size(); }
     size_t numHalfEdges()     const { return O.size(); }
@@ -97,8 +97,24 @@ public:
     BEHandle<const TriMesh>   boundaryEdge(size_t i) const { return BEHandle<const TriMesh>(i, *this); }
 
     // Higher-level entity access
-    HEHandle<      TriMesh> halfEdge(size_t s, size_t e)       { return halfEdge(m_halfedgeIndex(s, e)); }
-    HEHandle<const TriMesh> halfEdge(size_t s, size_t e) const { return halfEdge(m_halfedgeIndex(s, e)); }
+    /*! Get the index of the halfedge pointing from s to e or -1 if none exists.
+    //  If the halfedge is actualy a boundary edge, the index returned is the
+    //  encoded boundary edge index (-2 - bei) */
+    int halfEdgeIndex(size_t s, size_t e) const {
+        assert((s < numVertices()) && (e < numVertices()));
+
+        auto h = vertex(e).halfEdge();
+        auto hit = h;
+        do {
+            if (size_t(hit.tail().index()) == s) {
+                return hit.index();
+            }
+        } while ((hit = hit.cw()) != h);
+
+        return -1;
+    }
+    HEHandle<      TriMesh> halfEdge(size_t s, size_t e)       { return halfEdge(halfEdgeIndex(s, e)); }
+    HEHandle<const TriMesh> halfEdge(size_t s, size_t e) const { return halfEdge(halfEdgeIndex(s, e)); }
 
     // Visitors
     // Call f(he, edge_idx) for the primary half-edge of each edge.
@@ -106,15 +122,19 @@ public:
     template<class F>
     void visitEdges(F &&f) {
         size_t i = 0;
-        for (const auto &he : halfEdges())
+        for (const auto he : halfEdges())
             if (he.isPrimary()) { f(he, i); ++i; }
     }
     template<class F>
     void visitEdges(F &&f) const {
         size_t i = 0;
-        for (const auto &he : halfEdges())
+        for (const auto he : halfEdges())
             if (he.isPrimary()) { f(he, i); ++i; }
     }
+
+    // Get the list of (volume) vertex indices making up the boundary loops
+    // (traversed in order with mesh on the right).
+    std::vector<std::vector<size_t>> boundaryLoops() const;
 
     ////////////////////////////////////////////////////////////////////////////
     // Entity ranges (for range-based for).
@@ -349,26 +369,6 @@ protected:
     int m_nextBdryEdge(int be) const {
         int v = m_vertexForBdryVertex(m_bdryEdgeTip(be));
         return m_bdryEdgeIdx(m_halfEdgeOfVertex(v));
-    }
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Higher-level index queries
-    ////////////////////////////////////////////////////////////////////////////
-    /*! Get the index of the halfedge pointing from s to e or -1 if none exists.
-    //  If the halfedge is actualy a boundary edge, the index returned is the
-    //  encoded boundary edge index (-2 - bei) */
-    int m_halfedgeIndex(size_t s, size_t e) const {
-        assert((s < numVertices()) && (e < numVertices()));
-
-        auto h = vertex(e).halfEdge();
-        auto hit = h;
-        do {
-            if (size_t(hit.tail().index()) == s) {
-                return hit.index();
-            }
-        } while ((hit = hit.cw()) != h);
-
-        return -1;
     }
 };
 

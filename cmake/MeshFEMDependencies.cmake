@@ -28,14 +28,25 @@ find_package(Threads REQUIRED) # provides Threads::Threads
 
 # Boost library
 if(NOT TARGET meshfem::boost)
-    include(boost)
+    # Try to use system boost; downloading it with cmake-boost downloads around 800MB of stuff...
+    find_package(Boost 1.54 COMPONENTS filesystem system program_options QUIET)
+    if (NOT Boost_FOUND)
+        include(boost)
+    endif()
+
     add_library(meshfem_boost INTERFACE)
     add_library(meshfem::boost ALIAS meshfem_boost)
-    target_link_libraries(meshfem_boost INTERFACE
-        Boost::filesystem
-        Boost::system
-        Boost::program_options
-    )
+    if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
+        target_link_libraries(meshfem_boost INTERFACE
+            Boost::filesystem
+            Boost::system
+            Boost::program_options
+        )
+    else()
+        # When CMake and Boost versions are not in sync, imported targets may not be available... (sigh)
+        target_include_directories(meshfem_boost SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
+        target_link_libraries(meshfem_boost INTERFACE ${Boost_LIBRARIES})
+    endif()
 endif()
 
 # Catch2
@@ -71,7 +82,7 @@ if(NOT TARGET optional::optional)
 endif()
 
 # TBB library
-if(NOT TARGET tbb::tbb)
+if(MESHFEM_WITH_TBB AND NOT TARGET tbb::tbb)
     set(TBB_BUILD_STATIC OFF CACHE BOOL " " FORCE)
     set(TBB_BUILD_SHARED ON CACHE BOOL " " FORCE)
     set(TBB_BUILD_TBBMALLOC ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher

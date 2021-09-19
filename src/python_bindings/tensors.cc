@@ -43,7 +43,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
                     return D;
                 })
         .def("doubleContract", [](const ETensor &E, const SMValue &smat) { return E.doubleContract(smat); }, py::arg("smat"))
-        .def("doubleContract", [](const ETensor &E, const SMF     & smf) {
+        .def("doubleContract", [](const ETensor &E, const SMF     & smf) { 
                     SMF result(smf.domainSize());
                     for (size_t i = 0; i < smf.domainSize(); ++i)
                         result(i) = E.doubleContract(smf(i));
@@ -82,9 +82,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
     }
 
     py::class_<SMValue>(detail_module, NameMangler<SMValue>::name().c_str())
-        .def(py::init<Eigen::Matrix<_Real, flatLen(N), 1>>(), py::arg("flatValues"))
-        .def("__call__", [&](const SMValue &sm, size_t i, size_t j) { if ((i >= N) || (j >= N)) throw std::runtime_error("Index out of bounds"); return sm(i, j); }, py::arg("i"), py::arg("j"))
-        .def_property_readonly("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })
+        .def("__call__", [](const SMValue &sm, size_t i, size_t j) { if ((i >= N) || (j >= N)) throw std::runtime_error("Index out of bounds"); return sm(i, j); }, py::arg("i"), py::arg("j"))
+        .def("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })
         .def("eigenvalues",        &SMValue::eigenvalues)
         .def("eigenDecomposition", &SMValue::eigenDecomposition)
         ;
@@ -97,8 +96,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
                     result[i] = std::sqrt(smf_vm(i).frobeniusNormSq());
                 return result;
             })
-        .def("eigendecomposition", [&](const SMF &smf) {
-                std::vector<SMEigenDecompositionType<_Real, _Dimension>> result;
+        .def("eigendecomposition", [](const SMF &smf) {
+                std::vector<SMEigenDecompositionType<_Real, N>> result;
                 result.reserve(smf.domainSize());
                 for (size_t i = 0; i < smf.domainSize(); ++i)
                     result.push_back(smf(i).eigenDecomposition());
@@ -107,7 +106,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("__call__", [](const SMF &smf, size_t i) { if (i >= smf.domainSize()) throw std::runtime_error("Index out of bounds."); return SMValue(smf(i)); })
         ;
 
-    module.def("SymmetricMatrix", [&](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); });
+    module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); }, py::arg("flatValues"));
+    module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, N, N>          &mat)        { return SMValue(       mat); }, py::arg("mat"));
 }
 
 template<typename _Real>

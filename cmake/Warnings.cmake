@@ -1,5 +1,5 @@
 ################################################################################
-cmake_minimum_required(VERSION 2.6.3)
+cmake_minimum_required(VERSION 3.1)
 ################################################################################
 # See comments and discussions here:
 # http://stackoverflow.com/questions/5088460/flags-to-enable-thorough-and-verbose-g-warnings
@@ -23,7 +23,7 @@ set(MY_FLAGS
         -Wformat=2
         -Wuninitialized
         -Wcast-qual
-        -Wmissing-noreturn
+        # -Wmissing-noreturn # this is super annoying and sometimes buggy, it seems
         -Wmissing-format-attribute
         -Wredundant-decls
 

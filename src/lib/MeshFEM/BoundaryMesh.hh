@@ -21,9 +21,9 @@ struct BoundaryMesh;
 
 template<class _Mesh>
 struct GetVolMesh { using type = _Mesh; };
-template<class _VolMesh> struct GetVolMesh<BoundaryMesh   <_VolMesh>> { using type = _VolMesh; };
+template<class _VolMesh> struct GetVolMesh<BoundaryMesh<_VolMesh>> { using type = _VolMesh; };
 
-// Metafunction to strip off the boundary mesh wrapper (but still allow cv
+// Metafunction to strip off the boundary mesh wrapper (but still allow CV
 // qualifications). This is needed for the handle types, which must be
 // templated on their volume mesh type (not this boundary mesh type).
 // If there is no boundary mesh wrapper, just return the type.
@@ -131,7 +131,7 @@ protected:
     _Mesh &m_mesh;
 };
 
-// For the boundary of FEMMesh, we also need to access to nodes and elments
+// For the boundary of FEMMesh, we also need to access to nodes and elements
 // Thankfully all dimensions of FEMMesh have a uniform interface, so no
 // further specialization is needed.
 // We derive from the non-FEMMesh BoundaryMesh class to add node and element
@@ -141,6 +141,8 @@ struct BoundaryMesh<_FEMMesh, VolK, true> : public BoundaryMesh<_FEMMesh, VolK, 
     using Base = BoundaryMesh<_FEMMesh, VolK, false>;
     using Base::Base;
     using VolMesh = _FEMMesh;
+
+    static constexpr size_t Deg = VolMesh::Deg;
 
     size_t numElementNodes() const { return m_mesh.numBoundaryElementNodes(); }
     size_t    numEdgeNodes() const { return m_mesh.numBoundaryEdgeNodes();    }

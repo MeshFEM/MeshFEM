@@ -18,7 +18,10 @@ VType<Mesh> getV(const Mesh &m) {
 }
 
 template<class Mesh>
-Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> getF(const Mesh &m) {
+using FType = Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1>;
+
+template<class Mesh>
+FType<Mesh> getF(const Mesh &m) {
     Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1> F(m.numElements(), Mesh::K + 1);
     for (auto e : m.elements()) {
         for (auto v : e.vertices())
@@ -36,8 +39,9 @@ inline Eigen::MatrixX3d getV(const std::vector<MeshIO::IOVertex> &vertices) {
 }
 
 inline Eigen::MatrixXi getF(const std::vector<MeshIO::IOElement> &elements) {
-    const size_t K = elements.at(0).size();
     const size_t ne = elements.size();
+    if (ne == 0) return Eigen::MatrixXi();
+    const size_t K = elements.at(0).size();
     Eigen::MatrixXi F(ne, K);
     for (size_t i = 0; i < ne; ++i) {
         const auto &e = elements[i];
@@ -82,6 +86,19 @@ std::vector<MeshIO::IOVertex> getMeshIOVertices(const Eigen::MatrixBase<Derived>
         else              v.head(dim) = V.col(i).template cast<double>();
         result.emplace_back(v);
     }
+
+    return result;
+}
+
+template<class Mesh>
+enable_if_models_concept_t<Concepts::ElementMesh, Mesh, std::vector<MeshIO::IOVertex>>
+getMeshIOVertices(const Mesh &m) {
+    std::vector<MeshIO::IOVertex> result;
+    const size_t nv = m.numVertices();
+    result.reserve(nv);
+
+    for (auto v : m.vertices())
+        result.emplace_back(padTo3D(v.node()->p));
 
     return result;
 }

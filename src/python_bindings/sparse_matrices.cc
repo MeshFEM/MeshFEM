@@ -56,16 +56,31 @@ PYBIND11_MODULE(sparse_matrices, m) {
                 return soln;})
         ;
 
+    using SMode = SuiteSparseMatrix::SymmetryMode;
+    py::enum_<SMode>(m, "SymmetryMode")
+        .value("NONE",           SMode::NONE)
+        .value("UPPER_TRIANGLE", SMode::UPPER_TRIANGLE)
+        .value("LOWER_TRIANGLE", SMode::LOWER_TRIANGLE)
+        ;
+
+    using SymmetryModePicklingType = std::underlying_type_t<SMode>;
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
-        .def(py::init<TMatrix>(), py::arg("tripletMatrix"))
-        .def_readonly("m",  &SuiteSparseMatrix::m)
-        .def_readonly("n",  &SuiteSparseMatrix::n)
-        .def_readonly("nz", &SuiteSparseMatrix::nz)
-        .def("setZero",     &SuiteSparseMatrix::setZero)
-        .def("fill",        &SuiteSparseMatrix::fill)
-        .def("setIdentity", &SuiteSparseMatrix::setIdentity)
-        .def("trace",       &SuiteSparseMatrix::trace)
-        .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, double))(&SuiteSparseMatrix::addNZ), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
+        .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")
+        .def(py::init<std::string>(), py::arg("bin_dump_path"), "Load from binary dump file")
+        .def(py::init<>(),                                      "Construct empty matrix")
+        .def_readwrite("m",    &SuiteSparseMatrix::m)
+        .def_readwrite("n",    &SuiteSparseMatrix::n)
+        .def_readwrite("nz",   &SuiteSparseMatrix::nz)
+        .def_readwrite("Ap",   &SuiteSparseMatrix::Ap)
+        .def_readwrite("Ai",   &SuiteSparseMatrix::Ai)
+        .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
+        .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
+        .def("fill",           &SuiteSparseMatrix::fill)
+        .def("setIdentity",    &SuiteSparseMatrix::setIdentity)
+        .def("trace",          &SuiteSparseMatrix::trace)
+        .def("transpose",      &SuiteSparseMatrix::transpose)
+        .def("toSymmetryMode", &SuiteSparseMatrix::toSymmetryMode)
+        .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, const double &))(&SuiteSparseMatrix::addNZ<double>), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
         .def("setFromTMatrix", [&](SuiteSparseMatrix &smat, TMatrix &tmat) { smat.setFromTMatrix(tmat); } /* work around pybind11 error */ )
         .def("getTripletMatrix", &SuiteSparseMatrix::getTripletMatrix)
         .def("rowColRemoval", [&](SuiteSparseMatrix &smat, const std::vector<size_t> &indices) {
@@ -73,22 +88,35 @@ PYBIND11_MODULE(sparse_matrices, m) {
                     for (size_t i : indices) shouldRemove[i] = true;
                     smat.rowColRemoval([&shouldRemove](size_t i) { return shouldRemove[i]; });
                 })
-        .def_readwrite("Ap", &SuiteSparseMatrix::Ap)
-        .def_readwrite("Ai", &SuiteSparseMatrix::Ai)
-        .def_readwrite("Ax", &SuiteSparseMatrix::Ax)
+        .def_readwrite("symmetry_mode", &SuiteSparseMatrix::symmetry_mode)
         .def("apply", [](const SuiteSparseMatrix &mat, const Eigen::VectorXd &vec, bool transpose) {
                     return mat.apply(vec, transpose);
                 }, py::arg("vec"), py::arg("transpose") = false)
-        .def(py::pickle([](const SuiteSparseMatrix &mat) { return py::make_tuple(mat.m, mat.n, mat.nz, mat.Ap, mat.Ai, mat.Ax); },
+        .def(py::pickle([](const SuiteSparseMatrix &mat) { return py::make_tuple(mat.m, mat.n, mat.nz, mat.Ap, mat.Ai, mat.Ax, static_cast<SymmetryModePicklingType>(mat.symmetry_mode)); },
                         [](const py::tuple &t) {
-                        if (t.size() != 6) throw std::runtime_error("Invalid state!");
+                        if ((t.size() != 6) && (t.size() != 7)) throw std::runtime_error("Invalid state!");
                         SuiteSparseMatrix result(t[0].cast<SuiteSparse_long>(), t[1].cast<SuiteSparse_long>());
                         result.nz = t[2].cast<SuiteSparse_long>();
                         result.Ap = t[3].cast<std::vector<SuiteSparse_long>>();
                         result.Ai = t[4].cast<std::vector<SuiteSparse_long>>();
                         result.Ax = t[5].cast<std::vector<double>>();
+                        // For backwards compatibility with pickled files
+                        // written before we fixed the missing symmetry mode...
+                        if (t.size() == 6) {
+                            if (result.m == result.n) {
+                                std::cerr << "WARNING: symmetry mode was not pickled; assuming upper triangle symmetry for square matrix" << std::endl;
+                                result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+                            }
+                            else {
+                                std::cerr << "WARNING: symmetry mode was not pickled; assuming no symmetry for rectangular matrix" << std::endl;
+                                result.symmetry_mode = SuiteSparseMatrix::SymmetryMode::NONE;
+                            }
+                        }
+                        else {
+                            result.symmetry_mode = static_cast<SuiteSparseMatrix::SymmetryMode>(t[6].cast<SymmetryModePicklingType>());
+                        }
                         return result;
-                        }))
+                    }))
         .def("toSciPy", [](const SuiteSparseMatrix &A) {
                 py::object matrix_type = py::module::import("scipy.sparse").attr("csc_matrix");
                 py::array data(A.Ax.size(), A.Ax.data());
@@ -107,5 +135,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
                 factors.solve(b, x);
                 return x;
             })
+        .def("dump",       &SuiteSparseMatrix::dump)
+        .def("dumpBinary", &SuiteSparseMatrix::dumpBinary)
+        .def("readBinary", &SuiteSparseMatrix::readBinary)
         ;
 }

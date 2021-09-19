@@ -22,7 +22,8 @@ def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, 
         objectMethods = dir(obj)
         if (mtype == MassMatrixType.FULL):
             if ("massMatrix" in objectMethods):
-                Mtrip = obj.massMatrix()
+                M = obj.massMatrix()
+                Mtrip = M if isinstance(M, sparse_matrices.TripletMatrix) else M.getTripletMatrix()
                 Mtrip.reflectUpperTriangle()
                 Mtrip.rowColRemoval(fixedVars)
                 M_scipy = Mtrip.compressedColumn()

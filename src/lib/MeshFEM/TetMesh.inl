@@ -1,4 +1,5 @@
 #include <type_traits>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -11,7 +12,8 @@ template<class VertexData, class HalfFaceData, class HalfEdgeData, class TetData
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
 template<typename Tets>
 TetMesh<VertexData, HalfFaceData, HalfEdgeData, TetData, BoundaryVertexData, BoundaryHalfEdgeData, BoundaryFaceData>::
-TetMesh(const Tets &tets, const size_t nVertices) {
+TetMesh(const Tets &tets, const size_t nVertices, bool /* suppressNonmanifoldWarning */) {
+    // BENCHMARK_SCOPED_TIMER_SECTION timer("TetMesh constructor");
     // Corner Creation
     using EAA = ElementArrayAdaptor<Tets>;
     const size_t nt = EAA::numElements(tets);

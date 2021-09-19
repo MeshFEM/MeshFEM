@@ -455,7 +455,7 @@ public:
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
 
     template<typename Mesh>
-    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, std::vector<size_t> ignoreDims = std::vector<size_t>()) 
+    PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, const std::vector<size_t> &ignoreDims = std::vector<size_t>())
         : m_ignoreDims(ignoreDims)
     {
         BBox<VectorND<_N>> cell = mesh.boundingBox();
@@ -560,53 +560,58 @@ public:
         }
     }
 
-    // Constructor reading the periodic boundary conditions from a file
-    // This is a hack that only supports meshes with only periodic vertices (no
-    // periodic boundary elements)--i.e. only a nonmanifold tiling.
+    // Constructor reading the periodic boundary conditions from a file.
+    // This is a hack that only loads periodic nodes--i.e., it does not
+    // mark periodic boundary elements.
     template<typename Mesh>
     PeriodicCondition(const Mesh &mesh, const std::string &pcFile) {
-        // The periodic condition file contains pairs of *vertices*
+        // The periodic condition file contains pairs of nodes
         // that are periodically identified.
         std::cerr << "WARNING: periodic boundary condition files are a temporary hack." << std::endl;
-
-        // For now, we assume that each vertex appears in only a single pairing.
-        std::vector<size_t> pair(mesh.numVertices(), size_t(NO_PAIR));
 
         std::ifstream file(pcFile);
         if (!file.is_open()) throw std::runtime_error("Couldn't open " + pcFile);
 
+        std::vector<std::vector<size_t>> adj(mesh.numNodes());
         std::string line;
         while (std::getline(file, line)) {
             std::istringstream ls(line);
             size_t a, b;
             ls >> a >> b;
-
-            // Link later vertex to its earlier paired vertex
-            size_t later = std::max(a, b);
-            assert(pair.at(later) == NO_PAIR);
-            pair.at(later) = std::min(a, b);
+            adj[a].push_back(b);
+            adj[b].push_back(a);
         }
 
-        // Create dofs for every vertex that hasn't been linked.
+        // Assign unique dofs for each connected component in the
+        // identified node graph represented by adjacency list `adj`
+        std::queue<size_t> bfsQueue;
         m_dofForNode.assign(mesh.numNodes(), size_t(NO_DOF));
         m_nodesForDoF.reserve(mesh.numNodes());
         m_nodesForDoF.clear();
-        for (auto n : mesh.nodes()) {
-            auto v = n.vertex();
-            if (!v || (pair.at(n.vertex().index()) == NO_PAIR)) {
-                assert(m_dofForNode[n.index()] == NO_DOF);
-                m_dofForNode[n.index()] = m_nodesForDoF.size();
-                m_nodesForDoF.emplace_back(1, n.index());
-            }
-            else {
-                size_t v_pair = pair.at(n.vertex().index());
-                size_t n_pair = mesh.vertex(v_pair).node().index();
-                size_t dof = m_dofForNode.at(n_pair);
-                assert(dof != NO_DOF);
-                m_dofForNode[n.index()] = dof;
-                m_nodesForDoF[dof].push_back(n.index());
+        for (const auto n : mesh.nodes()) {
+            if (m_dofForNode[n.index()] != NO_DOF) continue;
+            size_t dof = m_nodesForDoF.size();
+            m_nodesForDoF.emplace_back(1, n.index());
+            auto &nodeSet = m_nodesForDoF.back();
+
+            bfsQueue.push(n.index());
+            m_dofForNode[n.index()] = dof;
+            while (!bfsQueue.empty()) {
+                size_t u = bfsQueue.front();
+                bfsQueue.pop();
+                for (const size_t v : adj[u]) {
+                    size_t &dof_v = m_dofForNode[v];
+                    if (dof_v != NO_DOF) {
+                        assert(dof_v == dof);
+                        continue;
+                    }
+                    bfsQueue.push(v);
+                    dof_v = dof;
+                    nodeSet.push_back(v);
+                }
             }
         }
+
         m_isPeriodicBoundaryElement.assign(mesh.numBoundaryElements(), false);
     }
 

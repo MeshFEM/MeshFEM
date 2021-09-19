@@ -5,3 +5,4 @@ build_*
 __pycache__
 .ipynb_checkpoints
 3rdparty
+python/MeshFEM

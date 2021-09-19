@@ -23,17 +23,18 @@ struct ElementArrayAdaptor {
     }
 };
 
-// Version for X by N Eigen types
+// Version for X by N, X by X Eigen types (one row per element)
 template<class EigenType>
 struct ElementArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, Eigen::Dynamic, 3>::value ||
-                                                              isMatrixOfSize<EigenType, Eigen::Dynamic, 4>::value, void>::type> {
+                                                              isMatrixOfSize<EigenType, Eigen::Dynamic, 4>::value ||
+                                                              isMatrixOfSize<EigenType, Eigen::Dynamic, Eigen::Dynamic>::value, void>::type> {
     using IndexType = typename EigenType::Scalar;
     static size_t numElements(const EigenType &E)                      { return E.rows(); }
-    static size_t elementSize(const EigenType &/*E*/, size_t /*ei*/)   { return EigenType::ColsAtCompileTime; }
+    static size_t elementSize(const EigenType &E, size_t /*ei*/)       { return E.cols(); }
     static IndexType      get(const EigenType &E, size_t ei, size_t c) { return E(ei, c); }
 };
 
-// Version for N by X Eigen types
+// Version for N by X Eigen types (one col per element)
 template<class EigenType>
 struct ElementArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<EigenType, 3, Eigen::Dynamic>::value ||
                                                               isMatrixOfSize<EigenType, 4, Eigen::Dynamic>::value, void>::type> {

@@ -1,11 +1,8 @@
-################################################################################
-# Independent binaries
-################################################################################
-
 add_executable(unit_tests
     main.cc
     test_quadrature.cc
     test_interpolant.cc
+    test_shape_functions.cc
     test_materials.cc
     test_sparse_matrices.cc
     test_tensors.cc

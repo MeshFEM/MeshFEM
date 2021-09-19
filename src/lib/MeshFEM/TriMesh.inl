@@ -3,6 +3,7 @@
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -13,7 +14,8 @@ template<class VertexData, class HalfEdgeData, class TriData,
          class BoundaryVertexData, class BoundaryEdgeData>
 template<typename Tris>
 TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
-TriMesh(const Tris &tris, size_t nVertices) {
+TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
+    // BENCHMARK_SCOPED_TIMER_SECTION timer("Halfedge Mesh Construction");
     using EAA = ElementArrayAdaptor<Tris>;
     const size_t nt = EAA::numElements(tris);
     // Corner Creation
@@ -51,7 +53,6 @@ TriMesh(const Tris &tris, size_t nVertices) {
         for (const auto &p : incidentTris)
             if (p.second > 2) throw std::runtime_error("Non-manifold edge detected");
     }
-
 
     for (size_t he = 0; he < nHalfEdges; ++he) {
         UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
@@ -117,7 +118,7 @@ TriMesh(const Tris &tris, size_t nVertices) {
         bTipTail.push_back(Vb[tailVV]);
     }
 
-    if (bV.size() != nBoundaryEdges) {
+    if ((bV.size() != nBoundaryEdges) && !suppressNonmanifoldWarning) {
         std::cerr << "Boundary edge count: "   << nBoundaryEdges << std::endl;
         std::cerr << "Boundary vertex count: " << bV.size()      << std::endl;
         std::cerr << "WARNING: Boundary is non-manifold; this will break certain traversal operations" << std::endl;
@@ -142,4 +143,27 @@ TriMesh(const Tris &tris, size_t nVertices) {
     m_triData           .resize(nt);
     m_boundaryVertexData.resize(bV.size());
     m_boundaryEdgeData  .resize(nBoundaryEdges);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template<class VertexData, class HalfEdgeData, class TriData,
+         class BoundaryVertexData, class BoundaryEdgeData>
+std::vector<std::vector<size_t>>
+TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>::
+boundaryLoops() const {
+    std::vector<std::vector<size_t>> result;
+    std::vector<bool> visited(numBoundaryEdges(), false);
+    for (const auto &be : boundaryEdges()) {
+        if (visited[be.index()]) continue;
+        result.emplace_back();
+        std::vector<size_t> &loop = result.back();
+
+        auto curr_be = be;
+        while ((curr_be = curr_be.next()) && !visited[curr_be.index()]) {
+            visited[curr_be.index()] = true;
+            loop.push_back(curr_be.tip().volumeVertex().index());
+        }
+    }
+    return result;
 }

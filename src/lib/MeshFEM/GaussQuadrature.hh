@@ -19,8 +19,8 @@
 #ifndef GAUSSQUADRATURE_HH
 #define GAUSSQUADRATURE_HH
 #include <MeshFEM/Types.hh>
+#include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
-#include <MeshFEM/function_traits.hh>
 #include <array>
 
 #include <MeshFEM_export.h>
@@ -414,5 +414,13 @@ struct Quadrature { };
 template<size_t _Deg> struct Quadrature<Simplex::Edge,        _Deg> : public QuadratureTable<Simplex::Edge,        _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_edge<_Deg>(f)) { return integrate_edge<_Deg>(f, vol); } };
 template<size_t _Deg> struct Quadrature<Simplex::Triangle,    _Deg> : public QuadratureTable<Simplex::Triangle,    _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tri <_Deg>(f)) { return integrate_tri< _Deg>(f, vol); } };
 template<size_t _Deg> struct Quadrature<Simplex::Tetrahedron, _Deg> : public QuadratureTable<Simplex::Tetrahedron, _Deg> { template<typename F> static auto integrate(const F& f, Real vol = 1.0) -> decltype(integrate_tet <_Deg>(f)) { return integrate_tet< _Deg>(f, vol); } };
+
+// Convenience function for calculating the integral of the FEM shape functions
+// over an element of volume 1.
+template<size_t _Deg, size_t _K>
+Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
+integratedShapeFunctions() {
+    return Quadrature<_K, _Deg>::integrate([](const EvalPt<_K> &x) { return shapeFunctions<_Deg, _K>(x); });
+}
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */

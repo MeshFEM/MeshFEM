@@ -1,8 +1,11 @@
-#pragma once
+#ifndef TRIMESHHANDLES_HH
+#define TRIMESHHANDLES_HH
 
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
 #include "Circulator.hh"
+
+// #undef interface // Needed when using MSVC not in standards-compliant mode.
 
 namespace _TriMeshHandles {
 
@@ -48,7 +51,7 @@ public:
     // Call `visitor(ei)` for each incident element `ei`.
     template<class F>
     void visitIncidentElements(F &&visitor) {
-        for (const auto &he : incidentHalfEdges()) {
+        for (const auto he : incidentHalfEdges()) {
             auto t = he.tri();
             if (t) visitor(t.index());
         }
@@ -131,6 +134,13 @@ public:
     void visitIncidentElements(F &&visitor) const {
         if (tri())            visitor(tri().index());
         if (opposite().tri()) visitor(opposite().tri().index());
+    }
+
+    // Index within tri()
+    size_t localIndex() const {
+        for (const auto he_b : tri().halfEdges())
+            if (he_b.index() == m_idx) return he_b.localIndex();
+        throw std::logic_error("Halfedge not found within its triangle");
     }
 
     // Note: these are only correct because of the careful boundary-case
@@ -290,3 +300,5 @@ template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::HEHandle<_Mesh>>
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles:: THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTris()            ; } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryEdges()   ; } };
+
+#endif /* end of include guard: TRIMESHHANDLES_HH */
