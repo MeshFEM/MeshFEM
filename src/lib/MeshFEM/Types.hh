@@ -32,8 +32,6 @@ template<typename Real_> using  Mat3_T = Eigen::Matrix<Real_, 3, 3>;
 template<typename Real_> using  Mat2_T = Eigen::Matrix<Real_, 2, 2>;
 template<typename Real_> using MatX3_T = Eigen::Matrix<Real_, Eigen::Dynamic, 3>;
 
-extern Eigen::IOFormat pointFormatter;
-
 // Very general detection of Eigen types.
 // Detect if T is an Eigen type (or evaluates to an Eigen type).
 template<class T, class = void> struct IsEigenType : public std::false_type { };

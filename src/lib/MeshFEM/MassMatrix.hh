@@ -68,8 +68,9 @@ struct Impl {
                     if (nj.index() < ni.index()) continue; // upper tri only
                     Real val = Quadrature<K, 2 * Deg>::integrate(
                             [&](const EvalPt<K> &pt) {
-                                return shapeFunction<Deg, K>(ni.localIndex(), pt) *
-                                       shapeFunction<Deg, K>(nj.localIndex(), pt);
+                                // Note: MSVC breaks if we use `K` instead of _FEMMesh::K :(
+                                return shapeFunction<Deg, _FEMMesh::K>(ni.localIndex(), pt) *
+                                       shapeFunction<Deg, _FEMMesh::K>(nj.localIndex(), pt);
                             }, e->volume());
                     M.addNZ(ni.index(), nj.index(), val);
                 }

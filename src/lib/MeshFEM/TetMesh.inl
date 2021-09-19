@@ -39,7 +39,7 @@ TetMesh(const Tets &tets, const size_t nVertices, bool /* suppressNonmanifoldWar
     std::runtime_error nonManifold("Non-manifold input detected.");
     O.assign(4 * nt, -1);
     const size_t nHalfFaces = O.size();
-    for (size_t hf = 0; hf < 4 * nt; ++hf) {
+    for (int hf = 0; hf < int(4 * nt); ++hf) {
         UnorderedTriplet face(m_vertexOfHalfFace(0, hf),
                               m_vertexOfHalfFace(1, hf),
                               m_vertexOfHalfFace(2, hf));

@@ -54,7 +54,7 @@ TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
             if (p.second > 2) throw std::runtime_error("Non-manifold edge detected");
     }
 
-    for (size_t he = 0; he < nHalfEdges; ++he) {
+    for (int he = 0; he < int(nHalfEdges); ++he) {
         UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
                            m_vertexOfHE<HEVertex::TAIL>(he));
         // Attempt to insert half-edge

@@ -34,8 +34,8 @@ endfunction()
 ## Ceres
 function(meshfem_download_ceres)
     meshfem_download_project(ceres
-        GIT_REPOSITORY https://github.com/jdumas/ceres-solver.git
-        GIT_TAG        2ba66a2c22959d9c455a8f2074dc7a605c4a92e8
+        GIT_REPOSITORY https://github.com/MeshFEM/ceres-solver.git
+        GIT_TAG        114ace92eec013192f156d5452551f68695ac86e
     )
 endfunction()
 
@@ -75,7 +75,7 @@ endfunction()
 function(meshfem_download_tinyexpr)
     meshfem_download_project(tinyexpr
         GIT_REPOSITORY https://github.com/codeplea/tinyexpr.git
-        GIT_TAG        ffb0d41b13e5f8d318db95feb071c220c134fe70
+        GIT_TAG        4e8cc0067a1e2378faae23eb2dfdd21e9e9907c2
     )
 endfunction()
 

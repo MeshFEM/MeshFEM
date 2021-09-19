@@ -61,7 +61,18 @@ if(NOT TARGET Eigen3::Eigen)
     add_library(meshfem_eigen INTERFACE)
     meshfem_download_eigen()
     target_include_directories(meshfem_eigen SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/eigen)
+    # target_include_directories(meshfem_eigen SYSTEM INTERFACE
+    #                            $<BUILD_INTERFACE:${MESHFEM_EXTERNAL}/eigen>
+    #                            $<INSTALL_INTERFACE:3rdparty/eigen>)
     add_library(Eigen3::Eigen ALIAS meshfem_eigen)
+    # install(TARGETS meshfem_eigen
+    #         EXPORT MeshFEMDummyExport)
+
+    # # Hack to work around Ceres' export needing `meshfem_eigen` to be exported.
+    # install(EXPORT MeshFEMDummyExport
+    #         NAMESPACE MeshFEMDummy::
+    #         DESTINATION libMeshFEM/cmake/Dummy
+    #         FILE MeshFEMDummyTargets.cmake)
 endif()
 
 # json library
@@ -149,18 +160,23 @@ if (MESHFEM_WITH_CERES AND NOT TARGET ceres::ceres)
     endif()
     if (NOT TARGET ceres::ceres)
         meshfem_download_ceres()
-        option(MINIGLOG "" ON)
+        list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/ceres/cmake)
+        find_package(Glog)
+        if (NOT GLOG_FOUND)
+            # Only fall back to MINIGLOG when glog is not installed.
+            # Otherwise we will get linker errors if the code linking
+            # to `ceres` mistakenly brings in the full `glog.h` due to
+            # its include path order.
+            option(MINIGLOG "" ON)
+        else()
+            option(MINIGLOG "" OFF)
+        endif()
         set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
         set(BUILD_DOCUMENTATION OFF CACHE BOOL " " FORCE)
         set(BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
         set(BUILD_BENCHMARKS OFF CACHE BOOL " " FORCE)
         get_target_property(EIGEN_INCLUDE_DIR_HINTS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
         set(EIGEN_PREFER_EXPORTED_EIGEN_CMAKE_CONFIGURATION FALSE)
-        if("$ENV{CLUSTER}" STREQUAL "PRINCE")
-            # Hints for SuiteSparse on Prince cluster
-            set(SUITESPARSE_INCLUDE_DIR_HINTS "$ENV{SUITESPARSE_INC}")
-            set(SUITESPARSE_LIBRARY_DIR_HINTS "$ENV{SUITESPARSE_LIB}")
-        endif()
         add_subdirectory(${MESHFEM_EXTERNAL}/ceres)
         add_library(ceres::ceres ALIAS ceres)
         meshfem_target_hide_warnings(ceres)
