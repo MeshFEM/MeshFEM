@@ -11,16 +11,15 @@ namespace py = pybind11;
 #include <MeshFEM/VonMises.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
-template<typename _Real, size_t _Dimension>
+template<typename _Real, size_t N>
 void bindTensors(py::module& module, py::module& detail_module) {
-    constexpr size_t N = _Dimension;
     using ETensor = ElasticityTensor    <_Real, N>;
     using SMValue = SymmetricMatrixValue<_Real, N>;
     using SMF     = SymmetricMatrixField<_Real, N>;
 
     auto py_et = py::class_<ETensor>(module, NameMangler<ETensor>::name().c_str())
         .def(py::init<>())
-        .def(py::init([](const std::string& material_file) { return Materials::Constant<_Dimension>(material_file).getTensor(); }), py::arg("material_file"))
+        .def(py::init([](const std::string& material_file) { return Materials::Constant<N>(material_file).getTensor(); }), py::arg("material_file"))
         .def(py::init<_Real, _Real>(), py::arg("E"), py::arg("nu"))
         .def("setIsotropic", &ETensor::setIsotropic, py::arg("E"), py::arg("nu"))
         .def("setIdentity",  &ETensor::setIdentity)
@@ -29,7 +28,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("anisotropy", &ETensor::anisotropy)
 
         .def("__call__", [](const ETensor &E, size_t i, size_t j, size_t k, size_t l) {
-                    if ((i >= _Dimension) || (j >= _Dimension) || (k >= _Dimension) || (l >= _Dimension))
+                    if ((i >= N) || (j >= N) || (k >= N) || (l >= N))
                         throw std::runtime_error("Index out of bounds");
                     return E(i, j, k, l);
                 })
@@ -61,12 +60,12 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("__sub__", [](const ETensor &E, const ETensor &Eother) { return E - Eother; })
         .def("__repr__", [](const ETensor &E) {
                 std::stringstream ss;
-                ss << _Dimension << "D elasticity tensor with orthotropic moduli: ";
+                ss << N << "D elasticity tensor with orthotropic moduli: ";
                 E.printOrthotropic(ss);
                 return ss.str(); })
         ;
 
-    if (_Dimension == 3) {
+    if (N == 3) {
         py_et.def("setOrthotropic",
             &ETensor::setOrthotropic3D,
             py::arg("Ex"),   py::arg("Ey"),   py::arg("Ez"),
@@ -74,7 +73,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
             py::arg("muYZ"), py::arg("myZX"), py::arg("muXY"));
     }
 
-    if (_Dimension == 2) {
+    if (N == 2) {
         py_et.def("setOrthotropic",
             &ETensor::setOrthotropic2D,
             py::arg("Ex"),   py::arg("Ey"),

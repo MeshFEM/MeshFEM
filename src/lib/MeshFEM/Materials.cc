@@ -364,7 +364,7 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void Bounds::setFromJson(const nlohmann::json &config) {
+void MESHFEM_EXPORT Bounds::setFromJson(const nlohmann::json &config) {
     parseVariableBounds(config["lower"], m_lower);
     parseVariableBounds(config["upper"], m_upper);
 }
@@ -373,11 +373,13 @@ void Bounds::setFromJson(const nlohmann::json &config) {
 // Explicit Instantiations
 // Has the nice side-effect that only code using valid dimensions 2 and 3 links.
 ////////////////////////////////////////////////////////////////////////////////
+template struct MESHFEM_EXPORT Isotropic<2>;
+template struct MESHFEM_EXPORT Isotropic<3>;
 
-template struct Orthotropic<2>;
-template struct Orthotropic<3>;
+template struct MESHFEM_EXPORT Orthotropic<2>;
+template struct MESHFEM_EXPORT Orthotropic<3>;
 
-template struct Constant<2>;
-template struct Constant<3>;
+template struct MESHFEM_EXPORT Constant<2>;
+template struct MESHFEM_EXPORT Constant<3>;
 
 }

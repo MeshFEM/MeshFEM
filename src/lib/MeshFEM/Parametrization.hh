@@ -62,42 +62,15 @@ UVMap scp(const Mesh &mesh, SCPInnerProduct iprod = SCPInnerProduct::Mass, Real 
 // Mapping analysis
 ////////////////////////////////////////////////////////////////////////////////
 MESHFEM_EXPORT
-std::vector<M23d> jacobians(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
-    std::vector<M23d> result;
-
-    result.assign(mesh.numElements(), M23d::Zero());
-    for (const auto e : mesh.elements()) {
-        for (const auto v : e.vertices()) {
-            result[e.index()] += (e->gradBarycentric().col(v.localIndex())
-                                    * uv.row(v.index())).transpose();
-        }
-    }
-
-    return result;
-}
+std::vector<M23d> jacobians(const Mesh &mesh, Eigen::Ref<const UVMap> uv);
 
 // Amount by which lengths are scaled when mapping from 2D to 3D.
 MESHFEM_EXPORT
-VXd scaleFactor(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
-    auto F = jacobians(mesh, uv);
-    VXd result(F.size());
-    for (size_t i = 0; i < F.size(); ++i)
-        result[i] = 1.0 / std::pow((F[i] * F[i].transpose()).determinant(), 0.25);
-    return result;
-}
+VXd scaleFactor(const Mesh &mesh, Eigen::Ref<const UVMap> uv);
 
 // Quasiconformal distortion "strain measure" (sigma_0 - sigma_1) / sigma_1 >= 0
 MESHFEM_EXPORT
-VXd conformalDistortion(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
-    auto F = jacobians(mesh, uv);
-    VXd result(F.size());
-    for (size_t i = 0; i < F.size(); ++i) {
-        Eigen::JacobiSVD<M23d> svd(F[i]);
-        auto sigma = svd.singularValues(); // decreasing order
-        result[i] = (sigma[0] - sigma[1]) / sigma[1];
-    }
-    return result;
-}
+VXd conformalDistortion(const Mesh &mesh, Eigen::Ref<const UVMap> uv);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Misc utilities

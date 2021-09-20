@@ -38,7 +38,7 @@
 namespace Materials {
 
 // Material parameter bounds
-struct MESHFEM_EXPORT Bounds {
+struct Bounds {
     struct Bound {
         Bound(size_t _var, Real _val) : var(_var), value(_val) { }
         size_t var; Real value;
@@ -48,7 +48,7 @@ struct MESHFEM_EXPORT Bounds {
     Bounds(const std::vector<Bound> &l, const std::vector<Bound> &u)
         : m_lower(l), m_upper(u) { }
 
-    void setFromJson(const nlohmann::json &entry);
+    void MESHFEM_EXPORT setFromJson(const nlohmann::json &entry);
 
     const std::vector<Bound> &lower() const { return m_lower; }
     const std::vector<Bound> &upper() const { return m_upper; }
@@ -61,7 +61,7 @@ private:
 
 // Base class for variable materials
 template<size_t _N, template<size_t> class _Mat, size_t _NVars>
-struct MESHFEM_EXPORT VariableMaterial {
+struct VariableMaterial {
     typedef ElasticityTensor<Real, _N> ETensor;
     static constexpr size_t numVars = _NVars;
 
@@ -99,7 +99,7 @@ struct MESHFEM_EXPORT VariableMaterial {
 
 // Var 0: Young's modulus, var 1: Poisson ratio
 template<size_t _N>
-struct MESHFEM_EXPORT Isotropic : public VariableMaterial<_N, Isotropic, 2> {
+struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
@@ -272,7 +272,7 @@ typename Isotropic<_N>::IsotropicBounds Isotropic<_N>::g_bounds;
 // Vars 6..8: Shear ratios   (YZ, ZX, XY)
 size_t constexpr nOrthotropicVars(size_t n) { return (n == 3) ? 9 : 4; }
 template<size_t _N>
-struct MESHFEM_EXPORT Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
+struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
@@ -400,7 +400,7 @@ template<size_t _N>
 typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
 
 template<size_t _N>
-struct MESHFEM_EXPORT Constant {
+struct Constant {
     static constexpr size_t N = _N;
     static constexpr size_t numVars = 0;
     typedef ElasticityTensor<Real, _N> ETensor;

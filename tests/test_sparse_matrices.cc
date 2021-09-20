@@ -2,7 +2,7 @@
 // WARNING: catch2/catch.hpp sets a BENCHMARK macro, so we must include it
 // after MeshFEM.
 #include <catch2/catch.hpp>
-#include <random>
+#include <cstdlib>
 
 TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
     using VXd = Eigen::VectorXd;
@@ -24,17 +24,17 @@ TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
     REQUIRE(A.nnz() == 0); // A - B should be exactly zero
 
     // Test conversions between full/upper/lower symmetry mode.
-    srandom(0);
+    srand(0);
     const size_t ntests = 100;
     for (size_t test = 0; test < ntests; ++test) {
-        size_t matSize   = 1000 + 1000 * (random() % 10);
-        size_t ntriplets = 6000 + 6000 * (random() % 10);
+        size_t matSize   = 1000 + 1000 * (rand() % 10);
+        size_t ntriplets = 6000 + 6000 * (rand() % 10);
         TripletMatrix<> Ctrip(matSize, matSize);
         Ctrip.reserve(2 * ntriplets);
         for (size_t t = 0; t < ntriplets; ++t) {
-            size_t i = random() % matSize;
-            size_t j = random() % matSize;
-            double v = random() / double(RAND_MAX);
+            size_t i = rand() % matSize;
+            size_t j = rand() % matSize;
+            double v = rand() / double(RAND_MAX);
             Ctrip.addNZ(i, j, v);
             Ctrip.addNZ(j, i, v);
         }
@@ -72,17 +72,17 @@ TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
     }
 
     // Test transpose of asymmetric matrix
-    srandom(0);
+    srand(0);
     for (size_t test = 0; test < ntests; ++test) {
-        size_t m   = 1000 + 1000 * (random() % 10);
-        size_t n   = 1000 + 1000 * (random() % 10);
-        size_t ntriplets = 6000 + 6000 * (random() % 10);
+        size_t m   = 1000 + 1000 * (rand() % 10);
+        size_t n   = 1000 + 1000 * (rand() % 10);
+        size_t ntriplets = 6000 + 6000 * (rand() % 10);
         TripletMatrix<> Ctrip(m, n);
         Ctrip.reserve(ntriplets);
         for (size_t t = 0; t < ntriplets; ++t) {
-            size_t i = random() % m;
-            size_t j = random() % n;
-            double v = random() / double(RAND_MAX);
+            size_t i = rand() % m;
+            size_t j = rand() % n;
+            double v = rand() / double(RAND_MAX);
             Ctrip.addNZ(i, j, v);
         }
 
@@ -105,16 +105,16 @@ TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
     // Test block sparse matrix matvec.
     for (size_t test = 0; test < ntests; ++test) {
         using M3d = Eigen::Matrix3d;
-        size_t m   = 1000 + 1000 * (random() % 10);
-        size_t n   = 1000 + 1000 * (random() % 10);
-        size_t ntriplets = 6000 + 6000 * (random() % 10);
+        size_t m   = 1000 + 1000 * (rand() % 10);
+        size_t n   = 1000 + 1000 * (rand() % 10);
+        size_t ntriplets = 6000 + 6000 * (rand() % 10);
         TripletMatrix<> Ctrip(3 * m, 3 * n);
         TripletMatrix<Triplet<M3d>> CtripBlock(m, n);
         Ctrip.reserve(9 * ntriplets);
         CtripBlock.reserve(ntriplets);
         for (size_t t = 0; t < ntriplets; ++t) {
-            size_t i = random() % m;
-            size_t j = random() % n;
+            size_t i = rand() % m;
+            size_t j = rand() % n;
             M3d v = M3d::Random();
             CtripBlock.addNZ(i, j, v);
             for (size_t c = 0; c < 3; ++c) {

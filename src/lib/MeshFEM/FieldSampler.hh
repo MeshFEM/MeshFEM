@@ -39,7 +39,7 @@ template<class FEMMesh_>
 MESHFEM_EXPORT
 std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FEMMesh_> mesh);
 
-struct MESHFEM_EXPORT FieldSampler {
+struct FieldSampler {
     template<typename... Args>
     static std::unique_ptr<FieldSampler> construct(Args &&... args) {
         return ConstructFieldSamplerImpl(std::forward<Args>(args)...);
@@ -147,7 +147,7 @@ protected:
 
 // Mesh type-specific implementations
 template<size_t N>
-struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
+struct RawMeshFieldSampler : public FieldSamplerImpl<N> {
     using Base = FieldSamplerImpl<N>;
     using Base::Base;
 
@@ -251,7 +251,7 @@ template<typename T> T &accessHolderContents(const std::shared_ptr<T> &x) { retu
 // MeshHolderType can be, e.g., `std::shared_ptr<const FEMMesh_` for ownernship or `const FEMMesh_ &`
 // if the user knows the mesh's lifetime will exceed the sampler's.
 template<class FEMMesh_, class MeshHolderType = std::shared_ptr<const FEMMesh_>>
-struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
+struct MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::EmbeddingDimension> {
     static constexpr size_t Dim = FEMMesh_::EmbeddingDimension;
     using Base = FieldSamplerImpl<Dim>;
 

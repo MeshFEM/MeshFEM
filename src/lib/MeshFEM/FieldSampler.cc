@@ -66,5 +66,5 @@ std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(Eigen::Ref<const Eigen::
 ////////////////////////////////////////////////////////////////////////////////
 // Explicit Instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template struct FieldSamplerImpl<2>;
-template struct FieldSamplerImpl<3>;
+template struct MESHFEM_EXPORT FieldSamplerImpl<2>;
+template struct MESHFEM_EXPORT FieldSamplerImpl<3>;
