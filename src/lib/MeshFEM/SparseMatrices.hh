@@ -31,6 +31,7 @@
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/AutomaticDifferentiation.hh>
 
 extern "C" {
 #include <umfpack.h>
@@ -101,6 +102,19 @@ namespace spmat_helper {
     // Plain arithmetic type version
     template<typename T>
     struct value_traits<T, std::enable_if_t<std::is_arithmetic<T>::value>> {
+        static constexpr size_t rows = 1;
+        static constexpr size_t cols = 1;
+        using Scalar = T;
+        using container_type = typename ContainerType<T>::type;
+        static Scalar valueMagnitudeSq(const T &v) { return v * v; }
+        static void setZero(T &v) { v = 0; }
+        static T Zero() { return 0.0; }
+    };
+
+    // Eigen autodiff type version
+    template<typename StorageType>
+    struct value_traits<Eigen::AutoDiffScalar<StorageType>> {
+        using T = Eigen::AutoDiffScalar<StorageType>;
         static constexpr size_t rows = 1;
         static constexpr size_t cols = 1;
         using Scalar = T;
