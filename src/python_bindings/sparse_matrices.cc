@@ -74,13 +74,13 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def_readwrite("Ap",   &SuiteSparseMatrix::Ap)
         .def_readwrite("Ai",   &SuiteSparseMatrix::Ai)
         .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
-        .def("setZero",        &SuiteSparseMatrix::setZero)
+        .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
         .def("fill",           &SuiteSparseMatrix::fill)
         .def("setIdentity",    &SuiteSparseMatrix::setIdentity)
         .def("trace",          &SuiteSparseMatrix::trace)
         .def("transpose",      &SuiteSparseMatrix::transpose)
         .def("toSymmetryMode", &SuiteSparseMatrix::toSymmetryMode)
-        .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, double))(&SuiteSparseMatrix::addNZ), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
+        .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, const double &))(&SuiteSparseMatrix::addNZ<double>), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
         .def("setFromTMatrix", [&](SuiteSparseMatrix &smat, TMatrix &tmat) { smat.setFromTMatrix(tmat); } /* work around pybind11 error */ )
         .def("getTripletMatrix", &SuiteSparseMatrix::getTripletMatrix)
         .def("rowColRemoval", [&](SuiteSparseMatrix &smat, const std::vector<size_t> &indices) {

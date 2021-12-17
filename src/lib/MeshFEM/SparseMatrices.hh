@@ -82,6 +82,98 @@ bool tripletsSortedAndUnique(const TMat &mat) {
     return true;
 }
 
+namespace spmat_helper {
+    // Helper structs and functions useful for implementing algorithms in a
+    // uniform syntax that work when matrix entries are scalars or dense
+    // blocks.
+
+    template<typename T, class Enable = void>
+    struct value_traits;
+
+    template<typename T, class Enable = void>
+    struct ContainerType { using type = std::vector<T>; }; // assume alignement unnecessary
+
+    template<typename EigenT>
+    struct ContainerType<EigenT, std::enable_if_t<sizeof(EigenT) % 16 == 0>> {
+        using type = aligned_std_vector<EigenT>; // alignment needed
+    };
+
+    // Plain arithmetic type version
+    template<typename T>
+    struct value_traits<T, std::enable_if_t<std::is_arithmetic<T>::value>> {
+        static constexpr size_t rows = 1;
+        static constexpr size_t cols = 1;
+        using Scalar = T;
+        using container_type = typename ContainerType<T>::type;
+        static Scalar valueMagnitudeSq(const T &v) { return v * v; }
+        static void setZero(T &v) { v = 0; }
+        static T Zero() { return 0.0; }
+    };
+
+    // Eigen type version
+    template<typename EigenT>
+    struct value_traits<EigenT, std::enable_if_t<isEigenType<EigenT>()>> {
+        static constexpr size_t rows = EigenT::RowsAtCompileTime;
+        static constexpr size_t cols = EigenT::ColsAtCompileTime;
+        using Scalar = typename EigenT::Scalar;
+        using container_type = typename ContainerType<EigenT>::type;
+        static Scalar valueMagnitudeSq(const EigenT &v) { return v.squaredNorm(); }
+        static void setZero(EigenT &v) {
+            static_assert((rows != Eigen::Dynamic) && (cols != Eigen::Dynamic), "Only fixed-size blocks are currently supported");
+            v.setZero();
+        }
+        static auto Zero() { return EigenT::Zero().eval(); }
+    };
+
+    // Get an N-dimensional segment of a vector of this number type
+    // 1-dimensional segments are just raw scalars.
+    template<size_t N, class VType, class Enable = void>
+    struct SegmentGetter;
+
+    // Get vector-valued entries of a block vector.
+    template<size_t N, class VType>
+    struct SegmentGetter<N, VType, std::enable_if_t<(N > 1) && isEigenType<typename VType::value_type>()>> {
+        using ElemType = std::decay_t<decltype(std::declval<VType>()[0])>;
+        using ScratchVec = Eigen::Matrix<typename ElemType::Scalar, N, 1>; // Storage-backed version of ElemType
+        static_assert((ElemType::RowsAtCompileTime == N) && (ElemType::ColsAtCompileTime == 1), "Inner block elements must already be of the correct vector type.");
+        template<typename T> static auto  get(const T &v, size_t i) { return v[i]; }
+        template<typename T> static auto &get(      T &v, size_t i) { return v[i]; }
+    };
+
+    // Get rows of an `Eigen::Dynamic x N` matrix.
+    template<size_t N, class VType>
+    struct SegmentGetter<N, VType, std::enable_if_t<(N > 1) && (VType::ColsAtCompileTime == N) && !isEigenType<typename VType::value_type>()>> {
+        using ScratchVec = Eigen::Matrix<typename VType::Scalar, N, 1>;
+        template<typename T> static auto get(const T &V, size_t i) { return V.row(i).transpose(); }
+        template<typename T> static auto get(      T &V, size_t i) { return V.row(i).transpose(); }
+    };
+
+    // Get segments of an ordinary (flattened) vector.
+    template<size_t N, class VType>
+    struct SegmentGetter<N, VType, std::enable_if_t<(N > 1) && (VType::ColsAtCompileTime == 1) && !isEigenType<typename VType::value_type>()>> {
+        using ScratchVec = Eigen::Matrix<typename VType::Scalar, N, 1>;
+        template<typename T> static auto get(const T &v, size_t i) { return v.template segment<N>(N * i); }
+        template<typename T> static auto get(      T &v, size_t i) { return v.template segment<N>(N * i); }
+    };
+
+    // Get a 1-dimensional segment of an ordinary vector (i.e., just a scalar)
+    template<class VType>
+    struct SegmentGetter<1, VType> {
+        using ScratchVec = typename VType:: Scalar;
+        template<typename T> static auto  get(const T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
+        template<typename T> static auto &get(      T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
+    };
+
+    template<typename T> void          setZero(     T &&v) {        value_traits<std::decay_t<T>>::setZero(v); }
+    template<typename T> auto valueMagnitudeSq(const T &v) { return value_traits<std::decay_t<T>>::valueMagnitudeSq(v); }
+
+    // Transpose of a dense matrix block
+    template<class Derived> auto transpose_block(const Eigen::MatrixBase<Derived> &A) { return A.transpose(); }
+
+    // Transpose of scalar
+    template<typename T> std::enable_if_t<std::is_arithmetic<T>::value, T> transpose_block(T a) { return a; }
+}
+
 template<typename _Triplet = Triplet<Real>>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
@@ -99,7 +191,7 @@ struct TripletMatrix {
     typedef typename _Triplet::value_type   Real;
     typedef Real                            value_type;
     size_t m, n;
-    std::vector<Triplet> nz;
+    aligned_std_vector<Triplet> nz;
     // Set this to false for minor speed gains if you know that your matrix is
     // already properly sorted and has its repeated entries summed.
     // Warning: it is not automatically set back to true if the matrix is modified!
@@ -114,10 +206,22 @@ struct TripletMatrix {
     void clear() { nz.clear(); }
     void reserve(size_t nn) { nz.reserve(nn); }
     size_t nnz() const { return nz.size(); }
-    void addNZ(size_t i, size_t j, Real v) {
+    void addNZUnpruned(size_t i, size_t j, Real v) {
         assert((i < m) && (j < n));
-        if (v == Real(0.0)) return; // Possibly give this a tolerance...
         nz.push_back(Triplet(i, j, v));
+    }
+    void addNZ(size_t i, size_t j, Real v) {
+        if (spmat_helper::valueMagnitudeSq(v) == 0.0) return; // Possibly give this a tolerance...
+        addNZUnpruned(i, j, v);
+    }
+
+    // Add a vertical strip of contiguous nonzero values starting at (i, j),
+    // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
+    template<class Derived>
+    int addNZStrip(long i, long j, const Eigen::DenseBase<Derived> &values, int hint = -1) {
+        for (int ii = 0; ii < values.rows(); ++ii)
+            addNZ(i + ii, j, values[ii]);
+        return hint;
     }
 
     // Sort and sum of repeated entries
@@ -213,7 +317,7 @@ struct TripletMatrix {
             }
             // Mark the unused entries for deletion
             for (size_t k = backIndex + 1; k < ei; ++k)
-                nz[k].v = 0;
+                spmat_helper::setZero(nz[k].v);
         };
 
 #if MESHFEM_WITH_TBB
@@ -228,7 +332,7 @@ struct TripletMatrix {
 
         // remove identically zero entries (could use a tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [](const Triplet &t) -> bool { return t.v == 0.0; });
+                [](const Triplet &t) -> bool { return spmat_helper::valueMagnitudeSq(t.v) == 0.0; });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
@@ -634,7 +738,7 @@ struct TripletMatrix {
 
 // Search for "i" in "Ai" at indices in the range "[lb, ub)"
 template<typename _Index>
-_Index binary_search(_Index i, _Index *Ai, _Index lb, _Index ub) {
+_Index binary_search(_Index i, const _Index *Ai, _Index lb, _Index ub) {
     return std::distance(Ai, std::lower_bound(Ai + lb, Ai + ub, i));
 #if 0
     while (ub - lb > 6) {
@@ -655,8 +759,8 @@ _Index binary_search(_Index i, _Index *Ai, _Index lb, _Index ub) {
 // at (i, j) already exists in the matrix.
 // Pointers are used so that we can directly modify matrices
 // stored in Cholmod's internal arrays.
-template<typename _Index, typename _Real>
-size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, _Index j, _Real v) {
+template<typename _Index, typename _Real, typename _Real2>
+size_t csc_add_nz(size_t /* nz */, const _Index *Ai, const _Index *Ap, _Real *Ax, _Index i, _Index j, const _Real2 &v) {
 #if 1
     const _Index colend = Ap[j + 1];
     _Index idx = binary_search(i, Ai, Ap[j], colend);
@@ -674,24 +778,16 @@ size_t csc_add_nz(size_t /* nz */, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, 
 #endif
 }
 
-template<typename _Index, typename _Real>
-size_t csc_add_nz(size_t nz, _Index *Ai, _Index *Ap, _Real *Ax, _Index i, _Index j, _Real v, size_t hint) {
-    if ((hint < nz) && (Ai[hint] == i) && (hint < size_t(Ap[j + 1])) && (hint >= size_t(Ap[j]))) {
-        Ax[hint] += v;
-        return hint + 1;
-    }
-    return csc_add_nz(nz, Ai, Ap, Ax, i, j, v);
-}
-
 // Matrix in Compressed Sparse Column format
-template<typename _Index, typename _Real>
+template<typename _Index, typename _Real, class IdxVector = std::vector<_Index>>
 struct CSCMatrix {
     using index_type = _Index;
     using value_type = _Real;
-    std::vector<_Index>  Ap, Ai; // Column pointer and row index arrays
-                                 // Note: the row index array must be sorted!
-    std::vector<_Real>   Ax;     // Value array
-    _Index m, n, nz;             // Number of rows, columns, and nonzeros
+    using container_type = typename spmat_helper::value_traits<value_type>::container_type;
+    IdxVector  Ap, Ai;   // Column pointer and row index arrays
+                         // Note: the row index array must be sorted!
+    container_type Ax;   // Value array (aligned if necessary)
+    _Index m, n, nz;     // Number of rows, columns, and nonzeros
 
     // Rudimentary support for tagging symmetric/nonsymmetric matrices (used by CSCMatrix::apply). This
     // effects, e.g., the interpretation of matrix multiplication.
@@ -704,8 +800,15 @@ struct CSCMatrix {
     CSCMatrix(_Index mm = 0, _Index nn = 0)
         : m(mm), n(nn), nz(0) { }
 
+    // Construct with a given sparsity pattern and uninitialized values.
+    // (Note: if _Real is a plain arithmetic type, `container_type` is really
+    // just a std::vector<_Real>, so the values will actually be initialized to
+    // zero).
+    CSCMatrix(_Index mm, _Index nn, const IdxVector &Ap_in, const IdxVector &Ai_in)
+        : Ap(Ap_in), Ai(Ai_in), Ax(Ai.size()), m(mm), n(nn), nz(Ai_in.size()) { }
+
     CSCMatrix(const CSCMatrix  &b) : Ap(b.Ap), Ai(b.Ai), Ax(b.Ax), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
-    CSCMatrix(      CSCMatrix &&b) : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
+    CSCMatrix(      CSCMatrix &&b) noexcept : Ap(std::move(b.Ap)), Ai(std::move(b.Ai)), Ax(std::move(b.Ax)), m(b.m), n(b.n), nz(b.nz), symmetry_mode(b.symmetry_mode) { }
 
     CSCMatrix(const std::string &path) { readBinary(path); }
 
@@ -718,7 +821,18 @@ struct CSCMatrix {
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) { data().setConstant(val); }
-    void setZero()       { data().setZero(); }
+    template<bool multithreaded = true> void setZero() {
+        if (multithreaded) {
+            parallel_for_range(Ax.size(), [&](size_t i) {
+                spmat_helper::setZero(Ax[i]);
+            });
+        }
+        else {
+            const size_t nnz = Ax.size();
+            for (size_t i = 0; i < nnz; ++i)
+                spmat_helper::setZero(Ax[i]);
+        }
+    }
     void clear() { Ap.clear(); Ai.clear(); Ax.clear(); nz = 0; }
 
     void setIdentity(bool preserveSparsity = false) {
@@ -812,7 +926,7 @@ struct CSCMatrix {
         // Add entries into the transposed matrix in sorted order
         for (_Index c = 0; c < n; ++c) {
             for (_Index inLoc = Ap[c]; inLoc < Ap[c + 1]; ++inLoc)
-                builder.insert(c, Ai[inLoc], Ax[inLoc]);
+                builder.insert(c, Ai[inLoc], spmat_helper::transpose_block(Ax[inLoc]));
         }
 
         return result;
@@ -912,11 +1026,37 @@ struct CSCMatrix {
         *this = toSymmetryMode(SymmetryMode::NONE);
     }
 
+    // Copy the strict lower triangle into the strict upper triangle.
+    // This method assumes that the sparsity pattern is already symmetric and can therefore
+    // avoid the allocation of new Ai/Ap/Ax entries.
+    // Furthermore, by processing lower triangle cols from left to right we know that
+    // entries will be added each column of the upper triangle from top to bottom,
+    // avoiding the need to search for entries entirely.
+    void reflectLowerTriangleInPlace() {
+        auto insertion_point = Ap; // index in each column's bucket where the next entry should be added (start at beginning)
+        for (index_type j = 0; j < n; ++j) {
+            index_type ii = findEntry(j, j) + 1;
+            for (; ii < Ap[j + 1]; ++ii) {
+                size_t i = Ai[ii];
+                // if (i <= j) continue; // skip upper tri
+                // Add entry (j, i)
+                index_type ip = insertion_point[i];
+                if (Ai[ip] != j) throw std::runtime_error("Failed to find lower tri entry in the sparsity pattern!");
+                Ax[ip] = spmat_helper::transpose_block(Ax[ii]);
+                insertion_point[i] = ip + 1;
+            }
+        }
+    }
+
     // Set this matrix to have the same sparsity pattern as b, but with zeros
+    template<bool multithreaded = true>
     void zeros_like(const CSCMatrix &b) {
         m = b.m; n = b.n; nz = b.nz;
         Ap = b.Ap; Ai = b.Ai;
-        Ax.assign(Ai.size(), 0.0);
+        bool previouslyEmpty = Ax.empty();
+        Ax.resize(Ai.size()); // already zero-initializes new elmeents for arithmetic types!
+        if (!std::is_arithmetic<_Real>::value || !previouslyEmpty)
+            setZero<multithreaded>();
     }
 
     template<bool _detectMissing = false>
@@ -937,7 +1077,7 @@ struct CSCMatrix {
     }
 
     // Add the NxN block `B` to this matrix, placing its upper-left corner at (i, i).
-    // (Assumes the block already exists in the sparisty pattern)
+    // (Assumes the block already exists in the sparsity pattern)
     // Only implemented for matrices with upper- or lower-triangle symmetry mode;
     // we cannot achieve a performance advantage over the block version of
     // addNZ for general sparse matrices.
@@ -980,45 +1120,31 @@ struct CSCMatrix {
         return idx;
     }
 
+    // Find with guess (hint).
+    template<bool _detectMissing = false>
+    _Index findEntry(_Index i, _Index j, _Index hint) const {
+        if ((hint < Ap[j + 1]) && (Ai[hint] == i) && (hint >= Ap[j])) {
+            return hint;
+        }
+        return findEntry(i, j);
+    }
+
     // Accumulate a value to (i, j)
     // Note: (i, j) must exist in the sparsity pattern!
     // Complexity: O(log(n_j)) where "n_j" is the number of nonzeros in column j
-    size_t addNZ(_Index i, _Index j, _Real v) {
+    template<typename _Real2>
+    size_t addNZ(_Index i, _Index j, const _Real2 &v) {
         assert((i < m) && (j < n) && "Index out of bounds");
         return csc_add_nz(nz, Ai.data(), Ap.data(), Ax.data(), i, j, v);
     }
 
     // Insert (i, j, v), with a guess that it should go at location "hint"
-    size_t addNZ(const _Index i, const _Index j, const _Real v, _Index hint) {
+    template<typename _Real2>
+    size_t addNZ(const _Index i, const _Index j, const _Real2 &v, _Index hint) {
         if ((hint < Ap[j + 1]) && (Ai[hint] == i) && (hint >= Ap[j])) {
             Ax[hint] += v;
             return hint + 1;
         }
-#if 0
-        const _Index lb = Ap[j], ub = Ap[j + 1];
-        if ((hint < ub) && (hint >= lb)) {
-            _Index row = Ai[hint];
-            if (row <  i) { hint = binary_search(i, Ai.data(), hint, ub); }
-            if (row >  i) { hint = binary_search(i, Ai.data(), lb, hint); }
-            Ax[hint] += v;
-            return hint + 1;
-        }
-#endif
-#if 0
-        const _Index lb = Ap[j], ub = Ap[j + 1];
-        if ((hint >= lb) && (hint < ub)) {
-            long dist = long(i) - long(Ai[hint]);
-            if (dist == 0) { Ax[hint] += v; return hint + 1; }
-            // Still use the hint if it gets us close to row i.
-            if (std::abs(dist) <= 5) {
-                _Index step = std::copysign(1, dist);
-                for (hint = hint + step; hint < ub; hint += step)
-                    if (Ai[hint] == i) { Ax[hint] += v; return hint + 1; }
-                throw std::runtime_error("fail");
-            }
-            return addNZ(i, j, v);
-        }
-#endif
         return addNZ(i, j, v);
     }
 
@@ -1026,26 +1152,27 @@ struct CSCMatrix {
     // return the index of the next nonzero entry after the written strip.
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
-        return addNZ(findEntry(i, j), values);
+    _Index addNZStrip(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
+        return addNZStrip(findEntry(i, j), values);
     }
 
     template<class Derived>
-    _Index addNZ(_Index i, _Index j, const Eigen::DenseBase<Derived> &values, _Index hint) {
+    _Index addNZStrip(_Index i, _Index j, const Eigen::DenseBase<Derived> &values, _Index hint) {
         if ((hint < nz) && (Ai[hint] == i) && (hint < Ap[j + 1]) && (hint >= Ap[j]))
-            return addNZ(hint, values);
-        return addNZ(i, j, values);
+            return addNZStrip(hint, values);
+        return addNZStrip(i, j, values);
     }
 
     // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
-    _Index addNZ(_Index idx, const Eigen::DenseBase<Derived> &values) {
+    _Index addNZStrip(_Index idx, const Eigen::DenseBase<Derived> &values) {
         static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZ");
         Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
 
-    _Index addNZ(_Index idx, _Real val) {
+    template<typename _Real2>
+    _Index addNZ(_Index idx, const _Real2 &val) {
         Ax[idx] += val;
         return idx + 1;
     }
@@ -1075,14 +1202,19 @@ struct CSCMatrix {
     // Entries that are zero in both matrices are left zero (even if they exist
     // in the sparsity pattern).
     void cwiseDivide(const CSCMatrix &b) {
-        if (nz != b.nz) throw std::runtime_error("Mismatched sparisty patterns");
+        if (nz != b.nz) throw std::runtime_error("Mismatched sparsity patterns");
         for (_Index i = 0; i < nz; ++i) { if ((Ax[i] != 0) || (b.Ax[i] != 0)) Ax[i] /= b.Ax[i]; }
     }
 
     // (*this) += alpha * b, assuming b's sparsity pattern is identical to ours.
-    void addWithIdenticalSparsity(const CSCMatrix &b, _Real alpha = 1.0) {
-        if (alpha == 1.0) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
-        else              { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
+    template<typename IdxVector2>
+    void addWithIdenticalSparsity(const CSCMatrix<_Index, _Real, IdxVector2> &b, double alpha = 1.0) {
+        if (b.Ax.size() != Ax.size()) throw std::runtime_error("nnz mismatch");
+        // Probably more efficient, but doesn't work with block matrices (add specialization?):
+        // if (alpha == 1.0) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
+        // else              { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
+        if (alpha == 1.0) { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] +=         b.Ax[i]; }); }
+        else              { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] += alpha * b.Ax[i]; }); }
     }
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
@@ -1135,7 +1267,7 @@ struct CSCMatrix {
         auto bj   = [&]() { return offset + bit.get_j();   };
         auto bval = [&]() { return  alpha * bit.get_val(); };
         std::vector<_Index> newAp, newAi;
-        std::vector<_Real>  newAx;
+        container_type  newAx;
         newAp.reserve(Ap.size());
         newAi.reserve(Ai.size());
         newAx.reserve(Ax.size());
@@ -1363,7 +1495,9 @@ struct CSCMatrix {
     void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
         const bool swapIndices = transpose && (symmetry_mode == SymmetryMode::NONE);
 
-        std::fill(result, result + (transpose ? n : m), 0.0);
+        size_t len = transpose ? n : m;
+        for (size_t i = 0; i < len; ++i)
+            spmat_helper::setZero(result[i]);
 
         const auto ende = end();
         for (auto it = begin(); it != ende; ++it) {
@@ -1373,6 +1507,82 @@ struct CSCMatrix {
             if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
                 result[j] += it.get_val() * x[i];
         }
+    }
+
+    // Parallelized matvec `A x`, where `A` is either an plain sparse matrix
+    // or a sparse matrix in block form  (i.e., an m x n matrix whose entires
+    // are p x q dense blocks).
+    // When the matrix is in block form, `x` can be either also be in block
+    // form (an m-vector whose elements are p-vectors) or in "flattened" form
+    // (a plain vector of length m * p).
+    //
+    // Currently we only support applying the *transpose* of this matrix to `x`
+    // since in the CSC representation, only that can be done lock-free and
+    // without accumulating and subsequently combining a partial "result"
+    // vectors for each thread.
+    // Furthermore, the full matrix (upper and lower tri) must be stored even
+    // in the symmetric case.
+    template<class _InVector, class _Result>
+    void applyTransposeParallel(const _InVector &x, _Result &&result) const {
+        using   Result = std::decay_t<_Result>;
+        using InVector = std::decay_t<_InVector>;
+
+        static_assert(isEigenType<InVector>(), "`x` must be an Eigen type!");
+        if (symmetry_mode != SymmetryMode::NONE) throw std::runtime_error("applyTransposeParallel requires explicit storage of both upper and lower triangle (i.e., a symmetry_mode of NONE)");
+
+        // We handle the following three cases:
+        //  a) matrix entries [p x q], vector flattened as [x0_0, ..., x0_{p - 1}, x1_0, ... ]
+        //  b) matrix entries [p x q], vector entries [p x 1]
+        //  c) matrix entries [p x q], "vector" [Dynamic x q]
+        //  d) matrix entries scalar, vector entries scalar.
+        using vtraits_A = spmat_helper::value_traits<value_type>;
+        using vtraits_x = spmat_helper::value_traits<typename InVector::value_type>;
+
+        static_assert(std::is_same<typename Result::Scalar, typename InVector::Scalar>::value
+                        && (long(Result::RowsAtCompileTime) == long(InVector::RowsAtCompileTime))
+                        && (long(Result::ColsAtCompileTime) == long(InVector::ColsAtCompileTime)), "Result currently must be same underlying type");
+
+        constexpr size_t p = vtraits_A::rows;
+        constexpr size_t q = vtraits_A::cols;
+        static_assert(((InVector::ColsAtCompileTime == 1) || (vtraits_x::rows == 1)) &&
+                       (InVector::ColsAtCompileTime != Eigen::Dynamic), "vector 'blocks' must either be stored in an inner vector type or in rows of `x`");
+
+        constexpr size_t vec_block = std::max<size_t>(vtraits_x::rows, InVector::ColsAtCompileTime);
+        static_assert(((vec_block == p) || (vec_block == 1)) && (vtraits_x::cols == 1), "x elements must be scalars or [p x 1] vectors");
+        static_assert( (vec_block == q) || (vec_block == 1), "result elements must be scalars for [q x 1] vectors"); // Note: we currently assume result is the same type as x...
+
+        // Note: this transposed matrix we're applying is `(n * q) x (m * p)`,
+        // so `x` should be of size `mm` and the result of size `nn`.
+        if (size_t(x.rows()) * vec_block != size_t(m * p)) throw std::runtime_error("Sparse matvec size mismatch.");
+        using SG = spmat_helper::SegmentGetter<p, InVector>;
+
+        const size_t result_size = (n * q) / vec_block;
+        result.resize(result_size, Result::ColsAtCompileTime);
+
+        // Process one matrix column at a time, generating an entry of the transposed matvec result.
+        auto computeEntry = [&x, &result, this](index_type j) {
+			const index_type col_begin = Ap[j],
+			                 col_end   = Ap[j + 1];
+            if (col_begin == col_end) { spmat_helper::setZero(SG::get(result, j)); return; } // zero-column case: output zero
+            typename SG::ScratchVec tmp = spmat_helper::transpose_block(Ax[col_begin]) * SG::get(x, Ai[col_begin]);
+            for (index_type entry = col_begin + 1; entry < col_end; ++entry)
+                tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+            SG::get(result, j) = tmp;
+        };
+
+#if MESHFEM_WITH_TBB
+        parallel_for_range(n, computeEntry);
+#else
+        for (index_type j = 0; j < n; ++j) computeEntry(j);
+#endif
+    }
+
+    template<typename _Vector>
+    auto applyTransposeParallel(const _Vector &x) const {
+        using Result = Eigen::Matrix<typename _Vector::Scalar, _Vector::RowsAtCompileTime, _Vector::ColsAtCompileTime>;
+        Result result;
+        applyTransposeParallel(x, result);
+        return result;
     }
 
     // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively

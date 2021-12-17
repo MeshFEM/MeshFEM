@@ -11,11 +11,12 @@ template <typename _Real, size_t _Dimension>
 struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
     static constexpr EDensityType EDType = EDensityType::FBased;
 
-    static constexpr size_t Dimension = _Dimension;
+    static constexpr size_t N = _Dimension;
+
     using Real = _Real;
-    using Matrix = Eigen::Matrix<_Real, _Dimension, _Dimension>;
-    using ETensor = ElasticityTensor<_Real, _Dimension>;
-    using SMatrix = SymmetricMatrixValue<_Real, _Dimension>;
+    using Matrix = Eigen::Matrix<_Real, N, N>;
+    using ETensor = ElasticityTensor<_Real, N>;
+    using SMatrix = SymmetricMatrixValue<_Real, N>;
 
     /**
      *  Construct a linear elastic energy density with a default initialized

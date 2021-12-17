@@ -73,6 +73,9 @@ public:
           T &operator[](size_t i)       { return get1D(i); }
 
     void fill(const T &value) { m_data.fill(value); }
+
+    const T *data() const { return m_data.data(); }
+
 private:
     template<size_t... I> const T &accessImpl(const NDArrayIndex<N> &idx, Future::index_sequence<I...>) const { return m_data.at(Idx::index(idx.template get<I>()...)); }
     template<size_t... I>       T &accessImpl(const NDArrayIndex<N> &idx, Future::index_sequence<I...>)       { return m_data.at(Idx::index(idx.template get<I>()...)); }

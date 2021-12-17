@@ -570,7 +570,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
                 const size_t var_b = 3 * v_b.index() + c_b;
                 for (const auto v_a : e.vertices()) {
                     if (v_a.index() > v_b.index()) continue;
-                    Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
+                    Hout.addNZStrip(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
                 }
             }
         }
@@ -581,7 +581,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
         for (const auto he_b : e.halfEdges()) {
             const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
             for (const auto v_a : e.vertices())
-                Hout.addNZ(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+                Hout.addNZStrip(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
             for (const auto he_a : e.halfEdges()) {
                 const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
                 if (var_a > var_b) continue;
@@ -600,7 +600,7 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
             // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
             const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
             for (const auto v_a : e.vertices())
-                Hout.addNZ(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+                Hout.addNZStrip(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
             for (const auto he_a : e.halfEdges()) {
                 size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
                 // First, extract the derivative with respect to the midedge normal angles for he_a and he_b

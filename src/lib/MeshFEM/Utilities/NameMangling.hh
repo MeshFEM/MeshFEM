@@ -44,14 +44,13 @@ std::string getElasticSolidName() {
 
 template<typename _Energy>
 std::string getEnergyName() {
-    return _Energy::name() + std::to_string(_Energy::Dimension) + "D";
+    return _Energy::name() + std::to_string(_Energy::N) + "D";
 }
 
-template<size_t _Dimension>
 std::string
-getElasticityTensorName()
+getElasticityTensorName(size_t N)
 {
-    return "ElasticityTensor" + std::to_string(_Dimension) + "D";
+    return "ElasticityTensor" + std::to_string(N) + "D";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -103,7 +102,7 @@ class ElasticityTensor;
 template<typename _Real, size_t _Dim, bool _MajorSymmetry>
 struct NameMangler<ElasticityTensor<_Real, _Dim, _MajorSymmetry>> {
     static std::string name() {
-        return getElasticityTensorName<_Dim>() + floatingPointTypeSuffix<_Real>();
+        return getElasticityTensorName(_Dim) + floatingPointTypeSuffix<_Real>();
     }
 };
 

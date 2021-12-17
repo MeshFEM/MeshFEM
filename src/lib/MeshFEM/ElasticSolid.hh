@@ -222,7 +222,7 @@ public:
 
     virtual void hessian(SuiteSparseMatrix& H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
-        auto assembler_per_element_contrib = [&](size_t ei, SuiteSparseMatrix& Hout) {
+        auto assembler_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
             const auto &e = m.element(ei);
             PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
@@ -241,7 +241,7 @@ public:
                         size_t len = std::min(size_t(N), gvar_b - gvar_a + 1);
                         for (size_t c = 0; c < len; ++c)
                             block[c] = contrib(perElementHessianFlattening(var_a + c, var_b));
-                        Hout.addNZ(gvar_a, gvar_b, block.topRows(len));
+                        Hout.addNZStrip(gvar_a, gvar_b, block.topRows(len));
                     }
                 }
             }

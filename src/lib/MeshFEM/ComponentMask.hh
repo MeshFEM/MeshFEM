@@ -1,9 +1,9 @@
 #ifndef COMPONENTMASK_HH
 #define COMPONENTMASK_HH
 #include <bitset>
+#include "Types.hh"
 
-class ComponentMask {
-public:
+struct ComponentMask {
     ComponentMask(const std::string &components = "") {
         setComponentString(components);
     }
@@ -76,6 +76,8 @@ public:
         if (cm.hasZ()) os << "z";
         return os;
     }
+
+    const std::bitset<3> &data() const { return m_active; }
 
 private:
     std::bitset<3> m_active;
