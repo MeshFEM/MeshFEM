@@ -344,6 +344,15 @@ ConvergenceReport NewtonOptimizer::optimize() {
             else {
                 alpha *= 0.5;
             }
+
+            if (bit == options.nbacktrack_iter - 1) {
+                std::cout << "Backtracking failure with:" << std::endl
+                          << "Curr energy: " << currEnergy << std::endl
+                          << "Stepped energy: " << steppedEnergy << std::endl
+                          << "sufficientDecrease: " << sufficientDecrease << std::endl
+                          << "decrease: " << decrease << std::endl
+                          << std::endl;
+            }
         }
         BENCHMARK_STOP_TIMER_SECTION("Backtracking");
 

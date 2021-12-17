@@ -140,8 +140,8 @@ struct MESHFEM_EXPORT NewtonProblem {
         // For the Lagrange multiplier estimate to be accurate, we require the gradient to be small.
         // (Since we're working with bound constraints, the first order Lagrange multiplier estimate is simply the gradient component)
         bool shouldRemoveFromWorkingSet(const VXd &g, const VXd &g_free) const {
-            if (type == Type::LOWER) { return g[idx] >  10 * g_free.norm(); }
-            if (type == Type::UPPER) { return g[idx] < -10 * g_free.norm(); }
+            if (type == Type::UPPER) { return g[idx] >  10 * g_free.norm(); }
+            if (type == Type::LOWER) { return g[idx] < -10 * g_free.norm(); }
             throw std::runtime_error("Unknown bound type");
         }
 
