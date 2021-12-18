@@ -31,8 +31,8 @@ struct EdgeAccessAdaptor<std::pair<size_t, size_t>> {
     static constexpr size_t  first(const std::pair<size_t, size_t> &e) { return  e.first; }
     static constexpr size_t second(const std::pair<size_t, size_t> &e) { return e.second; }
 
-    static constexpr size_t    get(const std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; throw std::runtime_error("Index out of bounds: " + std::to_string(i));  }
-    static constexpr size_t   &get(      std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; throw std::runtime_error("Index out of bounds: " + std::to_string(i));  }
+    static constexpr size_t    get(const std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; assert(false && "Index passed to EdgeAccessAdaptor::get is out of bounds!");  }
+    static constexpr size_t   &get(      std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; assert(false && "Index passed to EdgeAccessAdaptor::get is out of bounds!");  }
 };
 
 #endif /* end of include guard: EDGEACCESSADAPTOR_HH */
