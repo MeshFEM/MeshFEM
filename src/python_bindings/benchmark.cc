@@ -4,7 +4,7 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 namespace py = pybind11;
 
-PYBIND11_MODULE(benchmark, m) {
+PYBIND11_MODULE(_benchmark, m) {
     m.def("reset", &BENCHMARK_RESET);
     m.def("start_timer_section", &BENCHMARK_START_TIMER_SECTION, py::arg("name"));
     m.def("stop_timer_section",  &BENCHMARK_STOP_TIMER_SECTION,  py::arg("name"));
