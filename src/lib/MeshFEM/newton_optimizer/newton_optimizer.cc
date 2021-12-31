@@ -238,7 +238,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)
         g_free = workingSet.getFreeComponent(zg);
 
-        if ((!isIndefinite) && (zg.norm() < options.gradTol)) {
+        if ((!isIndefinite) && (g_free.norm() < options.gradTol)) {
             report.success = true;
             break; // TODO: termination criterion when bounds are active at the optimum
         }
