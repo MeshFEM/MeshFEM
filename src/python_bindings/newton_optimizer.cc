@@ -112,7 +112,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("setVars",                &NewtonProblem::setVars)
         .def("numVars",                &NewtonProblem::numVars)
         .def("applyBoundConstraints",  &NewtonProblem::applyBoundConstraints)
-        .def("activeBoundConstraints", &NewtonProblem::activeBoundConstraints)
+        .def("activeBoundConstraints", &NewtonProblem::activeBoundConstraints, py::arg("vars"), py::arg("g"), py::arg("tol") = 1e-8)
         .def("boundConstraints",       &NewtonProblem::boundConstraints, py::return_value_policy::reference)
         .def("feasible",               &NewtonProblem::feasible)
         .def("feasibleStepLength",     py::overload_cast<const Eigen::VectorXd &>(&NewtonProblem::feasibleStepLength, py::const_))

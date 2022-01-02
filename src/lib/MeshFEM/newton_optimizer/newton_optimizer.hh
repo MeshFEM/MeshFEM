@@ -132,8 +132,8 @@ struct MESHFEM_EXPORT NewtonProblem {
         // To avoid numerical issues as iterates approach the bound constraints, a constraint
         // is considered active if the variable is within "tol" of the bound.
         bool active(const VXd &vars, const VXd &g, Real tol = 1e-8) const {
-            return ((type == Type::LOWER) && (vars[idx] <= val + tol) && ((g.size() == 0) || (g[idx] <= 0)))
-                || ((type == Type::UPPER) && (vars[idx] >= val - tol) && ((g.size() == 0) || (g[idx] >= 0)));
+            return ((type == Type::LOWER) && (vars[idx] <= val + tol) && ((g.size() == 0) || (g[idx] >= 0)))
+                || ((type == Type::UPPER) && (vars[idx] >= val - tol) && ((g.size() == 0) || (g[idx] <= 0)));
         }
 
         // Decide whether the bound constraint should be removed form the working set.
