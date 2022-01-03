@@ -250,6 +250,7 @@ protected:
 
 struct MESHFEM_EXPORT WorkingSet {
     WorkingSet(const NewtonProblem &problem) : m_prob(problem), m_contains(problem.numBoundConstraints(), false), m_varFixed(problem.numVars(), false) { }
+    WorkingSet(const WorkingSet &ws) : m_prob(ws.m_prob), m_count(ws.m_count), m_contains(ws.m_contains), m_varFixed(ws.m_varFixed) { }
 
     // Check whether the working set contains a particular constraint
     bool contains(size_t idx) const { return m_contains[idx]; }
@@ -299,7 +300,7 @@ struct MESHFEM_EXPORT WorkingSet {
 
     // Zero out the components for variables fixed by the working set. E.g., if "g" is the gradient,
     // compute the gradient with respect to the "free" variables (without resizing)
-    void getFreeComponentInPlace(Eigen::VectorXd &g) const {
+    void getFreeComponentInPlace(Eigen::Ref<Eigen::VectorXd> g) const {
         if (size_t(g.size()) != m_varFixed.size()) throw std::runtime_error("Gradient size mismatch");
         for (size_t vidx = 0; vidx < m_varFixed.size(); ++vidx)
             if (m_varFixed[vidx]) g[vidx] = 0.0;
@@ -309,6 +310,10 @@ struct MESHFEM_EXPORT WorkingSet {
         getFreeComponentInPlace(g);
         return g;
     }
+
+    std::unique_ptr<WorkingSet> clone() const { return std::make_unique<WorkingSet>(*this); }
+
+    const NewtonProblem &problem() const { return m_prob; }
 
 private:
     const NewtonProblem &m_prob;
@@ -464,6 +469,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     }
 
     ConvergenceReport optimize();
+    ConvergenceReport optimize(WorkingSet &ws);
 
     Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
 
@@ -481,12 +487,14 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // the problem is solved or the iteration limit is reached, solver/kkt_solver
     // hold values from the previous iteration (before the final linesearch
     // step).
-    void update_factorizations() {
+    void update_factorizations(const WorkingSet &ws) {
         // Computing a Newton step updates the Cholesky factorization in
         // "solver" and (if applicable) the kkt_solver as a side-effect.
         Eigen::VectorXd dummy;
-        newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()));
+        newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()), ws, options.beta, std::min(options.beta, 1e-6));
     }
+
+    void update_factorizations() { update_factorizations(WorkingSet(*prob)); }
 
     Real tauScale() const { return (options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*prob) : 1.0) / prob->metricL2Norm(); }
 

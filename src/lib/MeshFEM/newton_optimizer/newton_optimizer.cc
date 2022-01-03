@@ -35,6 +35,7 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, c
 Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
     BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
     step.resize(g.size());
+    if (&ws.problem() != &get_problem()) throw std::runtime_error("Working set is for a different problem");
 
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
@@ -143,6 +144,12 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 }
 
 ConvergenceReport NewtonOptimizer::optimize() {
+    // Indices of the bound constraints in our working set.
+    WorkingSet workingSet(*prob);
+    return optimize(workingSet);
+}
+
+ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     size_t ngd_fallback_steps = options.ngd_fallback_steps; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
 
     prob->setUseIdentityMetric(options.useIdentityMetric);
@@ -150,9 +157,6 @@ ConvergenceReport NewtonOptimizer::optimize() {
 
     prob->setVars(prob->applyBoundConstraints(prob->getVars()));
     Eigen::VectorXd vars, step;
-
-    // Indices of the bound constraints in our working set.
-    WorkingSet workingSet(*prob);
 
     Real beta = options.beta;
     const Real betaMin = std::min(beta, 1e-10); // Initial shift "tau" to use when an indefinite matrix is detected.
@@ -238,11 +242,6 @@ ConvergenceReport NewtonOptimizer::optimize() {
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)
         g_free = workingSet.getFreeComponent(zg);
 
-        if ((!isIndefinite) && (g_free.norm() < options.gradTol)) {
-            report.success = true;
-            break; // TODO: termination criterion when bounds are active at the optimum
-        }
-
         // Free variables in the working set from their bound constraints, if necessary
         bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
                 bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free);
@@ -251,6 +250,11 @@ ConvergenceReport NewtonOptimizer::optimize() {
             });
 
         if (ws_updated) g_free = workingSet.getFreeComponent(zg);
+
+        if ((!isIndefinite) && (g_free.norm() < options.gradTol)) {
+            report.success = true;
+            break;
+        }
 
         } // End of 'Preamble' timer
 
