@@ -281,7 +281,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
             auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
-            ws.getFreeComponentInPlace(d);
+            workingSet.getFreeComponentInPlace(d);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {
