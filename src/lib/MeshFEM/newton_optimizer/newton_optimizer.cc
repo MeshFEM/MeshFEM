@@ -281,6 +281,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
             auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
+            ws.getFreeComponentInPlace(d);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {
@@ -425,12 +426,9 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg));
     std::cout << std::flush;
 
-    if (workingSet.size()) {
+    if (options.verboseWorkingSet && workingSet.size()) {
         std::cout << "Terminated with working set:\n";
-        vars = prob->getVars();
-        for (size_t bci = 0; bci < prob->numBoundConstraints(); ++bci) {
-            if (workingSet.contains(bci)) prob->boundConstraint(bci).report(vars, g);
-        }
+        workingSet.report(prob->getVars(), g);
     }
 
     // std::cout << "Before apply bound constraints: " << prob->energy() << std::endl;

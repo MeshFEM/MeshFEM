@@ -315,6 +315,12 @@ struct MESHFEM_EXPORT WorkingSet {
 
     const NewtonProblem &problem() const { return m_prob; }
 
+    void report(const Eigen::VectorXd &vars, const Eigen::VectorXd &g) const {
+        for (size_t bci = 0; bci < m_prob.numBoundConstraints(); ++bci) {
+            if (contains(bci)) m_prob.boundConstraint(bci).report(vars, g);
+        }
+    }
+
 private:
     const NewtonProblem &m_prob;
     size_t m_count = 0;
@@ -337,6 +343,7 @@ struct NewtonOptimizerOptionsBase {
     // Warning: the following fields are NOT serialized for reasons of backwards compatibility
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
+    bool verboseWorkingSet = false;            // Whether to report the contents of nonempty working sets upon termination.
 };
 
 // The part of the optimizer interface that is not trivially copyable.
