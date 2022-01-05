@@ -2058,6 +2058,10 @@ public:
     // Exchange the roles of m_L and m_L_stashed, making the stash the active factorization.
     void swapStashedFactorization() { std::swap(m_L, m_L_stashed); }
 
+    void clearStashedFactorization() {
+        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
+    }
+
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
     // to a vector.
     CholmodSparseWrapper getL() {
@@ -2077,8 +2081,8 @@ public:
     }
 
     void clearFactors() {
-        if (m_L)         { cholmod_l_free_factor(&m_L,         m_c.get()); m_L         = nullptr; }
-        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
+        if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
+        clearStashedFactorization();
     }
 
     ~CholmodFactorizer() {

@@ -281,13 +281,13 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
             auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
-            workingSet.getFreeComponentInPlace(d);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {
                     Eigen::VectorXd tmp(step.size());
                     extractFullSolution(d, tmp); // negative curvature direction was computed in reduced variables...
                     d = tmp;
+                    workingSet.getFreeComponentInPlace(d); // Enforce the active bound constraints.
                     // {
                     //     const SuiteSparseMatrix &H = prob->hessian();
                     //     H.applyRaw(d.data(), tmp.data());
