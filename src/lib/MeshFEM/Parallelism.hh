@@ -23,6 +23,7 @@ MESHFEM_EXPORT void set_gradient_assembly_num_threads(int num_threads);
 MESHFEM_EXPORT tbb::task_arena &get_hessian_assembly_arena();
 MESHFEM_EXPORT tbb::task_arena &get_gradient_assembly_arena();
 
+#if 1
 template<typename F>
 void parallel_for_range(size_t n, F &&f) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, n),
@@ -31,6 +32,13 @@ void parallel_for_range(size_t n, F &&f) {
             f(i);
     });
 }
+#else
+template<typename F>
+void parallel_for_range(size_t n, F &&f) {
+    for (size_t i = 0; i < n; ++i)
+        f(i);
+}
+#endif
 
 #endif
 #endif /* end of include guard: PARALLELISM_HH */

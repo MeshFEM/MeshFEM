@@ -256,12 +256,9 @@ struct TripletMatrix {
 #if PARALLEL_BIN
         auto bucketStart = std::unique_ptr<std::atomic<size_t>[]>(new std::atomic<size_t>[n + 1]);
         for (size_t i = 0; i < n + 1; ++i) bucketStart[i] = 0;
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, origNNZ),
-            [&bucketStart, this](const tbb::blocked_range<size_t> &r) {
-                for (size_t ti = r.begin(); ti < r.end(); ++ti)
-                    ++bucketStart[nz[ti].j + 1];
-        });
+        parallel_for_range(origNNZ, [&](size_t ti) {
+            ++bucketStart[nz[ti].j + 1];
+        }
 #else
         std::vector<size_t> bucketStart(n + 1, 0);
         for (size_t ti = 0; ti < origNNZ; ++ti)
@@ -297,11 +294,7 @@ struct TripletMatrix {
             columnBuckets[newEntry].second = t.v;
         };
 #if PARALLEL_BIN
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, origNNZ),
-            [&](const tbb::blocked_range<size_t> &r) {
-                for (size_t ti = r.begin(); ti < r.end(); ++ti) placeInBucket(ti);
-        });
+        parallel_for_range(origNNZ, [&](size_t ti) { placeInBucket(ti); });
 #else
         for (size_t ti = 0; ti < origNNZ; ++ti) placeInBucket(ti);
 #endif
@@ -334,15 +327,7 @@ struct TripletMatrix {
                 spmat_helper::setZero(nz[k].v);
         };
 
-#if MESHFEM_WITH_TBB
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, n),
-            [&](const tbb::blocked_range<size_t> &r) {
-                for (size_t j = r.begin(); j < r.end(); ++j) sortAndSumBucket(j);
-        });
-#else
-        for (size_t j = 0; j < n; ++j) sortAndSumBucket(j);
-#endif
+        parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
         // remove identically zero entries (could use a tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
