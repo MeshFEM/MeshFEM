@@ -233,18 +233,19 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).
         vars = prob->getVars();
-
         g = prob->gradient(true);
         currEnergy = prob->energy();
 
         zg = zeroOutFixedVars(g); // non-fixed components of the gradient; used for termination criteria
         projectOutLEQConstrainedComponents(zg);
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)
+
         g_free = workingSet.getFreeComponent(zg);
 
+        Real g_free_norm = g_free.norm();
         // Free variables in the working set from their bound constraints, if necessary
         bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
-                bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free);
+                bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free_norm);
                 if (shouldRemove) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
                 return shouldRemove;
             });
@@ -294,7 +295,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                     //     Real lambda = d.dot(tmp);
                     //     std::cout << "Found negative curvature direction with eigenvalue " << lambda << std::endl;
                     // }
-                    if (d.dot(g) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
+                    if (d.dot(zg) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
                     const Real cd = prob->characteristicDistance(d);
                     if (cd <= 0) // problem doesn't provide one
                         step += std::sqrt(step.squaredNorm() / d.squaredNorm()) * d; // TODO: find a better balance between newton step and negative curvature.
