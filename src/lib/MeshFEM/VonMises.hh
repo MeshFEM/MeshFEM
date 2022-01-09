@@ -56,6 +56,7 @@
 
 #include "ElasticityTensor.hh"
 #include "SymmetricMatrix.hh"
+#include "Fields.hh"
 
 
 // WARNING: in 2D, this does not actually extract the stress deviator tensor for

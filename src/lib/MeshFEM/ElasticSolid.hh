@@ -27,6 +27,7 @@
 #include "ElasticObject.hh"
 #include "MassMatrix.hh"
 #include "Laplacian.hh"
+#include "VonMises.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
@@ -323,14 +324,52 @@ public:
         return 0.5 * (F.transpose() * F - Matrix::Identity());
     }
 
+    Matrix cauchyStress(size_t ei, const EvalPtN &x) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        Matrix F = getDeformationGradient(ei, x);
+        psi.setDeformationGradient(F);
+        // For all energies *except* `LinearElaticEnergy`, `denergy`
+        // returns the PK1 stress (dpsi/dF) which must be transformed
+        // to obtained the Cauchy stress.
+        // For `LinearElaticEnergy`, dpsi/dF is actually the Cauchy stress
+        // directly, and transforming it is wrong!
+        if (isLinearElastic<Energy>::value) return psi.denergy();
+        return (psi.denergy() * F.transpose()) / F.determinant();
+    }
+
+    Real vonMisesStress(size_t ei, const EvalPtN &x) const {
+        // Note: this is very inefficient!
+        return std::sqrt(vonMises(SymmetricMatrixValue<Real, N>(cauchyStress(ei, x))).frobeniusNormSq());
+    }
+
     // Get the average Green strain tensor over element `ei`
     Matrix greenStrain(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // This quadrature rule is always exact
             [ei, this](const EvalPtN &x) { return greenStrain(ei, x); }, 1.0);
     }
 
+    // Get the average cauchy stress tensor over element `ei`
+    Matrix cauchyStress(size_t ei) const {
+        return Quadrature<N, 2 * (Deg - 1)>::integrate( // Exact for linear elasticity
+            [ei, this](const EvalPtN &x) { return cauchyStress(ei, x); }, 1.0);
+    }
+
     std::vector<Matrix> vertexGreenStrains() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtN &x) { return greenStrain(ei, x); });
+    }
+
+    std::vector<Matrix> vertexCauchyStresses() const {
+        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtN &x) { return cauchyStress(ei, x); });
+    }
+
+    // The Lp norm of the von Mises Cauchy stress (omitting the endcaps)
+    Real surfaceStressLpNorm(double p) const {
+        Real integral = 0;
+        for (auto e : mesh().elements()) {
+            integral += Quadrature<N, 2 * (Deg - 1)>::integrate(
+                    [&](const EvalPtN &x) { return std::pow(vonMisesStress(e.index(), x), p); }, e->volume());
+        }
+        return std::pow(integral, 1.0 / p);
     }
 
     VXd element3DVolumes() const {

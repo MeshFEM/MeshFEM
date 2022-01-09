@@ -66,6 +66,10 @@ struct ElasticSolidBinder {
           .def("greenStrain",               [](const ES &es, size_t ei) { return es.greenStrain(ei); }, py::arg("ei"))
           .def("greenStrain",               [](const ES &es, size_t ei, const typename ES::EvalPtN &baryCoords) { return es.greenStrain(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
           .def("vertexGreenStrains",        &ES::vertexGreenStrains)
+          .def("cauchyStress",              [](const ES &es, size_t ei) { return es.cauchyStress(ei); }, py::arg("ei"))
+          .def("cauchyStress",              [](const ES &es, size_t ei, const typename ES::EvalPtN &baryCoords) { return es.cauchyStress(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
+          .def("vertexCauchyStresses",      &ES::vertexCauchyStresses)
+          .def("surfaceStressLpNorm",       &ES::surfaceStressLpNorm, py::arg("p"))
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
                 return getVisualizationGeometry(visMesh, normalCreaseAngle);
