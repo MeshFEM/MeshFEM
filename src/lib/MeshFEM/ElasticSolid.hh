@@ -132,8 +132,8 @@ public:
     // Energy stored in the full object.
     virtual Real energy() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("energy");
-        return summation_parallel<Real>([this](size_t ei) { return elementEnergy(ei); },
-                                        mesh().numElements());
+        return summation_parallel([this](size_t ei) { return elementEnergy(ei); },
+                                  mesh().numElements());
     }
 
     // Gradient of a single element's energy with respect to its nodes' deformed positions..

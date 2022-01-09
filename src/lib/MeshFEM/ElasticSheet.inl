@@ -230,8 +230,8 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
 
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::energy(const EnergyType etype) const {
-    return summation_parallel<Real>([this, etype](size_t ei) { return elementEnergy(ei, etype); },
-                                    mesh().numElements());
+    return summation_parallel([this, etype](size_t ei) { return elementEnergy(ei, etype); },
+                              mesh().numElements());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
