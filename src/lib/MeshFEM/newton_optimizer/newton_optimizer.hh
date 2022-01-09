@@ -137,8 +137,8 @@ struct MESHFEM_EXPORT NewtonProblem {
         }
 
         // Decide whether the bound constraint should be removed from the working set.
-        // For the Lagrange multiplier estimate to be accurate, we require the gradient to be small.
-        // (Since we're working with bound constraints, the first order Lagrange multiplier estimate is simply the gradient component)
+        // For the Lagrange multiplier estimate to be accurate, the reduced gradient must be small.
+        // (Since we're working with bound constraints, the first-order Lagrange multiplier estimate is simply the gradient component)
         bool shouldRemoveFromWorkingSet(const VXd &g, Real g_free_norm) const {
             if (type == Type::UPPER) { return g[idx] >  10 * g_free_norm; }
             if (type == Type::LOWER) { return g[idx] < -10 * g_free_norm; }

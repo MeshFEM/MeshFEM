@@ -321,10 +321,10 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         std::tie(feasible_alpha, blocking_idx) = prob->feasibleStepLength(vars, step);
 
         // To add multiple nearby bounds to the working set at once, we allow the
-        // step to overshoot the bounds slightly (note: variables will be clamped to the bounds anyway before
-        // evaluating the objective). Then any bound violated by the step length obtaining
-        // sufficient decrease is added to the working set.
-        alpha = std::min(1.0, feasible_alpha + 1e-3);
+        // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
+        // evaluating the objective). Then all bounds violated by the step length obtaining
+        // sufficient decrease are added to the working set.
+        alpha = std::min(1.0, feasible_alpha * 2);
 
         const Real c_1 = 1e-2;
         size_t bit;
