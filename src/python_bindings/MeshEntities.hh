@@ -10,7 +10,8 @@
 #include <MeshFEM/Future.hh>
 #include <MeshFEM/Handles/Handle.hh>
 
-// Gets the *volume* vertex indices making up a volume or boundary element.
+// Get the indices of the vertices making up a volume or boundary element.
+// If `volumeIndices` is true, then the indices of *volume* vertices are obtained even in the boundary element case.
 template<class _EHandle, size_t... I>
 Eigen::Matrix<int, sizeof...(I), 1> getElementCorners(const _EHandle &e, bool volumeIndices, Future::index_sequence<I...>) {
     constexpr size_t nv = _EHandle::numVertices();
@@ -25,6 +26,28 @@ Eigen::Matrix<int, Eigen::Dynamic, _HandleRange::HType::numVertices()> getElemen
     Eigen::Matrix<int, Eigen::Dynamic, nvPerElem> elements(range.size(), nvPerElem);
     for (const auto e : range)
         elements.row(e.index()) = getElementCorners(e, volumeIndices, Future::make_index_sequence<nvPerElem>());
+    return elements;
+}
+
+// Get the indices of the nodes making up a volume or boundary element.
+// If `volumeIndices` is true, then the indices of *volume* nodes are obtained even in the boundary element case.
+template<class _EHandle, size_t... I>
+Eigen::Matrix<int, sizeof...(I), 1> getElementNodes(const _EHandle &e, bool volumeIndices, Future::index_sequence<I...>) {
+    constexpr size_t nn = _EHandle::numNodes();
+    static_assert(sizeof...(I) == nn, "Incorrect index sequence length.");
+    std::array<int, nn> result_stl; // Sadly we cannot construct an Eigen::Matrix with more than 4 entries (it doesn't take an initialzier list)...
+    if (volumeIndices) result_stl = {e.node(I).volumeNode().index()...};
+    else               result_stl = {e.node(I).index()...};
+    Eigen::Matrix<int, nn, 1> result = Eigen::Map<Eigen::Matrix<int, nn, 1>>(result_stl.data(), nn);
+    return result;
+}
+
+template<class _HandleRange>
+Eigen::Matrix<int, Eigen::Dynamic, _HandleRange::HType::numNodes()> getElementNodes(const _HandleRange &range, bool volumeIndices = true) {
+    constexpr size_t nnPerElem = _HandleRange::HType::numNodes();
+    Eigen::Matrix<int, Eigen::Dynamic, nnPerElem> elements(range.size(), nnPerElem);
+    for (const auto e : range)
+        elements.row(e.index()) = getElementNodes(e, volumeIndices, Future::make_index_sequence<nnPerElem>());
     return elements;
 }
 

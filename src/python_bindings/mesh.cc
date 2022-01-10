@@ -50,8 +50,10 @@ struct MeshBindingsBase {
                   if ((nv != m.numVertices()) && (nv != m.numNodes())) throw std::runtime_error("Incorrect vertex count");
                   m.setNodePositions(V);
                })
-          .def("elements",         [](const Mesh &m) { return getElementCorners(m.elements()); })
-          .def("boundaryElements", [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
+          .def("elements",            [](const Mesh &m) { return getElementCorners(m.elements()); })
+          .def("boundaryElements",    [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
+          .def("elementNodes",        [](const Mesh &m) { return getElementNodes(m.elements()); })
+          .def("boundaryElementNodes",[](const Mesh &m) { return getElementNodes(m.boundaryElements()); })
           .def("boundaryVertices", [](const Mesh &m) {
                     Eigen::VectorXi result(m.numBoundaryVertices());
                     for (const auto bv : m.boundaryVertices())
@@ -70,6 +72,8 @@ struct MeshBindingsBase {
                       result[be.index()] = be.opposite().simplex().index();
                   return result;
               })
+          .def_static("integratedShapeFunctions",         []() { return integratedShapeFunctions<Mesh::Deg, Mesh::    K>(); })
+          .def_static("integratedBoundaryShapeFunctions", []() { return integratedShapeFunctions<Mesh::Deg, Mesh::K - 1>(); })
 
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
@@ -82,7 +86,12 @@ struct MeshBindingsBase {
                                                       : "Boundary triangle normals")
           .def("elementVolumes", [](const Mesh &m) {
                       Eigen::VectorXd result(m.numElements());
-                      for (const auto e : m.elements()) result[e.index()] = e->volume();
+                      for (auto e : m.elements()) result[e.index()] = e->volume();
+                      return result;
+                  })
+          .def("boundaryElementVolumes", [](const Mesh &m) {
+                      Eigen::VectorXd result(m.numBoundaryElements());
+                      for (auto be : m.boundaryElements()) result[be.index()] = be->volume();
                       return result;
                   })
           .def("edgeLengths", [](const Mesh &m) {

@@ -23,6 +23,7 @@
 
 #include "RigidMotionPins.hh"
 #include "FieldPostProcessing.hh"
+#include "InterpolantRestriction.hh"
 
 #include "ElasticObject.hh"
 #include "MassMatrix.hh"
@@ -365,9 +366,12 @@ public:
     // The Lp norm of the von Mises Cauchy stress (omitting the endcaps)
     Real surfaceStressLpNorm(double p) const {
         Real integral = 0;
-        for (auto e : mesh().elements()) {
-            integral += Quadrature<N, 2 * (Deg - 1)>::integrate(
-                    [&](const EvalPtN &x) { return std::pow(vonMisesStress(e.index(), x), p); }, e->volume());
+        for (auto be : mesh().boundaryElements()) {
+            auto e = mesh().element(be.opposite().element().index());
+            integral += Quadrature<K - 1, 2 * (Deg - 1)>::integrate(
+                    restrictIntegrand([&](const EvalPt<K> &x_vol) {
+                        return std::pow(vonMisesStress(e.index(), x_vol), p); }, be, e),
+                    be->volume());
         }
         return std::pow(integral, 1.0 / p);
     }

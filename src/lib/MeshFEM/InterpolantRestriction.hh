@@ -26,7 +26,7 @@
 *///////////////////////////////////////////////////////////////////////////////
 template<class DataType, size_t Deg, size_t DomainK, size_t SubdomainK,
          class DomainHandle, class SubdomainHandle>
-void restrictInterpolant(DomainHandle dh, SubdomainHandle sdh,
+void restrictInterpolant(const DomainHandle &dh, const SubdomainHandle &sdh,
                          const Interpolant<DataType,    DomainK, Deg> &fdomain,
                                Interpolant<DataType, SubdomainK, Deg> &fsdomain)
 {
@@ -62,6 +62,45 @@ void restrictInterpolant(DomainHandle dh, SubdomainHandle sdh,
         }
         assert(set);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Embed an evaluation point living in a subdomain (e.g., boundary triangle)
+// as an equivalent evaluation point in the containing higher-dimensional
+// element. This is useful, e.g., for computing boundary integrals of integrands
+// that are defined volumetrically.
+////////////////////////////////////////////////////////////////////////////////
+template<class SubdomainHandle, class DomainHandle>
+void embedEvalPt(const SubdomainHandle &sdh, const DomainHandle &dh,
+                 const EvalPt<SubdomainHandle::numVertices() - 1> &xsdomain,
+                       EvalPt<   DomainHandle::numVertices() - 1> &xdomain)
+{
+    xdomain.fill(0);
+    for (auto sv : sdh.vertices()) {
+        size_t vi = sv.volumeVertex().index();
+        bool set = false;
+        for (auto dv : dh.vertices()) {
+            if (size_t(dv.volumeVertex().index()) == vi) {
+                set = true;
+                xdomain[dv.localIndex()] = xsdomain[sv.localIndex()];
+            }
+        }
+        assert(set);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Take an arbitrary volumetric integrand over some domain and restrict it to
+// form an integrand over a subdomain (e.g., for computing a surface integral of
+// a volumetric quantity like stress).
+////////////////////////////////////////////////////////////////////////////////
+template<class F, class SubdomainHandle, class DomainHandle>
+auto restrictIntegrand(const F &integrand, const SubdomainHandle &sdh, const DomainHandle &dh) {
+    return [&integrand, &sdh, &dh](const EvalPt<SubdomainHandle::numVertices() - 1> &x_subdomain) {
+        EvalPt<DomainHandle::numVertices() - 1> x_domain;
+        embedEvalPt(sdh, dh, x_subdomain, x_domain);
+        return integrand(x_domain);
+    };
 }
 
 #endif /* end of include guard: INTERPOLANTRESTRICTION_HH */
