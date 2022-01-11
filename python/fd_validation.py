@@ -144,7 +144,9 @@ def gradConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], e
 
 def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
     gradConvergencePlotRaw(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
-    plt.title('Directional derivative fd test for gradient')
+    title = 'Directional derivative fd test for gradient'
+    if hasattr(obj, 'name'): title += ' - ' + obj.name()
+    plt.title(title)
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
@@ -167,7 +169,9 @@ def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], i
 
 def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
     hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
-    plt.title('Directional derivative fd test for Hessian')
+    title = 'Directional derivative fd test for Hessian'
+    if hasattr(obj, 'name'): title += ' - ' + obj.name()
+    plt.title(title)
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
