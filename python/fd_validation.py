@@ -19,12 +19,12 @@ def setVars(obj, x, customArgs = None):
         obj.setVars(x, **{k: v for k, v in customArgs.items() if hasArg(obj.setVars, k)})
     obj.setVars(x)
 
-def evalWithCustomArgs(f, customArgs):
+def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
     if (customArgs is not None):
-        if (isinstance(customArgs, list)): return f(*customArgs)
-        if (isinstance(customArgs, dict)): return f(**{k: v for k, v in customArgs.items() if hasArg(f, k)})
-        return f(customArgs)
-    return f()
+        if (isinstance(customArgs, list)): return f(*mandatoryArgs, *customArgs)
+        if (isinstance(customArgs, dict)): return f(*mandatoryArgs, **{k: v for k, v in customArgs.items() if hasArg(f, k)})
+        return f(*mandatoryArgs, customArgs)
+    return f(*mandatoryArgs)
 
 def basisDirection(obj, c):
     e_c = np.zeros(obj.numVars())
@@ -95,8 +95,9 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
 
     return lowIdx
 
-def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None, H = None):
+def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], indexInterval = None, H = None, testHessVec = False, hessVecPrecomp = None):
     """
+    Validate a Hessian (testHessVec = False) or Hessian-vector product (testHessVec = True).
     Returns
     -------
         relative error (in l2 norm)
@@ -110,12 +111,18 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
         return evalWithCustomArgs(obj.gradient, customArgs)
 
     setVars(obj, xeval, customArgs)
-    if H is None: H = evalWithCustomArgs(obj.hessian, customArgs)
-    fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
-    if isinstance(H, np.ndarray): # Dense case
-        an_delta_grad = H @ perturb
-    else: an_delta_grad = H.apply(perturb)
+    if testHessVec:
+        if H is not None: raise Exception('Hessian should not be passed if testHessVec is True!')
+        if hessVecPrecomp is None:
+            an_delta_grad = evalWithCustomArgs(obj.hessVec, customArgs, mandatoryArgs=[perturb])
+        else: an_delta_grad = hessVecPrecomp
+    else:
+        if H is None: H = evalWithCustomArgs(obj.hessian, customArgs)
+        if isinstance(H, np.ndarray): # Dense case
+            an_delta_grad = H @ perturb
+        else: an_delta_grad = H.apply(perturb)
 
+    fd_delta_grad = (gradAt(xeval + perturb * fd_eps) - gradAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
     if indexInterval is not None:
         fd_delta_grad = fd_delta_grad[indexInterval[0]:indexInterval[1]]
         an_delta_grad = an_delta_grad[indexInterval[0]:indexInterval[1]]
@@ -150,25 +157,31 @@ def gradConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], epsi
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
-def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
+def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None, testHessVec=False):
     if epsilons is None:
         epsilons = np.logspace(-9, -3, 100)
     errors = []
     if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
 
-    H = evalWithCustomArgs(obj.hessian, customArgs)
+    H = None
+    hessVecPrecomp = None
+    if testHessVec:
+        hessVecPrecomp = evalWithCustomArgs(obj.hessVec, customArgs, mandatoryArgs=[perturb])
+    else:
+        if H is None: H = evalWithCustomArgs(obj.hessian, customArgs)
+        H = evalWithCustomArgs(obj.hessian, customArgs)
     for eps in epsilons:
-        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars, indexInterval=indexInterval, H=H)
+        err, fd, an = validateHessian(obj, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars, indexInterval=indexInterval, H=H, testHessVec=testHessVec, hessVecPrecomp=hessVecPrecomp)
         errors.append(err)
     return (epsilons, errors, an)
 
-def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
-    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
+def hessConvergencePlotRaw(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None, testHessVec=False):
+    eps, errors, ignore = hessConvergence(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons, testHessVec=testHessVec)
     plt.loglog(eps, errors, label='hess')
     plt.grid()
 
-def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None):
-    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons)
+def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], indexInterval = None, epsilons=None, testHessVec=False):
+    hessConvergencePlotRaw(obj, perturb, customArgs, fixedVars, indexInterval=indexInterval, epsilons=epsilons, testHessVec=testHessVec)
     title = 'Directional derivative fd test for Hessian'
     if hasattr(obj, 'name'): title += ' - ' + obj.name()
     plt.title(title)
