@@ -238,6 +238,24 @@ struct TripletMatrix {
         return hint;
     }
 
+    // Add a block of contiguous nonzero values starting at (i, j)
+    // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
+    // Note: if symmetry_mode UPPER_TRIANGLE and and we are adding a diagonal
+    // block, only the upper triangle is added.
+    template<class Derived>
+    void addNZBlock(long i, long j, const Eigen::DenseBase<Derived> &values) {
+        if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i == j)) {
+            for (int jj = 0; jj < values.cols(); ++jj)
+                for (int ii = 0; (ii < values.rows()) && (ii <= jj); ++ii)
+                    addNZ(i + ii, j + jj, values(ii, jj));
+        }
+        else {
+            for (int jj = 0; jj < values.cols(); ++jj)
+                for (int ii = 0; ii < values.rows(); ++ii)
+                    addNZ(i + ii, j + jj, values(ii, jj));
+        }
+    }
+
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
@@ -1152,6 +1170,7 @@ struct CSCMatrix {
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
     template<class Derived>
     _Index addNZStrip(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
         return addNZStrip(findEntry(i, j), values);
     }
 
@@ -1165,7 +1184,7 @@ struct CSCMatrix {
     // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
     _Index addNZStrip(_Index idx, const Eigen::DenseBase<Derived> &values) {
-        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZ");
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
         Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
@@ -1174,6 +1193,22 @@ struct CSCMatrix {
     _Index addNZ(_Index idx, const _Real2 &val) {
         Ax[idx] += val;
         return idx + 1;
+    }
+
+    // Add a block of contiguous nonzero values starting at (i, j)
+    // Note: if symmetry_mode UPPER_TRIANGLE and and we are adding a diagonal
+    // block, only the upper triangle is added.
+    template<class Derived>
+    void addNZBlock(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
+        if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i == j)) {
+            for (int c = 0; c < values.cols(); ++c)
+                addNZStrip(findEntry(i, j + c), values.col(c).head(c + 1));
+        }
+        else {
+            for (int c = 0; c < values.cols(); ++c) {
+                addNZStrip(findEntry(i, j + c), values.col(c));
+            }
+        }
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
