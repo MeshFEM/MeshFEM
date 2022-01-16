@@ -59,7 +59,7 @@ git clone --recursive https://github.com/jpanetta/MeshFEM
 cd MeshFEM
 mkdir build && cd build
 cmake ..
-make
+make -j(# of jobs)
 ```
 
 I would recommend instead using the [Ninja build system](https://ninja-build.org), which
