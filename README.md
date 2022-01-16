@@ -63,7 +63,7 @@ make -j(# of jobs)
 ```
 
 I would recommend instead using the [Ninja build system](https://ninja-build.org), which
-means changing the last two lines to `cmake .. -GNinja` and `ninja`
+means changing the last two lines to `cmake .. -GNinja` and `ninja`.
 
 Running the Jupyter Notebooks
 -----------------------------
