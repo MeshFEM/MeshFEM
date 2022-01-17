@@ -343,7 +343,7 @@ struct NewtonOptimizerOptionsBase {
     // Warning: the following fields are NOT serialized for reasons of backwards compatibility
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
-    bool verboseWorkingSet = false;            // Whether to report the contents of nonempty working sets upon termination.
+    int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
 };
 
 // The part of the optimizer interface that is not trivially copyable.

@@ -246,7 +246,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // Free variables in the working set from their bound constraints, if necessary
         bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
                 bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free_norm);
-                if (shouldRemove) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
+                if (shouldRemove && options.verboseWorkingSet) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
                 return shouldRemove;
             });
 
@@ -386,7 +386,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                     throw std::logic_error("Re-encountered bound in working set");
                 }
                 workingSet.add(bci);
-                std::cout << "Added constraint " << bci << " to working set\n";
+                if (options.verboseWorkingSet) std::cout << "Added constraint " << bci << " to working set\n";
             }
         }
 
@@ -427,7 +427,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg));
     std::cout << std::flush;
 
-    if (options.verboseWorkingSet && workingSet.size()) {
+    if ((options.verboseWorkingSet > 1) && workingSet.size()) {
         std::cout << "Terminated with working set:\n";
         workingSet.report(prob->getVars(), g);
     }
