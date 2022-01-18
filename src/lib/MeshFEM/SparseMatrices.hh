@@ -174,8 +174,8 @@ namespace spmat_helper {
     template<class VType>
     struct SegmentGetter<1, VType> {
         using ScratchVec = typename VType:: Scalar;
-        template<typename T> static auto  get(const T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
-        template<typename T> static auto &get(      T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
+        template<typename T> static auto  get(const T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value || isAutoDiffType<typename T:: Scalar>(), "Scalar type must be arithmetic!"); return v[i]; }
+        template<typename T> static auto &get(      T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value || isAutoDiffType<typename T:: Scalar>(), "Scalar type must be arithmetic!"); return v[i]; }
     };
 
     template<typename T> void          setZero(     T &&v) {        value_traits<std::decay_t<T>>::setZero(v); }
