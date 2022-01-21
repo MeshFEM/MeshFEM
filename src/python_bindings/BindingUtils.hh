@@ -1,6 +1,9 @@
 #ifndef BINDINGUTILS_HH
 #define BINDINGUTILS_HH
 
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
 // Recursive metafunction that tries casting the python unpickled type (py::tuple)
 // to each C++ state class in a list of supported state classes (proceeding
 // from left to right). If all casts fail, the cast failure exception for the
@@ -36,7 +39,7 @@ struct DeserializeBackwardsCompatible<C, PyC, State, BCState0, BCStates...> {
 // type is `unique_ptr`).
 template<class C, class PyC, class... BackwardsCompatibilityStates>
 void addSerializationBindings(PyC &pyClass) {
-    pyClass.def(py::pickle([](const C &opts) { return py::cast(C::serialize(opts)); },
+    pyClass.def(py::pickle([](const C &obj) { return py::cast(C::serialize(obj)); },
                            &DeserializeBackwardsCompatible<C, PyC, typename C::State, BackwardsCompatibilityStates...>::run))
            // This clone operation is actually quite dangerous since it does *not* necessarily perform a deep copy
            // unlike pickling/unpickling: if the serialized state contains pointers, the pointed-to objects will
