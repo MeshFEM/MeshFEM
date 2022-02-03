@@ -84,15 +84,15 @@ work on both macOS and Ubuntu:
 
 ```bash
 pip3 install wheel # Needed if installing in a virtual environment
-pip3 install jupyterlab==1.2.6 traitlets==4.3.3
+pip3 install jupyterlab ipykernel==5.5.5 # Use a slightly older version of ipykernel to avoid cluttering notebook with stdout content.
 # If necessary, follow the instructions in the warnings to add the Python user
 # bin directory (containing the 'jupyter' binary) to your PATH...
-jupyter labextension install @jupyter-widgets/jupyterlab-manager@1.1.0
 
 git clone https://github.com/jpanetta/pythreejs
 cd pythreejs
 pip3 install -e .
-jupyter labextension link ./js
+cd js
+jupyter labextension install .
 
 pip3 install matplotlib scipy
 ```
