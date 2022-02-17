@@ -129,7 +129,7 @@ TEST_CASE("sparse matrix format conversions", "[sparse_matrix]" ) {
         // Test that the scalar and block matvec implementations agree.
         const size_t nmatvec_tests = 10;
         for (size_t tt = 0; tt < nmatvec_tests; ++tt) {
-            VXd v = VXd::Random(3 * m); // `m` since we're applying the tranpose.
+            VXd v = VXd::Random(3 * m); // `m` since we're applying the transpose.
             // Unflatten block vector into an `m x 3` matrix.
             Eigen::MatrixX3d V = Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>(v.data(), m, 3);
             // Unflattedn block vector into an m-vector of 3-vectors

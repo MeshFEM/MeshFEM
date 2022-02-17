@@ -77,19 +77,20 @@ public:
     // Construct the elasticity tensor with a Young's modulus and Poisson ratio
     ElasticityTensor(Real E, Real nu) { setIsotropic(E, nu); }
 
-    // Allow converting constructor to and from major symmetric tensors.
+    // Allow converting constructor to and from major symmetric tensors and
+    // between differing floating point number types.
     // Converting to a major symmetric tensor verifies that the input is indeed
     // major symmetric.
-    template<bool _MajorSymmetry2>
-    ElasticityTensor(const ElasticityTensor<Real, _Dim, _MajorSymmetry2> &b) {
-        if ( _MajorSymmetry == _MajorSymmetry2) m_d = b.m_d;
+    template<typename Real2, bool _MajorSymmetry2>
+    ElasticityTensor(const ElasticityTensor<Real2, _Dim, _MajorSymmetry2> &b) {
+        if ( _MajorSymmetry == _MajorSymmetry2) m_d = b.m_d.template cast<Real>();
         if (!_MajorSymmetry && _MajorSymmetry2) {
-            m_d = b.m_d.template selfadjointView<Eigen::Upper>();
+            m_d = b.m_d.template cast<Real>().template selfadjointView<Eigen::Upper>();
         }
         if ( _MajorSymmetry && !_MajorSymmetry2) {
             if (!b.hasMajorSymmetry())
                 throw std::runtime_error("Attempting to copy construct major-symmetric tensor from non-major symmetric tensor");
-            m_d = b.m_d.template selfadjointView<Eigen::Upper>();
+            m_d = b.m_d.template cast<Real>().template selfadjointView<Eigen::Upper>();
         }
     }
 

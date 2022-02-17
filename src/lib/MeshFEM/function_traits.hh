@@ -66,19 +66,19 @@ struct AcceptsNDistinctReals {
             args_all_floats<F>(Future::make_index_sequence<FT::arity>());
 };
 
-template<class F, size_t N>
+template<class F, size_t N, typename Real_ = Real>
 struct AcceptsRealNTuple {
     using FT = function_traits<F>;
     static constexpr bool value = (FT::arity == 1) &&
-            std::is_same<typename NTuple<Real, N>::type, typename std::decay<
+            std::is_same<typename NTuple<Real_, N>::type, typename std::decay<
                 typename FT::template arg<0>::type>::type>::value;
 };
 
-template<class F, size_t N>
+template<class F, size_t N, typename Real_ = Real>
 struct AcceptsVectorND {
     using FT = function_traits<F>;
     static constexpr bool value = (FT::arity == 1) &&
-            std::is_same<VectorND<N>, typename std::decay<
+            std::is_same<VecN_T<Real_, N>, typename std::decay<
                 typename FT::template arg<0>::type>::type>::value;
 };
 

@@ -32,6 +32,8 @@ template<typename Real_> using  Mat3_T = Eigen::Matrix<Real_, 3, 3>;
 template<typename Real_> using  Mat2_T = Eigen::Matrix<Real_, 2, 2>;
 template<typename Real_> using MatX3_T = Eigen::Matrix<Real_, Eigen::Dynamic, 3>;
 
+template<typename Real_, size_t N> using VecN_T = Eigen::Matrix<Real_, N, 1>;
+
 extern Eigen::IOFormat pointFormatter;
 
 // Very general detection of Eigen types.

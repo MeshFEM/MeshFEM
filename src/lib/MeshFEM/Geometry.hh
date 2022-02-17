@@ -21,7 +21,7 @@
 
 template<typename _Vector>
 struct Region {
-    typedef _Vector Vector;
+    using Vector = _Vector;
 
     virtual ~Region() = default;
 
@@ -196,12 +196,20 @@ struct BBox : Region<_Vector> {
     // (Needed for aligned vector types)
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef _Vector                 Vector;
-    typedef typename Vector::Scalar Real_;
+    using Vector = _Vector;
+    using Real_  = typename Vector::Scalar;
 
     BBox() {
         this->minCorner = Vector::Zero();
         this->maxCorner = Vector::Zero();
+    }
+
+
+    // Converting constructor from another number type.
+    template<typename V2_>
+    BBox(const BBox<V2_> b) {
+        this->minCorner = b.minCorner.template cast<Real_>();
+        this->maxCorner = b.maxCorner.template cast<Real_>();
     }
 
     BBox(const Vector &minC, const Vector &maxC) {

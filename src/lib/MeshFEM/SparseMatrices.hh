@@ -1967,7 +1967,7 @@ public:
     }
 
     // Recompute the numeric factorization using the new system matrix "tmat",
-    // resuing the symbolic factorization. For this to work, it must have the same
+    // reusing the symbolic factorization. For this to work, it must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
     // NOTE: The positive definiteness check inside this function is not sufficient,
     //       since it just uses CHOLMOD's return status. If the diagonal entry of L
