@@ -23,6 +23,7 @@ struct ComponentMask {
     bool hasZ()        const { return m_active[2]; }
     bool hasAny(size_t dim) const { return count(dim) > 0; }
     bool hasAll(size_t dim) const { return count(dim) == dim; }
+    bool hasAny()           const { return m_active.any(); }
     // Number of active components for dimension (2 or 3)
     size_t count(size_t dim) const {
         if (dim == 3)      return m_active.count();
