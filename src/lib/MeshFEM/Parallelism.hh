@@ -25,13 +25,19 @@ MESHFEM_EXPORT tbb::task_arena &get_gradient_assembly_arena();
 
 #if 1
 template<typename F>
-void parallel_for_range(size_t n, F &&f) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, n),
+void parallel_for_range(size_t start, size_t end, F &&f) {
+    tbb::parallel_for(tbb::blocked_range<size_t>(start, end),
                       [&f](const tbb::blocked_range<size_t> &r) {
         for (size_t i = r.begin(); i < r.end(); ++i)
             f(i);
     });
 }
+
+template<typename F>
+void parallel_for_range(size_t n, F &&f) {
+    parallel_for_range(0, n, f);
+}
+
 #else
 template<typename F>
 void parallel_for_range(size_t n, F &&f) {
