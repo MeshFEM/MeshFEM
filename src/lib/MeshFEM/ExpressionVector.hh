@@ -2,7 +2,7 @@
 // ExpressionVector.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//      Provides a wrapper for libmatheval that evalutes vector-valued
+//      Provides a wrapper for tinyexpr that evalutes vector-valued
 //      expressions.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
@@ -46,7 +46,7 @@ struct ExpressionEnvironment {
     }
 
     template<class _Vec>
-    void setXYZ(_Vec &v) {
+    void setXYZ(const _Vec &v) {
         int N = _Vec::RowsAtCompileTime;
         if (!(N == 2 || N == 3)) throw std::runtime_error("Bad vector size");
         setValue("x", v[0]); setValue("y", v[1]);
