@@ -1053,9 +1053,9 @@ struct CSCMatrix {
         auto insertion_point = Ap; // index in each column's bucket where the next entry should be added (start at beginning)
         for (index_type j = 0; j < n; ++j) {
             index_type ii = findEntry(j, j) + 1;
-            for (; ii < Ap[j + 1]; ++ii) {
+            index_type end = Ap[j + 1];
+            for (; ii < end; ++ii) {
                 size_t i = Ai[ii];
-                // if (i <= j) continue; // skip upper tri
                 // Add entry (j, i)
                 index_type ip = insertion_point[i];
                 if (Ai[ip] != j) throw std::runtime_error("Failed to find lower tri entry in the sparsity pattern!");
@@ -1063,6 +1063,15 @@ struct CSCMatrix {
                 insertion_point[i] = ip + 1;
             }
         }
+    }
+
+    template<bool _detectMissing = false>
+    void reflectUpperTriangleInPlaceParallel() {
+        parallel_for_range(n, [&](index_type j) {
+            index_type i;
+            for (index_type ii = Ap[j]; (i = Ai[ii]) < j; ++ii)
+                Ax[findEntry<_detectMissing>(j, i)] += spmat_helper::transpose_block(Ax[ii]);
+        });
     }
 
     // Set this matrix to have the same sparsity pattern as b, but with zeros
@@ -1556,7 +1565,13 @@ struct CSCMatrix {
     // vectors for each thread.
     // Furthermore, the full matrix (upper and lower tri) must be stored even
     // in the symmetric case.
-    template<class _InVector, class _Result>
+    //
+    // The following operations can be performed, depending on the template
+    // parameters:
+    //      result =  A x,   result += A x      (Negate = False, ZeroInit = True, False)
+    //      result = -A x,   result -= A x      (Negate =  True, ZeroInit = True, False)
+    // If `ZeroInit` is false, the operation is `result += A x`
+    template<bool ZeroInit = true, bool Negate = false, class _InVector, class _Result>
     void applyTransposeParallel(const _InVector &x, _Result &&result) const {
         using   Result = std::decay_t<_Result>;
         using InVector = std::decay_t<_InVector>;
@@ -1598,10 +1613,21 @@ struct CSCMatrix {
 			const index_type col_begin = Ap[j],
 			                 col_end   = Ap[j + 1];
             if (col_begin == col_end) { spmat_helper::setZero(SG::get(result, j)); return; } // zero-column case: output zero
-            typename SG::ScratchVec tmp = spmat_helper::transpose_block(Ax[col_begin]) * SG::get(x, Ai[col_begin]);
-            for (index_type entry = col_begin + 1; entry < col_end; ++entry)
-                tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
-            SG::get(result, j) = tmp;
+            if (ZeroInit) {
+                typename SG::ScratchVec tmp = spmat_helper::transpose_block(Ax[col_begin]) * SG::get(x, Ai[col_begin]);
+                for (index_type entry = col_begin + 1; entry < col_end; ++entry)
+                    tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                if (Negate) SG::get(result, j) = -tmp;
+                else        SG::get(result, j) =  tmp;
+            }
+            else {
+                typename SG::ScratchVec tmp = SG::get(result, j);
+                for (index_type entry = col_begin; entry < col_end; ++entry) {
+                    if (Negate) tmp -= spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                    else        tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                }
+                SG::get(result, j) = tmp;
+            }
         };
 
 #if MESHFEM_WITH_TBB
