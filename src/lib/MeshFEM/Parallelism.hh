@@ -24,18 +24,18 @@ MESHFEM_EXPORT tbb::task_arena &get_hessian_assembly_arena();
 MESHFEM_EXPORT tbb::task_arena &get_gradient_assembly_arena();
 
 #if 1
-template<typename F>
+template<typename Partitioner = tbb::auto_partitioner, typename F>
 void parallel_for_range(size_t start, size_t end, F &&f) {
     tbb::parallel_for(tbb::blocked_range<size_t>(start, end),
                       [&f](const tbb::blocked_range<size_t> &r) {
         for (size_t i = r.begin(); i < r.end(); ++i)
             f(i);
-    });
+    }, Partitioner());
 }
 
-template<typename F>
+template<typename Partitioner = tbb::auto_partitioner, typename F>
 void parallel_for_range(size_t n, F &&f) {
-    parallel_for_range(0, n, f);
+    parallel_for_range<Partitioner>(0, n, f);
 }
 
 #else
