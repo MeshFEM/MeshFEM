@@ -48,7 +48,7 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
 
     setVars(obj, xeval, customArgs)
     if g is None: g = evalWithCustomArgs(obj.gradient, customArgs)
-    analytic_delta_E = g.dot(perturb)
+    analytic_delta_E = g.ravel().dot(perturb.ravel())
 
     fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
     setVars(obj, xold, customArgs)
