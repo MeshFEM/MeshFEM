@@ -142,7 +142,8 @@ public:
     }
 
     void stopSection(std::string name) {
-        assert(!m_sectionStack.empty());
+        if (m_sectionStack.empty())
+            throw std::runtime_error("stopSection(\"" + name + "\") called but section stack is empty");
         std::string currentName = m_sectionStack.back();
         m_sectionStack.pop_back();
 
