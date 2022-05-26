@@ -262,11 +262,13 @@ void bindPeriodicCondition(py::module& module)
     module.def("PeriodicCondition", [](const LinearMesh    &m, const std::string &path) { return std::make_shared<PC>(m, path); }, py::arg("mesh"), py::arg("periodic_condition_file"));
     module.def("PeriodicCondition", [](const QuadraticMesh &m, const std::string &path) { return std::make_shared<PC>(m, path); }, py::arg("mesh"), py::arg("periodic_condition_file"));
 
-    // We use a shared_ptr holder to support using PeriodicCondition instances
-    // as optionally "None" arguments
-    py::class_<PeriodicCondition<_Dimension>, std::shared_ptr<PeriodicCondition<_Dimension>>>(
-      module, ("PeriodicCondition" + std::to_string(_Dimension) + "D").c_str())
-      .def("periodicDoFsForNodes", &PeriodicCondition<_Dimension>::periodicDoFsForNodes);
+    py::class_<PC, std::shared_ptr<PC>>(module, ("PeriodicCondition" + std::to_string(_Dimension) + "D").c_str())
+      .def("numPeriodicDoFs", &PC::numPeriodicDoFs)
+      .def("periodicDoFsForNodes", &PC::periodicDoFsForNodes)
+      .def("nodesForPeriodicDoFs", &PC::nodesForPeriodicDoFs)
+      .def("isPeriodicNode", &PC::isPeriodicNode, py::arg("volNodeIdx"))
+      .def("identifiedNodes", &PC::identifiedNodes, py::arg("volNodeIdx"))
+      ;
 }
 
 // Wrapper to conform to the BindingInstantiations Binder interface.

@@ -7,7 +7,7 @@
 #include "Types.hh"
 
 ////////////////////////////////////////////////////////////////////////////////
-/*! Generalization of function_traits to work with lambda/functors. Allows
+/*! Generalization of function_traits to work with lambdas/functors. Allows
 //  compiletime introspection of return type, arity, and argument type.
 //  From:
 //  http://stackoverflow.com/questions/7943525/is-it-possible-to-figure-out-the-parameter-type-and-return-type-of-a-lambda
@@ -15,9 +15,7 @@
 *///////////////////////////////////////////////////////////////////////////////
 // For generic types, directly use the result of the signature of its 'operator()'
 template <typename T>
-struct function_traits
-    : public function_traits<decltype(&T::operator())>
-{};
+struct function_traits : public function_traits<decltype(&T::operator())> {};
 
 // Strip off references
 template <typename T>
