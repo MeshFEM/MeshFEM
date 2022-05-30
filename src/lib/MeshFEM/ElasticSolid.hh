@@ -97,7 +97,7 @@ public:
     }
 
     VXd getVars() const { return Eigen::Map<const VXd>(m_x.data(), m_x.size()); }
-    virtual void setVars(Eigen::Ref<const VXd> vars) override {
+    virtual void setVars(const Eigen::Ref<const VXd> &vars) override {
         if (size_t(vars.rows()) != numVars())
             throw std::invalid_argument("Invalid variable size");
         m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());

@@ -559,10 +559,10 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 }
 
 template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype, bool projectionMask) const {
+void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
-    auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, SuiteSparseMatrix& Hout) {
+    auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, CSCMat& Hout) {
         auto H_elem = elementHessian(ei, etype, projectionMask);
         const auto &e = m.element(ei);
         for (const auto v_b : e.vertices()) {
@@ -626,9 +626,9 @@ void ElasticSheet<Psi_2x2>::hessian(SuiteSparseMatrix &H, const EnergyType etype
 }
 
 template <class Psi_2x2>
-SuiteSparseMatrix ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const {
-    SuiteSparseMatrix Hsp(numVars(), numVars());
-    Hsp.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const {
+    CSCMat Hsp(numVars(), numVars());
+    Hsp.symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
     Hsp.Ap.reserve(numVars() + 1);
 
     auto &Ap = Hsp.Ap;
