@@ -45,6 +45,19 @@ template<class EQSystem> auto guardedGradientCall(const EQSystem &sys, bool /* f
 template<class EQSystem> auto guardedParametrizationUpdate(EQSystem &sys, int      /* PREFERRED */) -> decltype(sys.updateParametrization()) { return sys.updateParametrization(); }
 template<class EQSystem> void guardedParametrizationUpdate(EQSystem &   , long /* NON-PREFERRED */) { /* NOP */ } 
 
+template<class EQSystem> auto guardedApproxLinfVelocity(EQSystem &sys, const Eigen::VectorXd &d,        int      /* PREFERRED */) -> decltype(sys.approxLinfVelocity(d)) { return sys.approxLinfVelocity(d); }
+template<class EQSystem> auto guardedApproxLinfVelocity(EQSystem &   , const Eigen::VectorXd & /* d */, long /* NON-PREFERRED */) { return -1.0; } 
+
+template<class EQSystem> auto guardedCharacteristicLength(EQSystem &sys, int      /* PREFERRED */) -> decltype(sys.characteristicLength()) { return sys.characteristicLength(); }
+template<class EQSystem> auto guardedCharacteristicLength(EQSystem &   , long /* NON-PREFERRED */) { return 1.0; } 
+
+template<class EQSystem> auto guardedMassMatrixCall(EQSystem &sys, SuiteSparseMatrix &result, bool updatedSource,       bool useLumped,       int      /* PREFERRED */) -> decltype(sys.massMatrix(result)) { 
+    result.setZero();
+    return sys.massMatrix(result, updatedSource, useLumped); 
+}
+template<class EQSystem> void guardedMassMatrixCall(EQSystem &   , SuiteSparseMatrix &result, bool /* updatedSource */, bool /* useLumped */, long /* NON-PREFERRED */) { result.setIdentity(true); } 
+
+
 template<class EQSystem>
 using LoadCollection = std::vector<std::shared_ptr<Loads::Load<EQSystem::N, typename EQSystem::Real>>>;
 
@@ -56,10 +69,12 @@ struct EquilibriumProblem : public NewtonProblem {
 
     EquilibriumProblem(EQSystem &sys, const LC &lc = LC())
         : m_sys(sys), m_loads(lc),
-          m_hessianSparsity(sys.hessianSparsityPattern()) {
+          m_hessianSparsity(sys.hessianSparsityPattern()),
+          m_characteristicLength(guardedCharacteristicLength(sys, 0)) {
         for (const auto &l : m_loads)
             m_hessianSparsity.addWithDistinctSparsityPattern(l->hessianSparsityPattern(1.0));
         m_hessianSparsity.fill(1.0);
+        // TODO (Samara): Initialize bound constraints. 
     }
 
     virtual void setVars(const VXd &vars) override {
@@ -70,6 +85,8 @@ struct EquilibriumProblem : public NewtonProblem {
 
     virtual Real energy() const override {
         Real result = m_sys.energy();
+        if (result > systemEnergyIncreaseFactorLimit * m_currSystemEnergy)
+             return safe_numeric_limits<Real>::max();
         for (const auto &l : m_loads)
             result += l->energy();
         return result;
@@ -91,6 +108,17 @@ struct EquilibriumProblem : public NewtonProblem {
 
     virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
 
+    // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
+    // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)
+    virtual Real characteristicDistance(const Eigen::VectorXd &d) const override {
+        return guardedApproxLinfVelocity(m_sys, d, 0) / m_characteristicLength;
+    }
+
+    // The maximum factor by which we allow the elastic energy to increase in a single
+    // Newton iteration; limiting this prevents large deployment forces from
+    // severly deforming the umbrella mesh into a bad configuration.
+    Real systemEnergyIncreaseFactorLimit = 2.0;
+
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         result.setZero();
@@ -98,12 +126,11 @@ protected:
         for (const auto &l : m_loads)
             l->hessian(result, projectionMask);
     }
-    virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
-        // TODO: mass matrix?
-        result.setIdentity(true);
-    }
+
+    virtual void m_evalMetric(SuiteSparseMatrix &result) const override { guardedMassMatrixCall(m_sys, result, true, true, 0/* disambiguation hack to ensure `massMatrix` is called when possible */); }
 
     virtual void m_iterationCallback(size_t i) override {
+        m_currSystemEnergy = m_sys.energy();
         guardedParametrizationUpdate(m_sys, 0 /* disambiguation hack to ensure the `updateParametrization` call is made when it is available */);
         if (m_customCallback) m_customCallback(*this, i);
     }
@@ -114,6 +141,9 @@ protected:
     LC m_loads;
 
     mutable SuiteSparseMatrix m_hessianSparsity;
+
+    Real m_characteristicLength = 1.0;
+    Real m_currSystemEnergy = safe_numeric_limits<Real>::max();
 };
 
 template<class EQSys>
