@@ -9,6 +9,7 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
+#include <MeshFEM/EnergyDensities/IsoCRLEFixed.hh>
 #include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <MeshFEM/EnergyDensities/IsoCRLETensionFieldMembrane.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
@@ -123,6 +124,19 @@ void bindIsoCRLEWithHP(py::module &detail_module)
 }
 
 template<size_t _Dimension>
+void bindIsoCRLEFixed(py::module &detail_module)
+{
+    using CRLE = IsoCRLEFixed<double, _Dimension>;
+    auto ebind = bindEnergyFBased<CRLE>(detail_module);
+    ebind.def(py::init<double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"))
+         .def("R",     &CRLE::R)
+         .def("S",     &CRLE::S)
+         .def("sigma", &CRLE::biotStress)
+         .def_readwrite("projectionEnabled", &CRLE::projectionEnabled)
+         ;
+}
+
+template<size_t _Dimension>
 void bindNeoHookeanEnergy(py::module& detail_module)
 {
     auto ebind = bindEnergyFBased<NeoHookeanEnergy<double, _Dimension>>(detail_module);
@@ -182,6 +196,12 @@ py::object constructIsoCRLEHessProj(size_t dimension, double lambda, double mu) 
     throw std::runtime_error("Argument 'dimension' must be 2 or 3");
 }
 
+py::object constructIsoCRLEfixed(size_t dimension, double lambda, double mu) {
+    if (dimension == 2) return py::cast(new IsoCRLEFixed<double, 2>(lambda, mu), py::return_value_policy::take_ownership);
+    if (dimension == 3) return py::cast(new IsoCRLEFixed<double, 3>(lambda, mu), py::return_value_policy::take_ownership);
+    throw std::runtime_error("Argument 'dimension' must be 2 or 3");
+}
+
 py::object constructIsotropicStVK(size_t dimension, double young, double poisson) {
     if (dimension == 2) return py::cast(new StVenantKirchhoffEnergy<double, 2>(ElasticityTensor<double, 2>(young, poisson)), py::return_value_policy::take_ownership);
     if (dimension == 3) return py::cast(new StVenantKirchhoffEnergy<double, 3>(ElasticityTensor<double, 3>(young, poisson)), py::return_value_policy::take_ownership);
@@ -205,6 +225,8 @@ PYBIND11_MODULE(energy, m)
     bindStVKEnergy<3>           (detail_module);
     bindIsoCRLEWithHP<2>        (detail_module);
     bindIsoCRLEWithHP<3>        (detail_module);
+    bindIsoCRLEFixed<2>         (detail_module);
+    bindIsoCRLEFixed<3>         (detail_module);
     bindStVKEnergyHP<2>         (detail_module);
     bindStVKEnergyHP<3>         (detail_module);
 
@@ -320,6 +342,8 @@ PYBIND11_MODULE(energy, m)
 
     m.def("IsoCRLEWithHessianProjection",   [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsoCRLEWithHessianProjection",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+    m.def("IsoCRLEFixed",   [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEfixed(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
+    m.def("IsoCRLEFixed",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEfixed(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor3D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 3>>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor2D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 2>>>(etensor); }, py::arg("elasticity_tensor"));
 }
