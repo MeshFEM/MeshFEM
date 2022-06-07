@@ -21,11 +21,11 @@ void addComputeEquilibriumBinding(PYEs &pyES, py::module &detail_module, const s
 
     pyES
         .def("computeEquilibrium",
-            [](EQSystem &sys, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr) {
-                return equilibrium_newton(sys, loads, fixedVars, opts, callbackWrapper(pcb));
+            [](EQSystem &sys, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr, Real systemEnergyIncreaseFactorLimit = 2.0) {
+                return equilibrium_newton(sys, loads, fixedVars, opts, callbackWrapper(pcb), systemEnergyIncreaseFactorLimit);
             },
             py::arg("loads") = LC(),
-            py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr,
+            py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr, py::arg("systemEnergyIncreaseFactorLimit") = 2.0,
             py::call_guard<py::scoped_ostream_redirect,
                            py::scoped_estream_redirect>())
         .def("EquilibriumProblem",

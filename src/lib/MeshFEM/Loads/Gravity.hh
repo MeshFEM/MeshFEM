@@ -28,7 +28,7 @@ namespace Loads {
             static VXd compute(const Gravity<Object> &g) {
                 VXd result;
                 result.setZero(g.numVars());
-                const auto &m = g.obj().mesh();
+                const auto &m = g.getObj().mesh();
                 typename Object::Mesh::ElementData::Phis phiIntegrals;
                 auto integratedPhis = integratedShapeFunctions<Deg, K>();
                 for (const auto e : m.elements()) {
@@ -61,9 +61,11 @@ namespace Loads {
         void set_g(V3d g)      { m_g = g; m_updateCache(); }
         V3d  get_g()     const { return m_g; }
 
-        // Cast the weak pointer to a shared pointer so we can dereference and return.
-        const Object &obj() const { auto sobj = m_obj.lock(); if (!sobj) throw std::runtime_error("Object was destroyed"); return *sobj; }
-
+        const Object &getObj() const {
+            if (auto o = m_obj.lock()) return *o;
+            throw std::runtime_error("Elastic object was destroyed");
+        }
+        
         size_t numVars() const { return getObj().numVars(); }
         virtual Real energy() const override {
             return m_grad.dot(getObj().getVars());
@@ -99,11 +101,6 @@ namespace Loads {
         Real m_rho;
         V3d  m_g; // Gravitational acceleration vector
         int m_callbackID;
-
-        const Object &getObj() const {
-            if (auto o = m_obj.lock()) return *o;
-            throw std::runtime_error("Elastic object was destroyed");
-        }
 
         void m_updateCache() {
             m_grad = detail::GravityLoadVector<Object>::compute(*this);
