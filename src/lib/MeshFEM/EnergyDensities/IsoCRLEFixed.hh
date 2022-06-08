@@ -25,6 +25,9 @@ struct IsoCRLEFixed {
     static constexpr size_t Dimension = _Dim;
     static constexpr size_t N         = _Dim;
     static constexpr EDensityType EDType = EDensityType::FBased;
+
+    static constexpr size_t NumTwistEigenmodes = _Dim * (_Dim - 1) / 2;
+
     using Real    = _Real;
     using Matrix  = Eigen::Matrix<_Real, N, N>;
     using Vector  = Eigen::Matrix<_Real, N, 1>;
@@ -45,11 +48,25 @@ struct IsoCRLEFixed {
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
+        m_J = m_F.determinant();
+
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
-        const auto &U =svd.matrixU(),
-                   &V =svd.matrixV();
-        m_J = m_F.determinant();
+        const auto &U = svd.matrixU();
+        Matrix V = svd.matrixV();
+        Vector sigma = svd.singularValues();
+
+        // Use the "sign-flipped SVD" for inverted elements so that `R` is
+        // always the closest *rotation* (rather than closest element of SU(N)).
+        // The derivatives of the sign-flipped SVD are identical to the
+        // derivatives of the SVD with the standard sign convention! We just
+        // need to make sure to use the consistent sign-flipped quantities
+        // throughout.
+        if (m_J < 0) {
+            V.rightCols(1) *= -1;
+            sigma.tail(1) *= -1;
+        }
+        
         m_R = U * V.transpose();
         if (m_J < 0) {
             Matrix W = svd.matrixV();
@@ -57,87 +74,53 @@ struct IsoCRLEFixed {
             m_R = svd.matrixU() * W.transpose();
         }
         m_S = m_R.transpose() * F;
-        m_traceSigma = m_S.trace();
-        Matrix m_SinvT = m_S.inverse();
-        m_FinvT = m_R * m_SinvT;
-        m_sigma = svd.singularValues().array();
-        // m_simpleFinvTEigenvalueDenominators = 0;
-        // for (size_t i = 0; i < N; ++i) {
-        //     m_simpleFinvTEigenvalueDenominators += m_J/m_sigma[i];
-        // }
-        
+        Matrix SinvT = m_S.inverse();
 
-        // Analog to infinitesimal strain for linear elasticity.
         m_biotStrain = m_S - Matrix::Identity();
-
-        m_biotStress = m_lambda * (m_J - 1) * m_J * m_SinvT + 2 * m_mu * m_biotStrain; //lambda (J-1)J S^-T + 2mu biotStrain
+        m_biotStress = (m_lambda * (m_J - 1) * m_J) * SinvT + (2 * m_mu) * m_biotStrain; //lambda (J-1)J S^-T + 2mu biotStrain
         m_pk1_stress = m_R * m_biotStress;
-        m_pk1_stress = m_lambda * (m_J - 1) * m_J * m_F.inverse().transpose() + 2 * m_mu * (m_F - m_R);
 
         if (elevel < EvalLevel::Hessian) return;
         m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
 
         if (N == 3) {
-            m_flipEigenvalueDenominators = m_sigma;
-            m_twistEigenvalueDenominators = m_traceSigma - svd.singularValues().array();
-            // Construct eigenmatrices needed for Hessian evaluation (scaled by sqrt(2), not unit)
-            Matrix A;
-            for (size_t i = 0; i < N; ++i) {
-                for (size_t j = 0; j < N; ++j) {
-                    if (i==j) A(i,j) = m_J / (m_sigma[i] * m_sigma[j]);
-                    else A(i,j) = (2 * m_J - 1) / (m_sigma[i] * m_sigma[j]);
-                }
-            }
-            // A.triangularView<Eigen::Upper> = A.transpose();
-            Eigen::SelfAdjointEigenSolver<Matrix> es;
-            es.compute(A);
-            Matrix vect = es.eigenvectors();
-            m_AEigenvalue = m_J * es.eigenvalues().array();
-
-            std::array<Matrix, N> temp;
-            for (size_t i = 0; i < N; ++i) {
-                temp[i] = U.col(i) * V.col(i).transpose();
-            }
-
-            for (size_t i = 0; i < N; ++i) {
-                m_Tsqrt2[i] = U.col((i + 1) % N) * V.col((i + 2) % N).transpose()
-                            - U.col((i + 2) % N) * V.col((i + 1) % N).transpose();
-                m_Lsqrt2[i] = U.col((i + 1) % N) * V.col((i + 2) % N).transpose()
-                            + U.col((i + 2) % N) * V.col((i + 1) % N).transpose();
-                m_AEigenvector[i] = temp[0] * vect(0,i)
-                                  + temp[1] * vect(1,i)
-                                  + temp[2] * vect(2,i);
-            }
+            m_flipEigenvalueCoeffs = sigma;
+            m_twistEigenvalueDenominators = m_S.trace() - sigma.array();
         }
         else {
-            m_flipEigenvalueDenominators[0] = 1.0;
-            m_twistEigenvalueDenominators[0] = m_traceSigma;
-            Matrix A;
-            A << m_sigma[1] * m_sigma[1], 2 * m_J - 1, 2 * m_J - 1,  m_sigma[0] * m_sigma[0];
-            Eigen::SelfAdjointEigenSolver<Matrix> es;
-            es.compute(A);
-            Matrix vect = es.eigenvectors();
-            m_AEigenvalue = es.eigenvalues().array();
+            m_flipEigenvalueCoeffs[0] = 1.0;
+            m_twistEigenvalueDenominators[0] = m_S.trace();
+        }
 
-            std::array<Matrix, N> temp;
-            for (size_t i = 0; i < N; ++i) {
-                temp[i] = U.col(i) * V.col(i).transpose();
+        Matrix A;
+        for (size_t i = 0; i < N; ++i) {
+            for (size_t j = 0; j < N; ++j) {
+                A(i, j) = ((i == j) ? m_J : (2 * m_J - 1)) / (sigma[i] * sigma[j]);
             }
-            m_Tsqrt2[0] = U.col(0) * V.col(1).transpose()
-                        - U.col(1) * V.col(0).transpose();
-            m_Lsqrt2[0] = U.col(0) * V.col(1).transpose()
-                        + U.col(1) * V.col(0).transpose();
-            for (size_t i = 0; i < N; ++i) {
-                m_AEigenvector[i] = temp[0] * vect(0,i)
-                                  + temp[1] * vect(1,i);
-            }
+        }
+
+        Eigen::SelfAdjointEigenSolver<Matrix> es;
+        es.compute(A);
+        m_AEigenvalue = m_J * es.eigenvalues();
+
+        for (size_t i = 0; i < N; ++i) {
+            m_AEigenvector[i].setZero();
+            for (size_t j = 0; j < N; ++j)
+                m_AEigenvector[i] += (es.eigenvectors()(j, i) * U.col(j)) * V.col(j).transpose();
+        }
+
+        // Flip and twist eigenvectors scaled by sqrt(2)
+        for (size_t i = 0; i < NumTwistEigenmodes; ++i) {
+            size_t j = (i + 1) % N, k = (i + 2) % N;
+            m_Tsqrt2[i] = U.col(j) * V.col(k).transpose() - U.col(k) * V.col(j).transpose();
+            m_Lsqrt2[i] = U.col(j) * V.col(k).transpose() + U.col(k) * V.col(j).transpose();
         }
     }
 
     const Matrix &getDeformationGradient() const { return m_F; }
 
-    _Real energy() const { 
-        return m_mu * doubleContract(m_biotStrain, m_biotStrain) + m_lambda * (m_J -1) * (m_J -1) / 2.0; 
+    _Real energy() const {
+        return m_mu * doubleContract(m_biotStrain, m_biotStrain) + m_lambda * (m_J -1) * (m_J -1) / 2.0;
     }
 
     // PK1 stress
@@ -155,90 +138,23 @@ struct IsoCRLEFixed {
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const { //ZZ SimpleDefinedDeltaP
-        Matrix result;
-        if (usingProjection()){
-            result = (2 * m_mu) * dF;
-            constexpr size_t numTwistEigenmatrices = (N == 3 ? 3 : 1);
-            for (size_t i = 0; i < numTwistEigenmatrices; ++i) {
-                Real temp = m_lambda * m_flipEigenvalueDenominators[i] * (m_J - 1.0) / 2.0;
-                Real coeff_t = (- 2.0 * m_mu) / m_twistEigenvalueDenominators[i] + temp;
-                Real coeff_l = -temp;
-                //ZZ `Real coeff = (- 2 * m_mu) / m_twistEigenvalueDenominators[i];`
-                // Full eigenvalue (2 * mu + 2 * coeff) > 0 ==> coeff > -mu
-                // coeff_t = std::max(coeff_t, -m_mu);
-                // coeff_l = std::max(coeff_l, -m_mu);
-                result += m_Tsqrt2[i] * (doubleContract(m_Tsqrt2[i], dF) *  coeff_t);
-                result += m_Lsqrt2[i] * (doubleContract(m_Lsqrt2[i], dF) *  coeff_l);
+        Matrix result = (2 * m_mu) * dF;
+        for (size_t i = 0; i < NumTwistEigenmodes; ++i) {
+            Real coeff_t = m_lambda * m_flipEigenvalueCoeffs[i] * (m_J - 1.0) / 2.0;
+            Real coeff_l = -coeff_t;
+            coeff_t -= 2.0 * m_mu / m_twistEigenvalueDenominators[i];
+            // Full eigenvalue (2 * mu + 2 * coeff) > 0 ==> coeff > -mu
+            if (usingProjection()) {
+                coeff_t = std::max(coeff_t, -m_mu);
+                coeff_l = std::max(coeff_l, -m_mu);
             }
-            // Simple
-            //ZZ In Joey's SimpleDefinedDeltaP code: 
-            // result += m_FinvT * (m_lambda * doubleContract(m_FinvT, dF));
-            // Full
-            for (size_t i = 0; i < N; ++i) {
-                Real coeff = m_AEigenvalue[i] * m_lambda;
-                // coeff = std::max(coeff, -2 * m_mu);
-                result += m_AEigenvector[i] * (doubleContract(m_AEigenvector[i], dF) * coeff);
-            }
+            result += m_Tsqrt2[i] * (doubleContract(m_Tsqrt2[i], dF) *  coeff_t);
+            result += m_Lsqrt2[i] * (doubleContract(m_Lsqrt2[i], dF) *  coeff_l);
         }
-        else {
-            if(N == 3){
-                Matrix JFinvT,dR,dJFinvT,Dinv;
-                Matrix D = m_traceSigma*Matrix::Identity() - m_S;
-                Dinv=D.inverse();
-                
-                JFinvT(0, 0) = m_F(1, 1) * m_F(2, 2) - m_F(2, 1) * m_F(1, 2);
-                JFinvT(0, 1) = m_F(2, 0) * m_F(1, 2) - m_F(1, 0) * m_F(2, 2);
-                JFinvT(0, 2) = m_F(1, 0) * m_F(2, 1) - m_F(2, 0) * m_F(1, 1);
-                JFinvT(1, 0) = m_F(2, 1) * m_F(0, 2) - m_F(0, 1) * m_F(2, 2);
-                JFinvT(1, 1) = m_F(0, 0) * m_F(2, 2) - m_F(2, 0) * m_F(0, 2);
-                JFinvT(1, 2) = m_F(2, 0) * m_F(0, 1) - m_F(0, 0) * m_F(2, 1);
-                JFinvT(2, 0) = m_F(0, 1) * m_F(1, 2) - m_F(1, 1) * m_F(0, 2);
-                JFinvT(2, 1) = m_F(1, 0) * m_F(0, 2) - m_F(0, 0) * m_F(1, 2);
-                JFinvT(2, 2) = m_F(0, 0) * m_F(1, 1) - m_F(1, 0) * m_F(0, 1);
-                
-                Real dJ = 0;
-                for(size_t alpha=0;alpha<3;alpha++){
-                    for(size_t beta=0;beta<3;beta++){
-                        dJ+=JFinvT(alpha,beta)*dF(alpha,beta);
-                    }
-                }
-
-                //dR
-                Matrix A,B;
-                Vector a,b;
-                A = m_R.transpose()*dF;
-                b(0)=A(1,2)-A(2,1);b(1)=A(2,0)-A(0,2);b(2)=A(0,1)-A(1,0);
-                a=Dinv*b;
-                B(0,0)=0;B(0,1)=a(2);B(0,2)=-a(1);
-                B(1,0)=-a(2);B(1,1)=0;B(1,2)=a(0);
-                B(2,0)=a(1);B(2,1)=-a(0);B(2,2)=0;
-                dR=m_R*B;
-
-                dJFinvT(0, 0) = m_F(2, 2) * dF(1, 1) - m_F(2, 1) * dF(1, 2) - m_F(1, 2) * dF(2, 1) + m_F(1, 1) * dF(2, 2);
-                dJFinvT(0, 1) = -m_F(2, 2) * dF(1, 0) + m_F(2, 0) * dF(1, 2) + m_F(1, 2) * dF(2, 0) - m_F(1, 0) * dF(2, 2);
-                dJFinvT(0, 2) = m_F(2, 1) * dF(1, 0) - m_F(2, 0) * dF(1, 1) - m_F(1, 1) * dF(2, 0) + m_F(1, 0) * dF(2, 1);
-                dJFinvT(1, 0) = -m_F(2, 2) * dF(0, 1) + m_F(2, 1) * dF(0, 2) + m_F(0, 2) * dF(2, 1) - m_F(0, 1) * dF(2, 2);
-                dJFinvT(1, 1) = m_F(2, 2) * dF(0, 0) - m_F(2, 0) * dF(0, 2) - m_F(0, 2) * dF(2, 0) + m_F(0, 0) * dF(2, 2);
-                dJFinvT(1, 2) = -m_F(2, 1) * dF(0, 0) + m_F(2, 0) * dF(0, 1) + m_F(0, 1) * dF(2, 0) - m_F(0, 0) * dF(2, 1);
-                dJFinvT(2, 0) = m_F(1, 2) * dF(0, 1) - m_F(1, 1) * dF(0, 2) - m_F(0, 2) * dF(1, 1) + m_F(0, 1) * dF(1, 2);
-                dJFinvT(2, 1) = -m_F(1, 2) * dF(0, 0) + m_F(1, 0) * dF(0, 2) + m_F(0, 2) * dF(1, 0) - m_F(0, 0) * dF(1, 2);
-                dJFinvT(2, 2) = m_F(1, 1) * dF(0, 0) - m_F(1, 0) * dF(0, 1) - m_F(0, 1) * dF(1, 0) + m_F(0, 0) * dF(1, 1);
-
-                result = 2*m_mu*(dF - dR) + m_lambda*dJ*JFinvT + m_lambda*(m_J-1)*dJFinvT;
-            }
-            else{
-                Matrix JFinvT,dR,dJFinvT,C,A;
-                JFinvT<<m_F(1,1),-m_F(1,0),-m_F(0,1),m_F(0,0);
-                dJFinvT<<dF(1,1),-dF(1,0),-dF(0,1),dF(0,0);
-                C<<0.0,-1.0,1.0,0.0;
-
-                Real dJ=doubleContract(JFinvT, dF);
-                A = m_R.transpose()*dF;
-                Real a = doubleContract(C, A)/m_traceSigma;
-                dR=a*m_R*C;
-
-                result = 2 * m_mu*(dF - dR) + m_lambda*dJ*JFinvT + m_lambda*(m_J-1)*dJFinvT;
-            }
+        for (size_t i = 0; i < N; ++i) {
+            Real coeff = m_AEigenvalue[i] * m_lambda;
+            if (usingProjection()) coeff = std::max(coeff, -2 * m_mu);
+            result += m_AEigenvector[i] * (doubleContract(m_AEigenvector[i], dF) * coeff);
         }
         return result;
     }
@@ -254,7 +170,7 @@ struct IsoCRLEFixed {
 
     bool usingProjection() const { return projectionEnabled && m_projectionMask; }
 
-    bool projectionEnabled = true;
+    bool projectionEnabled = false;
 
 private:
     Real m_lambda = 0.0;   // Lame's first parameter
@@ -265,12 +181,15 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     // Deformed state quantities
     ////////////////////////////////////////////////////////////////////////////
-    Matrix m_F, m_FinvT,
+    Matrix m_F,
            m_R, m_S, // Polar decomposition
            m_biotStrain, m_biotStress, m_pk1_stress;
-    Real m_traceSigma, m_J; //, m_simpleFinvTEigenvalueDenominators;
-    Vector m_twistEigenvalueDenominators, m_flipEigenvalueDenominators, m_AEigenvalue, m_sigma;
-    std::array<Matrix, N> m_Tsqrt2, m_Lsqrt2, m_AEigenvector;
+    Real m_J;
+    Vector m_AEigenvalue;
+    Vector m_twistEigenvalueDenominators, m_flipEigenvalueCoeffs; // Only first NumTwistEigenmodes entries are used...
+
+    std::array<Matrix, N> m_AEigenvector;
+    std::array<Matrix, NumTwistEigenmodes> m_Tsqrt2, m_Lsqrt2;
 };
 
 #endif /* end of include guard: ISOCRLEFIXED_HH */
