@@ -49,10 +49,15 @@ struct IsoCRLEFixed {
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
         const auto &U =svd.matrixU(),
                    &V =svd.matrixV();
+        m_J = m_F.determinant();
         m_R = U * V.transpose();
+        if (m_J < 0) {
+            Matrix W = svd.matrixV();
+            W.col(svd.matrixV().cols() - 1) *= -1;
+            m_R = svd.matrixU() * W.transpose();
+        }
         m_S = m_R.transpose() * F;
         m_traceSigma = m_S.trace();
-        m_J = m_F.determinant();
         Matrix m_SinvT = m_S.inverse();
         m_FinvT = m_R * m_SinvT;
         m_sigma = svd.singularValues().array();
@@ -160,8 +165,8 @@ struct IsoCRLEFixed {
                 Real coeff_l = -temp;
                 //ZZ `Real coeff = (- 2 * m_mu) / m_twistEigenvalueDenominators[i];`
                 // Full eigenvalue (2 * mu + 2 * coeff) > 0 ==> coeff > -mu
-                coeff_t = std::max(coeff_t, -m_mu);
-                coeff_l = std::max(coeff_l, -m_mu);
+                // coeff_t = std::max(coeff_t, -m_mu);
+                // coeff_l = std::max(coeff_l, -m_mu);
                 result += m_Tsqrt2[i] * (doubleContract(m_Tsqrt2[i], dF) *  coeff_t);
                 result += m_Lsqrt2[i] * (doubleContract(m_Lsqrt2[i], dF) *  coeff_l);
             }
@@ -171,7 +176,7 @@ struct IsoCRLEFixed {
             // Full
             for (size_t i = 0; i < N; ++i) {
                 Real coeff = m_AEigenvalue[i] * m_lambda;
-                coeff = std::max(coeff, -2 * m_mu);
+                // coeff = std::max(coeff, -2 * m_mu);
                 result += m_AEigenvector[i] * (doubleContract(m_AEigenvector[i], dF) * coeff);
             }
         }
