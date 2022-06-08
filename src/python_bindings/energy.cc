@@ -115,7 +115,7 @@ void bindIsoCRLEWithHP(py::module &detail_module)
 {
     using CRLE = IsoCRLEWithHessianProjection<double, _Dimension>;
     auto ebind = bindEnergyFBased<CRLE>(detail_module);
-    ebind.def(py::init<double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"))
+    ebind.def(py::init<double, double>(), py::arg("lambda"), py::arg("mu"))
          .def("R",     &CRLE::R)
          .def("S",     &CRLE::S)
          .def("sigma", &CRLE::biotStress)
@@ -128,7 +128,7 @@ void bindIsoCRLEFixed(py::module &detail_module)
 {
     using CRLE = IsoCRLEFixed<double, _Dimension>;
     auto ebind = bindEnergyFBased<CRLE>(detail_module);
-    ebind.def(py::init<double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"))
+    ebind.def(py::init<double, double>(), py::arg("lambda"), py::arg("mu"))
          .def("R",     &CRLE::R)
          .def("S",     &CRLE::S)
          .def("sigma", &CRLE::biotStress)
@@ -140,14 +140,14 @@ template<size_t _Dimension>
 void bindNeoHookeanEnergy(py::module& detail_module)
 {
     auto ebind = bindEnergyFBased<NeoHookeanEnergy<double, _Dimension>>(detail_module);
-    ebind.def(py::init<double, double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"), py::arg("finite_continuation_start") = -1);
+    ebind.def(py::init<double, double, double>(), py::arg("lambda"), py::arg("mu"), py::arg("finite_continuation_start") = -1);
 }
 
 template<size_t _Dimension>
 void bindNeoHookeanEnergyHP(py::module& detail_module)
 {
     auto ebind = bindEnergyFBasedAutoProjected<NeoHookeanEnergy<double, _Dimension>>(detail_module);
-    ebind.def(py::init<double, double, double>(), py::arg("first_lame_parameter"), py::arg("shear_modulus"), py::arg("finite_continuation_start") = -1);
+    ebind.def(py::init<double, double, double>(), py::arg("lambda"), py::arg("mu"), py::arg("finite_continuation_start") = -1);
 }
 
 template<size_t _Dimension>
@@ -333,7 +333,7 @@ PYBIND11_MODULE(energy, m)
     auto lambdaFromENu = [](double E, double nu, bool is3D = true) { return is3D ? (E * nu / ((1 + nu) * (1 - 2 * nu))) : ((nu * E) / (1.0 - nu * nu)); };
     auto     muFromENu = [](double E, double nu)                   { return E / (2 * (1 + nu)); };
 
-    // Convenience method for constructing a neo-Hookean material from a Young's modulus Poisson's ratio
+    // Convenience methods for constructing a neo-Hookean material from a Young's modulus Poisson's ratio
     m.def("NeoHookeanYoungPoisson",         [&](size_t dimension, double E, double nu, double finiteContinuationStart) {                                                                     return constructNeoHookean(false, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookeanYoungPoisson",         [&](py::object mesh,  double E, double nu, double finiteContinuationStart) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructNeoHookean(false, dimension, lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
     m.def("NeoHookeanMembraneYoungPoisson", [&](                  double E, double nu, double finiteContinuationStart) {                                                               return std::make_unique<NeoHookeanMembrane>(lambdaFromENu(E, nu), muFromENu(E, nu), finiteContinuationStart); },                       py::arg("E"), py::arg("nu"), py::arg("finiteContinuationStart") = -1.0);
