@@ -1,11 +1,4 @@
-#include <pybind11/eigen.h>
-#include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-namespace py = pybind11;
-
 #include <MeshFEM/Utilities/NameMangling.hh>
-#include "BindingInstantiations.hh"
 
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
@@ -13,7 +6,16 @@ namespace py = pybind11;
 #include <MeshFEM/Loads/Springs.hh>
 #include <MeshFEM/Loads/Traction.hh>
 
+#include <pybind11/eigen.h>
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+namespace py = pybind11;
+
+#include "LoadBinding.hh"
+
 using APC = Loads::AttachmentPointCoordinate<double>;
+
 
 template<size_t N>
 void bind(py::module &m) {
@@ -31,25 +33,15 @@ struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
     static std::enable_if_t<Object::N == 3> bind(py::module &module, py::module &detail_module) {
-        using Load = Loads::Load<3, double>;
-
         ////////////////////////////////////////////////////////////////////////
         // Gravity
         ////////////////////////////////////////////////////////////////////////
-        using GLoad = Loads::Gravity<Object>;
-        py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, ("Gravity" + NameMangler<Object>::name()).c_str())
-           .def_property("rho", &GLoad::get_rho, &GLoad::set_rho)
-           ;
-
-        using V3d = Eigen::Vector3d;
-        module.def("Gravity", [&](const std::shared_ptr<Object> &obj, double rho, const V3d &g) {
-                    return std::make_shared<GLoad>(obj, rho, g);
-                }, py::arg("obj"), py::arg("rho"), py::arg("g") = V3d(0.0, 0.0, 9.80635))
-             ;
+        bindGravity<Object>(module, detail_module, ("Gravity" + NameMangler<Object>::name()).c_str());
 
         ////////////////////////////////////////////////////////////////////////
         // Traction
         ////////////////////////////////////////////////////////////////////////
+        using Load = Loads::Load<3, double>;
         using TLoad = Loads::Traction<Object>;
         py::class_<TLoad, Load, std::shared_ptr<TLoad>>(detail_module, ("Traction" + NameMangler<Object>::name()).c_str())
            .def_property("boundaryTractions", &TLoad::getBoundaryTractions, &TLoad::setBoundaryTractions)
@@ -141,3 +133,4 @@ PYBIND11_MODULE(loads, m)
         .def_readwrite("coefficients", &APC::coefficients)
         ;
 }
+

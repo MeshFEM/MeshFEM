@@ -85,7 +85,7 @@ struct EquilibriumProblem : public NewtonProblem {
 
     virtual Real energy() const override {
         Real result = m_sys.energy();
-        if (result > systemEnergyIncreaseFactorLimit * m_currSystemEnergy)
+        if (result > systemEnergyIncreaseFactorLimit * std::max(m_currSystemEnergy, energyLimitingThreshold))
              return safe_numeric_limits<Real>::max();
         for (const auto &l : m_loads)
             result += l->energy();
@@ -117,7 +117,8 @@ struct EquilibriumProblem : public NewtonProblem {
     // The maximum factor by which we allow the elastic energy to increase in a single
     // Newton iteration; limiting this prevents large deployment forces from
     // severly deforming the umbrella mesh into a bad configuration.
-    Real systemEnergyIncreaseFactorLimit = 2.0;
+    Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max();
+    Real energyLimitingThreshold = 1e-6;
 
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
@@ -149,10 +150,12 @@ protected:
 template<class EQSys>
 std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(EQSys &sys, const LoadCollection<EQSys> &loads,
                                                            const std::vector<size_t> &fixedVars,
-                                                           const NewtonOptimizerOptions &opts, CallbackFunction customCallback) {
+                                                           const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
     auto problem = std::make_unique<EquilibriumProblem<EQSys>>(sys, loads);
     problem->addFixedVariables(fixedVars);
     problem->setCustomIterationCallback(customCallback);
+    problem->systemEnergyIncreaseFactorLimit = systemEnergyIncreaseFactorLimit;
+    problem->energyLimitingThreshold = energyLimitingThreshold;
     auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
     opt->options = opts;
     return opt;
@@ -160,8 +163,8 @@ std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(EQSys &sys, const Loa
 
 template<class EQSys>
 ConvergenceReport equilibrium_newton(EQSys &sys, const LoadCollection<EQSys> &loads,
-                                     const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, CallbackFunction customCallback) {
-    return get_equilibrium_optimizer(sys, loads, fixedVars, opts, customCallback)->optimize();
+                                     const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
+    return get_equilibrium_optimizer(sys, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold)->optimize();
 }
 
 #endif /* end of include guard: EQUILIBRIUMSOLVER_HH */
