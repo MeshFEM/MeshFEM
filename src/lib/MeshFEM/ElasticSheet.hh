@@ -75,6 +75,7 @@ public:
     using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
     using Real    = typename Psi::Real;
     using ETensor = ElasticityTensor<Real, 2>;
+    using CSCMat = CSCMatrix<SuiteSparse_long, Real>;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;
@@ -193,7 +194,7 @@ public:
     size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
     int  creaseForHalfEdge(size_t hei) const { return m_creaseEdgeIndexForEdge[edgeForHalfEdge(hei)]; }
 
-    virtual void setVars(Eigen::Ref<const VXd> vars) override {
+    virtual void setVars(const Eigen::Ref<const VXd> &vars) override {
         if (size_t(vars.rows()) != numVars()) throw std::runtime_error("Invalid vars size");
         m_thetas = vars.segment(thetaOffset(), m_numEdges);
         m_creaseAngles = vars.segment(creaseAngleOffset(), m_numCreases);
@@ -278,13 +279,13 @@ public:
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
-    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype, bool projectionMask = false) const;
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
+    void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false) const;
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override;
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
     virtual VXd gradient() const override { return gradient(false, EnergyType::Full); }
-    virtual void hessian(SuiteSparseMatrix &Hout, bool projectionMask = false) const override { hessian(Hout, EnergyType::Full, projectionMask); }
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false) const override { hessian(Hout, EnergyType::Full, projectionMask); }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;

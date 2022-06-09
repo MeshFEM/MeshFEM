@@ -23,17 +23,18 @@ class ElasticObject {
 public:
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+    using CSCMat = CSCMatrix<SuiteSparse_long, _Real>;
 
     using NotificationCB = std::function<void()>;
 
-    virtual void setVars(Eigen::Ref<const VXd> vars) = 0;
+    virtual void setVars(const Eigen::Ref<const VXd> &vars) = 0;
     virtual Real  energy() const = 0;
     virtual VXd gradient() const = 0;
-    virtual void hessian(SuiteSparseMatrix &Hout, bool projectionMask = false) const = 0;
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const = 0;
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false) const = 0;
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const = 0;
 
     // Optional interface
-    virtual SuiteSparseMatrix massMatrix(bool /* lumped */ = false)              const { throw std::runtime_error("Unimplemented"); }
+    virtual CSCMat massMatrix(bool /* lumped */ = false)              const { throw std::runtime_error("Unimplemented"); }
     virtual SuiteSparseMatrix sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
 
     // Get a FieldSampler for sampling FEM fields defined on the reference configuration mesh.
