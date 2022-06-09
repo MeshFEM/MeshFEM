@@ -21,11 +21,11 @@ void addComputeEquilibriumBinding(PYEs &pyES, py::module &detail_module, const s
 
     pyES
         .def("computeEquilibrium",
-            [](EQSystem &sys, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr, Real systemEnergyIncreaseFactorLimit = 2.0) {
-                return equilibrium_newton(sys, loads, fixedVars, opts, callbackWrapper(pcb), systemEnergyIncreaseFactorLimit);
+            [](EQSystem &sys, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb = nullptr, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
+                return equilibrium_newton(sys, loads, fixedVars, opts, callbackWrapper(pcb), systemEnergyIncreaseFactorLimit, energyLimitingThreshold);
             },
             py::arg("loads") = LC(),
-            py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr, py::arg("systemEnergyIncreaseFactorLimit") = 2.0,
+            py::arg("fixedVars") = std::vector<size_t>(), py::arg("opts") = NewtonOptimizerOptions(), py::arg("cb") = nullptr, py::arg("systemEnergyIncreaseFactorLimit") = safe_numeric_limits<Real>::max(), py::arg("energyLimitingThreshold") = 1e-6,
             py::call_guard<py::scoped_ostream_redirect,
                            py::scoped_estream_redirect>())
         .def("EquilibriumProblem",
