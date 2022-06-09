@@ -5,6 +5,7 @@
 #include <string>
 #include <MeshFEM/OneForm.hh>
 
+#include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 #include <MeshFEM/InterpolantRestriction.hh>
 #include <MeshFEM/GlobalBenchmark.hh>

@@ -74,6 +74,7 @@ public:
     using Psi_2x2 = _Psi_2x2;
     using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
     using Real    = typename Psi::Real;
+    using ETensor = ElasticityTensor<Real, 2>;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;
@@ -107,9 +108,25 @@ public:
     enum class EnergyType { Full, Membrane, Bending };
     enum class HessianProjectionType { Off, MembraneFBased, FullXBased };
 
+    struct Material {
+        Material(const Psi_2x2 &psi_raw) : m_psi{psi_raw} { set(psi_raw); }
+
+        void set(const Psi_2x2 &psi_raw) {
+            m_psi = Psi(psi_raw, UninitializedDeformationTag());
+            m_etensor = tangentElasticityTensor(psi_raw);
+        }
+
+        void setProjectionEnabled(bool project) { m_psi.projectionEnabled = project; }
+
+        const Psi     &    psi() const { return m_psi; }
+        const ETensor &etensor() const { return m_etensor; }
+    private:
+        Psi m_psi;         // Membrane energy density function.
+        ETensor m_etensor; // Tangent elasticity tensor of `m_psi` used for bending energy.
+    };
+
     ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
-        : m_mesh(m), m_psi{{psi}},
-          m_etensor(tangentElasticityTensor(psi)),
+        : m_mesh(m), m_materials{psi},
           m_numVertices(m->numVertices()),
           m_numEdges   (m->numEdges()),
           m_numCreases(creases.rows())
@@ -233,10 +250,16 @@ public:
 
     MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
 
-    const Psi &getEnergyDensity(size_t ei) const {
-        if (m_psi.size() == 1) return m_psi.front();
-        return m_psi.at(ei);
+    size_t numMaterials() const { return m_materials.size(); }
+    const Material &material(size_t i) const { return m_materials.at(i); }
+          Material &material(size_t i)       { return m_materials.at(i); }
+    const Material &elementMaterial(size_t ei) const {
+        if (m_materialForElement.empty()) return m_materials.back();
+        return m_materials.at(m_materialForElement.at(ei));
     }
+
+    const Psi     &elementPsi    (size_t ei) const { return elementMaterial(ei).psi(); }
+    const ETensor &elementETensor(size_t ei) const { return elementMaterial(ei).etensor(); }
 
     Real elementEnergy(size_t ei, const EnergyType etype) const;
     Real energy(const EnergyType etype) const;
@@ -451,8 +474,8 @@ public:
     void setHessianProjectionType(HessianProjectionType hp) {
         m_hessianProjectionType = hp;
         bool projectPsi = (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
-        for (auto &psi : m_psi)
-            psi.projectionEnabled = projectPsi;
+        for (auto &mat : m_materials)
+            mat.setProjectionEnabled(projectPsi);
     }
 
     HessianProjectionType getHessianProjectionType() const {
@@ -528,10 +551,15 @@ private:
     // enters into the elastic energy expression.
     std::vector<M3d> m_II, m_restII;
 
-    // Energy density for each element (with support for multi-material microstructures).
-    // For single-material microstructures, this vector will contain only a single entry.
-    std::vector<Psi> m_psi;
-    ElasticityTensor<Real, 2> m_etensor;
+    // Properties for each distinct material in use.
+    // To support multi-material sheets consisting of a small number
+    // of distinct materials (e.g., 2), we use a level of indirection,
+    // where `m_materialForElement[e]` gives the index into `m_materials`
+    // for the material in use. For single-material sheets,
+    // `m_materialForElement` will be emtpy and `m_materials` will hold only
+    // one material.
+    std::vector<size_t> m_materialForElement;
+    std::vector<Material> m_materials;
 
     // Sheet thickness
     Real m_h = 1.0;

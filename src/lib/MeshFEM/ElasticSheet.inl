@@ -1,3 +1,4 @@
+#include "ElasticSheet.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 
 #define NORMAL_INFERENCE_PROBLEM_VERBOSITY 0
@@ -211,7 +212,7 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        Psi psi(elementPsi(ei), UninitializedDeformationTag());
         psi.setDeformationGradient(FB, EvalLevel::EnergyOnly);
         result += m_h * psi.energy();
     }
@@ -222,7 +223,7 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
         // We obtain a 2x2 second fundamental form in the reference configuration
         // using our orthonormal basis for the undeformed triangle.
         SM2d e_b = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        result += (std::pow(m_h, 3) / 24.0) * m_etensor.doubleContract(e_b).doubleContract(e_b);
+        result += (std::pow(m_h, 3) / 24.0) * elementETensor(ei).doubleContract(e_b).doubleContract(e_b);
     }
 
     return result * e->volume();
@@ -248,7 +249,7 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        Psi psi(elementPsi(ei), UninitializedDeformationTag());
         psi.setDeformationGradient(FB, EvalLevel::Gradient);
 
         // Derivative of `h * A * psi` with respect to FB
@@ -264,7 +265,7 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
         const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
         const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        const SM2d stress = m_etensor.doubleContract(bendingStrain);
+        const SM2d stress = elementETensor(ei).doubleContract(bendingStrain);
         constexpr size_t to = 3 * numNodesPerElement;
         const Real A = m_deformedElements[ei].volume();
 
@@ -459,7 +460,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        Psi psi(elementPsi(ei), UninitializedDeformationTag());
         psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
                                                       : EvalLevel::HessianWithDisabledProjection);
 
@@ -479,7 +480,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
         const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
         const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        const SM2d stress = m_etensor.doubleContract(bendingStrain);
+        const SM2d stress = elementETensor(ei).doubleContract(bendingStrain);
         constexpr size_t lto = 9;
 
         const auto &deformedElement = m_deformedElements[ei];
@@ -500,8 +501,8 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             M3d d2_E_d_A_gamma_div_len_dx(M3d::Zero());
 
             // Optimized version of the following expression (we've hoisted the elasticity tensor's double contraction outside the following loop)
-            // const Real d2E_d2_A_gamma_div_len_ab = 2 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(m_etensor.doubleContract(SM2d(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose())).contract(Bt_glambda_ref));
-            SM2d val = m_etensor.doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
+            // const Real d2E_d2_A_gamma_div_len_ab = 2 * (4 * 2 * dE_dpsi) * Bt_glambda_ref.dot(elementETensor(ei).doubleContract(SM2d(Bt_glambda_ref_b * Bt_glambda_ref_b.transpose())).contract(Bt_glambda_ref));
+            SM2d val = elementETensor(ei).doubleContract(SM2d(Bt_glambda_ref * Bt_glambda_ref.transpose()));
             val *= 2 * (4 * 2 * dE_dpsi);
 
             for (const auto he_b : e.halfEdges()) {

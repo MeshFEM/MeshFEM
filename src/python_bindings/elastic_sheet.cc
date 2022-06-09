@@ -17,14 +17,22 @@ struct ElasticSheetBinder {
     template<class ES>
     static void bind(py::module &module, py::module &detail_module) {
         using Energy = typename ES::Psi_2x2;
-        using Mesh = typename ES::Mesh;
+        using Mesh   = typename ES::Mesh;
         using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
+        using Mat    = typename ES::Material;
 
         using CreaseEdges = typename ES::CreaseEdges;
         module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e, const CreaseEdges &creases) {
                 return std::make_shared<ES>(m, e, creases); }, py::arg("mesh"), py::arg("energy"), py::arg("creaseEdges") = CreaseEdges());
 
         py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, NameMangler<ES>::name().c_str());
+        py::class_<Mat>(pyES, "Material")
+            .def("set", &Mat::set)
+            .def_property_readonly("psi",     &Mat::psi)
+            .def_property_readonly("etensor", &Mat::etensor)
+            .def("setProjectionEnabled",      &Mat::setProjectionEnabled)
+            ;
+
 
         using EType = typename ES::EnergyType;
         py::enum_<EType>(pyES, "EnergyType")
@@ -87,7 +95,12 @@ struct ElasticSheetBinder {
           .def("sourceReferenceFrames"  ,&ES::sourceReferenceFrames)
           .def("edgeMidpoints",          &ES::edgeMidpoints)
           .def("restEdgeMidpoints",      &ES::restEdgeMidpoints)
-          .def("getEnergyDensity",       &ES::getEnergyDensity, py::arg("ei"))
+
+          .def("elementPsi",        &ES::elementPsi, py::arg("ei"))
+          .def("elementETensor",    &ES::elementETensor, py::arg("ei"))
+          .def("numMaterials",      &ES::numMaterials)
+          .def("getMaterial",       [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference)
+
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());
                 return getVisualizationGeometry(visMesh, normalCreaseAngle);

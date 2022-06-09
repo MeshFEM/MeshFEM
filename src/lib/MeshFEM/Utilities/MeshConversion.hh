@@ -118,6 +118,24 @@ std::vector<MeshIO::IOElement> getMeshIOElements(const Eigen::MatrixBase<Derived
     return result;
 }
 
+template<class Mesh>
+enable_if_models_concept_t<Concepts::ElementMesh, Mesh, std::vector<MeshIO::IOElement>>
+getMeshIOElements(const Mesh &m) {
+    std::vector<MeshIO::IOElement> result;
+    const size_t ne = m.numElements();
+    const size_t nc = Mesh::K;
+    result.reserve(ne);
+
+    for (auto e : m.elements()) {
+        result.emplace_back();
+        for (auto v : e.vertices()) {
+            result.back().push_back(v.index());
+        }
+    }
+
+    return result;
+}
+
 
 template<class Derived1, class Derived2>
 std::pair<std::vector<MeshIO::IOVertex>, std::vector<MeshIO::IOElement>>
