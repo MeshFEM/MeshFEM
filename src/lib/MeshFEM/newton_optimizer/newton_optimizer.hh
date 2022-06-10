@@ -410,7 +410,7 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
 
 protected:
     // `shared_ptr` to support pickling
-    std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAlways>();
+    std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAdaptive>();
     std::shared_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_shared<HessianUpdateAlways>();
 };
 

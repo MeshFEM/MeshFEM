@@ -61,6 +61,8 @@ struct ElasticSheetBinder {
           .def("setThetas",                &ES::setThetas)
           .def("getCreaseAngles",          &ES::getCreaseAngles)
           .def("setCreaseAngles",          &ES::setCreaseAngles)
+          .def("programFlatRestCurvature", &ES::programFlatRestCurvature)
+          .def("programRestCurvature",     &ES::programRestCurvature)
           .def("setDeformedPositions",     &ES::setDeformedPositions)
           .def("getDeformedPositions",     &ES::deformedPositions)
           .def("getRestPositions",         &ES::restPositions)
@@ -98,8 +100,12 @@ struct ElasticSheetBinder {
 
           .def("elementPsi",        &ES::elementPsi, py::arg("ei"))
           .def("elementETensor",    &ES::elementETensor, py::arg("ei"))
-          .def("numMaterials",      &ES::numMaterials)
-          .def("getMaterial",       [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference)
+
+          .def("numMaterials", &ES::numMaterials)
+          .def("getMaterial",  [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference)
+          .def("setMaterials", &ES::setMaterials, py::arg("psiList"))
+          .def("clearMaterialAssignments", &ES::clearMaterialAssignments)
+          .def_property("elementMaterialAssignments", &ES::elementMaterialAssignments, &ES::setElementMaterialAssignments)
 
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());

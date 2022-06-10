@@ -13,6 +13,7 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/IsoCRLETensionFieldMembrane.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 #include <MeshFEM/EnergyDensities/TensionFieldTheory.hh>
+#include <MeshFEM/EnergyDensities/TensionFieldNeoHookean.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
@@ -259,6 +260,12 @@ PYBIND11_MODULE(energy, m)
         .def_property("relaxationEnabled", &INeo_TFT::relaxationEnabled, &INeo_TFT::setRelaxationEnabled)
         ;
 
+    using OptionalINeoTFT = OptionalTensionFieldEnergy<double>;
+    bindEnergyCBased<OptionalINeoTFT>(detail_module)
+        .def("tensionState", & OptionalINeoTFT::tensionState)
+        .def_property("relaxationEnabled", &OptionalINeoTFT::getRelaxationEnabled, &OptionalINeoTFT::setRelaxationEnabled)
+        ;
+
     using StVK_C = StVenantKirchhoffEnergyCBased<double, 2>;
     bindEnergyCBased<StVK_C>(detail_module)
         .def(py::init<const ETensor2D &>(), py::arg("elasticity_tensor"))
@@ -322,4 +329,6 @@ PYBIND11_MODULE(energy, m)
     m.def("IsoCRLEWithHessianProjection",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor3D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 3>>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor2D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 2>>>(etensor); }, py::arg("elasticity_tensor"));
+
+    m.def("OptionalTensionFieldEnergy", [](double Y) { auto psi = std::make_unique<OptionalINeoTFT>(); psi->setStiffness(Y / 6.0); return psi; }, py::arg("youngModulus"));
 }

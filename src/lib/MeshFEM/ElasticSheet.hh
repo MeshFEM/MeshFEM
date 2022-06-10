@@ -255,9 +255,25 @@ public:
     const Material &material(size_t i) const { return m_materials.at(i); }
           Material &material(size_t i)       { return m_materials.at(i); }
     const Material &elementMaterial(size_t ei) const {
-        if (m_materialForElement.empty()) return m_materials.back();
+        if (m_materialForElement.empty()) return m_materials.front();
         return m_materials.at(m_materialForElement.at(ei));
     }
+
+    void setMaterials(const std::vector<Psi_2x2> &mats) {
+        if (mats.empty()) throw std::runtime_error("Must specify at least one material");
+        clearMaterialAssignments();
+        m_materials.reserve(mats.size());
+        m_materials.clear();
+        for (const auto &psi : mats) m_materials.emplace_back(psi);
+    }
+
+    void clearMaterialAssignments() { m_materialForElement.clear(); }
+    void setElementMaterialAssignments(const std::vector<size_t> &mfore) {
+        if (mfore.size() != mesh().numElements())               throw std::runtime_error("Element size mismatch");
+        for (size_t mi : mfore) { if (mi >= m_materials.size()) throw std::runtime_error("Material index is out of bounds"); }
+        m_materialForElement = mfore;
+    }
+    const std::vector<size_t> elementMaterialAssignments() const { return m_materialForElement; }
 
     const Psi     &elementPsi    (size_t ei) const { return elementMaterial(ei).psi(); }
     const ETensor &elementETensor(size_t ei) const { return elementMaterial(ei).etensor(); }
@@ -358,6 +374,11 @@ public:
     const std::vector<M3d>  &getII()     const { return m_II;     }
     const std::vector<M3d>  &getRestII() const { return m_restII; }
     const std::vector<M32d> &getB()      const { return m_B;      }
+
+    // Set the rest state to be flat.
+    void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M3d::Zero()); }
+    // Bake the current deformed state's curvature into the rest curvature (plastically deforming)
+    void programRestCurvature() { m_restII = m_II; }
 
     // Get the per-element right Cauchy-Green deformation tensors/first
     // fundamentals form representing the deformation.
