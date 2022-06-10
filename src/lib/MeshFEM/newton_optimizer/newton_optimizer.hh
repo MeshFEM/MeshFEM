@@ -225,6 +225,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual ~NewtonProblem() { }
 
     bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
+    void invalidateCachedHessian() { m_cachedHessianUpToDate = false; }
 
 protected:
     // Clear the cached per-iterate quantities

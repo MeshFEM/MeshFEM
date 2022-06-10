@@ -5,6 +5,7 @@
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
 #include <MeshFEM/Loads/Traction.hh>
+#include <MeshFEM/Loads/Inflation.hh>
 
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
@@ -15,7 +16,6 @@ namespace py = pybind11;
 #include "LoadBinding.hh"
 
 using APC = Loads::AttachmentPointCoordinate<double>;
-
 
 template<size_t N>
 void bind(py::module &m) {
@@ -32,7 +32,10 @@ void bind(py::module &m) {
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
-    static std::enable_if_t<Object::N == 3> bind(py::module &module, py::module &detail_module) {
+    static void bind_generic(py::module &module, py::module &detail_module) {
+        using Real = typename Object::Real;
+        using Load = Loads::Load<3, Real>;
+
         ////////////////////////////////////////////////////////////////////////
         // Gravity
         ////////////////////////////////////////////////////////////////////////
@@ -41,7 +44,6 @@ struct LoadBinder {
         ////////////////////////////////////////////////////////////////////////
         // Traction
         ////////////////////////////////////////////////////////////////////////
-        using Load = Loads::Load<3, double>;
         using TLoad = Loads::Traction<Object>;
         py::class_<TLoad, Load, std::shared_ptr<TLoad>>(detail_module, ("Traction" + NameMangler<Object>::name()).c_str())
            .def_property("boundaryTractions", &TLoad::getBoundaryTractions, &TLoad::setBoundaryTractions)
@@ -108,6 +110,33 @@ struct LoadBinder {
                 }, py::arg("obj"), py::arg("deformationSamplerMatrix"),
                    py::arg("targetPositions"), py::arg("stiffness"))
              ;
+    }
+
+    template<class Object>
+    static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &module, py::module &detail_module) {
+        bind_generic<Object>(module, detail_module);
+    }
+
+    template<class Object>
+    static std::enable_if_t<(Object::N == 3) && (Object::K == 2)> bind(py::module &module, py::module &detail_module) {
+        bind_generic<Object>(module, detail_module);
+
+        ////////////////////////////////////////////////////////////////////////
+        // Sheet-specific load: Inflation
+        ////////////////////////////////////////////////////////////////////////
+        using Real = typename Object::Real;
+        using Load = Loads::Load<3, Real>;
+        using Inflation = Loads::Inflation<Object>;
+        using VXd       = Eigen::VectorXd;
+        py::class_<Inflation, Load, std::shared_ptr<Inflation>>(detail_module, ("Inflation" + NameMangler<Object>::name()).c_str())
+            .def("volume", &Inflation::volume)
+            .def_readwrite("pressure", &Inflation::pressure)
+            ;
+
+        module.def("Inflation", [&](const std::shared_ptr<Object> &obj, Real pressure) {
+                    return std::make_shared<Inflation>(obj, pressure);
+                }, py::arg("sheet"), py::arg("pressure") = 1.0);
+
     }
 
     template<class Object>
