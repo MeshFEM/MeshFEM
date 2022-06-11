@@ -103,7 +103,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     py::class_<NewtonProblem>(m, "NewtonProblem")
         .def("energy",                 &NewtonProblem::energy)
         .def("gradient",               &NewtonProblem::gradient, py::arg("freshIterate") = false)
-        .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = true)
+        .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = false)
         .def("hessianSparsityPattern", &NewtonProblem::hessianSparsityPattern)
         .def("metric",                 &NewtonProblem::metric)
         .def("fixedVars",              &NewtonProblem::fixedVars)

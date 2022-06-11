@@ -250,7 +250,8 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         Base::setDeformationGradient(F, elevel);
-        m_C33 = (m_lambda + 2 * m_mu) / (m_lambda * unpaddedI3() + 2 * m_mu);
+        if (m_lambda + m_mu == 0.0) m_C33 = 1.0; // Avoid `NaN` for zero-stiffness material.
+        else m_C33 = (m_lambda + 2 * m_mu) / (m_lambda * unpaddedI3() + 2 * m_mu);
     }
 
     // Trace of full (padded) Cauchy-Green deformation tensor.
@@ -323,6 +324,7 @@ protected:
         Real delta2_C33_ab = doubleContract(delta_d_C33_d_F(dF_a), dF_b);
 
         Real coeff = -2 * m_lambda / (m_lambda + 2 * m_mu);
+        if (m_lambda + m_mu == 0.0) coeff = 0.0; // Avoid `NaN` for zero-stiffness material.
         // Second variation of d_C33_d_unpaddedI3 along (dF_a, dF_b)
         Real delta2_d_C33_d_unpaddedI3_ab = coeff * (delta_C33_a * delta_C33_b + m_C33 * delta2_C33_ab);
         Real delta_d_C33_d_unpaddedI3_a   = coeff * m_C33 * delta_C33_a;
@@ -336,12 +338,14 @@ protected:
 
     // Derivative of normal component C33 with respect to the unpadded I3 invariant.
     Real d_C33_d_unpaddedI3() const {
+        if (m_lambda + m_mu == 0.0) return 0.0; // Avoid `NaN` for zero-stiffness material.
         return -m_C33 * m_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }
 
     // Directional derivative of d_C33_d_unpaddedI3 along dF
     template<class Mat_>
     Real delta_d_C33_d_unpaddedI3(const Mat_ &dF) const {
+        if (m_lambda + m_mu == 0.0) return 0.0; // Avoid `NaN` for zero-stiffness material.
         Real delta_C33 = doubleContract(d_C33_d_F(), dF);
         return -2 * m_C33 * delta_C33 * (m_lambda / (m_lambda + 2 * m_mu));
     }

@@ -84,9 +84,9 @@ struct AttachmentPointCoordinate {
 };
 
 template<class Object>
-struct Springs : public Load<Object::N, typename Object::Real> {
+struct Springs : public Load<typename Object::Real> {
     static constexpr size_t N = Object::N;
-    using Base = Load<Object::N, typename Object::Real>;
+    using Base = Load<typename Object::Real>;
     using Real = typename Base::Real;
     using VXd  = typename Base::VXd;
     using MXNd = Eigen::Matrix<Real, N, 1>;
@@ -97,7 +97,7 @@ struct Springs : public Load<Object::N, typename Object::Real> {
     Springs(std::weak_ptr<const Object> obj,
             const std::vector<APC> &coordsA,
             const std::vector<APC> &coordsB,
-            Eigen::Ref<const VXd> stiffnesses)
+            const Eigen::Ref<const VXd> &stiffnesses)
         : m_obj(obj), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
     {
         if (coordsA.size() != coordsB.size()) throw std::runtime_error("Attachment point size mismatch");
@@ -106,7 +106,7 @@ struct Springs : public Load<Object::N, typename Object::Real> {
         for (const auto &p : coordsB) p.validate();
 
         m_updateCache();
-        m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
+        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Defo, [this]() { m_updateCache(); });
     }
 
     Springs(std::weak_ptr<const Object> obj,
@@ -186,7 +186,7 @@ struct Springs : public Load<Object::N, typename Object::Real> {
 
     virtual ~Springs() {
         if (auto o = m_obj.lock())
-            o->deregisterDeformationUpdateCallback(m_callbackID);
+            o->deregisterUpdateCallback(m_callbackID);
     }
 
 private:

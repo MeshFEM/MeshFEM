@@ -29,36 +29,27 @@ struct ElasticSolidBinder {
         static constexpr size_t K   = ES::K;
         static constexpr size_t N   = ES::K;
         static constexpr size_t Deg = ES::Deg;
-        using Vector = VectorND<N>;
+        using Real   = typename ES::Real;
+        using EO     = ElasticObject<Real>;
         using Energy = typename ES::Energy;
         using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, N>;
-        using Mesh = typename ES::Mesh;
+        using Mesh   = typename ES::Mesh;
         using EmbeddingSpace = typename Mesh::EmbeddingSpace;
 
         module.def("ElasticSolid", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
-        const std::string name = getElasticSolidName<Energy, K, Deg, Vector>();
-        py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
+        const std::string name = getElasticSolidName<Energy, K, Deg, VecN_T<Real, N>>();
+        py::class_<ES, EO, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
         pyES
           .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
           .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })
           .def_property_readonly_static("energy_name", [](py::object /* self */) { return getEnergyName<Energy>(); })
           .def("mesh",                      &ES::mesh)
-          .def("numVars",                   &ES::numVars)
           .def("numElements",               &ES::numElements)
-          .def("setIdentityDeformation",    &ES::setIdentityDeformation)
-          .def("getVars",                   &ES::getVars)
-          .def("setVars",                   &ES::setVars, py::arg("vars"))
           .def("setDeformedPositions",      &ES::setDeformedPositions)
           .def("applyRigidTransform",       &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",    &ES::prepareRigidMotionPins)
           .def("filterRMPinArtifacts",      &ES::filterRMPinArtifacts, py::arg("pinVertices"))
-          .def("energy",                    &ES::energy)
-          .def("gradient",                  &ES::gradient)
-          .def("hessian",                   [](const ES &es, bool projectionMask) { return es.hessian(projectionMask); }, py::arg("projectionMask") = false)
-          .def("hessianSparsityPattern",    &ES::hessianSparsityPattern)
-          .def("massMatrix",                &ES::massMatrix, py::arg("lumped") = false)
-          .def("sobolevInnerProductMatrix", &ES::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
           .def("getDeformedPositions",      &ES::deformedPositions)
           .def("getRestPositions",          &ES::restPositions)
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
@@ -81,26 +72,9 @@ struct ElasticSolidBinder {
                   if (degree == 2) return toDegree<2>(es);
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
-          .def("referenceConfigSampler",   &ES::referenceConfigSampler)
-          .def("deformationSamplerMatrix", &ES::deformationSamplerMatrix)
          ;
 
         addComputeEquilibriumBinding<ES>(pyES, detail_module, name);
-
-#if 0 // For debugging
-        using SVP = SingleVertexOptProblem<ES>;
-        py::class_<SVP>(detail_module, ("SingleVertexOptProblem" + name).c_str())
-            .def("numVars",  [](const SVP &svp) { return svp.numVars(); })
-            .def("getVars",  &SVP::getVars)
-            .def("setVars",  &SVP::setVars)
-            .def("energy",   &SVP::energy)
-            .def("gradient", &SVP::gradient)
-            .def("hessian",  &SVP::hessian)
-            ;
-        module.def("SingleVertexOptProblem", [](ES &es, size_t vi) {
-                return std::make_unique<SVP>(es, vi);
-            }, py::arg("es"), py::arg("vi"));
-#endif
     }
 };
 
@@ -113,6 +87,7 @@ PYBIND11_MODULE(elastic_solid, m)
     py::module::import("sparse_matrices");
     py::module::import("py_newton_optimizer");
     py::module::import("loads");
+    py::module::import("elastic_object");
 
     generateElasticSolidBindings(m, detail_module, ElasticSolidBinder());
 }

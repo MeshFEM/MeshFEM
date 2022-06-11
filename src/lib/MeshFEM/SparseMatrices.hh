@@ -813,6 +813,7 @@ struct CSCMatrix {
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
+    void reserve(size_t nnz_request) { if (nnz_request > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve`"); }
 
     CSCMatrix(_Index mm = 0, _Index nn = 0)
         : m(mm), n(nn), nz(0) { }

@@ -34,7 +34,7 @@ struct NeumaierSum {
 };
 
 template<class Object>
-struct Inflation : public Load<3, typename Object::Real> {
+struct Inflation : public Load<typename Object::Real> {
     using Real = typename Object::Real;
     using VXd  = typename Object::VXd;
     using V3d  = Eigen::Matrix<Real, 3, 1>;

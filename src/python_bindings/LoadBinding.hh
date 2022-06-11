@@ -9,7 +9,7 @@
 
 template<class Object>
 static std::enable_if_t<Object::N == 3> bindGravity(py::module &module, py::module &detail_module, const char* name) {
-    using Load = Loads::Load<3, double>;
+    using Load = Loads::Load<double>;
 
     ////////////////////////////////////////////////////////////////////////
     // Gravity

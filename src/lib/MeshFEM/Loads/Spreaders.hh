@@ -35,7 +35,7 @@ namespace detail {
 }
 
 template<class Object>
-struct Spreaders : public Load<Object::N, typename Object::Real> {
+struct Spreaders : public Load<typename Object::Real> {
     static constexpr size_t N = Object::N;
 
     using Real = typename Object::Real;
@@ -62,8 +62,8 @@ struct Spreaders : public Load<Object::N, typename Object::Real> {
         if (long(N) * connectivity.maxCoeff() >= m_materialPointPositioner.m)
             throw std::runtime_error("Edge index out of bounds");
         m_updateCache();
-        m_callbackID = getObj().registerDeformationUpdateCallback([this]() { m_updateCache(); });
         // Spreader force is const wrt. X (no rest config update callback need be registered)
+        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Defo, [this]() { m_updateCache(); });
     }
 
     Spreaders(std::weak_ptr<const Object> obj,
@@ -157,7 +157,7 @@ struct Spreaders : public Load<Object::N, typename Object::Real> {
 
     virtual ~Spreaders() {
         if (auto o = m_obj.lock())
-            o->deregisterDeformationUpdateCallback(m_callbackID);
+            o->deregisterUpdateCallback(m_callbackID);
     }
 
 private:

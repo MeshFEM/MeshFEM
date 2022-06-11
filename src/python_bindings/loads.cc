@@ -17,24 +17,12 @@ namespace py = pybind11;
 
 using APC = Loads::AttachmentPointCoordinate<double>;
 
-template<size_t N>
-void bind(py::module &m) {
-    using Load = Loads::Load<N, double>;
-    py::class_<Load, std::shared_ptr<Load>>(m, ("Load" + std::to_string(N)).c_str())
-        .def("energy",               &Load::energy)
-        .def("grad_x",               &Load::grad_x)
-        .def("grad_X",               &Load::grad_X)
-        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
-        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
-        ;
-}
-
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
     static void bind_generic(py::module &module, py::module &detail_module) {
         using Real = typename Object::Real;
-        using Load = Loads::Load<3, Real>;
+        using Load = Loads::Load<Real>;
 
         ////////////////////////////////////////////////////////////////////////
         // Gravity
@@ -125,7 +113,7 @@ struct LoadBinder {
         // Sheet-specific load: Inflation
         ////////////////////////////////////////////////////////////////////////
         using Real = typename Object::Real;
-        using Load = Loads::Load<3, Real>;
+        using Load = Loads::Load<Real>;
         using Inflation = Loads::Inflation<Object>;
         using VXd       = Eigen::VectorXd;
         py::class_<Inflation, Load, std::shared_ptr<Inflation>>(detail_module, ("Inflation" + NameMangler<Object>::name()).c_str())
@@ -147,8 +135,14 @@ struct LoadBinder {
 
 PYBIND11_MODULE(loads, m)
 {
-    bind<2>(m);
-    bind<3>(m);
+    using Load = Loads::Load<double>;
+    py::class_<Load, std::shared_ptr<Load>>(m, "Load")
+        .def("energy",               &Load::energy)
+        .def("grad_x",               &Load::grad_x)
+        .def("grad_X",               &Load::grad_X)
+        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
+        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
+        ;
 
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());

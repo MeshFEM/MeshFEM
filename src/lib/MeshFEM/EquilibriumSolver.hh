@@ -2,23 +2,18 @@
 // EquilibriumSolver.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Compute the static equilibrium of a conservative system by minimizing its
-//  total potential energy with a Newton-based solver.
+//  Compute the static equilibrium of a conservative system (whose elastic
+//  energy term derives from the `ElasticObject` base class)
+//  by minimizing its total potential energy with a Newton-based solver.
 //
-//  The system whose equilibrium we compute must be represented by
-//  an object with the following methods:
-//      setVars/getVars/numVars
-//      energy
-//      gradient
-//      hessian/hessianSparsityPattern
-*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  07/31/2020 20:07:51
-////////////////////////////////////////////////////////////////////////////////
+*///////////////////////////////////////////////////////////////////////////////
 #ifndef EQUILIBRIUMSOLVER_HH
 #define EQUILIBRIUMSOLVER_HH
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Loads/Load.hh"
+#include "ElasticObject.hh"
 
 #include <memory>
 #include <functional>
@@ -39,38 +34,19 @@ using CallbackFunction = std::function<void(NewtonProblem &, size_t)>;
 // the overload accepting an `int` but that will still match the one accepting
 // a `long` if the `int` overload if invalid.
 ////////////////////////////////////////////////////////////////////////////////
-template<class EQSystem> auto guardedGradientCall(const EQSystem &sys, bool freshIterate,        int     /* PREFERRED */) -> decltype(sys.gradient(freshIterate)) { return sys.gradient(freshIterate); }
-template<class EQSystem> auto guardedGradientCall(const EQSystem &sys, bool /* freshIterate */, long /* NON-PREFERRED */) -> decltype(sys.gradient())             { return sys.gradient(); }
+template<typename _Real>
+using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
 
-template<class EQSystem> auto guardedParametrizationUpdate(EQSystem &sys, int      /* PREFERRED */) -> decltype(sys.updateParametrization()) { return sys.updateParametrization(); }
-template<class EQSystem> void guardedParametrizationUpdate(EQSystem &   , long /* NON-PREFERRED */) { /* NOP */ } 
-
-template<class EQSystem> auto guardedApproxLinfVelocity(EQSystem &sys, const Eigen::VectorXd &d,        int      /* PREFERRED */) -> decltype(sys.approxLinfVelocity(d)) { return sys.approxLinfVelocity(d); }
-template<class EQSystem> auto guardedApproxLinfVelocity(EQSystem &   , const Eigen::VectorXd & /* d */, long /* NON-PREFERRED */) { return -1.0; } 
-
-template<class EQSystem> auto guardedCharacteristicLength(EQSystem &sys, int      /* PREFERRED */) -> decltype(sys.characteristicLength()) { return sys.characteristicLength(); }
-template<class EQSystem> auto guardedCharacteristicLength(EQSystem &   , long /* NON-PREFERRED */) { return 1.0; } 
-
-template<class EQSystem> auto guardedMassMatrixCall(EQSystem &sys, SuiteSparseMatrix &result, bool updatedSource,       bool useLumped,       int      /* PREFERRED */) -> decltype(sys.massMatrix(result)) { 
-    result.setZero();
-    return sys.massMatrix(result, updatedSource, useLumped); 
-}
-template<class EQSystem> void guardedMassMatrixCall(EQSystem &   , SuiteSparseMatrix &result, bool /* updatedSource */, bool /* useLumped */, long /* NON-PREFERRED */) { result.setIdentity(true); } 
-
-
-template<class EQSystem>
-using LoadCollection = std::vector<std::shared_ptr<Loads::Load<EQSystem::N, typename EQSystem::Real>>>;
-
-template<class EQSystem>
+template<typename _Real>
 struct EquilibriumProblem : public NewtonProblem {
-    static constexpr size_t N = EQSystem::N;
-    using Real = typename EQSystem::Real;
-    using LC = LoadCollection<EQSystem>;
+    using Real = _Real;
+    using LC   = LoadCollection<Real>;
+    using EO   = ElasticObject<Real>;
 
-    EquilibriumProblem(EQSystem &sys, const LC &lc = LC())
-        : m_sys(sys), m_loads(lc),
-          m_hessianSparsity(sys.hessianSparsityPattern()),
-          m_characteristicLength(guardedCharacteristicLength(sys, 0)) {
+    EquilibriumProblem(ElasticObject<Real> &eo, const LC &lc = LC())
+        : m_obj(eo), m_loads(lc),
+          m_hessianSparsity(eo.hessianSparsityPattern()),
+          m_characteristicLength(eo.characteristicLength()) {
         for (const auto &l : m_loads)
             m_hessianSparsity.addWithDistinctSparsityPattern(l->hessianSparsityPattern(1.0));
         m_hessianSparsity.fill(1.0);
@@ -78,13 +54,13 @@ struct EquilibriumProblem : public NewtonProblem {
     }
 
     virtual void setVars(const VXd &vars) override {
-        m_sys.setVars(vars.cast<typename EQSystem::Real>());
+        m_obj.setVars(vars.cast<Real>());
     }
-    virtual const VXd getVars() const override { return m_sys.getVars().template cast<double>(); }
-    virtual size_t numVars() const override { return m_sys.numVars(); }
+    virtual const VXd getVars() const override { return m_obj.getVars().template cast<double>(); }
+    virtual size_t numVars() const override { return m_obj.numVars(); }
 
     virtual Real energy() const override {
-        Real result = m_sys.energy();
+        Real result = m_obj.energy();
         if (result > systemEnergyIncreaseFactorLimit * std::max(m_currSystemEnergy, energyLimitingThreshold))
              return safe_numeric_limits<Real>::max();
         for (const auto &l : m_loads)
@@ -93,7 +69,7 @@ struct EquilibriumProblem : public NewtonProblem {
     }
 
     virtual VXd gradient(bool freshIterate = false) const override {
-        auto result = guardedGradientCall(m_sys, freshIterate, 0/* disambiguation hack to ensure`freshIterate` is passed when possible */);
+        auto result = m_obj.gradient(freshIterate);
         for (const auto &l : m_loads)
             result += l->grad_x();
 
@@ -111,7 +87,7 @@ struct EquilibriumProblem : public NewtonProblem {
     // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
     // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)
     virtual Real characteristicDistance(const Eigen::VectorXd &d) const override {
-        return guardedApproxLinfVelocity(m_sys, d, 0) / m_characteristicLength;
+        return m_characteristicLength / m_obj.approxLinfVelocity(d);
     }
 
     // The maximum factor by which we allow the elastic energy to increase in a single
@@ -123,22 +99,22 @@ struct EquilibriumProblem : public NewtonProblem {
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         result.setZero();
-        m_sys.hessian(result, projectionMask);
+        m_obj.hessian(result, projectionMask);
         for (const auto &l : m_loads)
             l->hessian(result, projectionMask);
     }
 
-    virtual void m_evalMetric(SuiteSparseMatrix &result) const override { guardedMassMatrixCall(m_sys, result, true, true, 0/* disambiguation hack to ensure `massMatrix` is called when possible */); }
+    virtual void m_evalMetric(SuiteSparseMatrix &result) const override { m_obj.massMatrix(result, true, true); }
 
     virtual void m_iterationCallback(size_t i) override {
-        m_currSystemEnergy = m_sys.energy();
-        guardedParametrizationUpdate(m_sys, 0 /* disambiguation hack to ensure the `updateParametrization` call is made when it is available */);
+        m_currSystemEnergy = m_obj.energy();
+        m_obj.updateParametrization();
         if (m_customCallback) m_customCallback(*this, i);
     }
 
     CallbackFunction m_customCallback;
 
-    EQSystem &m_sys;
+    EO &m_obj;
     LC m_loads;
 
     mutable SuiteSparseMatrix m_hessianSparsity;
@@ -147,11 +123,11 @@ protected:
     Real m_currSystemEnergy = safe_numeric_limits<Real>::max();
 };
 
-template<class EQSys>
-std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(EQSys &sys, const LoadCollection<EQSys> &loads,
+template<typename _Real>
+std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(ElasticObject<_Real> &obj, const LoadCollection<_Real> &loads,
                                                            const std::vector<size_t> &fixedVars,
                                                            const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
-    auto problem = std::make_unique<EquilibriumProblem<EQSys>>(sys, loads);
+    auto problem = std::make_unique<EquilibriumProblem<_Real>>(obj, loads);
     problem->addFixedVariables(fixedVars);
     problem->setCustomIterationCallback(customCallback);
     problem->systemEnergyIncreaseFactorLimit = systemEnergyIncreaseFactorLimit;
@@ -161,10 +137,10 @@ std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(EQSys &sys, const Loa
     return opt;
 }
 
-template<class EQSys>
-ConvergenceReport equilibrium_newton(EQSys &sys, const LoadCollection<EQSys> &loads,
+template<typename _Real>
+ConvergenceReport equilibrium_newton(ElasticObject<_Real> &obj, const LoadCollection<_Real> &loads,
                                      const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
-    return get_equilibrium_optimizer(sys, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold)->optimize();
+    return get_equilibrium_optimizer(obj, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold)->optimize();
 }
 
 #endif /* end of include guard: EQUILIBRIUMSOLVER_HH */

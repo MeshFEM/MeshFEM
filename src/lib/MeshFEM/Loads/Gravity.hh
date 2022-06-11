@@ -44,7 +44,7 @@ namespace Loads {
     }
 
     template<class Object>
-    struct Gravity : public Load<3, typename Object::Real> {
+    struct Gravity : public Load<typename Object::Real> {
         using Real = typename Object::Real;
         using VXd  = typename Object::VXd;
         using V3d  = Eigen::Matrix<Real, 3, 1>;
@@ -52,7 +52,7 @@ namespace Loads {
         Gravity(std::weak_ptr<const Object> obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
             : m_obj(obj), m_rho(rho), m_g(g) {
             m_updateCache();
-            m_callbackID = getObj().registerRestConfigUpdateCallback([this]() { m_updateCache(); });
+            m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Rest, [this]() { m_updateCache(); });
         }
 
         void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
@@ -93,7 +93,7 @@ namespace Loads {
 
         virtual ~Gravity() {
             if (auto o = m_obj.lock())
-                o->deregisterRestConfigUpdateCallback(m_callbackID);
+                o->deregisterUpdateCallback(m_callbackID);
         }
 
     private:

@@ -14,6 +14,8 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
     m_updateDeformedElements();
 
     initializeMidedgeNormals();
+
+    this->m_defoConfigUpdated();
 }
 
 // Quadratic minimization to infer midedge normals (thetas):
@@ -286,8 +288,9 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
 }
 
 template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updatedSource, const EnergyType etype) const {
+typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updatedSource, VariableMask vars, const EnergyType etype) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Gradient");
+    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     const auto &m = mesh();
     auto accumulate_per_element_contrib = [this, updatedSource, etype, &m](size_t ei, VXd &g_out) {
         auto g_e = elementGradient(ei, updatedSource, etype);
@@ -560,7 +563,8 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 }
 
 template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask) const {
+void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
+    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
     const auto &m = mesh();
     auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, CSCMat& Hout) {

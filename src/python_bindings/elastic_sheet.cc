@@ -21,11 +21,16 @@ struct ElasticSheetBinder {
         using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
         using Mat    = typename ES::Material;
 
+        using Real   = typename ES::Real;
+        using EO     = ElasticObject<Real>;
+
+        using VariableMask = typename ES::VariableMask;
+
         using CreaseEdges = typename ES::CreaseEdges;
         module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e, const CreaseEdges &creases) {
                 return std::make_shared<ES>(m, e, creases); }, py::arg("mesh"), py::arg("energy"), py::arg("creaseEdges") = CreaseEdges());
 
-        py::class_<ES, std::shared_ptr<ES>> pyES(detail_module, NameMangler<ES>::name().c_str());
+        py::class_<ES, EO, std::shared_ptr<ES>> pyES(detail_module, NameMangler<ES>::name().c_str());
         py::class_<Mat>(pyES, "Material")
             .def("set", &Mat::set)
             .def_property_readonly("psi",     &Mat::psi)
@@ -50,13 +55,10 @@ struct ElasticSheetBinder {
 
         pyES
           .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
-          .def("numVars",                  &ES::numVars)
           .def("numThetas",                &ES::numThetas)
           .def("numCreases",               &ES::numCreases)
           .def("thetaOffset",              &ES::thetaOffset)
           .def("creaseAngleOffset",        &ES::creaseAngleOffset)
-          .def("setIdentityDeformation",   &ES::setIdentityDeformation)
-          .def("getVars",                  &ES::getVars)
           .def("getThetas",                &ES::getThetas)
           .def("setThetas",                &ES::setThetas)
           .def("getCreaseAngles",          &ES::getCreaseAngles)
@@ -72,7 +74,6 @@ struct ElasticSheetBinder {
           .def("filterRMPinArtifacts",     &ES::filterRMPinArtifacts, py::arg("pinVertices"))
           .def("initializeMidedgeNormals", &ES::initializeMidedgeNormals, py::arg("minimizeBending") = true)
           .def("updateSourceFrame",        &ES::updateSourceFrame)
-          .def("setVars",                  &ES::setVars, py::arg("vars"))
           .def("getII",                    &ES::getII)
           .def("getRestII",                &ES::getRestII)
           .def("getB",                     &ES::getB)
@@ -83,15 +84,12 @@ struct ElasticSheetBinder {
           .def("getAlphas",                &ES::getAlphas)
           .def("getGammas",                &ES::getGammas)
           .def("getSourceAlphas",          &ES::getSourceAlphas)
+          // The following overloads of the EO bindings are needed for ES-specific arguments.
           .def("energy",                   [](const ES &es, EType etype) { return es.energy(etype); }, py::arg("etype") = EType::Full)
-          .def("gradient",                 [](const ES &es, bool us, EType etype) { return es.gradient(us, etype); }, py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
+          .def("gradient",                 [](const ES &es, bool us, VariableMask vars, EType etype) { return es.gradient(us, vars, etype); }, py::arg("updatedSource") = false, py::arg("vars") = VariableMask::Defo, py::arg("etype") = EType::Full)
+          .def("hessian",                  [](const ES &es, EType etype, bool projectionMask, VariableMask vars) { auto H = es.hessianSparsityPattern(); es.hessian(H, etype, projectionMask, vars); return H; }, py::arg("etype") = EType::Full, py::arg("projectionMask") = false, py::arg("vars") = VariableMask::Defo)
           .def("elementEnergy",            [](const ES &es, size_t ei, EType etype) { return es.elementEnergy(ei, etype); }, py::arg("ei"), py::arg("etype") = EType::Full)
           .def("elementGradient",          [](const ES &es, size_t ei, bool us, EType etype) { return es.elementGradient(ei, us, etype); }, py::arg("ei"), py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
-          .def("hessian",                  [](const ES &es, EType etype, bool projectionMask) { auto H = es.hessianSparsityPattern(); es.hessian(H, etype, projectionMask); return H; }, py::arg("etype") = EType::Full, py::arg("projectionMask") = false)
-          .def("hessianSparsityPattern",   &ES::hessianSparsityPattern)
-          // .def("massMatrix", [](const ES &e, bool lumped) {
-          //               return MassMatrix::construct_vector_valued<>(e.mesh(), lumped);
-          //         }, py::arg("lumped") = false)
           .def("midedgeNormals",         &ES::midedgeNormals)
           .def("midedgeReferenceFrames", &ES::midedgeReferenceFrames)
           .def("sourceReferenceFrames"  ,&ES::sourceReferenceFrames)
@@ -120,9 +118,6 @@ struct ElasticSheetBinder {
           // For debugging purposes, drop the bending energy term.
           .def_property("disableBending", &ES::getDisabledBending, &ES::setDisabledBending)
           .def_property("hessianProjectionType", &ES::getHessianProjectionType, &ES::setHessianProjectionType)
-
-          .def("referenceConfigSampler",   &ES::referenceConfigSampler)
-          .def("deformationSamplerMatrix", &ES::deformationSamplerMatrix)
           ;
 
         const std::string name = NameMangler<ES>::name();
@@ -138,6 +133,7 @@ PYBIND11_MODULE(elastic_sheet, m)
     py::module::import("sparse_matrices");
     py::module::import("py_newton_optimizer");
     py::module::import("loads");
+    py::module::import("elastic_object");
 
     generateElasticSheetBindings(m, detail_module, ElasticSheetBinder());
 }
