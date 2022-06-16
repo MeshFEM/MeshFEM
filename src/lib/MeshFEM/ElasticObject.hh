@@ -77,10 +77,10 @@ public:
     // Energy and derivatives
     ////////////////////////////////////////////////////////////////////////////
     virtual Real  energy() const = 0;
-    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vars = VariableMask::Defo) const = 0;
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vars = VariableMask::Defo) const = 0;
+    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vmask = VariableMask::Defo) const = 0;
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const = 0;
 
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const = 0;
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const = 0;
 
     ////////////////////////////////////////////////////////////////////////////
     // Optional parts of the interface
@@ -90,8 +90,8 @@ public:
     virtual void updateParametrization() { }
     virtual CSCMat sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
 
-    virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const { M.setIdentity(true); }
-    virtual Real   approxLinfVelocity(const VXd &d) const { return -1.0; }
+    virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool /* lumped */) const { M.setIdentity(true); }
+    virtual Real   approxLinfVelocity(const VXd & /* d */) const { return -1.0; }
     virtual Real characteristicLength()             const { return  1.0; }
 
     // Get a FieldSampler for sampling FEM fields defined on the reference configuration mesh.

@@ -21,7 +21,7 @@ CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
 }
 
 template<class EQObj, class PYEs>
-void addComputeEquilibriumBinding(PYEs &pyES, py::module &detail_module, const std::string &objectName) {
+void addComputeEquilibriumBinding(PYEs &pyES, py::module & /* detail_module */, const std::string & /* objectName */) {
     using Real = typename EQObj::Real;
     using EQProb = EquilibriumProblem<Real>;
     using LC     = typename EQProb::LC;

@@ -290,7 +290,7 @@ public:
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
 
-    VXd  gradient(bool updatedSource, VariableMask vars, const EnergyType etype = EnergyType::Full) const;
+    VXd  gradient(bool updatedSource, VariableMask vmask, const EnergyType etype = EnergyType::Full) const;
 
     // Hessian with respect to an individual element's corner positions and midedge normal angles.
     // (Note, we don't separately differentiate with respect to local crease angle vars;
@@ -298,13 +298,13 @@ public:
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
-    void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vars = VariableMask::Defo) const;
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override;
+    void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override;
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
-    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vars = VariableMask::Defo) const override { return gradient(updatedParametrization, vars, EnergyType::Full); }
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vars = VariableMask::Defo) const override { hessian(Hout, EnergyType::Full, projectionMask, vars); }
+    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vmask = VariableMask::Defo) const override { return gradient(updatedParametrization, vmask, EnergyType::Full); }
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override { hessian(Hout, EnergyType::Full, projectionMask, vmask); }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;
@@ -527,7 +527,7 @@ private:
         m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
     }
 
-    void m_setRestVars(const Eigen::Ref<const VXd> &vars) override {
+    void m_setRestVars(const Eigen::Ref<const VXd> & /* vars */) override {
         throw std::runtime_error("Unimplemented");
     }
 
