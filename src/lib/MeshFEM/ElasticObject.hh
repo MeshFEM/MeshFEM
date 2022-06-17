@@ -57,6 +57,7 @@ public:
             VXd result(numDefoVars() + numRestVars());
             result.head(numDefoVars()) = getDefoVars();
             result.tail(numRestVars()) = getRestVars();
+            return result;
         }
         throw std::runtime_error("Unknown variable type");
     }

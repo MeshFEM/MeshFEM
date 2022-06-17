@@ -3,13 +3,20 @@ from numpy.linalg import norm
 import sparse_matrices
 from reflection import hasArg
 
+def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
+    if (customArgs is not None):
+        if (isinstance(customArgs, list)): return f(*mandatoryArgs, *customArgs)
+        if (isinstance(customArgs, dict)): return f(*mandatoryArgs, **{k: v for k, v in customArgs.items() if hasArg(f, k)})
+        return f(*mandatoryArgs, customArgs)
+    return f(*mandatoryArgs)
+
 def genPerturbation(x):
     return np.random.uniform(low=-1,high=1, size=x.shape)
 
-def preamble(obj, xeval, perturb, fixedVars = []):
-    if (xeval   is None): xeval = obj.getVars()
+def preamble(obj, xeval, perturb, customArgs, fixedVars = []):
+    if (xeval   is None): xeval = evalWithCustomArgs(obj.getVars, customArgs)
     if (perturb is None): perturb = genPerturbation(xeval)
-    xold = obj.getVars()
+    xold = evalWithCustomArgs(obj.getVars, customArgs)
     perturb = np.copy(perturb)
     perturb[fixedVars] = 0.0
     return (xold, xeval, perturb)
@@ -19,20 +26,13 @@ def setVars(obj, x, customArgs = None):
         obj.setVars(x, **{k: v for k, v in customArgs.items() if hasArg(obj.setVars, k)})
     obj.setVars(x)
 
-def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
-    if (customArgs is not None):
-        if (isinstance(customArgs, list)): return f(*mandatoryArgs, *customArgs)
-        if (isinstance(customArgs, dict)): return f(*mandatoryArgs, **{k: v for k, v in customArgs.items() if hasArg(f, k)})
-        return f(*mandatoryArgs, customArgs)
-    return f(*mandatoryArgs)
-
 def basisDirection(obj, c):
     e_c = np.zeros(obj.numVars())
     e_c[c] = 1.0
     return e_c
 
 def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     def evalAt(x):
         setVars(obj, x, customArgs)
@@ -44,7 +44,7 @@ def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVa
     return fd_delta_E
 
 def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], g = None):
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     setVars(obj, xeval, customArgs)
     if g is None: g = evalWithCustomArgs(obj.gradient, customArgs)
@@ -61,7 +61,7 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
     This isn't guaranteed to find the worst component, but it should find one
     of the worse ones.
     """
-    xold, xeval, perturb = preamble(obj, xeval, None, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, None, customArgs, fixedVars)
 
     setVars(obj, xeval, customArgs)
     g = evalWithCustomArgs(obj.gradient, customArgs)
@@ -104,7 +104,7 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
         finite difference delta gradient
         analytic delta gradient
     """
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     def gradAt(x):
         setVars(obj, x, customArgs)
@@ -135,7 +135,7 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = [], epsilons
     if epsilons is None:
         epsilons = np.logspace(-9, -3, 100)
     errors = []
-    if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
+    if (perturb is None): perturb = preamble(obj, None, perturb, customArgs, fixedVars)[-1]
     g = evalWithCustomArgs(obj.gradient, customArgs)
     for eps in epsilons:
         fd, an = validateGrad(obj, g=g, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars)

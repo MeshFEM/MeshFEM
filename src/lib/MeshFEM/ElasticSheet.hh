@@ -203,7 +203,7 @@ public:
     int  creaseForHalfEdge(size_t hei) const { return m_creaseEdgeIndexForEdge[edgeForHalfEdge(hei)]; }
 
     void setDeformedPositions(Eigen::Ref<const MX3d> x) {
-        if (x.rows() != numVertices()) throw std::runtime_error("Invalid vertex position size");
+        if (size_t(x.rows()) != numVertices()) throw std::runtime_error("Invalid vertex position size");
         VXd fullVars = getDefoVars();
         fullVars.head(3 * numVertices()) = Eigen::Map<const VXd>(x.data(), x.size());
         Base::setDefoVars(fullVars);
