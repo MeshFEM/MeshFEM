@@ -115,7 +115,6 @@ struct LoadBinder {
         using Real = typename Object::Real;
         using Load = Loads::Load<Real>;
         using Inflation = Loads::Inflation<Object>;
-        using VXd       = Eigen::VectorXd;
         py::class_<Inflation, Load, std::shared_ptr<Inflation>>(detail_module, ("Inflation" + NameMangler<Object>::name()).c_str())
             .def("volume", &Inflation::volume)
             .def_readwrite("pressure", &Inflation::pressure)

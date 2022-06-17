@@ -156,8 +156,8 @@ public:
     }
 
     // Gradient of the full object's energy with respect to all deformation variables.
-    virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vars = VariableMask::Defo) const override {
-        if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+    virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("gradient");
         VXd g(VXd::Zero(numVars()));
 
@@ -218,8 +218,8 @@ public:
             e->volume());
     }
 
-    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vars = VariableMask::Defo) const override {
-        if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
         auto assembler_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
@@ -249,7 +249,8 @@ public:
         assemble_parallel(assembler_per_element_contrib, H, numElements());
     }
 
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override {
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
 

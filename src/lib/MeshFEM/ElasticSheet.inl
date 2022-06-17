@@ -631,7 +631,8 @@ void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool proj
 }
 
 template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val) const {
+typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val, VariableMask vmask) const {
+    if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     CSCMat Hsp(numVars(), numVars());
     Hsp.symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
     Hsp.Ap.reserve(numVars() + 1);

@@ -123,7 +123,6 @@ enable_if_models_concept_t<Concepts::ElementMesh, Mesh, std::vector<MeshIO::IOEl
 getMeshIOElements(const Mesh &m) {
     std::vector<MeshIO::IOElement> result;
     const size_t ne = m.numElements();
-    const size_t nc = Mesh::K;
     result.reserve(ne);
 
     for (auto e : m.elements()) {
