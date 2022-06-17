@@ -488,6 +488,16 @@ class PythreejsViewerBase(ViewerBase):
         mr.meshes[0].alpha = 1.0
         mr.meshes[0].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
 
+        if self.vectorFieldMesh is not None:
+            vga = self.vectorFieldMesh.geometry.attributes
+            amu = self.arrowMaterial.uniforms
+            arrowAlignment          = amu['arrowAlignment']['value']
+            arrowRelativeScreenSize = amu[ 'arrowSizePx_x']['value'] / amu['rendererWidth']['value']
+            targetDepth             = amu[   'targetDepth']['value']
+            mr.addVectorFieldMesh(vga['position'].array, vga[   'index'].array, vga[    'normal'].array,
+                                  vga['arrowPos'].array, vga['arrowVec'].array, vga['arrowColor'].array,
+                                  arrowRelativeScreenSize, arrowAlignment, targetDepth)
+
         for gm in self.ghostMeshes.children:
             attr = gm.geometry.attributes
             P = attr['position'].array
