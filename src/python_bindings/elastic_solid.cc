@@ -14,7 +14,6 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
 
-#include "EquilibriumBinding.hh"
 #include "BindingInstantiations.hh"
 
 template<size_t NewDeg, class ES>
@@ -73,8 +72,6 @@ struct ElasticSolidBinder {
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
          ;
-
-        addComputeEquilibriumBinding<ES>(pyES, detail_module, name);
     }
 };
 

@@ -8,6 +8,7 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/NameMangling.hh>
 
 #include <MeshFEM/EquilibriumSolver.hh>
+#include "EquilibriumBinding.hh"
 
 template<typename Real_>
 void bind(py::module &m) {
@@ -45,6 +46,7 @@ void bind(py::module &m) {
 
          .def("setIdentityDeformation",   &EO::setIdentityDeformation)
         ;
+    addComputeEquilibriumBinding<EO>(pyEO);
 
     using EQProb = EquilibriumProblem<Real_>;
     py::class_<EQProb, NewtonProblem>(m, ("EquilibriumProblem" + floatingPointTypeSuffix<Real_>()).c_str())
