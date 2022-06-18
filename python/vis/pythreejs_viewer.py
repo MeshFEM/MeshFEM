@@ -194,20 +194,21 @@ class PythreejsViewerBase(ViewerBase):
             self.objects.add([self.meshes, self.ghostMeshes])
         else:
             superView.objects.add([self.meshes, self.ghostMeshes])
-        self.subviews = []
+            superView.subViews.append(self)
+        self.subViews = []
 
         self._arrowMaterial = None # Will hold this viewer's instance of the special vector field shader (shared/overridden by superView)
         self._arrowSize    = 60
 
-        # We must create the camera now (instead of later in `setCamera`) so
-        # that we can attach orbit controls and create the scene
-        self.cam = pythreejs.PerspectiveCamera(position=[0, 0, 5], up=[0, 1, 0], aspect=width / height)
-
-        # Camera needs to be part of the scene because the scene light is its child
-        # (so that it follows the camera).
-        self.scene = pythreejs.Scene(children=[self.objects, self.cam, pythreejs.AmbientLight(intensity=0.5)])
-
         if (superView is None):
+            # We must create the camera now (instead of later in `setCamera`) so
+            # that we can attach orbit controls and create the scene
+            self.cam = pythreejs.PerspectiveCamera(position=[0, 0, 5], up=[0, 1, 0], aspect=width / height)
+
+            # Camera needs to be part of the scene because the scene light is its child
+            # (so that it follows the camera).
+            self.scene = pythreejs.Scene(children=[self.objects, self.cam, pythreejs.AmbientLight(intensity=0.5)])
+
             # Sane trackball controls.
             self.controls = pythreejs.TrackballControls(controlling=self.cam)
             self.controls.staticMoving = True
@@ -216,10 +217,12 @@ class PythreejsViewerBase(ViewerBase):
             self.controls.panSpeed     = 1.0
             self.renderer = pythreejs.Renderer(camera=self.cam, scene=self.scene, controls=[self.controls], width=width, height=height)
         else:
+            self.cam      = superView.cam
+            self.scene    = superView.scene
             self.controls = superView.controls
             self.renderer = superView.renderer
 
-        super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
+        super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent, isSubview=superView is not None)
 
     def setCamera(self, position, up, fovy, aspect, near, far):
         self.cam.position = position
@@ -364,10 +367,7 @@ class PythreejsViewerBase(ViewerBase):
             self.vectorFieldMesh = self.vectorField.getArrows(vertices, idxs, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
 
             self.arrowMaterial = self.vectorFieldMesh.material
-            self.arrowMaterial.updateUniforms(arrowSizePx_x  = self.arrowSize,
-                                            rendererWidth  = self.renderer.width,
-                                            targetDepth    = np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
-                                            arrowAlignment = self.vectorField.align.getRelativeOffset())
+            self.arrowMaterial.updateUniforms(**self._arrowMaterialUniforms())
             self.controls.shaderMaterial = self.arrowMaterial
             if (self.vectorFieldMesh not in self.meshes.children):
                 self.meshes.add(self.vectorFieldMesh)
@@ -381,6 +381,15 @@ class PythreejsViewerBase(ViewerBase):
             try: self.renderer.resumeRendering()
             except: pass
 
+    def _arrowMaterialUniforms(self):
+        # When updating any uniforms of the arrow mterial we need to prevent
+        # stale, unsynced `rendererWidth` and `targetDepth` from overwriting
+        # the correct values in the frontend; recalculate fresh values here.
+        return { 'arrowSizePx_x' : self.arrowSize,
+                 'rendererWidth' : self.renderer.width,
+                 'targetDepth'   : np.linalg.norm(np.array(self.cam.position) - np.array(self.controls.target)),
+                 'arrowAlignment': self.vectorField.align.getRelativeOffset()}
+
     @property
     def arrowSize(self):
         return self._arrowSize
@@ -389,8 +398,7 @@ class PythreejsViewerBase(ViewerBase):
     def arrowSize(self, value):
         self._arrowSize = value
         if (self.arrowMaterial is not None):
-            self.arrowMaterial.updateUniforms(arrowSizePx_x = self.arrowSize)
-
+            self.arrowMaterial.updateUniforms(**self._arrowMaterialUniforms())
     @property
     def arrowMaterial(self):
         if (self.superView is None): return self._arrowMaterial
@@ -477,26 +485,37 @@ class PythreejsViewerBase(ViewerBase):
         if width  is None: width  = self.renderer.width
         if height is None: height = self.renderer.height
         mr = OffscreenRenderer.MeshRenderer(width, height)
+        self.__addOffscreenRendererObjects(mr)
 
-        attr = self.meshes.children[0].geometry.attributes
-        P = attr['position'].array
-        N = attr['normal'].array
-        C = attr['color'].array if 'color' in attr else self.materialLibrary.material(False).color
-        F = attr['index'].array if 'index' in attr else None
-        mr.setMesh(P, F, N, C)
+        mr.setCameraParams(self.getCameraParams())
+        for m in mr.meshes: m.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
+        mr.perspective(50, width / height, 0.1, 2000)
 
-        mr.meshes[0].alpha = 1.0
-        mr.meshes[0].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
+        mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
+        return mr
+
+    def __addOffscreenRendererObjects(self, mr):
+        """
+        Recursively add the meshes of `self` *and its subviews* to the
+        offscreen mesh renderer `mr`.
+        """
+        if (not self.isPointCloud):
+            attr = self.meshes.children[0].geometry.attributes
+            P = attr['position'].array
+            N = attr['normal'].array
+            C = attr['color'].array if 'color' in attr else self.materialLibrary.material(False).color
+            F = attr['index'].array if 'index' in attr else None
+            mr.addMesh(P, F, N, C, makeDefault=False)
+
+            mr.meshes[-1].alpha = 1.0
+            mr.meshes[-1].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
 
         if self.vectorFieldMesh is not None:
             vga = self.vectorFieldMesh.geometry.attributes
-            amu = self.arrowMaterial.uniforms
-            arrowAlignment          = amu['arrowAlignment']['value']
-            arrowRelativeScreenSize = amu[ 'arrowSizePx_x']['value'] / amu['rendererWidth']['value']
-            targetDepth             = amu[   'targetDepth']['value']
+            amu = self._arrowMaterialUniforms()
             mr.addVectorFieldMesh(vga['position'].array, vga[   'index'].array, vga[    'normal'].array,
                                   vga['arrowPos'].array, vga['arrowVec'].array, vga['arrowColor'].array,
-                                  arrowRelativeScreenSize, arrowAlignment, targetDepth)
+                                  amu['arrowSizePx_x'] / amu['rendererWidth'], amu['arrowAlignment'], amu['targetDepth'])
 
         for gm in self.ghostMeshes.children:
             attr = gm.geometry.attributes
@@ -508,13 +527,9 @@ class PythreejsViewerBase(ViewerBase):
             mr.meshes[-1].alpha = 0.25
             mr.meshes[-1].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
 
-        mr.setCameraParams(self.getCameraParams())
-        for m in mr.meshes: m.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
-        mr.perspective(50, width / height, 0.1, 2000)
-
-        mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
-
-        return mr
+        # Recursively add subviews
+        for sv in self.subViews:
+            sv.__addOffscreenRendererObjects(mr)
 
     def transformModel(self, position, scale, quaternion):
         self.objects.scale      = [scale] * 3
@@ -540,10 +555,19 @@ class PythreejsViewerBase(ViewerBase):
         submesh = mesh_operations.removeDanglingVertices(self.mesh.vertices(), self.mesh.triangles()[tris])
         subview = TriMeshViewer(submesh, superView=self)
         subview.showPoints()
-        self.subviews.append(subview)
+        self.subViews.append(subview)
 
     def clearSubviews(self):
-        self.subviews = []
+        for s in self.subViews:
+            if s.superView != self: raise Exception('subview-superview relationship disagreement')
+            self.objects.remove([s.meshes, s.ghostMeshes])
+            s.superView = -1 # subview has been divorced from its superview
+        self.subViews = []
+
+    def removeSubview(self, subview):
+        if subview not in self.subViews: return # raise Exception('subview does not exist')
+        self.objects.remove([subview.meshes, subview.ghostMeshes])
+        self.subViews.remove(subview)
 
     def __cleanMeshes(self, meshGroup):
         meshes = list(meshGroup.children)
@@ -563,6 +587,9 @@ class PythreejsViewerBase(ViewerBase):
     def __del__(self):
         # Clean up resources
         self.__cleanMeshes(self.ghostMeshes)
+
+        if ((self.superView is not None) and (self.superView != -1)):
+            self.superView.removeSubview(self)
 
         # If vectorFieldMesh, wireframeMesh, or pointsMesh exist but are hidden, add them to the meshes group for cleanup
         for m in [self.vectorFieldMesh, self.wireframeMesh, self.pointsMesh]:
