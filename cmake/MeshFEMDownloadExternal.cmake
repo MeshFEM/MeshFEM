@@ -83,7 +83,7 @@ endfunction()
 function(meshfem_download_triangle)
     meshfem_download_project(triangle
         GIT_REPOSITORY https://github.com/libigl/triangle.git
-        GIT_TAG        d6761dd691e2e1318c83bf7773fea88d9437464a
+        GIT_TAG        3ee6cac2230f0fe1413879574f741c7b6da11221
     )
 endfunction()
 
