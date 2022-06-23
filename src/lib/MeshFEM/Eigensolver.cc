@@ -50,12 +50,12 @@ struct ShiftedGeneralizedOp {
     void perform_op(const Real *x_in, Real *y_out) const {
         //BENCHMARK_START_TIMER("Apply iteration matrix");
 
-        // m_Hshift_inv.solveRaw(x_in, y_out, CHOLMOD_A); // Hshift_inv x
+        // m_Hshift_inv.solveRaw(x_in, y_out, CholeskySys::A); // Hshift_inv x
 
         m_L.         applyRaw(x_in,                m_workspace1.data());             // L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CHOLMOD_Pt); // P^T L x
-        m_Hshift_inv.solveRaw(m_workspace2.data(), m_workspace1.data(), CHOLMOD_A ); // Hshift_inv P^T L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CHOLMOD_P ); // P Hshift_inv P^T L x
+        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
+        m_Hshift_inv.solveRaw(m_workspace2.data(), m_workspace1.data(), CholeskySys::A ); // Hshift_inv P^T L x
+        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
         m_L.         applyRaw(m_workspace2.data(), y_out,     /* transpose */ true); // L^T P Hshift_inv PT L x
 
         //BENCHMARK_STOP_TIMER("Apply iteration matrix");
@@ -104,8 +104,8 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
     Eigen::VectorXd d(y.size());
     {
         Eigen::VectorXd tmp(y.size());
-        M_LLt->solveRaw(y.data(), tmp.data(), CHOLMOD_Lt);
-        M_LLt->solveRaw(tmp.data(), d.data(), CHOLMOD_Pt);
+        M_LLt->solveRaw(y.data(), tmp.data(), CholeskySys::Lt);
+        M_LLt->solveRaw(tmp.data(), d.data(), CholeskySys::Pt);
 
         // Normalize d so that ||d||_M = 1
         // M.applyRaw(d.data(), tmp.data());
@@ -146,17 +146,17 @@ struct CholmodCholeskyOp {
 
     // Solve (P^T L) y = x
     void lower_triangular_solve(const Real *x_in, Real *y_out) const {
-        // Note: specifying CHOLMOD_P actually applies P to x, instead of solving P y = x!!!
+        // Note: specifying CholeskySys::P actually applies P to x, instead of solving P y = x!!!
         //      (See Section 19.5 of the CHOLMOD user guide)
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CHOLMOD_P);
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CHOLMOD_L);
+        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(),  CholeskySys::P);
+        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CholeskySys::L);
     }
 
     // Solve (P^T L)^T y = L^T P y = x
     void upper_triangular_solve(const Real *x_in, Real *y_out) const {
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CHOLMOD_Lt);
-        // Note: specifying CHOLMOD_Pt actually applies Pt to x, instead of solving Pt y = x!!!
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CHOLMOD_Pt);
+        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CholeskySys::Lt);
+        // Note: specifying CholeskySys::Pt actually applies Pt to x, instead of solving Pt y = x!!!
+        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CholeskySys::Pt);
     }
 
 private:
