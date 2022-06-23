@@ -63,6 +63,11 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("LOWER_TRIANGLE", SMode::LOWER_TRIANGLE)
         ;
 
+    py::enum_<CholeskyProvider>(m, "CholeskyProvider")
+        .value("CHOLMOD",  CholeskyProvider::CHOLMOD)
+        .value("Catamari", CholeskyProvider::Catamari)
+        ;
+
     using SymmetryModePicklingType = std::underlying_type_t<SMode>;
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")

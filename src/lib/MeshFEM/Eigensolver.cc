@@ -36,7 +36,7 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
 }
 
 struct ShiftedGeneralizedOp {
-    ShiftedGeneralizedOp(CholmodFactorizer &Hshift_inv, CholmodFactorizer &M_LLt, CholmodSparseWrapper &&L)
+    ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, CholeskyFactorizerBase &M_LLt, CholmodSparseWrapper &&L)
         : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt), m_L(std::move(L))
     {
         if (rows() != cols()) throw std::runtime_error("Operator must be square");
@@ -63,11 +63,11 @@ struct ShiftedGeneralizedOp {
 
 private:
     mutable std::vector<Real> m_workspace1, m_workspace2; // storage for intermediate results (for ping-ponging the matvecs)
-    CholmodFactorizer &m_Hshift_inv, &m_M_LLt;
+    CholeskyFactorizerBase &m_Hshift_inv, &m_M_LLt;
     CholmodSparseWrapper m_L;
 };
 
-Eigen::VectorXd negativeCurvatureDirection(CholmodFactorizer &Hshift_inv, const SuiteSparseMatrix &M, Real tol) {
+Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix &M, Real tol) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("negativeCurvatureDirection");
     if (Hshift_inv.m() != size_t(M.m)) throw std::runtime_error("Argument matrices Hshift_inv and M must be the same size");
 

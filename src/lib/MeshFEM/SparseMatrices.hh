@@ -1943,8 +1943,83 @@ private:
     std::shared_ptr<cholmod_common> m_c; // Guaranteed non-null by construction/move assignment
 };
 
-class CholmodFactorizer {
-public:
+enum class CholeskyProvider {
+    CHOLMOD, Catamari
+};
+
+inline CholeskyProvider get_default_cholesky_provider() noexcept {
+    return CholeskyProvider::CHOLMOD;
+}
+
+// Interface to a CHOLMOD-like Cholesky factorization class.
+struct CholeskyFactorizerBase {
+    virtual size_t m() const = 0;
+    virtual size_t n() const = 0;
+    virtual void factorize() = 0;
+    virtual void factorizeSymbolic() = 0;
+    virtual void updateSymbolicFactorization(SuiteSparseMatrix mat) = 0;
+    virtual void updateFactorization(SuiteSparseMatrix mat, bool isInTryCatch=false) = 0;
+    virtual void solveRawExistingFactorization(const Real *b, Real *x, int sys = CHOLMOD_A) const = 0;
+    virtual void stashFactorization() = 0;
+    virtual bool hasStashedFactorization() const = 0;
+    virtual void swapStashedFactorization() = 0;
+    virtual void clearStashedFactorization() = 0;
+    virtual bool hasFactorization() const = 0;
+    virtual void clearFactors() = 0;
+    virtual void setSuppressWarnings(bool /* suppressWarnings */) { }
+    virtual bool checkPosDef() const = 0;
+
+    // Solve Ax =     b when sys = CHOLMOD_A,
+    //       Lx =     b when sys = CHOLMOD_L,
+    //    L^T x =     b when sys = CHOLMOD_Lt,
+    //        x = P   b when sys = CHOLMOD_P
+    //        x = P^T b when sys = CHOLMOD_Pt
+    template<typename _Vec1, typename _Vec2>
+    void solve(const _Vec1 &b, _Vec2 &x, int sys = CHOLMOD_A) {
+        assert(size_t(b.size()) == m());
+        x.resize(m());
+        solveRaw(&b[0], &x[0], sys);
+    }
+
+    template<typename _Vec>
+    _Vec solve(const _Vec &b, int sys = CHOLMOD_A) {
+        assert(size_t(b.size()) == m());
+        _Vec x(m());
+        solveRaw(&b[0], &x[0], sys);
+        return x;
+    }
+
+    template<typename _Vec1, typename _Vec2>
+    void solveExistingFactorization(const _Vec1 &b, _Vec2 &x, int sys = CHOLMOD_A) const {
+        assert(size_t(b.size()) == m());
+        x.resize(m());
+        solveRawExistingFactorization(&b[0], &x[0], sys);
+    }
+
+    template<typename _Vec>
+    _Vec solveExistingFactorization(const _Vec &b, int sys = CHOLMOD_A) const {
+        assert(size_t(b.size()) == m());
+        _Vec x(m());
+        solveRawExistingFactorization(&b[0], &x[0], sys);
+        return x;
+    }
+
+    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
+    void solveRaw(const Real *b, Real *x, int sys = CHOLMOD_A) {
+        if (!hasFactorization()) factorize();
+        solveRawExistingFactorization(b, x, sys);
+    }
+
+    virtual CholeskyProvider provider() const = 0;
+
+    virtual ~CholeskyFactorizerBase() { }
+};
+
+struct CholmodFactorizer final : public CholeskyFactorizerBase {
+    // Size of the factorized matrix.
+    size_t m() const override { return m_A.nrow; }
+    size_t n() const override { return m_A.ncol; }
+
     // Assumes matrix is stored in the upper triangle!
     template<typename _Triplet>
     CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
@@ -1961,7 +2036,7 @@ public:
     CholmodFactorizer(const CholmodFactorizer  &b) = delete;
     CholmodFactorizer &operator=(const CholmodFactorizer  &b) = delete;
 
-    void factorize() {
+    void factorize() override {
         clearFactors();
         factorizeSymbolic();
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
@@ -1978,7 +2053,7 @@ public:
     // Perform only the symbolic factorization with the current system matrix
     // (useful this matrix holds the sparsity pattern that will be used for
     // many numeric factorizations).
-    void factorizeSymbolic() {
+    void factorizeSymbolic() override {
         BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
         clearFactors();
         m_L = cholmod_l_analyze(&m_A, m_c.get());
@@ -1986,9 +2061,8 @@ public:
     }
 
     // Update the symbolic factorization for with a different sparsity pattern.
-    template<typename Mat>
-    void updateSymbolicFactorization(Mat &&mat) {
-        m_AStorage = std::forward<Mat>(mat);
+    void updateSymbolicFactorization(SuiteSparseMatrix mat) override {
+        m_AStorage = std::move(mat);
         m_matrixUpdated();
         factorizeSymbolic();
     }
@@ -2000,8 +2074,7 @@ public:
     //       since it just uses CHOLMOD's return status. If the diagonal entry of L
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
-    template<typename Mat>
-    void updateFactorization(Mat &&mat, bool isInTryCatch=false) {
+    void updateFactorization(SuiteSparseMatrix mat, bool isInTryCatch=false) override {
         if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) {
             // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
             throw std::runtime_error("Wrong matrix size; " + std::to_string(int(m_L != nullptr))
@@ -2012,7 +2085,7 @@ public:
         if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
         if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
 
-        m_AStorage = std::forward<Mat>(mat);
+        m_AStorage = std::move(mat);
         m_matrixUpdated();
 
         if (!hasFactorization()) return; // no symbolic factorization was computed yet; nothing needs to be updated.
@@ -2030,42 +2103,9 @@ public:
             throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
     }
 
-    // Solve Ax =     b when sys = CHOLMOD_A,
-    //       Lx =     b when sys = CHOLMOD_L,
-    //    L^T x =     b when sys = CHOLMOD_Lt,
-    //        x = P   b when sys = CHOLMOD_P
-    //        x = P^T b when sys = CHOLMOD_Pt
-    template<typename _Vec1, typename _Vec2>
-    void solve(const _Vec1 &b, _Vec2 &x, int sys = CHOLMOD_A) {
-        assert(size_t(b.size()) == size_t(m_A.nrow));
-        x.resize(m_A.ncol);
-        solveRaw(&b[0], &x[0], sys);
-    }
 
-    template<typename _Vec>
-    _Vec solve(const _Vec &b, int sys = CHOLMOD_A) {
-        assert(size_t(b.size()) == size_t(m_A.nrow));
-        _Vec x(m_A.ncol);
-        solveRaw(&b[0], &x[0], sys);
-        return x;
-    }
-
-    template<typename _Vec1, typename _Vec2>
-    void solveExistingFactorization(const _Vec1 &b, _Vec2 &x, int sys = CHOLMOD_A) const {
-        assert(size_t(b.size()) == size_t(m_A.nrow));
-        x.resize(m_A.ncol);
-        solveRawExistingFactorization(&b[0], &x[0], sys);
-    }
-
-    template<typename _Vec>
-    _Vec solveExistingFactorization(const _Vec &b, int sys = CHOLMOD_A) const {
-        assert(size_t(b.size()) == size_t(m_A.nrow));
-        _Vec x(m_A.ncol);
-        solveRawExistingFactorization(&b[0], &x[0], sys);
-        return x;
-    }
-
-    void solveRawExistingFactorization(const Real *b, Real *x, int sys = CHOLMOD_A) const {
+    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
+    void solveRawExistingFactorization(const Real *b, Real *x, int sys = CHOLMOD_A) const override {
         if (!hasFactorization()) throw std::runtime_error("Factorization doesn't exist");
         static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
 
@@ -2085,27 +2125,21 @@ public:
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
     }
 
-    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRaw(const Real *b, Real *x, int sys = CHOLMOD_A) {
-        if (!hasFactorization()) factorize();
-        solveRawExistingFactorization(b, x, sys);
-    }
-
-    bool hasFactorization() const { return m_L != nullptr; }
+    bool hasFactorization() const override { return m_L != nullptr; }
 
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.
-    void stashFactorization() {
+    void stashFactorization() override {
         if (m_L_stashed != nullptr) cholmod_l_free_factor(&m_L_stashed, m_c.get());
         m_L_stashed = cholmod_l_copy_factor(m_L, m_c.get());
     }
 
-    bool hasStashedFactorization() const { return m_L_stashed != nullptr; }
+    bool hasStashedFactorization() const override { return m_L_stashed != nullptr; }
 
     // Exchange the roles of m_L and m_L_stashed, making the stash the active factorization.
-    void swapStashedFactorization() { std::swap(m_L, m_L_stashed); }
+    void swapStashedFactorization() override { std::swap(m_L, m_L_stashed); }
 
-    void clearStashedFactorization() {
+    void clearStashedFactorization() override {
         if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
     }
 
@@ -2127,12 +2161,12 @@ public:
         return ((double) m_c->memory_usage) / (1 << 20);
     }
 
-    void clearFactors() {
+    void clearFactors() override {
         if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
         clearStashedFactorization();
     }
 
-    ~CholmodFactorizer() {
+    virtual ~CholmodFactorizer() {
         clearFactors();
 
         if (m_Y) cholmod_l_free_dense(&m_Y, m_c.get());
@@ -2154,7 +2188,7 @@ public:
     }
 
     // Check if the matrix for which factor "L" was computed is positive definite.
-    bool checkPosDef() const {
+    bool checkPosDef() const override {
         if (!m_L) throw std::runtime_error("Matrix wasn't factorized");
         if (m_L->is_ll) return true; // LL^T factorization only succeeds if the matrix was positive definite
         // We have an LDL^T factorization; we need to check that all entries of D are positive.
@@ -2175,13 +2209,11 @@ public:
         return true;
     }
 
-    // Size of the factorized matrix.
-    size_t m() const { return m_A.nrow; }
-    size_t n() const { return m_A.ncol; }
-
-    void setSuppressWarnings(bool suppressWarnings) {
+    void setSuppressWarnings(bool suppressWarnings) override {
         m_c->print = suppressWarnings ? 0 : 2;
     }
+
+    virtual CholeskyProvider provider() const override { return CholeskyProvider::CHOLMOD; }
 
 private:
     std::shared_ptr<cholmod_common> m_c;
@@ -2193,6 +2225,9 @@ private:
     SuiteSparseMatrix m_AStorage;
 
     void m_matrixUpdated() {
+        static size_t i = 0;
+        m_AStorage.dumpBinary("spmat_" + std::to_string(i++) + ".bin");
+
         m_A.p = m_AStorage.Ap.data();
         m_A.i = m_AStorage.Ai.data();
         m_A.x = m_AStorage.Ax.data();
@@ -2256,6 +2291,17 @@ private:
         m_matrixUpdated();
     }
 };
+
+template<class SpMat, typename... Args>
+std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider, const SpMat &A, Args&&... args) {
+    switch (provider) {
+        case CholeskyProvider::CHOLMOD:
+            return std::make_unique<CholmodFactorizer>(A, std::forward<Args>(args)...);
+        case CholeskyProvider::Catamari:
+        default:
+            throw std::runtime_error("Unknown provider");
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Wraps a (constrained) SPSD system that can be solved for several
@@ -2485,18 +2531,19 @@ public:
         // Reduced system rhs (reduced f and  Lagrange multipliers)
         // Exploits symmetry of system (identical indexing of variables and
         // equations).
-        std::vector<_Real> bReduced(m_AUpper.m, 0);
+        VecX_T<_Real> bReduced;
+        bReduced.setZero(m_AUpper.m);
         for (size_t v = 0; v < m_reducedVarForVar.size(); ++v) {
             int r = m_reducedVarForVar[v];
             if (r < 0) continue;
-            assert(size_t(r) < bReduced.size());
+            assert(r < bReduced.size());
             bReduced[r] =
                 ((v < nPrimaryVars) ? f[v] : m_constraintRHS[v - nPrimaryVars])
                     + m_fixedVarRHSContribution[r];
         }
 
         // Allocate space for solution + Lagrange multipliers
-        std::vector<_Real> uReduced(m_AUpper.m);
+        VecX_T<_Real> uReduced(m_AUpper.m);
 
 #if 0
         {
@@ -2560,7 +2607,7 @@ public:
                 u[v] = m_fixedVarValues[fixedVar];
             }
             else {
-                assert(size_t(r) < uReduced.size());
+                assert(r < uReduced.size());
                 u[v] = uReduced[r];
             }
         }
