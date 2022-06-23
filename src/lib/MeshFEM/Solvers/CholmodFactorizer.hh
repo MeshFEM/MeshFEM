@@ -70,99 +70,62 @@ private:
 
 struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Size of the factorized matrix.
-    size_t m() const override { return m_A.nrow; }
-    size_t n() const override { return m_A.ncol; }
+    size_t m() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
+    size_t n() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
 
-    // Assumes matrix is stored in the upper triangle!
-    template<typename _Triplet>
-    CholmodFactorizer(const TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(TripletMatrix<_Triplet>(tmat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
-
-    // Warning: modifies the passed triplet matrix, tmat!
-    template<typename _Triplet>
-    CholmodFactorizer(TripletMatrix<_Triplet> &tmat, bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(tmat)           { m_init(forceSupernodal, force_ll, suppressWarnings); }
-    CholmodFactorizer(const SuiteSparseMatrix &mat,  bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
-    CholmodFactorizer(SuiteSparseMatrix &mat,        bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(mat)            { m_init(forceSupernodal, force_ll, suppressWarnings); }
-    CholmodFactorizer(SuiteSparseMatrix &&mat,       bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) : m_AStorage(std::move(mat)) { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) { m_init(forceSupernodal, force_ll, suppressWarnings); }
 
     // Delete unsafe copy constructors/assignment.
     // This will also suppress creation of default move constructors/assignment.
     CholmodFactorizer(const CholmodFactorizer  &b) = delete;
     CholmodFactorizer &operator=(const CholmodFactorizer  &b) = delete;
 
-    void factorize() override {
-        clearFactors();
-        factorizeSymbolic();
-        BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
-        int success = cholmod_l_factorize(&m_A, m_L, m_c.get());
-        BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
-        if (!success)
-            throw std::runtime_error("Factorize failed.");
-        if (m_c->status == CHOLMOD_NOT_POSDEF)
-            throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
-        BENCHMARK_ADD_MESSAGE("Peak factorization memory (MB):\t" +
-                              std::to_string(peakMemoryMB()));
+    // Perform only the symbolic factorization for the given matrix `mat`.
+    void factorizeSymbolic(const SuiteSparseMatrix &mat) override {
+        m_factorizeSymbolicImpl(m_cholmod_sparse_wrapper(mat));
     }
 
-    // Perform only the symbolic factorization with the current system matrix
-    // (useful this matrix holds the sparsity pattern that will be used for
-    // many numeric factorizations).
-    void factorizeSymbolic() override {
-        BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
-        clearFactors();
-        m_L = cholmod_l_analyze(&m_A, m_c.get());
-        BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
-    }
-
-    // Update the symbolic factorization for with a different sparsity pattern.
-    void updateSymbolicFactorization(SuiteSparseMatrix mat) override {
-        m_AStorage = std::move(mat);
-        m_matrixUpdated();
-        factorizeSymbolic();
-    }
-
-    // Recompute the numeric factorization using the new system matrix "tmat",
-    // reusing the symbolic factorization. For this to work, it must have the same
+    // (Re)compute the numeric factorization, reusing the symbolic factorization
+    // if it exists; otherwise a symbolic factorization is computed.
+    // For symbolic factorization reuse to work, `mat` must have the same
     // sparsity pattern as the matrix for which the symbolic factorization was computed.
     // NOTE: The positive definiteness check inside this function is not sufficient,
     //       since it just uses CHOLMOD's return status. If the diagonal entry of L
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
-    void updateFactorization(SuiteSparseMatrix mat, bool isInTryCatch=false) override {
-        if ((m_L != nullptr) && ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n)))) {
+    void factorizeNumeric(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
+        cholmod_sparse A = m_cholmod_sparse_wrapper(mat);
+        if (m_L == nullptr) m_factorizeSymbolicImpl(A);
+
+        if ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n))) {
             // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
-            throw std::runtime_error("Wrong matrix size; " + std::to_string(int(m_L != nullptr))
-                    + ", " + std::to_string(m_L ? m_L->n : 0)
-                    + ", " + std::to_string(mat.m)
-                    + ", " + std::to_string(mat.n));
+            throw std::runtime_error("Symbolic factorization does not match size of matrix passed to `factorize`: "
+                    + std::to_string(m_L->n) + " vs " + std::to_string(mat.m) + ", " + std::to_string(mat.n));
         }
-        if (m_A.nzmax == 0) throw std::runtime_error("Cholmod matrix wasn't allocated.");
-        if (mat.nnz() > size_t(m_A.nzmax)) throw std::runtime_error("Matrix has more nonzeros than the one passed to the constructor"); // again, necessary but not sufficient!
-
-        m_AStorage = std::move(mat);
-        m_matrixUpdated();
-
-        if (!hasFactorization()) return; // no symbolic factorization was computed yet; nothing needs to be updated.
 
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
         bool oldTryCatch = m_c->try_catch;
         m_c->try_catch = isInTryCatch;
-        int success = cholmod_l_factorize(&m_A, m_L, m_c.get());
+        int success = cholmod_l_factorize(&A, m_L, m_c.get());
         m_c->try_catch = oldTryCatch;
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
-        if (!success)
-            throw std::runtime_error("Factor update failed");
-        // NOTE: Be careful. This check is not sufficient for ensuring positive definite.
-        if (m_c->status == CHOLMOD_NOT_POSDEF)
-            throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
+        if (!success) throw std::runtime_error("Numeric factorization failed");
+        // Careful: This check is not sufficient to guarantee positive definiteness.
+        if (m_c->status == CHOLMOD_NOT_POSDEF) throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
+        m_factorizationType = FactorizationType::Numeric;
     }
 
+    void factorize(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
+        clearFactors();
+        factorizeNumeric(mat, isInTryCatch);
+    }
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawExistingFactorization(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
-        if (!hasFactorization()) throw std::runtime_error("Factorization doesn't exist");
+    void solveRaw(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
+        assertFactorization(sys);
         static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
 
-        const size_t m = m_A.nrow, n = m_A.ncol;
+        const size_t m = m_L->n, n = m_L->n;
 
         // Wrap b values into a cholmod_dense struct
         auto cholb = cholmod_dense_wrap_vector_ptr(m, const_cast<Real *>(b)); // Suitesparse won't actually modify the RHS data, so this const_cast should be safe.
@@ -190,8 +153,6 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
     }
 
-    bool hasFactorization() const override { return m_L != nullptr; }
-
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.
     void stashFactorization() override {
@@ -214,10 +175,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // According to the documentation, cholmod_copy_factor will convert our numeric
         // factorization m_L back into a symbolic one, which will break future solves.
         // So we operate on a copy of m_L.
-        if (!hasFactorization()) throw std::runtime_error("Factorization doesn't exist");
+        assertFactorization();
         cholmod_factor *factorCopy = cholmod_l_copy_factor(m_L, m_c.get());
         if (factorCopy == nullptr) throw std::runtime_error("Factor copy failed");
-        auto result = CholmodSparseWrapper(m_A.nrow, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
+        auto result = CholmodSparseWrapper(m_L->n, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
         cholmod_l_free_factor(&factorCopy, m_c.get());
         return result;
     }
@@ -228,6 +189,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     void clearFactors() override {
         if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
+        m_factorizationType = FactorizationType::None;
         clearStashedFactorization();
     }
 
@@ -282,24 +244,38 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
 private:
     std::shared_ptr<cholmod_common> m_c;
-    cholmod_sparse m_A;
     cholmod_factor *m_L = nullptr, *m_L_stashed = nullptr;
 
     mutable cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
 
-    SuiteSparseMatrix m_AStorage;
+    cholmod_sparse m_cholmod_sparse_wrapper(const SuiteSparseMatrix &A) const {
+        cholmod_sparse result;
+        result.p = const_cast<SuiteSparse_long *>(A.Ap.data());
+        result.i = const_cast<SuiteSparse_long *>(A.Ai.data());
+        result.x = const_cast<double           *>(A.Ax.data());
 
-    void m_matrixUpdated() {
-        // static size_t i = 0;
-        // m_AStorage.dumpBinary("spmat_" + std::to_string(i++) + ".bin");
+        result.nrow   = A.m;
+        result.ncol   = A.n;
+        result.nzmax  = A.nnz();
 
-        m_A.p = m_AStorage.Ap.data();
-        m_A.i = m_AStorage.Ai.data();
-        m_A.x = m_AStorage.Ax.data();
+        result.nz     = nullptr; /* not needed because `result` is packed. */
+        result.z      = nullptr; /* not needed because `result` is real. */
+        result.stype  = 1; // upper triangle stored.
+        result.itype  = CHOLMOD_LONG;
+        result.xtype  = CHOLMOD_REAL;
+        result.dtype  = CHOLMOD_DOUBLE;
+        result.sorted = true;
+        result.packed = true;
 
-        m_A.nrow   = m_AStorage.m;
-        m_A.ncol   = m_AStorage.n;
-        m_A.nzmax  = m_AStorage.nnz();
+        return result;
+    }
+
+    void m_factorizeSymbolicImpl(const cholmod_sparse &A) {
+        BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
+        clearFactors();
+        m_L = cholmod_l_analyze(const_cast<cholmod_sparse *>(&A), m_c.get());
+        m_factorizationType = FactorizationType::Symbolic;
+        BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
     }
 
     void m_init(bool forceSupernodal, bool force_ll, bool suppressWarnings = false) {
@@ -343,17 +319,6 @@ private:
         // m_c->supernodal = CHOLMOD_SIMPLICIAL;
         m_c->grow2 = 0; // We don't plan to use the modify routines
         m_c->quick_return_if_not_posdef = true;
-
-        m_A.nz     = nullptr; /* not needed because m_A is packed. */
-        m_A.z      = nullptr; /* not needed because m_A is real. */
-        m_A.stype  = 1; // upper triangle stored.
-        m_A.itype  = CHOLMOD_LONG;
-        m_A.xtype  = CHOLMOD_REAL;
-        m_A.dtype  = CHOLMOD_DOUBLE;
-        m_A.sorted = true;
-        m_A.packed = true;
-
-        m_matrixUpdated();
     }
 };
 

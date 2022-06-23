@@ -77,12 +77,12 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
         // calculation of H + tau * M. But this means a lot of unnecessary work
         // for factorizing M itself, especially if M is diagonal.
         // Remove the unused entries before factorizing.
-        SuiteSparseMatrix Mcompressed = M;
+        SuiteSparseMatrix Mcompressed(M);
         Mcompressed.removeZeros();
-        M_LLt = std::make_unique<CholmodFactorizer>(std::move(Mcompressed), false, /* final_ll: force LL^T instead of LDL^T */ true);
+        M_LLt = std::make_unique<CholmodFactorizer>(false, /* final_ll: force LL^T instead of LDL^T */ true);
+        M_LLt->factorize(Mcompressed); // Compute P M P^T = L L^T
     }
 
-    M_LLt->factorize(); // Compute P M P^T = L L^T
     ShiftedGeneralizedOp op(Hshift_inv, *M_LLt, M_LLt->getL());
 
     Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, ShiftedGeneralizedOp> eigs(&op, 1, 5);
@@ -134,10 +134,10 @@ private:
 
 struct CholmodCholeskyOp {
     CholmodCholeskyOp(const SuiteSparseMatrix &A)
-        : m_LLt(A), m_n(A.m) {
+        : m_n(A.m) {
         // Compute P A P^T = L L^T
         //      ==> A = P^T L L^T P = (P^T L) (P^T L)^T
-        m_LLt.factorize();
+        m_LLt.factorize(A);
         m_workspace.resize(A.m);
     }
 
@@ -148,15 +148,15 @@ struct CholmodCholeskyOp {
     void lower_triangular_solve(const Real *x_in, Real *y_out) const {
         // Note: specifying CholeskySys::P actually applies P to x, instead of solving P y = x!!!
         //      (See Section 19.5 of the CHOLMOD user guide)
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(),  CholeskySys::P);
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CholeskySys::L);
+        m_LLt.solveRaw(x_in, m_workspace.data(),  CholeskySys::P);
+        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::L);
     }
 
     // Solve (P^T L)^T y = L^T P y = x
     void upper_triangular_solve(const Real *x_in, Real *y_out) const {
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CholeskySys::Lt);
+        m_LLt.solveRaw(x_in, m_workspace.data(), CholeskySys::Lt);
         // Note: specifying CholeskySys::Pt actually applies Pt to x, instead of solving Pt y = x!!!
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CholeskySys::Pt);
+        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::Pt);
     }
 
 private:

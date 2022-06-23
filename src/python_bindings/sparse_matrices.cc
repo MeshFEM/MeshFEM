@@ -135,7 +135,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("solve", [&](SuiteSparseMatrix &smat, const Eigen::VectorXd &b) {
                 if (smat.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
                     throw std::runtime_error("Only symmetric matrices are currently supported");
-                CholmodFactorizer factors(smat);
+                CholmodFactorizer factors;
+                factors.factorize(smat);
                 Eigen::VectorXd x;
                 factors.solve(b, x);
                 return x;

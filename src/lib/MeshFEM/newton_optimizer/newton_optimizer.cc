@@ -55,6 +55,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
     Eigen::VectorXd x, gReduced;
 
     auto &s = solver();
+    s.setSuppressWarnings(!options.verboseNonPosDef);
 
     auto postprocessSolution = [&]() {
         extractFullSolution(x, step);
@@ -79,7 +80,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
             hUpdtCtr.reusedHessian();
             gReduced = removeFixedEntries(g_free);
-            s.solveExistingFactorization(gReduced, x);
+            s.solve(gReduced, x);
             postprocessSolution();
             return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
         }
@@ -105,10 +106,10 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 
                 auto Hmod = H_reduced;
                 Hmod.addWithIdenticalSparsity(*M_reduced, tau * currentTauScale); // Note: rows/cols corresponding to vars with active bounds will now have a nonzero value different from 1 on the diagonal, but this is fine since the RHS component is zero...
-                s.updateFactorization(std::move(Hmod));
+                s.factorizeNumeric(std::move(Hmod));
             }
             else {
-                s.updateFactorization(H_reduced);
+                s.factorizeNumeric(H_reduced);
             }
 
             BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
@@ -121,6 +122,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
             break;
         }
         catch (std::exception &e) {
+            // std::cout << "Caught exception: " << e.what() << std::endl;
             tau  = std::max(  4 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
             if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << "\n";
@@ -162,8 +164,6 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
     Real beta = options.beta;
     const Real betaMin = std::min(beta, 1e-10); // Initial shift "tau" to use when an indefinite matrix is detected.
-
-    solver().setSuppressWarnings(!options.verboseNonPosDef);
 
     m_cachedHessianL2Norm.reset();
 

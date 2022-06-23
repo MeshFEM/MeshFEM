@@ -1754,14 +1754,14 @@ using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 #include "Solvers/UmfpackFactorizer.hh"
 #include "Solvers/CatamariFactorizer.hh"
 
-template<class SpMat, typename... Args>
-std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider, const SpMat &A, Args&&... args) {
+template<typename... Args>
+std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider, Args&&... args) {
     switch (provider) {
         case CholeskyProvider::CHOLMOD:
-            return std::make_unique<CholmodFactorizer>(A, std::forward<Args>(args)...);
+            return std::make_unique<CholmodFactorizer>(std::forward<Args>(args)...);
         case CholeskyProvider::Catamari:
 #if MESHFEM_WITH_CATAMARI
-            return std::make_unique<CatamariFactorizer>(A, std::forward<Args>(args)...);
+            return std::make_unique<CatamariFactorizer>(std::forward<Args>(args)...);
 #endif
             throw std::runtime_error("Compiled without Catamari");
         default:
@@ -1770,7 +1770,11 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
 }
 
 inline CholeskyProvider get_default_cholesky_provider() noexcept {
+#if MESHFEM_WITH_CATAMARI
+    return CholeskyProvider::Catamari;
+#else
     return CholeskyProvider::CHOLMOD;
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2034,14 +2038,16 @@ public:
         if (m_isSPD) {
             if (!m_LLT) {
                 BENCHMARK_START_TIMER_SECTION("Construct Factorizer");
-                m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_AUpper, m_forceSupernodal));
+                m_LLT = std::unique_ptr<_LLTFactorizer>(new _LLTFactorizer(m_forceSupernodal));
+                SuiteSparseMatrix A(m_AUpper);
+                m_LLT->factorize(A);
                 m_needsNumericFactorization = false;
                 if (m_economyMode) m_clearAUpperTriplets();
                 BENCHMARK_STOP_TIMER_SECTION("Construct Factorizer");
             }
 
             if (m_needsNumericFactorization) {
-                m_LLT->updateFactorization(m_AUpper);
+                m_LLT->factorizeNumeric(m_AUpper);
                 m_needsNumericFactorization = false;
             }
 
@@ -2067,7 +2073,7 @@ public:
             m_LU->solve(bReduced, uReduced);
         }
 
-        // Read off solution (but not the Lagrange multipliers)
+        // Read off primal solution (no Lagrange multipliers)
         u.resize(nPrimaryVars);
         for (size_t v = 0; v < nPrimaryVars; ++v) {
             int r = m_reducedVarForVar[v];

@@ -94,3 +94,11 @@ function(meshfem_download_spectra)
         GIT_TAG        ec27cfd2210a9b2322825c4cb8e5d47f014e1ac3
     )
 endfunction()
+
+## Catamari
+function(meshfem_download_catamari)
+    meshfem_download_project(catamari
+        GIT_REPOSITORY https://github.com/jpanetta/catamari.git
+        GIT_TAG        c9bac1304f059e3e9602e7f039ec8f6f699e3c56
+    )
+endfunction()

@@ -162,3 +162,8 @@ if (MESHFEM_WITH_CERES AND NOT TARGET ceres::ceres)
 elseif(NOT TARGET ceres::ceres)
     message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
 endif()
+
+if (MESHFEM_WITH_CATAMARI AND NOT TARGET catamari)
+    meshfem_download_catamari()
+    add_subdirectory(${MESHFEM_EXTERNAL}/catamari)
+endif()

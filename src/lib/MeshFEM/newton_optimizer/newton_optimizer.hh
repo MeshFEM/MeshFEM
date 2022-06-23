@@ -482,7 +482,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
         prob->setFixedVars(fixedVars);
         isFixed.assign(prob->numVars(), false);
         for (size_t fv : fixedVars) isFixed[fv] = true;
-        solver().updateSymbolicFactorization(prob->hessianReducedSparsityPattern());
+        solver().factorizeSymbolic(prob->hessianReducedSparsityPattern());
     }
 
     ConvergenceReport optimize();
@@ -550,7 +550,10 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     }
 
     CholeskyFactorizerBase &solver() { 
-        if (!m_solver || (m_solver->provider() != options.factorizer)) m_solver = make_cholesky_factorizer(options.factorizer, get_problem().hessianReducedSparsityPattern());
+        if (!m_solver || (m_solver->provider() != options.factorizer)) {
+            m_solver = make_cholesky_factorizer(options.factorizer);
+            m_solver->factorizeSymbolic(get_problem().hessianReducedSparsityPattern());
+        }
         return *m_solver;
     }
 
