@@ -290,8 +290,8 @@ private:
     SuiteSparseMatrix m_AStorage;
 
     void m_matrixUpdated() {
-        static size_t i = 0;
-        m_AStorage.dumpBinary("spmat_" + std::to_string(i++) + ".bin");
+        // static size_t i = 0;
+        // m_AStorage.dumpBinary("spmat_" + std::to_string(i++) + ".bin");
 
         m_A.p = m_AStorage.Ap.data();
         m_A.i = m_AStorage.Ai.data();

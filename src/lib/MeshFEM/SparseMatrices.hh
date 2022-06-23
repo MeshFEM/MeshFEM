@@ -1752,6 +1752,7 @@ using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 #include "Solvers/CholeskyFactorizerBase.hh"
 #include "Solvers/CholmodFactorizer.hh"
 #include "Solvers/UmfpackFactorizer.hh"
+#include "Solvers/CatamariFactorizer.hh"
 
 template<class SpMat, typename... Args>
 std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider, const SpMat &A, Args&&... args) {
@@ -1759,6 +1760,10 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
         case CholeskyProvider::CHOLMOD:
             return std::make_unique<CholmodFactorizer>(A, std::forward<Args>(args)...);
         case CholeskyProvider::Catamari:
+#if MESHFEM_WITH_CATAMARI
+            return std::make_unique<CatamariFactorizer>(A, std::forward<Args>(args)...);
+#endif
+            throw std::runtime_error("Compiled without Catamari");
         default:
             throw std::runtime_error("Unknown provider");
     }
