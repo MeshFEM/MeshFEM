@@ -194,3 +194,8 @@ endif()
 if(MESHFEM_WITH_UMFPACK)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
 endif()
+
+if (MESHFEM_WITH_CATAMARI)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CATAMARI)
+    target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
+endif()

@@ -36,7 +36,7 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
 }
 
 struct ShiftedGeneralizedOp {
-    ShiftedGeneralizedOp(CholmodFactorizer &Hshift_inv, CholmodFactorizer &M_LLt, CholmodSparseWrapper &&L)
+    ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, CholeskyFactorizerBase &M_LLt, CholmodSparseWrapper &&L)
         : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt), m_L(std::move(L))
     {
         if (rows() != cols()) throw std::runtime_error("Operator must be square");
@@ -50,12 +50,12 @@ struct ShiftedGeneralizedOp {
     void perform_op(const Real *x_in, Real *y_out) const {
         //BENCHMARK_START_TIMER("Apply iteration matrix");
 
-        // m_Hshift_inv.solveRaw(x_in, y_out, CHOLMOD_A); // Hshift_inv x
+        // m_Hshift_inv.solveRaw(x_in, y_out, CholeskySys::A); // Hshift_inv x
 
         m_L.         applyRaw(x_in,                m_workspace1.data());             // L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CHOLMOD_Pt); // P^T L x
-        m_Hshift_inv.solveRaw(m_workspace2.data(), m_workspace1.data(), CHOLMOD_A ); // Hshift_inv P^T L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CHOLMOD_P ); // P Hshift_inv P^T L x
+        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
+        m_Hshift_inv.solveRaw(m_workspace2.data(), m_workspace1.data(), CholeskySys::A ); // Hshift_inv P^T L x
+        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
         m_L.         applyRaw(m_workspace2.data(), y_out,     /* transpose */ true); // L^T P Hshift_inv PT L x
 
         //BENCHMARK_STOP_TIMER("Apply iteration matrix");
@@ -63,11 +63,11 @@ struct ShiftedGeneralizedOp {
 
 private:
     mutable std::vector<Real> m_workspace1, m_workspace2; // storage for intermediate results (for ping-ponging the matvecs)
-    CholmodFactorizer &m_Hshift_inv, &m_M_LLt;
+    CholeskyFactorizerBase &m_Hshift_inv, &m_M_LLt;
     CholmodSparseWrapper m_L;
 };
 
-Eigen::VectorXd negativeCurvatureDirection(CholmodFactorizer &Hshift_inv, const SuiteSparseMatrix &M, Real tol) {
+Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix &M, Real tol) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("negativeCurvatureDirection");
     if (Hshift_inv.m() != size_t(M.m)) throw std::runtime_error("Argument matrices Hshift_inv and M must be the same size");
 
@@ -77,12 +77,12 @@ Eigen::VectorXd negativeCurvatureDirection(CholmodFactorizer &Hshift_inv, const 
         // calculation of H + tau * M. But this means a lot of unnecessary work
         // for factorizing M itself, especially if M is diagonal.
         // Remove the unused entries before factorizing.
-        SuiteSparseMatrix Mcompressed = M;
+        SuiteSparseMatrix Mcompressed(M);
         Mcompressed.removeZeros();
-        M_LLt = std::make_unique<CholmodFactorizer>(std::move(Mcompressed), false, /* final_ll: force LL^T instead of LDL^T */ true);
+        M_LLt = std::make_unique<CholmodFactorizer>(false, /* final_ll: force LL^T instead of LDL^T */ true);
+        M_LLt->factorize(Mcompressed); // Compute P M P^T = L L^T
     }
 
-    M_LLt->factorize(); // Compute P M P^T = L L^T
     ShiftedGeneralizedOp op(Hshift_inv, *M_LLt, M_LLt->getL());
 
     Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, ShiftedGeneralizedOp> eigs(&op, 1, 5);
@@ -104,8 +104,8 @@ Eigen::VectorXd negativeCurvatureDirection(CholmodFactorizer &Hshift_inv, const 
     Eigen::VectorXd d(y.size());
     {
         Eigen::VectorXd tmp(y.size());
-        M_LLt->solveRaw(y.data(), tmp.data(), CHOLMOD_Lt);
-        M_LLt->solveRaw(tmp.data(), d.data(), CHOLMOD_Pt);
+        M_LLt->solveRaw(y.data(), tmp.data(), CholeskySys::Lt);
+        M_LLt->solveRaw(tmp.data(), d.data(), CholeskySys::Pt);
 
         // Normalize d so that ||d||_M = 1
         // M.applyRaw(d.data(), tmp.data());
@@ -134,10 +134,10 @@ private:
 
 struct CholmodCholeskyOp {
     CholmodCholeskyOp(const SuiteSparseMatrix &A)
-        : m_LLt(A), m_n(A.m) {
+        : m_n(A.m) {
         // Compute P A P^T = L L^T
         //      ==> A = P^T L L^T P = (P^T L) (P^T L)^T
-        m_LLt.factorize();
+        m_LLt.factorize(A);
         m_workspace.resize(A.m);
     }
 
@@ -146,17 +146,17 @@ struct CholmodCholeskyOp {
 
     // Solve (P^T L) y = x
     void lower_triangular_solve(const Real *x_in, Real *y_out) const {
-        // Note: specifying CHOLMOD_P actually applies P to x, instead of solving P y = x!!!
+        // Note: specifying CholeskySys::P actually applies P to x, instead of solving P y = x!!!
         //      (See Section 19.5 of the CHOLMOD user guide)
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CHOLMOD_P);
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CHOLMOD_L);
+        m_LLt.solveRaw(x_in, m_workspace.data(),  CholeskySys::P);
+        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::L);
     }
 
     // Solve (P^T L)^T y = L^T P y = x
     void upper_triangular_solve(const Real *x_in, Real *y_out) const {
-        m_LLt.solveRawExistingFactorization(x_in, m_workspace.data(), CHOLMOD_Lt);
-        // Note: specifying CHOLMOD_Pt actually applies Pt to x, instead of solving Pt y = x!!!
-        m_LLt.solveRawExistingFactorization(m_workspace.data(), y_out, CHOLMOD_Pt);
+        m_LLt.solveRaw(x_in, m_workspace.data(), CholeskySys::Lt);
+        // Note: specifying CholeskySys::Pt actually applies Pt to x, instead of solving Pt y = x!!!
+        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::Pt);
     }
 
 private:

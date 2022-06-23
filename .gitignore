@@ -55,8 +55,16 @@ __pycache__
 .clangd/
 compile_commands.json
 
-# Dependencies
-/3rdparty
+# Non-submodule dependencies
+/3rdparty/Catch2/
+/3rdparty/eigen/
+/3rdparty/json/
+/3rdparty/optional/
+/3rdparty/pybind11/
+/3rdparty/spectra/
+/3rdparty/tbb/
+/3rdparty/tinyexpr/
+/3rdparty/triangle/
 
 # Mac/ntfs garbage
 .DS_Store

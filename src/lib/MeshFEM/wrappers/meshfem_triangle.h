@@ -20,9 +20,7 @@
 #define MESHFEM_REAL double
 #define MESHFEM_VOID int
 
-extern "C" {
 #include <triangle.h>
-}
 
 #undef ANSI_DECLARATORS
 #ifdef MESHFEM_PREVIOUSLY_DEFINED_ANSI_DECLARATORS

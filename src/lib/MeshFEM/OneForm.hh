@@ -116,6 +116,7 @@ struct OneForm<Real, N> : public VectorSpace<Real, OneForm<Real, N>> {
 
     // "cast" from vector field.
     OneForm(const VF &vf) { m_diff = vf; }
+    OneForm(VF &&vf)      { m_diff = std::move(vf); }
 
     OneForm(const OneForm  &f) = default;
     OneForm(      OneForm &&f) = default;

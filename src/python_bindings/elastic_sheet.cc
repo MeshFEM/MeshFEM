@@ -11,7 +11,6 @@ namespace py = pybind11;
 #include "MeshEntities.hh"
 
 #include "BindingInstantiations.hh"
-#include "EquilibriumBinding.hh"
 
 struct ElasticSheetBinder {
     template<class ES>
@@ -121,7 +120,6 @@ struct ElasticSheetBinder {
           ;
 
         const std::string name = NameMangler<ES>::name();
-        addComputeEquilibriumBinding<ES>(pyES, detail_module, name);
    }
 };
 
