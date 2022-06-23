@@ -71,8 +71,12 @@ public:
     virtual VXd getDefoVars() const = 0;
     virtual VXd getRestVars() const = 0;
 
-    void setDefoVars(const Eigen::Ref<const VXd> &vars) { m_setDefoVars(vars); m_defoConfigUpdated(); }
-    void setRestVars(const Eigen::Ref<const VXd> &vars) { m_setRestVars(vars); m_restConfigUpdated(); }
+    void setDefoVars(const Eigen::Ref<const VXd> &vars) { if (size_t(vars.size()) != numDefoVars()) throw std::runtime_error("Size of input vars doesn't match numDefoVars!");
+        m_setDefoVars(vars); m_defoConfigUpdated(); 
+    }
+    void setRestVars(const Eigen::Ref<const VXd> &vars) { if (size_t(vars.size()) != numRestVars()) throw std::runtime_error("Size of input vars doesn't match numRestVars!");
+        m_setRestVars(vars); m_restConfigUpdated(); 
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Energy and derivatives
