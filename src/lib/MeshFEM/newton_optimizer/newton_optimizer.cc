@@ -104,9 +104,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
                     M_reduced->rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
                 }
 
-                auto Hmod = H_reduced;
-                Hmod.addWithIdenticalSparsity(*M_reduced, tau * currentTauScale); // Note: rows/cols corresponding to vars with active bounds will now have a nonzero value different from 1 on the diagonal, but this is fine since the RHS component is zero...
-                s.factorizeNumeric(std::move(Hmod));
+                s.factorizeNumericWithShift(H_reduced, *M_reduced, tau * currentTauScale);
             }
             else {
                 s.factorizeNumeric(H_reduced);

@@ -89,7 +89,7 @@ struct Inflation : public Load<typename Object::Real> {
         const auto &m = sheet.mesh();
         auto assemblePerTriContrib = [&](const size_t ti, SuiteSparseMatrix &Hout) {
             const auto &tri = m.element(ti);
-            auto triCornerPos = sheet.getCornerPositions(ti);
+            // TODO: Single loop over "other" vertices, determining v_a and v_b cyclically
             for (    const auto v_b : tri.vertices()) {
                 for (const auto v_a : tri.vertices()) {
                     size_t a = 3 * v_a.index(),
@@ -104,14 +104,24 @@ struct Inflation : public Load<typename Object::Real> {
                     // gives a cross product matrix -[v_3]_x or [v_2]_x, respectively.
                     // The sign here is referred to as ordering_sign below.
                     const size_t vlother = 3 - (vla + vlb);
-                    const double ordering_sign = (vlb == ((vla + 1) % 3)) ? -1.0 : 1.0;
-                    V3d contrib = (-pressure * ordering_sign / 6.0) * triCornerPos.col(vlother);
-                    Hout.addNZ(a + 1, b + 0,  contrib[2]);
-                    Hout.addNZ(a + 2, b + 0, -contrib[1]);
-                    Hout.addNZ(a + 0, b + 1, -contrib[2]);
-                    Hout.addNZ(a + 2, b + 1,  contrib[0]);
-                    Hout.addNZ(a + 0, b + 2,  contrib[1]);
-                    Hout.addNZ(a + 1, b + 2, -contrib[0]);
+                    const double ordering_sign = (vlb == ((vla + 1) % 3)) ? 1.0 : -1.0;
+                    // V3d contrib = (pressure * ordering_sign / 6.0) * triCornerPos.col(vlother);
+                    V3d contrib = (pressure * ordering_sign / 6.0) * sheet.deformedPositions().row(tri.vertex(vlother).index());// triCornerPos.col(vlother);
+
+                    size_t hint;
+                    hint = Hout.addNZ(a + 1, b + 0,  contrib[2]);
+                    // Hout.addNZ(a + 2, b + 0, -contrib[1], hint);
+                    Hout.Ax[hint] -= contrib[1];
+
+                    hint += (Hout.Ap[b + 1] - Hout.Ap[b + 0]) - 2;
+                    hint = Hout.addNZ(a + 0, b + 1, -contrib[2], hint);
+                    // Hout.addNZ(a + 2, b + 1,  contrib[0], hint + 1);
+                    Hout.Ax[hint + 1] += contrib[0];
+
+                    hint += (Hout.Ap[b + 2] - Hout.Ap[b + 1]) - 1;
+                    hint = Hout.addNZ(a + 0, b + 2,  contrib[1], hint);
+                    // Hout.addNZ(a + 1, b + 2, -contrib[0], hint);
+                    Hout.Ax[hint] -= contrib[0];
                 }
             }
         };

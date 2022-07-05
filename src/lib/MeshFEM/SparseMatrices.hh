@@ -974,7 +974,7 @@ struct CSCMatrix {
 
             // Accumulate entries in the output matrix in sorted order.
             // Note: from our requirement that this->Ai be sorted, we can
-            // assume input triplets are are looped over in lexicographically
+            // assume input triplets are visited in lexicographically
             // sorted (j, i) order.
             // Therefore, entries will be added to the output matrix columns in sorted
             // order as well. However, we must make sure in the LOWER_TRIANGLE

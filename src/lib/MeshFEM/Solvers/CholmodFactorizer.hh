@@ -67,13 +67,76 @@ private:
     std::shared_ptr<cholmod_common> m_c; // Guaranteed non-null by construction/move assignment
 };
 
+// Construct a `cholmod_sparse` object pointing at the data stored in `SuiteSparseMatrix`.
+inline cholmod_sparse cholmod_sparse_view(const SuiteSparseMatrix &A) {
+    cholmod_sparse result;
+    result.p = const_cast<SuiteSparse_long *>(A.Ap.data());
+    result.i = const_cast<SuiteSparse_long *>(A.Ai.data());
+    result.x = const_cast<double           *>(A.Ax.data());
+
+    result.nrow   = A.m;
+    result.ncol   = A.n;
+    result.nzmax  = A.nnz();
+
+    result.nz     = nullptr; /* not needed because `result` is packed. */
+    result.z      = nullptr; /* not needed because `result` is real. */
+    result.stype  = 1; // upper triangle stored.
+    result.itype  = CHOLMOD_LONG;
+    result.xtype  = CHOLMOD_REAL;
+    result.dtype  = CHOLMOD_DOUBLE;
+    result.sorted = true;
+    result.packed = true;
+
+    return result;
+}
 
 struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Size of the factorized matrix.
     size_t m() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
     size_t n() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
 
-    CholmodFactorizer(bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) { m_init(forceSupernodal, force_ll, suppressWarnings); }
+    CholmodFactorizer(bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) {
+        m_c = std::make_shared<cholmod_common>();
+        cholmod_l_start(m_c.get());
+
+#ifdef TOO_LARGE_FOR_METIS
+         // Use NESDIS since plain Metis is failing on large matrices.
+         // This can be slower for some matrices, so we make this an option.
+        m_c->default_nesdis = 1.0;
+#endif
+
+        if (forceSupernodal) m_c->supernodal = CHOLMOD_SUPERNODAL;
+        m_c->final_ll = force_ll;
+
+        m_c->print = suppressWarnings ? 0 : 2;
+
+#if 0
+        // Try many different orderings searching for the best.
+        m_c->nmethods = 9;
+#else
+        // NESDIS seems to give best performance...
+        m_c->nmethods = 1;
+        m_c->method[0].ordering = CHOLMOD_NESDIS;
+        // m_c->method[0].ordering = CHOLMOD_METIS;
+#endif
+
+        // Completely bypass Metis/NESDIS (for large matrices, this fails...)
+        // Note: this shouldn't be done for smaller matrices because it results in slower solves.
+        //// This version avoids Metis, but fails for even more matrices due to fill-in.
+        //// m_c->nmethods = 1;
+        //// m_c->method[0].ordering = CHOLMOD_AMD;
+        //// m_c->postorder = 1; // TRUE
+        //// m_c->error_handler = error_handler;
+        //
+        // // This puts us in LDL' mode
+        // // "To factorize a large indefinite matrix, set Common->supernodal to
+        // // CHOLMOD_SIMPLICIAL, and the simplicial LDL' method will always be
+        // // used. This will be significantly slower than a supernodal LL'
+        // // factorization, however.
+        // m_c->supernodal = CHOLMOD_SIMPLICIAL;
+        m_c->grow2 = 0; // We don't plan to use the modify routines
+        m_c->quick_return_if_not_posdef = true;
+    }
 
     // Delete unsafe copy constructors/assignment.
     // This will also suppress creation of default move constructors/assignment.
@@ -82,7 +145,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &mat) override {
-        m_factorizeSymbolicImpl(m_cholmod_sparse_wrapper(mat));
+        m_factorizeSymbolicImpl(cholmod_sparse_view(mat));
     }
 
     // (Re)compute the numeric factorization, reusing the symbolic factorization
@@ -94,7 +157,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
     void factorizeNumeric(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
-        cholmod_sparse A = m_cholmod_sparse_wrapper(mat);
+        cholmod_sparse A = cholmod_sparse_view(mat);
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);
 
         if ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n))) {
@@ -113,6 +176,20 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // Careful: This check is not sufficient to guarantee positive definiteness.
         if (m_c->status == CHOLMOD_NOT_POSDEF) throw std::runtime_error("CHOLMOD detected non-positive definite matrix!");
         m_factorizationType = FactorizationType::Numeric;
+    }
+
+    // Compute the numeric factorization of `A + sigma * B`, reusing the
+    // symbolic factorization if it exists.
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override {
+        if (!m_Ashift) {
+            m_Ashift = std::make_unique<SuiteSparseMatrix>(A);
+            m_Ashift->data() += sigma * B.data();
+        }
+        else {
+            m_Ashift->data() = A.data() + sigma * B.data();
+        }
+
+        factorizeNumeric(*m_Ashift, isInTryCatch);
     }
 
     void factorize(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
@@ -189,6 +266,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     void clearFactors() override {
         if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
+        m_Ashift.reset();
         m_factorizationType = FactorizationType::None;
         clearStashedFactorization();
     }
@@ -243,32 +321,11 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     virtual CholeskyProvider provider() const override { return CholeskyProvider::CHOLMOD; }
 
 private:
+    std::unique_ptr<SuiteSparseMatrix> m_Ashift;
     std::shared_ptr<cholmod_common> m_c;
     cholmod_factor *m_L = nullptr, *m_L_stashed = nullptr;
 
     mutable cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
-
-    cholmod_sparse m_cholmod_sparse_wrapper(const SuiteSparseMatrix &A) const {
-        cholmod_sparse result;
-        result.p = const_cast<SuiteSparse_long *>(A.Ap.data());
-        result.i = const_cast<SuiteSparse_long *>(A.Ai.data());
-        result.x = const_cast<double           *>(A.Ax.data());
-
-        result.nrow   = A.m;
-        result.ncol   = A.n;
-        result.nzmax  = A.nnz();
-
-        result.nz     = nullptr; /* not needed because `result` is packed. */
-        result.z      = nullptr; /* not needed because `result` is real. */
-        result.stype  = 1; // upper triangle stored.
-        result.itype  = CHOLMOD_LONG;
-        result.xtype  = CHOLMOD_REAL;
-        result.dtype  = CHOLMOD_DOUBLE;
-        result.sorted = true;
-        result.packed = true;
-
-        return result;
-    }
 
     void m_factorizeSymbolicImpl(const cholmod_sparse &A) {
         BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
@@ -276,49 +333,6 @@ private:
         m_L = cholmod_l_analyze(const_cast<cholmod_sparse *>(&A), m_c.get());
         m_factorizationType = FactorizationType::Symbolic;
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
-    }
-
-    void m_init(bool forceSupernodal, bool force_ll, bool suppressWarnings = false) {
-        if (m_c) { cholmod_l_finish(m_c.get()); }
-        m_c = std::make_shared<cholmod_common>();
-        cholmod_l_start(m_c.get());
-
-#ifdef TOO_LARGE_FOR_METIS
-         // Use NESDIS since plain Metis is failing on large matrices.
-         // This can be slower for some matrices, so we make this an option.
-        m_c->default_nesdis = 1.0;
-#endif
-
-        if (forceSupernodal) m_c->supernodal = CHOLMOD_SUPERNODAL;
-        m_c->final_ll = force_ll;
-
-        m_c->print = suppressWarnings ? 0 : 2;
-
-#if 0
-        // Try many different orderings searching for the best.
-        m_c->nmethods = 9;
-#else
-        // NESDIS seems to give best performance...
-        m_c->nmethods = 1;
-        m_c->method[0].ordering = CHOLMOD_NESDIS;
-#endif
-
-        // Completely bypass Metis/NESDIS (for large matrices, this fails...)
-        // Note: this shouldn't be done for smaller matrices because it results in slower solves.
-        //// This version avoids Metis, but fails for even more matrices due to fill-in.
-        //// m_c->nmethods = 1;
-        //// m_c->method[0].ordering = CHOLMOD_AMD;
-        //// m_c->postorder = 1; // TRUE
-        //// m_c->error_handler = error_handler;
-        //
-        // // This puts us in LDL' mode
-        // // "To factorize a large indefinite matrix, set Common->supernodal to
-        // // CHOLMOD_SIMPLICIAL, and the simplicial LDL' method will always be
-        // // used. This will be significantly slower than a supernodal LL'
-        // // factorization, however.
-        // m_c->supernodal = CHOLMOD_SIMPLICIAL;
-        m_c->grow2 = 0; // We don't plan to use the modify routines
-        m_c->quick_return_if_not_posdef = true;
     }
 };
 

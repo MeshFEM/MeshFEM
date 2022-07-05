@@ -88,6 +88,7 @@ add_library(MeshFEM SHARED
         util.h
         utils.hh
         VonMises.hh
+        Solvers/CatamariFactorizer.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh
