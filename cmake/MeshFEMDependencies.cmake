@@ -44,7 +44,7 @@ if(NOT TARGET meshfem::boost)
 endif()
 
 # Catch2
-if(NOT TARGET Catch2::Catch2 AND (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR))
+if(NOT TARGET Catch2::Catch2 AND MESHFEM_BUILD_BINARIES)
     meshfem_download_catch()
     add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
     list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)
@@ -161,4 +161,9 @@ if (MESHFEM_WITH_CERES AND NOT TARGET ceres::ceres)
     endif()
 elseif(NOT TARGET ceres::ceres)
     message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
+endif()
+
+if (MESHFEM_WITH_CATAMARI AND NOT TARGET catamari)
+    meshfem_download_catamari()
+    add_subdirectory(${MESHFEM_EXTERNAL}/catamari)
 endif()

@@ -38,7 +38,7 @@ def runSimulation(obj):
     with so(): obj.computeEquilibrium([], leftEdgeVars + rightEdgeVars, opts=opts)
     return time.time() - start, obj
 
-def getSheet(thickness, maxArea = 0.0001, L = 4, useNeoHookean = False):
+def getSheet(thickness, maxArea = 0.0001, L = 4, useNeoHookean = True):
     if useNeoHookean: psi = energy.NeoHookeanYoungPoisson (2, 200, 0.3)
     else:             psi = energy.StVenantKirchhoffCBased(tensors.ElasticityTensor2D(200, 0.3))
     m = mesh.Mesh(*triangulation.triangulate(*stripBoundary(L), triArea=maxArea)[0:2], embeddingDimension=3)
@@ -46,10 +46,10 @@ def getSheet(thickness, maxArea = 0.0001, L = 4, useNeoHookean = False):
     plate.thickness = thickness
     return plate
 
-def dirichletSheetSim(thickness, maxArea = 0.0001, useNeoHookean = False):
+def dirichletSheetSim(thickness, maxArea = 0.0001, useNeoHookean = True):
     return runSimulation(getSheet(thickness, maxArea, useNeoHookean=useNeoHookean))
 
-def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4, useNeoHookean = False):
+def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4, useNeoHookean = True):
     if useNeoHookean: psi3d = energy.NeoHookeanYoungPoisson (3, 200, 0.3)
     else:             psi3d = energy.IsotropicStVenantKirchhoff(3, 200, 0.3)
     pts, _ = stripBoundary(L)
@@ -59,7 +59,7 @@ def dirichletTetSimulation(thickness, maxVol = 0.01, degree=2, L = 4, useNeoHook
     sim = elastic_solid.ElasticSolid(m3d, psi3d)
     return runSimulation(sim)
 
-def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30), useNeoHookean = False):
+def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30), useNeoHookean = True):
     result = { 'times':            [],
                'energies':         [],
                'bendingEnergies':  [],
@@ -77,7 +77,7 @@ def sheetConvergenceSweep(thickness, maxAreas = np.logspace(-1.5, -5, 30), useNe
         result['edgeLens'].append(np.median(sim.mesh().edgeLengths()))
     return result
 
-def tetConvergenceSweep(thickness, maxVols = np.logspace(-3, -5.5, 30), includeDeg1=False, useNeoHookean = False):
+def tetConvergenceSweep(thickness, maxVols = np.logspace(-3, -5.5, 30), includeDeg1=False, useNeoHookean = True):
     energies = {1: [], 2: []}
     times    = {1: [], 2: []}
     elements = {1: [], 2: []}

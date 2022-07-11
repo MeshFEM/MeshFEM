@@ -83,7 +83,7 @@ endfunction()
 function(meshfem_download_triangle)
     meshfem_download_project(triangle
         GIT_REPOSITORY https://github.com/libigl/triangle.git
-        GIT_TAG        d6761dd691e2e1318c83bf7773fea88d9437464a
+        GIT_TAG        3ee6cac2230f0fe1413879574f741c7b6da11221
     )
 endfunction()
 
@@ -92,5 +92,13 @@ function(meshfem_download_spectra)
     meshfem_download_project(spectra
         GIT_REPOSITORY https://github.com/yixuan/spectra.git
         GIT_TAG        ec27cfd2210a9b2322825c4cb8e5d47f014e1ac3
+    )
+endfunction()
+
+## Catamari
+function(meshfem_download_catamari)
+    meshfem_download_project(catamari
+        GIT_REPOSITORY https://github.com/jpanetta/catamari.git
+        GIT_TAG        2f69b7f43fa5f7c6be4c3065b786a25076f2c448
     )
 endfunction()

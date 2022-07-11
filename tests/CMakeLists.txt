@@ -28,8 +28,11 @@ target_link_libraries(unit_tests PUBLIC
 )
 
 add_executable(solve_system solve_system.cc)
-
 target_link_libraries(solve_system MeshFEM)
+
+add_executable(benchmark_linear_systems benchmark_linear_systems)
+target_link_libraries(benchmark_linear_systems MeshFEM)
+
 
 if (MSVC)
 else ()

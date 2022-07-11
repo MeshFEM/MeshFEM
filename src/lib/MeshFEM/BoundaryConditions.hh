@@ -662,6 +662,8 @@ public:
     }
 
     size_t numPeriodicDoFs() const { return m_nodesForDoF.size(); }
+    const std::vector<std::vector<size_t>> &nodesForPeriodicDoFs() const { return m_nodesForDoF; }
+    const std::vector<size_t> &nodesForPeriodicDoF(size_t dof) const { return m_nodesForDoF.at(dof); }
 
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;

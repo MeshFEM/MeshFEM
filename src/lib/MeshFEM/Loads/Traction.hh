@@ -17,10 +17,13 @@
 #ifndef TRACTION_HH
 #define TRACTION_HH
 
+#include "Load.hh"
+#include <MeshFEM/GaussQuadrature.hh>
+
 namespace Loads {
 
 template<class Object>
-struct Traction : public Load<Object::N, typename Object::Real> {
+struct Traction : public Load<typename Object::Real> {
     static constexpr size_t N = Object::N;
     static constexpr size_t K   = Object::K;
     static constexpr size_t Deg = Object::Deg;
@@ -33,7 +36,7 @@ struct Traction : public Load<Object::N, typename Object::Real> {
         : m_obj(obj) {
         m_boundaryTractions.setZero(getObj().mesh().numBoundaryElements(), N);
         m_updateCache();
-        m_callbackID = getObj().registerRestConfigUpdateCallback([this]() { m_updateCache(); });
+        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Rest, [this]() { m_updateCache(); });
     }
 
     virtual Real energy() const override {
@@ -65,7 +68,7 @@ struct Traction : public Load<Object::N, typename Object::Real> {
 
     virtual ~Traction() {
         if (auto o = m_obj.lock())
-            o->deregisterRestConfigUpdateCallback(m_callbackID);
+            o->deregisterUpdateCallback(m_callbackID);
     }
 private:
     std::weak_ptr<const Object> m_obj;
