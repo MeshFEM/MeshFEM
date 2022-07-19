@@ -1,5 +1,9 @@
 #include <MeshFEM/SparseMatrices.hh>
 
+extern "C" {
+#include <cholmod.h>
+}
+
 #if MESHFEM_WITH_CATAMARI
 
 #define DUMP_MATRICES 0
@@ -34,19 +38,20 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat) {
 
         catamari::SymmetricOrdering ordering;
         {
+            static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
             ordering.inverse_permutation.Resize(mat.m);
-            catamari::Buffer<catamari::Int> CParent(mat.m), CMember(mat.m);
+            catamari::Buffer<SuiteSparse_long> CParent(mat.m), CMember(mat.m);
             auto cholmat = cholmod_sparse_view(mat);
             if (orderingMethod == OrderingMethod::CholmodNesdis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
-                                            ordering.inverse_permutation.Data(),
+                                            (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
             }
             else {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
-                                ordering.inverse_permutation.Data(), m_c.get());
+                                (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
             }
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
