@@ -137,7 +137,7 @@ void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, Args&&... args) {
 
     TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);
     Mscalar.sumRepeated();
-    M.reserve((N * N) * Mscalar.nnz()); // Each scalar entry gets replicated into an NxN block
+    M.reserve(N * Mscalar.nnz()); // Each scalar entry gets replicated into a diagonal NxN block
 
     for (const auto &t : Mscalar)
         for (size_t c = 0; c < N; ++c)
