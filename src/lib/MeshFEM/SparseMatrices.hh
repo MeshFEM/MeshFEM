@@ -256,6 +256,18 @@ struct TripletMatrix {
         }
     }
 
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    int findEntry(long /* i */, long /* j */) const {
+        return -1;
+    }
+
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    template<bool /* _knownGood */ = true>
+    int addNZAtLoc(long i, long j, const Real &v, int loc) {
+        addNZUnpruned(i, j, v);
+        return loc;
+    }
+
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
@@ -1219,6 +1231,25 @@ struct CSCMatrix {
                 addNZStrip(findEntry(i, j + c), values.col(c));
             }
         }
+    }
+
+    // Add a nonzero entry using a guess `loc` of the location where it appears
+    // in column `j`'s sparsity pattern that is *guaranteed to be a lower bound*.
+    // A binary search is dispensed in favor of a linear search initiated at
+    // `loc`. The location of the *subsequent* entry in the column is returned.
+    // This is a more persistent version of `addNZ(i, j, v, hint)` that
+    // does not fall back to a binary search on an incorrect guess.
+    // If `_knownGood` is `false`, we allow for the possibility that `loc` is invalid
+    // and needs to be searched afresh.)
+    template<bool _knownGood = true, typename _Real2>
+    _Index addNZAtLoc(_Index i, _Index j, const _Real2 &val, int loc) {
+        if (!_knownGood) {
+            if ((loc < Ap[j]) || (loc >= Ap[j + 1]) || (Ai[loc] > i))
+                return csc_add_nz(nz, Ai.data(), Ap.data(), Ax.data(), i, j, val);
+        }
+        while (Ai[loc] < i) ++loc;
+        Ax[loc] += val;
+        return loc + 1;
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
