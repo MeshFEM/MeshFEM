@@ -30,6 +30,7 @@ struct CatamariConverter {
     using CMat = catamari::CoordinateMatrix<double>;
 
     CatamariConverter(const SuiteSparseMatrix &Asp) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter");
         if (Asp.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
             throw std::runtime_error("Unexpected symmetry mode");
         if (Asp.m != Asp.n) throw std::runtime_error("Only square matrices are supported");
