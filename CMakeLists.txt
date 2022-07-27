@@ -131,8 +131,8 @@ add_subdirectory(3rdparty/OffscreenRenderer)
 # Unit tests
 ################################################################################
 
-# Compile tests only if this is a top-level project
-if(MESHFEM_TOPLEVEL_PROJECT)
+# Compile tests if we are also building the MeshFEM binaries
+if (MESHFEM_BUILD_BINARIES)
     # Unit tests
     enable_testing()
     add_subdirectory(tests)

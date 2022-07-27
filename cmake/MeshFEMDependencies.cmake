@@ -44,7 +44,7 @@ if(NOT TARGET meshfem::boost)
 endif()
 
 # Catch2
-if(NOT TARGET Catch2::Catch2 AND (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR))
+if(NOT TARGET Catch2::Catch2 AND MESHFEM_BUILD_BINARIES)
     meshfem_download_catch()
     add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
     list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)

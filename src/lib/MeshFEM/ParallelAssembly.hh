@@ -1,10 +1,10 @@
 #ifndef PARALLELASSEMBLY_HH
 #define PARALLELASSEMBLY_HH
 
-#include "SparseMatrices.hh"
 #include "Eigen/Dense"
 
 #include <MeshFEM/Parallelism.hh>
+#include <MeshFEM/SparseMatrices.hh>
 
 // Support custom thread-local data.
 struct CustomThreadLocalData {
@@ -24,8 +24,13 @@ struct SummationData {
 template<typename T>
 using SumLocalData = tbb::enumerable_thread_specific<SummationData<T>>;
 
+template<class F, typename Real_, typename enabled = void>
+struct SummandEvaluator;
+
+#include "function_traits.hh"
+// Evaluator for loop bodies that take an individual index
 template<class F, typename Real_>
-struct SummandEvaluator {
+struct SummandEvaluator<F, Real_, std::enable_if_t<std::is_integral<typename function_traits<F>::template arg<0>::type>::value>> {
     SummandEvaluator(const F &f, SumLocalData<Real_> &locals) : m_f(f), m_locals(locals) { }
 
     void operator()(const tbb::blocked_range<size_t> &r) const {
@@ -38,7 +43,21 @@ private:
     SumLocalData<Real_> &m_locals;
 };
 
-#include "function_traits.hh"
+// Evaluator for loop bodies that take an entire `tbb::blocked_range`.
+template<class F, typename Real_>
+struct SummandEvaluator<F, Real_, std::enable_if_t<!std::is_integral<typename function_traits<F>::template arg<0>::type>::value>> {
+    SummandEvaluator(const F &f, SumLocalData<Real_> &locals) : m_f(f), m_locals(locals) { }
+
+    void operator()(const tbb::blocked_range<size_t> &r) const {
+        auto &data = m_locals.local();
+        if (!data.constructed) { data.v = 0.0; data.constructed = true; }
+        data.v += m_f(r);
+    }
+private:
+    const F &m_f;
+    SumLocalData<Real_> &m_locals;
+};
+
 template<typename PerElemSummand>
 return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, const size_t numElems) {
     using Real_ = return_type<PerElemSummand>;

@@ -26,17 +26,29 @@ struct CholeskyFactorizerBase {
 
     virtual size_t m() const = 0;
     virtual size_t n() const = 0;
+
+    // Perform only the symbolic factorization for the given matrix `mat`.
     virtual void factorizeSymbolic(const SuiteSparseMatrix &mat) = 0;
+
+    // (Re)compute the numeric factorization, reusing the symbolic factorization
+    // if it exists; otherwise a symbolic factorization is computed.
+    // For symbolic factorization reuse to work, `mat` must have the same
+    // sparsity pattern as the matrix for which the symbolic factorization was computed.
     virtual void  factorizeNumeric(const SuiteSparseMatrix &mat, bool isInTryCatch=false) = 0;
+
+    // Compute the numeric factorization of `A + sigma * B`, reusing the
+    // symbolic factorization if it exists.
+    virtual void  factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) = 0;
 
     // (Re)compute both symbolic and numeric factorizations
     virtual void  factorize       (const SuiteSparseMatrix &mat, bool isInTryCatch=false) = 0;
+    virtual void clearFactors() = 0;
 
     virtual void stashFactorization() = 0;
     virtual bool hasStashedFactorization() const = 0;
     virtual void swapStashedFactorization() = 0;
     virtual void clearStashedFactorization() = 0;
-    virtual void clearFactors() = 0;
+
     virtual void setSuppressWarnings(bool /* suppressWarnings */) { }
     virtual bool checkPosDef() const = 0;
 
@@ -48,8 +60,8 @@ struct CholeskyFactorizerBase {
     }
 
     bool hasFactorization(CholeskySys sys = CholeskySys::A) const {
-        if ((sys == CholeskySys::A) || 
-            (sys == CholeskySys::L) || 
+        if ((sys == CholeskySys::A) ||
+            (sys == CholeskySys::L) ||
             (sys == CholeskySys::Lt)) return hasFactorization(FactorizationType::Numeric);
         return hasFactorization(FactorizationType::Symbolic);
     }

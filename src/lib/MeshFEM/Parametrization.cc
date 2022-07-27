@@ -140,13 +140,10 @@ UVMap scp(const Mesh &mesh, SCPInnerProduct iprod, Real eps) {
             if (size_t(x_in.size()) != 2 * nv) throw std::runtime_error("unexpected size");
             VXd result(VXd::Zero(2 * nv));
             const size_t nbv = mesh.numBoundaryVertices();
-            Real uAvg = 0.0, vAvg = 0.0;
             for (const auto &b : mesh.boundaryVertices()) {
                 const size_t vi = b.volumeVertex().index();
                 result[     vi] = x_in[     vi];
                 result[nv + vi] = x_in[nv + vi];
-                uAvg += x_in[     vi];
-                vAvg += x_in[nv + vi];
             }
             return result;
         };

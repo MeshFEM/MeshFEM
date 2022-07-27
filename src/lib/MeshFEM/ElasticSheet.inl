@@ -195,6 +195,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
     if (minimizeBending) {
         auto problem = std::make_unique<NormalInferenceProblem<ElasticSheet>>(*this);
         auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
+        opt->options.factorizer = CholeskyProvider::CHOLMOD;
         opt->options.verbose = NORMAL_INFERENCE_PROBLEM_VERBOSITY;
         opt->optimize();
     }

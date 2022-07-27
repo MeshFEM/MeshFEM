@@ -256,6 +256,18 @@ struct TripletMatrix {
         }
     }
 
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    int findEntry(long /* i */, long /* j */) const {
+        return -1;
+    }
+
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    template<bool /* _knownGood */ = true>
+    int addNZAtLoc(long i, long j, const Real &v, int loc) {
+        addNZUnpruned(i, j, v);
+        return loc;
+    }
+
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
@@ -813,7 +825,7 @@ struct CSCMatrix {
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
-    void reserve(size_t nnz_request) { if (nnz_request > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve`"); }
+    void reserve(size_t nnz_request) { if (nnz_request > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve` (" + std::to_string(nnz_request) + " vs " + std::to_string(nz) + ")"); }
 
     CSCMatrix(_Index mm = 0, _Index nn = 0)
         : m(mm), n(nn), nz(0) { }
@@ -974,7 +986,7 @@ struct CSCMatrix {
 
             // Accumulate entries in the output matrix in sorted order.
             // Note: from our requirement that this->Ai be sorted, we can
-            // assume input triplets are are looped over in lexicographically
+            // assume input triplets are visited in lexicographically
             // sorted (j, i) order.
             // Therefore, entries will be added to the output matrix columns in sorted
             // order as well. However, we must make sure in the LOWER_TRIANGLE
@@ -1219,6 +1231,25 @@ struct CSCMatrix {
                 addNZStrip(findEntry(i, j + c), values.col(c));
             }
         }
+    }
+
+    // Add a nonzero entry using a guess `loc` of the location where it appears
+    // in column `j`'s sparsity pattern that is *guaranteed to be a lower bound*.
+    // A binary search is dispensed in favor of a linear search initiated at
+    // `loc`. The location of the *subsequent* entry in the column is returned.
+    // This is a more persistent version of `addNZ(i, j, v, hint)` that
+    // does not fall back to a binary search on an incorrect guess.
+    // If `_knownGood` is `false`, we allow for the possibility that `loc` is invalid
+    // and needs to be searched afresh.)
+    template<bool _knownGood = true, typename _Real2>
+    _Index addNZAtLoc(_Index i, _Index j, const _Real2 &val, int loc) {
+        if (!_knownGood) {
+            if ((loc < Ap[j]) || (loc >= Ap[j + 1]) || (Ai[loc] > i))
+                return csc_add_nz(nz, Ai.data(), Ap.data(), Ax.data(), i, j, val);
+        }
+        while (Ai[loc] < i) ++loc;
+        Ax[loc] += val;
+        return loc + 1;
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
