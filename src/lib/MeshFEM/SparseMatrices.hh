@@ -229,6 +229,8 @@ struct TripletMatrix {
         addNZUnpruned(i, j, v);
     }
 
+    void addDiagEntry(size_t i, Real v) { addNZ(i, i, v); }
+
     // Add a vertical strip of contiguous nonzero values starting at (i, j),
     // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
     template<class Derived>
@@ -267,6 +269,7 @@ struct TripletMatrix {
         addNZUnpruned(i, j, v);
         return loc;
     }
+
 
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
