@@ -157,6 +157,7 @@ target_link_libraries(${PROJECT_NAME}
         cholmod::cholmod
         meshfem::boost
         meshfem::spectra
+        rotation_optimization
 #		CGAL::CGAL
     PRIVATE
         warnings::all
