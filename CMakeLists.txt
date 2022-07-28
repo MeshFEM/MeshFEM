@@ -100,6 +100,7 @@ include(MeshFEMDependencies)
 ################################################################################
 # Subdirectories
 ################################################################################
+add_subdirectory(3rdparty/RotationOptimization)
 
 add_subdirectory(src/lib)
 

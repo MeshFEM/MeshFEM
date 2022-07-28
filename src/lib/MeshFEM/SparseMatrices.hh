@@ -1240,7 +1240,7 @@ struct CSCMatrix {
     // This is a more persistent version of `addNZ(i, j, v, hint)` that
     // does not fall back to a binary search on an incorrect guess.
     // If `_knownGood` is `false`, we allow for the possibility that `loc` is invalid
-    // and needs to be searched afresh.)
+    // and needs to be searched afresh.
     template<bool _knownGood = true, typename _Real2>
     _Index addNZAtLoc(_Index i, _Index j, const _Real2 &val, int loc) {
         if (!_knownGood) {

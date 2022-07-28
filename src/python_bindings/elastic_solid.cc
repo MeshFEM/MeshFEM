@@ -5,6 +5,7 @@
 namespace py = pybind11;
 
 #include <MeshFEM/ElasticSolid.hh>
+#include <MeshFEM/ElasticSolidRotExtrap.hh>
 #include <MeshFEM/MassMatrix.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
@@ -38,8 +39,7 @@ struct ElasticSolidBinder {
         module.def("ElasticSolid", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
         const std::string name = getElasticSolidName<Energy, K, Deg, VecN_T<Real, N>>();
-        py::class_<ES, EO, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
-        pyES
+        py::class_<ES, EO, std::shared_ptr<ES>>(detail_module, name.c_str())
           .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
           .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })
           .def_property_readonly_static("energy_name", [](py::object /* self */) { return getEnergyName<Energy>(); })
@@ -50,14 +50,14 @@ struct ElasticSolidBinder {
           .def("prepareRigidMotionPins",    &ES::prepareRigidMotionPins)
           .def("filterRMPinArtifacts",      &ES::filterRMPinArtifacts, py::arg("pinVertices"))
           .def("getDeformedPositions",      &ES::deformedPositions)
-          .def("getRestPositions",          &ES::restPositions)
+          .def("getRestPositions",          &ES::restNodePositions)
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
           .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference)
           .def("greenStrain",               [](const ES &es, size_t ei) { return es.greenStrain(ei); }, py::arg("ei"))
-          .def("greenStrain",               [](const ES &es, size_t ei, const typename ES::EvalPtN &baryCoords) { return es.greenStrain(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
+          .def("greenStrain",               [](const ES &es, size_t ei, const typename ES::EvalPtK &baryCoords) { return es.greenStrain(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
           .def("vertexGreenStrains",        &ES::vertexGreenStrains)
           .def("cauchyStress",              [](const ES &es, size_t ei) { return es.cauchyStress(ei); }, py::arg("ei"))
-          .def("cauchyStress",              [](const ES &es, size_t ei, const typename ES::EvalPtN &baryCoords) { return es.cauchyStress(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
+          .def("cauchyStress",              [](const ES &es, size_t ei, const typename ES::EvalPtK &baryCoords) { return es.cauchyStress(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
           .def("vertexCauchyStresses",      &ES::vertexCauchyStresses)
           .def("surfaceStressLpNorm",       &ES::surfaceStressLpNorm, py::arg("p"))
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
@@ -72,6 +72,12 @@ struct ElasticSolidBinder {
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
          ;
+
+        using ESRE = ElasticSolidRotExtrap<K, Deg, EmbeddingSpace, Energy>;
+        module.def("ElasticSolidRotExtrap", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ESRE>(e, m); }, py::arg("mesh"), py::arg("energy"));
+
+        py::class_<ESRE, EO, std::shared_ptr<ESRE>>(detail_module, (name + "RotExtrap").c_str())
+            ;
     }
 };
 

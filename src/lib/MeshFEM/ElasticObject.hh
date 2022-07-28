@@ -20,8 +20,7 @@
 #include "SparseMatrices.hh"
 
 template<class _Real>
-class ElasticObject {
-public:
+struct ElasticObject {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using CSCMat = CSCMatrix<SuiteSparse_long, _Real>;
