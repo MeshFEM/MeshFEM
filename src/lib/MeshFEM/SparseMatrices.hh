@@ -188,7 +188,7 @@ namespace spmat_helper {
     template<typename T> std::enable_if_t<std::is_arithmetic<T>::value, T> transpose_block(T a) { return a; }
 }
 
-template<typename _Triplet = Triplet<Real>, bool Prune = true>
+template<typename _Triplet = Triplet<Real>>
 struct TripletMatrix {
     typedef enum {APPEND_ABOVE, APPEND_BELOW,
                   APPEND_LEFT , APPEND_RIGHT} AppendPos;
@@ -198,6 +198,7 @@ struct TripletMatrix {
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
+
     TripletMatrix(size_t mm = 0, size_t nn = 0) : m(mm), n(nn) { }
 
     typedef TripletMatrix<_Triplet>         TMatrix;
@@ -206,6 +207,9 @@ struct TripletMatrix {
     typedef Real                            value_type;
     size_t m, n;
     aligned_std_vector<Triplet> nz;
+
+    value_type pruneTol = 0.0;
+
     // Set this to false for minor speed gains if you know that your matrix is
     // already properly sorted and has its repeated entries summed.
     // Warning: it is not automatically set back to true if the matrix is modified!
@@ -225,7 +229,7 @@ struct TripletMatrix {
         nz.push_back(Triplet(i, j, v));
     }
     void addNZ(size_t i, size_t j, Real v) {
-        if (spmat_helper::valueMagnitudeSq(v) == 0.0 && Prune) return; // Possibly give this a tolerance...
+        if (spmat_helper::valueMagnitudeSq(v) == this->pruneTol) return;
         addNZUnpruned(i, j, v);
     }
 
@@ -364,7 +368,7 @@ struct TripletMatrix {
 
         // remove identically zero entries (could use a tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) == 0.0) && Prune; });
+                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) == this->pruneTol); });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
@@ -845,8 +849,8 @@ struct CSCMatrix {
 
     CSCMatrix(const std::string &path) { readBinary(path); }
 
-    template<typename T, bool b> CSCMatrix(TripletMatrix<T, b>  &mat) { setFromTMatrix(mat); }
-    template<typename T, bool b> CSCMatrix(TripletMatrix<T, b> &&mat) { setFromTMatrix(std::move(mat)); }
+    template<typename T> CSCMatrix(TripletMatrix<T>  &mat) { setFromTMatrix(mat); }
+    template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
 
     using DataType = Eigen::Matrix<_Real, Eigen::Dynamic, 1>;
     Eigen::Map<      DataType> data()       { return Eigen::Map<      DataType>(Ax.data(), Ax.size()); }
