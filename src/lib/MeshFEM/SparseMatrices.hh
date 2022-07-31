@@ -31,6 +31,7 @@
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/AutomaticDifferentiation.hh>
 
 extern "C" {
 #include <umfpack.h>
@@ -110,6 +111,19 @@ namespace spmat_helper {
         static T Zero() { return 0.0; }
     };
 
+    // Eigen autodiff type version
+    template<typename StorageType>
+    struct value_traits<Eigen::AutoDiffScalar<StorageType>> {
+        using T = Eigen::AutoDiffScalar<StorageType>;
+        static constexpr size_t rows = 1;
+        static constexpr size_t cols = 1;
+        using Scalar = T;
+        using container_type = typename ContainerType<T>::type;
+        static Scalar valueMagnitudeSq(const T &v) { return v * v; }
+        static void setZero(T &v) { v = 0; }
+        static T Zero() { return 0.0; }
+    };
+
     // Eigen type version
     template<typename EigenT>
     struct value_traits<EigenT, std::enable_if_t<isEigenType<EigenT>()>> {
@@ -160,8 +174,8 @@ namespace spmat_helper {
     template<class VType>
     struct SegmentGetter<1, VType> {
         using ScratchVec = typename VType:: Scalar;
-        template<typename T> static auto  get(const T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
-        template<typename T> static auto &get(      T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value, "Scalar type must be arithmetic!"); return v[i]; }
+        template<typename T> static auto  get(const T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value || isAutoDiffType<typename T:: Scalar>(), "Scalar type must be arithmetic!"); return v[i]; }
+        template<typename T> static auto &get(      T &v, size_t i) { static_assert(std::is_arithmetic<typename T::Scalar>::value || isAutoDiffType<typename T:: Scalar>(), "Scalar type must be arithmetic!"); return v[i]; }
     };
 
     template<typename T> void          setZero(     T &&v) {        value_traits<std::decay_t<T>>::setZero(v); }
@@ -224,6 +238,24 @@ struct TripletMatrix {
         return hint;
     }
 
+    // Add a block of contiguous nonzero values starting at (i, j)
+    // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
+    // Note: if symmetry_mode UPPER_TRIANGLE and and we are adding a diagonal
+    // block, only the upper triangle is added.
+    template<class Derived>
+    void addNZBlock(long i, long j, const Eigen::DenseBase<Derived> &values) {
+        if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i == j)) {
+            for (int jj = 0; jj < values.cols(); ++jj)
+                for (int ii = 0; (ii < values.rows()) && (ii <= jj); ++ii)
+                    addNZ(i + ii, j + jj, values(ii, jj));
+        }
+        else {
+            for (int jj = 0; jj < values.cols(); ++jj)
+                for (int ii = 0; ii < values.rows(); ++ii)
+                    addNZ(i + ii, j + jj, values(ii, jj));
+        }
+    }
+
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
@@ -242,12 +274,9 @@ struct TripletMatrix {
 #if PARALLEL_BIN
         auto bucketStart = std::unique_ptr<std::atomic<size_t>[]>(new std::atomic<size_t>[n + 1]);
         for (size_t i = 0; i < n + 1; ++i) bucketStart[i] = 0;
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, origNNZ),
-            [&bucketStart, this](const tbb::blocked_range<size_t> &r) {
-                for (size_t ti = r.begin(); ti < r.end(); ++ti)
-                    ++bucketStart[nz[ti].j + 1];
-        });
+        parallel_for_range(origNNZ, [&](size_t ti) {
+            ++bucketStart[nz[ti].j + 1];
+        }
 #else
         std::vector<size_t> bucketStart(n + 1, 0);
         for (size_t ti = 0; ti < origNNZ; ++ti)
@@ -283,11 +312,7 @@ struct TripletMatrix {
             columnBuckets[newEntry].second = t.v;
         };
 #if PARALLEL_BIN
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, origNNZ),
-            [&](const tbb::blocked_range<size_t> &r) {
-                for (size_t ti = r.begin(); ti < r.end(); ++ti) placeInBucket(ti);
-        });
+        parallel_for_range(origNNZ, [&](size_t ti) { placeInBucket(ti); });
 #else
         for (size_t ti = 0; ti < origNNZ; ++ti) placeInBucket(ti);
 #endif
@@ -320,15 +345,7 @@ struct TripletMatrix {
                 spmat_helper::setZero(nz[k].v);
         };
 
-#if MESHFEM_WITH_TBB
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, n),
-            [&](const tbb::blocked_range<size_t> &r) {
-                for (size_t j = r.begin(); j < r.end(); ++j) sortAndSumBucket(j);
-        });
-#else
-        for (size_t j = 0; j < n; ++j) sortAndSumBucket(j);
-#endif
+        parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
         // remove identically zero entries (could use a tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
@@ -1153,6 +1170,7 @@ struct CSCMatrix {
     // (so that the adjacent strip below can be written by directly calling addNZ(idx, values))
     template<class Derived>
     _Index addNZStrip(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
         return addNZStrip(findEntry(i, j), values);
     }
 
@@ -1166,7 +1184,7 @@ struct CSCMatrix {
     // Add a sequence of values to the compressed nonzero entries starting at "idx"
     template<class Derived>
     _Index addNZStrip(_Index idx, const Eigen::DenseBase<Derived> &values) {
-        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZ");
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
         Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
@@ -1175,6 +1193,22 @@ struct CSCMatrix {
     _Index addNZ(_Index idx, const _Real2 &val) {
         Ax[idx] += val;
         return idx + 1;
+    }
+
+    // Add a block of contiguous nonzero values starting at (i, j)
+    // Note: if symmetry_mode UPPER_TRIANGLE and and we are adding a diagonal
+    // block, only the upper triangle is added.
+    template<class Derived>
+    void addNZBlock(_Index i, _Index j, const Eigen::DenseBase<Derived> &values) {
+        if ((symmetry_mode == SymmetryMode::UPPER_TRIANGLE) && (i == j)) {
+            for (int c = 0; c < values.cols(); ++c)
+                addNZStrip(findEntry(i, j + c), values.col(c).head(c + 1));
+        }
+        else {
+            for (int c = 0; c < values.cols(); ++c) {
+                addNZStrip(findEntry(i, j + c), values.col(c));
+            }
+        }
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
@@ -2044,6 +2078,10 @@ public:
     // Exchange the roles of m_L and m_L_stashed, making the stash the active factorization.
     void swapStashedFactorization() { std::swap(m_L, m_L_stashed); }
 
+    void clearStashedFactorization() {
+        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
+    }
+
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
     // to a vector.
     CholmodSparseWrapper getL() {
@@ -2063,8 +2101,8 @@ public:
     }
 
     void clearFactors() {
-        if (m_L)         { cholmod_l_free_factor(&m_L,         m_c.get()); m_L         = nullptr; }
-        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
+        if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
+        clearStashedFactorization();
     }
 
     ~CholmodFactorizer() {

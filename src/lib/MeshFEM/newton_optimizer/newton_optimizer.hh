@@ -132,16 +132,16 @@ struct MESHFEM_EXPORT NewtonProblem {
         // To avoid numerical issues as iterates approach the bound constraints, a constraint
         // is considered active if the variable is within "tol" of the bound.
         bool active(const VXd &vars, const VXd &g, Real tol = 1e-8) const {
-            return ((type == Type::LOWER) && (vars[idx] <= val + tol) && ((g.size() == 0) || (g[idx] <= 0)))
-                || ((type == Type::UPPER) && (vars[idx] >= val - tol) && ((g.size() == 0) || (g[idx] >= 0)));
+            return ((type == Type::LOWER) && (vars[idx] <= val + tol) && ((g.size() == 0) || (g[idx] >= 0)))
+                || ((type == Type::UPPER) && (vars[idx] >= val - tol) && ((g.size() == 0) || (g[idx] <= 0)));
         }
 
-        // Decide whether the bound constraint should be removed form the working set.
-        // For the Lagrange multiplier estimate to be accurate, we require the gradient to be small.
-        // (Since we're working with bound constraints, the first order Lagrange multiplier estimate is simply the gradient component)
-        bool shouldRemoveFromWorkingSet(const VXd &g, const VXd &g_free) const {
-            if (type == Type::LOWER) { return g[idx] >  10 * g_free.norm(); }
-            if (type == Type::UPPER) { return g[idx] < -10 * g_free.norm(); }
+        // Decide whether the bound constraint should be removed from the working set.
+        // For the Lagrange multiplier estimate to be accurate, the reduced gradient must be small.
+        // (Since we're working with bound constraints, the first-order Lagrange multiplier estimate is simply the gradient component)
+        bool shouldRemoveFromWorkingSet(const VXd &g, Real g_free_norm) const {
+            if (type == Type::UPPER) { return g[idx] >  10 * g_free_norm; }
+            if (type == Type::LOWER) { return g[idx] < -10 * g_free_norm; }
             throw std::runtime_error("Unknown bound type");
         }
 
@@ -250,6 +250,7 @@ protected:
 
 struct MESHFEM_EXPORT WorkingSet {
     WorkingSet(const NewtonProblem &problem) : m_prob(problem), m_contains(problem.numBoundConstraints(), false), m_varFixed(problem.numVars(), false) { }
+    WorkingSet(const WorkingSet &ws) : m_prob(ws.m_prob), m_count(ws.m_count), m_contains(ws.m_contains), m_varFixed(ws.m_varFixed) { }
 
     // Check whether the working set contains a particular constraint
     bool contains(size_t idx) const { return m_contains[idx]; }
@@ -299,7 +300,7 @@ struct MESHFEM_EXPORT WorkingSet {
 
     // Zero out the components for variables fixed by the working set. E.g., if "g" is the gradient,
     // compute the gradient with respect to the "free" variables (without resizing)
-    void getFreeComponentInPlace(Eigen::VectorXd &g) const {
+    void getFreeComponentInPlace(Eigen::Ref<Eigen::VectorXd> g) const {
         if (size_t(g.size()) != m_varFixed.size()) throw std::runtime_error("Gradient size mismatch");
         for (size_t vidx = 0; vidx < m_varFixed.size(); ++vidx)
             if (m_varFixed[vidx]) g[vidx] = 0.0;
@@ -308,6 +309,16 @@ struct MESHFEM_EXPORT WorkingSet {
     Eigen::VectorXd getFreeComponent(Eigen::VectorXd g /* copy modified inside */) const {
         getFreeComponentInPlace(g);
         return g;
+    }
+
+    std::unique_ptr<WorkingSet> clone() const { return std::make_unique<WorkingSet>(*this); }
+
+    const NewtonProblem &problem() const { return m_prob; }
+
+    void report(const Eigen::VectorXd &vars, const Eigen::VectorXd &g) const {
+        for (size_t bci = 0; bci < m_prob.numBoundConstraints(); ++bci) {
+            if (contains(bci)) m_prob.boundConstraint(bci).report(vars, g);
+        }
     }
 
 private:
@@ -332,6 +343,7 @@ struct NewtonOptimizerOptionsBase {
     // Warning: the following fields are NOT serialized for reasons of backwards compatibility
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
+    int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
 };
 
 // The part of the optimizer interface that is not trivially copyable.
@@ -464,6 +476,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     }
 
     ConvergenceReport optimize();
+    ConvergenceReport optimize(WorkingSet &ws);
 
     Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
 
@@ -481,12 +494,14 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // the problem is solved or the iteration limit is reached, solver/kkt_solver
     // hold values from the previous iteration (before the final linesearch
     // step).
-    void update_factorizations() {
+    void update_factorizations(const WorkingSet &ws) {
         // Computing a Newton step updates the Cholesky factorization in
         // "solver" and (if applicable) the kkt_solver as a side-effect.
         Eigen::VectorXd dummy;
-        newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()));
+        newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()), ws, options.beta, std::min(options.beta, 1e-6));
     }
+
+    void update_factorizations() { update_factorizations(WorkingSet(*prob)); }
 
     Real tauScale() const { return (options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*prob) : 1.0) / prob->metricL2Norm(); }
 

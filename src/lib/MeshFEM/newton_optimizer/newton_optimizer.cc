@@ -35,6 +35,7 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, c
 Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
     BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
     step.resize(g.size());
+    if (&ws.problem() != &get_problem()) throw std::runtime_error("Working set is for a different problem");
 
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
@@ -143,6 +144,12 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 }
 
 ConvergenceReport NewtonOptimizer::optimize() {
+    // Indices of the bound constraints in our working set.
+    WorkingSet workingSet(*prob);
+    return optimize(workingSet);
+}
+
+ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     size_t ngd_fallback_steps = options.ngd_fallback_steps; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
 
     prob->setUseIdentityMetric(options.useIdentityMetric);
@@ -150,9 +157,6 @@ ConvergenceReport NewtonOptimizer::optimize() {
 
     prob->setVars(prob->applyBoundConstraints(prob->getVars()));
     Eigen::VectorXd vars, step;
-
-    // Indices of the bound constraints in our working set.
-    WorkingSet workingSet(*prob);
 
     Real beta = options.beta;
     const Real betaMin = std::min(beta, 1e-10); // Initial shift "tau" to use when an indefinite matrix is detected.
@@ -229,28 +233,29 @@ ConvergenceReport NewtonOptimizer::optimize() {
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).
         vars = prob->getVars();
-
         g = prob->gradient(true);
         currEnergy = prob->energy();
 
         zg = zeroOutFixedVars(g); // non-fixed components of the gradient; used for termination criteria
         projectOutLEQConstrainedComponents(zg);
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)
+
         g_free = workingSet.getFreeComponent(zg);
 
-        if ((!isIndefinite) && (zg.norm() < options.gradTol)) {
-            report.success = true;
-            break; // TODO: termination criterion when bounds are active at the optimum
-        }
-
+        Real g_free_norm = g_free.norm();
         // Free variables in the working set from their bound constraints, if necessary
         bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
-                bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free);
-                if (shouldRemove) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
+                bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free_norm);
+                if (shouldRemove && options.verboseWorkingSet) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
                 return shouldRemove;
             });
 
         if (ws_updated) g_free = workingSet.getFreeComponent(zg);
+
+        if ((!isIndefinite) && (g_free.norm() < options.gradTol)) {
+            report.success = true;
+            break;
+        }
 
         } // End of 'Preamble' timer
 
@@ -283,13 +288,14 @@ ConvergenceReport NewtonOptimizer::optimize() {
                     Eigen::VectorXd tmp(step.size());
                     extractFullSolution(d, tmp); // negative curvature direction was computed in reduced variables...
                     d = tmp;
+                    workingSet.getFreeComponentInPlace(d); // Enforce the active bound constraints.
                     // {
                     //     const SuiteSparseMatrix &H = prob->hessian();
                     //     H.applyRaw(d.data(), tmp.data());
                     //     Real lambda = d.dot(tmp);
                     //     std::cout << "Found negative curvature direction with eigenvalue " << lambda << std::endl;
                     // }
-                    if (d.dot(g) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
+                    if (d.dot(zg) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
                     const Real cd = prob->characteristicDistance(d);
                     if (cd <= 0) // problem doesn't provide one
                         step += std::sqrt(step.squaredNorm() / d.squaredNorm()) * d; // TODO: find a better balance between newton step and negative curvature.
@@ -315,10 +321,10 @@ ConvergenceReport NewtonOptimizer::optimize() {
         std::tie(feasible_alpha, blocking_idx) = prob->feasibleStepLength(vars, step);
 
         // To add multiple nearby bounds to the working set at once, we allow the
-        // step to overshoot the bounds slightly (note: variables will be clamped to the bounds anyway before
-        // evaluating the objective). Then any bound violated by the step length obtaining
-        // sufficient decrease is added to the working set.
-        alpha = std::min(1.0, feasible_alpha + 1e-3);
+        // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
+        // evaluating the objective). Then all bounds violated by the step length obtaining
+        // sufficient decrease are added to the working set.
+        alpha = std::min(1.0, feasible_alpha * 2);
 
         const Real c_1 = 1e-2;
         size_t bit;
@@ -352,6 +358,15 @@ ConvergenceReport NewtonOptimizer::optimize() {
             else {
                 alpha *= 0.5;
             }
+
+            if (bit == options.nbacktrack_iter - 1) {
+                std::cout << "Backtracking failure with:" << std::endl
+                          << "Curr energy: " << currEnergy << std::endl
+                          << "Stepped energy: " << steppedEnergy << std::endl
+                          << "sufficientDecrease: " << sufficientDecrease << std::endl
+                          << "decrease: " << decrease << std::endl
+                          << std::endl;
+            }
         }
         BENCHMARK_STOP_TIMER_SECTION("Backtracking");
 
@@ -371,7 +386,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
                     throw std::logic_error("Re-encountered bound in working set");
                 }
                 workingSet.add(bci);
-                std::cout << "Added constraint " << bci << " to working set\n";
+                if (options.verboseWorkingSet) std::cout << "Added constraint " << bci << " to working set\n";
             }
         }
 
@@ -412,12 +427,9 @@ ConvergenceReport NewtonOptimizer::optimize() {
     reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg));
     std::cout << std::flush;
 
-    if (workingSet.size()) {
+    if ((options.verboseWorkingSet > 1) && workingSet.size()) {
         std::cout << "Terminated with working set:\n";
-        vars = prob->getVars();
-        for (size_t bci = 0; bci < prob->numBoundConstraints(); ++bci) {
-            if (workingSet.contains(bci)) prob->boundConstraint(bci).report(vars, g);
-        }
+        workingSet.report(prob->getVars(), g);
     }
 
     // std::cout << "Before apply bound constraints: " << prob->energy() << std::endl;
