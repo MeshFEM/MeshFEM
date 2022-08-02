@@ -28,7 +28,7 @@
 template<size_t _K, size_t _Deg>
 struct MESHFEM_EXPORT QuadratureTable {
     static constexpr size_t numPoints = 0;
-    static constexpr std::array<EvalPt<_K>, numPoints> points{};
+    inline static constexpr std::array<EvalPt<_K>, numPoints> points{};
     // TODO: weights!
 };
 
@@ -64,7 +64,7 @@ using QPArray = std::array<EvalPt<_K>, QuadratureTable<_K, _Deg>::numPoints>;
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 0> {
     static constexpr size_t numPoints = 1;
-    static constexpr QPArray<Simplex::Edge, 0> points{{
+    inline static constexpr QPArray<Simplex::Edge, 0> points{{
         {{0.5, 0.5}}
     }};
 };
@@ -76,7 +76,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 1> : public QuadratureTable
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 2> {
     static constexpr size_t numPoints = 2;
-    static constexpr QPArray<Simplex::Edge, 2> points{{
+    inline static constexpr QPArray<Simplex::Edge, 2> points{{
         {{0.78867513459481288225, 0.21132486540518711775}},
         {{0.21132486540518711775, 0.78867513459481288225}}
     }};
@@ -89,7 +89,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 3> : public QuadratureTable
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Edge, 4> {
     static constexpr size_t numPoints = 3;
-    static constexpr QPArray<Simplex::Edge, 4> points{{
+    inline static constexpr QPArray<Simplex::Edge, 4> points{{
         {{0.11270166537925831148, 0.88729833462074168852}},
         {{0.88729833462074168852, 0.11270166537925831148}},
         {{0.5, 0.5}}
@@ -198,7 +198,7 @@ typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 0> {
     static constexpr size_t numPoints = 1;
-    static constexpr QPArray<Simplex::Triangle, 0> points{{
+    inline static constexpr QPArray<Simplex::Triangle, 0> points{{
         {{1 / 3.0, 1 / 3.0, 1 / 3.0}}
     }};
 };
@@ -212,7 +212,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 2> {
     static constexpr size_t numPoints = 3;
 
     static constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
-    static constexpr QPArray<Simplex::Triangle, 2> points{{
+    inline static constexpr QPArray<Simplex::Triangle, 2> points{{
         {{c0, c1, c1}},
         {{c1, c0, c1}},
         {{c1, c1, c0}}
@@ -224,7 +224,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 3> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 3 / 5.0,
                             c1 = 1 / 5.0;
-    static constexpr QPArray<Simplex::Triangle, 3> points{{
+    inline static constexpr QPArray<Simplex::Triangle, 3> points{{
         {{c0, c1, c1}},
         {{c1, c0, c1}},
         {{c1, c1, c0}},
@@ -241,7 +241,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 4> {
                             c0_1 = 0.81684757298045851308,
                             c1_1 = 0.09157621350977074346;
 
-    static constexpr QPArray<Simplex::Triangle, 4> points{{
+    inline static constexpr QPArray<Simplex::Triangle, 4> points{{
         {{c0_0, c1_0, c1_0}},
         {{c1_0, c0_0, c1_0}},
         {{c1_0, c1_0, c0_0}},
@@ -260,7 +260,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 5> {
                             c0_1 = 0.059715871789769820459,
                             c1_1 = 0.47014206410511508977;
 
-    static constexpr QPArray<Simplex::Triangle, 5> points{{
+    inline static constexpr QPArray<Simplex::Triangle, 5> points{{
         {{c0_0, c1_0, c1_0}},
         {{c1_0, c0_0, c1_0}},
         {{c1_0, c1_0, c0_0}},
@@ -345,7 +345,7 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 0> {
     static constexpr size_t numPoints = 1;
-    static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
+    inline static constexpr QPArray<Simplex::Tetrahedron, 0> points{{
         {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}}
     }};
 };
@@ -359,7 +359,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 2> {
     static constexpr size_t numPoints = 4;
     static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
                             c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
-    static constexpr QPArray<Simplex::Tetrahedron, 2> points{{
+    inline static constexpr QPArray<Simplex::Tetrahedron, 2> points{{
         {{c0, c1, c1, c1}},
         {{c1, c0, c1, c1}},
         {{c1, c1, c0, c1}},
@@ -372,7 +372,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 3> {
     static constexpr size_t numPoints = 5;
     static constexpr double c0 = 0.5,
                             c1 = 1 / 6.0;
-    static constexpr QPArray<Simplex::Tetrahedron, 3> points{{
+    inline static constexpr QPArray<Simplex::Tetrahedron, 3> points{{
         {{c0, c1, c1, c1}},
         {{c1, c0, c1, c1}},
         {{c1, c1, c0, c1}},
@@ -390,7 +390,7 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 4> {
                             c0_1 = 0.39940357616679920500, // (14 + sqrt(70)) / 56
                             c1_1 = 0.10059642383320079500; // (14 - sqrt(70)) / 56
 
-    static constexpr QPArray<Simplex::Tetrahedron, 4> points{{
+    inline static constexpr QPArray<Simplex::Tetrahedron, 4> points{{
         {{1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0}},
         {{c0_0, c1_0, c1_0, c1_0}},
         {{c1_0, c0_0, c1_0, c1_0}},

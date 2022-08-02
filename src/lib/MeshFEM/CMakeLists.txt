@@ -28,7 +28,6 @@ add_library(MeshFEM SHARED
         Future.hh
         FieldSampler.cc
         FieldSampler.hh
-        GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
         GlobalBenchmark.cc
@@ -141,8 +140,8 @@ add_library(MeshFEM SHARED
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
 
-# Use C++14
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_14)
+# Use C++17
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC

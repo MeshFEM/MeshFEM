@@ -5,6 +5,7 @@
 #define TBB_PREVIEW_GLOBAL_CONTROL 1
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
 #include <tbb/global_control.h>
 #include <tbb/parallel_for.h>
 #include <tbb/enumerable_thread_specific.h>
