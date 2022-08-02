@@ -52,7 +52,7 @@ void restrictInterpolant(const DomainHandle &dh, const SubdomainHandle &sdh,
     // Could be optimized (traversal operations instead of brute-force search)
     for (size_t sdni = 0; sdni < fsdomain.size(); ++sdni) {
         size_t sdnvi = sdh.node(sdni).volumeNode().index();
-        bool set = false;
+        [[maybe_unused]] bool set = false;
         for (size_t dni = 0; dni < fdomain.size(); ++dni) {
             if (size_t(dh.node(dni).volumeNode().index()) == sdnvi) {
                 fsdomain[sdni] = fdomain[dni];
@@ -78,7 +78,7 @@ void embedEvalPt(const SubdomainHandle &sdh, const DomainHandle &dh,
     xdomain.fill(0);
     for (auto sv : sdh.vertices()) {
         size_t vi = sv.volumeVertex().index();
-        bool set = false;
+        [[maybe_unused]] bool set = false;
         for (auto dv : dh.vertices()) {
             if (size_t(dv.volumeVertex().index()) == vi) {
                 set = true;

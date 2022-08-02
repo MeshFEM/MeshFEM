@@ -3,10 +3,13 @@
 
 #ifdef MESHFEM_WITH_TBB
 #define TBB_PREVIEW_GLOBAL_CONTROL 1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-qual"
 #include <tbb/global_control.h>
 #include <tbb/parallel_for.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/combinable.h>
+#pragma GCC diagnostic pop
 
 #include <memory>
 
