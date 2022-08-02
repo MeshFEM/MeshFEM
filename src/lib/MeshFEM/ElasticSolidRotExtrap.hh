@@ -15,13 +15,14 @@
 //  rotation (that is lost in stressed configurations under the conventional,
 //  trivial parametrization) is restored; we expect this to particularly
 //  benefit the solution of problems employing pin constraints to eliminate
-//  rigid motion, and more generally expect accelerated convergence due to
-//  reduction of linearization artifacts in the finite step made in the line
+//  rigid motion and more generally expect accelerated convergence due to
+//  reduction of linearization artifacts in the finite steps made by the line
 //  search.
 //
 //  Because of the local nature of the reparametrization, the Hessian *sparsity
 //  pattern* is identical to the underlying `ElasticSolid`, meaning no
 //  additional expense is incurred in the linear solve.
+//  However, additional indefiniteness may be introduced.
 //
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  07/27/2022 11:16:20
@@ -33,6 +34,13 @@
 #include "EnergyDensities/CorotatedLinearElasticity.hh"
 #include <rotation_optimization.hh>
 
+// (theta - sin(theta)) / theta^3
+template<typename Real_>
+Real_ theta_minus_sin_div_theta_cubed(Real_ theta, Real_ theta_sq) {
+    if (theta_sq < theta_sq_crossover_threshold) { return 1.0 / 6.0 - theta_sq / 120.0; }
+    return (theta - sin(theta)) / (theta * theta_sq);
+}
+
 template<typename Real, size_t N>
 struct RotExtrap;
 
@@ -41,25 +49,43 @@ struct RotExtrap<Real, 3> {
     using M3d = Eigen::Matrix<Real, 3, 3>;
     using V3d = Eigen::Matrix<Real, 3, 1>;
     using RO  = rotation_optimization<Real>;
-    static M3d extrapolate(const M3d &grad_u) {
-        // Determine the rotation and stretching parts
-        M3d stretch = 0.5 * (grad_u + grad_u.transpose()); // symmetric part
-        V3d w(CRQuantities<Real, 3>::sk_inv(grad_u));      // cross-product vector representation of skew symmetric part
+    using WField = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
+    using WEntry = V3d;
 
-        // Extrapolate the rotation part
-        return RO::rotated_matrix(w, stretch);
+    static WEntry get_w(const M3d &grad_u) { return CRQuantities<Real, 3>::sk_inv(grad_u); }
+
+    static std::pair<M3d, V3d> extrapolate(const M3d &grad_u, const V3d &xbar, const V3d &ubar) {
+        // Determine the rotation and stretching parts
+        V3d w(get_w(grad_u));      // cross-product vector representation of the skew symmetric part
+        V3d w_cross_c = w.cross(xbar) - ubar;
+        Real thetaSq = w.squaredNorm();
+        Real theta = std::sqrt(thetaSq);
+        return std::make_pair(
+                RO::rotation_matrix(w), // Extrapolate the rotation part
+                V3d(-sinc(theta, thetaSq) * w_cross_c - one_minus_cos_div_theta_sq(theta, thetaSq) * w.cross(w_cross_c))); // Velocity of vector connecting centroid to center of rotation
+    }
+
+    static V3d modal_warp_correction(const WEntry &w, const V3d &u) {
+        Real thetaSq = w.squaredNorm();
+        Real theta = std::sqrt(thetaSq);
+        V3d wxu = w.cross(u);
+        return one_minus_cos_div_theta_sq(theta, thetaSq) * wxu + theta_minus_sin_div_theta_cubed(theta, thetaSq) * w.cross(wxu);
     }
 };
 
 template<typename Real>
 struct RotExtrap<Real, 2> {
     using M2d =  Eigen::Matrix<Real, 2, 2>;
-    using RO  = rotation_optimization<Real>;
+    using V2d =  Eigen::Matrix<Real, 2, 1>;
+    using RO  =  rotation_optimization<Real>;
+    using WField = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+    using WEntry = Eigen::Matrix<Real, 1, 1>;
 
-    static M2d extrapolate(const M2d &grad_u) {
+    static WEntry get_w(const M2d &grad_u) { return WEntry(CRQuantities<Real, 2>::sk_inv(grad_u)); }
+
+    static std::pair<M2d, V2d> extrapolate(const M2d &grad_u, const V2d &xbar, const V2d &ubar) {
         // Determine the rotation and stretching parts
-        M2d stretch = 0.5 * (grad_u + grad_u.transpose()); // symmetric part
-        Real w = CRQuantities<Real, 2>::sk_inv(grad_u);
+        Real w = get_w(grad_u)[0];
 
 #if 0
         const Real theta_sq = w * w;
@@ -69,10 +95,16 @@ struct RotExtrap<Real, 2> {
 #endif
         throw std::runtime_error("Unimplemented");
     }
+
+    static V2d modal_warp_correction(const WEntry &w, const V2d &u) {
+        throw std::runtime_error("Unimplemented");
+    }
 };
 
 template<size_t _K, size_t _Deg, class _EmbeddingSpace, class _Energy>
 struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Scalar> {
+    enum class Method { ElementExtrapolation, ModalWarping };
+
     using Base         = ElasticObject<typename _EmbeddingSpace::Scalar>;
     using ES           = ElasticSolid<_K, _Deg, _EmbeddingSpace, _Energy>;
     using Real         = typename ES  ::Real;
@@ -86,7 +118,9 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     using MXNdCMap     = Eigen::Map<const MXNd>;
 
     ElasticSolidRotExtrap(const typename ES::Energy &energy, const std::shared_ptr<typename ES::Mesh> &mesh)
-        : m_es(energy, mesh) { }
+        : m_es(energy, mesh) {
+        updateParametrization();
+    }
 
     static constexpr size_t K = ES::K;
     static constexpr size_t N = ES::N;
@@ -120,6 +154,19 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
         updateParametrization();
     }
 
+    const ES &elasticSolid() const { return m_es; }
+          ES &elasticSolid()       { return m_es; }
+
+    const MXNd &source_x() const { return m_source_x; }
+
+    const typename ES::Mesh &mesh() const { return m_es.mesh(); }
+
+    Method getMethod() const { return m_method; }
+    void setMethod(Method m) {
+        m_method = m;
+        m_setDefoVars(m_vars); // Recompute extrapolation with new method.
+    }
+
 private:
     // The following two methods must be implemented by the derived class to
     // update the deformed/rest states.
@@ -134,34 +181,69 @@ private:
         EvalPtK centroid_bc;
         centroid_bc.fill(1.0 / centroid_bc.size());
 
-        // Extrapolate the motion of each element and accumulate displacement to its nodes.
-        Eigen::ArrayXi valence = Eigen::ArrayXi::Zero(m_es.numNodes());
-        MXNd u_extrap = MXNd::Zero(m_es.numNodes(), N);
-        for (auto e : m_es.mesh().elements()) {
-            // Extract element's rigid translation, which we define as
-            // the displacement of its centroid.
-            // TODO (quadratic): use integral?
-            VNd centroid_u = VNd::Zero();
-            VNd centroid_X = VNd::Zero();
-            for (auto v : e.vertices()) {
-                centroid_u += u.row(v.index()).transpose();
-                centroid_X += v.node()->p;
+        MXNd x_extrap = MXNd::Zero(m_es.numNodes(), N);
+        using RE = RotExtrap<Real, N>;
+        if (m_method == Method::ElementExtrapolation) {
+            // Extrapolate the motion of each element and accumulate displacement to its nodes.
+            VXd totalWeight = VXd::Zero(m_es.numNodes());
+            for (auto e : mesh().elements()) {
+                // TODO (quadratic): use integral?
+                VNd ubar = VNd::Zero();
+                VNd xbar = VNd::Zero();
+                for (auto v : e.vertices()) {
+                    ubar += u.row(v.index()).transpose();
+                    xbar += m_source_x.row(v.index()).transpose();
+                }
+                ubar /= e.numVertices();
+                xbar /= e.numVertices();
+
+                MNd grad_u = m_es.jacobian(e.index(), centroid_bc, u);
+                // std::cout << "grad_u[" << e.index() << "] = " << grad_u << std::endl;
+
+                // Generate and accumulate the updated node displacements
+                MNd rot_extrap;
+                VNd cm_translation;
+                MNd strain_increment = 0.5 * (grad_u + grad_u.transpose());
+                std::tie(rot_extrap, cm_translation) = RE::extrapolate(grad_u, xbar, ubar);
+                // std::cout << rot_extrap << std::endl;
+                // std::cout << "cm_translation: " << cm_translation.transpose() << std::endl;
+
+                for (auto n : e.nodes()) {
+                    size_t ni = n.index();
+                    const auto &xhat = m_source_x.row(ni).transpose();
+                    x_extrap.row(ni) += e->volume() * (rot_extrap * (xhat + strain_increment * (xhat - xbar)) + cm_translation);
+                    totalWeight[ni]  += e->volume();
+                }
             }
-            centroid_u /= e.numVertices();
-            centroid_X /= e.numVertices();
+            x_extrap.array().colwise() /= totalWeight.array();
+        }
+        else if (m_method == Method::ModalWarping) {
+            // Average the element rotations onto the nodes.
+            VXd totalWeight = VXd::Zero(m_es.numNodes());
 
-            MNd grad_u = m_es.jacobian(e.index(), centroid_bc, u);
+            typename RE::WField node_w;
+            node_w.setZero(m_es.numNodes(), RE::WField::ColsAtCompileTime);
+            for (auto e : mesh().elements()) {
+                // For linear and quadratic elements, the average deformation
+                // gradient is the Jacobian the element centroid...
+                MNd grad_u = m_es.jacobian(e.index(), centroid_bc, u);
+                auto w_e = RE::get_w(grad_u);
+                for (auto n : e.nodes()) {
+                    totalWeight[n.index()] += e->volume();
+                    node_w.row(n.index())  += w_e * e->volume();
+                }
+            }
 
-            // Generate the updated node displacements
-            MNd grad_extrap = RotExtrap<Real, N>::extrapolate(grad_u);
-            for (auto n : e.nodes()) {
-                u_extrap.row(n.index()) += grad_extrap * (n->p - centroid_X) + centroid_u;
-                ++valence[n.index()];
+            // Extrapolate each nodal trajectory
+            for (auto n : mesh().nodes()) {
+                const size_t ni = n.index();
+                node_w.row(ni) /= totalWeight[ni];
+                x_extrap.row(ni) = m_source_x.row(ni) + u.row(ni) + RE::modal_warp_correction(node_w.row(n.index()).transpose(), u.row(ni).transpose()).transpose();
             }
         }
+        else throw std::runtime_error("Unknown extrapolation method");
 
-        u_extrap.array().colwise() /= valence.cast<Real>();
-        m_es.setDeformedPositions(m_source_x + u_extrap);
+        m_es.setDeformedPositions(x_extrap);
     }
 
     virtual void m_setRestVars(const Eigen::Ref<const VXd> &vars) {
@@ -174,6 +256,8 @@ private:
     // "Source" deformed positions for each node
     MXNd m_source_x;
     VXd m_vars;
+
+    Method m_method = Method::ModalWarping;
 };
 
 #endif /* end of include guard: ELASTICSOLIDROTEXTRAP_HH */

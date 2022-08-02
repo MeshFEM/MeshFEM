@@ -76,7 +76,24 @@ struct ElasticSolidBinder {
         using ESRE = ElasticSolidRotExtrap<K, Deg, EmbeddingSpace, Energy>;
         module.def("ElasticSolidRotExtrap", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ESRE>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
-        py::class_<ESRE, EO, std::shared_ptr<ESRE>>(detail_module, (name + "RotExtrap").c_str())
+        py::class_<ESRE, EO, std::shared_ptr<ESRE>> pyESRE(detail_module, (name + "RotExtrap").c_str());
+
+        using Method = typename ESRE::Method;
+        py::enum_<Method>(pyESRE, "Method")
+            .value("ElementExtrapolation", Method::ElementExtrapolation)
+            .value("ModalWarping",         Method::ModalWarping        )
+            ;
+
+        pyESRE
+            .def_property_readonly("elasticSolid", [](const ESRE &esre) -> const ES & { return esre.elasticSolid(); }, py::return_value_policy::reference)
+            .def_property_readonly("source_x",     &ESRE::source_x)
+            .def_property("method", &ESRE::getMethod, &ESRE::setMethod)
+            .def("visualizationGeometry", [](const ESRE &obj, double normalCreaseAngle) {
+                  FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.elasticSolid().deformedVertices());
+                  return getVisualizationGeometry(visMesh, normalCreaseAngle);
+               }, py::arg("normalCreaseAngle") = M_PI)
+            .def("visualizationField", [](const ESRE &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+            .def("visualizationField", [](const ESRE &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
             ;
     }
 };
