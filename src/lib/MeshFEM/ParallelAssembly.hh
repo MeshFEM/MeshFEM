@@ -14,7 +14,7 @@ struct CustomThreadLocalData {
 struct CTLDEmpty : public CustomThreadLocalData { };
 
 #if MESHFEM_WITH_TBB
-// Energy summation
+// Scalar summation (e.g., for per-element energies)
 template<typename T>
 struct SummationData {
     T v;
@@ -30,7 +30,7 @@ struct SummandEvaluator {
 
     void operator()(const tbb::blocked_range<size_t> &r) const {
         auto &data = m_locals.local();
-        if (!data.constructed) data.v = 0.0;
+        if (!data.constructed) { data.v = 0.0; data.constructed = true; }
         for (size_t i = r.begin(); i < r.end(); ++i) { data.v += m_f(i); }
     }
 private:
@@ -38,8 +38,10 @@ private:
     SumLocalData<Real_> &m_locals;
 };
 
-template<typename Real_, typename PerElemSummand>
-Real_ summation_parallel(const PerElemSummand &summand, const size_t numElems) {
+#include "function_traits.hh"
+template<typename PerElemSummand>
+return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, const size_t numElems) {
+    using Real_ = return_type<PerElemSummand>;
     SumLocalData<Real_> localData;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
                       SummandEvaluator<PerElemSummand, Real_>(summand, localData));
@@ -208,6 +210,7 @@ void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_
                           HessianAssembler<CustomData_, PerElemAssembler, Real_>(assembler, H, haLocalData));
     });
 
+    // BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread matrices");
     for (const auto &data : haLocalData) {
         if (data.H != nullptr)
             H.addWithIdenticalSparsity(*(data.H));

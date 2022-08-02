@@ -11,6 +11,7 @@
 #define FIELDPOSTPROCESSING_HH
 
 #include <vector>
+#include "Functions.hh"
 
 // Take a piecewise smooth but discontinuous interpolant field (e.g., stress)
 // defined by a function `f(ei, x)`, where `ei` is an element index and `x` is
@@ -41,6 +42,31 @@ std::vector<return_type<F>> vertexAveragedField(const FEMMesh_ &m, const F &f) {
     }
     for (auto v : m.vertices())
         result[v.index()] /= averagingVolume[v.index()];
+
+    return result;
+}
+
+// Similar to above, but returning an Eigen matrix where each row holds
+// the flattened version of the per-vertex result. This is especially helpful in case,
+// e.g., of SIMD alignment issues with std::vector.
+#include <Eigen/Dense>
+template<class FEMMesh_, class F>
+Eigen::MatrixXd vertexAveragedFieldEigen(const FEMMesh_ &m, const F &f) {
+    using value_type = return_type<F>;
+    Eigen::MatrixXd result;
+    int rangeDimension = value_type::SizeAtCompileTime;
+    result.setZero(m.numVertices(), rangeDimension);
+
+    std::vector<Real> averagingVolume(m.numVertices());
+    for (auto e : m.elements()) {
+        Real evol = e->volume();
+        for (auto v : e.vertices()) {
+            averagingVolume[v.index()] += evol;
+            result.row(v.index()) += evol * Eigen::Map<Eigen::VectorXd>(f(e.index(), v.localIndex()).data(), rangeDimension);
+        }
+    }
+    for (auto v : m.vertices())
+        result.row(v.index()) /= averagingVolume[v.index()];
 
     return result;
 }
