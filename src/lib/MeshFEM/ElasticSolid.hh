@@ -34,12 +34,16 @@
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
 template<size_t _K, size_t _Deg, class _EmbeddingSpace, class _Energy>
-class ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
-public:
+struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     using EmbeddingSpace = _EmbeddingSpace;
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
     static_assert(std::is_convertible<typename Energy::Real, Real>::value, "Incompatible real number types");
+
+    using Base = ElasticObject<Real>;
+    using CSCMat  = typename Base::CSCMat;
+    using Base::numVars;
+    using VariableMask = typename Base::VariableMask;
 
     static constexpr size_t K = _K;
     static constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;
@@ -48,7 +52,7 @@ public:
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
     using QuadratureRule = Quadrature<N, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
-    using EvalPtN = EvalPt<N>;
+    using EvalPtK = EvalPt<K>;
     using Vector = Eigen::Matrix<Real, N, 1>;
     using Matrix = Eigen::Matrix<Real, N, N>;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
@@ -69,7 +73,7 @@ public:
 
         const auto &m = mesh();
         // Transfer/interpolate deformation field to our new mesh.
-        m_x.resize(mesh().numNodes(), size_t(N));
+        m_x.resize(numNodes(), size_t(N));
         for (const auto n : m.nodes()) {
             const size_t ni = n.index();
             if (n.isVertexNode()) m_x.row(ni) = oldDeformation.row(ni);
@@ -85,50 +89,31 @@ public:
         setDeformedPositions(m_x);
     }
 
-    size_t numVars() const { return m_x.size(); }
     size_t numElements() const { return mesh().numElements(); }
     size_t numVertices() const { return mesh().numVertices(); }
-    size_t numRestStateVars() const { return numVertices() * N; }
+    size_t numNodes   () const { return mesh().numNodes(); }
 
-    void setIdentityDeformation() {
-        m_x.resize(mesh().numNodes(), size_t(N));
+    size_t numDefoVars() const override { return m_x.size(); }
+    size_t numRestVars() const override { return numVertices() * N; }
+
+    void setIdentityDeformation() override {
+        m_x.resize(numNodes(), size_t(N));
         for (const auto n : mesh().nodes())
             m_x.row(n.index()) = n->p;
+        this->m_defoConfigUpdated();
     }
 
-    VXd getVars() const { return Eigen::Map<const VXd>(m_x.data(), m_x.size()); }
-    virtual void setVars(Eigen::Ref<const VXd> vars) override {
-        if (size_t(vars.rows()) != numVars())
-            throw std::invalid_argument("Invalid variable size");
-        m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());
-        this->m_deformedConfigUpdated();
-    }
+    VXd getDefoVars() const override { return Eigen::Map<const VXd>(m_x.data(), m_x.size()); }
 
-    void setDeformedPositions(Eigen::Ref<const MXNd> vertexPositions) {
-        setVars(Eigen::Map<const VXd>(vertexPositions.data(), vertexPositions.size()));
-    }
-
-    void setRestState(const VXd &vertexPositions) {
-        if (size_t(vertexPositions.size()) != N * numVertices())
-            throw std::invalid_argument("Invalid vertexPositions size");
-        mesh().setNodePositions(Eigen::Map<const MXNd>(vertexPositions.data(), numVertices(), size_t(N)));
-    }
-
-    VXd getRestState() const {
-        VXd rest_state(numRestStateVars());
+    VXd getRestVars() const override {
+        VXd rest_state(numRestVars());
         for (const auto v : mesh().vertices())
             rest_state.template segment<N>(N * v.index()) = v.node()->p;
         return rest_state;
     }
 
-    // Energy stored in a single element.
-    Real elementEnergy(size_t ei) const {
-        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        return QuadratureRule::integrate(
-            [ei, &psi, this](const EvalPtN &x) {
-                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
-                return psi.energy();
-            }, mesh().element(ei)->volume());
+    void setDeformedPositions(Eigen::Ref<const MXNd> vertexPositions) {
+        Base::setDefoVars(Eigen::Map<const VXd>(vertexPositions.data(), vertexPositions.size()));
     }
 
     // Energy stored in the full object.
@@ -138,12 +123,22 @@ public:
                                   mesh().numElements());
     }
 
+    // Energy stored in a single element.
+    Real elementEnergy(size_t ei) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        return QuadratureRule::integrate(
+            [ei, &psi, this](const EvalPtK &x) {
+                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
+                return psi.energy();
+            }, mesh().element(ei)->volume());
+    }
+
     // Gradient of a single element's energy with respect to its nodes' deformed positions..
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t ei) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &e = mesh().element(ei);
-        return QuadratureRule::integrate([&](const EvalPtN& x) {
+        return QuadratureRule::integrate([&](const EvalPtK &x) {
                   ElementGradient integrand;
                   GradPhis gradPhis = e->gradPhis(x);
                   psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
@@ -161,7 +156,8 @@ public:
     }
 
     // Gradient of the full object's energy with respect to all deformation variables.
-    virtual VXd gradient() const override {
+    virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("gradient");
         VXd g(VXd::Zero(numVars()));
 
@@ -176,8 +172,8 @@ public:
         return g;
     }
 
-    SuiteSparseMatrix hessian(bool projectionMask = false) const {
-        SuiteSparseMatrix H(hessianSparsityPattern());
+    CSCMat hessian(bool projectionMask = false) const {
+        CSCMat H(hessianSparsityPattern());
         hessian(H, projectionMask);
         return H;
     }
@@ -194,7 +190,7 @@ public:
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &m = mesh();
         const auto &e = m.element(ei);
-        return QuadratureRule::integrate([&](const EvalPtN &x) {
+        return QuadratureRule::integrate([&](const EvalPtK &x) {
                 GradPhis gradPhis = e->gradPhis(x);
                 psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                                                    : EvalLevel::Hessian);
@@ -222,7 +218,8 @@ public:
             e->volume());
     }
 
-    virtual void hessian(SuiteSparseMatrix& H, bool projectionMask = false) const override {
+    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
         auto assembler_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
@@ -252,7 +249,8 @@ public:
         assemble_parallel(assembler_per_element_contrib, H, numElements());
     }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
 
@@ -271,19 +269,20 @@ public:
             }
         }
 
-        SuiteSparseMatrix result(std::move(triplet_result));
+        CSCMat result(std::move(triplet_result));
         result.fill(val);
         return result;
     }
 
-    virtual SuiteSparseMatrix massMatrix(bool lumped = false) const override {
-        return MassMatrix::construct_vector_valued<>(mesh(), lumped);
+    virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {
+        M.setZero();
+        MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped);
     }
 
-    virtual SuiteSparseMatrix sobolevInnerProductMatrix(Real Mscale = 1.0) const override {
-        SuiteSparseMatrix result = Laplacian::construct_vector_valued<>(mesh());
+    virtual CSCMat sobolevInnerProductMatrix(Real Mscale = 1.0) const override {
+        CSCMat result = Laplacian::construct_vector_valued<>(mesh());
         if (Mscale != 0.0)
-            result.addWithDistinctSparsityPattern(massMatrix(), Mscale);
+            MassMatrix::accumulate_vector_valued<>(mesh(), result);
         return result;
     }
 
@@ -291,13 +290,13 @@ public:
 
     MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
     MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
-    MXNd restPositions() const {
-        MXNd rpos(mesh().numNodes(), size_t(N));
+    MXNd restNodePositions() const {
+        MXNd rpos(numNodes(), size_t(N));
         for (const auto n : mesh().nodes())
             rpos.row(n.index()) = n->p;
         return rpos;
     }
-    MXNd nodeDisplacements() const { return deformedPositions() - restPositions(); }
+    MXNd nodeDisplacements() const { return deformedPositions() - restNodePositions(); }
 
     const Mesh &mesh() const { return *m_mesh; }
 
@@ -306,26 +305,37 @@ public:
         return m_energyDensities.at(ei);
     }
 
-    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
+    // Evaluate F = \nabla f within element `ei` using a linear combination of
+    // the element's shape function gradients `gradPhis`.
+    Matrix jacobian(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const MXNd &f) const {
         Matrix F(Matrix::Zero());
         const auto &e = mesh().element(ei);
         for (const auto n : e.nodes()) {
-            F += (gradPhis.col(n.localIndex()) * m_x.row(n.index())).transpose();
+            F += (gradPhis.col(n.localIndex()) * f.row(n.index())).transpose();
         }
         return F;
     }
 
-    Matrix getDeformationGradient(size_t ei, const EvalPtN &x) const {
+    // Evaluate F = \nabla f at barycentric coordinates `bc` in element `ei`.
+    Matrix jacobian(size_t ei, const EvalPtK &bc, const MXNd &f) const {
+        return jacobian(ei, mesh().element(ei)->gradPhis(bc), f);
+    }
+
+    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
+        return jacobian(ei, gradPhis, m_x);
+    }
+
+    Matrix getDeformationGradient(size_t ei, const EvalPtK &x) const {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
     }
 
     // Get the Green strain tensor at a particular point in element `ei`
-    Matrix greenStrain(size_t ei, const EvalPtN &x) const {
+    Matrix greenStrain(size_t ei, const EvalPtK &x) const {
         Matrix F = getDeformationGradient(ei, x);
         return 0.5 * (F.transpose() * F - Matrix::Identity());
     }
 
-    Matrix cauchyStress(size_t ei, const EvalPtN &x) const {
+    Matrix cauchyStress(size_t ei, const EvalPtK &x) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         Matrix F = getDeformationGradient(ei, x);
         psi.setDeformationGradient(F);
@@ -338,7 +348,7 @@ public:
         return (psi.denergy() * F.transpose()) / F.determinant();
     }
 
-    Real vonMisesStress(size_t ei, const EvalPtN &x) const {
+    Real vonMisesStress(size_t ei, const EvalPtK &x) const {
         // Note: this is very inefficient!
         return std::sqrt(vonMises(SymmetricMatrixValue<Real, N>(cauchyStress(ei, x))).frobeniusNormSq());
     }
@@ -346,21 +356,21 @@ public:
     // Get the average Green strain tensor over element `ei`
     Matrix greenStrain(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // This quadrature rule is always exact
-            [ei, this](const EvalPtN &x) { return greenStrain(ei, x); }, 1.0);
+            [ei, this](const EvalPtK &x) { return greenStrain(ei, x); }, 1.0);
     }
 
     // Get the average cauchy stress tensor over element `ei`
     Matrix cauchyStress(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // Exact for linear elasticity
-            [ei, this](const EvalPtN &x) { return cauchyStress(ei, x); }, 1.0);
+            [ei, this](const EvalPtK &x) { return cauchyStress(ei, x); }, 1.0);
     }
 
     std::vector<Matrix> vertexGreenStrains() const {
-        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtN &x) { return greenStrain(ei, x); });
+        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &x) { return greenStrain(ei, x); });
     }
 
     std::vector<Matrix> vertexCauchyStresses() const {
-        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtN &x) { return cauchyStress(ei, x); });
+        return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &x) { return cauchyStress(ei, x); });
     }
 
     // The Lp norm of the von Mises Cauchy stress (omitting the endcaps)
@@ -410,8 +420,21 @@ public:
         return FieldSampler::construct(std::shared_ptr<const Mesh>(m_mesh)); // work around template parameter deduction issue
     }
 
-    virtual SuiteSparseMatrix deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
+    virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
         return fieldSamplerMatrix(mesh(), N, P);
+    }
+
+private:
+    void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
+        if (size_t(vars.size()) != numDefoVars())
+            throw std::invalid_argument("Invalid variable size");
+        m_x = Eigen::Map<const MXNd>(vars.data(), m_x.rows(), m_x.cols());
+    }
+
+    void m_setRestVars(const Eigen::Ref<const VXd> &vars) override {
+        if (size_t(vars.size()) != N * numVertices())
+            throw std::invalid_argument("Invalid vertexPositions size");
+        m_mesh->setNodePositions(Eigen::Map<const MXNd>(vars.data(), numVertices(), size_t(N)));
     }
 
 protected:
@@ -425,7 +448,7 @@ protected:
 
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>
-    friend class ElasticSolid;
+    friend struct ElasticSolid;
 };
 
 #endif /* end of include guard: ELASTICSOLID_HH */

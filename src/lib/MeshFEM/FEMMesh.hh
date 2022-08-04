@@ -257,6 +257,9 @@ public:
         return m_bbox;
     }
 
+    // Overwrite bounding box (use with care...)
+    void setBoundingBox(const BBox<EmbeddingSpace> &bb) { m_bbox = bb; }
+
     Real volume() const {
         Real vol = 0.0;
         for (size_t i = 0; i < numElements(); ++i)

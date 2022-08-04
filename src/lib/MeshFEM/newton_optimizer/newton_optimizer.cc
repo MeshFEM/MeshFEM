@@ -54,6 +54,9 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 
     Eigen::VectorXd x, gReduced;
 
+    auto &s = solver();
+    s.setSuppressWarnings(!options.verboseNonPosDef);
+
     auto postprocessSolution = [&]() {
         extractFullSolution(x, step);
         step *= -1;
@@ -62,7 +65,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         if (prob->hasLEQConstraint()) {
             // TODO: handle more than a single constraint...
             Eigen::VectorXd a = removeFixedEntries(ws.getFreeComponent(prob->LEQConstraintMatrix()));
-            kkt_solver.update(solver, a);
+            kkt_solver.update(s, a);
             const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
             extractFullSolution(kkt_solver.solve(-x, r), step);
         }
@@ -73,11 +76,11 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 
     Eigen::VectorXd g_free = ws.getFreeComponent(g); // Zero out the entries with active bound constraints.
 
-    if (solver.hasFactorization()) {
+    if (s.hasFactorization()) {
         if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
             hUpdtCtr.reusedHessian();
             gReduced = removeFixedEntries(g_free);
-            solver.solveExistingFactorization(gReduced, x);
+            s.solve(gReduced, x);
             postprocessSolution();
             return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
         }
@@ -101,24 +104,23 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
                     M_reduced->rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
                 }
 
-                auto Hmod = H_reduced;
-                Hmod.addWithIdenticalSparsity(*M_reduced, tau * currentTauScale); // Note: rows/cols corresponding to vars with active bounds will now have a nonzero value different from 1 on the diagonal, but this is fine since the RHS component is zero...
-                solver.updateFactorization(std::move(Hmod));
+                s.factorizeNumericWithShift(H_reduced, *M_reduced, tau * currentTauScale);
             }
             else {
-                solver.updateFactorization(H_reduced);
+                s.factorizeNumeric(H_reduced);
             }
 
             BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
 
             gReduced = removeFixedEntries(g_free);
-            solver.solve(gReduced, x);
-            if (!solver.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
+            s.solve(gReduced, x);
+            if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
             postprocessSolution();
 
             break;
         }
         catch (std::exception &e) {
+            // std::cout << "Caught exception: " << e.what() << std::endl;
             tau  = std::max(  4 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
             if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << "\n";
@@ -160,8 +162,6 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
     Real beta = options.beta;
     const Real betaMin = std::min(beta, 1e-10); // Initial shift "tau" to use when an indefinite matrix is detected.
-
-    solver.setSuppressWarnings(!options.verboseNonPosDef);
 
     m_cachedHessianL2Norm.reset();
 
@@ -281,7 +281,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             auto M_reduced = prob->metric();
             fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
-            auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
+            auto d = negativeCurvatureDirection(solver(), M_reduced, 1e-6);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {

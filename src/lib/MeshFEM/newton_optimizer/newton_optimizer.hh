@@ -225,6 +225,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual ~NewtonProblem() { }
 
     bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
+    void invalidateCachedHessian() { m_cachedHessianUpToDate = false; }
 
 protected:
     // Clear the cached per-iterate quantities
@@ -344,6 +345,7 @@ struct NewtonOptimizerOptionsBase {
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
     int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
+    CholeskyProvider factorizer = get_default_cholesky_provider();
 };
 
 // The part of the optimizer interface that is not trivially copyable.
@@ -371,15 +373,16 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
     ////////////////////////////////////////////////////////////////////////////
     // Serialization + cloning support (for pickling)
     ////////////////////////////////////////////////////////////////////////////
-    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t>;
+    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t, CholeskyProvider>;
     using StateBackwardCompat = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>>; // before nbacktrack_iter and ngd_fallback_steps were added
+    using StateBackwardCompat2 = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t>; // before CholeskyProvider was added
     static State serialize(const NewtonOptimizerOptions &opts) {
         return std::make_tuple(opts.gradTol,  opts.beta,
                                opts.hessianScaledBeta, opts.niter, opts.useIdentityMetric,
                                opts.useNegativeCurvatureDirection, opts.feasibilitySolve,
                                opts.verbose, opts.writeIterateFiles, opts.verboseNonPosDef,
                                opts.m_hessianProjectionController, opts.m_hessianUpdateController,
-                               opts.nbacktrack_iter, opts.ngd_fallback_steps);
+                               opts.nbacktrack_iter, opts.ngd_fallback_steps, opts.factorizer);
     }
     template<typename State_>
     static std::unique_ptr<NewtonOptimizerOptions> deserialize_(const State_ &state) {
@@ -399,17 +402,24 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
         return opts;
     }
     static std::unique_ptr<NewtonOptimizerOptions> deserialize(const StateBackwardCompat &state) { return deserialize_(state); }
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const StateBackwardCompat2 &state) {
+        auto opts = deserialize_(state);
+        opts->nbacktrack_iter    = std::get<12>(state);
+        opts->ngd_fallback_steps = std::get<13>(state);
+        return opts;
+    }
     static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
         auto opts = deserialize_(state);
         opts->nbacktrack_iter    = std::get<12>(state);
         opts->ngd_fallback_steps = std::get<13>(state);
+        opts->factorizer         = std::get<14>(state);
         return opts;
     }
     std::unique_ptr<NewtonOptimizerOptions> clone() { return deserialize(serialize(*this)); }
 
 protected:
     // `shared_ptr` to support pickling
-    std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAlways>();
+    std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAdaptive>();
     std::shared_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_shared<HessianUpdateAlways>();
 };
 
@@ -462,7 +472,7 @@ private:
 };
 
 struct MESHFEM_EXPORT NewtonOptimizer {
-    NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) : solver(p->hessianReducedSparsityPattern()) {
+    NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) {
         prob = std::move(p);
         isFixed.assign(prob->numVars(), false);
         for (size_t fv : prob->fixedVars()) isFixed[fv] = true;
@@ -472,7 +482,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
         prob->setFixedVars(fixedVars);
         isFixed.assign(prob->numVars(), false);
         for (size_t fv : fixedVars) isFixed[fv] = true;
-        solver.updateSymbolicFactorization(prob->hessianReducedSparsityPattern());
+        solver().factorizeSymbolic(prob->hessianReducedSparsityPattern());
     }
 
     ConvergenceReport optimize();
@@ -539,8 +549,15 @@ struct MESHFEM_EXPORT NewtonOptimizer {
         return x;
     }
 
+    CholeskyFactorizerBase &solver() { 
+        if (!m_solver || (m_solver->provider() != options.factorizer)) {
+            m_solver = make_cholesky_factorizer(options.factorizer);
+            m_solver->factorizeSymbolic(get_problem().hessianReducedSparsityPattern());
+        }
+        return *m_solver;
+    }
+
     NewtonOptimizerOptions options;
-    CholmodFactorizer solver;
     KKTSolver kkt_solver;
     // We fix variables by constraining the newton step to have zeros for these entries
     std::vector<char> isFixed;
@@ -548,6 +565,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
 
 private:
     std::unique_ptr<NewtonProblem> prob;
+    std::unique_ptr<CholeskyFactorizerBase> m_solver;
 };
 
 #endif /* end of include guard: NEWTON_OPTIMIZER_HH */

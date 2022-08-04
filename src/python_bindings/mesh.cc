@@ -27,6 +27,7 @@ struct MeshBindingsBase {
     using Real = typename Mesh::Real;
     static constexpr size_t K = Mesh::K;
     static constexpr size_t EmbeddingDimension = Mesh::EmbeddingDimension;
+    using VNd    = Eigen::Matrix<Real, EmbeddingDimension, 1>;
     using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,     3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
@@ -124,7 +125,8 @@ struct MeshBindingsBase {
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
           .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh",  [](const Mesh &) { return K == 3; })
+          .def_static("is_tet_mesh",  []() { return K == 3; })
+          .def("setBoundingBox", [](Mesh &m, const VNd &minCorner, const VNd &maxCorner) { m.setBoundingBox(BBox<VNd>(minCorner, maxCorner)); }, py::arg("minCorner"), py::arg("maxCorner"))
           .def_property_readonly(       "bbox", [](const Mesh& m) { const auto bb = m.boundingBox(); return std::make_pair(bb.minCorner, bb.maxCorner); })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")

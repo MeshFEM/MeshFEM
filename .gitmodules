@@ -1,3 +1,6 @@
 [submodule "3rdparty/OffscreenRenderer"]
 	path = 3rdparty/OffscreenRenderer
 	url = https://github.com/MeshFEM/OffscreenRenderer
+[submodule "3rdparty/RotationOptimization"]
+	path = 3rdparty/RotationOptimization
+	url = https://github.com/EPFL-LGG/RotationOptimization

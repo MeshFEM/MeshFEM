@@ -23,6 +23,7 @@
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
 #include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
+#include <MeshFEM/EnergyDensities/TensionFieldNeoHookean.hh>
 
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
@@ -99,8 +100,9 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
 
 template<class ESBinder>
 void generateElasticSheetBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
-    b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
+    // /b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
     b.template bind<ElasticSheet<             NeoHookeanEnergy<double, 2>>>(m, detail_module);
+    b.template bind<ElasticSheet<   OptionalTensionFieldEnergy<double   >>>(m, detail_module);
 }
 
 template<class EOBinder>

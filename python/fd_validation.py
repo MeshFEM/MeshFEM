@@ -3,22 +3,6 @@ from numpy.linalg import norm
 import sparse_matrices
 from reflection import hasArg
 
-def genPerturbation(x):
-    return np.random.uniform(low=-1,high=1, size=x.shape)
-
-def preamble(obj, xeval, perturb, fixedVars = []):
-    if (xeval   is None): xeval = obj.getVars()
-    if (perturb is None): perturb = genPerturbation(xeval)
-    xold = obj.getVars()
-    perturb = np.copy(perturb)
-    perturb[fixedVars] = 0.0
-    return (xold, xeval, perturb)
-
-def setVars(obj, x, customArgs = None):
-    if (customArgs is not None):
-        obj.setVars(x, **{k: v for k, v in customArgs.items() if hasArg(obj.setVars, k)})
-    obj.setVars(x)
-
 def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
     if (customArgs is not None):
         if (isinstance(customArgs, list)): return f(*mandatoryArgs, *customArgs)
@@ -26,13 +10,30 @@ def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
         return f(*mandatoryArgs, customArgs)
     return f(*mandatoryArgs)
 
+def genPerturbation(x):
+    return np.random.uniform(low=-1,high=1, size=x.shape)
+
+def preamble(obj, xeval, perturb, customArgs, fixedVars = []):
+    if (xeval   is None): xeval = evalWithCustomArgs(obj.getVars, customArgs)
+    if (perturb is None): perturb = genPerturbation(xeval)
+    xold = evalWithCustomArgs(obj.getVars, customArgs)
+    perturb = np.copy(perturb)
+    perturb[fixedVars] = 0.0
+    return (xold, xeval, perturb)
+
+def setVars(obj, x, customArgs = None):
+    if (customArgs is not None):
+        obj.setVars(x, **{k: v for k, v in customArgs.items() if hasArg(obj.setVars, k)})
+    else:
+        obj.setVars(x)
+
 def basisDirection(obj, c):
     e_c = np.zeros(obj.numVars())
     e_c[c] = 1.0
     return e_c
 
 def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     def evalAt(x):
         setVars(obj, x, customArgs)
@@ -44,7 +45,7 @@ def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVa
     return fd_delta_E
 
 def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], g = None):
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     setVars(obj, xeval, customArgs)
     if g is None: g = evalWithCustomArgs(obj.gradient, customArgs)
@@ -61,7 +62,7 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
     This isn't guaranteed to find the worst component, but it should find one
     of the worse ones.
     """
-    xold, xeval, perturb = preamble(obj, xeval, None, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, None, customArgs, fixedVars)
 
     setVars(obj, xeval, customArgs)
     g = evalWithCustomArgs(obj.gradient, customArgs)
@@ -72,7 +73,7 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
         if lowIdx > upIdx: return 0
         err = 0
         for i in range(nprobes):
-            perturb = np.random.uniform(low=-1, high=1, size=obj.numVars())
+            perturb = np.random.uniform(low=-1, high=1, size=evalWithCustomArgs(obj.numVars, customArgs))
             perturb[fixedVars] = 0
             perturb[0:lowIdx] = 0
             perturb[upIdx + 1:] = 0
@@ -104,7 +105,7 @@ def validateHessian(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs
         finite difference delta gradient
         analytic delta gradient
     """
-    xold, xeval, perturb = preamble(obj, xeval, perturb, fixedVars)
+    xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     def gradAt(x):
         setVars(obj, x, customArgs)
@@ -135,7 +136,7 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = [], epsilons
     if epsilons is None:
         epsilons = np.logspace(-9, -3, 100)
     errors = []
-    if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
+    if (perturb is None): perturb = preamble(obj, None, perturb, customArgs, fixedVars)[-1]
     g = evalWithCustomArgs(obj.gradient, customArgs)
     for eps in epsilons:
         fd, an = validateGrad(obj, g=g, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars)
@@ -161,7 +162,7 @@ def hessConvergence(obj, perturb=None, customArgs=None, fixedVars = [], indexInt
     if epsilons is None:
         epsilons = np.logspace(-9, -3, 100)
     errors = []
-    if (perturb is None): perturb = np.random.uniform(-1, 1, size=obj.numVars())
+    if (perturb is None): perturb = np.random.uniform(-1, 1, size=evalWithCustomArgs(obj.numVars, customArgs))
 
     H = None
     hessVecPrecomp = None
@@ -187,6 +188,38 @@ def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], inde
     plt.title(title)
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
+
+def block_hessian_error(obj, var_indices, va, vb, customArgs=None, eps=1e-6, perturb=None, testHessVec = False, hessVecPrecomp = None):
+    '''
+    Report the error in the (va, vb) block of the Hessian, where
+    va and vb are members of the `var_types` array.
+    '''
+    if (perturb is None):
+        perturb = np.random.normal(0, 1, evalWithCustomArgs(obj.numVars, customArgs))
+    block_perturb = np.zeros_like(perturb)
+    block_perturb[var_indices[vb]] = perturb[var_indices[vb]]
+    err, fd_delta_grad, an_delta_grad = validateHessian(obj, customArgs=customArgs, fd_eps=eps, perturb=block_perturb, testHessVec=testHessVec, hessVecPrecomp=hessVecPrecomp)
+    fd_delta_grad = fd_delta_grad[var_indices[va]]
+    an_delta_grad = an_delta_grad[var_indices[va]]
+    return (norm(an_delta_grad - fd_delta_grad) / norm(an_delta_grad),
+            fd_delta_grad, an_delta_grad)
+
+def hessian_convergence_block_plot(obj, var_types, var_indices, customArgs=None, testHessVec = False, hessVecPrecomp = None, plot_name=None):
+    perturb = np.random.normal(0, 1, evalWithCustomArgs(obj.numVars, customArgs))
+    numVarTypes = len(var_types)
+    epsilons = np.logspace(np.log10(1e-12), np.log10(1e2), 50)
+    fig = plt.figure(figsize=(16, 12))
+    for i, vi in enumerate(var_types):
+        for j, vj in enumerate(var_types):
+            plt.subplot(numVarTypes, numVarTypes, i * numVarTypes + j + 1)
+            errors = [block_hessian_error(obj, var_indices, vi, vj, customArgs=customArgs, eps=eps, perturb=perturb, testHessVec=testHessVec, hessVecPrecomp=hessVecPrecomp)[0] for eps in epsilons]
+            plt.loglog(epsilons, errors)
+            plt.title(f'({vi}, {vj}) block')
+            plt.grid()
+            plt.tight_layout()
+    if (plot_name is not None):
+        plt.savefig(plot_name, dpi = 300)
+    plt.show()
 
 def allEnergies(obj):
     if hasattr(obj, 'EnergyType'):

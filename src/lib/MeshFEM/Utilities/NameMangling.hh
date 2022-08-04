@@ -11,6 +11,7 @@
 
 #include <string>
 #include <array>
+#include <stdexcept>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
 template<typename _Real>

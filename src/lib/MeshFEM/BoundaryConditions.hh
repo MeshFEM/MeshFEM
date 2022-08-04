@@ -469,33 +469,11 @@ public:
 
         // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
         if (ignoreDims.size() > 0) {
-            std::vector<size_t> periodicDims;
-            for (size_t d = 0; d < _N; d++) {
-                if (std::find(ignoreDims.begin(), ignoreDims.end(), d) == ignoreDims.end()) {
-                    periodicDims.push_back(d);
-                }
-            }
-
-            assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
-            std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
             for (size_t i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
-                for (size_t dim : periodicDims) {
-                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMinFace(dim);
-                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
-                }
-                if (onSignificantDim[i]) {
-                    // Only remove membership from ignored faces
-                    for (size_t d : ignoreDims) {
-                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-                    }
-                }
-                else {
-                    // Remove membership from all faces
-                    for (size_t d = 0; d < _N; d++) {
-                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-                    }
+                for (size_t d : ignoreDims) {
+                    if (d > _N) throw std::runtime_error("ignoreDims entry out of bounds");
+                    m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
+                    m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
                 }
             }
         }
