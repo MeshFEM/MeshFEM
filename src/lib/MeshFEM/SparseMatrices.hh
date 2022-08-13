@@ -229,7 +229,7 @@ struct TripletMatrix {
         nz.push_back(Triplet(i, j, v));
     }
     void addNZ(size_t i, size_t j, Real v) {
-        if (spmat_helper::valueMagnitudeSq(v) == this->pruneTol) return;
+        if (spmat_helper::valueMagnitudeSq(v) <= this->pruneTol) return;
         addNZUnpruned(i, j, v);
     }
 
@@ -366,9 +366,9 @@ struct TripletMatrix {
 
         parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
-        // remove identically zero entries (could use a tolerance)
+        // remove identically zero entries (numerical tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) == this->pruneTol); });
+                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) <= this->pruneTol); });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
