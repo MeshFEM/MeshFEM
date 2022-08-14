@@ -65,11 +65,16 @@ struct RotExtrap<Real, 3> {
                 V3d(-sinc(theta, thetaSq) * w_cross_c - one_minus_cos_div_theta_sq(theta, thetaSq) * w.cross(w_cross_c))); // Velocity of vector connecting centroid to center of rotation
     }
 
-    static V3d modal_warp_correction(const WEntry &w, const V3d &u) {
+    // Calculate `Rtilde(w) u`
+    static V3d apply_Rtilde(const WEntry &w, const V3d &u) {
         Real thetaSq = w.squaredNorm();
         Real theta = std::sqrt(thetaSq);
         V3d wxu = w.cross(u);
         return one_minus_cos_div_theta_sq(theta, thetaSq) * wxu + theta_minus_sin_div_theta_cubed(theta, thetaSq) * w.cross(wxu);
+    }
+
+    static V3d modal_warp_correction(const WEntry &w, const V3d &u) {
+        return apply_Rtilde(w, u);
     }
 };
 
@@ -96,6 +101,10 @@ struct RotExtrap<Real, 2> {
         throw std::runtime_error("Unimplemented");
     }
 
+    static V2d apply_Rtilde(const WEntry &w, const V2d &u) {
+        throw std::runtime_error("Unimplemented");
+    }
+
     static V2d modal_warp_correction(const WEntry &w, const V2d &u) {
         throw std::runtime_error("Unimplemented");
     }
@@ -107,6 +116,10 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
 
     using Base         = ElasticObject<typename _EmbeddingSpace::Scalar>;
     using ES           = ElasticSolid<_K, _Deg, _EmbeddingSpace, _Energy>;
+
+    static constexpr size_t K = ES::K;
+    static constexpr size_t N = ES::N;
+
     using Real         = typename ES  ::Real;
     using VNd          = typename ES  ::Vector;
     using VXd          = typename Base::VXd;
@@ -116,14 +129,13 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     using CSCMat       = typename Base::CSCMat;
     using VariableMask = typename Base::VariableMask;
     using MXNdCMap     = Eigen::Map<const MXNd>;
+    using RE           = RotExtrap<Real, N>;
+    using WField       = typename RE::WField;
 
     ElasticSolidRotExtrap(const typename ES::Energy &energy, const std::shared_ptr<typename ES::Mesh> &mesh)
         : m_es(energy, mesh) {
         updateParametrization();
     }
-
-    static constexpr size_t K = ES::K;
-    static constexpr size_t N = ES::N;
 
     virtual size_t numDefoVars() const { return m_es.numDefoVars(); }
     virtual size_t numRestVars() const { return m_es.numRestVars(); }
@@ -133,6 +145,32 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
 
     virtual Real energy() const { return m_es.energy(); }
     virtual VXd gradient(bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const {
+        if (m_method != Method::ModalWarping) throw std::runtime_error("Only modal warping derivatives are implemented");
+        if (vmask != VariableMask::Defo)      throw std::runtime_error("Only VariableMask::Defo is implemented");
+        VXd g_es = m_es.gradient(updatedParametrization, vmask);
+        if (updatedParametrization) return g_es;
+
+        // Compute displacement from the source configuration.
+        MXNd u = MXNdCMap(m_vars.data(), m_es.numNodes(), N) - m_source_x;
+        WField node_w = m_nodal_w(u);
+
+        VXd g(g_es.size());
+        for (const auto n : mesh().nodes()) {
+            // Note [Rtilde(w)]^T = Rtilde(-w)
+            g.template segment<N>(N * n.index()) = g_es + RE::apply_Rtilde(-node_w.row(n.index()), g_es);
+        }
+
+        // For quadratic meshes, we use the average displacement gradient,,
+        // which is equivalent to evaluating at the barycenter.
+        EvalPtK centroid_bc;
+        centroid_bc.fill(1.0 / centroid_bc.size());
+        for (const auto e : mesh().elements()) {
+            auto gradPhis = e->gradPhis(centroid_bc);
+            for (auto n : e.nodes()) {
+
+            }
+        }
+
         throw std::runtime_error("Unimplemented.");
     }
 
@@ -182,7 +220,6 @@ private:
         centroid_bc.fill(1.0 / centroid_bc.size());
 
         MXNd x_extrap = MXNd::Zero(m_es.numNodes(), N);
-        using RE = RotExtrap<Real, N>;
         if (m_method == Method::ElementExtrapolation) {
             // Extrapolate the motion of each element and accumulate displacement to its nodes.
             VXd totalWeight = VXd::Zero(m_es.numNodes());
@@ -218,32 +255,43 @@ private:
             x_extrap.array().colwise() /= totalWeight.array();
         }
         else if (m_method == Method::ModalWarping) {
-            // Average the element rotations onto the nodes.
-            VXd totalWeight = VXd::Zero(m_es.numNodes());
-
-            typename RE::WField node_w;
-            node_w.setZero(m_es.numNodes(), RE::WField::ColsAtCompileTime);
-            for (auto e : mesh().elements()) {
-                // For linear and quadratic elements, the average deformation
-                // gradient is the Jacobian the element centroid...
-                MNd grad_u = m_es.jacobian(e.index(), centroid_bc, u);
-                auto w_e = RE::get_w(grad_u);
-                for (auto n : e.nodes()) {
-                    totalWeight[n.index()] += e->volume();
-                    node_w.row(n.index())  += w_e * e->volume();
-                }
-            }
+            WField node_w = m_nodal_w(u);
 
             // Extrapolate each nodal trajectory
             for (auto n : mesh().nodes()) {
                 const size_t ni = n.index();
-                node_w.row(ni) /= totalWeight[ni];
                 x_extrap.row(ni) = m_source_x.row(ni) + u.row(ni) + RE::modal_warp_correction(node_w.row(n.index()).transpose(), u.row(ni).transpose()).transpose();
             }
         }
         else throw std::runtime_error("Unknown extrapolation method");
 
         m_es.setDeformedPositions(x_extrap);
+    }
+
+    // Average the elements' linearized rotations onto the nodes.
+    WField m_nodal_w(const Eigen::Ref<const MXNd> &u) const {
+        WField result;
+        result.setZero(m_es.numNodes(), RE::WField::ColsAtCompileTime);
+
+        EvalPtK centroid_bc;
+        centroid_bc.fill(1.0 / centroid_bc.size());
+
+        VXd totalWeight = VXd::Zero(m_es.numNodes());
+
+        for (auto e : mesh().elements()) {
+            // For linear and quadratic elements, the average deformation
+            // gradient is the Jacobian the element centroid...
+            MNd grad_u = m_es.jacobian(e.index(), centroid_bc, u);
+            auto w_e = RE::get_w(grad_u);
+            for (auto n : e.nodes()) {
+                totalWeight[n.index()] += e->volume();
+                result.row(n.index())  += w_e * e->volume();
+            }
+        }
+
+        for (auto n : mesh().nodes())
+            result.row(n.index()) /= totalWeight[n.index()];
+        return result;
     }
 
     virtual void m_setRestVars(const Eigen::Ref<const VXd> &vars) {
