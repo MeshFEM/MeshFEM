@@ -24,8 +24,8 @@ struct BindMarchingTetrahedra<FEMMesh<3, _Deg, _EmbeddingSpace>> {
             std::vector<MeshIO::IOVertex> outVertices;
             std::vector<MeshIO::IOElement> outElements;
             std::vector<ContourSamplePtInfo> outSampleInfo;
-            marching_tetrahedra(m, f, outVertices, outElements, outSampleInfo);
-            return std::make_tuple(getV(outVertices), getF(outElements), outSampleInfo);
+            size_t numContourTris = marching_tetrahedra(m, f, outVertices, outElements, outSampleInfo, sublevelset, lerp);
+            return std::make_tuple(getV(outVertices), getF(outElements), outSampleInfo, numContourTris);
         }, py::arg("mesh"), py::arg("f"), py::arg("sublevelset") = true, py::arg("linearInterpolation") = true)
         ;
     };

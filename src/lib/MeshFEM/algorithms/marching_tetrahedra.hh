@@ -14,7 +14,8 @@
 #include <vector>
 #include <queue>
 #include <limits>
-#include "../SimplicialMesh.hh"
+#include <MeshFEM/SimplicialMesh.hh>
+#include <MeshFEM/MeshIO.hh>
 
 // va, vb, barycentric coordinates--useful for sampling functions at the
 using ContourSamplePtInfo = std::tuple<size_t, size_t, double>;
@@ -36,6 +37,7 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
 
     outVertices.clear();
     outElements.clear();
+    outSampleInfo.clear();
 
     constexpr size_t NONE = std::numeric_limits<size_t>::max();
     std::vector<size_t> outIdxForVtx(m.numVertices(), NONE);
@@ -47,13 +49,15 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
         size_t outIdx = outVertices.size();
 
         // f(t) = (1 - t) * f_a + t * f_b == 0
-        //      ==> t = f_a / (f_b - f_a)
+        //      ==> t = f_a / (f_a - f_b)
         double t = 0.5;
-        if (lerp) t =  f[va] / (f[vb] - f[va]);
+        if (lerp) t = f[va] / (f[va] - f[vb]);
 
         auto pa = m.node(va)->p;
         auto pb = m.node(vb)->p;
         outVertices.push_back(((1 - t) * pa + t * pb).eval());
+        outSampleInfo.emplace_back(va, vb, t);
+
         return outIdx;
     };
 
@@ -73,17 +77,17 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
         bool flip = false;
         if (numOutside == 3) {
             std::swap(inside_idx, outside_idx);
-            numOutside = 3;
+            numOutside = 1;
             flip = true;
         }
 
-        //       v
-        //      (+)
-        //      / \`.
-        //     /   \ `(-)
-        //    / _.--\ /
-        //  (-)-----(-)
         if (numOutside == 1) {
+            //       v
+            //      (+)
+            //      / \`.
+            //     /   \ `(-)
+            //    / _.--\ /
+            //  (-)-----(-)
             auto v  = e.vertex(outside_idx[0]);
             auto hf = e.halfFace(outside_idx[0]); // outside face opposite v
             auto &tri = outElements.emplace_back();
@@ -91,14 +95,13 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
                 tri.push_back(insertEdgeVertex(v.index(), v_opp.index()));
             if (flip) std::swap(tri[0], tri[1]);
         }
-
-        //          v1
-        //         (+)
-        //         / \`d
-        //        /   c `(-)  ^
-        //       / _.a-\-/   / he = e.halfedge(v1, v2)
-        //  v2 (+)--b--(-)
-        if (numOutside == 2) {
+        else if (numOutside == 2) {
+            //          v1
+            //         (+)
+            //         / \`d
+            //        /   c `(-)  ^
+            //       / _.a-\-/   / he = e.halfedge(v1, v2)
+            //  v2 (+)--b--(-)
             auto v1 = e.vertex(outside_idx[0]);
             auto v2 = e.vertex(outside_idx[1]);
 
@@ -112,8 +115,9 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
             outElements.emplace_back(va, vb, vc);
             outElements.emplace_back(vc, vd, va);
         }
-
-        throw std::logic_error("Impossible");
+        else {
+            throw std::logic_error("Impossible numOutside: " + std::to_string(numOutside));
+        }
     }
 
     size_t numContourTris = outElements.size();
@@ -122,8 +126,9 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
         auto insertOrigVertex = [&](size_t origIdx) -> size_t {
             size_t outIdx = outIdxForVtx[origIdx];
             if (outIdx == NONE) {
-                outIdx = outVertices.size();
+                outIdxForVtx[origIdx] = outIdx = outVertices.size();
                 outVertices.push_back(m.node(origIdx)->p);
+                outSampleInfo.emplace_back(origIdx, 0, 0.0);
             }
             return outIdx;
         };
@@ -146,7 +151,7 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
             const size_t numInside = inside_idx.size();
 
             if (numInside == 0) continue;
-            if (numInside == 3) insertBoundaryFace(be);
+            if (numInside == 3) { insertBoundaryFace(be); continue; }
 
             if (numInside == 1) {
                 //     (-)
@@ -155,10 +160,11 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
                 //   /     `
                 // (+)--he->(+)
                 auto he = be.halfEdge(inside_idx[0]);
-                auto &bdryTri = outElements.emplace_back();
-                bdryTri.push_back(insertOrigVertex(be.vertex(inside_idx[0]).volumeVertex().index()));
-                bdryTri.push_back(he.tail().volumeVertex().index());
-                bdryTri.push_back(he.tip ().volumeVertex().index());
+                size_t vi = be.vertex(inside_idx[0]).volumeVertex().index();
+                outElements.emplace_back(
+                        insertOrigVertex(vi),
+                        insertEdgeVertex(he.tail().volumeVertex().index(), vi),
+                        insertEdgeVertex(he.tip ().volumeVertex().index(), vi));
             }
             else if (numInside == 2) {
                 //     a(-)
@@ -171,7 +177,7 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
                 size_t va = insertOrigVertex(he.tail().volumeVertex().index());
                 size_t vb = insertOrigVertex(he. tip().volumeVertex().index());
 
-                auto vi = be.vertex(outside_idx[0]).volumeVertex().index();
+                size_t vi = be.vertex(outside_idx[0]).volumeVertex().index();
                 size_t vc = insertEdgeVertex(he. tip().volumeVertex().index(), vi);
                 size_t vd = insertEdgeVertex(he.tail().volumeVertex().index(), vi);
 
@@ -179,7 +185,7 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
                 outElements.emplace_back(va, vc, vd);
             }
             else {
-                throw std::runtime_error("Impossible");
+                throw std::runtime_error("Impossible numInside: " + std::to_string(numInside));
             }
         }
     }
