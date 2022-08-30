@@ -238,6 +238,12 @@ public:
      TH neighbor(size_t i) const { return  TH(m_mesh.m_tetAdjTet(i, m_idx), m_mesh); }
     HFH halfFace(size_t i) const { return HFH(m_mesh.m_faceOfTet(i, m_idx), m_mesh); }
     HEH halfEdge(size_t i) const { return (valid() && (i < 12)) ? HEH(12 * m_idx + i, m_mesh) : HEH(-1, m_mesh); }
+    // Get the half-edge in this tet defined by the intersection of half-faces (specified by tet-local index)
+    // The half-edge lives inside half_face `lhfi1` and be opposte tet corner `lhfi2`.
+    HEH halfEdge(size_t lhfi1, size_t lhfi2) const {
+        if (valid() && (lhfi1 != lhfi2) && (lhfi1 < 4) && (lhfi2 < 4)) return HEH(typename _Mesh::_HERep(m_idx, lhfi1, lhfi2).index(), m_mesh);
+        return HEH(-1, m_mesh);
+    }
 
     // Support range-based for over vertices, neighboring tets, and half-faces (interfaces)
     struct  VRangeTraits { using SEHType =  VH; using EHType = THandle; static constexpr size_t count = numVertices() ; static constexpr auto get = &EHType::vertex  ; };
