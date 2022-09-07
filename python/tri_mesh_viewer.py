@@ -99,7 +99,7 @@ class FlatteningAnimation:
 
 # Render a quad/hex mesh
 class QuadHexMeshWrapper:
-    def __init__(self, V, F):
+    def __init__(self, V, F, flatShade = False):
         V = np.array(V, dtype=np.float32)
         F = np.array(F, dtype=np.uint32)
 
@@ -133,24 +133,30 @@ class QuadHexMeshWrapper:
         FN = np.cross(V[FT[:, 1]] - V[FT[:, 0]], V[FT[:, 2]] - V[FT[:, 0]])
         FN /= np.linalg.norm(FN, axis=1)[:, np.newaxis]
 
-        # Average onto the vertices with uniform weights for now...
-        N = np.zeros_like(V)
-        np.add.at(N, FT, FN[:, np.newaxis, :]) # todo: incorporate weights?
-        # Normalize, guarding for zero-vector normals which occur for interior hex mesh vertices
-        # (assuming we do not replicate them per-face)
-        norms = np.linalg.norm(N, axis=1)
-        norms = np.where(norms > 1e-5, norms, 1.0)
-        N /= norms[:, np.newaxis]
-
         self.numElems = F.shape[0]
         self.numVerts = V.shape[0]
 
+        if flatShade:
+            V = V[FT.ravel(), :]
+            N = np.repeat(FN, 3, axis=0)
+            FT_orig = FT
+            FT = np.arange(len(V), dtype=np.uint32).reshape(-1, FT.shape[1])
+        else:
+            # Average onto the vertices with uniform weights for now...
+            N = np.zeros_like(V)
+            np.add.at(N, FT, FN[:, np.newaxis, :]) # todo: incorporate weights?
+            # Normalize, guarding for zero-vector normals which occur for interior hex mesh vertices
+            # (assuming we do not replicate them per-face)
+            norms = np.linalg.norm(N, axis=1)
+            norms = np.where(norms > 1e-5, norms, 1.0)
+            N /= norms[:, np.newaxis]
+
         # Lookup table maping visualization vertices, triangles back to their originating vertex/element
-        # currently we do not replicate vertices...
-        self.origVertForVert = np.arange(V.shape[0])
-        self.elementForTri = np.empty(FT.shape[0], dtype=np.int)
-        eft = np.reshape(self.elementForTri, (F.shape[0], -1), order='C')
-        eft[:, :] = np.arange(F.shape[0])[:, np.newaxis]
+        if flatShade:
+            self.origVertForVert = FT_orig.ravel()
+        else:
+            self.origVertForVert = np.arange(V.shape[0], dtype=np.uint32)
+        self.elementForTri = np.repeat(np.arange(F.shape[0], dtype=np.uint32), 2 * len(outwardFaces))
 
         self.V, self.F, self.N = V, FT, N
 
@@ -159,13 +165,29 @@ class QuadHexMeshWrapper:
 
     def visualizationField(self, data):
         domainSize = data.shape[0]
+        # print(f'visualizationField: {domainSize}, {self.numVerts}, {self.numElems}')
         if (domainSize == self.numVerts): return data[self.origVertForVert]
         if (domainSize == self.numElems): return data[self.elementForTri]
         raise Exception('Unrecognized data size')
 
 class QuadHexViewer(TriMeshViewer):
-    def __init__(self, V, F, *args, **kwargs):
-        super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
+    def __init__(self, V, F, flatShade=False, *args, **kwargs):
+        super().__init__(QuadHexMeshWrapper(V, F, flatShade=flatShade), *args, **kwargs)
+
+class VoxelViewer(TriMeshViewer):
+    def __init__(self, grid, dx, *args, **kwargs):
+        # Generate quad/hex mesh from ndarray
+        shape = grid.shape
+        dim = len(shape)
+        if (dim < 2) or (dim > 3): raise Exception('2D or 3D grid expected')
+        vtx_shape = tuple(s + 1 for s in shape)
+        V = np.column_stack([C.ravel(order='F') for C in np.meshgrid(*([np.linspace(0, dx * n, n) for n in vtx_shape]), indexing='ij')])
+        if dim == 2: V = np.pad(V, [(0, 0), (0, 1)])
+        elementCorners = [0, 1, vtx_shape[0] + 1, vtx_shape[0]] # Fortran ordering
+        if dim == 3: elementCorners += [vtx_shape[1] * vtx_shape[0] + i for i in elementCorners]
+        elementCorners = np.array(elementCorners)
+        F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange((np.prod(shape))), shape, order='F'), vtx_shape, order='F')])
+        super().__init__(QuadHexMeshWrapper(V, F, flatShade=True), *args, **kwargs)
 
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
