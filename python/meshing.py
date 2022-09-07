@@ -102,3 +102,23 @@ def tetrahedralize_extruded_polylines(polylines, holePts, thickness, maxVol):
     # Generate a low-quality triangulation so that we can traverse polygons of the facets
     m2d_coarse = mesh.Mesh(*triangulate_polylines(polylines, holePts, lowQuality=True), degree=1, embeddingDimension=2)
     return tetrahedralize_extrusion(m2d_coarse, holePts, thickness, maxVol)
+
+def perforatedSheet(holes=[], maxArea = 0.0001, L = 1, holeEdgeLen = 0.01):
+    """
+    Construct a triangle mesh of a 1xL rectangular sheet perforated with
+    circular holes. Holes are specified as a list of (center, radius) tuples.
+    The holes are discretized with a polyline with edge length close to `holeEdgeLen`.
+    """
+    pts = [[0, 0], [0, 1], [L, 1], [L, 0]]
+    edges = [[0, 1], [1, 2], [2, 3], [3, 0]]
+    holePts = [h[0] for h in holes]
+
+    for c, r in holes:
+        npts = max(int(np.ceil((2 * np.pi * r) / holeEdgeLen)), 3)
+        thetas = np.linspace(0, 2 * np.pi, npts, endpoint=False)
+        idxOffset = len(pts)
+        pts.extend(r * np.column_stack([np.cos(thetas), np.sin(thetas)]) + c)
+        idxs = np.arange(idxOffset, idxOffset + npts)
+        edges.extend(np.column_stack([idxs, np.roll(idxs, -1)]))
+
+    return mesh.Mesh(*mesh_operations.removeDanglingVertices(*triangulation.triangulate(pts, edges, holePts, triArea=maxArea)[0:2]), embeddingDimension=3)

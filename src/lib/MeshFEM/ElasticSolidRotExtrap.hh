@@ -230,7 +230,7 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
             for (auto n : e.nodes())
                 totalWeight[n.index()] += e->volume();
 
-        VXd g = gradient(/* updateParametrization = */ true);
+        VXd g = gradient(/* updatedParametrization = */ true);
         EvalPtK centroid_bc;
         centroid_bc.fill(1.0 / centroid_bc.size());
         for (auto e : m.elements()) {
@@ -263,6 +263,11 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     virtual void setIdentityDeformation() {
         m_es.setIdentityDeformation();
         updateParametrization();
+    }
+
+    virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
+        if (!updatedParametrization) throw std::runtime_error("Mass matrix is only correct when source config is up to date.");
+        m_es.massMatrix(M, updatedParametrization, lumped);
     }
 
     const ES &elasticSolid() const { return m_es; }

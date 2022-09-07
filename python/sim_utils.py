@@ -27,3 +27,22 @@ def getBBoxVars(obj, face, displacementComponents = [0, 1, 2], displacementsOnly
         EX = obj.restEdgeMidpoints() if restPos else obj.edgeMidpoints()
         varIdxs.extend(obj.thetaOffset() + np.where(np.abs(EX[:, axis] - val) < tol)[0])
     return varIdxs
+
+def rigidModes(obj, restPos=False):
+    X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()
+    D = obj.dimension
+    if D != X.shape[1]: raise Exception('Unexpected node position shape')
+    nv = obj.numVars()
+    if np.prod(X.shape) != nv: raise Exception('Only objects described by nodal position variables are supported')
+    numRigidModes = D + (D * (D - 1)) // 2
+    rigidModes = np.zeros((nv, numRigidModes))
+    for i in range(D): rigidModes[i::D, i] = 1.0
+
+    if D == 2:
+        rigidModes[:, 3] = np.cross([0, 0, 1], X)[:, 0:2].ravel()
+    elif D == 3:
+        for i in range(D):
+            rigidModes[:, D + i] = np.cross(np.identity(3)[i], X).ravel()
+    else: raise Exception('Unexpected dimension')
+
+    return rigidModes

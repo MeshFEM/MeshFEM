@@ -81,6 +81,7 @@ struct MeshBindingsBase {
           .def("visualizationGeometry",  [](const Mesh &m, double normalCreaseAngle) { return getVisualizationGeometry(m, normalCreaseAngle); }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (K == 2) ? "Vertex normals (triangle area weighted)"
                                                                         : "Boundary vertex normals (triangle area weighted)")
           .def("normals", &getNormals<Mesh>, (K == 2) ? "Triangle normals"

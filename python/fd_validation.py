@@ -1,14 +1,7 @@
 import numpy as np
 from numpy.linalg import norm
 import sparse_matrices
-from reflection import hasArg
-
-def evalWithCustomArgs(f, customArgs, mandatoryArgs=[]):
-    if (customArgs is not None):
-        if (isinstance(customArgs, list)): return f(*mandatoryArgs, *customArgs)
-        if (isinstance(customArgs, dict)): return f(*mandatoryArgs, **{k: v for k, v in customArgs.items() if hasArg(f, k)})
-        return f(*mandatoryArgs, customArgs)
-    return f(*mandatoryArgs)
+from reflection import hasArg, evalWithCustomArgs
 
 def genPerturbation(x):
     return np.random.uniform(low=-1,high=1, size=x.shape)
