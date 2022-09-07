@@ -74,6 +74,12 @@ public:
     using Psi_2x2 = _Psi_2x2;
     using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
     using Real    = typename Psi::Real;
+    using ETensor = ElasticityTensor<Real, 2>;
+
+    using Base = ElasticObject<Real>;
+    using CSCMat  = typename Base::CSCMat;
+    using Base::numVars;
+    using VariableMask = typename Base::VariableMask;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;
@@ -107,9 +113,25 @@ public:
     enum class EnergyType { Full, Membrane, Bending };
     enum class HessianProjectionType { Off, MembraneFBased, FullXBased };
 
+    struct Material {
+        Material(const Psi_2x2 &psi_raw) : m_psi{psi_raw} { set(psi_raw); }
+
+        void set(const Psi_2x2 &psi_raw) {
+            m_psi = Psi(psi_raw, UninitializedDeformationTag());
+            m_etensor = tangentElasticityTensor(psi_raw);
+        }
+
+        void setProjectionEnabled(bool project) { m_psi.projectionEnabled = project; }
+
+        const Psi     &    psi() const { return m_psi; }
+        const ETensor &etensor() const { return m_etensor; }
+    private:
+        Psi m_psi;         // Membrane energy density function.
+        ETensor m_etensor; // Tangent elasticity tensor of `m_psi` used for bending energy.
+    };
+
     ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
-        : m_mesh(m), m_psi{{psi}},
-          m_etensor(tangentElasticityTensor(psi)),
+        : m_mesh(m), m_materials{psi},
           m_numVertices(m->numVertices()),
           m_numEdges   (m->numEdges()),
           m_numCreases(creases.rows())
@@ -156,13 +178,17 @@ public:
           Mesh &mesh()       { return *m_mesh; }
 
     // The variables consist of deformed vertex positions and midedge normal rotation angles.
-    size_t numVars() const {
+    size_t numDefoVars() const override {
         return 3 * m_numVertices
                  + m_numEdges
                  + m_numCreases;
     }
-    size_t numThetas()  const { return m_numEdges;   }
-    size_t numCreases() const { return m_numCreases; }
+
+    size_t numRestVars() const override { return 3 * numVertices(); }
+
+    size_t numVertices()  const { return m_numVertices;   }
+    size_t numThetas()    const { return m_numEdges;   }
+    size_t numCreases()   const { return m_numCreases; }
 
     static constexpr size_t xOffset(){ return 0; }
     size_t       thetaOffset() const { return xOffset() + 3 * m_numVertices; }
@@ -176,20 +202,11 @@ public:
     size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
     int  creaseForHalfEdge(size_t hei) const { return m_creaseEdgeIndexForEdge[edgeForHalfEdge(hei)]; }
 
-    virtual void setVars(Eigen::Ref<const VXd> vars) override {
-        if (size_t(vars.rows()) != numVars()) throw std::runtime_error("Invalid vars size");
-        m_thetas = vars.segment(thetaOffset(), m_numEdges);
-        m_creaseAngles = vars.segment(creaseAngleOffset(), m_numCreases);
-        setDeformedPositions(Eigen::Map<const MX3d>(vars.data(), m_numVertices, 3));
-    }
-
     void setDeformedPositions(Eigen::Ref<const MX3d> x) {
-        if (size_t(x.rows()) != m_numVertices) throw std::runtime_error("Invalid x size");
-        m_deformedPositions = x;
-        m_updateDeformedElements();
-        m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
-
-        this->m_deformedConfigUpdated();
+        if (size_t(x.rows()) != numVertices()) throw std::runtime_error("Invalid vertex position size");
+        VXd fullVars = getDefoVars();
+        fullVars.head(3 * numVertices()) = Eigen::Map<const VXd>(x.data(), x.size());
+        Base::setDefoVars(fullVars);
     }
 
     const VXd &getThetas()       const { return m_thetas;       }
@@ -202,7 +219,7 @@ public:
         m_updateShapeOperators();
         m_updateMidedgeNormals();
 
-        this->m_deformedConfigUpdated();
+        this->m_defoConfigUpdated();
     }
 
     void setCreaseAngles(Eigen::Ref<const VXd> creaseAngles) {
@@ -211,12 +228,16 @@ public:
         setThetas(m_thetas);
     }
 
-    VXd getVars() const {
-        VXd result(numVars());
+    VXd getDefoVars() const override {
+        VXd result(numDefoVars());
         result.segment(          xOffset(), 3 * m_numVertices) = Eigen::Map<const VXd>(m_deformedPositions.data(), 3 * m_numVertices);
         result.segment(      thetaOffset(),        m_numEdges) = m_thetas;
         result.segment(creaseAngleOffset(),      m_numCreases) = m_creaseAngles;
         return result;
+    }
+
+    VXd getRestVars() const override {
+        return Eigen::Map<const VXd>(m_deformedPositions.data(), numRestVars());
     }
 
     const MX3d &deformedPositions() const { return m_deformedPositions; }
@@ -233,10 +254,32 @@ public:
 
     MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
 
-    const Psi &getEnergyDensity(size_t ei) const {
-        if (m_psi.size() == 1) return m_psi.front();
-        return m_psi.at(ei);
+    size_t numMaterials() const { return m_materials.size(); }
+    const Material &material(size_t i) const { return m_materials.at(i); }
+          Material &material(size_t i)       { return m_materials.at(i); }
+    const Material &elementMaterial(size_t ei) const {
+        if (m_materialForElement.empty()) return m_materials.front();
+        return m_materials.at(m_materialForElement.at(ei));
     }
+
+    void setMaterials(const std::vector<Psi_2x2> &mats) {
+        if (mats.empty()) throw std::runtime_error("Must specify at least one material");
+        clearMaterialAssignments();
+        m_materials.reserve(mats.size());
+        m_materials.clear();
+        for (const auto &psi : mats) m_materials.emplace_back(psi);
+    }
+
+    void clearMaterialAssignments() { m_materialForElement.clear(); }
+    void setElementMaterialAssignments(const std::vector<size_t> &mfore) {
+        if (mfore.size() != mesh().numElements())               throw std::runtime_error("Element size mismatch");
+        for (size_t mi : mfore) { if (mi >= m_materials.size()) throw std::runtime_error("Material index is out of bounds"); }
+        m_materialForElement = mfore;
+    }
+    const std::vector<size_t> elementMaterialAssignments() const { return m_materialForElement; }
+
+    const Psi     &elementPsi    (size_t ei) const { return elementMaterial(ei).psi(); }
+    const ETensor &elementETensor(size_t ei) const { return elementMaterial(ei).etensor(); }
 
     Real elementEnergy(size_t ei, const EnergyType etype) const;
     Real energy(const EnergyType etype) const;
@@ -247,7 +290,7 @@ public:
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
 
-    VXd  gradient(bool updatedSource, const EnergyType etype = EnergyType::Full) const;
+    VXd  gradient(bool updatedSource, VariableMask vmask, const EnergyType etype = EnergyType::Full) const;
 
     // Hessian with respect to an individual element's corner positions and midedge normal angles.
     // (Note, we don't separately differentiate with respect to local crease angle vars;
@@ -255,13 +298,13 @@ public:
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
-    void hessian(SuiteSparseMatrix &Hout, const EnergyType etype, bool projectionMask = false) const;
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override;
+    void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override;
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
-    virtual VXd gradient() const override { return gradient(false, EnergyType::Full); }
-    virtual void hessian(SuiteSparseMatrix &Hout, bool projectionMask = false) const override { hessian(Hout, EnergyType::Full, projectionMask); }
+    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vmask = VariableMask::Defo) const override { return gradient(updatedParametrization, vmask, EnergyType::Full); }
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override { hessian(Hout, EnergyType::Full, projectionMask, vmask); }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;
@@ -297,7 +340,7 @@ public:
     // Note, we set the undeformed midedge normals by minimizing the bending energy
     // (since only a mesh is provided as input, these midedge normals are not
     // specified).
-    void setIdentityDeformation();
+    void setIdentityDeformation() override;
 
     // (Re-)initialize the midedge normals (thetas), inferring them from the midsurface.
     // TODO: possibly make this infer crease angle as well?
@@ -310,7 +353,7 @@ public:
 
     // Update our parametrization of the system's DoFs
     // (currently this just means updating the source frames.)
-    void updateParametrization() { updateSourceFrame(); }
+    void updateParametrization() override { updateSourceFrame(); }
 
     template<class HEType>
     auto deformedEdgeVector(const HEType &he) const {
@@ -334,6 +377,11 @@ public:
     const std::vector<M3d>  &getII()     const { return m_II;     }
     const std::vector<M3d>  &getRestII() const { return m_restII; }
     const std::vector<M32d> &getB()      const { return m_B;      }
+
+    // Set the rest state to be flat.
+    void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M3d::Zero()); this->m_restConfigUpdated(); }
+    // Bake the current deformed state's curvature into the rest curvature (plastically deforming)
+    void programRestCurvature() { m_restII = m_II; this->m_restConfigUpdated(); }
 
     // Get the per-element right Cauchy-Green deformation tensors/first
     // fundamentals form representing the deformation.
@@ -451,8 +499,8 @@ public:
     void setHessianProjectionType(HessianProjectionType hp) {
         m_hessianProjectionType = hp;
         bool projectPsi = (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
-        for (auto &psi : m_psi)
-            psi.projectionEnabled = projectPsi;
+        for (auto &mat : m_materials)
+            mat.setProjectionEnabled(projectPsi);
     }
 
     HessianProjectionType getHessianProjectionType() const {
@@ -463,11 +511,26 @@ public:
         return FieldSampler::construct(std::shared_ptr<const Mesh>(m_mesh)); // work around template parameter deduction issue
     }
 
-    virtual SuiteSparseMatrix deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
-        return fieldSamplerMatrix(mesh(), N, P, 0, numVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
+    virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
+        return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
 
 private:
+    void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
+        if (size_t(vars.rows()) != numDefoVars()) throw std::runtime_error("Invalid vars size");
+
+        m_thetas = vars.segment(thetaOffset(), m_numEdges);
+        m_creaseAngles = vars.segment(creaseAngleOffset(), m_numCreases);
+
+        m_deformedPositions = Eigen::Map<const MX3d>(vars.data(), numVertices(), 3);
+        m_updateDeformedElements();
+        m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
+    }
+
+    void m_setRestVars(const Eigen::Ref<const VXd> & /* vars */) override {
+        throw std::runtime_error("Unimplemented");
+    }
+
     // Update the current midedge reference frame to adapt to the new deformed
     // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.
     void m_adaptReferenceFrame();
@@ -528,10 +591,15 @@ private:
     // enters into the elastic energy expression.
     std::vector<M3d> m_II, m_restII;
 
-    // Energy density for each element (with support for multi-material microstructures).
-    // For single-material microstructures, this vector will contain only a single entry.
-    std::vector<Psi> m_psi;
-    ElasticityTensor<Real, 2> m_etensor;
+    // Properties for each distinct material in use.
+    // To support multi-material sheets consisting of a small number
+    // of distinct materials (e.g., 2), we use a level of indirection,
+    // where `m_materialForElement[e]` gives the index into `m_materials`
+    // for the material in use. For single-material sheets,
+    // `m_materialForElement` will be emtpy and `m_materials` will hold only
+    // one material.
+    std::vector<size_t> m_materialForElement;
+    std::vector<Material> m_materials;
 
     // Sheet thickness
     Real m_h = 1.0;

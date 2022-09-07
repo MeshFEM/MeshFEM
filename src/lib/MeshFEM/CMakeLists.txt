@@ -28,7 +28,6 @@ add_library(MeshFEM SHARED
         Future.hh
         FieldSampler.cc
         FieldSampler.hh
-        GaussQuadrature.cc
         GaussQuadrature.hh
         Geometry.hh
         GlobalBenchmark.cc
@@ -88,6 +87,7 @@ add_library(MeshFEM SHARED
         util.h
         utils.hh
         VonMises.hh
+        Solvers/CatamariFactorizer.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh
@@ -140,15 +140,15 @@ add_library(MeshFEM SHARED
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
 
-# Use C++14
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_14)
+# Use C++17
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
+        tbb::tbb
         Threads::Threads
         Eigen3::Eigen
         json::json
-        tbb::tbb
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
@@ -156,6 +156,7 @@ target_link_libraries(${PROJECT_NAME}
         cholmod::cholmod
         meshfem::boost
         meshfem::spectra
+        rotation_optimization
 #		CGAL::CGAL
     PRIVATE
         warnings::all
@@ -193,4 +194,9 @@ endif()
 
 if(MESHFEM_WITH_UMFPACK)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
+endif()
+
+if (MESHFEM_WITH_CATAMARI)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CATAMARI)
+    target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
 endif()

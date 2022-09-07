@@ -1,51 +1,33 @@
-#include <pybind11/eigen.h>
-#include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-namespace py = pybind11;
-
 #include <MeshFEM/Utilities/NameMangling.hh>
-#include "BindingInstantiations.hh"
 
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
 #include <MeshFEM/Loads/Traction.hh>
+#include <MeshFEM/Loads/Inflation.hh>
+
+#include <pybind11/eigen.h>
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+namespace py = pybind11;
+
+#include "LoadBinding.hh"
 
 using APC = Loads::AttachmentPointCoordinate<double>;
-
-template<size_t N>
-void bind(py::module &m) {
-    using Load = Loads::Load<N, double>;
-    py::class_<Load, std::shared_ptr<Load>>(m, ("Load" + std::to_string(N)).c_str())
-        .def("energy",               &Load::energy)
-        .def("grad_x",               &Load::grad_x)
-        .def("grad_X",               &Load::grad_X)
-        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
-        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
-        ;
-}
 
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
-    static std::enable_if_t<Object::N == 3> bind(py::module &module, py::module &detail_module) {
-        using Load = Loads::Load<3, double>;
+    static void bind_generic(py::module &module, py::module &detail_module) {
+        using Real = typename Object::Real;
+        using Load = Loads::Load<Real>;
 
         ////////////////////////////////////////////////////////////////////////
         // Gravity
         ////////////////////////////////////////////////////////////////////////
-        using GLoad = Loads::Gravity<Object>;
-        py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, ("Gravity" + NameMangler<Object>::name()).c_str())
-           .def_property("rho", &GLoad::get_rho, &GLoad::set_rho)
-           ;
-
-        using V3d = Eigen::Vector3d;
-        module.def("Gravity", [&](const std::shared_ptr<Object> &obj, double rho, const V3d &g) {
-                    return std::make_shared<GLoad>(obj, rho, g);
-                }, py::arg("obj"), py::arg("rho"), py::arg("g") = V3d(0.0, 0.0, 9.80635))
-             ;
+        bindGravity<Object>(module, detail_module, ("Gravity" + NameMangler<Object>::name()).c_str());
 
         ////////////////////////////////////////////////////////////////////////
         // Traction
@@ -119,6 +101,32 @@ struct LoadBinder {
     }
 
     template<class Object>
+    static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &module, py::module &detail_module) {
+        bind_generic<Object>(module, detail_module);
+    }
+
+    template<class Object>
+    static std::enable_if_t<(Object::N == 3) && (Object::K == 2)> bind(py::module &module, py::module &detail_module) {
+        bind_generic<Object>(module, detail_module);
+
+        ////////////////////////////////////////////////////////////////////////
+        // Sheet-specific load: Inflation
+        ////////////////////////////////////////////////////////////////////////
+        using Real = typename Object::Real;
+        using Load = Loads::Load<Real>;
+        using Inflation = Loads::Inflation<Object>;
+        py::class_<Inflation, Load, std::shared_ptr<Inflation>>(detail_module, ("Inflation" + NameMangler<Object>::name()).c_str())
+            .def("volume", &Inflation::volume)
+            .def_readwrite("pressure", &Inflation::pressure)
+            ;
+
+        module.def("Inflation", [&](const std::shared_ptr<Object> &obj, Real pressure) {
+                    return std::make_shared<Inflation>(obj, pressure);
+                }, py::arg("sheet"), py::arg("pressure") = 1.0);
+
+    }
+
+    template<class Object>
     static std::enable_if_t<Object::N == 2> bind(py::module &/* module */, py::module &/* detail_module */) {
         // No loads are defined for 2D yet
     }
@@ -126,8 +134,14 @@ struct LoadBinder {
 
 PYBIND11_MODULE(loads, m)
 {
-    bind<2>(m);
-    bind<3>(m);
+    using Load = Loads::Load<double>;
+    py::class_<Load, std::shared_ptr<Load>>(m, "Load")
+        .def("energy",               &Load::energy)
+        .def("grad_x",               &Load::grad_x)
+        .def("grad_X",               &Load::grad_X)
+        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
+        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
+        ;
 
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());
@@ -141,3 +155,4 @@ PYBIND11_MODULE(loads, m)
         .def_readwrite("coefficients", &APC::coefficients)
         ;
 }
+

@@ -284,7 +284,7 @@ void curveCleanup(std::list<VectorND<int(N)>> &curve,
 
             // Then collapse to the periodic pair of collapsePt:
             Point pairCollapsePt = collapsePt;
-            bool flip = false;
+            [[maybe_unused]] bool flip = false;
             for (size_t d = 0; d < N; ++d) {
                 if (seFM.onMinFace(d)) { pairCollapsePt[d] = cell.maxCorner[d]; flip = true; break; }
                 if (seFM.onMaxFace(d)) { pairCollapsePt[d] = cell.minCorner[d]; flip = true; break; }

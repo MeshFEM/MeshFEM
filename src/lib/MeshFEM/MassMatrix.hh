@@ -129,19 +129,29 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
 
 // Construct the mass matrix for vector-valued shape functions
 // (assumes interleaved ordering of the unknown components (x0, y0, ...))
-template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, typename... Args>
-TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
+template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, class _SPMat, typename... Args>
+void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, Args&&... args) {
+    constexpr size_t N = _FEMMesh::EmbeddingDimension;
+    if ((M.m != mesh.numNodes() * N) || (M.n != M.m))
+        throw std::runtime_error("Unexpected output size");
+
     TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);
     Mscalar.sumRepeated();
-
-    constexpr size_t N = _FEMMesh::EmbeddingDimension;
-    TripletMatrix<> M(Mscalar.n * N, Mscalar.m * N);
-    M.reserve(N * Mscalar.nnz());
+    M.reserve(N * Mscalar.nnz()); // Each scalar entry gets replicated into a diagonal NxN block
 
     for (const auto &t : Mscalar)
         for (size_t c = 0; c < N; ++c)
             M.addNZ(N * t.i + c, N * t.j + c, t.v);
-    M.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
+    M.symmetry_mode = _SPMat::SymmetryMode::UPPER_TRIANGLE;
+}
+
+// Construct the mass matrix for vector-valued shape functions
+// (assumes interleaved ordering of the unknown components (x0, y0, ...))
+template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, typename... Args>
+TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
+    constexpr size_t N = _FEMMesh::EmbeddingDimension;
+    TripletMatrix<> M(mesh.numNodes() * N, mesh.numNodes() * N);
+    accumulate_vector_valued(mesh, M, std::forward<Args>(args)...);
     return M;
 }
 

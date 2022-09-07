@@ -96,11 +96,24 @@ jupyter labextension install .
 
 pip3 install matplotlib scipy
 ```
+The compatible versions of `ipywidgets` and `jupyterlab-widgets` are 
+```
+ipywidgets           7.7.0 
+jupyterlab-widgets   1.1.0
+```
 
 Launch Jupyter lab from the root python directory:
 ```bash
 cd python
 jupyter lab
+```
+If you are on a virtual machine, you should call
+```
+jupyter lab --ip 0.0.0.0 --no-browser --port portnumber
+```
+You might also need to establish a tunnel from your local machine:
+```
+ssh -N -L portnumber:localhost:portnumber username@domain
 ```
 
 <a name="python-bindings"></a>

@@ -407,3 +407,22 @@ template vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, cons
 template vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
 template vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, const BBox<VectorND<2> > &, bool &);
 template vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &);
+
+// Note: the following out-of-line "key functions" are needed in some versions
+// of clang/llvm to enable RTTI/dynamic_cast across module boundaries
+// See:
+//      https://stackoverflow.com/questions/47322895/dynamic-cast-doesnt-work-across-module-boundaries-on-clang
+//      https://github.com/android/ndk/issues/533#issuecomment-335977747
+template<size_t N>          BoundaryCondition<N>::         ~BoundaryCondition() { }
+template<size_t N>         DirichletCondition<N>::        ~DirichletCondition() { }
+template<size_t N>           NeumannCondition<N>::          ~NeumannCondition() { }
+template<size_t N>            TargetCondition<N>::           ~TargetCondition() { }
+template<size_t N>   NeumannElementsCondition<N>::  ~NeumannElementsCondition() { }
+template<size_t N>    DirichletNodesCondition<N>::   ~DirichletNodesCondition() { }
+template<size_t N> DirichletElementsCondition<N>::~DirichletElementsCondition() { }
+template<size_t N>        DeltaForceCondition<N>::       ~DeltaForceCondition() { }
+template<size_t N>   DeltaForceNodesCondition<N>::  ~DeltaForceNodesCondition() { }
+template<size_t N>           ContactCondition<N>::          ~ContactCondition() { }
+template<size_t N>   ContactElementsCondition<N>::  ~ContactElementsCondition() { }
+template<size_t N>          FractureCondition<N>::         ~FractureCondition() { }
+template<size_t N>  FractureElementsCondition<N>:: ~FractureElementsCondition() { }

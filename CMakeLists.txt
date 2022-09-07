@@ -13,7 +13,7 @@ if(POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -85,6 +85,7 @@ option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" OFF)
 option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
+option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   OFF)
 option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)"   OFF)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
@@ -99,6 +100,7 @@ include(MeshFEMDependencies)
 ################################################################################
 # Subdirectories
 ################################################################################
+add_subdirectory(3rdparty/RotationOptimization)
 
 add_subdirectory(src/lib)
 
@@ -130,8 +132,8 @@ add_subdirectory(3rdparty/OffscreenRenderer)
 # Unit tests
 ################################################################################
 
-# Compile tests only if this is a top-level project
-if(MESHFEM_TOPLEVEL_PROJECT)
+# Compile tests if we are also building the MeshFEM binaries
+if (MESHFEM_BUILD_BINARIES)
     # Unit tests
     enable_testing()
     add_subdirectory(tests)

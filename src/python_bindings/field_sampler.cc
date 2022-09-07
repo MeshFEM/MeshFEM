@@ -5,19 +5,43 @@
 namespace py = pybind11;
 
 #include <MeshFEM/FieldSampler.hh>
+#include <MeshFEM/algorithms/marching_tetrahedra.hh>
 
 #include "BindingInstantiations.hh"
+#include <MeshFEM/Utilities/MeshConversion.hh>
+
+// `marching_tetrahedra` is specific to tetrahedral meshes...
+template<class Mesh>
+struct BindMarchingTetrahedra {
+    static void bind(py::module &/* m */) { };
+};
+
+template<size_t _Deg, class _EmbeddingSpace>
+struct BindMarchingTetrahedra<FEMMesh<3, _Deg, _EmbeddingSpace>> {
+    using Mesh = FEMMesh<3, _Deg, _EmbeddingSpace>;
+    static void bind(py::module &m) {
+        m.def("marching_tetrahedra", [](const Mesh &m, const Eigen::VectorXd &f, bool sublevelset, bool lerp) {
+            std::vector<MeshIO::IOVertex> outVertices;
+            std::vector<MeshIO::IOElement> outElements;
+            std::vector<ContourSamplePtInfo> outSampleInfo;
+            size_t numContourTris = marching_tetrahedra(m, f, outVertices, outElements, outSampleInfo, sublevelset, lerp);
+            return std::make_tuple(getV(outVertices), getF(outElements), outSampleInfo, numContourTris);
+        }, py::arg("mesh"), py::arg("f"), py::arg("sublevelset") = true, py::arg("linearInterpolation") = true)
+        ;
+    };
+};
 
 template<class PyFS>
 struct SamplingMeshBinder {
     SamplingMeshBinder(PyFS &pyFS) : m_pyFS(pyFS) { }
 
     template<class Mesh>
-    void bind(py::module &/* m */, py::module &/* detail_module */) {
+    void bind(py::module &m, py::module &/* detail_module */) {
         m_pyFS.def(py::init([](std::shared_ptr<const Mesh> mesh) {
                         return FieldSampler::construct(mesh);
                     }), py::arg("mesh"))
         ;
+        BindMarchingTetrahedra<Mesh>::bind(m);
     }
 
 private:

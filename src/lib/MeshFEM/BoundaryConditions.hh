@@ -35,7 +35,7 @@
 #include <bitset>
 
 template<size_t _N>
-struct BoundaryCondition {
+struct MESHFEM_EXPORT BoundaryCondition {
     BoundaryCondition() {
         region = std::make_shared<Region<VectorND<_N>>>();
         region->minCorner = VectorND<_N>::Zero();
@@ -44,7 +44,7 @@ struct BoundaryCondition {
     BoundaryCondition(const std::shared_ptr<Region<VectorND<_N>>> r) : region(r) {}
     std::shared_ptr<Region<VectorND<_N>>> region;
     bool containsPoint(const VectorND<_N> &p) const { return region->containsPoint(p); }
-    virtual ~BoundaryCondition() { }
+    virtual ~BoundaryCondition();
 };
 
 
@@ -117,7 +117,7 @@ using ConstCondPtr = std::shared_ptr<const BoundaryCondition<_N> >;
 template<size_t _N>
 struct ContactCondition : public BoundaryCondition<_N> {
     ContactCondition(const std::shared_ptr<Region<VectorND<_N>>> &r) : BoundaryCondition<_N>(r) { }
-    virtual ~ContactCondition() { }
+    virtual ~ContactCondition();
 };
 
 // Initially, only important thing is the contact region itself. In the future, a friction coefficient may be added and
@@ -137,7 +137,7 @@ struct ContactElementsCondition : public BoundaryCondition<_N> {
         }
     }
 
-    virtual ~ContactElementsCondition() { }
+    virtual ~ContactElementsCondition();
 private:
 
     std::set<int> m_contactIndices;
@@ -148,7 +148,7 @@ private:
 template<size_t _N>
 struct FractureCondition : public BoundaryCondition<_N> {
     FractureCondition(const std::shared_ptr<Region<VectorND<_N>>> &r) : BoundaryCondition<_N>(r) { }
-    virtual ~FractureCondition() { }
+    virtual ~FractureCondition();
 };
 
 // Fracture here represents contact between two regions of the object with same material
@@ -169,7 +169,7 @@ struct FractureElementsCondition : public BoundaryCondition<_N> {
         }
     }
 
-    virtual ~FractureElementsCondition() { }
+    virtual ~FractureElementsCondition();
 private:
 
     std::set<UnorderedPair> m_contactPairs;
@@ -180,7 +180,7 @@ enum class NeumannType { Pressure, Traction, Force };
 // For the NeumannType::Force case, the force vector is stored in the "traction"
 // field, and it is divided by the region's boundary area at application time.
 template<size_t _N>
-struct NeumannCondition : public BoundaryCondition<_N> {
+struct MESHFEM_EXPORT NeumannCondition : public BoundaryCondition<_N> {
     NeumannCondition(const std::shared_ptr<Region<VectorND<_N>>> &r, Real p)
         : BoundaryCondition<_N>(r), type(NeumannType::Pressure),
           m_isExpr(false) { m_vecValue[0] = p; }
@@ -214,7 +214,7 @@ struct NeumannCondition : public BoundaryCondition<_N> {
 
     NeumannType type;
 
-    virtual ~NeumannCondition() { }
+    virtual ~NeumannCondition();
 
 private:
     VectorND<_N> m_vecValue;
@@ -224,7 +224,7 @@ private:
 };
 
 template<size_t _N>
-struct DirichletCondition : public BoundaryCondition<_N> {
+struct MESHFEM_EXPORT DirichletCondition : public BoundaryCondition<_N> {
     DirichletCondition(const std::shared_ptr<Region<VectorND<_N>>> &r, const VectorND<_N> &d, const ComponentMask &m)
         : BoundaryCondition<_N>(r), componentMask(m), m_isExpr(false), m_displacement(d) { }
 
@@ -241,7 +241,7 @@ struct DirichletCondition : public BoundaryCondition<_N> {
         else          return m_displacement;
     }
 
-    virtual ~DirichletCondition() { }
+    virtual ~DirichletCondition();
 
     ComponentMask componentMask; // 1 if condition affects component
 
@@ -257,6 +257,7 @@ private:
 template<size_t _N>
 struct TargetCondition : public DirichletCondition<_N> {
     using DirichletCondition<_N>::DirichletCondition;
+    virtual ~TargetCondition();
 };
 
 template<size_t _N>
@@ -336,7 +337,7 @@ struct NeumannElementsCondition : public BoundaryCondition<_N> {
     /*! Number of elements this condition affects. */
     size_t numElements() const { return m_vals.size(); }
 
-    virtual ~NeumannElementsCondition() { }
+    virtual ~NeumannElementsCondition();
 
 private:
     std::map<UnorderedTriplet, Value> m_vals;
@@ -351,7 +352,7 @@ struct DirichletNodesCondition : public BoundaryCondition<_N> {
     ComponentMask componentMask;
     std::vector<size_t> indices;
     std::vector<VectorND<_N>> displacements;
-    virtual ~DirichletNodesCondition() { }
+    virtual ~DirichletNodesCondition();
 };
 
 template<size_t _N>
@@ -366,7 +367,7 @@ struct DirichletElementsCondition : public BoundaryCondition<_N> {
         : componentMask(m), m_corners(nidxs), m_isExpr(true), m_displacementExpr(ev)
     { sortIndices(); }
 
-    virtual ~DirichletElementsCondition() { }
+    virtual ~DirichletElementsCondition();
 
     bool containsElement(IVectorND<_N> idx) const {
         std::sort(idx.begin(), idx.end());
@@ -416,7 +417,7 @@ struct DeltaForceCondition : public BoundaryCondition<_N> {
         else          return m_force;
     }
 
-    virtual ~DeltaForceCondition() { }
+    virtual ~DeltaForceCondition();
 private:
     bool m_isExpr;
     VectorND<_N> m_force;
@@ -430,7 +431,7 @@ struct DeltaForceNodesCondition : public BoundaryCondition<_N> {
 
     std::vector<size_t> indices;
     std::vector<VectorND<_N>> forces;
-    virtual ~DeltaForceNodesCondition() { }
+    virtual ~DeltaForceNodesCondition();
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -469,33 +470,11 @@ public:
 
         // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
         if (ignoreDims.size() > 0) {
-            std::vector<size_t> periodicDims;
-            for (size_t d = 0; d < _N; d++) {
-                if (std::find(ignoreDims.begin(), ignoreDims.end(), d) == ignoreDims.end()) {
-                    periodicDims.push_back(d);
-                }
-            }
-
-            assert(m_periodicBoundariesForBoundaryNode.size() == bdryPts.size());
-            std::vector<bool> onSignificantDim(m_periodicBoundariesForBoundaryNode.size(), false);
             for (size_t i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
-                for (size_t dim : periodicDims) {
-                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMinFace(dim);
-                    onSignificantDim[i] = onSignificantDim[i] | m_periodicBoundariesForBoundaryNode[i].onMaxFace(dim);
-                }
-                if (onSignificantDim[i]) {
-                    // Only remove membership from ignored faces
-                    for (size_t d : ignoreDims) {
-                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-                    }
-                }
-                else {
-                    // Remove membership from all faces
-                    for (size_t d = 0; d < _N; d++) {
-                        m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-                        m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-                    }
+                for (size_t d : ignoreDims) {
+                    if (d > _N) throw std::runtime_error("ignoreDims entry out of bounds");
+                    m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
+                    m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
                 }
             }
         }
@@ -662,6 +641,8 @@ public:
     }
 
     size_t numPeriodicDoFs() const { return m_nodesForDoF.size(); }
+    const std::vector<std::vector<size_t>> &nodesForPeriodicDoFs() const { return m_nodesForDoF; }
+    const std::vector<size_t> &nodesForPeriodicDoF(size_t dof) const { return m_nodesForDoF.at(dof); }
 
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;

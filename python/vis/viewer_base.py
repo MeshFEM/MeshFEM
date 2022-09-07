@@ -30,9 +30,10 @@ def replicateAttributesPerTriCorner(attr):
 
 # Generic viewer interface that is agnostic to the backend renderer (e.g., Pythreejs vs OffscreenRenderer)
 class ViewerBase:
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        self.setCamera([0, 0, 5], [0, 1, 0], 50, width / height, 0.1, 200)
-        self.setPointLight([0.6, 0.6, 0.6], [0, 0, 5])
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, isSubview=False):
+        if not isSubview:
+            self.setCamera([0, 0, 5], [0, 1, 0], 50, width / height, 0.1, 200)
+            self.setPointLight([0.6, 0.6, 0.6], [0, 0, 5])
 
         # Turning angle between normals below which we treat an edge as smooth.
         # Note, setting this to zero should give per-face normals, while setting

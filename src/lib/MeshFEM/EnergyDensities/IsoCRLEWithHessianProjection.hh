@@ -16,6 +16,10 @@
 #ifndef ISOCRLEWITHHESSIANPROJECTION_HH
 #define ISOCRLEWITHHESSIANPROJECTION_HH
 
+#include <Eigen/Dense>
+#include "EnergyTraits.hh"
+#include "Tensor.hh"
+
 template <typename _Real, size_t _Dim>
 struct IsoCRLEWithHessianProjection {
     static constexpr size_t Dimension = _Dim;
@@ -43,9 +47,13 @@ struct IsoCRLEWithHessianProjection {
         m_F = F;
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV );
-        const auto &U =svd.matrixU(),
-                   &V =svd.matrixV();
+        const auto &U = svd.matrixU();
+        Matrix V = svd.matrixV();
         m_R = U * V.transpose();
+        if (m_R.determinant() < 0) {
+            V.rightCols(1) *= -1;
+            m_R = svd.matrixU() * V.transpose();
+        }
         m_S = m_R.transpose() * F;
         m_traceSigma = m_S.trace();
 

@@ -13,6 +13,8 @@
 #ifndef TANGENTELASTICITYTENSOR_HH
 #define TANGENTELASTICITYTENSOR_HH
 
+#include "EDensityAdaptors.hh"
+
 // The following `tangentElasticityTensor` routines for volumetric energy
 // densities, compute the tangent elasticity tensor around a particular
 // deformation. Around the identity deformation, this should give the

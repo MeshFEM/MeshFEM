@@ -15,7 +15,7 @@
 
 namespace Loads {
 
-template<size_t N, typename _Real = Real>
+template<typename _Real = Real>
 struct Load {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
