@@ -15,7 +15,7 @@
 #include <MeshFEM/GaussQuadrature.hh>
 
 namespace Loads {
-    template<class Object>
+    template<class Object, template<typename T> class EOStoragePolicy = EOStoragePolicyWeakPtr>
     struct Gravity;
 
     namespace detail {
@@ -43,16 +43,17 @@ namespace Loads {
         };
     }
 
-    template<class Object>
-    struct Gravity : public Load<typename Object::Real> {
+    template<class Object, template<typename T> class EOStoragePolicy>
+    struct Gravity : public ObjectSpecificLoad<Object, EOStoragePolicy> {
         using Real = typename Object::Real;
+        using Base = ObjectSpecificLoad<Object, EOStoragePolicy>;
+        using ST   = typename Base::SP::StorageType;
         using VXd  = typename Object::VXd;
         using V3d  = Eigen::Matrix<Real, 3, 1>;
 
-        Gravity(std::weak_ptr<const Object> obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
-            : m_obj(obj), m_rho(rho), m_g(g) {
+        Gravity(const ST &obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
+            : Base(obj), m_rho(rho), m_g(g) {
             m_updateCache();
-            m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Rest, [this]() { m_updateCache(); });
         }
 
         void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
@@ -61,14 +62,9 @@ namespace Loads {
         void set_g(V3d g)      { m_g = g; m_updateCache(); }
         V3d  get_g()     const { return m_g; }
 
-        const Object &getObj() const {
-            if (auto o = m_obj.lock()) return *o;
-            throw std::runtime_error("Elastic object was destroyed");
-        }
-        
-        size_t numVars() const { return getObj().numVars(); }
+        size_t numVars() const { return Base::getObj().numVars(); }
         virtual Real energy() const override {
-            return m_grad.dot(getObj().getVars());
+            return m_grad.dot(Base::getObj().getVars());
         }
 
         // Gradient with respect to the deformed state
@@ -91,16 +87,13 @@ namespace Loads {
             return SuiteSparseMatrix(Hsp);
         }
 
-        virtual ~Gravity() {
-            if (auto o = m_obj.lock())
-                o->deregisterUpdateCallback(m_callbackID);
+    private:
+        virtual void m_stateUpdated(typename Base::VM vmask) override {
+            if (vmask == Base::VM::Rest) m_updateCache();
         }
 
-    private:
-        std::weak_ptr<const Object> m_obj;
         Real m_rho;
         V3d  m_g; // Gravitational acceleration vector
-        int m_callbackID;
 
         void m_updateCache() {
             m_grad = detail::GravityLoadVector<Object>::compute(*this);
