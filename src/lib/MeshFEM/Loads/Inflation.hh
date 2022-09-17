@@ -34,18 +34,21 @@ struct NeumaierSum {
 };
 
 template<class Object>
-struct Inflation : public Load<typename Object::Real> {
-    using Real = typename Object::Real;
-    using VXd  = typename Object::VXd;
+struct Inflation : public ObjectSpecificLoad<Object> {
+    using Base = ObjectSpecificLoad<Object>;
+    using Real = typename Base::Real;
+    using VXd  = typename Base::VXd;
     using V3d  = Eigen::Matrix<Real, 3, 1>;
+
     static constexpr size_t N   = 3;
     static constexpr size_t K   = Object::K;
     static constexpr size_t Deg = Object::Deg;
+    using Base::getObj;
 
     static_assert(K == 2, "Inflation loads are only defined for surfaces immersed in 3D");
 
     Inflation(std::weak_ptr<const Object> obj, Real p = 1.0)
-        : m_obj(obj) { pressure = p; }
+        : Base(obj) { pressure = p; }
 
     Real pressure = 1.0;
 
@@ -137,15 +140,9 @@ struct Inflation : public Load<typename Object::Real> {
         return SuiteSparseMatrix(Hsp);
     }
 
-    const Object &getObj() const {
-        if (auto o = m_obj.lock()) return *o;
-        throw std::runtime_error("Elastic object was destroyed");
-    }
-
     virtual ~Inflation() { }
 
 private:
-    std::weak_ptr<const Object> m_obj;
     Real m_vol;
 };
 

@@ -84,13 +84,14 @@ struct AttachmentPointCoordinate {
 };
 
 template<class Object>
-struct Springs : public Load<typename Object::Real> {
+struct Springs : public ObjectSpecificLoad<Object> {
     static constexpr size_t N = Object::N;
-    using Base = Load<typename Object::Real>;
+    using Base = ObjectSpecificLoad<Object>;
     using Real = typename Base::Real;
     using VXd  = typename Base::VXd;
     using MXNd = Eigen::Matrix<Real, N, 1>;
     using APC = AttachmentPointCoordinate<Real>;
+    using Base::getObj;
 
     // Create uniaxial, axis-aligned springs connecting the attachment points
     // in `coordsA` with the corresponding attachment points in `coordsB`
@@ -98,7 +99,7 @@ struct Springs : public Load<typename Object::Real> {
             const std::vector<APC> &coordsA,
             const std::vector<APC> &coordsB,
             const Eigen::Ref<const VXd> &stiffnesses)
-        : m_obj(obj), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
+        : Base(obj), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
     {
         if (coordsA.size() != coordsB.size()) throw std::runtime_error("Attachment point size mismatch");
         if (size_t(stiffnesses.size()) != coordsA.size()) throw std::runtime_error("Spring stiffnesses size mismatch");
@@ -106,7 +107,6 @@ struct Springs : public Load<typename Object::Real> {
         for (const auto &p : coordsB) p.validate();
 
         m_updateCache();
-        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Defo, [this]() { m_updateCache(); });
     }
 
     Springs(std::weak_ptr<const Object> obj,
@@ -184,20 +184,14 @@ struct Springs : public Load<typename Object::Real> {
 
     size_t numSprings() const { return m_coordsA.size(); }
 
-    virtual ~Springs() {
-        if (auto o = m_obj.lock())
-            o->deregisterUpdateCallback(m_callbackID);
-    }
+    virtual ~Springs() { }
 
 private:
-    std::weak_ptr<const Object> m_obj;
     std::vector<APC> m_coordsA, m_coordsB;
     Eigen::VectorXd m_k;
-    int m_callbackID;
 
-    const Object &getObj() const {
-        if (auto o = m_obj.lock()) return *o;
-        throw std::runtime_error("Elastic object was destroyed");
+    virtual void m_stateUpdated(typename Base::VM vmask) override {
+        if (vmask == Base::VM::Defo) m_updateCache();
     }
 
     void m_updateCache() {

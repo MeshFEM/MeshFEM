@@ -15,6 +15,7 @@ namespace py = pybind11;
 
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/Utilities/VoxelBoundaryMesh.hh>
 #include "MeshFactory.hh"
 
 #include "MSHFieldWriter_bindings.hh"
@@ -81,6 +82,7 @@ struct MeshBindingsBase {
           .def("visualizationGeometry",  [](const Mesh &m, double normalCreaseAngle) { return getVisualizationGeometry(m, normalCreaseAngle); }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (K == 2) ? "Vertex normals (triangle area weighted)"
                                                                         : "Boundary vertex normals (triangle area weighted)")
           .def("normals", &getNormals<Mesh>, (K == 2) ? "Triangle normals"
@@ -342,6 +344,20 @@ PYBIND11_MODULE(mesh, m)
         .def_readonly("updatedInputPoints",   &PST::updatedInputPoints)
         .def_readonly("updatedInputPolygons", &PST::updatedInputPolygons)
         .def("getMesh", [](const PST &pst, size_t deg) { return MeshFactory<double>(pst.getElements(), pst.getVertices(), /* K = */ 2, deg, /* N = */ 2); }, py::arg("deg"))
+        ;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Utilities for numpy ndarray voxel data visualization
+    ////////////////////////////////////////////////////////////////////////////
+    using VBM = VoxelBoundaryMesh;
+    py::class_<VBM>(m, "VoxelBoundaryMesh")
+        .def(py::init(&VBM::construct_numpy<py::array_t<double>, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def(py::init(&VBM::construct_numpy<py::array_t<float >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def(py::init(&VBM::construct_numpy<py::array_t<int   >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def(py::init(&VBM::construct_numpy<py::array_t<bool  >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def("visualizationGeometry", [](const VBM &v) { return std::make_tuple(v.vertices(), v.faces(), v.normals()); })
+        .def("visualizationField",    &VBM::visualizationField<double>, py::arg("f"))
+        .def("visualizationField",    &VBM::visualizationField<float >, py::arg("f"))
         ;
 
     ////////////////////////////////////////////////////////////////////////////

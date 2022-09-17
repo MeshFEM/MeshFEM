@@ -158,7 +158,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        BENCHMARK_SCOPED_TIMER_SECTION timer("gradient");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
         VXd g(VXd::Zero(numVars()));
 
         auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {

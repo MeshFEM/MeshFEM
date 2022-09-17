@@ -29,11 +29,11 @@ void bind(py::module &m) {
         .def( "getVars", &EO::getVars,                  py::arg("vmask") = VM::Defo)
         .def( "numVars", &EO::numVars,                  py::arg("vmask") = VM::Defo)
         .def(  "energy", &EO::energy)
-        .def("gradient", &EO::gradient)
+        .def("gradient", &EO::gradient, py::arg("updatedParametrization") = false, py::arg("vmask") = VM::Defo)
 
         .def("hessian", [](const EO &eo, bool projectionMask) { return eo.hessian(projectionMask); }, py::arg("projectionMask") = false)
         .def("hessianSparsityPattern",    &EO::hessianSparsityPattern,    py::arg("val") = 0, py::arg("vmask") = VM::Defo)
-        .def("massMatrix",                [](const EO &eo, bool up, bool l) { return eo.massMatrix(up, l); }, py::arg("updateParametrization") = false, py::arg("lumped") = false)
+        .def("massMatrix",                [](const EO &eo, bool up, bool l) { return eo.massMatrix(up, l); }, py::arg("updatedParametrization") = false, py::arg("lumped") = false)
         .def("sobolevInnerProductMatrix", &EO::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
 
         .def("updateParametrization",     &EO::updateParametrization)

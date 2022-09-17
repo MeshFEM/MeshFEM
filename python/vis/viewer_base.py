@@ -87,7 +87,9 @@ class ViewerBase:
                 # Handle input in the form of a ScalarField or a raw scalar data array.
                 # Construct scalar field from raw scalar data array if necessary.
                 if (not isinstance(self.scalarField, ScalarField)):
-                    self.scalarField = ScalarField(self.mesh, self.scalarField)
+                    if isinstance(self.scalarField, dict): # interpreted as kwargs
+                        self.scalarField = ScalarField(self.mesh, **self.scalarField)
+                    else: self.scalarField = ScalarField(self.mesh, self.scalarField)
                 self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
 
                 attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)

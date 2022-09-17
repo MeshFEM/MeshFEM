@@ -93,7 +93,7 @@ getNormals(const HandleRange<_Mesh, _HType> &range) {
 }
 
 // Note: to support non-manifold input, we need to accumulate weighted normals
-// by looping over faces (passsed as `frange`) instead of circulating around vertices.
+// by looping over faces (passed as `frange`) instead of circulating around vertices.
 template<class _Mesh, template<class> class _VHType, template<class> class _FHType>
 typename std::enable_if<_Mesh::EmbeddingDimension == 3,
                         Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
@@ -101,11 +101,11 @@ getAreaWeightedNormals(const HandleRange<_Mesh, _VHType> &vrange, const HandleRa
     Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3> N;
     N.setZero(vrange.size(), 3);
     for (auto f: frange) {
+        if (f->volume() == 0.0) continue; // skip zero-area faces that have `NaN` normals (so vertex normals are not polluted)
         for (auto v : f.vertices())
-            N.row(v.index()) += f->volume() * f->normal();
+            N.row(v.index()) = f->normal();
     }
-    for (int i = 0; i < N.rows(); ++i)
-        N.row(i) = N.row(i).normalized();
+    N.rowwise().normalize();
 
     return N;
 }
