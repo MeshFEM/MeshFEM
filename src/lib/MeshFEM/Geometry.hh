@@ -550,7 +550,7 @@ inline DataType BarycentricInterpolate(const BaryCoords &coords
 //  @param[in]  p0, p1, p2      triangle vertex positions
 //  @param[out] center          incircle center
 *///////////////////////////////////////////////////////////////////////////////
-inline void Circumcircle(const Point2D &p0, const Point2D &p1,
+inline void circumcircle(const Point2D &p0, const Point2D &p1,
          const Point2D &p2, Point2D &center, Point2D::Scalar &radius)
 {
     typedef Point2D::Scalar Real_;
@@ -582,7 +582,7 @@ inline void Circumcircle(const Point2D &p0, const Point2D &p1,
 //  @param[out] center          incircle center
 //  @param[out] radius          incircle radius
 *///////////////////////////////////////////////////////////////////////////////
-inline void Incircle(const Point2D &p0, const Point2D &p1,
+inline void incircle(const Point2D &p0, const Point2D &p1,
          const Point2D &p2, Point2D &center, Point2D::Scalar &radius)
 {
     using _Real = Point2D::Scalar;
@@ -602,6 +602,41 @@ inline void Incircle(const Point2D &p0, const Point2D &p1,
     center = BarycentricInterpolate(centerBaryCoords, p0, p1, p2);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/*! Computes the barycentric coordinates of the circumcircle of each simplex
+//  (line, triangle, tetrahedron, ...) in the mesh (V, F).
+//  @param[in]  V               vertex positions in nD
+//  @param[in]  F               indices into `V` of element corners
+//  @param[out] C               barycentric coordinates of each circumcenter
+//  @param[out] R               incircle radii for each element
+*///////////////////////////////////////////////////////////////////////////////
+template<class DerivedV, class DerivedF, class DerivedC, class DerivedR>
+void circumcircle_bc(const Eigen::MatrixBase<DerivedV> &V,
+                     const Eigen::MatrixBase<DerivedF> &F,
+                           Eigen::MatrixBase<DerivedC> &C,
+                           Eigen::MatrixBase<DerivedR> &R) {
+    const size_t ne = F.rows();
+    const size_t K  = F.cols() - 1;
+    const size_t D  = V.cols();
+    if (D < K) throw std::runtime_error("Degenerate input: " + std::to_string(K) + "-simplices embedded in dimension " + std::to_string(D));
+
+    C.derived().resize(ne, F.cols());
+    R.derived().resize(ne, 1);
+
+    using MXd = Eigen::Matrix<typename DerivedV::Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    MXd U(D, K);
+    for (size_t i = 0; i < ne; ++i) {
+        for (size_t j = 1; j <= K; ++j) {
+            U.col(j - 1) = V.row(F(i, j)).transpose();
+        }
+        MXd A = U.transpose() * U;
+        auto lambda = (0.5 * A.llt().solve(A.diagonal())).eval();
+        C.row(i).rightCols(K) = lambda.transpose();
+        C(i, 0) = 1.0 - C.row(i).rightCols(K).sum();
+        R[i] = (U * lambda).norm();
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////
 /*! Computes the condition number of a triangle
 //  @param[in]  tri     triangle corner indices
@@ -612,8 +647,8 @@ inline double cond(const TriangleIndex &tri, const std::vector<Point2D> &verts)
 {
     Point2D center;
     Point2D::Scalar R, r;
-    Circumcircle(verts[tri[0]], verts[tri[1]], verts[tri[2]], center, R);
-    Incircle(verts[tri[0]], verts[tri[1]], verts[tri[2]], center, r);
+    circumcircle(verts[tri[0]], verts[tri[1]], verts[tri[2]], center, R);
+    incircle(verts[tri[0]], verts[tri[1]], verts[tri[2]], center, r);
     return .5 * R / r;
 }
 
