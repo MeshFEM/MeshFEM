@@ -6,8 +6,8 @@
 //  binary mask specifing voxels that should be removed. This is helpful
 //  for efficient visualization of voxel designs.
 //
-//  The voxel grid must be a 3D array conforming to the
-//  `pybind11::unchecked<3>` array interface.
+//  The 2D case is handled by considering every pixel to comprise a single
+//  "boundary face" (so that the full grid is drawn if `mask` is None).
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  09/02/2022 17:06:42
@@ -20,38 +20,37 @@
 #include <map>
 
 struct VoxelBoundaryMesh {
-    using A3i = Eigen::Array<int, 3, 1>;
     using FType = Eigen::Matrix<uint32_t, Eigen::Dynamic, 3, Eigen::RowMajor>;
     using VType = Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
-    template<class NumpyArray3t, class NumpyArray3b>
-    static std::unique_ptr<VoxelBoundaryMesh> construct_numpy(const NumpyArray3t &numpy_grid,
-               const Eigen::Array3d &dx, const NumpyArray3b *mask_ptr = nullptr,
+    template<class NumpyArrayb>
+    static std::unique_ptr<VoxelBoundaryMesh> construct_numpy(const Eigen::ArrayXi &grid_shape,
+               const Eigen::ArrayXd &dx, const NumpyArrayb *mask_ptr = nullptr,
                char order = 'C') {
         const bool hasMask = mask_ptr && (mask_ptr->ndim() != 0); // apparently pybind11 is passing an unspecified `mask` as an empty one, rather than `nullptr` :/
-        if ((numpy_grid.ndim() != 3) || (hasMask && (mask_ptr->ndim() != 3))) throw std::runtime_error("Grids must be 3D");
-        auto grid = numpy_grid.template unchecked<3>();
-        if (!hasMask)
-            return std::make_unique<VoxelBoundaryMesh>(grid, dx, (const NumpyArray3b *) nullptr, order);
-        auto mask = mask_ptr->template unchecked<3>();
-        return std::make_unique<VoxelBoundaryMesh>(grid, dx, &mask, order);
+        size_t dim = grid_shape.size();
+        if ((dim != 2) && (dim != 3)) throw std::runtime_error("Grids must be 2D or 3D");
+        if (hasMask && (mask_ptr->ndim() != dim)) throw std::runtime_error("Mask must be of the same dimension as the grid");
+        if (!hasMask) {
+            if (dim == 2) return std::make_unique<VoxelBoundaryMesh>(grid_shape.head<2>().eval(), dx.head<2>().eval(), (const NumpyArrayb *) nullptr, order);
+            return               std::make_unique<VoxelBoundaryMesh>(grid_shape.head<3>().eval(), dx.head<3>().eval(), (const NumpyArrayb *) nullptr, order);
+        }
+
+        if (dim == 2) { auto mask = mask_ptr->template unchecked<2>(); return std::make_unique<VoxelBoundaryMesh>(grid_shape.head<2>().eval(), dx.head<2>().eval(), &mask, order); }
+                        auto mask = mask_ptr->template unchecked<3>(); return std::make_unique<VoxelBoundaryMesh>(grid_shape.head<3>().eval(), dx.head<3>().eval(), &mask, order);
+
     }
 
-    struct GridPtCompare {
-        bool operator()(const A3i lhs, const A3i rhs) const {
-            return std::lexicographical_compare(lhs.data(), lhs.data() + lhs.size(), rhs.data(), rhs.data() + rhs.size());
-        }
-    };
-
-    template<class Array3t, class Array3b>
-    VoxelBoundaryMesh(const Array3t &grid, const Eigen::Array3d &dx,
-                      const Array3b *mask_ptr = nullptr,
+    template<int N, class Array_Nd_b> // `N` must be `int` for deduction from `Eigen::Array` template parameters
+    VoxelBoundaryMesh(const Eigen::Array<int, N, 1> &grid_shape, const Eigen::Array<double, N, 1> &dx,
+                      const Array_Nd_b *mask_ptr = nullptr,
                       char order = 'C') {
-        m_numVoxels = grid.size();
+        using ANi = Eigen::Array<int, N, 1>;
+        m_numVoxels     = grid_shape.prod();
+        m_numGridPoints = (grid_shape + 1).prod();
         size_t numFaces = 0;
-        s_visitBoundaryFaces([&numFaces](const A3i &/* idx */, size_t /* face */) { ++numFaces; }, grid, mask_ptr);
+        s_visitBoundaryFaces([&numFaces](const ANi &/* idx */, size_t /* face */) { ++numFaces; }, grid_shape, mask_ptr);
 
-        std::map<A3i, size_t, GridPtCompare> vtxForIdx;
         const size_t ntris = 2 * numFaces;
         m_F.resize(ntris, 3);
         m_voxelForTri.resize(ntris);
@@ -73,20 +72,53 @@ struct VoxelBoundaryMesh {
         // Nodes of faces [x_min, x_max, y_min, y_max, z_min, z_max]
         // oriented outward.
         Eigen::Array<size_t, 6, 4> faces;
-        faces << 0, 4, 6, 2,
-                 1, 3, 7, 5,
-                 0, 1, 5, 4,
-                 2, 6, 7, 3,
-                 0, 2, 3, 1,
-                 4, 5, 7, 6;
+        if (N == 3) {
+            faces << 0, 4, 6, 2,
+                     1, 3, 7, 5,
+                     0, 1, 5, 4,
+                     2, 6, 7, 3,
+                     0, 2, 3, 1,
+                     4, 5, 7, 6;
+        }
+        else {
+            faces << 0, 1, 3, 2;
+        }
 
         std::vector<Eigen::Vector3f> verts;
-        auto insertCorner = [&](const A3i &voxel_idx, size_t c) {
-            A3i vert_idx = voxel_idx + A3i(bool(c & (1 << 0)), bool(c & (1 << 1)), bool(c & (1 << 2)));
-            auto it = vtxForIdx.find(vert_idx);
-            if (it == vtxForIdx.end()) {
-                vtxForIdx.emplace(vert_idx, verts.size());
-                verts.emplace_back((vert_idx.cast<double>() * dx).template cast<float>().matrix().eval());
+        ANi gridPtIdxIncrement, voxIdxIncrement;
+        if (N == 3) {
+            if (order == 'C') {
+                voxIdxIncrement    <<  grid_shape[1] *       grid_shape[2],       grid_shape[2],      1;
+                gridPtIdxIncrement << (grid_shape[1] + 1) * (grid_shape[2] + 1), (grid_shape[2] + 1), 1;
+            } else if (order == 'F') {
+                voxIdxIncrement    << 1,  grid_shape[0]     ,  grid_shape[0]      *  grid_shape[1]     ;
+                gridPtIdxIncrement << 1, (grid_shape[0] + 1), (grid_shape[0] + 1) * (grid_shape[1] + 1);
+            }
+            else throw std::runtime_error("Unknown array storage order");
+        }
+        if (N == 2) {
+            if (order == 'C') {
+                voxIdxIncrement    <<  grid_shape[1]     , 1;
+                gridPtIdxIncrement << (grid_shape[1] + 1), 1;
+            } else if (order == 'F') {
+                voxIdxIncrement    << 1,  grid_shape[0]     ;
+                gridPtIdxIncrement << 1, (grid_shape[0] + 1);
+            }
+            else throw std::runtime_error("Unknown array storage order");
+        }
+
+        auto flattenedGridPtIdx = [&](auto idxND) { return (gridPtIdxIncrement * idxND).sum(); };
+        auto    flattenedVoxIdx = [&](auto idxND) { return (   voxIdxIncrement * idxND).sum(); };
+
+        auto insertCorner = [&](const ANi &voxel_idx, size_t c) {
+            ANi grid_pt = voxel_idx;
+            for (int i = 0; i < N; ++i)
+                grid_pt[i] += bool(c & (1 << i));
+            size_t vert_idx = flattenedGridPtIdx(grid_pt);
+            auto it = m_vtxForGridPt.find(vert_idx);
+            if (it == m_vtxForGridPt.end()) {
+                m_vtxForGridPt.emplace(vert_idx, verts.size());
+                verts.emplace_back(padTo3D((grid_pt.template cast<double>() * dx).template cast<float>().matrix().eval()));
                 return verts.size() - 1;
             }
             return it->second;
@@ -94,25 +126,18 @@ struct VoxelBoundaryMesh {
 
         size_t tri_back = 0;
 
-        A3i idxIncrement;
-        if (order == 'C')
-            idxIncrement << grid.shape(1) * grid.shape(2), grid.shape(2), 1;
-        else if (order == 'F')
-            idxIncrement << 1, grid.shape(0), grid.shape(0) * grid.shape(1);
-        else throw std::runtime_error("Unknown array storage order");
-
-        s_visitBoundaryFaces([&](const A3i &idx, size_t face) {
+        s_visitBoundaryFaces([&](const ANi &idx, size_t face) {
                 Eigen::Array<size_t, 4, 1> vidxs;
                 for (size_t c = 0; c < 4; ++c)
                     vidxs[c] = insertCorner(idx, faces(face, c));
                 m_F.row(tri_back++) << vidxs[0], vidxs[1], vidxs[2];
                 m_F.row(tri_back++) << vidxs[2], vidxs[3], vidxs[0];
 
-                int flatIdx = (idxIncrement * idx).sum();
+                int flatIdx = flattenedVoxIdx(idx);
                 assert(tri_back - 1 < m_voxelForTri.size());
                 m_voxelForTri[tri_back - 2] = flatIdx;
                 m_voxelForTri[tri_back - 1] = flatIdx;
-            }, grid, mask_ptr);
+            }, grid_shape, mask_ptr);
 
         const size_t nv = verts.size();
         m_V.resize(nv, 3);
@@ -132,51 +157,73 @@ struct VoxelBoundaryMesh {
 
     template<typename T>
     Eigen::MatrixXf visualizationField(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &f) const {
-        if (f.rows() != m_numVoxels) throw std::runtime_error("Unexpected field shape");
-        const size_t ntris = m_F.rows();
-        Eigen::MatrixXf result(ntris, f.cols());
-        for (size_t i = 0; i < ntris; ++i)
-            result.row(i) = f.row(m_voxelForTri[i]).template cast<float>();
-        return result;
+        if (f.rows() == m_numVoxels) {
+            const size_t ntris = m_F.rows();
+            Eigen::MatrixXf result(ntris, f.cols());
+            for (size_t i = 0; i < ntris; ++i)
+                result.row(i) = f.row(m_voxelForTri[i]).template cast<float>();
+            return result;
+        }
+        if (f.rows() == m_numGridPoints) {
+            Eigen::MatrixXf result(m_vtxForGridPt.size(), f.cols());
+            for (auto &entry : m_vtxForGridPt) {
+                result.row(entry.second) = f.row(entry.first).template cast<float>();
+            }
+            return result;
+        }
+        throw std::runtime_error("Unexpected field shape");
     }
 
 private:
     FType m_F;
     VType m_V;
-    size_t m_numVoxels;
+    size_t m_numVoxels, m_numGridPoints;
     Eigen::ArrayXi m_voxelForTri;
+    std::map<size_t, size_t> m_vtxForGridPt; // sparse map from grid point indices to the output vertex
 
-    template<class Array3t, class F, class VoxelPresent>
-    static void s_visitBoundaryFaces(const F &f, const Array3t &grid, const VoxelPresent &present) {
-        A3i shape{int(grid.shape(0)), int(grid.shape(1)), int(grid.shape(2))};
-        A3i idx;
-        for (idx[0] = 0; idx[0] < shape[0]; ++idx[0]) {
-            for (idx[1] = 0; idx[1] < shape[1]; ++idx[1]) {
-                for (idx[2] = 0; idx[2] < shape[2]; ++idx[2]) {
-                    if (!present(idx)) continue;
-                    // Iterate over faces [x_min, x_max, y_min, y_max, z_min, z_max]
-                    for (size_t face = 0; face < 6; ++face) {
-                        // Neighbor directions `s e_d` for `s in {-1, 1}`
-                        size_t d = face / 2;
-                        int s = 2 * (face % 2) - 1;
-                        A3i nidx = idx;
-                        nidx[d] += s;
-                        bool neighborMissing = ((nidx[d] < 0) || (nidx[d] >= shape[d]) || !present(nidx));
-                        if (neighborMissing)
-                            f(idx, face);
+    template<int N, class F, class VoxelPresent>
+    static void s_visitBoundaryFaces(const F &f, const Eigen::Array<int, N, 1> &grid_shape, const VoxelPresent &present) {
+        using ANi = Eigen::Array<int, N, 1>;
+        ANi idx;
+        for (idx[0] = 0; idx[0] < grid_shape[0]; ++idx[0]) {
+            for (idx[1] = 0; idx[1] < grid_shape[1]; ++idx[1]) {
+                if (N == 3) {
+                    for (idx[2] = 0; idx[2] < grid_shape[2]; ++idx[2]) {
+                        if (!present(idx)) continue;
+                        // Iterate over faces [x_min, x_max, y_min, y_max, z_min, z_max]
+                        for (size_t face = 0; face < 6; ++face) {
+                            // Neighbor directions `s e_d` for `s in {-1, 1}`
+                            size_t d = face / 2;
+                            int s = 2 * (face % 2) - 1;
+                            ANi nidx = idx;
+                            nidx[d] += s;
+                            bool neighborMissing = ((nidx[d] < 0) || (nidx[d] >= grid_shape[d]) || !present(nidx));
+                            if (neighborMissing)
+                                f(idx, face);
+                        }
                     }
+                }
+                if (N == 2) {
+                    if (!present(idx)) continue;
+                    f(idx, 0);
                 }
             }
         }
     }
 
-    template<class Array3t, class Array3b, class F>
-    static void s_visitBoundaryFaces(const F &f, const Array3t &grid, const Array3b *mask_ptr = nullptr) {
+    template<class Array_Nd_b, class ANi, size_t... Idxs>
+    static auto s_accessNDArray(const Array_Nd_b &a, const ANi &idx, std::index_sequence<Idxs...>) {
+        return a(idx[Idxs]...);
+    }
+
+    template<int N, class Array_Nd_b, class F>
+    static void s_visitBoundaryFaces(const F &f, const Eigen::Array<int, N, 1> &grid_shape, const Array_Nd_b *mask_ptr = nullptr) {
+        using ANi = Eigen::Array<int, N, 1>;
         if (mask_ptr == nullptr)
-            s_visitBoundaryFaces(f, grid, [](const A3i &/* idx */) { return true; });
+            s_visitBoundaryFaces<N>(f, grid_shape, [](const ANi &/* idx */) { return true; });
         else {
-            const Array3b &mask = *mask_ptr;
-            s_visitBoundaryFaces(f, grid, [&mask](const A3i &idx) { return mask(idx[0], idx[1], idx[2]); });
+            const Array_Nd_b &mask = *mask_ptr;
+            s_visitBoundaryFaces<N>(f, grid_shape, [&mask](const ANi &idx) { return s_accessNDArray(mask, idx, std::make_index_sequence<N>()); });
         }
     }
 };

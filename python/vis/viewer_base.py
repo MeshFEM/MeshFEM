@@ -27,7 +27,6 @@ def replicateAttributesPerTriCorner(attr):
     #   https://github.com/mrdoob/three.js/pull/15198/commits/ea0db1988cd908167b1a24967cfbad5099bf644f
     attr['index'] = np.arange(len(idxs), dtype=np.uint32)
 
-
 # Generic viewer interface that is agnostic to the backend renderer (e.g., Pythreejs vs OffscreenRenderer)
 class ViewerBase:
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, isSubview=False):
@@ -47,7 +46,7 @@ class ViewerBase:
 
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         if (mesh is not None): self.mesh = mesh
         self.setGeometry(*self.getVisualizationGeometry(),
                           preserveExisting=preserveExisting,
@@ -55,9 +54,10 @@ class ViewerBase:
                           textureMap=textureMap,
                           scalarField=scalarField,
                           vectorField=vectorField,
-                          transparent=transparent)
+                          transparent=transparent,
+                          displacementField=displacementField)
 
-    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         self.scalarField = scalarField
         self.vectorField = vectorField
 
@@ -67,7 +67,12 @@ class ViewerBase:
         attrRaw = {'position': vertices,
                    'index':    idxs.ravel()}
 
-        if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
+        if displacementField is not None:
+            displacementField = self.mesh.visualizationField(displacementField)
+            if displacementField.shape != vertices.shape: raise Exception(f'Incorrect shape of per-vertex displacementField: {displacementField.shape} vs {vertices.shape}')
+            attrRaw['position'] = vertices + displacementField # allocates a new numpy array so that the caller's `vertices` array is not modified
+
+        if textureMap is not None: attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
 
         if normals is not None:
             needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals

@@ -28,6 +28,7 @@
 # Python cache and notebook stuff
 __pycache__
 .ipynb_checkpoints
+.cache
 
 # Executables
 *.exe
@@ -69,3 +70,6 @@ compile_commands.json
 # Mac/ntfs garbage
 .DS_Store
 .nfs*
+
+# Auto-generated python stuff
+python/MeshFEM/__init__.py

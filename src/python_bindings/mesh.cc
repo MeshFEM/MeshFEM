@@ -351,10 +351,7 @@ PYBIND11_MODULE(mesh, m)
     ////////////////////////////////////////////////////////////////////////////
     using VBM = VoxelBoundaryMesh;
     py::class_<VBM>(m, "VoxelBoundaryMesh")
-        .def(py::init(&VBM::construct_numpy<py::array_t<double>, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
-        .def(py::init(&VBM::construct_numpy<py::array_t<float >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
-        .def(py::init(&VBM::construct_numpy<py::array_t<int   >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
-        .def(py::init(&VBM::construct_numpy<py::array_t<bool  >, py::array_t<bool>>), py::arg("grid").noconvert(), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def(py::init(&VBM::construct_numpy<py::array_t<bool>>), py::arg("grid_shape"), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
         .def("visualizationGeometry", [](const VBM &v) { return std::make_tuple(v.vertices(), v.faces(), v.normals()); })
         .def("visualizationField",    &VBM::visualizationField<double>, py::arg("f"))
         .def("visualizationField",    &VBM::visualizationField<float >, py::arg("f"))

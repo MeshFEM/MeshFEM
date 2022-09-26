@@ -160,7 +160,7 @@ struct NDArrayIndexer<0> {
 
     static constexpr size_t        size() { return 1; }
     static constexpr size_t centerIndex() { return 0; }
-    constexpr static std::array<size_t, 0> unflattenIndex(size_t i) { return std::array<size_t, 0>(); }
+    constexpr static std::array<size_t, 0> unflattenIndex(size_t /* i */) { return std::array<size_t, 0>(); }
 };
 
 // Special index type for dimension-independent code.

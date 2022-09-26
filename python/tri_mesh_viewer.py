@@ -107,6 +107,9 @@ class QuadHexMeshWrapper:
 
         if (F.shape[1] == 4):
             # 2 triangles per quad
+            # 3---2
+            # |   |
+            # 0---1
             outwardFaces = [[0, 1, 2, 3]]
         elif (F.shape[1] == 8):
             # 2 triangles for each of the 6 cube faces
@@ -175,19 +178,42 @@ class QuadHexViewer(TriMeshViewer):
         super().__init__(QuadHexMeshWrapper(V, F, flatShade=flatShade), *args, **kwargs)
 
 class VoxelViewer(TriMeshViewer):
-    def __init__(self, grid, dx, *args, **kwargs):
+    """
+    Dense voxel grid viewer that visualizes all interior voxels. This is appropriate for
+    2D voxel grids and small 3D grids. For large grids, the `mesh.VoxelBoundaryMesh`
+    class should be used to visualize only the outer surface.
+    """
+    def __init__(self, grid_shape, dx, *args, **kwargs):
+        super().__init__(VoxelViewer.generateQuadHexWrapper(grid_shape, dx), *args, **kwargs)
+
+    @classmethod
+    def generateQuadHexWrapper(cls, grid_shape, dx, order='C'):
         # Generate quad/hex mesh from ndarray
-        shape = grid.shape
-        dim = len(shape)
+        dim = len(grid_shape)
+
+        # Support both single-scalar (cube) and per-dimension `dx`.
+        if hasattr(dx, "__len__"):
+            if len(dx) != dim: raise Exception('dx and grid shape mismatch')
+        else: dx = [dx] * dim
+
         if (dim < 2) or (dim > 3): raise Exception('2D or 3D grid expected')
-        vtx_shape = tuple(s + 1 for s in shape)
-        V = np.column_stack([C.ravel(order='F') for C in np.meshgrid(*([np.linspace(0, dx * n, n) for n in vtx_shape]), indexing='ij')])
+        vtx_shape = tuple(s + np.uint64(1) for s in grid_shape)
+        V = np.column_stack([C.ravel(order=order) for C in np.meshgrid(*([np.linspace(0, dx_i * n, n) for dx_i, n in zip(dx, vtx_shape)]), indexing='ij')])
+
         if dim == 2: V = np.pad(V, [(0, 0), (0, 1)])
-        elementCorners = [0, 1, vtx_shape[0] + 1, vtx_shape[0]] # Fortran ordering
-        if dim == 3: elementCorners += [vtx_shape[1] * vtx_shape[0] + i for i in elementCorners]
+        if order == 'F':
+            elementCorners = [0, 1, vtx_shape[0] + 1, vtx_shape[0]] # Fortran ordering
+            if dim == 3: elementCorners += [vtx_shape[1] * vtx_shape[0] + i for i in elementCorners]
+        elif order == 'C':
+            elementCorners = [0, vtx_shape[1], 1 + vtx_shape[1], 1]
+            if dim == 3:
+                elementCorners = [c + vtx_shape[2] * i for c in [0, 1] for i in elementCorners]
+        else:
+            raise Exception("Unexpected order (must be 'C' or 'F')")
+
         elementCorners = np.array(elementCorners)
-        F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange((np.prod(shape))), shape, order='F'), vtx_shape, order='F')])
-        super().__init__(QuadHexMeshWrapper(V, F, flatShade=True), *args, **kwargs)
+        F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(grid_shape), dtype=np.uint64), grid_shape, order=order), vtx_shape, order=order)])
+        return QuadHexMeshWrapper(V, F, flatShade=True)
 
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
