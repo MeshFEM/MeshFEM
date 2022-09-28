@@ -3,13 +3,14 @@ from scipy.sparse import csc_matrix, save_npz
 from scipy.sparse.linalg import eigsh
 import numpy as np, enum
 import sparse_matrices
+from reflection import evalWithCustomArgs
 
 class MassMatrixType(enum.Enum):
     IDENTITY = 1
     FULL = 2
     LUMPED = 3
 
-def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, n = 7, sigma=-0.001):
+def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, n = 7, sigma=-0.001, updatedParametrization=True):
     """
     Compute the vibrational modes of an elastic object `obj`
     """
@@ -20,20 +21,25 @@ def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, 
 
     if (mtype != MassMatrixType.IDENTITY):
         objectMethods = dir(obj)
-        if (mtype == MassMatrixType.FULL):
+        if ((mtype == MassMatrixType.FULL) or (mtype == MassMatrixType.LUMPED)):
             if ("massMatrix" in objectMethods):
-                M = obj.massMatrix()
+                customArgs = {}
+                if (mtype == MassMatrixType.LUMPED):
+                    customArgs['lumped'] = True
+                if (updatedParametrization):
+                    customArgs['updatedParametrization'] = True
+                M = evalWithCustomArgs(obj.massMatrix, customArgs)
                 Mtrip = M if isinstance(M, sparse_matrices.TripletMatrix) else M.getTripletMatrix()
                 Mtrip.reflectUpperTriangle()
                 Mtrip.rowColRemoval(fixedVars)
                 M_scipy = Mtrip.compressedColumn()
             else:
                 print("WARNING: object does not implement `massMatrix`; falling back to identity metric")
-        elif (mtype == MassMatrixType.LUMPED):
-            if ("lumpedMassMatrix" in objectMethods):
-                M_scipy = scipy.sparse.diags(np.delete(obj.lumpedMassMatrix(), fixedVars))
-            else:
-                print("WARNING: object does not implement `lumpedMassMatrix`; falling back to identity metric")
+        # elif (mtype == MassMatrixType.LUMPED):
+        #     if ("lumpedMassMatrix" in objectMethods):
+        #         M_scipy = scipy.sparse.diags(np.delete(obj.lumpedMassMatrix(), fixedVars))
+        #     else:
+        #         print("WARNING: object does not implement `lumpedMassMatrix`; falling back to identity metric")
         else: raise Exception('Unknown mass matrix type.')
 
     return compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, M_scipy)

@@ -6,6 +6,7 @@
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Triangulate.h>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/Geometry.hh>
 
 #include <tuple>
 
@@ -70,4 +71,14 @@ PYBIND11_MODULE(triangulation, m) {
             return std::make_pair(outV, outF);
         }, py::arg("V"), py::arg("F"), py::arg("triArea"), py::arg("perTriangleArea") = std::vector<double>(),
            py::arg("additionalFlags") = "", py::arg("overrideFlags") = "");
+
+    m.def("circumcircle_bc",
+            [](Eigen::Ref<const Eigen::MatrixXd> V,
+               Eigen::Ref<const Eigen::MatrixXi> F) {
+                std::pair<Eigen::MatrixXd, Eigen::VectorXd> result; // C, R
+                circumcircle_bc(V, F, result.first, result.second);
+                return result;
+            },
+            py::arg("V"), py::arg("F"))
+        ;
 }

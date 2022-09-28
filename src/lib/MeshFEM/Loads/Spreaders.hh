@@ -35,23 +35,26 @@ namespace detail {
 }
 
 template<class Object>
-struct Spreaders : public Load<typename Object::Real> {
+struct Spreaders : public ObjectSpecificLoad<Object> {
     static constexpr size_t N = Object::N;
 
-    using Real = typename Object::Real;
-    using VXd  = typename Object::VXd;
+    using Base = ObjectSpecificLoad<Object>;
+    using Real = typename Base::Real;
+    using VXd  = typename Base::VXd;
     using VNd  = Eigen::Matrix<Real, N, 1>;
     using MNd  = Eigen::Matrix<Real, N, N>;
     using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N>;
     using MX2i = Eigen::MatrixX2i;
     using VXi  = Eigen::VectorXi;
 
+    using Base::getObj;
+
     Spreaders(std::weak_ptr<const Object> obj,
               const SuiteSparseMatrix &materialPointPositioner,
               const MX2i &connectivity,
               Real magnitude,
               bool disableHessian = false)
-        : m_obj(obj),
+        : Base(obj),
           m_materialPointPositioner(materialPointPositioner),
           m_connectivity(connectivity),
           m_magnitude(magnitude),
@@ -62,8 +65,6 @@ struct Spreaders : public Load<typename Object::Real> {
         if (long(N) * connectivity.maxCoeff() >= m_materialPointPositioner.m)
             throw std::runtime_error("Edge index out of bounds");
         m_updateCache();
-        // Spreader force is const wrt. X (no rest config update callback need be registered)
-        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Defo, [this]() { m_updateCache(); });
     }
 
     Spreaders(std::weak_ptr<const Object> obj,
@@ -155,22 +156,17 @@ struct Spreaders : public Load<typename Object::Real> {
         return Hsp_csc;
     }
 
-    virtual ~Spreaders() {
-        if (auto o = m_obj.lock())
-            o->deregisterUpdateCallback(m_callbackID);
-    }
+    virtual ~Spreaders() { }
 
 private:
-    std::weak_ptr<const Object> m_obj;
     SuiteSparseMatrix m_materialPointPositioner, m_materialPointPositionerTranspose;
     MX2i m_connectivity;
     Real m_magnitude;
     const bool m_disableHessian;
-    int m_callbackID;
 
-    const Object &getObj() const {
-        if (auto o = m_obj.lock()) return *o;
-        throw std::runtime_error("Elastic object was destroyed");
+    virtual void m_stateUpdated(typename Base::VM vmask) override {
+        if (vmask == Base::VM::Defo) m_updateCache();
+            // Spreader force is const wrt. X (rest config updates can be ignored)
     }
 
     void m_updateCache() {

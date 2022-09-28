@@ -89,7 +89,10 @@ if(NOT TARGET tbb::tbb)
     #set_target_properties(tbb_static PROPERTIES COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter -Wno-keyword-macro")
 
     add_library(tbb_tbb INTERFACE)
-    target_include_directories(tbb_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
+    # Note: declaring TBB as a system header results in the local `tbb` include directory being listed
+    # after other system include paths, potentially causing an incompatible system-wide version of the headers
+    # to leak in. Instead, we suppress warnings from the TBB headers using #pragmas in `Parallelism.hh`.
+    # target_include_directories(tbb_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
     target_link_libraries(tbb_tbb INTERFACE tbbmalloc tbb)
     add_library(tbb::tbb ALIAS tbb_tbb)
 

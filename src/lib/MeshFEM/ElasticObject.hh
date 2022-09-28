@@ -163,7 +163,7 @@ private:
     }
 
 protected:
-    // Subclasses are free to define other iterfaces for mutating subsets of
+    // Subclasses are free to define other interfaces for mutating subsets of
     // variables (in which case, they must manually issue update notifications)
     void m_defoConfigUpdated() const { m_issueNotifications(VariableMask::Defo); }
     void m_restConfigUpdated() const { m_issueNotifications(VariableMask::Rest); }

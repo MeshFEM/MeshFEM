@@ -236,16 +236,6 @@ class PythreejsViewerBase(ViewerBase):
         self.light = pythreejs.PointLight(color=htmlColor(color), position=position)
         self.cam.children = [self.light]
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        if (mesh is not None):   self.mesh = mesh
-        self.setGeometry(*self.getVisualizationGeometry(),
-                          preserveExisting=preserveExisting,
-                          updateModelMatrix=updateModelMatrix,
-                          textureMap=textureMap,
-                          scalarField=scalarField,
-                          vectorField=vectorField,
-                          transparent=transparent)
-
     def makeTransparent(self, color=None):
         if color is not None:
             self.ghostColor = color
@@ -258,7 +248,7 @@ class PythreejsViewerBase(ViewerBase):
 
     def _setGeometryImpl(self, vertices, idxs, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         """
-        Backend-specific parts of ViewerBase::setGeometry
+        Backend-specific parts of ViewerBase.setGeometry
         """
         # Turn the current mesh into a ghost if preserveExisting
         if (preserveExisting and (self.currMesh is not None)):
@@ -315,11 +305,9 @@ class PythreejsViewerBase(ViewerBase):
                     self.bufferAttributeStash[key] = attr[key]
                     attr.pop(key)
 
-        # Avoid flicker/partial redraws during updates
-        if self.avoidRedrawFlicker:
-            # This is allowed to fail in case the user doesn't have my pythreejs fork...
-            try: self.renderer.pauseRendering()
-            except: pass
+        # Avoid flicker/partial redraws during updates (if the user has our pythreejs fork installed)
+        if self.avoidRedrawFlicker and hasattr(self.renderer, 'pauseRendering'):
+            self.renderer.pauseRendering()
 
         if (self.currMesh is None):
             attr = {}
@@ -340,7 +328,7 @@ class PythreejsViewerBase(ViewerBase):
             attr = self.currMesh.geometry.attributes.copy()
             attr['position'].array = attrRaw['position']
             if 'normal' in attr:
-                attr['normal'  ].array = attrRaw['normal']
+                attr['normal'].array = attrRaw['normal']
 
             for key in stashableKeys:
                 allocateUpdateOrStashBufferAttribute(attr, key)

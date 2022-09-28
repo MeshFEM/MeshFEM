@@ -23,20 +23,21 @@
 namespace Loads {
 
 template<class Object>
-struct Traction : public Load<typename Object::Real> {
+struct Traction : public ObjectSpecificLoad<Object> {
     static constexpr size_t N = Object::N;
     static constexpr size_t K   = Object::K;
     static constexpr size_t Deg = Object::Deg;
 
-    using Real = typename Object::Real;
-    using VXd  = typename Object::VXd;
+    using Base = ObjectSpecificLoad<Object>;
+    using Real = typename Base::Real;
+    using VXd  = typename Base::VXd;
     using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N>;
+    using Base::getObj;
 
     Traction(std::weak_ptr<const Object> obj)
-        : m_obj(obj) {
+        : Base(obj) {
         m_boundaryTractions.setZero(getObj().mesh().numBoundaryElements(), N);
         m_updateCache();
-        m_callbackID = getObj().registerUpdateCallback(Object::VariableMask::Rest, [this]() { m_updateCache(); });
     }
 
     virtual Real energy() const override {
@@ -66,15 +67,14 @@ struct Traction : public Load<typename Object::Real> {
     void setBoundaryTractions(Eigen::Ref<const MXNd> val) { m_boundaryTractions = val; m_updateCache(); }
     const MXNd &getBoundaryTractions() const { return m_boundaryTractions; }
 
-    virtual ~Traction() {
-        if (auto o = m_obj.lock())
-            o->deregisterUpdateCallback(m_callbackID);
-    }
+    virtual ~Traction() { }
 private:
-    std::weak_ptr<const Object> m_obj;
-    int m_callbackID;
     MXNd m_boundaryTractions;
     VXd m_grad;
+
+    virtual void m_stateUpdated(typename Base::VM vmask) override {
+        if (vmask == Base::VM::Rest) m_updateCache();
+    }
 
     void m_updateCache() {
         m_grad.setZero(getObj().numVars());
@@ -87,11 +87,6 @@ private:
                     m_boundaryTractions.row(be.index()) * (integratedPhis[bn.localIndex()] * be->volume());
             }
         }
-    }
-
-    const Object &getObj() const {
-        if (auto o = m_obj.lock()) return *o;
-        throw std::runtime_error("Elastic object was destroyed");
     }
 };
 

@@ -207,3 +207,26 @@ def clippedMesh(m, region):
     bcs = m.barycenters()
     keep = [bc in region for bc in m.barycenters()]
     return mesh.Mesh(*removeDanglingVertices(m.vertices(), m.elements()[keep]))
+
+def reflectMesh(V, F, axes = None):
+    """
+    Generates a periodic mesh by merging copies of the mesh (V, F) reflected across the
+    coordinate planes `x_i = 0` for i in `axes`.
+
+    If `axes` is `None, reflection is performed across all nonempty dimensions
+    occupied by `V` (default behavior).
+    """
+    N = V.shape[1]
+    if axes is None:
+        axes = [d for d in range(N) if np.linalg.norm(V[:, d]) != 0]
+
+    def reflected_mesh(s):
+        flips = np.sum(np.array(s) != 1)
+        V_refl = V.copy()
+        V_refl[:, 0:len(s)] = V[:, 0:len(s)] @ np.diag(s)
+        F_refl = F if (flips % 2 == 0) else F[:, [1, 0, 2]]
+        return (V_refl, F_refl)
+    S = [[-1, 1] if d in axes else [1] for d in range(N)]
+
+    import itertools
+    return mergedMesh([(V, F)] + [reflected_mesh(s) for s in itertools.product(*S) if np.sum(s) != N])
