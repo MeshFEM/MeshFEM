@@ -43,6 +43,7 @@ struct ElasticObject {
     }
 
     void setVars(const Eigen::Ref<const VXd> &vars, VariableMask vmask = VariableMask::Defo) {
+        if (size_t(vars.size()) != numVars(vmask)) throw std::runtime_error("Input vars size doesn't match vmask");
         if ((vmask == VariableMask::Defo) || (vmask == VariableMask::All))
             setDefoVars(vars.head(numDefoVars()));
         if ((vmask == VariableMask::Rest) || (vmask == VariableMask::All))
