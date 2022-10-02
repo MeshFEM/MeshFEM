@@ -84,7 +84,12 @@ work on both macOS and Ubuntu:
 
 ```bash
 pip3 install wheel # Needed if installing in a virtual environment
-pip3 install jupyterlab ipykernel==5.5.5 # Use a slightly older version of ipykernel to avoid cluttering notebook with stdout content.
+# Recent versions of jupyterlab and related packages cause problems:
+#   JupyerLab 3.4 and later has a bug where the tab and status bar GUI
+#                 remains visible after taking a viewer fullscreen
+#   ipykernel > 5.5.5 clutters the notebook with stdout content
+#   ipywidgets 8 and juptyerlab-widgets 3.0 break pythreejs
+pip3 install jupyterlab==3.3.4 ipykernel==5.5.5 ipywidgets==7.7.2 jupyterlab-widgets==1.1.1
 # If necessary, follow the instructions in the warnings to add the Python user
 # bin directory (containing the 'jupyter' binary) to your PATH...
 
