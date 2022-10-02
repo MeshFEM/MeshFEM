@@ -208,7 +208,7 @@ struct TripletMatrix {
     size_t m, n;
     aligned_std_vector<Triplet> nz;
 
-    value_type pruneTol = 0.0;
+    decltype(spmat_helper::valueMagnitudeSq(std::declval<Real>())) pruneTol = 0.0;
 
     // Set this to false for minor speed gains if you know that your matrix is
     // already properly sorted and has its repeated entries summed.
