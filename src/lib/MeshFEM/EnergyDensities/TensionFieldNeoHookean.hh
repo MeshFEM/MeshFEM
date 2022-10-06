@@ -61,7 +61,7 @@ struct IncompressibleBalloonEnergy {
         return stiffness * (M2d::Identity() - (1.0 / (m_det_C * m_det_C)) * m_grad_det_C);
     }
 
-    Real d2energy(const M2d &dC_a, const M2d &dC_b) const {
+    Real d2energy_dC(const M2d &dC_a, const M2d &dC_b) const {
         return stiffness * ((2.0 / (m_det_C * m_det_C * m_det_C)) * doubleContract(m_grad_det_C, dC_a) * doubleContract(m_grad_det_C, dC_b)
                           - (1.0 / (m_det_C * m_det_C)) * (dC_a(1, 1) * dC_b(0, 0) + dC_a(0, 0) * dC_b(1, 1) - 2 * dC_a(0, 1) * dC_b(0, 1)));
     }
@@ -130,7 +130,7 @@ struct TensionFieldEnergy {
                                                + 1.5 * inv_l1 * inv_l1 * m_l2_tilde * m_eigSensitivities. dLambda(0, dC_a)
                                                                                     * m_eigSensitivities. dLambda(0, dC_b));
         }
-        return m_balloonEnergy.d2energy(dC_a, dC_b);
+        return m_balloonEnergy.d2energy_dC(dC_a, dC_b);
     }
 
     M2d delta_denergy_dC(const M2d &dC) const {
