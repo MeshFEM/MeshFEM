@@ -132,7 +132,7 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
 template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, class _SPMat, typename... Args>
 void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, Args&&... args) {
     constexpr size_t N = _FEMMesh::EmbeddingDimension;
-    if ((M.m != mesh.numNodes() * N) || (M.n != M.m))
+    if ((size_t(M.m) != mesh.numNodes() * N) || (M.n != M.m))
         throw std::runtime_error("Unexpected output size");
 
     TripletMatrix<> Mscalar = construct<Deg>(mesh, std::forward<Args>(args)...);

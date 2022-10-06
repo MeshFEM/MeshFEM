@@ -109,11 +109,11 @@ struct RotExtrap<Real, 2> {
 
     static WEntry get_w(const M2d &grad_u) { return WEntry(CRQuantities<Real, 2>::sk_inv(grad_u)); }
 
-    static std::pair<M2d, V2d> extrapolate(const M2d &grad_u, const V2d &xbar, const V2d &ubar) {
+    static std::pair<M2d, V2d> extrapolate(const M2d &/* grad_u */, const V2d &/* xbar */, const V2d &/* ubar */) {
         // Determine the rotation and stretching parts
-        Real w = get_w(grad_u)[0];
 
 #if 0
+        Real w = get_w(grad_u)[0];
         const Real theta_sq = w * w;
         const Real theta    = std::abs(w);
         return stretch * RO::cos(theta,  theta_sq)
@@ -122,15 +122,15 @@ struct RotExtrap<Real, 2> {
         throw std::runtime_error("Unimplemented");
     }
 
-    static V2d apply_Rtilde(const WEntry &w, const V2d &u) {
+    static V2d apply_Rtilde(const WEntry &/* w */, const V2d &/* u */) {
         throw std::runtime_error("Unimplemented");
     }
 
-    static V2d modal_warp_correction(const WEntry &w, const V2d &u) {
+    static V2d modal_warp_correction(const WEntry &/* w */, const V2d &/* u */) {
         throw std::runtime_error("Unimplemented");
     }
 
-    static M2d nodal_warp_derivative(const WEntry &w_k, const V2d &g_k, const V2d &u_k) {
+    static M2d nodal_warp_derivative(const WEntry &/* w_k */, const V2d &/* g_k */, const V2d &/* u_k */) {
         throw std::runtime_error("Unimplemented");
     }
 };

@@ -27,10 +27,11 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     using Derived = _Derived_T<Real, N>;
     using Matrix = Eigen::Matrix<Real, N, N>;
 
-    NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other) = default;
+    NeoHookeanEnergyBase(const NeoHookeanEnergyBase &/* other */) = default;
+    NeoHookeanEnergyBase &operator=(const NeoHookeanEnergyBase &/* other */) = default;
 
     // Constructor copying material properties only, not the current deformation
-    NeoHookeanEnergyBase(const NeoHookeanEnergyBase& other, UninitializedDeformationTag &&)
+    NeoHookeanEnergyBase(const NeoHookeanEnergyBase &other, UninitializedDeformationTag &&)
         : m_lambda(other.m_lambda), m_mu(other.m_mu), m_finite_continuation_start(other.m_finite_continuation_start)
     { }
 

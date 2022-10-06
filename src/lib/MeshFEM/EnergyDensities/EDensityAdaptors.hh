@@ -58,6 +58,8 @@ struct EnergyDensityFBasedFromCBased : public Psi_C {
     EnergyDensityFBasedFromCBased(const Base &b) : Base(b) { }
 
     EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &) = default;
+    EnergyDensityFBasedFromCBased &operator=(const EnergyDensityFBasedFromCBased &) = default;
+
     EnergyDensityFBasedFromCBased(const EnergyDensityFBasedFromCBased &other, UninitializedDeformationTag &&)
         : Base(other, UninitializedDeformationTag()), m_F(other.m_F) { }
 
@@ -178,6 +180,8 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     EnergyDensityFBasedMembraneFromFBased(const Base &b) : Base(b) { }
 
     EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &) = default;
+    EnergyDensityFBasedMembraneFromFBased &operator=(const EnergyDensityFBasedMembraneFromFBased &) = default;
+
     EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, UninitializedDeformationTag &&)
         : Base(other, UninitializedDeformationTag()), m_B(other.m_B) { }
 
