@@ -81,7 +81,7 @@ struct VoxelBoundaryMesh {
                      4, 5, 7, 6;
         }
         else {
-            faces << 0, 1, 3, 2;
+            faces.row(0) << 0, 1, 3, 2;
         }
 
         std::vector<Eigen::Vector3f> verts;
