@@ -19,6 +19,7 @@
 #include <vector>
 #include <cassert>
 #include <utility>
+#include <cmath>
 
 template<typename Real, typename Point>
 class CollisionGrid {

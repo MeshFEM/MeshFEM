@@ -76,7 +76,7 @@ struct NameMangler<FEMMesh<_K, _Degree, _EmbeddingSpace, _FEMData>> {
 
 // ElasticSolid
 template<size_t _K, size_t _Deg, class EmbeddingSpace, class _Energy>
-class ElasticSolid;
+struct ElasticSolid;
 
 template<typename _Energy, size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct NameMangler<ElasticSolid<_K, _Degree, _EmbeddingSpace, _Energy>> {

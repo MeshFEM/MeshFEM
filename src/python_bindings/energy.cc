@@ -282,10 +282,23 @@ PYBIND11_MODULE(energy, m)
         .def_property("relaxationEnabled", &INeo_TFT::relaxationEnabled, &INeo_TFT::setRelaxationEnabled)
         ;
 
-    using OptionalINeoTFT = OptionalTensionFieldEnergy<double>;
-    bindEnergyCBased<OptionalINeoTFT>(detail_module)
-        .def("tensionState", & OptionalINeoTFT::tensionState)
-        .def_property("relaxationEnabled", &OptionalINeoTFT::getRelaxationEnabled, &OptionalINeoTFT::setRelaxationEnabled)
+    using OTFE = OptionalTensionFieldEnergy<double>;
+    using OTFE_M2d = OTFE::M2d;
+    bindEnergyCBased<OTFE>(detail_module)
+        .def("tensionState", & OTFE::tensionState)
+        .def_property("relaxationEnabled", &OTFE::getRelaxationEnabled, &OTFE::setRelaxationEnabled)
+
+        .def( "denergy",         py::overload_cast<const OTFE_M2d &>(&OTFE::denergy_dC, py::const_), py::arg("dC"))
+        .def( "denergy",         py::overload_cast<                >(&OTFE::denergy_dC, py::const_))
+        .def("d2energy",         &OTFE::d2energy_dC)
+        .def("eigSensitivities", &OTFE::eigSensitivities)
+        .def("setMatrix", [](OTFE &tfe, OTFE_M2d &mat) { tfe.setMatrix(mat); })
+
+        .def("setEigs",   &OTFE::setEigs,   py::arg("l1"), py::arg("l2"))
+        .def("psi",       &OTFE::psi)
+        .def("dpsi_dl",   &OTFE::dpsi_dl)
+        .def("d2psi_dl2", &OTFE::d2psi_dl2)
+        .def_readwrite("useTensionField", &OTFE::useTensionField)
         ;
 
     using StVK_C = StVenantKirchhoffEnergyCBased<double, 2>;
@@ -354,5 +367,5 @@ PYBIND11_MODULE(energy, m)
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor3D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 3>>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor2D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 2>>>(etensor); }, py::arg("elasticity_tensor"));
 
-    m.def("OptionalTensionFieldEnergy", [](double Y) { auto psi = std::make_unique<OptionalINeoTFT>(); psi->setStiffness(Y / 6.0); return psi; }, py::arg("youngModulus"));
+    m.def("OptionalTensionFieldEnergy", [](double Y) { auto psi = std::make_unique<OTFE>(); psi->setStiffness(Y / 6.0); return psi; }, py::arg("youngModulus"));
 }

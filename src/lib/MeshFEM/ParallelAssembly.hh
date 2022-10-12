@@ -267,6 +267,14 @@ void assemble_parallel(const PerElemAssembler1 &assembler1, const size_t numElem
     }
 }
 
+// Hessian (sparsity pattern) assembly for triplet matrix. Temporary stub implementation that operates serially.
+template<class CustomData_ = CTLDEmpty, typename PerElemAssembler, typename Real_>
+void assemble_parallel(const PerElemAssembler &assembler, TripletMatrix<Triplet<Real_>> &H, const size_t numElems) {
+    CustomData_ customData;
+    for (size_t ei = 0; ei < numElems; ++ei)
+        assembler(ei, H, customData);
+}
+
 #else
 
 // Fallback to serial assembly.

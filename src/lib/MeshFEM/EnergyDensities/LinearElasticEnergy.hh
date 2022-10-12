@@ -32,6 +32,7 @@ struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
     }
 
     LinearElasticEnergy(const LinearElasticEnergy&) = default;
+    LinearElasticEnergy &operator=(const LinearElasticEnergy&) = default;
 
     // Constructor copying material properties only, not the current deformation
     LinearElasticEnergy(const LinearElasticEnergy &other, const UninitializedDeformationTag &)

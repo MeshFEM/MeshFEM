@@ -11,6 +11,7 @@
 #ifndef SIMPLEX_HH
 #define SIMPLEX_HH
 #include <stdexcept>
+#include "Types.hh"
 
 namespace Simplex {
     constexpr size_t numVertices(size_t K) { return K + 1; }

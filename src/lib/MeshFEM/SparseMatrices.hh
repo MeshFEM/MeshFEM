@@ -198,6 +198,7 @@ struct TripletMatrix {
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
+
     TripletMatrix(size_t mm = 0, size_t nn = 0) : m(mm), n(nn) { }
 
     typedef TripletMatrix<_Triplet>         TMatrix;
@@ -206,6 +207,9 @@ struct TripletMatrix {
     typedef Real                            value_type;
     size_t m, n;
     aligned_std_vector<Triplet> nz;
+
+    decltype(spmat_helper::valueMagnitudeSq(std::declval<Real>())) pruneTol = 0.0;
+
     // Set this to false for minor speed gains if you know that your matrix is
     // already properly sorted and has its repeated entries summed.
     // Warning: it is not automatically set back to true if the matrix is modified!
@@ -225,9 +229,11 @@ struct TripletMatrix {
         nz.push_back(Triplet(i, j, v));
     }
     void addNZ(size_t i, size_t j, Real v) {
-        if (spmat_helper::valueMagnitudeSq(v) == 0.0) return; // Possibly give this a tolerance...
+        if (spmat_helper::valueMagnitudeSq(v) <= this->pruneTol) return;
         addNZUnpruned(i, j, v);
     }
+
+    void addDiagEntry(size_t i, Real v) { addNZ(i, i, v); }
 
     // Add a vertical strip of contiguous nonzero values starting at (i, j),
     // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
@@ -267,6 +273,7 @@ struct TripletMatrix {
         addNZUnpruned(i, j, v);
         return loc;
     }
+
 
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
@@ -359,9 +366,9 @@ struct TripletMatrix {
 
         parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
-        // remove identically zero entries (could use a tolerance)
+        // remove identically zero entries (numerical tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [](const Triplet &t) -> bool { return spmat_helper::valueMagnitudeSq(t.v) == 0.0; });
+                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) <= this->pruneTol); });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
@@ -825,7 +832,7 @@ struct CSCMatrix {
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
-    void reserve(size_t nnz_request) { if (nnz_request > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve` (" + std::to_string(nnz_request) + " vs " + std::to_string(nz) + ")"); }
+    void reserve(size_t nnz_request) { if (_Index(nnz_request) > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve` (" + std::to_string(nnz_request) + " vs " + std::to_string(nz) + ")"); }
 
     CSCMatrix(_Index mm = 0, _Index nn = 0)
         : m(mm), n(nn), nz(0) { }

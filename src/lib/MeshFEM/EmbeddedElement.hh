@@ -61,7 +61,10 @@ public:
         m_gradBarycentric.col(1) = e;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 2, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 2) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1));
     }
 
@@ -103,7 +106,10 @@ public:
         m_gradBarycentric.col(1) = e;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 2, 2>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 2)
+                   && (Derived::ColsAtCompileTime == 2), "Invalid size of P");
         embed(P.row(0), P.row(1));
     }
 
@@ -148,7 +154,10 @@ public:
         m_gradBarycentric.col(2) = m_normal.cross(e2) / doubleA;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 3, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 3) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2));
     }
 
@@ -189,7 +198,10 @@ public:
         m_gradBarycentric.col(2) = Vec(-e2[1], e2[0]) / doubleA;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 3, 2>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 3) &&
+                      (Derived::ColsAtCompileTime == 2), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2));
     }
 
@@ -230,7 +242,10 @@ public:
         m_gradBarycentric.col(3) = (p1 - p0).cross(p2 - p0) / vol_6;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 4, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 4) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2), P.row(3));
     }
 
@@ -399,6 +414,12 @@ public:
     void embed(Eigen::Ref<const Vec> p0, Args&&... args) {
         Base::embed(p0, std::forward<Args>(args)...);
         m_p0 = p0;
+    }
+
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        Base::embed(P);
+        m_p0 = P.row(0);
     }
 
     BaryCoords barycentricCoords(Eigen::Ref<const Vec> p) const {
