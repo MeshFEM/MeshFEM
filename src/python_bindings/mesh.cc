@@ -249,7 +249,7 @@ struct MeshBindings<FEMMesh<3, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
                         return std::make_shared<BoundaryMesh>(getElementCorners(m.boundaryElements(), false), getVertices(m.boundaryVertices()));
                 }, "Get a triangle mesh of the boundary (copy)")
             .def("shrunkenTetVisualizationGeometry", &getShrunkenTetVisualizationGeometry<Mesh>, py::arg("tetShrinkFactor"))
-            .def("shrunkenTetVisualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { throw std::runtime_error("Unimplemented"); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+            .def("shrunkenTetVisualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { return getShrunkenTetVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
         ;
         return mesh_bindings;
     }

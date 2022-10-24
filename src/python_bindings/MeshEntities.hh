@@ -311,4 +311,48 @@ VisualizationGeometry getShrunkenTetVisualizationGeometry(const Mesh &m, double 
     return result;
 }
 
+// Convert the field data to per-visualization-tri or per-visualization-vtx
+template<class Mesh, class FieldType>
+Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic>
+getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
+    size_t numValues = field.rows();
+    size_t numComponents = field.cols();
+
+    // per-node fields are visualized as per-vertex fields
+    if (numValues == m.numNodes())
+        numValues = m.numVertices();
+
+    if (numComponents == 2)
+        numComponents = 3; // pad 2D vectors to 3D
+
+    Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result(12 * m.numElements(), numComponents);
+    if (numValues == m.numVertices()) {
+        Eigen::Matrix<typename FieldType::Scalar, 1, FieldType::ColsAtCompileTime> cornerData[3];
+        for (auto e : m.elements()) {
+            for (auto f : e.halfFaces()) { // inward orientation
+                for (auto v : f.vertices())
+                    cornerData[v.localIndex()] = field.row(v.index());
+                // Vertices [0, 1] were swapped to obtain outward orientation,
+                // so data must be swapped too...
+                std::swap(cornerData[0], cornerData[1]);
+                for (size_t c = 0; c < 3; ++c)
+                    result.row(12 * e.index() + 3 * f.localIndex() + c).leftCols(field.cols()) = cornerData[c];
+            }
+        }
+    }
+    if (numValues == m.numElements()) {
+        for (auto e : m.elements()) {
+            for (auto f : e.halfFaces()) {
+                for (auto v : f.vertices())
+                    result.row(12 * e.index() + 3 * f.localIndex() + v.localIndex()).leftCols(field.cols()) = field.row(e.index());
+            }
+        }
+    }
+
+    int colsToPad = numComponents - field.cols();
+    if (colsToPad > 0) result.rightCols(colsToPad).setZero();
+
+    return result;
+}
+
 #endif /* end of include guard: MESHENTITIES_HH */
