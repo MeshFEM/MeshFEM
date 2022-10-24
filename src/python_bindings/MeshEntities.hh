@@ -272,4 +272,43 @@ VisualizationGeometry getVisualizationGeometry(const Mesh &m, double normalCreas
                                  getVisualizationNormals(m, normalCreaseAngle).template cast<float>()};
 }
 
+template<class Mesh>
+VisualizationGeometry getShrunkenTetVisualizationGeometry(const Mesh &m, double tetShrinkFactor) {
+    VisualizationGeometry result;
+    auto &V = std::get<0>(result);
+    auto &F = std::get<1>(result);
+    auto &N = std::get<2>(result);
+
+    const size_t nt = m.numElements();
+    V.resize(12 * nt, 3);
+    F.resize( 4 * nt, 3);
+    N.resize(12 * nt, 3);
+
+    using V3d = Vec3_T<typename Mesh::Real>;
+
+    for (auto e : m.elements()) {
+        size_t ei = e.index();
+        V3d bc = V3d::Zero();
+        for (const auto v : e.vertices())
+            bc += v.node()->p;
+        bc /= 4;
+
+        for (auto f : e.halfFaces()) { // inward orientation
+            V3d p[3];
+            for (auto v : f.vertices())
+                p[v.localIndex()] = m.node(v.index())->p;
+            std::swap(p[0], p[1]); // reverse orientation
+            V3d n = (p[1] - p[0]).cross(p[2] - p[0]).normalized();
+
+            for (size_t c = 0; c < 3; ++c) {
+                V.row(12 * ei + 3 * f.localIndex() + c) = ((1.0 - tetShrinkFactor) * p[c] + bc * tetShrinkFactor).template cast<float>();
+                N.row(12 * ei + 3 * f.localIndex() + c) = n.template cast<float>();
+                F(4 * e.index() + f.localIndex(), c) = 12 * ei + 3 * f.localIndex() + c;
+            }
+        }
+    }
+
+    return result;
+}
+
 #endif /* end of include guard: MESHENTITIES_HH */

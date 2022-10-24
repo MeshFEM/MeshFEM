@@ -15,10 +15,10 @@ def replicateAttributesPerTriCorner(attr):
     numTris = len(idxs) // 3
     for key in attr:
         attrSize = attr[key].shape[0]
-        if attrSize == numTris:
-            attr[key] = np.repeat(attr[key], 3, axis=0)
-        elif attrSize == numVerts:
+        if attrSize == numVerts:        # Assume per-vertex attributes in the case that #V = #F (i.e., for the boundary of a tetrahedron)
             attr[key] = attr[key][idxs]
+        elif attrSize == numTris:
+            attr[key] = np.repeat(attr[key], 3, axis=0)
         elif attrSize == 3 * numTris:
             pass
         else: raise Exception('Unexpected attribute size')

@@ -29,7 +29,7 @@ class RawMesh():
     def visualizationField(self, data):
         return data
 
-class TriMeshViewer(PythreejsViewerBase):
+class Viewer(PythreejsViewerBase):
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
         if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
             trimesh = RawMesh(*trimesh)
@@ -59,7 +59,7 @@ class PointCloudViewer(PythreejsViewerBase):
 class FlatteningAnimation:
     # Duration in seconds
     def __init__(self, trimesh, uvs, width=512, height=512, duration=5, textureMap = None):
-        self.viewer = TriMeshViewer(trimesh, width, height, textureMap)
+        self.viewer = Viewer(trimesh, width, height, textureMap)
 
         flatPosArray = None
         if (uvs.shape[1] == 2): flatPosArray = np.array(np.pad(uvs, [(0, 0), (0, 1)], 'constant'), dtype=np.float32)
@@ -173,11 +173,11 @@ class QuadHexMeshWrapper:
         if (domainSize == self.numElems): return data[self.elementForTri]
         raise Exception('Unrecognized data size')
 
-class QuadHexViewer(TriMeshViewer):
+class QuadHexViewer(Viewer):
     def __init__(self, V, F, flatShade=False, *args, **kwargs):
         super().__init__(QuadHexMeshWrapper(V, F, flatShade=flatShade), *args, **kwargs)
 
-class VoxelViewer(TriMeshViewer):
+class VoxelViewer(Viewer):
     """
     Dense voxel grid viewer that visualizes all interior voxels. This is appropriate for
     2D voxel grids and small 3D grids. For large grids, the `mesh.VoxelBoundaryMesh`
@@ -214,6 +214,48 @@ class VoxelViewer(TriMeshViewer):
         elementCorners = np.array(elementCorners)
         F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(grid_shape), dtype=np.uint64), grid_shape, order=order), vtx_shape, order=order)])
         return QuadHexMeshWrapper(V, F, flatShade=True)
+
+class TriMeshViewer(Viewer):
+    """
+    Triangle meshes just use the generic viewer as-is...
+    """
+    pass
+
+class TetMeshViewer(Viewer):
+    """
+    Tet-mesh-specific visualization support.
+    Currently the only custom behavior is visualizations with "tet shrink factors"
+    """
+    class TetMeshWrapper:
+        def __init__(self, tetmesh):
+            self.mesh = tetmesh
+            self.tetShrinkFactor = 0.0
+
+        def visualizationGeometry(self, normalCreaseAngle):
+            if self.tetShrinkFactor <= 0:
+                return self.mesh.visualizationGeometry(normalCreaseAngle=normalCreaseAngle)
+            else:
+                return self.mesh.shrunkenTetVisualizationGeometry(self.tetShrinkFactor)
+
+        def visualizationField(self, data):
+            if self.tetShrinkFactor <= 0:
+                return self.mesh.visualizationField(data)
+            else:
+                return self.mesh.shrunkenTetVisualizationField(data)
+
+    def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
+
+    @property
+    def tetShrinkFactor(self):
+        return self.mesh.tetShrinkFactor
+
+    @tetShrinkFactor.setter
+    def tetShrinkFactor(self, tsf):
+        self.mesh.tetShrinkFactor = np.clip(tsf, 0, 1)
+        currMat = self.currMesh.material
+        self.update()
+        self.currMesh.material = currMat
 
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
