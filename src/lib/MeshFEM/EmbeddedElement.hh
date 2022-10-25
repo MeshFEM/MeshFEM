@@ -438,7 +438,7 @@ public:
 
     // Embed a list of points passed as separate arguments;
     // SFINAE used to attempt to resolve ambiguity with the `embed(V, F, i)` overload declared below.
-    template<typename... Args, typename = std::enable_if_t<!std::is_arithmetic_v<LastType<Args...>>>>
+    template<typename... Args>
     void embed(const Eigen::Ref<const Vec> &p0, Args&&... args) {
         Base::embed(p0, std::forward<Args>(args)...);
         m_p0 = p0;
