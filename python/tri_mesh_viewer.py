@@ -252,9 +252,15 @@ class TetMeshViewer(Viewer):
 
     @tetShrinkFactor.setter
     def tetShrinkFactor(self, tsf):
+        oldTSF = self.mesh.tetShrinkFactor
         self.mesh.tetShrinkFactor = np.clip(tsf, 0, 1)
         currMat = self.currMesh.material
-        self.update()
+        if (oldTSF > 0) != (self.mesh.tetShrinkFactor > 0):
+            if self.scalarField is not None:
+                self.scalarField.meshVGCombinatoricsUpdated()
+            if self.vectorField is not None:
+                self.vectorField.meshVGCombinatoricsUpdated()
+        self.update(scalarField=self.scalarField, vectorField=self.vectorField)
         self.currMesh.material = currMat
 
 # Offscreen versions of the viewers (where supported)

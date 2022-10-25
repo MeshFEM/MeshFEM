@@ -42,6 +42,9 @@ using CopyCV_t = typename CopyCV<_CVType, _NonCVType>::type;
 template<typename... Types>
 using FirstType = typename std::tuple_element<0, std::tuple<Types...>>::type;
 
+template<typename... Types>
+using LastType = typename std::tuple_element<sizeof...(Types) - 1, std::tuple<Types...>>::type;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Determine whether a type supports dereferencing
 // from  https://stackoverflow.com/a/55377775

@@ -4,7 +4,11 @@
 #include <pybind11/stl.h>
 namespace py = pybind11;
 
+#include <MeshFEM/libigl_aabb/point_simplex_squared_distance.h>
+
 #include <MeshFEM/FieldSampler.hh>
+#include <MeshFEM/EmbeddedElement.hh>
+#include <MeshFEM/Parallelism.hh>
 #include <MeshFEM/algorithms/marching_tetrahedra.hh>
 
 #include "BindingInstantiations.hh"
@@ -87,6 +91,51 @@ PYBIND11_MODULE(field_sampler, m)
                 return s.sample(P, fieldValues);
             }, py::arg("P"), py::arg("fieldValues")) // Piecewise linear field
         ;
+
+    m.def("closestPointsInTetrahedra" ,
+        [](Eigen::Ref<const Eigen::MatrixXd> V,
+           Eigen::Ref<const Eigen::MatrixXi> T,
+           const Eigen::Vector3d &p) {
+            if (T.cols() != 4) throw std::runtime_error("Expected tetrahedra");
+            const size_t ne = T.rows();
+            using AES = AffineEmbeddedSimplex<3, Eigen::Vector3d>;
+            AES aes;
+            std::pair<Eigen::VectorXd, Eigen::MatrixXd> result;
+
+            Eigen::VectorXd &dists = result.first;
+            Eigen::MatrixXd &closestPts = result.second;
+
+            dists.resize(ne);
+            closestPts.resize(ne, 3);
+
+            parallel_for_range(0, ne, [&](size_t ei) {
+                aes.embed_indexed(V, T, ei);
+                if (aes.contains(p)) {
+                    dists[ei] = 0.0;
+                    closestPts.row(ei) = p.transpose();
+                    return;
+                }
+                Eigen::RowVector4i t = T.row(ei);
+                double min_d = std::numeric_limits<double>::max();
+                Eigen::Vector3d closest_c;
+                for (size_t face = 0; face < 4; ++face) {
+                    double d;
+                    Eigen::Vector3d c;
+                    iglaabb::point_simplex_squared_distance<3>(p, V, t.leftCols(3).eval(), 0, d, c);
+                    t = (Eigen::RowVector4i() << t.rightCols(3), t[0]).finished(); // move to next face (orientation irrelevant)
+                    if (d < min_d) {
+                        min_d = d;
+                        closest_c = c;
+                    }
+                }
+                dists[ei] = min_d;
+                closestPts.row(ei) = closest_c;
+            });
+
+            return result;
+        },
+        "Find the closest point to `p` separately for each tetrahedra of mesh (V, T) along with its closest distance"
+    );
 
     generateMeshSpecificBindings(m, m, SamplingMeshBinder<decltype(pyFS)>(pyFS));
 }

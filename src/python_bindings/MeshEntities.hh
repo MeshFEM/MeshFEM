@@ -325,8 +325,9 @@ getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
     if (numComponents == 2)
         numComponents = 3; // pad 2D vectors to 3D
 
-    Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result(12 * m.numElements(), numComponents);
+    Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result;
     if (numValues == m.numVertices()) {
+        result.resize(12 * m.numElements(), numComponents);
         Eigen::Matrix<typename FieldType::Scalar, 1, FieldType::ColsAtCompileTime> cornerData[3];
         for (auto e : m.elements()) {
             for (auto f : e.halfFaces()) { // inward orientation
@@ -341,10 +342,11 @@ getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
         }
     }
     if (numValues == m.numElements()) {
+        result.resize(4 * m.numElements(), numComponents);
         for (auto e : m.elements()) {
             for (auto f : e.halfFaces()) {
                 for (auto v : f.vertices())
-                    result.row(12 * e.index() + 3 * f.localIndex() + v.localIndex()).leftCols(field.cols()) = field.row(e.index());
+                    result.row(4 * e.index() + f.localIndex()).leftCols(field.cols()) = field.row(e.index());
             }
         }
     }

@@ -40,11 +40,21 @@ class VisualizationField:
     # It is also used to validate the sizes of the data field.
     def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):
         self.mesh = mesh
-        self.data = mesh.visualizationField(data)
+        # TODO: instead of the class-name-based hack used here, implement an
+        # interface for registering combinatorics update callbacks (and make
+        # the following conditional on `mesh` providing this interface)
+        if mesh.__class__.__name__ in ['TetMeshWrapper']:
+            self.rawData = data # needed if self.mesh.visualizationGeometry changes combinatorics
+            self.meshVGCombinatoricsUpdated()
+        else:
+            self.data = self.mesh.visualizationField(data)
         self.domainType = domainType
         self.colormap = colormap
         self.vmin = vmin
         self.vmax = vmax
+
+    def meshVGCombinatoricsUpdated(self):
+        self.data = self.mesh.visualizationField(self.rawData)
 
     def validateSize(self, numVertices, numFaces):
         domainSize = len(self.data)
