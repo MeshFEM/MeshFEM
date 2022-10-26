@@ -25,6 +25,7 @@
 #include <utility>
 #include <MeshFEM/Future.hh>
 #include <MeshFEM/function_traits.hh>
+#include <Eigen/Dense>
 
 template<size_t N, size_t... Dims> struct NDArrayIndexer; // ND -> 1D flattening
 template<size_t N, size_t... Dims> struct NDArrayScanner; // scanline traversal
@@ -51,6 +52,9 @@ public:
     // Dimension-independent access
     const T &operator()(const NDArrayIndex<N> &idx) const { return accessImpl(idx, Future::make_index_sequence<N>()); }
           T &operator()(const NDArrayIndex<N> &idx)       { return accessImpl(idx, Future::make_index_sequence<N>()); }
+
+    const T &operator()(const Eigen::Array<size_t, N, 1> &idx) const { return accessImpl(idx, Future::make_index_sequence<N>()); }
+          T &operator()(const Eigen::Array<size_t, N, 1> &idx)       { return accessImpl(idx, Future::make_index_sequence<N>()); }
 
     // Visit each entry in scanline order, calling either visitor(val, idx0, idx1, ...)
     // or visitor(val) depending on visitor's signature
@@ -79,6 +83,9 @@ public:
 private:
     template<size_t... I> const T &accessImpl(const NDArrayIndex<N> &idx, Future::index_sequence<I...>) const { return m_data.at(Idx::index(idx.template get<I>()...)); }
     template<size_t... I>       T &accessImpl(const NDArrayIndex<N> &idx, Future::index_sequence<I...>)       { return m_data.at(Idx::index(idx.template get<I>()...)); }
+
+    template<size_t... I> const T &accessImpl(const Eigen::Array<size_t, N, 1> &idx, Future::index_sequence<I...>) const { return m_data.at(Idx::index(idx[I]...)); }
+    template<size_t... I>       T &accessImpl(const Eigen::Array<size_t, N, 1> &idx, Future::index_sequence<I...>)       { return m_data.at(Idx::index(idx[I]...)); }
 
     std::array<T, Idx::size()> m_data;
 };
@@ -153,7 +160,7 @@ struct NDArrayIndexer<0> {
 
     static constexpr size_t        size() { return 1; }
     static constexpr size_t centerIndex() { return 0; }
-    constexpr static std::array<size_t, 0> unflattenIndex(size_t i) { return std::array<size_t, 0>(); }
+    constexpr static std::array<size_t, 0> unflattenIndex(size_t /* i */) { return std::array<size_t, 0>(); }
 };
 
 // Special index type for dimension-independent code.

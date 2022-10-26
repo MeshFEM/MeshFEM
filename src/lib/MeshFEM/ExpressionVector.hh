@@ -46,7 +46,7 @@ struct ExpressionEnvironment {
     }
 
     template<class _Vec>
-    void setXYZ(_Vec &v) {
+    void setXYZ(const _Vec &v) {
         int N = _Vec::RowsAtCompileTime;
         if (!(N == 2 || N == 3)) throw std::runtime_error("Bad vector size");
         setValue("x", v[0]); setValue("y", v[1]);

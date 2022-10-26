@@ -198,6 +198,7 @@ struct TripletMatrix {
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
+
     TripletMatrix(size_t mm = 0, size_t nn = 0) : m(mm), n(nn) { }
 
     typedef TripletMatrix<_Triplet>         TMatrix;
@@ -206,6 +207,9 @@ struct TripletMatrix {
     typedef Real                            value_type;
     size_t m, n;
     aligned_std_vector<Triplet> nz;
+
+    decltype(spmat_helper::valueMagnitudeSq(std::declval<Real>())) pruneTol = 0.0;
+
     // Set this to false for minor speed gains if you know that your matrix is
     // already properly sorted and has its repeated entries summed.
     // Warning: it is not automatically set back to true if the matrix is modified!
@@ -225,9 +229,11 @@ struct TripletMatrix {
         nz.push_back(Triplet(i, j, v));
     }
     void addNZ(size_t i, size_t j, Real v) {
-        if (spmat_helper::valueMagnitudeSq(v) == 0.0) return; // Possibly give this a tolerance...
+        if (spmat_helper::valueMagnitudeSq(v) <= this->pruneTol) return;
         addNZUnpruned(i, j, v);
     }
+
+    void addDiagEntry(size_t i, Real v) { addNZ(i, i, v); }
 
     // Add a vertical strip of contiguous nonzero values starting at (i, j),
     // (For compatibility with CSCMatrix interface--we can't actually gain a speedup here.)
@@ -255,6 +261,19 @@ struct TripletMatrix {
                     addNZ(i + ii, j + jj, values(ii, jj));
         }
     }
+
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    int findEntry(long /* i */, long /* j */) const {
+        return -1;
+    }
+
+    // FOR COMPATIBILITY WITH CSCMatrix only!
+    template<bool /* _knownGood */ = true>
+    int addNZAtLoc(long i, long j, const Real &v, int loc) {
+        addNZUnpruned(i, j, v);
+        return loc;
+    }
+
 
     // Sort and sum of repeated entries
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
@@ -347,9 +366,9 @@ struct TripletMatrix {
 
         parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
-        // remove identically zero entries (could use a tolerance)
+        // remove identically zero entries (numerical tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [](const Triplet &t) -> bool { return spmat_helper::valueMagnitudeSq(t.v) == 0.0; });
+                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) <= this->pruneTol); });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
@@ -813,6 +832,7 @@ struct CSCMatrix {
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
+    void reserve(size_t nnz_request) { if (_Index(nnz_request) > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve` (" + std::to_string(nnz_request) + " vs " + std::to_string(nz) + ")"); }
 
     CSCMatrix(_Index mm = 0, _Index nn = 0)
         : m(mm), n(nn), nz(0) { }
@@ -973,7 +993,7 @@ struct CSCMatrix {
 
             // Accumulate entries in the output matrix in sorted order.
             // Note: from our requirement that this->Ai be sorted, we can
-            // assume input triplets are are looped over in lexicographically
+            // assume input triplets are visited in lexicographically
             // sorted (j, i) order.
             // Therefore, entries will be added to the output matrix columns in sorted
             // order as well. However, we must make sure in the LOWER_TRIANGLE
@@ -1053,9 +1073,9 @@ struct CSCMatrix {
         auto insertion_point = Ap; // index in each column's bucket where the next entry should be added (start at beginning)
         for (index_type j = 0; j < n; ++j) {
             index_type ii = findEntry(j, j) + 1;
-            for (; ii < Ap[j + 1]; ++ii) {
+            index_type end = Ap[j + 1];
+            for (; ii < end; ++ii) {
                 size_t i = Ai[ii];
-                // if (i <= j) continue; // skip upper tri
                 // Add entry (j, i)
                 index_type ip = insertion_point[i];
                 if (Ai[ip] != j) throw std::runtime_error("Failed to find lower tri entry in the sparsity pattern!");
@@ -1063,6 +1083,15 @@ struct CSCMatrix {
                 insertion_point[i] = ip + 1;
             }
         }
+    }
+
+    template<bool _detectMissing = false>
+    void reflectUpperTriangleInPlaceParallel() {
+        parallel_for_range(n, [&](index_type j) {
+            index_type i;
+            for (index_type ii = Ap[j]; (i = Ai[ii]) < j; ++ii)
+                Ax[findEntry<_detectMissing>(j, i)] += spmat_helper::transpose_block(Ax[ii]);
+        });
     }
 
     // Set this matrix to have the same sparsity pattern as b, but with zeros
@@ -1209,6 +1238,25 @@ struct CSCMatrix {
                 addNZStrip(findEntry(i, j + c), values.col(c));
             }
         }
+    }
+
+    // Add a nonzero entry using a guess `loc` of the location where it appears
+    // in column `j`'s sparsity pattern that is *guaranteed to be a lower bound*.
+    // A binary search is dispensed in favor of a linear search initiated at
+    // `loc`. The location of the *subsequent* entry in the column is returned.
+    // This is a more persistent version of `addNZ(i, j, v, hint)` that
+    // does not fall back to a binary search on an incorrect guess.
+    // If `_knownGood` is `false`, we allow for the possibility that `loc` is invalid
+    // and needs to be searched afresh.
+    template<bool _knownGood = true, typename _Real2>
+    _Index addNZAtLoc(_Index i, _Index j, const _Real2 &val, int loc) {
+        if (!_knownGood) {
+            if ((loc < Ap[j]) || (loc >= Ap[j + 1]) || (Ai[loc] > i))
+                return csc_add_nz(nz, Ai.data(), Ap.data(), Ax.data(), i, j, val);
+        }
+        while (Ai[loc] < i) ++loc;
+        Ax[loc] += val;
+        return loc + 1;
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
@@ -1556,7 +1604,13 @@ struct CSCMatrix {
     // vectors for each thread.
     // Furthermore, the full matrix (upper and lower tri) must be stored even
     // in the symmetric case.
-    template<class _InVector, class _Result>
+    //
+    // The following operations can be performed, depending on the template
+    // parameters:
+    //      result =  A x,   result += A x      (Negate = False, ZeroInit = True, False)
+    //      result = -A x,   result -= A x      (Negate =  True, ZeroInit = True, False)
+    // If `ZeroInit` is false, the operation is `result += A x`
+    template<bool ZeroInit = true, bool Negate = false, class _InVector, class _Result>
     void applyTransposeParallel(const _InVector &x, _Result &&result) const {
         using   Result = std::decay_t<_Result>;
         using InVector = std::decay_t<_InVector>;
@@ -1598,10 +1652,21 @@ struct CSCMatrix {
 			const index_type col_begin = Ap[j],
 			                 col_end   = Ap[j + 1];
             if (col_begin == col_end) { spmat_helper::setZero(SG::get(result, j)); return; } // zero-column case: output zero
-            typename SG::ScratchVec tmp = spmat_helper::transpose_block(Ax[col_begin]) * SG::get(x, Ai[col_begin]);
-            for (index_type entry = col_begin + 1; entry < col_end; ++entry)
-                tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
-            SG::get(result, j) = tmp;
+            if (ZeroInit) {
+                typename SG::ScratchVec tmp = spmat_helper::transpose_block(Ax[col_begin]) * SG::get(x, Ai[col_begin]);
+                for (index_type entry = col_begin + 1; entry < col_end; ++entry)
+                    tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                if (Negate) SG::get(result, j) = -tmp;
+                else        SG::get(result, j) =  tmp;
+            }
+            else {
+                typename SG::ScratchVec tmp = SG::get(result, j);
+                for (index_type entry = col_begin; entry < col_end; ++entry) {
+                    if (Negate) tmp -= spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                    else        tmp += spmat_helper::transpose_block(Ax[entry]) * SG::get(x, Ai[entry]);
+                }
+                SG::get(result, j) = tmp;
+            }
         };
 
 #if MESHFEM_WITH_TBB
@@ -2458,18 +2523,19 @@ public:
         // Reduced system rhs (reduced f and  Lagrange multipliers)
         // Exploits symmetry of system (identical indexing of variables and
         // equations).
-        std::vector<_Real> bReduced(m_AUpper.m, 0);
+        VecX_T<_Real> bReduced;
+        bReduced.setZero(m_AUpper.m);
         for (size_t v = 0; v < m_reducedVarForVar.size(); ++v) {
             int r = m_reducedVarForVar[v];
             if (r < 0) continue;
-            assert(size_t(r) < bReduced.size());
+            assert(r < bReduced.size());
             bReduced[r] =
                 ((v < nPrimaryVars) ? f[v] : m_constraintRHS[v - nPrimaryVars])
                     + m_fixedVarRHSContribution[r];
         }
 
         // Allocate space for solution + Lagrange multipliers
-        std::vector<_Real> uReduced(m_AUpper.m);
+        VecX_T<_Real> uReduced(m_AUpper.m);
 
 #if 0
         {
@@ -2523,7 +2589,7 @@ public:
             m_LU->solve(bReduced, uReduced);
         }
 
-        // Read off solution (but not the Lagrange multipliers)
+        // Read off primal solution (no Lagrange multipliers)
         u.resize(nPrimaryVars);
         for (size_t v = 0; v < nPrimaryVars; ++v) {
             int r = m_reducedVarForVar[v];
@@ -2533,7 +2599,7 @@ public:
                 u[v] = m_fixedVarValues[fixedVar];
             }
             else {
-                assert(size_t(r) < uReduced.size());
+                assert(r < uReduced.size());
                 u[v] = uReduced[r];
             }
         }

@@ -30,7 +30,9 @@ template<typename Real_> using  Vec2_T = Eigen::Matrix<Real_, 2, 1>;
 template<typename Real_> using  VecX_T = Eigen::Matrix<Real_, Eigen::Dynamic, 1>;
 template<typename Real_> using  Mat3_T = Eigen::Matrix<Real_, 3, 3>;
 template<typename Real_> using  Mat2_T = Eigen::Matrix<Real_, 2, 2>;
-template<typename Real_> using MatX3_T = Eigen::Matrix<Real_, Eigen::Dynamic, 3>;
+template<typename Real_> using Mat3X_T = Eigen::Matrix<Real_, 3, Eigen::Dynamic>;
+
+template<typename Real_, size_t N> using VecN_T = Eigen::Matrix<Real_, N, 1>;
 
 // Very general detection of Eigen types.
 // Detect if T is an Eigen type (or evaluates to an Eigen type).

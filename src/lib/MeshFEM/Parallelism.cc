@@ -1,5 +1,4 @@
 #include <MeshFEM/Parallelism.hh>
-#include <stdexcept>
 
 #ifdef MESHFEM_WITH_TBB
 
