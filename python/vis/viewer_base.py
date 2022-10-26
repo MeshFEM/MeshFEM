@@ -15,10 +15,10 @@ def replicateAttributesPerTriCorner(attr):
     numTris = len(idxs) // 3
     for key in attr:
         attrSize = attr[key].shape[0]
-        if attrSize == numTris:
-            attr[key] = np.repeat(attr[key], 3, axis=0)
-        elif attrSize == numVerts:
+        if attrSize == numVerts:        # Assume per-vertex attributes in the case that #V = #F (i.e., for the boundary of a tetrahedron)
             attr[key] = attr[key][idxs]
+        elif attrSize == numTris:
+            attr[key] = np.repeat(attr[key], 3, axis=0)
         elif attrSize == 3 * numTris:
             pass
         else: raise Exception('Unexpected attribute size')
@@ -27,12 +27,12 @@ def replicateAttributesPerTriCorner(attr):
     #   https://github.com/mrdoob/three.js/pull/15198/commits/ea0db1988cd908167b1a24967cfbad5099bf644f
     attr['index'] = np.arange(len(idxs), dtype=np.uint32)
 
-
 # Generic viewer interface that is agnostic to the backend renderer (e.g., Pythreejs vs OffscreenRenderer)
 class ViewerBase:
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        self.setCamera([0, 0, 5], [0, 1, 0], 50, width / height, 0.1, 200)
-        self.setPointLight([0.6, 0.6, 0.6], [0, 0, 5])
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, isSubview=False):
+        if not isSubview:
+            self.setCamera([0, 0, 5], [0, 1, 0], 50, width / height, 0.1, 200)
+            self.setPointLight([0.6, 0.6, 0.6], [0, 0, 5])
 
         # Turning angle between normals below which we treat an edge as smooth.
         # Note, setting this to zero should give per-face normals, while setting
@@ -46,7 +46,7 @@ class ViewerBase:
 
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         if (mesh is not None): self.mesh = mesh
         self.setGeometry(*self.getVisualizationGeometry(),
                           preserveExisting=preserveExisting,
@@ -54,9 +54,10 @@ class ViewerBase:
                           textureMap=textureMap,
                           scalarField=scalarField,
                           vectorField=vectorField,
-                          transparent=transparent)
+                          transparent=transparent,
+                          displacementField=displacementField)
 
-    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         self.scalarField = scalarField
         self.vectorField = vectorField
 
@@ -66,7 +67,12 @@ class ViewerBase:
         attrRaw = {'position': vertices,
                    'index':    idxs.ravel()}
 
-        if (textureMap is not None): attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
+        if displacementField is not None:
+            displacementField = self.mesh.visualizationField(displacementField)
+            if displacementField.shape != vertices.shape: raise Exception(f'Incorrect shape of per-vertex displacementField: {displacementField.shape} vs {vertices.shape}')
+            attrRaw['position'] = vertices + displacementField # allocates a new numpy array so that the caller's `vertices` array is not modified
+
+        if textureMap is not None: attrRaw['uv'] = np.array(textureMap.uv, dtype=np.float32)
 
         if normals is not None:
             needsReplication = normals.shape[0] != vertices.shape[0] # detect non-vertex normals
@@ -86,7 +92,9 @@ class ViewerBase:
                 # Handle input in the form of a ScalarField or a raw scalar data array.
                 # Construct scalar field from raw scalar data array if necessary.
                 if (not isinstance(self.scalarField, ScalarField)):
-                    self.scalarField = ScalarField(self.mesh, self.scalarField)
+                    if isinstance(self.scalarField, dict): # interpreted as kwargs
+                        self.scalarField = ScalarField(self.mesh, **self.scalarField)
+                    else: self.scalarField = ScalarField(self.mesh, self.scalarField)
                 self.scalarField.validateSize(vertices.shape[0], idxs.shape[0])
 
                 attrRaw['color'] = np.array(self.scalarField.colors(), dtype=np.float32)

@@ -15,6 +15,7 @@ namespace py = pybind11;
 
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
+#include <MeshFEM/Utilities/VoxelBoundaryMesh.hh>
 #include "MeshFactory.hh"
 
 #include "MSHFieldWriter_bindings.hh"
@@ -27,6 +28,7 @@ struct MeshBindingsBase {
     using Real = typename Mesh::Real;
     static constexpr size_t K = Mesh::K;
     static constexpr size_t EmbeddingDimension = Mesh::EmbeddingDimension;
+    using VNd    = Eigen::Matrix<Real, EmbeddingDimension, 1>;
     using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,     3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
@@ -50,8 +52,8 @@ struct MeshBindingsBase {
                   if ((nv != m.numVertices()) && (nv != m.numNodes())) throw std::runtime_error("Incorrect vertex count");
                   m.setNodePositions(V);
                })
-          .def("elements",         [](const Mesh &m) { return getElementCorners(m.elements()); })
-          .def("boundaryElements", [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
+          .def("elements",            [](const Mesh &m) { return getElementCorners(m.elements()); })
+          .def("boundaryElements",    [](const Mesh &m) { return getElementCorners(m.boundaryElements()); })
           .def("boundaryVertices", [](const Mesh &m) {
                     Eigen::VectorXi result(m.numBoundaryVertices());
                     for (const auto bv : m.boundaryVertices())
@@ -76,13 +78,19 @@ struct MeshBindingsBase {
           .def("visualizationGeometry",  [](const Mesh &m, double normalCreaseAngle) { return getVisualizationGeometry(m, normalCreaseAngle); }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const Mesh &m, const Eigen::VectorXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("visualizationField", [](const Mesh &m, const MXNd            &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+          .def("visualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { return getVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def("vertexNormals", &getAreaWeightedNormals<Mesh>, (K == 2) ? "Vertex normals (triangle area weighted)"
                                                                         : "Boundary vertex normals (triangle area weighted)")
           .def("normals", &getNormals<Mesh>, (K == 2) ? "Triangle normals"
                                                       : "Boundary triangle normals")
           .def("elementVolumes", [](const Mesh &m) {
                       Eigen::VectorXd result(m.numElements());
-                      for (const auto e : m.elements()) result[e.index()] = e->volume();
+                      for (auto e : m.elements()) result[e.index()] = e->volume();
+                      return result;
+                  })
+          .def("boundaryElementVolumes", [](const Mesh &m) {
+                      Eigen::VectorXd result(m.numBoundaryElements());
+                      for (auto be : m.boundaryElements()) result[be.index()] = be->volume();
                       return result;
                   })
           .def("edgeLengths", [](const Mesh &m) {
@@ -115,7 +123,7 @@ struct MeshBindingsBase {
           .def("numNodes",    &Mesh::numNodes)
           .def("save", [&](const Mesh &m, const std::string& path) { return MeshIO::save(path, m); })
           .def("field_writer", [](const Mesh &m, const std::string &path) { return Future::make_unique<MSHFieldWriter>(path, m); }, py::arg("path"))
-          .def("is_tet_mesh",  [](const Mesh &) { return K == 3; })
+          .def_static("is_tet_mesh",  []() { return K == 3; })
           .def_property_readonly(       "bbox", [](const Mesh& m) { const auto bb = m.boundingBox(); return std::make_pair(bb.minCorner, bb.maxCorner); })
           .def_property_readonly("bbox_volume", [](const Mesh& m) { return m.boundingBox().volume(); }, "bounding box volume")
           .def_property_readonly(     "volume", [](const Mesh& m) { return m.volume(); }, "mesh volume")
@@ -329,6 +337,17 @@ PYBIND11_MODULE(mesh, m)
         .def_readonly("updatedInputPoints",   &PST::updatedInputPoints)
         .def_readonly("updatedInputPolygons", &PST::updatedInputPolygons)
         .def("getMesh", [](const PST &pst, size_t deg) { return MeshFactory<double>(pst.getElements(), pst.getVertices(), /* K = */ 2, deg, /* N = */ 2); }, py::arg("deg"))
+        ;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Utilities for numpy ndarray voxel data visualization
+    ////////////////////////////////////////////////////////////////////////////
+    using VBM = VoxelBoundaryMesh;
+    py::class_<VBM>(m, "VoxelBoundaryMesh")
+        .def(py::init(&VBM::construct_numpy<py::array_t<bool>>), py::arg("grid_shape"), py::arg("dx"), py::arg("mask") = nullptr, py::arg("order") = 'C')
+        .def("visualizationGeometry", [](const VBM &v) { return std::make_tuple(v.vertices(), v.faces(), v.normals()); })
+        .def("visualizationField",    &VBM::visualizationField<double>, py::arg("f"))
+        .def("visualizationField",    &VBM::visualizationField<float >, py::arg("f"))
         ;
 
     ////////////////////////////////////////////////////////////////////////////
