@@ -42,7 +42,9 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
 
     setVars(obj, xeval, customArgs)
     if g is None: g = evalWithCustomArgs(obj.gradient, customArgs)
-    analytic_delta_E = g.ravel().dot(perturb.ravel())
+    if (g.ravel().shape == perturb.ravel().shape): # Use `ravel()` to support scalar-valued functions of matrices
+        analytic_delta_E = g.ravel().dot(perturb.ravel())
+    analytic_delta_E = g.dot(perturb)              # Don't use `ravel()` in the case of vector-valued functions where "grad" is really a Jacobian...
 
     fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
     setVars(obj, xold, customArgs)
@@ -133,7 +135,8 @@ def gradConvergence(obj, perturb=None, customArgs=None, fixedVars = [], epsilons
     g = evalWithCustomArgs(obj.gradient, customArgs)
     for eps in epsilons:
         fd, an = validateGrad(obj, g=g, customArgs=customArgs, perturb=perturb, fd_eps=eps, fixedVars=fixedVars)
-        err = np.abs(an - fd) / np.abs(an)
+        err = np.linalg.norm(an - fd) / np.linalg.norm(an)
+        # print(f'{err=}')
         errors.append(err)
     return (epsilons, errors, an)
 
