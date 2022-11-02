@@ -511,7 +511,7 @@ class PythreejsViewerBase(ViewerBase):
             mr.meshes[-1].alpha = mainMesh.material.opacity
             mr.meshes[-1].lineWidth = 0.75 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
 
-        if self.vectorFieldMesh is not None:
+        if (self.vectorFieldMesh is not None) and (self.vectorField is not None):
             vga = self.vectorFieldMesh.geometry.attributes
             amu = self._arrowMaterialUniforms()
             mr.addVectorFieldMesh(vga['position'].array, vga[   'index'].array, vga[    'normal'].array,
