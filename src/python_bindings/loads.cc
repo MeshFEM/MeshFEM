@@ -4,6 +4,7 @@
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
+#include <MeshFEM/Loads/SphereFitter.hh>
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
@@ -103,6 +104,21 @@ struct LoadBinder {
     template<class Object>
     static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &module, py::module &detail_module) {
         bind_generic<Object>(module, detail_module);
+
+        ////////////////////////////////////////////////////////////////////////
+        // Solid-specific load: SphereFitter
+        ////////////////////////////////////////////////////////////////////////
+        using Real = typename Object::Real;
+        using Load = Loads::Load<Real>;
+        using SphereFitter = Loads::SphereFitter<Object>;
+        py::class_<SphereFitter, Load, std::shared_ptr<SphereFitter>>(detail_module, ("SphereFitter" + NameMangler<Object>::name()).c_str())
+            .def_readwrite("stiffness", &SphereFitter::stiffness)
+            .def_readwrite("r_tgt",     &SphereFitter::r_tgt)
+            ;
+        module.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
+                    return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
+                }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
+        ;
     }
 
     template<class Object>

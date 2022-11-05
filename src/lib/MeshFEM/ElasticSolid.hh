@@ -221,7 +221,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
-        auto assembler_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
+        auto accumulate_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
             const auto &e = m.element(ei);
             PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
@@ -246,7 +246,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
             }
         };
 
-        assemble_parallel(assembler_per_element_contrib, H, numElements());
+        assemble_parallel(accumulate_per_element_contrib, H, numElements());
     }
 
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
@@ -329,6 +329,22 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
     }
 
+    Vector deformedPosition(size_t ei, const EvalPtK &x) const {
+        Vector result(Vector::Zero());
+        const auto &e = mesh().element(ei);
+        for (const auto n : e.nodes())
+            result += shapeFunction<Deg, K>(n.localIndex(), x) * m_x.row(n.index()).transpose();
+        return result;
+    }
+
+    Vector deformedBoundaryPosition(size_t bei, const EvalPt<K - 1> &x) const {
+        Vector result(Vector::Zero());
+        const auto &be = mesh().boundaryElement(bei);
+        for (const auto bn : be.nodes())
+            result += shapeFunction<Deg, K - 1>(bn.localIndex(), x) * m_x.row(bn.volumeNode().index()).transpose();
+        return result;
+    }
+
     // Get the Green strain tensor at a particular point in element `ei`
     Matrix greenStrain(size_t ei, const EvalPtK &x) const {
         Matrix F = getDeformationGradient(ei, x);
@@ -373,16 +389,30 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &x) { return cauchyStress(ei, x); });
     }
 
-    // The Lp norm of the von Mises Cauchy stress (omitting the endcaps)
+    // Compute an integral of integrand(be, x) over a single boundary element `bei`
+    template<size_t QDeg, class Integrand>
+    auto surfaceElementIntegral(const Integrand &integrand, size_t bei) const {
+        const auto &m = mesh();
+        auto be = m.boundaryElement(bei);
+        return Quadrature<K - 1, QDeg>::integrate([&](const EvalPt<K - 1> &x) { return integrand(be, x); },
+                                                  be->volume());
+    }
+
+    // Compute an integral of integrand(be, x) over the surface.
+    template<size_t QDeg, class Integrand>
+    auto surfaceIntegral(const Integrand &integrand) const {
+        return summation_parallel([&](size_t bei) {
+                return surfaceElementIntegral<QDeg>(integrand, bei);
+        }, mesh().numBoundaryElements());
+    }
+
+    // The Lp norm of the von Mises Cauchy stress
     Real surfaceStressLpNorm(double p) const {
-        Real integral = 0;
-        for (auto be : mesh().boundaryElements()) {
+        Real integral = surfaceIntegral<2 * (Deg - 1)>([&](auto be, const EvalPt<K - 1> &x) {
             auto e = mesh().element(be.opposite().element().index());
-            integral += Quadrature<K - 1, 2 * (Deg - 1)>::integrate(
-                    restrictIntegrand([&](const EvalPt<K> &x_vol) {
-                        return std::pow(vonMisesStress(e.index(), x_vol), p); }, be, e),
-                    be->volume());
-        }
+            return restrictIntegrand([&](const EvalPt<K> &x_vol) {
+                        return std::pow(vonMisesStress(e.index(), x_vol), p); }, be, e)(x);
+        });
         return std::pow(integral, 1.0 / p);
     }
 
