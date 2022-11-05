@@ -138,8 +138,8 @@ class ViewerBase:
     def transformModel(self, position, scale, quaternion): raise Exception('Unimplemented')
     def isRecording(self):                                 return False
 
-    def makeTransparent(self, color=None): raise Exception('Unimplemented')
-    def makeOpaque     (self, color=None): raise Exception('Unimplemented')
+    def makeTransparent(self, color=None, alpha=0.25): raise Exception('Unimplemented')
+    def makeOpaque     (self, color=None            ): raise Exception('Unimplemented')
 
     def resetCamera(self):
         self.setCameraParams(([0.0, 0.0, 5.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]))

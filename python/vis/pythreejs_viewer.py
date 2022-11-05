@@ -236,10 +236,11 @@ class PythreejsViewerBase(ViewerBase):
         self.light = pythreejs.PointLight(color=htmlColor(color), position=position)
         self.cam.children = [self.light]
 
-    def makeTransparent(self, color=None):
+    def makeTransparent(self, color=None, alpha=0.25):
         if color is not None:
             self.ghostColor = color
         self.currMesh.material = self.materialLibrary.ghostMaterial(self.currMesh.material, self.ghostColor)
+        self.currMesh.material.opacity = alpha
 
     def makeOpaque(self, color=None):
         self.currMesh.material = self.materialLibrary.material(False)

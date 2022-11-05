@@ -221,47 +221,53 @@ class TriMeshViewer(Viewer):
     """
     pass
 
-class TetMeshViewer(Viewer):
-    """
-    Tet-mesh-specific visualization support.
-    Currently the only custom behavior is visualizations with "tet shrink factors"
-    """
-    class TetMeshWrapper:
-        def __init__(self, tetmesh):
-            self.mesh = tetmesh
-            self.tetShrinkFactor = 0.0
+def _makeTetMeshViewer(BaseClass):
+    class TetMeshViewer(BaseClass):
+        """
+        Tet-mesh-specific visualization support.
+        Currently the only custom behavior is visualizations with "tet shrink factors"
+        """
+        class TetMeshWrapper:
+            def __init__(self, tetmesh):
+                self.mesh = tetmesh
+                self.tetShrinkFactor = 0.0
 
-        def visualizationGeometry(self, normalCreaseAngle):
-            if self.tetShrinkFactor <= 0:
-                return self.mesh.visualizationGeometry(normalCreaseAngle=normalCreaseAngle)
-            else:
-                return self.mesh.shrunkenTetVisualizationGeometry(self.tetShrinkFactor)
+            def visualizationGeometry(self, normalCreaseAngle):
+                if self.tetShrinkFactor <= 0:
+                    return self.mesh.visualizationGeometry(normalCreaseAngle=normalCreaseAngle)
+                else:
+                    return self.mesh.shrunkenTetVisualizationGeometry(self.tetShrinkFactor)
 
-        def visualizationField(self, data):
-            if self.tetShrinkFactor <= 0:
-                return self.mesh.visualizationField(data)
-            else:
-                return self.mesh.shrunkenTetVisualizationField(data)
+            def visualizationField(self, data):
+                if self.tetShrinkFactor <= 0:
+                    return self.mesh.visualizationField(data)
+                else:
+                    return self.mesh.shrunkenTetVisualizationField(data)
 
-    def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
-        super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
+        def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+            super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
 
-    @property
-    def tetShrinkFactor(self):
-        return self.mesh.tetShrinkFactor
+        @property
+        def tetShrinkFactor(self):
+            return self.mesh.tetShrinkFactor
 
-    @tetShrinkFactor.setter
-    def tetShrinkFactor(self, tsf):
-        oldTSF = self.mesh.tetShrinkFactor
-        self.mesh.tetShrinkFactor = np.clip(tsf, 0, 1)
-        currMat = self.currMesh.material
-        if (oldTSF > 0) != (self.mesh.tetShrinkFactor > 0):
-            if self.scalarField is not None:
-                self.scalarField.meshVGCombinatoricsUpdated()
-            if self.vectorField is not None:
-                self.vectorField.meshVGCombinatoricsUpdated()
-        self.update(scalarField=self.scalarField, vectorField=self.vectorField)
-        self.currMesh.material = currMat
+        @tetShrinkFactor.setter
+        def tetShrinkFactor(self, tsf):
+            oldTSF = self.mesh.tetShrinkFactor
+            self.mesh.tetShrinkFactor = np.clip(tsf, 0, 1)
+            # Attempt to preserve material (doesn't work in OffscreenTetMeshViewer)
+            currMat = self.currMesh.material if hasattr(self, 'currMesh') else None
+            if (oldTSF > 0) != (self.mesh.tetShrinkFactor > 0):
+                if self.scalarField is not None:
+                    self.scalarField.meshVGCombinatoricsUpdated()
+                if self.vectorField is not None:
+                    self.vectorField.meshVGCombinatoricsUpdated()
+            self.update(scalarField=self.scalarField, vectorField=self.vectorField)
+            if currMat is not None:
+                self.currMesh.material = currMat
+    return TetMeshViewer
+
+TetMeshViewer = _makeTetMeshViewer(Viewer)
 
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
@@ -269,8 +275,10 @@ if HAS_OFFSCREEN:
         def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, wireframe=False):
             if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
                 trimesh = RawMesh(*trimesh)
-            super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, transparent)
+            super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView=None, transparent=transparent)
             if wireframe: self.showWireframe(True)
+
+    OffscreenTetMeshViewer = _makeTetMeshViewer(OffscreenViewerBase)
 
     class OffscreenQuadHexViewer(OffscreenTriMeshViewer):
         def __init__(self, V, F, *args, **kwargs):

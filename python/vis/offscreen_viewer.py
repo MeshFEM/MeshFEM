@@ -3,9 +3,14 @@ import OffscreenRenderer
 from OffscreenRenderer import video_writer as vw
 
 class OffscreenViewerBase(ViewerBase):
-    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False):
+    def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        if superView is not None:
+            raise Exception('Superview not supported for OffscreenViewerBase')
+
         self.renderer = OffscreenRenderer.MeshRenderer(width, height)
         super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
+
+        if wireframe: self.showWireframe(True)
 
     def _setGeometryImpl(self, vertices, idxs, attrRaw, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
         P = attrRaw['position']
@@ -78,7 +83,7 @@ class OffscreenViewerBase(ViewerBase):
 
     def transformModel(self, position, scale, quaternion): self.renderer.modelMatrix(position, scale, quaternion)
 
-    def makeTransparent(self, color=None): self.renderer.alpha = 0.25
+    def makeTransparent(self, color=None, alpha=0.25): self.renderer.alpha = alpha
     def makeOpaque     (self, color=None): self.renderer.alpha = 1.0
 
     @property
