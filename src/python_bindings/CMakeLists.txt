@@ -22,9 +22,9 @@ pybind11_add_module(_parallelism parallelism.cc)
 set_target_properties(_parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(_parallelism PUBLIC MeshFEM)
 
-pybind11_add_module(benchmark benchmark.cc)
-set_target_properties(benchmark PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(benchmark PUBLIC MeshFEM)
+pybind11_add_module(_benchmark benchmark.cc)
+set_target_properties(_benchmark PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(_benchmark PUBLIC MeshFEM)
 
 pybind11_add_module(tensors tensors.cc)
 set_target_properties(tensors PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
