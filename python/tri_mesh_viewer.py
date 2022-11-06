@@ -29,7 +29,7 @@ class RawMesh():
     def visualizationField(self, data):
         return data
 
-class Viewer(PythreejsViewerBase):
+class TriMeshViewer(PythreejsViewerBase):
     def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
         if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
             trimesh = RawMesh(*trimesh)
@@ -173,11 +173,11 @@ class QuadHexMeshWrapper:
         if (domainSize == self.numElems): return data[self.elementForTri]
         raise Exception('Unrecognized data size')
 
-class QuadHexViewer(Viewer):
+class QuadHexViewer(TriMeshViewer):
     def __init__(self, V, F, flatShade=False, *args, **kwargs):
         super().__init__(QuadHexMeshWrapper(V, F, flatShade=flatShade), *args, **kwargs)
 
-class VoxelViewer(Viewer):
+class VoxelViewerTriMesh(TriMeshViewer):
     """
     Dense voxel grid viewer that visualizes all interior voxels. This is appropriate for
     2D voxel grids and small 3D grids. For large grids, the `mesh.VoxelBoundaryMesh`
@@ -214,12 +214,6 @@ class VoxelViewer(Viewer):
         elementCorners = np.array(elementCorners)
         F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(grid_shape), dtype=np.uint64), grid_shape, order=order), vtx_shape, order=order)])
         return QuadHexMeshWrapper(V, F, flatShade=True)
-
-class TriMeshViewer(Viewer):
-    """
-    Triangle meshes just use the generic viewer as-is...
-    """
-    pass
 
 def _makeTetMeshViewer(BaseClass):
     class TetMeshViewer(BaseClass):
@@ -267,7 +261,7 @@ def _makeTetMeshViewer(BaseClass):
                 self.currMesh.material = currMat
     return TetMeshViewer
 
-TetMeshViewer = _makeTetMeshViewer(Viewer)
+TetMeshViewer = _makeTetMeshViewer(TriMeshViewer)
 
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
@@ -283,6 +277,22 @@ if HAS_OFFSCREEN:
     class OffscreenQuadHexViewer(OffscreenTriMeshViewer):
         def __init__(self, V, F, *args, **kwargs):
             super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
+
+def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False, offscreen=False):
+    import reflection
+    cls = OffscreenTriMeshViewer if offscreen else TriMeshViewer # Default to generic [Offscreen]TriMeshViewer
+    if reflection.isElasticSolid(obj):
+        # Use specialized TetMeshViewer for 3D elastic solids.
+        if (obj.dimension == 3):
+            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
+        else: raise Exception('Unepxected elastic solid dimension')
+    try:
+        if obj.is_tet_mesh():
+            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
+    except: pass
+    if reflection.isVoxelFEMSimulator(obj):
+        raise Exception('Use VoxelFEM Viewer')
+    return cls(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, superView=superView, transparent=transparent, wireframe=wireframe)
 
 def concatVisGeometries(A, B):
     return (np.vstack([A[0], B[0]]), # Stacked V

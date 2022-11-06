@@ -39,7 +39,8 @@ struct ElasticSolidBinder {
         module.def("ElasticSolid", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ES>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
         const std::string name = getElasticSolidName<Energy, K, Deg, VecN_T<Real, N>>();
-        py::class_<ES, EO, std::shared_ptr<ES>>(detail_module, name.c_str())
+        py::class_<ES, EO, std::shared_ptr<ES>> pyES(detail_module, name.c_str());
+        pyES
           .def_property_readonly_static("dimension",   [](py::object /* self */) { return N; })
           .def_property_readonly_static("degree",      [](py::object /* self */) { return Deg; })
           .def_property_readonly_static("energy_name", [](py::object /* self */) { return getEnergyName<Energy>(); })
@@ -72,6 +73,17 @@ struct ElasticSolidBinder {
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
          ;
+        if constexpr (K == 3) {
+            pyES.def("shrunkenTetVisualizationGeometry", [](const ES &obj, double tetShrinkFactor) {
+                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
+                return getShrunkenTetVisualizationGeometry(visMesh, tetShrinkFactor);
+            }, py::arg("tetShrinkFactor"))
+            .def("shrunkenTetVisualizationField", [](const ES &obj, const Eigen::MatrixXd &f) {
+                return getShrunkenTetVisualizationField(obj.mesh(), f);
+            }, py::arg("f"))
+            ;
+        }
+
 
         using ESRE = ElasticSolidRotExtrap<K, Deg, EmbeddingSpace, Energy>;
         module.def("ElasticSolidRotExtrap", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ESRE>(e, m); }, py::arg("mesh"), py::arg("energy"));

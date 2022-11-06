@@ -81,6 +81,16 @@ class OffscreenViewerBase(ViewerBase):
         self.renderer.render()
         self.renderer.save(path)
 
+    def render(self, scaleFactor=None):
+        self.renderer.render()
+        return   self.renderer.image() if scaleFactor is None else self.renderer.scaledImage(scaleFactor)
+
+    def renderAnimation(self, outPath, nframes, frameCallback, display=False, *videoWriterArgs, **videoWriterKWargs):
+        """
+        Write an animation out as a video/image sequence, where each frame is set up calling `frameCallback(renderer, frame_num)`
+        """
+        return self.renderer.renderAnimation(outPath, nframes, frameCallback, display=display, *videoWriterArgs, **videoWriterKWargs)
+
     def transformModel(self, position, scale, quaternion): self.renderer.modelMatrix(position, scale, quaternion)
 
     def makeTransparent(self, color=None, alpha=0.25): self.renderer.alpha = alpha
