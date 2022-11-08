@@ -49,6 +49,15 @@ struct MeshBinder {
             }, py::arg("ns"), py::arg("m"), py::arg("ei"), py::arg("f"),
             "Approximately integrate scalar field f(barycoords) over element `ei` of mesh `m` using `ns` samples.");
 
+        bm.def("monteCarloElementAverage", [](size_t ns, const Mesh &m, size_t ei,
+                                     std::function<Real(VecN_T<Real, Mesh::K + 1>)> f) {
+                if (ei > m.numElements()) throw std::runtime_error("Mesh element index out of bounds");
+                return monteCarloIntegration<K>([&](const EvalPt<K> &x) {
+                            return f(Eigen::Map<const VecBC>(x.data()));
+                        }, ns, 1.0);
+            }, py::arg("ns"), py::arg("m"), py::arg("ei"), py::arg("f"),
+            "Approximately average scalar field f(barycoords) over element `ei` of mesh `m` using `ns` samples.");
+
         bm.def("gaussQuadrature", [](size_t deg, const Mesh &m, std::function<Real(size_t, const VecBC &)> f) {
                 Real result = 0;
                 for (auto e : m.elements()) {
@@ -83,14 +92,22 @@ struct MeshBinder {
                 }
                 return result;
             }, py::arg("ns"), py::arg("m"), py::arg("f"),
-            "Integrate scalar field f(ei, x) over each element `ei` in mesh `m`, returning the total integral.");
+            "Approximately integrate scalar field f(ei, x) over each element `ei` in mesh `m`, returning the total integral.");
         em.def("monteCarloElement", [](size_t ns, const Mesh &m, size_t ei,
                                      std::function<Real(VecN)> f) {
                 if (ei > m.numElements()) throw std::runtime_error("Mesh element index out of bounds");
                 auto e = m.element(ei);
                 return monteCarloIntegration<K>([&](const EvalPt<K> &x) { return f(ptForBarycoords<VecN>(x, e)); }, ns, e->volume());
             }, py::arg("ns"), py::arg("m"), py::arg("ei"), py::arg("f"),
-            "Integrate scalar field f(barycoords) over element `ei` of mesh `m`.");
+            "Approximately integrate scalar field f(x) over element `ei` of mesh `m`.");
+
+        em.def("monteCarloElementAverage", [](size_t ns, const Mesh &m, size_t ei,
+                                     std::function<Real(VecN)> f) {
+                if (ei > m.numElements()) throw std::runtime_error("Mesh element index out of bounds");
+                auto e = m.element(ei);
+                return monteCarloIntegration<K>([&](const EvalPt<K> &x) { return f(ptForBarycoords<VecN>(x, e)); }, ns, 1.0);
+            }, py::arg("ns"), py::arg("m"), py::arg("ei"), py::arg("f"),
+            "Approximately average scalar field f(x) over element `ei` of mesh `m`.");
 
         em.def("gaussQuadrature", [](size_t deg, const Mesh &m, std::function<Real(size_t, const VecN &)> f) {
                 Real result = 0;

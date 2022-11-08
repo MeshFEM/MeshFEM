@@ -5,6 +5,7 @@
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
 #include <MeshFEM/Loads/SphereFitter.hh>
+#include <MeshFEM/Loads/CircumcenterBarrier.hh>
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
@@ -106,7 +107,7 @@ struct LoadBinder {
         bind_generic<Object>(module, detail_module);
 
         ////////////////////////////////////////////////////////////////////////
-        // Solid-specific load: SphereFitter
+        // Solid-specific load: SphereFitter, CircumcenterBarrier
         ////////////////////////////////////////////////////////////////////////
         using Real = typename Object::Real;
         using Load = Loads::Load<Real>;
@@ -118,6 +119,15 @@ struct LoadBinder {
         module.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
                     return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
                 }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
+        ;
+
+        using CircumcenterBarrier = Loads::CircumcenterBarrier<Object>;
+        py::class_<CircumcenterBarrier, Load, std::shared_ptr<CircumcenterBarrier>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
+            .def_readwrite("bc_min", &CircumcenterBarrier::bc_min)
+            ;
+        module.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min) {
+                    return std::make_shared<CircumcenterBarrier>(obj, bc_min);
+                }, py::arg("obj"), py::arg("bc_min") = 0.0)
         ;
     }
 
