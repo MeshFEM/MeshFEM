@@ -109,11 +109,11 @@ struct RotExtrap<Real, 2> {
 
     static WEntry get_w(const M2d &grad_u) { return WEntry(CRQuantities<Real, 2>::sk_inv(grad_u)); }
 
-    static std::pair<M2d, V2d> extrapolate(const M2d &grad_u, const V2d &xbar, const V2d &ubar) {
+    static std::pair<M2d, V2d> extrapolate(const M2d &/* grad_u */, const V2d &/* xbar */, const V2d &/* ubar */) {
         // Determine the rotation and stretching parts
-        Real w = get_w(grad_u)[0];
 
 #if 0
+        Real w = get_w(grad_u)[0];
         const Real theta_sq = w * w;
         const Real theta    = std::abs(w);
         return stretch * RO::cos(theta,  theta_sq)
@@ -122,15 +122,15 @@ struct RotExtrap<Real, 2> {
         throw std::runtime_error("Unimplemented");
     }
 
-    static V2d apply_Rtilde(const WEntry &w, const V2d &u) {
+    static V2d apply_Rtilde(const WEntry &/* w */, const V2d &/* u */) {
         throw std::runtime_error("Unimplemented");
     }
 
-    static V2d modal_warp_correction(const WEntry &w, const V2d &u) {
+    static V2d modal_warp_correction(const WEntry &/* w */, const V2d &/* u */) {
         throw std::runtime_error("Unimplemented");
     }
 
-    static M2d nodal_warp_derivative(const WEntry &w_k, const V2d &g_k, const V2d &u_k) {
+    static M2d nodal_warp_derivative(const WEntry &/* w_k */, const V2d &/* g_k */, const V2d &/* u_k */) {
         throw std::runtime_error("Unimplemented");
     }
 };
@@ -162,14 +162,14 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
         updateParametrization();
     }
 
-    virtual size_t numDefoVars() const { return m_es.numDefoVars(); }
-    virtual size_t numRestVars() const { return m_es.numRestVars(); }
+    virtual size_t numDefoVars() const override { return m_es.numDefoVars(); }
+    virtual size_t numRestVars() const override { return m_es.numRestVars(); }
 
-    virtual VXd getDefoVars() const { return m_vars; }
-    virtual VXd getRestVars() const { return m_es.getRestVars(); }
+    virtual VXd getDefoVars() const override { return m_vars; }
+    virtual VXd getRestVars() const override { return m_es.getRestVars(); }
 
-    virtual Real energy() const { return m_es.energy(); }
-    virtual VXd gradient(bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const {
+    virtual Real energy() const override { return m_es.energy(); }
+    virtual VXd gradient(bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolidRotExtrap.gradient");
         if (m_method != Method::ModalWarping) throw std::runtime_error("Only modal warping derivatives are implemented");
         if (vmask != VariableMask::Defo)      throw std::runtime_error("Only VariableMask::Defo is implemented");
@@ -220,7 +220,7 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
         return g;
     }
 
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
+    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         m_es.hessian(Hout, projectionMask, vmask);
 
         const auto &m = mesh();
@@ -251,16 +251,16 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
         }
     }
 
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
         return m_es.hessianSparsityPattern(val, vmask);
     }
 
-    virtual void updateParametrization() {
+    virtual void updateParametrization() override {
         m_source_x = m_es.deformedPositions();
         m_vars = m_es.getVars();
     }
 
-    virtual void setIdentityDeformation() {
+    virtual void setIdentityDeformation() override {
         m_es.setIdentityDeformation();
         updateParametrization();
     }
@@ -286,7 +286,7 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
 private:
     // The following two methods must be implemented by the derived class to
     // update the deformed/rest states.
-    virtual void m_setDefoVars(const Eigen::Ref<const VXd> &vars) {
+    virtual void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolidRotExtrap.m_setDefoVars");
         m_vars = vars;
 
@@ -374,7 +374,7 @@ private:
         return result;
     }
 
-    virtual void m_setRestVars(const Eigen::Ref<const VXd> &vars) {
+    virtual void m_setRestVars(const Eigen::Ref<const VXd> &vars) override {
         m_es.setRestVars(vars);
         updateParametrization();
     }

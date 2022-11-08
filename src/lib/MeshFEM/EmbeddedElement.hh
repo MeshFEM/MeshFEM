@@ -23,6 +23,7 @@
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/TemplateHacks.hh>
 
 // The *EmbeddedSimplex classes store the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the
@@ -61,8 +62,16 @@ public:
         m_gradBarycentric.col(1) = e;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 2, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 2) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1));
+    }
+
+    template<class DerivedV, class DerivedF>
+    void embed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, int i) {
+        embed(V.row(F(i, 0)), V.row(F(i, 1)));
     }
 
     Real volume() const { return m_volume; }
@@ -103,8 +112,16 @@ public:
         m_gradBarycentric.col(1) = e;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 2, 2>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 2)
+                   && (Derived::ColsAtCompileTime == 2), "Invalid size of P");
         embed(P.row(0), P.row(1));
+    }
+
+    template<class DerivedV, class DerivedF>
+    void embed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, int i) {
+        embed(V.row(F(i, 0)), V.row(F(i, 1)));
     }
 
     Real volume() const { return m_volume; }
@@ -148,8 +165,16 @@ public:
         m_gradBarycentric.col(2) = m_normal.cross(e2) / doubleA;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 3, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 3) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2));
+    }
+
+    template<class DerivedV, class DerivedF>
+    void embed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, int i) {
+        embed(V.row(F(i, 0)), V.row(F(i, 1)), V.row(F(i, 2)));
     }
 
     Real volume() const { return m_volume; }
@@ -189,8 +214,16 @@ public:
         m_gradBarycentric.col(2) = Vec(-e2[1], e2[0]) / doubleA;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 3, 2>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 3) &&
+                      (Derived::ColsAtCompileTime == 2), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2));
+    }
+
+    template<class DerivedV, class DerivedF>
+    void embed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, int i) {
+        embed(V.row(F(i, 0)), V.row(F(i, 1)), V.row(F(i, 2)));
     }
 
     Real volume() const { return m_volume; }
@@ -230,8 +263,16 @@ public:
         m_gradBarycentric.col(3) = (p1 - p0).cross(p2 - p0) / vol_6;
     }
 
-    void embed(Eigen::Ref<const Eigen::Matrix<Real, 4, 3>> P) {
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        static_assert((Derived::RowsAtCompileTime == 4) &&
+                      (Derived::ColsAtCompileTime == 3), "Invalid size of P");
         embed(P.row(0), P.row(1), P.row(2), P.row(3));
+    }
+
+    template<class DerivedV, class DerivedF>
+    void embed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, int i) {
+        embed(V.row(F(i, 0)), V.row(F(i, 1)), V.row(F(i, 2)), V.row(F(i, 3)));
     }
 
     Real volume() const { return m_volume; }
@@ -395,10 +436,27 @@ public:
     AffineEmbeddedSimplex(const Base &leSimplex, Eigen::Ref<const Vec> p0)
         : Base(leSimplex), m_p0(p0) { }
 
+    // Embed a list of points passed as separate arguments;
+    // SFINAE used to attempt to resolve ambiguity with the `embed(V, F, i)` overload declared below.
     template<typename... Args>
-    void embed(Eigen::Ref<const Vec> p0, Args&&... args) {
+    void embed(const Eigen::Ref<const Vec> &p0, Args&&... args) {
         Base::embed(p0, std::forward<Args>(args)...);
         m_p0 = p0;
+    }
+
+    template<class Derived>
+    void embed(const Eigen::MatrixBase<Derived> &P) {
+        Base::embed(P);
+        m_p0 = P.row(0);
+    }
+
+    // Ideally this would be an overload for the variadic template above, but
+    // unfortunately clang is still warning about an ambiguity, even with
+    // `enable_if`.
+    template<class DerivedV, class DerivedF>
+    void embed_indexed(const Eigen::MatrixBase<DerivedV> &V, const Eigen::MatrixBase<DerivedF> &F, size_t i) {
+        Base::embed(V, F, i);
+        m_p0 = V.row(F(i, 0));
     }
 
     BaryCoords barycentricCoords(Eigen::Ref<const Vec> p) const {

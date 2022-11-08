@@ -236,10 +236,11 @@ class PythreejsViewerBase(ViewerBase):
         self.light = pythreejs.PointLight(color=htmlColor(color), position=position)
         self.cam.children = [self.light]
 
-    def makeTransparent(self, color=None):
+    def makeTransparent(self, color=None, alpha=0.25):
         if color is not None:
             self.ghostColor = color
         self.currMesh.material = self.materialLibrary.ghostMaterial(self.currMesh.material, self.ghostColor)
+        self.currMesh.material.opacity = alpha
 
     def makeOpaque(self, color=None):
         self.currMesh.material = self.materialLibrary.material(False)
@@ -468,8 +469,13 @@ class PythreejsViewerBase(ViewerBase):
             self.screenshotWriter = ScreenshotWriter(self.renderer)
         self.screenshotWriter.capture(path)
 
-    def offscreenRenderer(self, width = None, height = None):
+    def offscreenRenderer(self, width = None, height = None, scale = None):
         import OffscreenRenderer
+        if scale is not None:
+            if width is not None or height is not None:
+                raise Exception('Specifying `scale` and `width` or `height` are mutually exclusive')
+            width  = self.renderer.width  * scale
+            height = self.renderer.height * scale
         if width  is None: width  = self.renderer.width
         if height is None: height = self.renderer.height
         mr = OffscreenRenderer.MeshRenderer(width, height)
@@ -482,23 +488,31 @@ class PythreejsViewerBase(ViewerBase):
         mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
         return mr
 
+    def antialiasedImage(self, renderScale=2, outputScale=1):
+        orender = self.offscreenRenderer(scale=renderScale)
+        for m in orender.meshes:
+            m.lineWidth *= renderScale
+        orender.render()
+        return orender.scaledImage(outputScale / renderScale)
+
     def __addOffscreenRendererObjects(self, mr):
         """
         Recursively add the meshes of `self` *and its subviews* to the
         offscreen mesh renderer `mr`.
         """
         if (not self.isPointCloud):
-            attr = self.meshes.children[0].geometry.attributes
+            mainMesh = self.meshes.children[0]
+            attr = mainMesh.geometry.attributes
             P = attr['position'].array
             N = attr['normal'].array
-            C = attr['color'].array if 'color' in attr else self.materialLibrary.material(False).color
+            C = attr['color'].array if 'color' in attr else mainMesh.material.color
             F = attr['index'].array if 'index' in attr else None
             mr.addMesh(P, F, N, C, makeDefault=False)
 
-            mr.meshes[-1].alpha = 1.0
-            mr.meshes[-1].lineWidth = 1.0 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
+            mr.meshes[-1].alpha = mainMesh.material.opacity
+            mr.meshes[-1].lineWidth = 0.75 if ((self.wireframeMesh is not None) and (self.wireframeMesh in self.meshes.children)) else 0.0
 
-        if self.vectorFieldMesh is not None:
+        if (self.vectorFieldMesh is not None) and (self.vectorField is not None):
             vga = self.vectorFieldMesh.geometry.attributes
             amu = self._arrowMaterialUniforms()
             mr.addVectorFieldMesh(vga['position'].array, vga[   'index'].array, vga[    'normal'].array,

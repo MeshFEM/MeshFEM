@@ -13,6 +13,7 @@
 
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/ElasticObject.hh>
+#include <MeshFEM/ParallelAssembly.hh>
 
 namespace Loads {
 

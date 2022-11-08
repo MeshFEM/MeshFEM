@@ -272,4 +272,89 @@ VisualizationGeometry getVisualizationGeometry(const Mesh &m, double normalCreas
                                  getVisualizationNormals(m, normalCreaseAngle).template cast<float>()};
 }
 
+template<class Mesh>
+VisualizationGeometry getShrunkenTetVisualizationGeometry(const Mesh &m, double tetShrinkFactor) {
+    VisualizationGeometry result;
+    auto &V = std::get<0>(result);
+    auto &F = std::get<1>(result);
+    auto &N = std::get<2>(result);
+
+    const size_t nt = m.numElements();
+    V.resize(12 * nt, 3);
+    F.resize( 4 * nt, 3);
+    N.resize(12 * nt, 3);
+
+    using V3d = Vec3_T<typename Mesh::Real>;
+
+    for (auto e : m.elements()) {
+        size_t ei = e.index();
+        V3d bc = V3d::Zero();
+        for (const auto v : e.vertices())
+            bc += v.node()->p;
+        bc /= 4;
+
+        for (auto f : e.halfFaces()) { // inward orientation
+            V3d p[3];
+            for (auto v : f.vertices())
+                p[v.localIndex()] = m.node(v.index())->p;
+            std::swap(p[0], p[1]); // reverse orientation
+            V3d n = (p[1] - p[0]).cross(p[2] - p[0]).normalized();
+
+            for (size_t c = 0; c < 3; ++c) {
+                V.row(12 * ei + 3 * f.localIndex() + c) = ((1.0 - tetShrinkFactor) * p[c] + bc * tetShrinkFactor).template cast<float>();
+                N.row(12 * ei + 3 * f.localIndex() + c) = n.template cast<float>();
+                F(4 * e.index() + f.localIndex(), c) = 12 * ei + 3 * f.localIndex() + c;
+            }
+        }
+    }
+
+    return result;
+}
+
+// Convert the field data to per-visualization-tri or per-visualization-vtx
+template<class Mesh, class FieldType>
+Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic>
+getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
+    size_t numValues = field.rows();
+    size_t numComponents = field.cols();
+
+    // per-node fields are visualized as per-vertex fields
+    if (numValues == m.numNodes())
+        numValues = m.numVertices();
+
+    if (numComponents == 2)
+        numComponents = 3; // pad 2D vectors to 3D
+
+    Eigen::Matrix<typename FieldType::Scalar, Eigen::Dynamic, Eigen::Dynamic> result;
+    if (numValues == m.numVertices()) {
+        result.resize(12 * m.numElements(), numComponents);
+        Eigen::Matrix<typename FieldType::Scalar, 1, FieldType::ColsAtCompileTime> cornerData[3];
+        for (auto e : m.elements()) {
+            for (auto f : e.halfFaces()) { // inward orientation
+                for (auto v : f.vertices())
+                    cornerData[v.localIndex()] = field.row(v.index());
+                // Vertices [0, 1] were swapped to obtain outward orientation,
+                // so data must be swapped too...
+                std::swap(cornerData[0], cornerData[1]);
+                for (size_t c = 0; c < 3; ++c)
+                    result.row(12 * e.index() + 3 * f.localIndex() + c).leftCols(field.cols()) = cornerData[c];
+            }
+        }
+    }
+    if (numValues == m.numElements()) {
+        result.resize(4 * m.numElements(), numComponents);
+        for (auto e : m.elements()) {
+            for (auto f : e.halfFaces()) {
+                for (auto v : f.vertices())
+                    result.row(4 * e.index() + f.localIndex()).leftCols(field.cols()) = field.row(e.index());
+            }
+        }
+    }
+
+    int colsToPad = numComponents - field.cols();
+    if (colsToPad > 0) result.rightCols(colsToPad).setZero();
+
+    return result;
+}
+
 #endif /* end of include guard: MESHENTITIES_HH */

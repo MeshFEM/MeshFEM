@@ -28,7 +28,7 @@ struct VoxelBoundaryMesh {
                const Eigen::ArrayXd &dx, const NumpyArrayb *mask_ptr = nullptr,
                char order = 'C') {
         const bool hasMask = mask_ptr && (mask_ptr->ndim() != 0); // apparently pybind11 is passing an unspecified `mask` as an empty one, rather than `nullptr` :/
-        size_t dim = grid_shape.size();
+        int dim = grid_shape.size();
         if ((dim != 2) && (dim != 3)) throw std::runtime_error("Grids must be 2D or 3D");
         if (hasMask && (mask_ptr->ndim() != dim)) throw std::runtime_error("Mask must be of the same dimension as the grid");
         if (!hasMask) {
@@ -81,7 +81,7 @@ struct VoxelBoundaryMesh {
                      4, 5, 7, 6;
         }
         else {
-            faces << 0, 1, 3, 2;
+            faces.row(0) << 0, 1, 3, 2;
         }
 
         std::vector<Eigen::Vector3f> verts;
@@ -124,7 +124,7 @@ struct VoxelBoundaryMesh {
             return it->second;
         };
 
-        size_t tri_back = 0;
+        int tri_back = 0;
 
         s_visitBoundaryFaces([&](const ANi &idx, size_t face) {
                 Eigen::Array<size_t, 4, 1> vidxs;
@@ -157,14 +157,14 @@ struct VoxelBoundaryMesh {
 
     template<typename T>
     Eigen::MatrixXf visualizationField(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &f) const {
-        if (f.rows() == m_numVoxels) {
+        if (size_t(f.rows()) == m_numVoxels) {
             const size_t ntris = m_F.rows();
             Eigen::MatrixXf result(ntris, f.cols());
             for (size_t i = 0; i < ntris; ++i)
                 result.row(i) = f.row(m_voxelForTri[i]).template cast<float>();
             return result;
         }
-        if (f.rows() == m_numGridPoints) {
+        if (size_t(f.rows()) == m_numGridPoints) {
             Eigen::MatrixXf result(m_vtxForGridPt.size(), f.cols());
             for (auto &entry : m_vtxForGridPt) {
                 result.row(entry.second) = f.row(entry.first).template cast<float>();

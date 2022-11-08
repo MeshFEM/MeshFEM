@@ -203,6 +203,9 @@ struct HessianAssembler {
         if (!data.constructed) {
             // Construct with a copy/reference to the sparsity pattern of `m_H`
             data.H = std::make_unique<SPMat>(m_H.m, m_H.n, m_H.Ap, m_H.Ai);
+            // We need to propagate `symmetry_mode` in case the assembly
+            // routine calls `addNZBlock` or another symmetry-dependent method!
+            data.H->symmetry_mode = static_cast<typename SPMat::SymmetryMode>(m_H.symmetry_mode);
             // Arithmetic types are already zero-ed out by the constructor, but
             // custom types need to be explicitly set to zero.
             if (!std::is_arithmetic<Real_>::value)

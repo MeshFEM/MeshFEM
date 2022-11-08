@@ -230,3 +230,69 @@ def reflectMesh(V, F, axes = None):
 
     import itertools
     return mergedMesh([(V, F)] + [reflected_mesh(s) for s in itertools.product(*S) if np.sum(s) != N])
+
+def edgeCollapse(V, F, minLen):
+    """
+    Brute force implementation of edge collapse for simplicial mesh (V, F):
+	repeatedly collapse the shortest edge until no edge shorter than `minLen`
+	remains.
+    (Typically this would be a triangle or tet mesh.)
+
+	Returns (V_collapsed, F_collapsed)
+    """
+    numCorners = F.shape[1] # simplex dimension + 1
+    edgeLens = []
+    edgeVertices = []
+    edgeForVertexPair = {}
+    elementsIncidentVertex = [[] for i in range(len(V))]
+
+    # Construct (vtxPair ==> edge) and (vertex ==> element) connectivity structures
+    for ei, e in enumerate(F):
+        for v in e:
+            if (ei not in elementsIncidentVertex[v]):
+                elementsIncidentVertex[v].append(ei)
+        for v1 in e:
+            for v2 in e:
+                if (v1 < v2):
+                    if (v1, v2) not in edgeForVertexPair:
+                        edgeForVertexPair[(v1, v2)] = len(edgeLens)
+                        edgeLens.append(np.linalg.norm(V[v2] - V[v1]))
+                        edgeVertices.append((v1, v2))
+
+    V_collapsed = np.array(V)
+    F_collapsed = np.array(F)
+
+    # Find the shortest edge
+    while edgeLens[(shortest := np.argmin(edgeLens))] <= minLen:
+        v1, v2 = edgeVertices[shortest]
+        # Merge edgeVertices to their midpoint, overwriting v1
+        V_collapsed[v1] = 0.5 * (V_collapsed[v1] + V_collapsed[v2])
+        # Re-index all elements incident v2 and merge them into v2's incident array.
+        for ei in elementsIncidentVertex[v2]:
+            # Invalidate all edges attached to v2 (which is getting reindexed...)
+            for vother in F_collapsed[ei]:
+                if (vother != v2):
+                    edgeLens[edgeForVertexPair[(min(vother, v2), max(vother, v2))]] = np.inf
+            F_collapsed[ei][F_collapsed[ei] == v2] = v1
+            if ei not in elementsIncidentVertex[v1]:
+                elementsIncidentVertex[v1].append(ei)
+
+        # Update influenced edge lengths
+        for ei in elementsIncidentVertex[v1]:
+            e = F_collapsed[ei]
+            for v1_new in e:
+                for v2_new in e:
+                    if (v1_new < v2_new):
+                        vpair = tuple(sorted((v1_new, v2_new)))
+                        newLen = np.linalg.norm(V_collapsed[v1_new] - V_collapsed[v2_new])
+                        if vpair not in edgeForVertexPair:
+                            edgeForVertexPair[vpair] = len(edgeLens)
+                            edgeLens.append(np.inf)
+                            edgeVertices.append(vpair)
+                        else: edgeLens[edgeForVertexPair[(v1_new, v2_new)]] = newLen
+
+    # Eliminate the combinatorially degenerate elements
+    degenerate = np.array([len(np.unique(e)) != numCorners for e in F_collapsed])
+    F_collapsed = F_collapsed[~degenerate]
+
+    return removeDanglingVertices(V_collapsed, F_collapsed)
