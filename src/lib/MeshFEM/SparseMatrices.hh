@@ -198,6 +198,7 @@ struct TripletMatrix {
     enum class SymmetryMode { NONE, UPPER_TRIANGLE };
     SymmetryMode symmetry_mode = SymmetryMode::NONE;
 
+    static constexpr size_t INDEX_NONE = std::numeric_limits<size_t>::max();
 
     TripletMatrix(size_t mm = 0, size_t nn = 0) : m(mm), n(nn) { }
 
@@ -279,7 +280,6 @@ struct TripletMatrix {
     bool needsSumRepated() const { return needs_sum_repeated && (nz.size() > 1); }
     void sumRepeated() {
         if (!needsSumRepated()) { return; }
-
         BENCHMARK_SCOPED_TIMER_SECTION timer("Compress Matrix");
         if (tripletsSortedAndUnique(*this)) return;
 
@@ -361,14 +361,14 @@ struct TripletMatrix {
             }
             // Mark the unused entries for deletion
             for (size_t k = backIndex + 1; k < ei; ++k)
-                spmat_helper::setZero(nz[k].v);
+                nz[k].i = INDEX_NONE;
         };
 
         parallel_for_range(n, [&](size_t j) { sortAndSumBucket(j); });
 
         // remove identically zero entries (numerical tolerance)
         auto back = std::remove_if(nz.begin(), nz.end(),
-                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) <= this->pruneTol); });
+                [this](const Triplet &t) -> bool { return (spmat_helper::valueMagnitudeSq(t.v) <= this->pruneTol) || t.i == INDEX_NONE; });
         // std::cout << "removed " << std::distance(back, nz.end()) << " small entries" << std::endl;
         nz.erase(back, nz.end());
     }
@@ -438,6 +438,7 @@ struct TripletMatrix {
             while ((i < num_nz) && (nz[i].col() == j)) {
                 ++i;
             }
+
             assert((i == num_nz) || (j < nz[i].col()));
             // Write column end index (next column's begin index)
             Ap[j + 1] = i;
