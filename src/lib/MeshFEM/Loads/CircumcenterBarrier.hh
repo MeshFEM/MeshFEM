@@ -29,21 +29,23 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         static constexpr size_t K   = Object::K;
         static constexpr size_t Deg = Object::Deg;
         using VKd  = Eigen::Matrix<Real, K, 1>;
-        using AKi  = Eigen::Array <int, K + 1, 1>;
+        using AK1i = Eigen::Array <int, K + 1, 1>;
         using MKd  = Eigen::Matrix<Real, K, K>;
         using MXNd = typename Object::MXNd;
         using Barycooords = Eigen::Matrix<Real, K + 1, 1>;
 
-        CircumcenterBarrier(const ST &obj, Real bc_min) : Base(obj), bc_min(bc_min) {
+        CircumcenterBarrier(const ST &obj, Real bc_min, bool subdivisionBarrier = false) : Base(obj), bc_min(bc_min), m_subdivisionBarrier(subdivisionBarrier) {
             if (Deg != 1) throw std::runtime_error("CircumcenterBarrier is only intended for linear meshes");
             if (  K != N) throw std::runtime_error("CircumcenterBarrier is not intended for co-dimensional objects");
 
             barrier.barrierThreshold = bc_min; // Put infinite barrier at constraint violation magnitude of `bc_min` (which will infinitely resist bar becoming negative)
         }
 
+        const auto &mesh() const { return Base::getObj().mesh(); }
+
         size_t numVars() const { return Base::getObj().numVars(); }
 
-        static MKd getU(const MXNd &x, const AKi &e) {
+        static MKd getU(const MXNd &x, const AK1i &e) {
             MKd U;
             for (size_t i = 0; i < K; ++i) {
                 U.col(i) = (x.row(e[i + 1])
@@ -52,15 +54,117 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             return U;
         }
 
-        AKi elementCorners(size_t ei) const {
-            AKi c;
-            for (auto v : Base::getObj().mesh().element(ei).vertices()) c[v.localIndex()] = v.index();
+        AK1i elementCorners(size_t ei) const {
+            AK1i c;
+            for (auto v : mesh().element(ei).vertices()) c[v.localIndex()] = v.index();
             return c;
         }
 
         MKd getU(size_t ei) const { return getU(Base::getObj().deformedPositions(), elementCorners(ei)); }
 
-        static Barycooords circumcenter(const MXNd &x, const AKi &e) {
+        // Call f(e, B, x) for each subelement `e`,
+        // where `e` is the vector of corner indices,
+        //       `B` is a #subv x (K + 1) matrix of barycentric coordinates of
+        //           the subelement corner positions wrt the macro element
+        //           corner positions, and
+        //       `x` is a #subv x N matrix of subvertex positions
+        template<class F>
+        void foreach_subelement(size_t ei, const F& f) const {
+            if (K != 3) throw std::runtime_error("Subdivided element optimization is only supported for tetrahedral meshes");
+
+            static constexpr size_t nsubv = Simplex::numVertices(K) + Simplex::numEdges(K);
+            Eigen::Matrix<Real, nsubv, K + 1> B;
+            Eigen::Matrix<Real, nsubv, N>     x;
+
+            // The first (K + 1) subdivided vertices are simply the macro element corners
+            const auto &xMacro = Base::getObj().deformedPositions();
+            for (auto v : mesh().element(ei).vertices())
+                x.row(v.localIndex()) = xMacro.row(v.index());
+            B.template topRows<K + 1>().setIdentity();
+
+            // The rest are at the macro edge midpoints
+            B.template bottomRows<Simplex::numEdges(K)>().setZero();
+            VecN_T<Real, Simplex::numEdges(K)> edgeLens;
+            for (size_t i = 0; i < Simplex::numEdges(K); ++i) {
+                size_t uLocal = Simplex::edgeStartNode(i),
+                       vLocal = Simplex::edgeEndNode(i);
+                size_t u = mesh().element(ei).vertex(uLocal).index(),
+                       v = mesh().element(ei).vertex(vLocal).index();
+                edgeLens[i] = (xMacro.row(u) - xMacro.row(v)).norm();
+                size_t out = (K + 1) + i;
+                x.row(out) = 0.5 * (xMacro.row(u) + xMacro.row(v));
+                B(out, uLocal) = 0.5;
+                B(out, vLocal) = 0.5;
+            }
+
+            //      3
+            //      *
+            //     / \`e4
+            //   e3  e5 `* 2
+            //   / e2--\ / e1
+            // 0*--e0---* 1
+            constexpr size_t oppositeSubFaceEdgePts[4][3] = {
+                {0, 3, 2},
+                {0, 1, 5},
+                {2, 4, 1},
+                {3, 5, 4}
+            };
+
+            // Visit the corner subtetrahedra
+            for (size_t c = 0; c < K + 1; ++c) {
+                AK1i e((K + 1) + oppositeSubFaceEdgePts[c][0],
+                       (K + 1) + oppositeSubFaceEdgePts[c][1],
+                       (K + 1) + oppositeSubFaceEdgePts[c][2], c);
+                f(e, B, x);
+            }
+
+            // The inner octahedron is tetrahedralized by inserting a center
+            // edge connecting the base edge midpoints.
+            // The base edges are the longest edge pair of the
+            // macro element.
+            constexpr size_t diagonalPairedEdge[3] = { 4, 3, 5 }; // (e0, e4), (e1, e3), (e2, e5)
+            Real longestLen = 0;
+            size_t longestPair = 0;
+            for (size_t i = 0; i < 3; ++i) {
+                Real pairLen = edgeLens[i] + edgeLens[diagonalPairedEdge[i]];
+                if (pairLen > longestLen) {
+                    longestLen = pairLen;
+                    longestPair = i;
+                }
+            }
+
+            // Visit the for subtetrahedra of the inner octahedron
+            for (size_t c = 0; c < K + 1; ++c) {
+                AK1i e;
+                e[0] = oppositeSubFaceEdgePts[c][1]; // reversed orientation
+                e[1] = oppositeSubFaceEdgePts[c][0];
+                e[2] = oppositeSubFaceEdgePts[c][2];
+                if ((e.template head<K>() == longestPair).any())
+                    e[3] = diagonalPairedEdge[longestPair];
+                else
+                    e[3] = longestPair;
+                e += K + 1; // all indices above refer to edge midpoints...
+                f(e, B, x);
+            }
+        }
+
+        // For debugging
+        std::pair<Eigen::MatrixXd, Eigen::MatrixXi> subtets(size_t ei) const {
+            std::pair<Eigen::MatrixXd, Eigen::MatrixXi> result;
+            Eigen::MatrixXd &V = result.first;
+            Eigen::MatrixXi &F = result.second;
+
+            F.resize(8, 4);  // 8  subtetrahedra
+            int Fback = 0;
+            foreach_subelement(ei, [&](const AK1i &e, auto B, auto x) {
+                if (V.rows() == 0)
+                    V = x;
+                F.row(Fback++) = e;
+            });
+            return result;
+        }
+
+        static Barycooords circumcenter(const MXNd &x, const AK1i &e) {
             MKd U = getU(x, e);
             MKd A = U.transpose() * U;
             Barycooords result;
@@ -69,7 +173,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             return result;
         }
 
-        Real elementEnergy(const MXNd &x, const AKi &e) const {
+        Real elementEnergy(const MXNd &x, const AK1i &e) const {
             auto bc = circumcenter(x, e);
             Real result = 0.0;
             for (size_t i = 0; i < K + 1; ++i)
@@ -78,7 +182,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         using PerElementGradient = Eigen::Matrix<Real, N * (K + 1), 1>;
-        PerElementGradient elementGradient(const MXNd &x, const AKi &e) const {
+        PerElementGradient elementGradient(const MXNd &x, const AK1i &e) const {
             Barycooords bc = circumcenter(x, e);
             MKd U = getU(x, e);
 
@@ -98,7 +202,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         using PerElementHessian = Eigen::Matrix<Real, N * (K + 1), N * (K + 1)>;
-        PerElementHessian elementHessian(const MXNd &x, const AKi &e) const {
+        PerElementHessian elementHessian(const MXNd &x, const AK1i &e) const {
             PerElementHessian result;
             result.setZero();
             Barycooords bc = circumcenter(x, e);
@@ -156,10 +260,16 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
         virtual Real energy() const override {
             const auto &o = Base::getObj();
-            const auto &m = o.mesh();
             Real result = 0.0;
-            for (auto e : m.elements())
+            for (auto e : mesh().elements()) {
                 result += elementEnergy(o.deformedPositions(), elementCorners(e.index()));
+
+                if (m_subdivisionBarrier) {
+                    foreach_subelement(e.index(), [&](const AK1i &sube, auto B, auto x) {
+                        result += elementEnergy(x, sube);
+                    });
+                }
+            }
             return result;
         }
 
@@ -169,8 +279,24 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             result.setZero(numVars());
 
             const auto &o = Base::getObj();
-            for (auto e : o.mesh().elements()) {
+            for (auto e : mesh().elements()) {
                 PerElementGradient g = elementGradient(o.deformedPositions(), elementCorners(e.index()));
+
+                if (m_subdivisionBarrier) {
+                    foreach_subelement(e.index(), [&](const AK1i &sub_e, auto B, auto x) {
+                        PerElementGradient gSub = elementGradient(x, sub_e);
+                        for (size_t lvi = 0; lvi < e.numVertices(); ++lvi) {
+                            auto g_v = g.template segment<N>(N * lvi);
+                            for (size_t k = 0; k < e.numVertices(); ++k) {
+                                size_t sub_v = sub_e[k];
+                                Real lambda = B(sub_v, lvi);
+                                if (lambda == 0) continue;
+                                g_v += lambda * gSub.template segment<N>(N * k);
+                            }
+                        }
+                    });
+                }
+
                 for (auto v : e.vertices())
                     result.template segment<N>(N * v.index()) += g.template segment<N>(N * v.localIndex());
             }
@@ -186,8 +312,31 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         // Hessian with respect to the deformed state H_xx
         virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
-            for (auto e : o.mesh().elements()) {
+            for (auto e : mesh().elements()) {
                 PerElementHessian eH = elementHessian(o.deformedPositions(), elementCorners(e.index()));
+
+                if (m_subdivisionBarrier) {
+                    foreach_subelement(e.index(), [&](const AK1i &sub_e, auto B, auto x) {
+                        PerElementHessian eHSub = elementHessian(x, sub_e);
+                        for (size_t lvi_a = 0; lvi_a < e.numVertices(); ++lvi_a) {
+                            for (size_t lvi_b = 0; lvi_b < e.numVertices(); ++lvi_b) {
+                                auto H_ab = eH.template block<N, N>(N * lvi_a, N * lvi_b);
+                                for (size_t k = 0; k < e.numVertices(); ++k) {
+                                    size_t sub_v_k = sub_e[k];
+                                    Real lambda_a = B(sub_v_k, lvi_a);
+                                    if (lambda_a == 0) continue;
+                                    for (size_t l = 0; l < e.numVertices(); ++l) {
+                                        size_t sub_v_l = sub_e[l];
+                                        Real lambda_b = B(sub_v_l, lvi_b);
+                                        if (lambda_b == 0) continue;
+                                        H_ab += (lambda_a * lambda_b) * eHSub.template block<N, N>(N * k, N * l);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
                 for (auto v_b : e.vertices()) {
                     for (auto v_a : e.vertices()) {
                         if (v_a.index() > v_b.index()) continue;
@@ -208,7 +357,9 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         Real bc_min = 0.1;
-        RawBarrierLog barrier; // enforce a constraint of the form `c <= 0`
+        RawBarrierLog barrier;           // enforce a constraint of the form `c <= 0`
+    private:
+        bool m_subdivisionBarrier = false; // also enforce a barrier on the mesh generated by one level of subdivision
     };
 }
 
