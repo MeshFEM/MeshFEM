@@ -29,7 +29,9 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         static constexpr size_t K   = Object::K;
         static constexpr size_t Deg = Object::Deg;
         using VKd  = Eigen::Matrix<Real, K, 1>;
+        using AKi  = Eigen::Array <int, K + 1, 1>;
         using MKd  = Eigen::Matrix<Real, K, K>;
+        using MXNd = typename Object::MXNd;
         using Barycooords = Eigen::Matrix<Real, K + 1, 1>;
 
         CircumcenterBarrier(const ST &obj, Real bc_min) : Base(obj), bc_min(bc_min) {
@@ -41,21 +43,25 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
         size_t numVars() const { return Base::getObj().numVars(); }
 
-        MKd getU(size_t ei) const {
-            const auto &o = Base::getObj();
-            const auto &m = o.mesh();
-            auto e = m.element(ei);
-            const auto &x = o.deformedPositions();
+        static MKd getU(const MXNd &x, const AKi &e) {
             MKd U;
             for (size_t i = 0; i < K; ++i) {
-                U.col(i) = (x.row(e.vertex(i + 1).index())
-                          - x.row(e.vertex(    0).index())).transpose();
+                U.col(i) = (x.row(e[i + 1])
+                          - x.row(e[    0])).transpose();
             }
             return U;
         }
 
-        Barycooords circumcenter(size_t ei) const {
-            MKd U = getU(ei);
+        AKi elementCorners(size_t ei) const {
+            AKi c;
+            for (auto v : Base::getObj().mesh().element(ei).vertices()) c[v.localIndex()] = v.index();
+            return c;
+        }
+
+        MKd getU(size_t ei) const { return getU(Base::getObj().deformedPositions(), elementCorners(ei)); }
+
+        static Barycooords circumcenter(const MXNd &x, const AKi &e) {
+            MKd U = getU(x, e);
             MKd A = U.transpose() * U;
             Barycooords result;
             result.template tail<K>() = 0.5 * A.llt().solve(A.diagonal());
@@ -63,19 +69,97 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             return result;
         }
 
+        Real elementEnergy(const MXNd &x, const AKi &e) const {
+            auto bc = circumcenter(x, e);
+            Real result = 0.0;
+            for (size_t i = 0; i < K + 1; ++i)
+                result += barrier.b(bc_min - bc[i]);
+            return result;
+        }
+
+        using PerElementGradient = Eigen::Matrix<Real, N * (K + 1), 1>;
+        PerElementGradient elementGradient(const MXNd &x, const AKi &e) const {
+            Barycooords bc = circumcenter(x, e);
+            MKd U = getU(x, e);
+
+            // Barycooords dJ_dbc = 2 * bc; // Simple function for debugging
+            Barycooords dJ_dbc;
+            for (size_t i = 0; i < K + 1; ++i)
+                dJ_dbc[i] = -barrier.db(bc_min - bc[i]);
+
+            // Solve adjoint equation
+            VKd s = (U.transpose() * U).llt().solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
+
+            PerElementGradient result;
+            for (size_t i = 0; i < K; ++i)
+                result.template segment<N>(N * (i + 1)) = s[i] * U.col(i) - U * (s[i] * bc.template tail<K>() + bc[i + 1] * s);
+            result.template head<N>() = -Eigen::Map<Eigen::Matrix<Real, N, K + 1>>(result.data()).template rightCols<K>().rowwise().sum();
+            return result;
+        }
+
+        using PerElementHessian = Eigen::Matrix<Real, N * (K + 1), N * (K + 1)>;
+        PerElementHessian elementHessian(const MXNd &x, const AKi &e) const {
+            PerElementHessian result;
+            result.setZero();
+            Barycooords bc = circumcenter(x, e);
+            MKd U = getU(x, e);
+
+            // Gradient and Hessian of the objective with respect to the barycentric coordinates
+            Barycooords dJ_dbc;
+            Eigen::Matrix<Real, K + 1, K + 1> d2J_dbc2;
+
+            d2J_dbc2.setZero();
+            for (size_t i = 0; i < K + 1; ++i) {
+                dJ_dbc[i] = -barrier.db(bc_min - bc[i]);
+                d2J_dbc2(i, i) = barrier.d2b(bc_min - bc[i]);
+            }
+
+            MKd A = U.transpose() * U;
+            auto A_llt = A.llt();
+            // Solve adjoint equation
+            VKd s = A_llt.solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
+
+            // Loop over perturbations "delta u_j[c]" and calculate the change in gradient "delta g".
+            // This is a rather brute-force implementation that could be simplified and accelerated.
+            for (size_t j = 0; j < K; ++j) {
+                for (size_t c = 0; c < N; ++c) {
+                    MKd delta_U = MKd::Zero();
+                    delta_U(c, j) = 1;
+                    MKd delta_A = delta_U.transpose() * U + U.transpose() * delta_U;
+
+                    VKd delta_bc_tail = A_llt.solve(0.5 * delta_A.diagonal() - delta_A * bc.template tail<K>());
+
+                    // Hessian of the objective with respect to the "independent" barycentric coordinates bc.tail<k>()
+                    MKd d2Jtilde_dbc_tail2        = d2J_dbc2.template block<K, K>(1, 1);
+                    d2Jtilde_dbc_tail2.rowwise() -= d2J_dbc2.template block<1, K>(0, 1);
+                    d2Jtilde_dbc_tail2.colwise() -= d2J_dbc2.template block<K, 1>(1, 0);
+                    d2Jtilde_dbc_tail2.array()   += d2J_dbc2(0, 0);
+
+                    VKd delta_s = A_llt.solve(d2Jtilde_dbc_tail2 * delta_bc_tail - delta_A * s);
+                    for (size_t i = 0; i < K; ++i) { // loop over delta g_i
+                        // Recall that g_i = s[i] * U.col(i) - U * (s[i] * bc.template tail<K>() + bc[i + 1] * s);
+                        VKd delta_g_i = delta_s[i] * U.col(i) + s[i] * delta_U.col(i)
+                                      - delta_U * (s[i] * bc.template tail<K>() + bc[i + 1] * s)
+                                      -       U * (delta_s[i] * bc.template tail<K>() + s[i] * delta_bc_tail
+                                                    + delta_bc_tail[i] * s + bc[i + 1] * delta_s);
+                        result.template block<N, 1>(N * (i + 1), N * (j + 1) + c) += delta_g_i;
+                        result.template block<N, 1>(          0, N * (j + 1) + c) -= delta_g_i;
+                        result.template block<N, 1>(N * (i + 1),               c) -= delta_g_i;
+                        result.template block<N, 1>(          0,               c) += delta_g_i;
+                    }
+                }
+            }
+            return result;
+        }
+
+        Barycooords circumcenter(size_t ei) const { return circumcenter(Base::getObj().deformedPositions(), elementCorners(ei)); }
+
         virtual Real energy() const override {
             const auto &o = Base::getObj();
             const auto &m = o.mesh();
             Real result = 0.0;
-            for (auto e : m.elements()) {
-                Barycooords bc = circumcenter(e.index());
-                // result += bc.squaredNorm(); // Simple function for debugging
-
-                // Impose a constraint on each barycentric coordinate.
-                // bc[i] >= bc_min <==>  bc_min - bc[i] <= 0
-                for (auto v : e.vertices())
-                    result += barrier.b(bc_min - bc[v.localIndex()]);
-            }
+            for (auto e : m.elements())
+                result += elementEnergy(o.deformedPositions(), elementCorners(e.index()));
             return result;
         }
 
@@ -84,24 +168,11 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             VXd result;
             result.setZero(numVars());
 
-            for (auto e : Base::getObj().mesh().elements()) {
-                Barycooords bc = circumcenter(e.index());
-
-                MKd U = getU(e.index());
-
-                // Barycooords dJ_dbc = 2 * bc; // Simple function for debugging
-                Barycooords dJ_dbc;
+            const auto &o = Base::getObj();
+            for (auto e : o.mesh().elements()) {
+                PerElementGradient g = elementGradient(o.deformedPositions(), elementCorners(e.index()));
                 for (auto v : e.vertices())
-                    dJ_dbc[v.localIndex()] = -barrier.db(bc_min - bc[v.localIndex()]);
-
-                // Solve adjoint equation
-                VKd s = (U.transpose() * U).llt().solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
-
-                for (size_t i = 0; i < K; ++i) { // loop over contributions from d/du_i
-                    VKd dJ_dui = s[i] * U.col(i) - U * (s[i] * bc.template tail<K>() + bc[i + 1] * s);
-                    result.template segment<N>(N * e.vertex(i + 1).index()) += dJ_dui;
-                    result.template segment<N>(N * e.vertex(    0).index()) -= dJ_dui;
-                }
+                    result.template segment<N>(N * v.index()) += g.template segment<N>(N * v.localIndex());
             }
 
             return result;
@@ -114,61 +185,14 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
         // Hessian with respect to the deformed state H_xx
         virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
-            // Add nonzeros to H's **upper triangle** only.
-            auto addUpperTriStrip = [&](int i, int j, const VKd &v) {
-                if (i > j) return; // skip lower triangle
-                H.addNZStrip(i, j, v.head(std::min<size_t>(j - i + 1, v.size()))); // add only the portion of `v` in the upper triangle.
-            };
-            for (auto e : Base::getObj().mesh().elements()) {
-                Barycooords bc = circumcenter(e.index());
-
-                MKd U = getU(e.index());
-
-                // Gradient and Hessian of the objective with respect to the barycentric coordinates
-                Barycooords dJ_dbc;
-                Eigen::Matrix<Real, K + 1, K + 1> d2J_dbc2;
-                // dJ_dbc = 2 * bc; // Simple function for debugging
-                // d2J_dbc2 = 2 * Eigen::Matrix<Real, K + 1, K + 1>::Identity(); // Simple function for debugging
-
-                d2J_dbc2.setZero();
-                for (size_t i = 0; i < K + 1; ++i) {
-                    dJ_dbc[i] = -barrier.db(bc_min - bc[i]);
-                    d2J_dbc2(i, i) = barrier.d2b(bc_min - bc[i]);
-                }
-
-                MKd A = U.transpose() * U;
-                auto A_llt = A.llt();
-                // Solve adjoint equation
-                VKd s = A_llt.solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
-
-                // Loop over perturbations "delta u_j[c]" and calculate the change in gradient "delta g".
-                // This is a rather brute-force implementation that could be simplified/accelerated.
-                for (size_t j = 0; j < K; ++j) {
-                    for (size_t c = 0; c < N; ++c) {
-                        MKd delta_U = MKd::Zero();
-                        delta_U(c, j) = 1;
-                        MKd delta_A = delta_U.transpose() * U + U.transpose() * delta_U;
-
-                        VKd delta_bc_tail = A_llt.solve(0.5 * delta_A.diagonal() - delta_A * bc.template tail<K>());
-
-                        // Hessian of the objective with respect to the "independent" barycentric coordinates bc.tail<k>()
-                        MKd d2Jtilde_dbc_tail2        = d2J_dbc2.template block<K, K>(1, 1);
-                        d2Jtilde_dbc_tail2.rowwise() -= d2J_dbc2.template block<1, K>(0, 1);
-                        d2Jtilde_dbc_tail2.colwise() -= d2J_dbc2.template block<K, 1>(1, 0);
-                        d2Jtilde_dbc_tail2.array()   += d2J_dbc2(0, 0);
-
-                        VKd delta_s = A_llt.solve(d2Jtilde_dbc_tail2 * delta_bc_tail - delta_A * s);
-                        for (size_t i = 0; i < K; ++i) { // loop over delta g_i
-                            // g_i = s[i] * U.col(i) - U * (s[i] * bc.template tail<K>() + bc[i + 1] * s);
-                            VKd delta_g_i = delta_s[i] * U.col(i) + s[i] * delta_U.col(i)
-                                          - delta_U * (s[i] * bc.template tail<K>() + bc[i + 1] * s)
-                                          -       U * (delta_s[i] * bc.template tail<K>() + s[i] * delta_bc_tail
-                                                        + delta_bc_tail[i] * s + bc[i + 1] * delta_s);
-                            addUpperTriStrip(N * e.vertex(i + 1).index(), N * e.vertex(j + 1).index() + c,  delta_g_i);
-                            addUpperTriStrip(N * e.vertex(    0).index(), N * e.vertex(j + 1).index() + c, -delta_g_i);
-                            addUpperTriStrip(N * e.vertex(i + 1).index(), N * e.vertex(    0).index() + c, -delta_g_i);
-                            addUpperTriStrip(N * e.vertex(    0).index(), N * e.vertex(    0).index() + c,  delta_g_i);
-                        }
+            const auto &o = Base::getObj();
+            for (auto e : o.mesh().elements()) {
+                PerElementHessian eH = elementHessian(o.deformedPositions(), elementCorners(e.index()));
+                for (auto v_b : e.vertices()) {
+                    for (auto v_a : e.vertices()) {
+                        if (v_a.index() > v_b.index()) continue;
+                        H.addNZBlock(N * v_a.index(), N * v_b.index(),
+                                     eH.template block<N, N>(N * v_a.localIndex(), N * v_b.localIndex()));
                     }
                 }
             }

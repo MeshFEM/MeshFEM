@@ -24,6 +24,9 @@ namespace py = pybind11;
 #include "MeshEntities.hh"
 
 template<class Mesh>
+using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
+
+template<class Mesh>
 struct MeshBindingsBase {
     using Real = typename Mesh::Real;
     static constexpr size_t K = Mesh::K;
