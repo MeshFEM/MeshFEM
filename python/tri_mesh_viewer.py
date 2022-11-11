@@ -59,7 +59,7 @@ class PointCloudViewer(PythreejsViewerBase):
 class FlatteningAnimation:
     # Duration in seconds
     def __init__(self, trimesh, uvs, width=512, height=512, duration=5, textureMap = None):
-        self.viewer = TriMeshViewer(trimesh, width, height, textureMap)
+        self.viewer = Viewer(trimesh, width, height, textureMap)
 
         flatPosArray = None
         if (uvs.shape[1] == 2): flatPosArray = np.array(np.pad(uvs, [(0, 0), (0, 1)], 'constant'), dtype=np.float32)
@@ -177,7 +177,7 @@ class QuadHexViewer(TriMeshViewer):
     def __init__(self, V, F, flatShade=False, *args, **kwargs):
         super().__init__(QuadHexMeshWrapper(V, F, flatShade=flatShade), *args, **kwargs)
 
-class VoxelViewer(TriMeshViewer):
+class VoxelViewerTriMesh(TriMeshViewer):
     """
     Dense voxel grid viewer that visualizes all interior voxels. This is appropriate for
     2D voxel grids and small 3D grids. For large grids, the `mesh.VoxelBoundaryMesh`
@@ -215,18 +215,84 @@ class VoxelViewer(TriMeshViewer):
         F = np.array([elementCorners + offset for offset in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(grid_shape), dtype=np.uint64), grid_shape, order=order), vtx_shape, order=order)])
         return QuadHexMeshWrapper(V, F, flatShade=True)
 
+def _makeTetMeshViewer(BaseClass):
+    class TetMeshViewer(BaseClass):
+        """
+        Tet-mesh-specific visualization support.
+        Currently the only custom behavior is visualizations with "tet shrink factors"
+        """
+        class TetMeshWrapper:
+            def __init__(self, tetmesh):
+                self.mesh = tetmesh
+                self.tetShrinkFactor = 0.0
+
+            def visualizationGeometry(self, normalCreaseAngle):
+                if self.tetShrinkFactor <= 0:
+                    return self.mesh.visualizationGeometry(normalCreaseAngle=normalCreaseAngle)
+                else:
+                    return self.mesh.shrunkenTetVisualizationGeometry(self.tetShrinkFactor)
+
+            def visualizationField(self, data):
+                if self.tetShrinkFactor <= 0:
+                    return self.mesh.visualizationField(data)
+                else:
+                    return self.mesh.shrunkenTetVisualizationField(data)
+
+        def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+            super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
+
+        @property
+        def tetShrinkFactor(self):
+            return self.mesh.tetShrinkFactor
+
+        @tetShrinkFactor.setter
+        def tetShrinkFactor(self, tsf):
+            oldTSF = self.mesh.tetShrinkFactor
+            self.mesh.tetShrinkFactor = np.clip(tsf, 0, 1)
+            # Attempt to preserve material (doesn't work in OffscreenTetMeshViewer)
+            currMat = self.currMesh.material if hasattr(self, 'currMesh') else None
+            if (oldTSF > 0) != (self.mesh.tetShrinkFactor > 0):
+                if self.scalarField is not None:
+                    self.scalarField.meshVGCombinatoricsUpdated()
+                if self.vectorField is not None:
+                    self.vectorField.meshVGCombinatoricsUpdated()
+            self.update(scalarField=self.scalarField, vectorField=self.vectorField)
+            if currMat is not None:
+                self.currMesh.material = currMat
+    return TetMeshViewer
+
+TetMeshViewer = _makeTetMeshViewer(TriMeshViewer)
+
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
     class OffscreenTriMeshViewer(OffscreenViewerBase):
         def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, wireframe=False):
             if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
                 trimesh = RawMesh(*trimesh)
-            super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, transparent)
+            super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView=None, transparent=transparent)
             if wireframe: self.showWireframe(True)
+
+    OffscreenTetMeshViewer = _makeTetMeshViewer(OffscreenViewerBase)
 
     class OffscreenQuadHexViewer(OffscreenTriMeshViewer):
         def __init__(self, V, F, *args, **kwargs):
             super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
+
+def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False, offscreen=False):
+    import reflection
+    cls = OffscreenTriMeshViewer if offscreen else TriMeshViewer # Default to generic [Offscreen]TriMeshViewer
+    if reflection.isElasticSolid(obj):
+        # Use specialized TetMeshViewer for 3D elastic solids.
+        if (obj.dimension == 3):
+            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
+        else: raise Exception('Unepxected elastic solid dimension')
+    try:
+        if obj.is_tet_mesh():
+            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
+    except: pass
+    if reflection.isVoxelFEMSimulator(obj):
+        raise Exception('Use VoxelFEM Viewer')
+    return cls(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, superView=superView, transparent=transparent, wireframe=wireframe)
 
 def concatVisGeometries(A, B):
     return (np.vstack([A[0], B[0]]), # Stacked V

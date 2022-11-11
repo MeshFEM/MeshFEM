@@ -4,6 +4,8 @@
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
+#include <MeshFEM/Loads/SphereFitter.hh>
+#include <MeshFEM/Loads/CircumcenterBarrier.hh>
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
@@ -103,6 +105,35 @@ struct LoadBinder {
     template<class Object>
     static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &module, py::module &detail_module) {
         bind_generic<Object>(module, detail_module);
+
+        ////////////////////////////////////////////////////////////////////////
+        // Solid-specific load: SphereFitter, CircumcenterBarrier
+        ////////////////////////////////////////////////////////////////////////
+        using Real = typename Object::Real;
+        using Load = Loads::Load<Real>;
+        using SphereFitter = Loads::SphereFitter<Object>;
+        py::class_<SphereFitter, Load, std::shared_ptr<SphereFitter>>(detail_module, ("SphereFitter" + NameMangler<Object>::name()).c_str())
+            .def_readwrite("stiffness", &SphereFitter::stiffness)
+            .def_readwrite("r_tgt",     &SphereFitter::r_tgt)
+            ;
+        module.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
+                    return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
+                }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
+        ;
+
+        using CB = Loads::CircumcenterBarrier<Object>;
+        py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
+            .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
+            .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
+                                                 [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
+            .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
+                                              [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
+            .def_readwrite("bc_min", &CB::bc_min)
+            ;
+        module.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
+                    return std::make_shared<CB>(obj, bc_min, subdivisionBarrier);
+                }, py::arg("obj"), py::arg("bc_min") = 0.0, py::arg("subdivisionBarrier") = false)
+        ;
     }
 
     template<class Object>

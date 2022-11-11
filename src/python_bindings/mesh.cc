@@ -24,6 +24,9 @@ namespace py = pybind11;
 #include "MeshEntities.hh"
 
 template<class Mesh>
+using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
+
+template<class Mesh>
 struct MeshBindingsBase {
     using Real = typename Mesh::Real;
     static constexpr size_t K = Mesh::K;
@@ -260,6 +263,8 @@ struct MeshBindings<FEMMesh<3, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
             .def("boundaryMesh", [](const Mesh &m) {
                         return std::make_shared<BoundaryMesh>(getElementCorners(m.boundaryElements(), false), getVertices(m.boundaryVertices()));
                 }, "Get a triangle mesh of the boundary (copy)")
+            .def("shrunkenTetVisualizationGeometry", &getShrunkenTetVisualizationGeometry<Mesh>, py::arg("tetShrinkFactor"))
+            .def("shrunkenTetVisualizationField", [](const Mesh &m, const Eigen::MatrixXd &f) { return getShrunkenTetVisualizationField(m, f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
         ;
         return mesh_bindings;
     }

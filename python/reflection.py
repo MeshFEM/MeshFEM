@@ -23,3 +23,15 @@ def evalWithCustomArgs(f, customArgs, mandatoryArgs=[], strict=False):
             return f(*mandatoryArgs, **{k: v for k, v in customArgs.items() if hasArg(f, k)})
         return f(*mandatoryArgs, customArgs)
     return f(*mandatoryArgs)
+
+def baseClassNames(obj):
+    """
+    Get the names of all of the base classes of an object instance.
+    """
+    return [b.__name__ for b in type.mro(obj.__classes__)]
+
+def isElasticSolid(obj):
+    return 'ElasticSolid' in obj.__class__.__name__
+
+def isVoxelFEMSimulator(obj):
+    return 'TensorProductSimulator' in obj.__class__.__name__

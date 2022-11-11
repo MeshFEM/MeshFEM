@@ -15,10 +15,10 @@ def replicateAttributesPerTriCorner(attr):
     numTris = len(idxs) // 3
     for key in attr:
         attrSize = attr[key].shape[0]
-        if attrSize == numTris:
-            attr[key] = np.repeat(attr[key], 3, axis=0)
-        elif attrSize == numVerts:
+        if attrSize == numVerts:        # Assume per-vertex attributes in the case that #V = #F (i.e., for the boundary of a tetrahedron)
             attr[key] = attr[key][idxs]
+        elif attrSize == numTris:
+            attr[key] = np.repeat(attr[key], 3, axis=0)
         elif attrSize == 3 * numTris:
             pass
         else: raise Exception('Unexpected attribute size')
@@ -138,8 +138,8 @@ class ViewerBase:
     def transformModel(self, position, scale, quaternion): raise Exception('Unimplemented')
     def isRecording(self):                                 return False
 
-    def makeTransparent(self, color=None): raise Exception('Unimplemented')
-    def makeOpaque     (self, color=None): raise Exception('Unimplemented')
+    def makeTransparent(self, color=None, alpha=0.25): raise Exception('Unimplemented')
+    def makeOpaque     (self, color=None            ): raise Exception('Unimplemented')
 
     def resetCamera(self):
         self.setCameraParams(([0.0, 0.0, 5.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]))

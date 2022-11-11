@@ -63,7 +63,6 @@ private:
     Vector m_center;
 };
 
-
 // Extruded path region
 template<typename _Vector>
 struct PathRegion : Region<_Vector> {
@@ -625,15 +624,15 @@ void circumcircle_bc(const Eigen::MatrixBase<DerivedV> &V,
 
     using MXd = Eigen::Matrix<typename DerivedV::Scalar, Eigen::Dynamic, Eigen::Dynamic>;
     MXd U(D, K);
-    for (size_t i = 0; i < ne; ++i) {
-        for (size_t j = 1; j <= K; ++j) {
-            U.col(j - 1) = V.row(F(i, j)).transpose();
-        }
+    for (size_t ei = 0; ei < ne; ++ei) {
+        for (size_t j = 1; j <= K; ++j)
+            U.col(j - 1) = (V.row(F(ei, j)) - V.row(F(ei, 0))).transpose();
+
         MXd A = U.transpose() * U;
         auto lambda = (0.5 * A.llt().solve(A.diagonal())).eval();
-        C.row(i).rightCols(K) = lambda.transpose();
-        C(i, 0) = 1.0 - C.row(i).rightCols(K).sum();
-        R[i] = (U * lambda).norm();
+        C.row(ei).rightCols(K) = lambda.transpose();
+        C(ei, 0) = 1.0 - C.row(ei).rightCols(K).sum();
+        R[ei] = (U * lambda).norm();
     }
 }
 

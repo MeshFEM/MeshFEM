@@ -81,4 +81,23 @@ PYBIND11_MODULE(triangulation, m) {
             },
             py::arg("V"), py::arg("F"))
         ;
+    m.def("circumcircles",
+            [](Eigen::Ref<const Eigen::MatrixXd> V,
+               Eigen::Ref<const Eigen::MatrixXi> F) {
+                std::pair<Eigen::MatrixXd, Eigen::VectorXd> result; // P, R
+                Eigen::MatrixXd C;
+                circumcircle_bc(V, F, C, result.second);
+
+                auto &P = result.first;
+                P.resize(C.rows(), V.cols());
+                for (size_t ei = 0; ei < F.rows(); ++ei) {
+                    P.row(ei).setZero();
+                    for (size_t c = 0; c < F.cols(); ++c)
+                        P.row(ei) += C(ei, c) * V.row(F(ei, c));
+                }
+
+                return result;
+            },
+            py::arg("V"), py::arg("F"))
+        ;
 }
