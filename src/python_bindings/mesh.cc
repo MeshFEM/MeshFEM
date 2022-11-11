@@ -224,11 +224,23 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
                     }
                     return result;
                 }, "Get the lists of *boundary vertex indices* making up each boundary loop")
-            .def("visitEdges", [](const Mesh &m, const std::function<void(std::pair<size_t, size_t>, size_t)> &pyvisitor) {
+            .def("visitEdges", [](const Mesh &m, const std::function<void(std::pair<int, int>, size_t)> &pyvisitor) {
                     m.visitEdges([&pyvisitor](const CHEHandle &he, size_t edgeIdx) {
                             pyvisitor(std::make_pair(he.tail().index(), he.tip().index()), edgeIdx);
                     });
                 }, py::arg("visitor"))
+            .def("visitEdgesFaceIdxPair", [](const Mesh &m, const std::function<void(std::pair<int, int>, size_t)> &pyvisitor) {
+                    m.visitEdges([&pyvisitor](const CHEHandle &he, size_t edgeIdx) {
+                            pyvisitor(std::make_pair(
+                                he.tri().index(),
+                                he.opposite().tri().index()),
+                                edgeIdx);
+                    });
+                }, py::arg("visitor"))
+            .def("visitIncidentTris", [](const Mesh &m, size_t vi, const std::function<void(size_t)> &pyvisitor) {
+                    auto v = m.vertex(vi);
+                    v.visitIncidentElements(pyvisitor);
+                }, py::arg("vi"), py::arg("visitor"))
         ;
         return mesh_bindings;
     }
