@@ -38,7 +38,12 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             if (Deg != 1) throw std::runtime_error("CircumcenterBarrier is only intended for linear meshes");
             if (  K != N) throw std::runtime_error("CircumcenterBarrier is not intended for co-dimensional objects");
 
-            barrier.barrierThreshold = bc_min; // Put infinite barrier at constraint violation magnitude of `bc_min` (which will infinitely resist bar becoming negative)
+            // Position the infinite barrier (barrierThreshold) automatically:
+            // by default we put it at `bc_min` so that the barrier becomes
+            // infinite just as bc approaches 0. However this makes recovering from
+            // initial configurations with `bc < 0` impossible.
+            Real barrierMargin = 0.05;
+            barrier.barrierThreshold = std::max(bc_min, bc_min - minCircumcenterBC() + barrierMargin);
         }
 
         const auto &mesh() const { return Base::getObj().mesh(); }
@@ -164,13 +169,20 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             return result;
         }
 
-        static Barycooords circumcenter(const MXNd &x, const AK1i &e) {
-            MKd U = getU(x, e);
+        static Barycooords circumcenter(const MXNd &x, const AK1i &e, MKd &U, Eigen::LLT<MKd> &A_llt) {
+            U = getU(x, e);
             MKd A = U.transpose() * U;
+            A_llt = A.llt();
             Barycooords result;
-            result.template tail<K>() = 0.5 * A.llt().solve(A.diagonal());
+            result.template tail<K>() = 0.5 * A_llt.solve(A.diagonal());
             result[0] = 1.0 - result.template tail<K>().sum();
             return result;
+        }
+
+        static Barycooords circumcenter(const MXNd &x, const AK1i &e) {
+            MKd U;
+            Eigen::LLT<MKd> A_llt;
+            return circumcenter(x, e, U, A_llt);
         }
 
         Real elementEnergy(const MXNd &x, const AK1i &e) const {
@@ -183,8 +195,9 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
         using PerElementGradient = Eigen::Matrix<Real, N * (K + 1), 1>;
         PerElementGradient elementGradient(const MXNd &x, const AK1i &e) const {
-            Barycooords bc = circumcenter(x, e);
-            MKd U = getU(x, e);
+            MKd U;
+            Eigen::LLT<MKd> A_llt;
+            Barycooords bc = circumcenter(x, e, U, A_llt);
 
             // Barycooords dJ_dbc = 2 * bc; // Simple function for debugging
             Barycooords dJ_dbc;
@@ -192,7 +205,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                 dJ_dbc[i] = -barrier.db(bc_min - bc[i]);
 
             // Solve adjoint equation
-            VKd s = (U.transpose() * U).llt().solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
+            VKd s = A_llt.solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
 
             PerElementGradient result;
             for (size_t i = 0; i < K; ++i)
@@ -205,8 +218,9 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         PerElementHessian elementHessian(const MXNd &x, const AK1i &e) const {
             PerElementHessian result;
             result.setZero();
-            Barycooords bc = circumcenter(x, e);
-            MKd U = getU(x, e);
+            MKd U;
+            Eigen::LLT<MKd> A_llt;
+            Barycooords bc = circumcenter(x, e, U, A_llt);
 
             // Gradient and Hessian of the objective with respect to the barycentric coordinates
             Barycooords dJ_dbc;
@@ -218,8 +232,6 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                 d2J_dbc2(i, i) = barrier.d2b(bc_min - bc[i]);
             }
 
-            MKd A = U.transpose() * U;
-            auto A_llt = A.llt();
             // Solve adjoint equation
             VKd s = A_llt.solve((dJ_dbc.template tail<K>().array() - dJ_dbc[0]).matrix());
 
@@ -240,7 +252,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                     d2Jtilde_dbc_tail2.array()   += d2J_dbc2(0, 0);
 
                     VKd delta_s = A_llt.solve(d2Jtilde_dbc_tail2 * delta_bc_tail - delta_A * s);
-                    for (size_t i = 0; i < K; ++i) { // loop over delta g_i
+                    for (size_t i = 0; i < K; ++i) { // loop over delta g_i (upper tri)
                         // Recall that g_i = s[i] * U.col(i) - U * (s[i] * bc.template tail<K>() + bc[i + 1] * s);
                         VKd delta_g_i = delta_s[i] * U.col(i) + s[i] * delta_U.col(i)
                                       - delta_U * (s[i] * bc.template tail<K>() + bc[i + 1] * s)
@@ -253,10 +265,28 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                     }
                 }
             }
+
             return result;
         }
 
         Barycooords circumcenter(size_t ei) const { return circumcenter(Base::getObj().deformedPositions(), elementCorners(ei)); }
+
+        // Get the smallest barycentric coordinate of any of the elements
+        // (or any of the sub-elements if `m_subdivisionBarrier` is `true`).
+        Real minCircumcenterBC() const {
+            Real result = safe_numeric_limits<Real>::max();
+            const auto &o = Base::getObj();
+            for (auto e : mesh().elements()) {
+                result = std::min(result, circumcenter(o.deformedPositions(), elementCorners(e.index())).minCoeff());
+
+                if (m_subdivisionBarrier) {
+                    foreach_subelement(e.index(), [&](const AK1i &sube, auto B, auto x) {
+                        result = std::min(result, circumcenter(x, sube).minCoeff());
+                    });
+                }
+            }
+            return result;
+        }
 
         virtual Real energy() const override {
             const auto &o = Base::getObj();
@@ -275,19 +305,18 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
         // Gradient with respect to the deformed state
         virtual VXd grad_x() const override {
-            VXd result;
-            result.setZero(numVars());
-
+            BENCHMARK_SCOPED_TIMER_SECTION timer("CircumcenterBarrier.grad_x");
             const auto &o = Base::getObj();
-            for (auto e : mesh().elements()) {
-                PerElementGradient g = elementGradient(o.deformedPositions(), elementCorners(e.index()));
+            constexpr size_t nlv = Simplex::numVertices(K);
+            auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
+                PerElementGradient g = elementGradient(o.deformedPositions(), elementCorners(ei));
 
                 if (m_subdivisionBarrier) {
-                    foreach_subelement(e.index(), [&](const AK1i &sub_e, auto B, auto x) {
+                    foreach_subelement(ei, [&](const AK1i &sub_e, auto B, auto x) {
                         PerElementGradient gSub = elementGradient(x, sub_e);
-                        for (size_t lvi = 0; lvi < e.numVertices(); ++lvi) {
+                        for (size_t lvi = 0; lvi < nlv; ++lvi) {
                             auto g_v = g.template segment<N>(N * lvi);
-                            for (size_t k = 0; k < e.numVertices(); ++k) {
+                            for (size_t k = 0; k < nlv; ++k) {
                                 size_t sub_v = sub_e[k];
                                 Real lambda = B(sub_v, lvi);
                                 if (lambda == 0) continue;
@@ -297,10 +326,14 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                     });
                 }
 
+                auto e = mesh().element(ei);
                 for (auto v : e.vertices())
-                    result.template segment<N>(N * v.index()) += g.template segment<N>(N * v.localIndex());
-            }
+                    g_out.template segment<N>(N * v.index()) += g.template segment<N>(N * v.localIndex());
+            };
 
+            VXd result;
+            result.setZero(numVars());
+            assemble_parallel(accumulate_per_element_contrib, result, mesh().numElements());
             return result;
         }
 
@@ -312,20 +345,23 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         // Hessian with respect to the deformed state H_xx
         virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
-            for (auto e : mesh().elements()) {
-                PerElementHessian eH = elementHessian(o.deformedPositions(), elementCorners(e.index()));
+            const auto &m = mesh();
+            BENCHMARK_SCOPED_TIMER_SECTION timer("CircumcenterBarrier.hessian");
+            auto accumulate_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
+                PerElementHessian eH = elementHessian(o.deformedPositions(), elementCorners(ei));
 
                 if (m_subdivisionBarrier) {
-                    foreach_subelement(e.index(), [&](const AK1i &sub_e, auto B, auto x) {
+                    constexpr size_t nlv = Simplex::numVertices(K);
+                    foreach_subelement(ei, [&](const AK1i &sub_e, auto B, auto x) {
                         PerElementHessian eHSub = elementHessian(x, sub_e);
-                        for (size_t lvi_a = 0; lvi_a < e.numVertices(); ++lvi_a) {
-                            for (size_t lvi_b = 0; lvi_b < e.numVertices(); ++lvi_b) {
+                        for (size_t lvi_b = 0; lvi_b < nlv; ++lvi_b) {
+                            for (size_t lvi_a = 0; lvi_a <= lvi_b; ++lvi_a) {
                                 auto H_ab = eH.template block<N, N>(N * lvi_a, N * lvi_b);
-                                for (size_t k = 0; k < e.numVertices(); ++k) {
+                                for (size_t k = 0; k < nlv; ++k) {
                                     size_t sub_v_k = sub_e[k];
                                     Real lambda_a = B(sub_v_k, lvi_a);
                                     if (lambda_a == 0) continue;
-                                    for (size_t l = 0; l < e.numVertices(); ++l) {
+                                    for (size_t l = 0; l < nlv; ++l) {
                                         size_t sub_v_l = sub_e[l];
                                         Real lambda_b = B(sub_v_l, lvi_b);
                                         if (lambda_b == 0) continue;
@@ -337,14 +373,22 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                     });
                 }
 
+                auto e = m.element(ei);
                 for (auto v_b : e.vertices()) {
                     for (auto v_a : e.vertices()) {
                         if (v_a.index() > v_b.index()) continue;
-                        H.addNZBlock(N * v_a.index(), N * v_b.index(),
-                                     eH.template block<N, N>(N * v_a.localIndex(), N * v_b.localIndex()));
+                        // Only the upper triangle was computed above...
+                        size_t br = N * v_a.localIndex();
+                        size_t bc = N * v_b.localIndex();
+                        if (br <= bc)
+                            Hout.addNZBlock(N * v_a.index(), N * v_b.index(), eH.template block<N, N>(br, bc));
+                        else
+                            Hout.addNZBlock(N * v_a.index(), N * v_b.index(), eH.template block<N, N>(bc, br).transpose());
                     }
                 }
-            }
+            };
+
+            assemble_parallel(accumulate_per_element_contrib, H, m.numElements());
         }
 
         // *Additional* nonzeros contributed by this load to the potential energy Hessian.

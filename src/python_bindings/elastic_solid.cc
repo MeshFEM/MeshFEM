@@ -62,7 +62,7 @@ struct ElasticSolidBinder {
           .def("vertexCauchyStresses",      &ES::vertexCauchyStresses)
           .def("surfaceStressLpNorm",       &ES::surfaceStressLpNorm, py::arg("p"))
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
-                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
+                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions().topRows(obj.numVertices()));
                 return getVisualizationGeometry(visMesh, normalCreaseAngle);
              }, py::arg("normalCreaseAngle") = M_PI)
           .def("visualizationField", [](const ES &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
@@ -72,10 +72,20 @@ struct ElasticSolidBinder {
                   if (degree == 2) return toDegree<2>(es);
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
+          .def("minDeformedEdgeLen", [](const ES &es) {
+                BENCHMARK_SCOPED_TIMER_SECTION timer("minDeformedEdgeLen");
+                Real result = std::numeric_limits<Real>::max();
+                for (auto he : es.mesh().halfEdges()) {
+                    result = std::min(result, (es.deformedPositions().row(he.tip().index()) -
+                                               es.deformedPositions().row(he.tail().index())).norm());
+                }
+                return result;
+              }, "Useful for detecting collapsed elements...")
+          .def("deformedElementVolumes", &ES::deformedElementVolumes, "Numerical approximation of each element's volume in the deformed config.")
          ;
         if constexpr (K == 3) {
             pyES.def("shrunkenTetVisualizationGeometry", [](const ES &obj, double tetShrinkFactor) {
-                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedVertices());
+                FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions().topRows(obj.numVertices()));
                 return getShrunkenTetVisualizationGeometry(visMesh, tetShrinkFactor);
             }, py::arg("tetShrinkFactor"))
             .def("shrunkenTetVisualizationField", [](const ES &obj, const Eigen::MatrixXd &f) {

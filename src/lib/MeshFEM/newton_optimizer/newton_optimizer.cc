@@ -194,11 +194,11 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
     Real alpha = 0;
     bool isIndefinite = false;
-    auto reportIterate = [&](size_t i, Real energy, const Eigen::VectorXd &g, const Eigen::VectorXd &g_free) {
+    auto reportIterate = [&](size_t i, Real energy, const Eigen::VectorXd &g, const Eigen::VectorXd &g_free, bool forcePrintIfVerbose) {
         prob->writeIterateFiles(i);
         report.addEntry(energy, g.norm(), g_free.norm(), alpha, isIndefinite);
 
-        if (options.verbose && ((i % options.verbose) == 0)) {
+        if (options.verbose && (((i % options.verbose) == 0) || forcePrintIfVerbose)) {
             std::cout << i << '\t';
             report.printEntry();
             if (i % options.stdoutFlushInterval == 0)
@@ -227,7 +227,11 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // std::cout << "pre-update gradient: " << zeroOutFixedVars(prob->gradient(false)).norm() << std::endl;
         {
             BENCHMARK_SCOPED_TIMER_SECTION cbTimer("Callback");
-            prob->iterationCallback(it);
+            bool earlyExit = prob->iterationCallback(it);
+            if (earlyExit) {
+                if (options.verbose) std::cout << "Early termination requested by user callback" << std::endl;
+                break;
+            }
         }
         // Note: we allow the iteration callback to modify the variables!
         // (in case the user wants to run some custom projection/filter at the start
@@ -370,7 +374,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         }
         BENCHMARK_STOP_TIMER_SECTION("Backtracking");
 
-        reportIterate(it - 1, currEnergy, zg, g_free); // Record iterate statistics, now that we know alpha, isIndefinite
+        reportIterate(it - 1, currEnergy, zg, g_free, false); // Record iterate statistics, now that we know alpha, isIndefinite
         prob->customIterateReport(report);
 
         // Add to the working set all bounds encountered by the step of length "alpha"
@@ -424,7 +428,8 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     zg = zeroOutFixedVars(g);
     projectOutLEQConstrainedComponents(zg);
     prob->customIterateReport(report);
-    reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg));
+    reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg),
+                  /* force report under any nonzero verbosity level */ true);
     std::cout << std::flush;
 
     if ((options.verboseWorkingSet > 1) && workingSet.size()) {

@@ -14,10 +14,10 @@ namespace py = pybind11;
 //      https://github.com/pybind/pybind11/issues/1200
 // We therefore make our Python callback interface use a raw pointer to forbid this copy (which
 // causes an error since NewtonProblem is not copyable).
-using PyCallbackFunction = std::function<void(NewtonProblem *, size_t)>;
+using PyCallbackFunction = std::function<bool(NewtonProblem *, size_t)>;
 
 CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
-    return [pcb](NewtonProblem &p, size_t i) -> void { if (pcb) pcb(&p, i); };
+    return [pcb](NewtonProblem &p, size_t i) -> bool { if (pcb) return pcb(&p, i); return false; };
 }
 
 template<class EQObj, class PYEs>
