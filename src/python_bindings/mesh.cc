@@ -121,7 +121,17 @@ struct MeshBindingsBase {
                 }
                 return result;
               }, "Get the barycenters of each element")
-
+          .def("visitVertexNeighbors", [](const Mesh &m, size_t vi, const std::function<bool(size_t)> &visitor) {
+            std::set<size_t> seen{vi};
+            m.vertex(vi).visitIncidentElements([&](size_t ei) {
+                for (auto vb : m.element(ei).vertices()) {
+                    if (seen.count(vb.index())) continue;
+                    bool ret = visitor(vb.index());
+                    if (ret) break;
+                    seen.insert(vb.index());
+                }
+            });
+          })
           .def("numVertices", &Mesh::numVertices)
           .def("numElements", &Mesh::numElements)
           .def("numNodes",    &Mesh::numNodes)
