@@ -220,7 +220,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
         auto accumulate_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
             const auto &m = mesh();
             const auto &e = m.element(ei);
@@ -288,8 +288,8 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     Vector getNodePosition(size_t node_index) const { return m_x.row(node_index); }
 
-    MXNd deformedVertices() const  { return m_x.topRows(numVertices()); }
-    MXNd deformedPositions() const { return m_x; } // deformed positions for all nodes
+    auto deformedVertices() const { return m_x.topRows(numVertices()); } // return slice of m_x
+    const MXNd &deformedPositions() const { return m_x; } // deformed positions for all nodes
     MXNd restNodePositions() const {
         MXNd rpos(numNodes(), size_t(N));
         for (const auto n : mesh().nodes())
@@ -416,13 +416,24 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return std::pow(integral, 1.0 / p);
     }
 
-    VXd element3DVolumes() const {
-        if (N != 3) { throw std::runtime_error("Only 3D meshes have element volumes"); }
-        // For a tet mesh, the 3D volume associated with a tetrahedron is simply the tet's volume.
+    VXd restElementVolumes() const {
         const auto &m = mesh();
         VXd result(m.numElements());
         for (const auto e : m.elements())
             result[e.index()] = e->volume();
+        return result;
+    }
+
+    // Numerical approximation of each element's volume in the deformed config.
+    VXd deformedElementVolumes() const {
+        const auto &m = mesh();
+        VXd result(m.numElements());
+        for (const auto e : m.elements()) {
+            result[e.index()] =
+                QuadratureRule::integrate([&](const EvalPt<K> &x) {
+                        return getDeformationGradient(e.index(), x).determinant();
+                    }, e->volume());
+        }
         return result;
     }
 

@@ -29,9 +29,9 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual size_t numVars() const = 0;
 
     // Called at the start of each new iteration (after line search has been performed)
-    void iterationCallback(size_t i) {
+    bool iterationCallback(size_t i) {
         m_clearCache();
-        m_iterationCallback(i);
+        return m_iterationCallback(i);
     }
 
     virtual Real energy() const = 0;
@@ -231,7 +231,8 @@ protected:
     // Clear the cached per-iterate quantities
     void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
     // Called at the start of each new iteration (after line search has been performed)
-    virtual void m_iterationCallback(size_t /* i */) { }
+    // Returns true to exit early.
+    virtual bool m_iterationCallback(size_t /* i */) { return false; }
 
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const = 0;
     virtual void m_evalMetric (SuiteSparseMatrix &result) const = 0;

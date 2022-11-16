@@ -186,9 +186,6 @@ template<class _Mesh>
 typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getPerCornerNormals(const _Mesh &m, double normalCreaseAngle) { return getPerCornerNormals(m.boundaryElements(), normalCreaseAngle); }
 
-template<class Mesh>
-using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
-
 // Convert the field data to per-visualization-tri or per-visualization-vtx
 // (NOP for triangle meshes, extract boundary data for tet meshes).
 template<class Mesh, class FieldType>

@@ -19,7 +19,8 @@
 #include <functional>
 #include <utility>
 
-using CallbackFunction = std::function<void(NewtonProblem &, size_t)>;
+// Callback to be called like `bool earlyExit = cb(problem, iter)`
+using CallbackFunction = std::function<bool(NewtonProblem &, size_t)>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // "Guarded" implementation calls:
@@ -69,6 +70,7 @@ struct EquilibriumProblem : public NewtonProblem {
     }
 
     virtual VXd gradient(bool freshIterate = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("EquilibriumProblem.gradient");
         auto result = m_obj.gradient(freshIterate);
         for (const auto &l : m_loads)
             result += l->grad_x();
@@ -106,10 +108,11 @@ protected:
 
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override { m_obj.massMatrix(result, true, true); }
 
-    virtual void m_iterationCallback(size_t i) override {
+    virtual bool m_iterationCallback(size_t i) override {
         m_currSystemEnergy = m_obj.energy();
         m_obj.updateParametrization();
-        if (m_customCallback) m_customCallback(*this, i);
+        if (m_customCallback) return m_customCallback(*this, i);
+        return false; // don't exit early
     }
 
     CallbackFunction m_customCallback;

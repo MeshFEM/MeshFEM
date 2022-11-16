@@ -241,6 +241,24 @@ def _makeTetMeshViewer(BaseClass):
         def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
             super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
 
+        def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
+            # Wrap the passed mesh in a TetMeshWrapper if it is a tetrahedral mesh
+            if mesh is not None:
+                import reflection
+                try:
+                    if (reflection.isElasticSolid(mesh) and (mesh.dimension == 3)) or mesh.is_tet_mesh():
+                        mesh = TetMeshViewer.TetMeshWrapper(mesh)
+                        # Copy current shrink factor, if any (silently fails if
+                        # current mesh is not actually a tetrahedral mesh).
+                        mesh.tetShrinkFactor = self.mesh.tetShrinkFactor 
+                except: pass
+
+            super().update(preserveExisting=preserveExisting, mesh=mesh,
+                    updateModelMatrix=updateModelMatrix, textureMap=textureMap,
+                    scalarField=scalarField, vectorField=vectorField,
+                    transparent=transparent,
+                    displacementField=displacementField)
+
         @property
         def tetShrinkFactor(self):
             return self.mesh.tetShrinkFactor
