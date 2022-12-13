@@ -15,6 +15,7 @@
 #define RIGIDMOTIONPINS_HH
 
 #include "Types.hh"
+#include "AutomaticDifferentiation.hh"
 #include <type_traits>
 #include <utility>
 #include "newton_optimizer/dense_newton.hh"
@@ -31,7 +32,7 @@ struct RigidMotionPins<Object, std::integral_constant<bool, Object::N == 3>> {
         using M3d = Eigen::Matrix<typename Object::Real, 3, 3>;
         // Note: we only allow vertices (not edge nodes) as pins
         // to simplify the traversal to influenced elements.
-        auto P = obj.deformedPositions().topRows(obj.mesh().numVertices()).eval();
+        auto P = obj.deformedPositions().topRows(obj.numVertices()).eval();
 
         // Pick centermost vertex "c" and place it at the origin.
         int c_idx;
@@ -53,7 +54,7 @@ struct RigidMotionPins<Object, std::integral_constant<bool, Object::N == 3>> {
 
         // Detect cases where points p and q lie the XY plane but the rotation ends up
         // flipping this plane over; we undo this by flipping the y (and z) axis vectors.
-        if (std::abs(z_hat[2] - (-1)) < 1e-9) {
+        if (std::abs(stripAutoDiff(z_hat[2]) - (-1)) < 1e-9) {
             y_hat *= -1;
             z_hat *= -1;
         }
