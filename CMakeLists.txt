@@ -86,7 +86,8 @@ option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TO
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   OFF)
-option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)"   OFF)
+option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)" OFF)
+option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"    OFF)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
 
@@ -126,7 +127,10 @@ if(NOT TARGET pybind11::module)
 endif()
 
 add_subdirectory(src/python_bindings)
-add_subdirectory(3rdparty/OffscreenRenderer)
+
+if(MESHFEM_WITH_OFFSCREEN_RENDER)
+    add_subdirectory(3rdparty/OffscreenRenderer)
+endif()
 
 ################################################################################
 # Unit tests

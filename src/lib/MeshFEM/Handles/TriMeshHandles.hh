@@ -1,8 +1,11 @@
+#ifndef TRIMESHHANDLES_HH
+#define TRIMESHHANDLES_HH
+
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
 #include "Circulator.hh"
 
-#undef interface
+// #undef interface // Needed when using MSVC not in standards-compliant mode.
 
 namespace _TriMeshHandles {
 
@@ -297,3 +300,5 @@ template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::HEHandle<_Mesh>>
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles:: THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTris()            ; } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryEdges()   ; } };
+
+#endif /* end of include guard: TRIMESHHANDLES_HH */

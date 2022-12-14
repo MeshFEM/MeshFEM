@@ -1,3 +1,6 @@
+#ifndef TETMESHHANDLES_HH
+#define TETMESHHANDLES_HH
+
 #include <MeshFEM/MeshDataTraits.hh>
 #include "Handle.hh"
 #include "Circulator.hh"
@@ -394,3 +397,5 @@ template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::  THandle<_Mesh>
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryFaces()    ; } };
+
+#endif /* end of include guard: TETMESHHANDLES_HH */
