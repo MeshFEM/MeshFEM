@@ -92,6 +92,19 @@ bool isSymmetric(const Eigen::MatrixBase<_Derived>& matrix) {
     return true;
 }
 
+template<typename Derived>
+Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>
+scaleOffDiagonals(const Eigen::MatrixBase<Derived> &A, typename Derived::Scalar s) {
+    auto result = A.eval();
+    for (int i = 0; i < A.rows(); ++i) {
+        for (int j = 0; j < A.cols(); ++j) {
+            if (i == j) continue;
+            result(i, j) *= s;
+        }
+    }
+    return result;
+}
+
 // Compute the scalar product of two matrices A : B
 template<typename _Derived1, typename _Derived2>
 typename _Derived1::Scalar doubleContract(const Eigen::MatrixBase<_Derived1>& A, const Eigen::MatrixBase<_Derived2>& B)
