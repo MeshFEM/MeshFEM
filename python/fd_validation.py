@@ -51,7 +51,6 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
     analytic_delta_E = g.dot(perturb)              # Don't use `ravel()` in the case of vector-valued functions where "grad" is really a Jacobian...
 
     fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
-    setVars(obj, xold, customArgs)
 
     return (fd_delta_E, analytic_delta_E)
 
