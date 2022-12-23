@@ -21,10 +21,10 @@
 template<class Concept, class Model>
 using models_concept = std::is_base_of<Concept, Model>;
 
-template<class Concept, class Model, class T>
+template<class Concept, class Model, class T = void>
 using enable_if_models_concept_t = typename std::enable_if<models_concept<Concept, Model>::value, T>::type;
 
-template<class Concept, class Model, class T>
+template<class Concept, class Model, class T = void>
 using enable_if_not_models_concept_t = typename std::enable_if<!models_concept<Concept, Model>::value, T>::type;
 
 namespace Concepts {
