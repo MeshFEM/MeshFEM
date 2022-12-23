@@ -11,6 +11,9 @@
 #ifndef DENSE_NEWTON_HH
 #define DENSE_NEWTON_HH
 
+#include <MeshFEM/Types.hh>
+#include <iostream>
+
 template<class Problem>
 void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, bool verbose=false) {
     using HType = typename Problem::HessType;
@@ -59,7 +62,7 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
         const Real_ c_1 = 1e-4;
         const size_t nbacktrack_iter = 15;
         size_t bit;
-        Eigen::VectorXd steppedVars;
+        VType steppedVars;
         for (bit = 0; bit < nbacktrack_iter; ++bit) {
             steppedVars = vars + alpha * step;
             prob.setVars(steppedVars);

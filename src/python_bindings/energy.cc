@@ -17,6 +17,7 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/TensionFieldNeoHookean.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/StressToBiotStrain.hh>
 
 template<class Energy>
 py::class_<Energy>
@@ -33,8 +34,13 @@ bindEnergyFBased(py::module &detail_module)
         .def("d2energy",       &Energy::d2energy, py::arg("dF_a"), py::arg("dF_b"))
         .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
         .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
-        .def("PK2Stress",      &Energy::PK2Stress)
-        ;
+        .def("PK2Stress",      &Energy::PK2Stress);
+    if constexpr (Energy::EDType == EDensityType::FBased) {
+        ebind.def("stressToBiotStrain", [](const Energy &e, const Mat &PK1Stress, double gradTol, bool verbose) {
+                        return stressToBiotStrain(e, PK1Stress, gradTol, verbose);
+                    }, py::arg("PK1Stress"), py::arg("gradTol") = 1e-9, py::arg("verbose") = false, "Solve for a deformation gradient under which the material responds with a given PK1 stress")
+            ;
+    }
     return ebind;
 }
 

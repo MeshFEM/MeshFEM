@@ -23,6 +23,7 @@ struct IsoCRLETensionFieldMembrane {
     static constexpr size_t EmbeddingDimension = 3;
     static constexpr size_t N                  = Dimension;
     static constexpr size_t M                  = EmbeddingDimension;
+    static constexpr EDensityType EDType = EDensityType::Membrane;
     using Real = _Real;
     using M32d = Eigen::Matrix<Real, 3, 2>;
     using M3d  = Eigen::Matrix<Real, 3, 3>;

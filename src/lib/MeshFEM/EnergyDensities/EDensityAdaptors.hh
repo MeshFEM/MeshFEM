@@ -31,6 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EDENSITYADAPTORS_HH
 #define EDENSITYADAPTORS_HH
+#include <string>
 #include "Tensor.hh"
 #include "EnergyTraits.hh"
 #include "../Geometry.hh"
@@ -165,6 +166,7 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     static_assert((Psi_F::Dimension == 2) && (Psi_F::EDType == EDensityType::FBased),
                   "We can only create a membrane from a 2D F-based material");
     using Base = Psi_F;
+    static constexpr EDensityType EDType = EDensityType::Membrane;
     static constexpr size_t Dimension          = 2;
     static constexpr size_t EmbeddingDimension = 3;
     static constexpr size_t N                  = Dimension;

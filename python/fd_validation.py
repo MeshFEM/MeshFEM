@@ -38,6 +38,10 @@ def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVa
     return fd_delta_E
 
 def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], g = None):
+    """
+    Return (fd, an) where `fd` and `an` are the finite difference approximation and
+    analytically calculated gradient.
+    """
     xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     setVars(obj, xeval, customArgs)
