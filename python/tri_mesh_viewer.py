@@ -299,15 +299,9 @@ if HAS_OFFSCREEN:
 def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False, offscreen=False):
     import reflection
     cls = OffscreenTriMeshViewer if offscreen else TriMeshViewer # Default to generic [Offscreen]TriMeshViewer
-    if reflection.isElasticSolid(obj):
-        # Use specialized TetMeshViewer for 3D elastic solids.
-        if (obj.dimension == 3):
-            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
-        else: raise Exception('Unepxected elastic solid dimension')
-    try:
-        if obj.is_tet_mesh():
-            cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
-    except: pass
+    if reflection.hasMethod(obj, 'shrunkenTetVisualizationGeometry'):
+        # Use specialized TetMeshViewer for objects implementing the necessary interface
+        cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
     if reflection.isVoxelFEMSimulator(obj):
         raise Exception('Use VoxelFEM Viewer')
     return cls(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, superView=superView, transparent=transparent, wireframe=wireframe)

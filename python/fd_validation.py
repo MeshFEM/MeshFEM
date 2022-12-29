@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.linalg import norm
 import sparse_matrices
-from reflection import hasArg, evalWithCustomArgs
+from reflection import hasArg, evalWithCustomArgs, hasMethod
 
 def genPerturbation(x):
     return np.random.uniform(low=-1,high=1, size=x.shape)
@@ -28,9 +28,15 @@ def basisDirection(obj, c):
 def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
     xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
-    def evalAt(x):
-        setVars(obj, x, customArgs)
-        return evalWithCustomArgs(obj.energy, customArgs)
+    if (hasMethod(obj, 'energy')):
+        def evalAt(x):
+            setVars(obj, x, customArgs)
+            return evalWithCustomArgs(obj.energy, customArgs)
+    elif (hasMethod(obj, 'value')):
+        def evalAt(x):
+            setVars(obj, x, customArgs)
+            return evalWithCustomArgs(obj.value, customArgs)
+    else: raise Exception('Object does not implement `energy` or `value`')
 
     fd_delta_E = (evalAt(xeval + perturb * fd_eps) - evalAt(xeval - perturb * fd_eps)) / (2 * fd_eps)
     setVars(obj, xold, customArgs)

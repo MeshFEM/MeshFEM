@@ -53,7 +53,7 @@ struct ElasticSolidBinder {
           .def("getDeformedPositions",      &ES::deformedPositions)
           .def("getRestPositions",          &ES::restNodePositions)
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
-          .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference)
+          .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference_internal)
           .def("greenStrain",               [](const ES &es, size_t ei) { return es.greenStrain(ei); }, py::arg("ei"))
           .def("greenStrain",               [](const ES &es, size_t ei, const typename ES::EvalPtK &baryCoords) { return es.greenStrain(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))
           .def("vertexGreenStrains",        &ES::vertexGreenStrains)
@@ -107,7 +107,7 @@ struct ElasticSolidBinder {
             ;
 
         pyESRE
-            .def_property_readonly("elasticSolid", [](const ESRE &esre) -> const ES & { return esre.elasticSolid(); }, py::return_value_policy::reference)
+            .def_property_readonly("elasticSolid", [](const ESRE &esre) -> const ES & { return esre.elasticSolid(); }, py::return_value_policy::reference_internal)
             .def_property_readonly("source_x",     &ESRE::source_x)
             .def_property("method", &ESRE::getMethod, &ESRE::setMethod)
             .def("visualizationGeometry", [](const ESRE &obj, double normalCreaseAngle) {

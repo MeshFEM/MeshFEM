@@ -8,6 +8,10 @@ def hasArg(func, argName):
         # but at least their arg names are guaranteed to appear in the docstring... :(
         return argName in func.__doc__
 
+def hasMethod(obj, methodName):
+    try: return callable(obj.__getattribute__(methodName))
+    except: return False
+
 def evalWithCustomArgs(f, customArgs, mandatoryArgs=[], strict=False):
     '''
     Evaluate f(*mandatoryArgs) also passing the additional args or kwargs in `customArgs`.
@@ -35,3 +39,7 @@ def isElasticSolid(obj):
 
 def isVoxelFEMSimulator(obj):
     return 'TensorProductSimulator' in obj.__class__.__name__
+
+def isNumeric(obj):
+    import numbers
+    return isinstance(obj, numbers.Number)

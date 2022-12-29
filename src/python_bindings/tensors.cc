@@ -64,6 +64,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
                 ss << _Dimension << "D elasticity tensor with orthotropic moduli: ";
                 E.printOrthotropic(ss);
                 return ss.str(); })
+        .def("__imul__", [](ETensor E, _Real s) { E *= s; return E; })
+        .def_property_readonly_static("dimension", [](const py::object &) { return N; })
         ;
 
     if (_Dimension == 3) {
@@ -86,6 +88,8 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("toMatrix", [](const SMValue &sm) { return sm.toMatrix(); })
         .def("eigenvalues",        &SMValue::eigenvalues)
         .def("eigenDecomposition", &SMValue::eigenDecomposition)
+        .def_property_readonly("data", [](SMValue &sm) -> auto & { return sm.flattened(); })
+        .def_property_readonly_static("dimension", [](const py::object &) { return N; })
         ;
 
     py::class_<SMF>(detail_module, ("SymmetricMatrixField" + std::to_string(N) + "D" + floatingPointTypeSuffix<_Real>()).c_str())
@@ -106,6 +110,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def("__call__", [](const SMF &smf, size_t i) { if (i >= smf.domainSize()) throw std::runtime_error("Index out of bounds."); return SMValue(smf(i)); })
         ;
 
+    module.def("SymmetricMatrix", [](const SMValue                             &smat)       { return SMValue(      smat); }, py::arg("smat"));
     module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); }, py::arg("flatValues"));
     module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, N, N>          &mat)        { return SMValue(       mat); }, py::arg("mat"));
 }
@@ -119,6 +124,20 @@ void addBindings(py::module &m) {
         ;
     bindTensors<_Real, 2>(m, detail_module);
     bindTensors<_Real, 3>(m, detail_module);
+
+    m.def("IdentityRank4Tensor", [](size_t N) -> py::object {
+        if (N == 2) {
+            ElasticityTensor<_Real, 2> E;
+            E.setIdentity();
+            return py::cast(E);
+        }
+        if (N == 3) {
+            ElasticityTensor<_Real, 3> E;
+            E.setIdentity();
+            return py::cast(E);
+        }
+        throw std::runtime_error("Dimension must be 2 or 3");
+    });
 }
 
 PYBIND11_MODULE(tensors, m) {

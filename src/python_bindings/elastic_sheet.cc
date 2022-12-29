@@ -53,7 +53,7 @@ struct ElasticSheetBinder {
             ;
 
         pyES
-          .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference)
+          .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference_internal)
           .def("numThetas",                &ES::numThetas)
           .def("numCreases",               &ES::numCreases)
           .def("thetaOffset",              &ES::thetaOffset)
@@ -99,7 +99,7 @@ struct ElasticSheetBinder {
           .def("elementETensor",    &ES::elementETensor, py::arg("ei"))
 
           .def("numMaterials", &ES::numMaterials)
-          .def("getMaterial",  [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference)
+          .def("getMaterial",  [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference_internal)
           .def("setMaterials", &ES::setMaterials, py::arg("psiList"))
           .def("clearMaterialAssignments", &ES::clearMaterialAssignments)
           .def_property("elementMaterialAssignments", &ES::elementMaterialAssignments, &ES::setElementMaterialAssignments)
