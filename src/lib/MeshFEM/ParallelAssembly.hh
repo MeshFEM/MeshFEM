@@ -4,6 +4,7 @@
 #include "Eigen/Dense"
 
 #include <MeshFEM/Parallelism.hh>
+#include <MeshFEM/ParallelVectorOps.hh>
 #include <MeshFEM/SparseMatrices.hh>
 
 // Support custom thread-local data.
@@ -121,7 +122,7 @@ auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
     });
 
     for (const auto &d : localData)
-        if (!d.needs_reset) A += d.A; // this if statement will skip thread 0's unused storage.
+        if (!d.needs_reset) addScaledInPlace(A, d.A); // this if statement skips thread 0's unused storage.
 }
 
 // Returns thread local storage collection so that it might be re-used.
@@ -232,7 +233,7 @@ void assemble_parallel(const PerElemAssembler &assembler, CSCMatrix<SuiteSparse_
                           HessianAssembler<CustomData_, PerElemAssembler, Real_>(assembler, H, haLocalData));
     });
 
-    // BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread matrices");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread matrices");
     for (const auto &data : haLocalData) {
         if (data.H != nullptr)
             H.addWithIdenticalSparsity(*(data.H));

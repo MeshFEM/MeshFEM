@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cmath>
 #include "Parallelism.hh"
+#include "ParallelVectorOps.hh"
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
@@ -1145,6 +1146,18 @@ struct CSCMatrix {
         }
     }
 
+    // Add a vertical strip of contiguous nonzero values *ending* at (i, i)
+    template<class Derived>
+    void addDiagNZStrip(_Index i, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
+
+        _Index idx = findDiagEntry(i);
+        for (SuiteSparse_long k = values.size() - 1; k >= 0; --k, --idx) { // upper triangle only
+            Ax[idx] += values[k];
+        }
+    }
+
     void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
     void addScaledIdentity(_Real v) {
@@ -1293,11 +1306,15 @@ struct CSCMatrix {
     template<typename IdxVector2>
     void addWithIdenticalSparsity(const CSCMatrix<_Index, _Real, IdxVector2> &b, double alpha = 1.0) {
         if (b.Ax.size() != Ax.size()) throw std::runtime_error("nnz mismatch");
-        // Probably more efficient, but doesn't work with block matrices (add specialization?):
-        // if (alpha == 1.0) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) +=         Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
-        // else              { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) += alpha * Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(b.Ax.data(), b.Ax.size()); }
-        if (alpha == 1.0) { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] +=         b.Ax[i]; }); }
-        else              { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] += alpha * b.Ax[i]; }); }
+        if constexpr (std::is_arithmetic_v<_Real>) {
+            Eigen::Map<      Eigen::Matrix<_Real, Eigen::Dynamic, 1>>  AEigen(  Ax.data(),   Ax.size());
+            Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>> bAEigen(b.Ax.data(), b.Ax.size());
+            addScaledInPlace(AEigen, bAEigen, alpha);
+        }
+        else {
+            if (alpha == 1.0) { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] +=         b.Ax[i]; }); }
+            else              { parallel_for_range(Ax.size(), [&](size_t i) { Ax[i] += alpha * b.Ax[i]; }); }
+        }
     }
 
     void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }

@@ -32,12 +32,12 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
 
     // Constructor copying material properties only, not the current deformation
     NeoHookeanEnergyBase(const NeoHookeanEnergyBase &other, UninitializedDeformationTag &&)
-        : m_lambda(other.m_lambda), m_mu(other.m_mu), m_finite_continuation_start(other.m_finite_continuation_start)
+        : m_lambda(other.m_lambda), m_mu(other.m_mu)
     { }
 
     // Construct from Lame's first parameter (lambda) and shear modulus (mu).
-    NeoHookeanEnergyBase(Real lambda, Real mu, Real finite_continuation_start = -1)
-        : m_lambda(lambda), m_mu(mu), m_finite_continuation_start(finite_continuation_start)
+    NeoHookeanEnergyBase(Real lambda, Real mu)
+        : m_lambda(lambda), m_mu(mu)
     {
         setDeformationGradient(Matrix::Identity());
     }
@@ -52,38 +52,17 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
 
     Real energy() const {
         // Standard behavior: return inf for inverted elements
-        if (m_finite_continuation_start <= 0 && m_detF < 0) {
+        if (m_detF < 0)
             return std::numeric_limits<Real>::max();
-        }
+
 
         const Real I3 = getI3();
         const Real I1 = getI1();
-
-        // Modified behavior to support inverted elements:
-        // if det F < eps, we replace the log(I3) term by a constant + exp(- (det (F) - eps) )
-        // where the constant is chosen such that the energy remains continuous
-        if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
-            Derived tmp(m_lambda, m_mu, m_finite_continuation_start);
-            Matrix tmp_F = Matrix::Identity();
-            tmp_F(0, 0) = m_finite_continuation_start;
-            tmp.setDeformationGradient(tmp_F);
-            Real continuation_constant = - std::log(tmp.getI3()) * (m_lambda / 2 + m_mu) / 2;
-
-            return m_lambda * (I3 - 1) / 4 + m_mu * (I1 - 3) / 2
-                + continuation_constant + std::exp(-(m_detF - m_finite_continuation_start)) - 1;
-        }
 
         return (m_mu / 2) * (I1 - 3) + (m_lambda / 4) * (I3 - 1) - std::log(I3) * (m_mu / 2 + m_lambda / 4);
     }
 
     Matrix denergy() const {
-        if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
-            Real dPsi3 = m_lambda / 4;
-            return (-std::exp(-(m_detF - m_finite_continuation_start))) * m_detF * m_Finv.transpose()
-                + dPsi3 * d_I3_d_F()
-                + d_psi_d_I1() * d_I1_d_F();
-        }
-
         return d_psi_d_I1() * d_I1_d_F() + d_psi_d_I3() * d_I3_d_F();
     }
 
@@ -97,21 +76,6 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     //      (d^2 psi / dF^2) : dF
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const {
-        if (m_finite_continuation_start > 0 && m_detF < m_finite_continuation_start) {
-            // ln I3 term is constant, but exp(-(detF)) got added
-            Real dPsi3 = m_lambda / 4;
-            Real exp_term = -std::exp(-(m_detF - m_finite_continuation_start));
-
-            Matrix d_det_dF = m_detF * m_Finv.transpose();
-            Matrix delta_d_det_dF = doubleContract(d_det_dF, dF) * m_Finv.transpose()
-                                  - m_detF * (m_Finv * dF * m_Finv).transpose();
-
-            return exp_term * d_det_dF * d_det_dF
-                + exp_term * delta_d_det_dF
-                + dPsi3 * delta_d_I3_d_F(dF)
-                + d_psi_d_I1() * delta_d_I1_d_F(dF);
-        }
-
         Matrix dI3 = d_I3_d_F();
         Real delta_I3 = doubleContract(dI3, dF);
         return d_psi_d_I1() * delta_d_I1_d_F(dF) + (d2_psi_d2_I3() * delta_I3) * dI3 + d_psi_d_I3() * delta_d_I3_d_F(dF);
@@ -121,8 +85,6 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     // Second variation of "denergy" along (dF_a, dF_b)
     template<class Mat_, class Mat2_>
     Matrix delta2_denergy(const Mat_ &dF_a, const Mat2_ &dF_b) const {
-        if (m_finite_continuation_start > 0) throw std::runtime_error("Finite continuation energy variant is not supported");
-
         Matrix dI3 = d_I3_d_F();
         Real delta_I3_a = doubleContract(dI3, dF_a),
              delta_I3_b = doubleContract(dI3, dF_b);
@@ -225,7 +187,6 @@ protected:
 
     Real m_lambda = 0.0; // Lame's first parameter
     Real m_mu = 0.0;     // Shear modulus
-    Real m_finite_continuation_start = -1;
 
     // Cached deformation quantities.
     Matrix m_F = Matrix::Identity(), m_Finv = Matrix::Identity();
