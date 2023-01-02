@@ -138,7 +138,7 @@ struct IsoCRLEFixed {
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const { //ZZ SimpleDefinedDeltaP
-        Matrix result = (2 * m_mu) * dF;
+        Matrix result = ((2 * m_mu) * dF).matrix();
         for (size_t i = 0; i < NumTwistEigenmodes; ++i) {
             Real coeff_t = m_lambda * m_flipEigenvalueCoeffs[i] * (m_J - 1.0) / 2.0;
             Real coeff_l = -coeff_t;

@@ -245,6 +245,38 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
                unpaddedI3()               * delta_d_C33_d_F(dF);
     }
 
+    static constexpr size_t N = Base::N;
+    using Hessian = Eigen::Matrix<Real, N * N, N * N>;
+    using Base::d2energy; // prevent shadowing
+    Hessian d2energy() const {
+        // Inlined and deduplicated accelerated calculations...
+        Hessian H;
+        const Real d_psi_d_I1_eval         = Base::d_psi_d_I1();
+        const Real d_psi_d_I3_eval         = Base::d_psi_d_I3();
+        const Real d_C33_d_unpaddedI3_eval = d_C33_d_unpaddedI3();
+        const Real unpaddedI3_eval         = m_detF * m_detF;
+        const Real coeff_1 = (d_psi_d_I1_eval + d_psi_d_I3_eval * unpaddedI3_eval);
+        const Real delta_d_unpaddedI3_coeff = (coeff_1 * d_C33_d_unpaddedI3_eval + d_psi_d_I3_eval * m_C33) * unpaddedI3_eval;
+              Real coeff_2 = (m_C33 + (unpaddedI3_eval * d_C33_d_unpaddedI3_eval));
+                   coeff_2 *= coeff_2 * Base::d2_psi_d2_I3();
+                   coeff_2 += (2 * d_C33_d_unpaddedI3_eval) * (d_psi_d_I3_eval - m_C33 * coeff_1 * (m_lambda / (m_lambda + 2 * m_mu)));
+                   coeff_2  = 2 * (coeff_2 * unpaddedI3_eval * unpaddedI3_eval + delta_d_unpaddedI3_coeff);
+        const Matrix Finv_T = m_Finv.transpose(); // Enable transposed matrix to be stored contiguously in a SIMD register...
+
+        for (size_t j = 0; j < N; ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                // delta_F = e_i \otimes e_j
+                Matrix delta_de = (coeff_2 * m_Finv(j, i)) * Finv_T
+                                - delta_d_unpaddedI3_coeff * (Finv_T.col(j) * m_Finv.col(i).transpose());
+                delta_de(i, j) += d_psi_d_I1_eval;
+                delta_de *= 2;
+                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
+            }
+        }
+
+        return H;
+    }
+
     // (d^3 I1 / dF^3) :: (dF_a \otimes dF_b)
     Matrix delta2_d_I1_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return delta2_d_C33_d_F(dF_a, dF_b); }
 
@@ -314,6 +346,7 @@ protected:
 
 private:
     using Base::m_F;
+    using Base::m_Finv;
     using Base::m_detF;
     using Base::m_lambda;
     using Base::m_mu;

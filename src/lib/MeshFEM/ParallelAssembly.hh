@@ -68,7 +68,7 @@ return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, co
 
     Real_ result = 0;
     for (const auto &d : localData)
-        result += d.v; // this if statement will skip thread 0's unused storage.
+        result += d.v;
     return result;
 }
 

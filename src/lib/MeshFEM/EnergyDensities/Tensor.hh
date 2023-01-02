@@ -216,7 +216,7 @@ bool arePastEndIndices(size_t row, size_t col) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Support for accelerating calculations involving Jacobians of vector-valued
-// shape functions
+// shape functions and canonical basis matrices  e_i ⨂  e_j.
 ////////////////////////////////////////////////////////////////////////////////
 
 // The vectorized shape functions are of the form
@@ -311,6 +311,100 @@ struct VectorizedShapeFunctionJacobian {
     }
 };
 
+template<class T>
+struct IsVectorizedShapeFunctionJacobian { static constexpr bool value = false; };
+template<int D, class GradType>
+struct IsVectorizedShapeFunctionJacobian<VectorizedShapeFunctionJacobian<D, GradType>> {
+    static constexpr bool value = true;
+};
+
+// (scalings of) Canonical basis matrices: a e_i ⨂  e_j
+template<int D, int N, typename Real>
+struct CanonicalBasisMatrix {
+    // Emulate part of Eigen's interface.
+    // This also allows VectorizedShapeFunctionJacobian to
+    // masquerade as a DxN matrix in metaprogramming type checks (e.g., isMatrixOfSize).
+    static constexpr int RowsAtCompileTime = D;
+    static constexpr int ColsAtCompileTime = N;
+    using Scalar     = Real;
+    using MatrixType = Eigen::Matrix<Scalar, D, N>;
+    using ColVec     = Eigen::Matrix<Scalar, D, 1>;
+    using Derived    = MatrixType;
+
+    int i = 0, j = 0;
+    Scalar a = 0;
+
+    CanonicalBasisMatrix(int ii, int jj, Scalar aa = 1.0)
+        : i(ii), j(jj), a(aa) { }
+
+    MatrixType toMatrix() const {
+        MatrixType result(MatrixType::Zero());
+        result(i, j) = a;
+        return result;
+    }
+
+    // Note: it doesn't seem possible to actually use this explicit cast operator
+    // except by directly calling `.operator MatrixType()`--this is because Eigen's
+    // converting constructor is preferred when issuing a
+    // `static_cast<MatrixType()` or `MatrixType()`.
+    explicit operator MatrixType() const { // Allow conversion to underlying matrix type when necessary.
+        return toMatrix();
+    }
+
+    // Note: this method provides the same conversion interface as Eigen::DenseBase::matrix();
+    // this allows generic code to call `.matrix()` on CanonicalBasisMatrix or Eigen types.
+    MatrixType matrix() const { return toMatrix(); }
+
+    template<class Derived>
+    friend auto operator*(const CanonicalBasisMatrix &A, const Eigen::MatrixBase<Derived> &B) {
+        using ResultType = VectorizedShapeFunctionJacobian<D, Eigen::Matrix<Scalar, Derived::ColsAtCompileTime, 1>>;
+        return ResultType(A.i, B.row(A.j).transpose());
+    }
+
+    template<class Derived>
+    friend auto operator*(const Eigen::MatrixBase<Derived> &A, const CanonicalBasisMatrix &B) {
+        Eigen::Matrix<Scalar, Derived::RowsAtCompileTime, ColsAtCompileTime> result;
+        result.setZero(A.rows(), ColsAtCompileTime);
+        result.col(B.j) = A.col(B.i);
+        return result;
+    }
+
+    template<typename Real2, class Enable = std::enable_if_t<std::is_arithmetic<Real2>::value>>
+    friend CanonicalBasisMatrix operator*(const Real2 &s, const CanonicalBasisMatrix &A) {
+        return CanonicalBasisMatrix(A.i, A.j, A.a * s);
+    }
+
+    template<typename Real2, class Enable = std::enable_if_t<std::is_arithmetic<Real2>::value>>
+    friend CanonicalBasisMatrix operator*(const CanonicalBasisMatrix &A, const Real2 &s) {
+        return s * A;
+    }
+
+    template<class Derived>
+    friend MatrixType operator+(const CanonicalBasisMatrix &A, const Eigen::MatrixBase<Derived> &B) {
+        static_assert((RowsAtCompileTime == Derived::RowsAtCompileTime) &&
+                      (ColsAtCompileTime == Derived::ColsAtCompileTime), "Size mismatch");
+        MatrixType result(B);
+        result(A.i, A.j) += A.a;
+        return result;
+    }
+
+    template<class Derived>
+    friend MatrixType operator+(const Eigen::MatrixBase<Derived> &A, const CanonicalBasisMatrix &B) {
+        return B + A;
+    }
+
+    template<class Derived>
+    friend ColVec colCross(const CanonicalBasisMatrix &A, int j, const Eigen::MatrixBase<Derived> &v) {
+        // A.a * e_i.cross(v)
+        if (j != A.j) return ColVec::Zero();
+        ColVec result;
+        result[ A.i         ] = 0.0;
+        result[(A.i + 2) % D] =  A.a * v[(A.i + 1) % D];
+        result[(A.i + 1) % D] = -A.a * v[(A.i + 2) % D];
+        return result;
+    }
+};
+
 // A : (B.c otimes B.g)
 template<class Derived, int D, class GradType>
 typename Derived::Scalar doubleContract(const Eigen::MatrixBase<Derived> &A,
@@ -322,12 +416,14 @@ template<class Derived, int D, class GradType>
 auto doubleContract(const VectorizedShapeFunctionJacobian<D, GradType> &A,
                       const Eigen::MatrixBase<Derived> &B) { return doubleContract(B, A); }
 
-template<class T>
-struct IsVectorizedShapeFunctionJacobian { static constexpr bool value = false; };
-template<int D, class GradType>
-struct IsVectorizedShapeFunctionJacobian<VectorizedShapeFunctionJacobian<D, GradType>> {
-    static constexpr bool value = true;
-};
+template<class Derived, int D, int N, typename Real>
+Real doubleContract(const Eigen::MatrixBase<Derived> &A, const CanonicalBasisMatrix<D, N, Real> &B) {
+    return B.a * A(B.i, B.j);
+}
+
+template<class Derived, int D, int N, typename Real>
+Real doubleContract(const CanonicalBasisMatrix<D, N, Real> &A,
+                      const Eigen::MatrixBase<Derived> &B) { return doubleContract(B, A); }
 
 // Some operations that can be accelerated with VectorizedShapeFunctionJacobian types.
 template<class AType, class BType, typename =
@@ -339,6 +435,12 @@ template<int D, class GradType>
 bool AtBKnownZero(const VectorizedShapeFunctionJacobian<D, GradType> &A,
                   const VectorizedShapeFunctionJacobian<D, GradType> &B) {
     return A.c != B.c;
+}
+
+template<int D, int N, typename Real>
+bool AtBKnownZero(const CanonicalBasisMatrix<D, N, Real> &A,
+                  const CanonicalBasisMatrix<D, N, Real> &B) {
+    return A.i != B.i;
 }
 
 template<class AType, class BType, typename =
@@ -360,6 +462,18 @@ auto computeAtB(const VectorizedShapeFunctionJacobian<D, GradType> &A,
     return Result(Result::Zero());
 }
 
+template<int D, int N, typename Real>
+bool compuateAtB(const CanonicalBasisMatrix<D, N, Real> &A,
+                 const CanonicalBasisMatrix<D, N, Real> &B) {
+    CanonicalBasisMatrix<D, N, Real> result; 
+    if (A.i == B.i) {
+        result.i = A.j;
+        result.j = B.j;
+        result.a = A.a * B.a;
+    }
+    return result;
+}
+
 template<class Derived1, class Derived2>
 Eigen::Matrix<typename Derived1::Scalar, 3, 1>
 colCross(const Eigen::MatrixBase<Derived1> &A, int j, const Eigen::MatrixBase<Derived2> &v) {
@@ -369,11 +483,17 @@ colCross(const Eigen::MatrixBase<Derived1> &A, int j, const Eigen::MatrixBase<De
 }
 
 template<int D, class GradType>
-SMVType<VectorizedShapeFunctionJacobian<D, GradType>>
-symmetrized(const VectorizedShapeFunctionJacobian<D, GradType> &A) {
+auto symmetrized(const VectorizedShapeFunctionJacobian<D, GradType> &A) {
     SMVType<VectorizedShapeFunctionJacobian<D, GradType>> result; // zero-initializes
     for (int i = 0; i < int(D); ++i)
         result(A.c, i) = ((i == A.c) ? 1.0 : 0.5) * A.g[i];
+    return result;
+}
+
+template<int D, typename Real>
+auto symmetrized(const CanonicalBasisMatrix<D, D, Real> &A) {
+    SMVType<CanonicalBasisMatrix<D, D, Real>> result;
+    result(A.i, A.j) = ((A.i == A.j) ? 1.0 : 0.5) * A.a;
     return result;
 }
 
@@ -416,14 +536,35 @@ applyFlattened4thOrderTensor(const Eigen::MatrixBase<FlattenedTensorDerived> &C,
     using Scalar = typename FlattenedTensorDerived::Scalar;
     constexpr int M = D,
                   N = GradType::RowsAtCompileTime;
-    using FlatMatrix = Eigen::Matrix<Scalar, M * N, 1>;
     // "e" consists of a single nonzero row at index "e.c" with values "e.g"
     // We assume column major ordering, so the flattened version of "e" has
     // nonzero values at indices `e.c + D * i`.
-    FlatMatrix flatResult = C.col(e.c) * e.g[0];
+    Eigen::Matrix<Scalar, M, N> result;
+    using FlatMatrix = Eigen::Matrix<Scalar, M * N, 1>;
+    auto flatResult = Eigen::Map<FlatMatrix>(result.data());
+    flatResult = C.col(e.c) * e.g[0];
     for (int i = 1; i < N; ++i)
         flatResult += C.col(e.c + D * i) * e.g[i];
-    return Eigen::Map<Eigen::Matrix<Scalar, M, N>>(flatResult.data());
+    return result;
+}
+
+// Compute the double contraction `C : e` for fourth order tensor `C` and matrix `e`.
+// Assumes that C has been flattened **in column major order**
+template<class FlattenedTensorDerived, int D, int N, typename Real>
+std::enable_if_t<(FlattenedTensorDerived::RowsAtCompileTime == FlattenedTensorDerived::RowsAtCompileTime)
+                && (FlattenedTensorDerived::ColsAtCompileTime == (D * N)),
+Eigen::Matrix<typename FlattenedTensorDerived::Scalar, D, N>>
+applyFlattened4thOrderTensor(const Eigen::MatrixBase<FlattenedTensorDerived> &C,
+                             const CanonicalBasisMatrix<D, N, Real> &e) {
+    using Scalar = typename FlattenedTensorDerived::Scalar;
+    constexpr int M = D;
+
+    Eigen::Matrix<Scalar, M, N> result;
+    using FlatMatrix = Eigen::Matrix<Scalar, M * N, 1>;
+    auto flatResult = Eigen::Map<FlatMatrix>(result.data());
+
+    flatResult = C.col(e.i + D * e.j) * e.a;
+    return result;
 }
 
 #endif

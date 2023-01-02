@@ -31,9 +31,9 @@ bindEnergyFBased(py::module &detail_module)
         .def("energy", &Energy::energy)
         .def("denergy", py::overload_cast<          >(&Energy::denergy, py::const_))
         .def("denergy", py::overload_cast<const Mat&>(&Energy::denergy, py::const_), py::arg("dF"))
-        .def("d2energy",       &Energy::d2energy, py::arg("dF_a"), py::arg("dF_b"))
-        .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
-        .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
+        .def("d2energy",       [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.d2energy      (dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
+        .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                 ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
+        .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
         .def("PK2Stress",      &Energy::PK2Stress);
     if constexpr (Energy::EDType == EDensityType::FBased) {
         ebind.def("stressToBiotStrain", [](const Energy &e, const Mat &PK1Stress, double gradTol, bool verbose) {

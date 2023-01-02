@@ -270,6 +270,50 @@ struct MembraneEnergyDensityFrom2x2Density<Psi_F, std::enable_if_t<Psi_F::EDType
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+// Evaluate d^2 Psi/dF^2, either by calling d2energy() if it exists or by
+// probing `psi.delta_denergy` with the canonical basis matrices.
+////////////////////////////////////////////////////////////////////////////////
+// Note: the `int`/`char` first argument is used as a hack to resolve ambiguity
+// in favor of the `d2energy()` version, as described here:
+//      https://stackoverflow.com/questions/38283086/how-to-resolve-ambiguity-in-overloaded-functions-using-sfinae
+template<class Psi_F>
+auto evaluate_d2energy_dF2_impl(/* hack */ int, const Psi_F &psi) -> decltype(psi.d2energy()) {
+    return psi.d2energy();
+}
+
+template<class Psi_F>
+auto evaluate_d2energy_dF2_impl(/* hack */ char, const Psi_F &psi) {
+    static_assert(Psi_F::EDType == EDensityType::FBased
+               || Psi_F::EDType == EDensityType::Membrane, "Psi_F must be F-based or Membrane");
+    using Matrix  = typename Psi_F::Matrix;
+    static constexpr size_t N = Psi_F::N;
+    static constexpr size_t M = Matrix::RowsAtCompileTime; // Embedding dimension (may differ from N)
+    using Hessian  = Eigen::Matrix<Real, M * N, M * N>;
+
+    // Evaluate the full Hessian by probing it on a basis with delta_denergy.
+    Hessian H;
+    CanonicalBasisMatrix<M, N, Real> probe(0, 0, 1.0);
+    for (size_t j = 0; j < N; ++j) {
+        probe.j = j;
+        for (size_t i = 0; i < M; ++i) {
+            probe.i = i;
+            auto delta_de = psi.delta_denergy(probe);
+            // Column major flattening order to match `Matrix`!
+            H.col(i + j * M) = Eigen::Map<const Eigen::Matrix<double, M * N, 1>>(delta_de.data());
+        }
+    }
+
+    if ((H - H.transpose()).squaredNorm() > 1e-10 * H.squaredNorm())
+        throw std::runtime_error("Asymmetric probed Hessian");
+    return H;
+}
+
+template<class Psi_F>
+auto evaluate_d2energy_dF2(const Psi_F &psi) {
+    return evaluate_d2energy_dF2_impl(/* hack */ 0, psi);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Brute-force Hessian Projection for F-based energy densities.
 ////////////////////////////////////////////////////////////////////////////////
 template<class Psi_F, class Enable = void>
@@ -307,25 +351,11 @@ struct AutoHessianProjection : Psi_F {
         if (!usingProjection() || elevel < EvalLevel::Hessian)
             return;
 
-        // Evaluate the full Hessian by probing it on a basis with delta_denergy.
-        Hessian H;
-        VectorizedShapeFunctionJacobian<M, Vector> probe(0, Vector::Zero());
-        for (size_t j = 0; j < N; ++j) {
-            probe.g[j] = 1.0;
-            for (size_t i = 0; i < M; ++i) {
-                probe.c = i;
-                auto delta_de = Base::delta_denergy(probe);
-                // Column major flattening order to match `Matrix`!
-                H.col(i + j * M) = Eigen::Map<const Eigen::Matrix<double, M * N, 1>>(delta_de.data());
-            }
-            probe.g[j] = 0.0;
-        }
-
-        if ((H - H.transpose()).squaredNorm() > 1e-10 * H.squaredNorm())
-            throw std::runtime_error("Asymmetric probed Hessian");
+        Hessian H = evaluate_d2energy_dF2(*(Psi_F *)(this));
 
         ESolver Hes(H);
-        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        // m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().asDiagonal() * Hes.eigenvectors().transpose();
     }
 
     template<class Mat_>
