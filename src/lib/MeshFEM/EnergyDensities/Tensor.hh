@@ -394,9 +394,9 @@ struct CanonicalBasisMatrix {
     }
 
     template<class Derived>
-    friend ColVec colCross(const CanonicalBasisMatrix &A, int j, const Eigen::MatrixBase<Derived> &v) {
+    friend ColVec colCross(const CanonicalBasisMatrix &A, int col, const Eigen::MatrixBase<Derived> &v) {
         // A.a * e_i.cross(v)
-        if (j != A.j) return ColVec::Zero();
+        if (col != A.j) return ColVec::Zero();
         ColVec result;
         result[ A.i         ] = 0.0;
         result[(A.i + 2) % D] =  A.a * v[(A.i + 1) % D];

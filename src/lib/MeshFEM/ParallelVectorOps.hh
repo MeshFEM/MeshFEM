@@ -88,7 +88,7 @@ void addScaledInPlace(Eigen::MatrixBase<Derived1> &x, const Eigen::MatrixBase<De
     if (y.cols() != x.cols()) throw std::runtime_error("Col size mismatch");
     if (a == 1.0) {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, x.rows()),
-                          [a, &y, &x](const tbb::blocked_range<size_t> &r) {
+                          [&y, &x](const tbb::blocked_range<size_t> &r) {
                 x.middleRows(r.begin(), r.size()) += y.middleRows(r.begin(), r.size());
             });
     }
