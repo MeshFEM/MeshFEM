@@ -1274,7 +1274,7 @@ struct CSCMatrix {
     }
 
     CSCMatrix &operator=(const CSCMatrix  &b) { Ap = b.Ap           ; Ai = b.Ai           ; Ax = b.Ax           ; m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
-    CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); std::move(Ai = b.Ai); std::move(Ax = b.Ax); m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
+    CSCMatrix &operator=(      CSCMatrix &&b) { Ap = std::move(b.Ap); Ai = std::move(b.Ai); Ax = std::move(b.Ax); m = b.m; n = b.n; nz = b.nz; symmetry_mode = b.symmetry_mode; return *this; }
     template<typename _Real2>
     CSCMatrix &operator=(const CSCMatrix<_Index, _Real2> &b) {
         Ap = b.Ap; Ai = b.Ai;
@@ -1714,18 +1714,30 @@ struct CSCMatrix {
         return result;
     }
 
-    // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively
+    // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively.
+    // If passed, `reducedEntryForEntry` will be filled with the destination
+    // location in the new, smaller `Ax` of each original matrix entry
+    // (or INDEX_NONE if that entry was removed).
+    // If no rows/cols are removed, then `reducedEntryForEntry` will be resized to zero.
     template<class Predicate>
-    void rowColRemoval(const Predicate &shouldRemove) {
+    void rowColRemoval(const Predicate &shouldRemove, std::vector<_Index> *reducedRowForRow = nullptr, std::vector<_Index> *reducedEntryForEntry = nullptr) {
         if (m != n) throw std::runtime_error("rowColRemoval only implemented for square matrices");
 
         // Determine the mapping from old row indices to new (reduced) row indices.
-        constexpr _Index NONE = std::numeric_limits<_Index>::max();
-        std::vector<_Index> replacementRowIdx(n, NONE);
+        std::vector<_Index> rr_tmp; // internal local version used only if `reducedRowForRow` was not passed
+        auto rr_ptr = reducedRowForRow ? reducedRowForRow : &rr_tmp;
+        std::vector<_Index> &replacementRowIdx = *rr_ptr;
+        replacementRowIdx.assign(n, INDEX_NONE);
+
         size_t toRemove = 0;
         for (_Index reducedIdx = 0, i = 0; i < m; ++i) {
             if (shouldRemove(i)) { ++toRemove; continue; }
             replacementRowIdx[i] = reducedIdx++;
+        }
+
+        if (reducedEntryForEntry) {
+            if (toRemove == 0) reducedEntryForEntry->clear(); // rowColRemoval was a NOP operation; reducedEntryForEntry is the identity.
+            else               reducedEntryForEntry->resize(nz, INDEX_NONE);
         }
 
         if (toRemove == 0) return;
@@ -1744,6 +1756,7 @@ struct CSCMatrix {
                 if (shouldRemove(i)) continue;
                 Ai[entry_back] = replacementRowIdx[i];
                 Ax[entry_back] = Ax[idx];
+                if (reducedEntryForEntry) (*reducedEntryForEntry)[idx] = entry_back;
                 ++entry_back;
             }
             idx_begin = idx_end;
@@ -1828,8 +1841,15 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
         case CholeskyProvider::CHOLMOD:
             return std::make_unique<CholmodFactorizer>(std::forward<Args>(args)...);
         case CholeskyProvider::Catamari:
+        case CholeskyProvider::CatamariNesdis:
 #if MESHFEM_WITH_CATAMARI
-            return std::make_unique<CatamariFactorizer>(std::forward<Args>(args)...);
+            {
+                auto c = std::make_unique<CatamariFactorizer>(std::forward<Args>(args)...);
+                c->orderingMethod = (provider == CholeskyProvider::Catamari)
+                                            ? CatamariFactorizer::OrderingMethod::Catamari
+                                            : CatamariFactorizer::OrderingMethod::CholmodNesdis;
+                return c;
+            }
 #endif
             throw std::runtime_error("Compiled without Catamari");
         default:
@@ -1839,7 +1859,7 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
 
 inline CholeskyProvider get_default_cholesky_provider() noexcept {
 #if MESHFEM_WITH_CATAMARI
-    return CholeskyProvider::Catamari;
+    return CholeskyProvider::CatamariNesdis;
 #else
     return CholeskyProvider::CHOLMOD;
 #endif

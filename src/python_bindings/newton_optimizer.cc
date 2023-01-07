@@ -85,7 +85,6 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readonly("success",          &ConvergenceReport::success)
         .def         ("numIters",         &ConvergenceReport::numIters)
         .def_readonly("energy",           &ConvergenceReport::energy)
-        .def_readonly("gradientNorm",     &ConvergenceReport::gradientNorm)
         .def_readonly("freeGradientNorm", &ConvergenceReport::freeGradientNorm)
         .def_readonly("stepLength",       &ConvergenceReport::stepLength)
         .def_readonly("indefinite",       &ConvergenceReport::indefinite)

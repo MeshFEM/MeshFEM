@@ -92,8 +92,8 @@ inline cholmod_sparse cholmod_sparse_view(const SuiteSparseMatrix &A) {
 
 struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Size of the factorized matrix.
-    size_t m() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
-    size_t n() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
+    size_t m_reduced() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
+    size_t n_reduced() const override { assertFactorization(FactorizationType::Symbolic); return m_L->n; }
 
     CholmodFactorizer(bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) {
         m_c = std::make_shared<cholmod_common>();
@@ -144,8 +144,9 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     CholmodFactorizer &operator=(const CholmodFactorizer  &b) = delete;
 
     // Perform only the symbolic factorization for the given matrix `mat`.
-    void factorizeSymbolic(const SuiteSparseMatrix &mat) override {
-        m_factorizeSymbolicImpl(cholmod_sparse_view(mat));
+    void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override {
+        const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
+        m_factorizeSymbolicImpl(cholmod_sparse_view(*A_reduced));
     }
 
     // (Re)compute the numeric factorization, reusing the symbolic factorization
@@ -156,7 +157,8 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     //       since it just uses CHOLMOD's return status. If the diagonal entry of L
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
-    void factorizeNumeric(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
+    void factorizeNumeric(const SuiteSparseMatrix &fullMat, bool isInTryCatch=false) override {
+        const SuiteSparseMatrix &mat = *m_rowColRemoval(fullMat);
         cholmod_sparse A = cholmod_sparse_view(mat);
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);
 
@@ -192,13 +194,14 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         factorizeNumeric(*m_Ashift, isInTryCatch);
     }
 
-    void factorize(const SuiteSparseMatrix &mat, bool isInTryCatch=false) override {
+    void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         clearFactors();
+        factorizeSymbolic(mat, fixedVars);
         factorizeNumeric(mat, isInTryCatch);
     }
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRaw(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
+    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
         assertFactorization(sys);
         static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
 
@@ -221,14 +224,16 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
             default: throw std::runtime_error("Unknown sys parameter");
         }
 
-        BENCHMARK_START_TIMER("CHOLMOD Backsub");
+        BENCHMARK_START_TIMER("CHOLMOD Solve");
         // Solve A x = b re-using the workspace vectors x, Y, and E
-        cholmod_l_solve2(chol_sys, m_L, &cholb, NULL, &cholx_ptr, NULL, &m_Y, &m_E, m_c.get());
+        cholmod_l_solve2(chol_sys, m_L, &cholb, /* Bset = */ NULL, &cholx_ptr, /* Xset = */ NULL, &m_Y, &m_E, m_c.get());
 
         if (cholx_ptr != &cholx) throw std::runtime_error("Cholmod reallocated x vector.");
 
-        BENCHMARK_STOP_TIMER("CHOLMOD Backsub");
+        BENCHMARK_STOP_TIMER("CHOLMOD Solve");
     }
+
+    bool preferInPlaceSolve() const override { return false; }
 
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.

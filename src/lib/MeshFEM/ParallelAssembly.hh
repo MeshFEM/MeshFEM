@@ -121,6 +121,7 @@ auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
                           DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
     });
 
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
     for (const auto &d : localData)
         if (!d.needs_reset) addScaledInPlace(A, d.A); // this if statement skips thread 0's unused storage.
 }

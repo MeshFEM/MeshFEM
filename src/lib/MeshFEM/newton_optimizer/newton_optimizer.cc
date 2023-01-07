@@ -1,5 +1,7 @@
 #include "newton_optimizer.hh"
 #include "../AutomaticDifferentiation.hh"
+#include "MeshFEM/SparseMatrices.hh"
+#include <Eigen/src/Core/Matrix.h>
 
 // Modify `H` to enforce the active bound constraints (which are of the form d_i = 0 when solving H d = -g).
 // In order to preserve H's sparsity pattern, instead of removing the rows/columns for pinned variables `i`,
@@ -26,17 +28,38 @@ void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatrix &H, c
     BENCHMARK_STOP_TIMER("fixVariablesInWorkingSet");
 }
 
-// Solve the Newton system `H d = -g`, modifying H to be pos. def. if it is indefinite.
-// Returns "tau", the coefficient of the metric term that was added to make the Hessian positive definite.
-// "-tau" can be interpreted as an estimate (lower bound) for the smallest generalized eigenvalue for "H d = lambda M d"
-// (Returns 0 if the Hessian is already positive definite).
-// Upon return, "solver" holds a factorization of the matrix:
-//     (H + tau (M / ||M||_2))
-Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
-    BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
-    step.resize(g.size());
-    if (&ws.problem() != &get_problem()) throw std::runtime_error("Working set is for a different problem");
+// Copy-on-write-style optimization for Hessian that only occasionally needs
+// modification (when working set is nonempty).
+// Assumes that the matrix pased to `set` stays alive for the duration of this
+// object's lifetime.
+struct OptionallyModifiedHessian {
+    OptionallyModifiedHessian() : m_H(nullptr) { }
 
+    OptionallyModifiedHessian(const SuiteSparseMatrix &H_cached) { set(H_cached); }
+
+    void set(const SuiteSparseMatrix &H_cached) {
+        m_H = &H_cached;
+        m_H_tmp.reset();
+    }
+
+    const SuiteSparseMatrix *get()        const { return m_H; }
+          SuiteSparseMatrix *getMutable() {
+        if (m_H == nullptr) throw std::runtime_error("Matrix doesn't exist");
+        if (!m_H_tmp) {
+            m_H_tmp = std::make_unique<SuiteSparseMatrix>(*get());
+            m_H = m_H_tmp.get();
+        }
+        return m_H_tmp.get();
+    }
+
+    operator const SuiteSparseMatrix &() const { return *get(); }
+    operator bool() const { return get() != nullptr; }
+private:
+    const SuiteSparseMatrix *m_H;
+    std::unique_ptr<SuiteSparseMatrix> m_H_tmp;
+};
+
+Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, const Real betaMin) {
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
     // Nocedal and Wright 2006, pp 51.
@@ -48,49 +71,16 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
     // the mass matrix is a good choice.
     Real tau = 0;
 
-    // Though the full mass matrix is cached by NewtonProblem, we also want to cache
-    // the reduced version (if it is ever needed).
-    std::unique_ptr<SuiteSparseMatrix> M_reduced;
-
-    Eigen::VectorXd x, gReduced;
-
     auto &s = solver();
     s.setSuppressWarnings(!options.verboseNonPosDef);
 
-    auto postprocessSolution = [&]() {
-        extractFullSolution(x, step);
-        step *= -1;
-        // ws.validateStep(step);
-
-        if (prob->hasLEQConstraint()) {
-            // TODO: handle more than a single constraint...
-            Eigen::VectorXd a = removeFixedEntries(ws.getFreeComponent(prob->LEQConstraintMatrix()));
-            kkt_solver.update(s, a);
-            const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
-            extractFullSolution(kkt_solver.solve(-x, r), step);
-        }
-    };
-
     auto &hUpdtCtr = options.getHessianUpdateController();
     auto &hProjCtr = options.getHessianProjectionController();
+    OptionallyModifiedHessian H(prob->hessian(hProjCtr.shouldUseProjection())), M;
 
-    Eigen::VectorXd g_free = ws.getFreeComponent(g); // Zero out the entries with active bound constraints.
-
-    if (s.hasFactorization()) {
-        if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
-            hUpdtCtr.reusedHessian();
-            gReduced = removeFixedEntries(g_free);
-            s.solve(gReduced, x);
-            postprocessSolution();
-            return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
-        }
-    }
-
-    SuiteSparseMatrix H_reduced;
-    { BENCHMARK_SCOPED_TIMER_SECTION hevalTimer("hessEval");
-        H_reduced = prob->hessian(hProjCtr.shouldUseProjection());
-        fixVariablesInWorkingSet(*prob, H_reduced, ws);
-        H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
+    if (ws.size()) {
+        BENCHMARK_SCOPED_TIMER_SECTION hevalTimer("hessMod");
+        fixVariablesInWorkingSet(*prob, *H.getMutable(), ws);
     }
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
@@ -98,25 +88,17 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         try {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Newton solve");
             if (tau != 0) {
-                if (!M_reduced) {
-                    M_reduced = std::make_unique<SuiteSparseMatrix>(prob->metric());
-                    fixVariablesInWorkingSet(*prob, *M_reduced, ws);
-                    M_reduced->rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
+                if (!M) {
+                    BENCHMARK_SCOPED_TIMER_SECTION solve("Eval metric");
+                    M.set(prob->metric());
+                    if (ws.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), ws);
                 }
 
-                s.factorizeNumericWithShift(H_reduced, *M_reduced, tau * currentTauScale);
+                s.factorizeNumericWithShift(H, M, tau * currentTauScale);
             }
             else {
-                s.factorizeNumeric(H_reduced);
+                s.factorizeNumeric(H);
             }
-
-            BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
-
-            gReduced = removeFixedEntries(g_free);
-            s.solve(gReduced, x);
-            if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
-            postprocessSolution();
-
             break;
         }
         catch (std::exception &e) {
@@ -136,11 +118,51 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         }
     }
 
+    if (prob->hasLEQConstraint()) {
+        Eigen::VectorXd a = ws.getFreeComponent(prob->LEQConstraintMatrix());
+        kkt_solver.update(s, a);
+    }
+
     // Notify controllers that we have factorized a new Hessian
     // and whether or not it was indefinite.
     bool isIndefinite = tau != 0.0;
     hProjCtr.notifyDefiniteness(isIndefinite);
     hUpdtCtr.newHessian(isIndefinite);
+
+    return tau;
+}
+
+// Solve the Newton system `H d = -g`, modifying H to be pos. def. if it is indefinite.
+// Returns "tau", the coefficient of the metric term that was added to make the Hessian positive definite.
+// "-tau" can be interpreted as an estimate (lower bound) for the smallest generalized eigenvalue for "H d = lambda M d"
+// (Returns 0 if the Hessian is already positive definite).
+// Upon return, "solver" holds a factorization of the matrix:
+//     (H + tau (M / ||M||_2))
+Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &neg_g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility) {
+    BENCHMARK_SCOPED_TIMER_SECTION ns_timer("newton_step");
+    step.resize(neg_g.size());
+    if (&ws.problem() != &get_problem()) throw std::runtime_error("Working set is for a different problem");
+
+    Real tau = NAN; // tau is unknown/undefined if we're reusing an old factorization; no negative curvature direction will be attempted by caller.
+                    //
+    auto &hUpdtCtr = options.getHessianUpdateController();
+    const bool reuseFactorization = solver().hasFactorization() && !hUpdtCtr.needsUpdate() && (ws.size() == 0); // TODO: Reusing factorizations with bound constraints needs more care
+    if (reuseFactorization) hUpdtCtr.reusedHessian();
+    else {
+        tau = m_factorizationUpdate(ws, beta, betaMin);
+    }
+
+    // Solve Newton/KKT system using the current factorization.
+    if (ws.size()) solver().solve(ws.getFreeComponent(neg_g), step);
+    else           solver().solve(neg_g, step);
+
+    if (prob->hasLEQConstraint()) {
+        // TODO: handle more than a single constraint...
+        const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
+        step = kkt_solver.solve(step, r);
+    }
+
+    // ws.validateStep(step);
 
     return tau;
 }
@@ -170,7 +192,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             if (options.feasibilitySolve) {
                 // std::cout << "Running feasibility solve with residual " << prob->LEQConstraintResidual() << ", energy " << prob->energy() << std::endl;
                 prob->iterationCallback(0);
-                newton_step(step, prob->gradient(true), workingSet, beta, betaMin, true);
+                newton_step(step, -prob->gradient(true), workingSet, beta, betaMin, true);
                 // We must take a full step to ensure feasibility
                 // TODO: use multiple iterations and a line search to get feasible?
                 prob->setVars(prob->applyBoundConstraints(step + prob->getVars()));
@@ -188,15 +210,16 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     }
 
     const auto &fixedVars = prob->fixedVars();
-    auto zeroOutFixedVars = [&](const Eigen::VectorXd &g) { auto result = g; for (size_t var : fixedVars) result[var] = 0.0; return result; };
+    auto zeroOutFixedVarsInPlace = [&](Eigen::VectorXd &g) { for (size_t var : fixedVars) g[var] = 0.0; };
+    auto zeroOutFixedVars = [&](Eigen::VectorXd g) { zeroOutFixedVarsInPlace(g); return g; };
 
     ConvergenceReport report;
 
     Real alpha = 0;
     bool isIndefinite = false;
-    auto reportIterate = [&](size_t i, Real energy, const Eigen::VectorXd &g, const Eigen::VectorXd &g_free, bool forcePrintIfVerbose) {
+    auto reportIterate = [&](size_t i, Real energy, Real g_free_norm, bool forcePrintIfVerbose) {
         prob->writeIterateFiles(i);
-        report.addEntry(energy, g.norm(), g_free.norm(), alpha, isIndefinite);
+        report.addEntry(energy, g_free_norm, alpha, isIndefinite);
 
         if (options.verbose && (((i % options.verbose) == 0) || forcePrintIfVerbose)) {
             std::cout << i << '\t';
@@ -208,9 +231,8 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
     BENCHMARK_START_TIMER_SECTION("Newton iterations");
     size_t it;
-    Eigen::VectorXd g(prob->numVars());
-
-    Eigen::VectorXd za, zg, g_free;
+    Eigen::VectorXd za, neg_g, neg_g_ws_free_storage;
+    Eigen::VectorXd *neg_g_ws_free_ptr = &neg_g;
     if (prob->hasLEQConstraint()) { za = zeroOutFixedVars(prob->LEQConstraintMatrix()); }
     // Kill off components of "v" in the span of the LEQ constraint vectors
     auto projectOutLEQConstrainedComponents = [&](Eigen::VectorXd &v) { if (prob->hasLEQConstraint()) v -= za * (v.dot(za) / za.squaredNorm()); };
@@ -221,7 +243,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     for (it = 1; it <= options.niter; ++it) {
         BENCHMARK_SCOPED_TIMER_SECTION it_timer("Newton iterate");
 
-        Real currEnergy;
+        Real currEnergy, g_free_norm;
         { BENCHMARK_SCOPED_TIMER_SECTION t2("Preamble");
 
         // std::cout << "pre-update gradient: " << zeroOutFixedVars(prob->gradient(false)).norm() << std::endl;
@@ -237,26 +259,37 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).
         vars = prob->getVars();
-        g = prob->gradient(true);
+        neg_g = -(prob->gradient(true));
+        zeroOutFixedVarsInPlace(neg_g);
+
         currEnergy = prob->energy();
 
-        zg = zeroOutFixedVars(g); // non-fixed components of the gradient; used for termination criteria
-        projectOutLEQConstrainedComponents(zg);
+        projectOutLEQConstrainedComponents(neg_g);
+
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)
+        if (workingSet.size()) {
+            neg_g_ws_free_storage = workingSet.getFreeComponent(neg_g);
+            neg_g_ws_free_ptr = &neg_g_ws_free_storage;
+            g_free_norm = neg_g_ws_free_storage.norm();
 
-        g_free = workingSet.getFreeComponent(zg);
+            // Free variables in the working set from their bound constraints, if necessary
+            bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
+                    bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(neg_g, g_free_norm);
+                    if (shouldRemove && options.verboseWorkingSet) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
+                    return shouldRemove;
+                });
 
-        Real g_free_norm = g_free.norm();
-        // Free variables in the working set from their bound constraints, if necessary
-        bool ws_updated = workingSet.remove_if([&](size_t bc_idx) {
-                bool shouldRemove = prob->boundConstraint(bc_idx).shouldRemoveFromWorkingSet(g, g_free_norm);
-                if (shouldRemove && options.verboseWorkingSet) { std::cout << "Removed constraint " << bc_idx << " from working set" << std::endl; }
-                return shouldRemove;
-            });
+            if (ws_updated) {
+                neg_g_ws_free_storage = workingSet.getFreeComponent(neg_g);
+                g_free_norm = neg_g_ws_free_storage.norm();
+            }
+        }
+        else {
+            neg_g_ws_free_ptr = &neg_g;
+            g_free_norm = neg_g.norm();
+        }
 
-        if (ws_updated) g_free = workingSet.getFreeComponent(zg);
-
-        if ((!isIndefinite) && (g_free.norm() < options.gradTol)) {
+        if ((!isIndefinite) && (g_free_norm < options.gradTol)) {
             report.success = true;
             break;
         }
@@ -269,7 +302,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         Real old_beta = beta;
         Real tau;
         try {
-            tau = newton_step(step, g_free, workingSet, beta, betaMin);
+            tau = newton_step(step, *neg_g_ws_free_ptr, workingSet, beta, betaMin);
         }
         catch (std::exception &e) {
             // Tau ran away
@@ -278,20 +311,17 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         isIndefinite = (tau != 0.0);
 
         // Only add in negative curvature directions when "tau" is a reasonable estimate for the smallest eigenvalue and the gradient has become small.
-        if (options.useNegativeCurvatureDirection && ((tau > old_beta) || (tau == betaMin)) && (g_free.norm() < 100 * options.gradTol)) {
+        if (options.useNegativeCurvatureDirection && ((tau > old_beta) || (tau == betaMin)) && (g_free_norm < 100 * options.gradTol)) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Negative curvature dir");
             // std::cout.precision(19);
             std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << '\n';
-            auto M_reduced = prob->metric();
-            fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
-            M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
-            auto d = negativeCurvatureDirection(solver(), M_reduced, 1e-6);
+
+            OptionallyModifiedHessian M(prob->metric());
+            if (workingSet.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), workingSet);
+            auto d = negativeCurvatureDirection(solver(), *M.get(), 1e-6);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {
-                    Eigen::VectorXd tmp(step.size());
-                    extractFullSolution(d, tmp); // negative curvature direction was computed in reduced variables...
-                    d = tmp;
                     workingSet.getFreeComponentInPlace(d); // Enforce the active bound constraints.
                     // {
                     //     const SuiteSparseMatrix &H = prob->hessian();
@@ -299,7 +329,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                     //     Real lambda = d.dot(tmp);
                     //     std::cout << "Found negative curvature direction with eigenvalue " << lambda << std::endl;
                     // }
-                    if (d.dot(zg) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
+                    if (d.dot(*neg_g_ws_free_ptr) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
                     const Real cd = prob->characteristicDistance(d);
                     if (cd <= 0) // problem doesn't provide one
                         step += std::sqrt(step.squaredNorm() / d.squaredNorm()) * d; // TODO: find a better balance between newton step and negative curvature.
@@ -313,7 +343,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
         } // End of 'Compute descent direction' timer
 
-        Real directionalDerivative = g_free.dot(step);
+        Real directionalDerivative = -(neg_g.dot(step));
         // if (options.verbose)
         //     std::cout << "Found step with directional derivative: " << directionalDerivative << std::endl;
 
@@ -374,7 +404,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         }
         BENCHMARK_STOP_TIMER_SECTION("Backtracking");
 
-        reportIterate(it - 1, currEnergy, zg, g_free, false); // Record iterate statistics, now that we know alpha, isIndefinite
+        reportIterate(it - 1, currEnergy, g_free_norm, false); // Record iterate statistics, now that we know alpha, isIndefinite
         prob->customIterateReport(report);
 
         // Add to the working set all bounds encountered by the step of length "alpha"
@@ -384,7 +414,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                     const auto &bc = prob->boundConstraint(bci);
                     std::cerr << "Bound constraint on variable " << bc.idx << " reencountered";
                     std::cerr << "step component: " << step[bc.idx] << std::endl;
-                    std::cerr << "g_free component: " << g_free[bc.idx] << std::endl;
+                    std::cerr << "neg_g_ws_free component: " << (*neg_g_ws_free_ptr)[bc.idx] << std::endl;
 
                     std::cerr << "throwing logic error (this freezes Knitro!!!)" << std::endl;
                     throw std::logic_error("Re-encountered bound in working set");
@@ -404,11 +434,11 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             }
 
             size_t gd_bit;
-            directionalDerivative = -g_free.squaredNorm();
-            alpha *= step.norm() / g_free.norm(); // Start with the same step magnitude where the Newton step backtracking failed....
-            step = -g_free;
+            directionalDerivative = -g_free_norm * g_free_norm;
+            alpha *= step.norm() / g_free_norm; // Start with the same step magnitude where the Newton step backtracking failed....
+            // step = -neg_g_ws_free
             for (gd_bit = 0; gd_bit < options.nbacktrack_iter; ++gd_bit) {
-                steppedVars = vars + alpha * step;
+                steppedVars = vars + alpha * (*neg_g_ws_free_ptr);
                 prob->applyBoundConstraintsInPlace(steppedVars);
                 prob->setVars(steppedVars);
                 Real steppedEnergy = prob->energy();
@@ -423,18 +453,18 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     // Report the last iterate; gradient must be re-computed in case the iteration limit was exceeded
     if (it > options.niter) {
         prob->iterationCallback(it);
-        g = prob->gradient(true);
+        neg_g = -prob->gradient(true);
+        zeroOutFixedVarsInPlace(neg_g);
     }
-    zg = zeroOutFixedVars(g);
-    projectOutLEQConstrainedComponents(zg);
+    projectOutLEQConstrainedComponents(neg_g);
     prob->customIterateReport(report);
-    reportIterate(it - 1, prob->energy(), zg, workingSet.getFreeComponent(zg),
+    reportIterate(it - 1, prob->energy(), workingSet.getFreeComponent(neg_g).norm(),
                   /* force report under any nonzero verbosity level */ true);
     std::cout << std::flush;
 
     if ((options.verboseWorkingSet > 1) && workingSet.size()) {
         std::cout << "Terminated with working set:\n";
-        workingSet.report(prob->getVars(), g);
+        workingSet.report(prob->getVars(), neg_g);
     }
 
     // std::cout << "Before apply bound constraints: " << prob->energy() << std::endl;

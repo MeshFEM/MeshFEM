@@ -8,14 +8,15 @@ extern "C" {
 
 #define DUMP_MATRICES 0
 
-void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat) {
+void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
+    const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
 #if DUMP_MATRICES
     {
         static size_t i = 0;
         size_t n_zero = 4;
         std::string padded_num = std::to_string(i++);
         padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
-        mat.dumpBinary("symbolic_mat_" + padded_num + ".bin");
+        A->dumpBinary("symbolic_mat_" + padded_num + ".bin");
     }
 #endif
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
@@ -26,7 +27,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat) {
     // However, the overhead of doing a numeric factorization is quite low, especially since
     // we often run the symbolic factorization on a singular matrix with the sparsity pattern
     // filled with ones (in which case, the numeric factorization fails quickly).
-    m_catamariConverter = std::make_unique<CatamariConverter>(mat);
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced);
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl.Factor(m_catamariConverter->get(), m_ldlControl);
@@ -39,9 +40,9 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat) {
         catamari::SymmetricOrdering ordering;
         {
             static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
-            ordering.inverse_permutation.Resize(mat.m);
-            catamari::Buffer<SuiteSparse_long> CParent(mat.m), CMember(mat.m);
-            auto cholmat = cholmod_sparse_view(mat);
+            ordering.inverse_permutation.Resize(A_reduced->m);
+            catamari::Buffer<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
+            auto cholmat = cholmod_sparse_view(*A_reduced);
             if (orderingMethod == OrderingMethod::CholmodNesdis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
@@ -61,8 +62,29 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat) {
     m_factorizationType = FactorizationType::Symbolic;
 }
 
-void CatamariFactorizer::factorizeNumeric(const CMat &cmat) {
+void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
+#if DUMP_MATRICES
+    {
+        const SuiteSparse *A = m_rowColRemoval(mat);
+        static size_t i = 0;
+        size_t n_zero = 4;
+        std::string padded_num = std::to_string(i++);
+        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
+        A->dumpBinary("numeric_mat_" + padded_num + ".bin");
+    }
+#endif
+    m_catamariConverter->injectEntries(m_ldl, mat, m_reducedRowForRow, m_reducedEntryForEntry);
+    m_factorizeInjectedEntries();
+}
+
+void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
+    m_catamariConverter->injectEntries(m_ldl, A, m_reducedRowForRow, m_reducedEntryForEntry, sigma, &B);
+    m_factorizeInjectedEntries();
+}
+
+void CatamariFactorizer::m_factorizeInjectedEntries() {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
+    const auto &cmat = m_catamariConverter->get(); // TODO: remove matrix argument from RefactorWithFixedSparsityPattern.
     auto result = m_ldl.RefactorWithFixedSparsityPattern(cmat);
     if (result.num_successful_pivots != cmat.NumColumns()) {
         m_factorizationType = FactorizationType::Symbolic;
@@ -70,23 +92,6 @@ void CatamariFactorizer::factorizeNumeric(const CMat &cmat) {
                                  std::to_string(cmat.NumColumns()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
     }
     m_factorizationType = FactorizationType::Numeric;
-}
-
-void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
-#if DUMP_MATRICES
-    {
-        static size_t i = 0;
-        size_t n_zero = 4;
-        std::string padded_num = std::to_string(i++);
-        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
-        mat.dumpBinary("numeric_mat_" + padded_num + ".bin");
-    }
-#endif
-    factorizeNumeric(m_catamariConverter->convert(mat));
-}
-
-void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
-    factorizeNumeric(m_catamariConverter->convertWithShift(A, sigma, B));
 }
 
 #endif

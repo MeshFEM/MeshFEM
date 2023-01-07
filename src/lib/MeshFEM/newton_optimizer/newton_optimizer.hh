@@ -12,6 +12,7 @@
 #ifndef NEWTON_OPTIMIZER_HH
 #define NEWTON_OPTIMIZER_HH
 
+#include <stdexcept>
 #include <vector>
 #include <cmath>
 #include <MeshFEM/SparseMatrices.hh>
@@ -19,6 +20,7 @@
 #include "ConvergenceReport.hh"
 #include "HessianProjectionController.hh"
 #include "HessianUpdateController.hh"
+#include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
 
 #include <MeshFEM_export.h>
 
@@ -85,16 +87,6 @@ struct MESHFEM_EXPORT NewtonProblem {
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
     virtual SuiteSparseMatrix hessianSparsityPattern() const = 0;
 
-    // sparsity pattern with fixed variable rows/cols removed.
-    virtual SuiteSparseMatrix hessianReducedSparsityPattern() const {
-        auto hsp = hessianSparsityPattern();
-        hsp.fill(1.0);
-        std::vector<char> isFixed(numVars(), false);
-        for (size_t fv : m_fixedVars) isFixed.at(fv) = true;
-        hsp.rowColRemoval([&isFixed] (size_t i) { return isFixed[i]; });
-        return hsp;
-    }
-
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
     size_t numFixedVars() const { return fixedVars().size(); }
     size_t numReducedVars() const { return numVars() - fixedVars().size(); } // number of remaining variables after fixing fixedVars
@@ -139,9 +131,9 @@ struct MESHFEM_EXPORT NewtonProblem {
         // Decide whether the bound constraint should be removed from the working set.
         // For the Lagrange multiplier estimate to be accurate, the reduced gradient must be small.
         // (Since we're working with bound constraints, the first-order Lagrange multiplier estimate is simply the gradient component)
-        bool shouldRemoveFromWorkingSet(const VXd &g, Real g_free_norm) const {
-            if (type == Type::UPPER) { return g[idx] >  10 * g_free_norm; }
-            if (type == Type::LOWER) { return g[idx] < -10 * g_free_norm; }
+        bool shouldRemoveFromWorkingSet(const VXd &neg_g, Real g_free_norm) const {
+            if (type == Type::UPPER) { return neg_g[idx] <  10 * g_free_norm; }
+            if (type == Type::LOWER) { return neg_g[idx] > -10 * g_free_norm; }
             throw std::runtime_error("Unknown bound type");
         }
 
@@ -475,28 +467,23 @@ private:
 struct MESHFEM_EXPORT NewtonOptimizer {
     NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) {
         prob = std::move(p);
-        isFixed.assign(prob->numVars(), false);
-        for (size_t fv : prob->fixedVars()) isFixed[fv] = true;
     }
 
     void setFixedVars(const std::vector<size_t> &fixedVars) {
-        prob->setFixedVars(fixedVars);
-        isFixed.assign(prob->numVars(), false);
-        for (size_t fv : fixedVars) isFixed[fv] = true;
-        solver().factorizeSymbolic(prob->hessianReducedSparsityPattern());
+        solver().factorizeSymbolic(prob->hessianSparsityPattern(), fixedVars);
     }
 
     ConvergenceReport optimize();
     ConvergenceReport optimize(WorkingSet &ws);
 
-    Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
+    Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &neg_g, const WorkingSet &ws, Real &beta, const Real betaMin, const bool feasibility = false);
 
     // Calculate a Newton step with empty working set and default beta/betaMin.
-    Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &g) {
+    Real newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &neg_g) {
         Real beta = options.beta;
         const Real betaMin = std::min(beta, 1e-6);
         WorkingSet ws(*prob);
-        return newton_step(step, g, ws, beta, betaMin);
+        return newton_step(step, neg_g, ws, beta, betaMin);
     }
 
     // Update the factorizations of the Hessian/KKT system with the current
@@ -506,10 +493,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // hold values from the previous iteration (before the final linesearch
     // step).
     void update_factorizations(const WorkingSet &ws) {
-        // Computing a Newton step updates the Cholesky factorization in
-        // "solver" and (if applicable) the kkt_solver as a side-effect.
-        Eigen::VectorXd dummy;
-        newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()), ws, options.beta, std::min(options.beta, 1e-6));
+        m_factorizationUpdate(ws, options.beta, std::min(options.beta, 1e-6));
     }
 
     void update_factorizations() { update_factorizations(WorkingSet(*prob)); }
@@ -519,54 +503,30 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     const NewtonProblem &get_problem() const { return *prob; }
           NewtonProblem &get_problem()       { return *prob; }
 
-    // Construct a vector of reduced components by removing the entries of "x" corresponding
-    // to fixed variables. This is a (partial) inverse of extractFullSolution.
-    void removeFixedEntriesInPlace(Eigen::VectorXd &x) const {
-        int back = 0;
-        for (int i = 0; i < x.size(); ++i)
-            if (!isFixed[i]) x[back++] = x[i];
-        x.conservativeResize(back);
-    }
-    Eigen::VectorXd removeFixedEntries(const Eigen::VectorXd &x) const {
-        auto result = x;
-        removeFixedEntriesInPlace(result);
-        return result;
-    }
-
-    // Extract the full linear system solution vector "x" from the reduced linear
-    // system solution "xReduced" (which was solved by removing the rows/columns for fixed variables).
-    void extractFullSolution(const Eigen::VectorXd &xReduced, Eigen::VectorXd &x) const {
-        int back = 0;
-        for (int i = 0; i < x.size(); ++i) {
-            if (!isFixed[i]) x[i] = xReduced[back++];
-            else             x[i] = 0.0;
-        }
-        assert(back == xReduced.size());
-    }
-
-    Eigen::VectorXd extractFullSolution(const Eigen::VectorXd &xReduced) const {
-        Eigen::VectorXd x(prob->numVars());
-        extractFullSolution(xReduced, x);
-        return x;
-    }
-
     CholeskyFactorizerBase &solver() { 
         if (!m_solver || (m_solver->provider() != options.factorizer)) {
             m_solver = make_cholesky_factorizer(options.factorizer);
-            m_solver->factorizeSymbolic(get_problem().hessianReducedSparsityPattern());
+            m_solver->factorizeSymbolic(get_problem().hessianSparsityPattern(), prob->fixedVars());
         }
         return *m_solver;
     }
 
+    const CholeskyFactorizerBase &solver() const {
+        if (!m_solver) throw std::runtime_error("Solver doesn't exist.");
+        return *m_solver;
+    }
+
+    std::shared_ptr<CholeskyFactorizerBase> getHessianSolverPtr() const { return m_solver; }
+
     NewtonOptimizerOptions options;
     KKTSolver kkt_solver;
-    // We fix variables by constraining the newton step to have zeros for these entries
-    std::vector<char> isFixed;
     mutable CachedHessianL2Norm m_cachedHessianL2Norm;
 
 private:
     std::unique_ptr<NewtonProblem> prob;
-    std::unique_ptr<CholeskyFactorizerBase> m_solver;
+    std::shared_ptr<CholeskyFactorizerBase> m_solver;
+
+    Real m_factorizationUpdate(const WorkingSet &ws, Real &beta, const Real betaMin);
 };
 
 #endif /* end of include guard: NEWTON_OPTIMIZER_HH */

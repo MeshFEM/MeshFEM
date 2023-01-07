@@ -245,6 +245,17 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
                unpaddedI3()               * delta_d_C33_d_F(dF);
     }
 
+    using Base::denergy; // prevent shadowing
+    // Inlined and accelerated gradient calculation for 2D
+    Matrix denergy() const {
+        Real unpaddedI3_eval = unpaddedI3();
+        Real d_psi_d_I3_eval = Base::d_psi_d_I3();
+
+        Real FinvTCoeff = (d_C33_d_unpaddedI3() * unpaddedI3_eval);
+        FinvTCoeff = (2 * unpaddedI3_eval) * d_psi_d_I3_eval * (FinvTCoeff + m_C33) + m_mu * FinvTCoeff;
+        return m_mu * m_F + FinvTCoeff * m_Finv.transpose();
+    }
+
     static constexpr size_t N = Base::N;
     using Hessian = Eigen::Matrix<Real, N * N, N * N>;
     using Base::d2energy; // prevent shadowing

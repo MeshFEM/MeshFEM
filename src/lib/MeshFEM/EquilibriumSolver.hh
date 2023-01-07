@@ -106,7 +106,10 @@ protected:
             l->hessian(result, projectionMask);
     }
 
-    virtual void m_evalMetric(SuiteSparseMatrix &result) const override { m_obj.massMatrix(result, true, true); }
+    virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("EquilibriumSolver.m_evalMetric");
+        m_obj.massMatrix(result, true, true);
+    }
 
     virtual bool m_iterationCallback(size_t i) override {
         m_currSystemEnergy = m_obj.energy();

@@ -354,22 +354,24 @@ public:
     }
 
     GradPhis gradPhis(const EvalPtK &x) const {
-        GradPhis result;
-        if (_Deg == 1)  result.leftCols(numVertices) = m_gradBarycentric;
-        if (_Deg == 2) {
-            Eigen::Map<const EigenEvalPt<K>> ex(x.data());
+        if constexpr (_Deg == 1) { return m_gradBarycentric; }
+        if constexpr (_Deg == 2) {
+            GradPhis result;
             // For vertex shape functions:
             //      grad phi_i = (sum_j ((j == i) ? 3 : -1) x[j]) grad lambda_i
             //                 = (4 x[i] - sum_j x[j]) grad lambda_i
             //                 = (4 x[i] - 1) grad lambda_i
-            result.leftCols(numVertices) = m_gradBarycentric * (4.0 * ex.array() - 1.0).matrix().asDiagonal();
+            EigenEvalPt<K> x4 = 4 * Eigen::Map<const EigenEvalPt<K>>(x.data());
+            result.leftCols(numVertices).noalias() = m_gradBarycentric * (x4.array() - 1.0).matrix().asDiagonal();
             for (size_t j = 0; j < Simplex::numEdges(K); ++j) {
                 const size_t start = Simplex::edgeStartNode(j),
                              end   = Simplex::  edgeEndNode(j);
-                result.col(numVertices + j) = 4 * (x[end] * m_gradBarycentric.col(start) + x[start] * m_gradBarycentric.col(end));
+                result.col(numVertices + j) = x4[  end] * m_gradBarycentric.col(start)
+                                            + x4[start] * m_gradBarycentric.col(  end);
             }
+            return result;
         }
-        return result;
+        static_assert(_Deg == 1 || _Deg == 2, "Higher degrees not implemented");
     }
 
     // Compute the change in shape function gradient due to element corner

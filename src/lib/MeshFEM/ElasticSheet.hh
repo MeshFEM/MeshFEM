@@ -47,6 +47,8 @@
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
 
+#include <atomic>
+
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
 // intuitively expressed in the global 2D coordinate system; this is
@@ -615,6 +617,18 @@ private:
     bool m_disableBending = false;
 
     HessianProjectionType m_hessianProjectionType = HessianProjectionType::Off;
+
+    // Spin locks used for parallel Hessian assembly.
+    mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
+    auto &m_getVarLocks() const {
+        if (!m_varLocks) {
+            const size_t nv = numVars(VariableMask::All);
+            m_varLocks = std::make_unique<std::vector<std::atomic<bool>>>(nv);
+            for (size_t i = 0; i < nv; ++i)
+                atomic_init(&(*m_varLocks)[i], false);
+        }
+        return *m_varLocks;
+    }
 };
 
 #include "ElasticSheet.inl"

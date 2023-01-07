@@ -44,8 +44,8 @@ struct ShiftedGeneralizedOp {
         m_workspace2.resize(rows());
     }
 
-    int rows() const { return m_Hshift_inv.m(); }
-    int cols() const { return m_Hshift_inv.n(); }
+    int rows() const { return m_Hshift_inv.m_reduced(); }
+    int cols() const { return m_Hshift_inv.n_reduced(); }
 
     void perform_op(const Real *x_in, Real *y_out) const {
         //BENCHMARK_START_TIMER("Apply iteration matrix");
@@ -53,9 +53,9 @@ struct ShiftedGeneralizedOp {
         // m_Hshift_inv.solveRaw(x_in, y_out, CholeskySys::A); // Hshift_inv x
 
         m_L.         applyRaw(x_in,                m_workspace1.data());             // L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
-        m_Hshift_inv.solveRaw(m_workspace2.data(), m_workspace1.data(), CholeskySys::A ); // Hshift_inv P^T L x
-        m_M_LLt.     solveRaw(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
+        m_M_LLt.     solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
+        m_Hshift_inv.solveRawReduced(m_workspace2.data(), m_workspace1.data(), CholeskySys::A ); // Hshift_inv P^T L x
+        m_M_LLt.     solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
         m_L.         applyRaw(m_workspace2.data(), y_out,     /* transpose */ true); // L^T P Hshift_inv PT L x
 
         //BENCHMARK_STOP_TIMER("Apply iteration matrix");
@@ -80,7 +80,7 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
         SuiteSparseMatrix Mcompressed(M);
         Mcompressed.removeZeros();
         M_LLt = std::make_unique<CholmodFactorizer>(false, /* final_ll: force LL^T instead of LDL^T */ true);
-        M_LLt->factorize(Mcompressed); // Compute P M P^T = L L^T
+        M_LLt->factorize(Mcompressed, Hshift_inv.getFixedVars()); // Compute P M P^T = L L^T
     }
 
     ShiftedGeneralizedOp op(Hshift_inv, *M_LLt, M_LLt->getL());
@@ -104,15 +104,17 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
     Eigen::VectorXd d(y.size());
     {
         Eigen::VectorXd tmp(y.size());
-        M_LLt->solveRaw(y.data(), tmp.data(), CholeskySys::Lt);
-        M_LLt->solveRaw(tmp.data(), d.data(), CholeskySys::Pt);
+        M_LLt->solveRawReduced(y.data(), tmp.data(), CholeskySys::Lt);
+        M_LLt->solveRawReduced(tmp.data(), d.data(), CholeskySys::Pt);
 
         // Normalize d so that ||d||_M = 1
         // M.applyRaw(d.data(), tmp.data());
         // d /= d.dot(tmp);
     }
 
-    return d;
+    Eigen::VectorXd d_full;
+    Hshift_inv.extractFullSolution(d, d_full);
+    return d_full;
 }
 
 struct MatvecCallbackOp {
@@ -148,15 +150,15 @@ struct CholmodCholeskyOp {
     void lower_triangular_solve(const Real *x_in, Real *y_out) const {
         // Note: specifying CholeskySys::P actually applies P to x, instead of solving P y = x!!!
         //      (See Section 19.5 of the CHOLMOD user guide)
-        m_LLt.solveRaw(x_in, m_workspace.data(),  CholeskySys::P);
-        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::L);
+        m_LLt.solveRawReduced(x_in, m_workspace.data(),  CholeskySys::P);
+        m_LLt.solveRawReduced(m_workspace.data(), y_out, CholeskySys::L);
     }
 
     // Solve (P^T L)^T y = L^T P y = x
     void upper_triangular_solve(const Real *x_in, Real *y_out) const {
-        m_LLt.solveRaw(x_in, m_workspace.data(), CholeskySys::Lt);
+        m_LLt.solveRawReduced(x_in, m_workspace.data(), CholeskySys::Lt);
         // Note: specifying CholeskySys::Pt actually applies Pt to x, instead of solving Pt y = x!!!
-        m_LLt.solveRaw(m_workspace.data(), y_out, CholeskySys::Pt);
+        m_LLt.solveRawReduced(m_workspace.data(), y_out, CholeskySys::Pt);
     }
 
 private:

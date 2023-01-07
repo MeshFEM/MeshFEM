@@ -1,4 +1,5 @@
 #include "ElasticSheet.hh"
+#include "MeshFEM/GlobalBenchmark.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 
 #define NORMAL_INFERENCE_PROBLEM_VERBOSITY 0
@@ -566,69 +567,80 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
     if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Hessian");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.hessian");
     const auto &m = mesh();
-    auto assembler_per_element_contrib = [&m, this, etype, projectionMask](size_t ei, CSCMat& Hout) {
-        auto H_elem = elementHessian(ei, etype, projectionMask);
-        const auto &e = m.element(ei);
-        for (const auto v_b : e.vertices()) {
-            for (size_t c_b = 0; c_b < 3; ++c_b) {
-                const size_t var_b = 3 * v_b.index() + c_b;
-                for (const auto v_a : e.vertices()) {
-                    if (v_a.index() > v_b.index()) continue;
-                    Hout.addNZStrip(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
+    // Version without per-thread copies
+    auto &varLocks = m_getVarLocks();
+
+    get_hessian_assembly_arena().execute([&m, &H, &varLocks, this, etype, projectionMask]() {
+        parallel_for_range(m.numElements(), [&m, &H, &varLocks, this, etype, projectionMask](size_t ei) {
+            auto H_elem = elementHessian(ei, etype, projectionMask);
+
+            const auto &e = m.element(ei);
+            for (const auto v_b : e.vertices()) {
+                for (size_t c_b = 0; c_b < 3; ++c_b) {
+                    const size_t var_b = 3 * v_b.index() + c_b;
+
+                    while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
+                    for (const auto v_a : e.vertices()) {
+                        if (v_a.index() > v_b.index()) continue;
+                        H.addNZStrip(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
+                    }
+                    varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
                 }
             }
-        }
 
-        // Theta vars
-        const size_t to = thetaOffset();
-        constexpr size_t lto = 9;
-        for (const auto he_b : e.halfEdges()) {
-            const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
-            for (const auto v_a : e.vertices())
-                Hout.addNZStrip(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-            for (const auto he_a : e.halfEdges()) {
-                const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
-                if (var_a > var_b) continue;
-                Hout.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
-                                                lto + std::max(he_a.localIndex(), he_b.localIndex())));
-            }
-        }
-
-        // Crease angles (if they exist)
-        const size_t co = creaseAngleOffset();
-        for (const auto he_b : e.halfEdges()) {
-            int ci_b = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[he_b.index()]];
-            if (ci_b < 0) continue;
-            const size_t var_b = co + ci_b;
-
-            // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
-            const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
-            for (const auto v_a : e.vertices())
-                Hout.addNZStrip(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-            for (const auto he_a : e.halfEdges()) {
-                size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
-                // First, extract the derivative with respect to the midedge normal angles for he_a and he_b
-                Real Hentry = H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
-                                     lto + std::max(he_a.localIndex(), he_b.localIndex()));
-                { // Interaction with theta var
-                    const size_t var_a = to + edgeIdx_a;
-                    Hout.addNZ(var_a, var_b, coeff_b * Hentry);
-                }
-                { // Interaction with crease angle var
-                    int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
-                    const size_t var_a = (ci_a >= 0) ? co + ci_a : std::numeric_limits<size_t>::max();
+            // Theta vars
+            const size_t to = thetaOffset();
+            constexpr size_t lto = 9;
+            for (const auto he_b : e.halfEdges()) {
+                const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
+                while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
+                for (const auto v_a : e.vertices())
+                    H.addNZStrip(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+                for (const auto he_a : e.halfEdges()) {
+                    const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
                     if (var_a > var_b) continue;
-
-                    const Real coeff_a = he_a.isPrimary() ? -0.5 : 0.5;
-                    Hout.addNZ(var_a, var_b, coeff_a * coeff_b * Hentry);
+                    H.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
+                                                 lto + std::max(he_a.localIndex(), he_b.localIndex())));
                 }
+                varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
             }
-        }
-    };
 
-    assemble_parallel(assembler_per_element_contrib, H, m.numElements());
+            // Crease angles (if they exist)
+            const size_t co = creaseAngleOffset();
+            for (const auto he_b : e.halfEdges()) {
+                int ci_b = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[he_b.index()]];
+                if (ci_b < 0) continue;
+                const size_t var_b = co + ci_b;
+                while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
+
+                // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
+                const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
+                for (const auto v_a : e.vertices())
+                    H.addNZStrip(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
+                for (const auto he_a : e.halfEdges()) {
+                    size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
+                    // First, extract the derivative with respect to the midedge normal angles for he_a and he_b
+                    Real Hentry = H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
+                                         lto + std::max(he_a.localIndex(), he_b.localIndex()));
+                    { // Interaction with theta var
+                        const size_t var_a = to + edgeIdx_a;
+                        H.addNZ(var_a, var_b, coeff_b * Hentry);
+                    }
+                    { // Interaction with crease angle var
+                        int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
+                        const size_t var_a = (ci_a >= 0) ? co + ci_a : std::numeric_limits<size_t>::max();
+                        if (var_a > var_b) continue;
+
+                        const Real coeff_a = he_a.isPrimary() ? -0.5 : 0.5;
+                        H.addNZ(var_a, var_b, coeff_a * coeff_b * Hentry);
+                    }
+                }
+                varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
+            }
+        });
+    });
 }
 
 template <class Psi_2x2>

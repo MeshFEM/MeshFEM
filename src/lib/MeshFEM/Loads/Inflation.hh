@@ -88,6 +88,7 @@ struct Inflation : public ObjectSpecificLoad<Object> {
     }
 
     virtual void hessian(SuiteSparseMatrix& H, bool /* projectionMask */ = true) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Inflation load Hessian");
         const auto &sheet = getObj();
         const auto &m = sheet.mesh();
         auto assemblePerTriContrib = [&](const size_t ti, SuiteSparseMatrix &Hout) {
@@ -128,7 +129,9 @@ struct Inflation : public ObjectSpecificLoad<Object> {
                 }
             }
         };
-        assemble_parallel(assemblePerTriContrib, H, m.numTris());
+        const size_t ne = m.numTris();
+        for (size_t ei = 0; ei < ne; ++ei)
+            assemblePerTriContrib(ei, H);
     }
 
     // *Additional* nonzeros contributed by this load to the potential energy Hessian.

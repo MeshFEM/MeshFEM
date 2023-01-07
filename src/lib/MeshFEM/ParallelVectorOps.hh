@@ -25,6 +25,15 @@ int ddot_(const int *N,
 }
 
 template<class Derived>
+void setZeroParallel(const Eigen::MatrixBase<Derived> &result) {
+    Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, result.rows()),
+                      [&out](const tbb::blocked_range<size_t> &r) {
+            out.middleRows(r.begin(), r.size()).setZero();
+        });
+}
+
+template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result, size_t rows, size_t cols) {
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
 
