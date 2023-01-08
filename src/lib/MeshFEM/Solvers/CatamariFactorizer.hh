@@ -92,8 +92,15 @@ struct CatamariConverter {
 
         if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
 
-        setZeroParallel(catamari::eigenMap(df->values_));
-        setZeroParallel(catamari::eigenMap(lf->values_));
+        size_t nthreads = get_max_num_tbb_threads();
+        if (nthreads >= 2) {
+            setZeroParallel(catamari::eigenMap(df->values_));
+            setZeroParallel(catamari::eigenMap(lf->values_));
+        }
+        else {
+            catamari::eigenMap(df->values_).setZero();
+            catamari::eigenMap(lf->values_).setZero();
+        }
 
         if (m_locForEntry.empty()) {
             BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
@@ -155,12 +162,22 @@ struct CatamariConverter {
 
         {
             if (B_optional == nullptr || sigma == 0) {
-                parallel_for_range(A.nz, [&](size_t ii) {
+                if (nthreads > 1) {
+                    parallel_for_range(A.nz, [&](size_t ii) {
+                            SuiteSparse_long loc = m_locForEntry[ii];
+                            if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
+                            if (loc < lowerBlockOffset) df->values_[loc                   ] = A.Ax[ii];
+                            else                        lf->values_[loc - lowerBlockOffset] = A.Ax[ii];
+                        });
+                }
+                else {
+                    for (SuiteSparse_long ii = 0; ii < A.nz; ++ii) {
                         SuiteSparse_long loc = m_locForEntry[ii];
                         if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
                         if (loc < lowerBlockOffset) df->values_[loc                   ] = A.Ax[ii];
                         else                        lf->values_[loc - lowerBlockOffset] = A.Ax[ii];
-                    });
+                    }
+                }
             }
             else {
                 // Factorize with shift.

@@ -11,18 +11,22 @@
 #include <MeshFEM/SparseMatrices.hh>
 
 void benchmark_method(const std::string &method, const char *sparsityPatternPath, size_t numNumericMatrices,
-                      const char **numericMatrices) {
-    set_max_num_tbb_threads(16);
+                      const char **numericMatrices, size_t tbb_threads) {
+    set_max_num_tbb_threads(tbb_threads);
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
 
     if (method == "cholmod") {
         factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
     }
-    else if (method == "catamari" || method == "catamari_nesdis") {
+    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis") {
 #if MESHFEM_WITH_CATAMARI
         std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>();
-        cf->orderingMethod = (method == "catamari") ? CatamariFactorizer::OrderingMethod::Catamari
-                                                    : CatamariFactorizer::OrderingMethod::CholmodNesdis;
+        if (method == "catamari")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
+        if (method == "catamari_nesdis")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
+        if (method == "catamari_metis")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
         factorizer = std::move(cf);
 #else
         throw std::runtime_error("Catamari not included");
@@ -52,20 +56,16 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 4) {
-        std::cout << "Usage: " << argv[0] << " method sparsityPattern.bin numeric_0.bin [numeric_1.bin ...]" << std::endl;
+    if (argc < 5) {
+        std::cout << "Usage: " << argv[0] << " method tbb_threads sparsityPattern.bin numeric_0.bin [numeric_1.bin ...]" << std::endl;
         std::cout << "where method is in {cholmod, catamari, catamari_nesdis}" << std::endl;
         exit(-1);
     }
 
-    const char **numericMatrices = argv + 3;
-    size_t numNumericMatrices = argc - 3;
+    const char **numericMatrices = argv + 4;
+    size_t numNumericMatrices = argc - 4;
 
-    if (false) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Initial Cholmod version");
-        benchmark_method("cholmod", argv[2], numNumericMatrices, numericMatrices);
-    }
-    benchmark_method(argv[1], argv[2], numNumericMatrices, numericMatrices);
+    benchmark_method(argv[1], argv[3], numNumericMatrices, numericMatrices, std::stod(argv[2]));
 
     return 0;
 }
