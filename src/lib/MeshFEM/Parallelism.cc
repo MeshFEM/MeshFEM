@@ -1,4 +1,5 @@
 #include <MeshFEM/Parallelism.hh>
+#include <iostream>
 
 #ifdef MESHFEM_WITH_TBB
 
@@ -11,6 +12,11 @@ std::unique_ptr<tbb::task_arena> g_hessian_assembly_arena,
 void set_max_num_tbb_threads(int num_threads) {
     if (num_threads < 1) throw std::runtime_error("num_threads must be >= 1");
     g_global_control = std::make_unique<tbb::global_control>(tbb::global_control::parameter::max_allowed_parallelism, num_threads);
+}
+
+int get_max_num_tbb_threads() {
+    if (!g_global_control) return tbb::this_task_arena::max_concurrency();
+    return std::min<int>(tbb::this_task_arena::max_concurrency(), g_global_control->active_value(tbb::global_control::parameter::max_allowed_parallelism));
 }
 
 void unset_max_num_tbb_threads() {
@@ -49,6 +55,10 @@ tbb::task_arena &get_gradient_assembly_arena() {
 #else // !MESHFEM_WITH_TBB
 
 void set_max_num_tbb_threads(int num_threads) {
+    throw std::runtime_error("TBB Disabled");
+}
+
+int get_max_num_tbb_threads() {
     throw std::runtime_error("TBB Disabled");
 }
 

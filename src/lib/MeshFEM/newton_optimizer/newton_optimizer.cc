@@ -1,6 +1,8 @@
 #include "newton_optimizer.hh"
 #include "../AutomaticDifferentiation.hh"
-#include "MeshFEM/SparseMatrices.hh"
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/ParallelVectorOps.hh>
 #include <Eigen/src/Core/Matrix.h>
 
 // Modify `H` to enforce the active bound constraints (which are of the form d_i = 0 when solving H d = -g).
@@ -86,7 +88,6 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
     while (true) {
         try {
-            BENCHMARK_SCOPED_TIMER_SECTION timer("Newton solve");
             if (tau != 0) {
                 if (!M) {
                     BENCHMARK_SCOPED_TIMER_SECTION solve("Eval metric");
@@ -255,15 +256,16 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                 break;
             }
         }
+
         // Note: we allow the iteration callback to modify the variables!
         // (in case the user wants to run some custom projection/filter at the start
         //  of each Newton iteration).
         vars = prob->getVars();
-        neg_g = -(prob->gradient(true));
-        zeroOutFixedVarsInPlace(neg_g);
 
         currEnergy = prob->energy();
+        neg_g = -prob->gradient(true);
 
+        zeroOutFixedVarsInPlace(neg_g);
         projectOutLEQConstrainedComponents(neg_g);
 
         // Gradient with respect to the "free" variables (components corresponding to fixed/actively constrained variables zero-ed out)

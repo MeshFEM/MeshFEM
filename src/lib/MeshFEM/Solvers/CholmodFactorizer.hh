@@ -201,9 +201,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     }
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
+    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override {
         assertFactorization(sys);
         static_assert(std::is_same<Real, double>::value, "Right-hand side must be an array of doubles");
+        if (alreadyPermuted) throw std::runtime_error("Unimplemented");
 
         const size_t m = m_L->n, n = m_L->n;
 
@@ -234,6 +235,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     }
 
     bool preferInPlaceSolve() const override { return false; }
+    bool supportsPrePermutation() const override { return false; }
 
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.

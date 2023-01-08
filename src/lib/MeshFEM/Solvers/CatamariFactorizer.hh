@@ -217,18 +217,20 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         m_factorizationType = FactorizationType::None;
     }
 
+    void solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const override;
+
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const override {
+    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override {
         // Catamari does the solve in-place! Copy `b` into `x` and wrap it in a
         // catamari::BlasMatrixView.
         const size_t s = m_reduced();
         Eigen::Map<Eigen::VectorXd>(x, s) = Eigen::Map<const Eigen::VectorXd>(b, s);
 
-        solveRawReducedInPlace(x, sys);
+        solveRawReducedInPlace(x, sys, alreadyPermuted);
     }
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A) const override {
+    void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override {
         assertFactorization(sys);
         if (sys != CholeskySys::A) {
             std::cout << "Alternative CholeskySys not yet wrapped for Catamari" << std::endl;
@@ -243,10 +245,11 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         v.data = bx;
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-        m_ldl.Solve(&v);
+        m_ldl.Solve(&v, alreadyPermuted);
     }
 
     bool preferInPlaceSolve() const override { return true; }
+    bool supportsPrePermutation() const override { return true; }
 
     void        stashFactorization()       override { throw std::runtime_error("Stashing unimplemented"); }
     bool   hasStashedFactorization() const override { throw std::runtime_error("Stashing unimplemented"); }
@@ -268,6 +271,24 @@ private:
     void m_factorizeInjectedEntries();
 
     std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
+
+    // Support fused pre-permutation functionality (where row-col-removal is fused with permutation)
+    void m_populatePermutedReducedRowForRow() const override {
+        const size_t n_full = n();
+        if (m_reducedRowForRow.size() != n_full) throw std::runtime_error("Incorrect m_reducedRowForRow size");
+        if (m_permutedReducedRowForRow.size() == n_full) return;
+        auto f = m_ldl.supernodal_factorization.get();
+
+        if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
+        const auto &o = f->ordering_;
+
+        m_permutedReducedRowForRow.resize(n_full);
+        for (size_t i = 0; i < n_full; ++i) {
+            SuiteSparse_long row_orig = m_reducedRowForRow[i];
+            m_permutedReducedRowForRow[i] = (row_orig != SuiteSparseMatrix::INDEX_NONE)
+                                                ? o.permutation[row_orig] : row_orig;
+        }
+    }
 };
 #endif
 

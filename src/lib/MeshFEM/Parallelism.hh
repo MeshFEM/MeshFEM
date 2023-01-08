@@ -8,6 +8,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
+#include <tbb/info.h>
 #include <tbb/global_control.h>
 #include <tbb/parallel_for.h>
 #include <tbb/enumerable_thread_specific.h>
@@ -19,6 +20,7 @@
 #include <MeshFEM_export.h>
 
 MESHFEM_EXPORT void   set_max_num_tbb_threads(int num_threads);
+MESHFEM_EXPORT int    get_max_num_tbb_threads();
 MESHFEM_EXPORT void unset_max_num_tbb_threads();
 
 // We may want to use different numbers of threads to assemble the Hessian/gradient because of the

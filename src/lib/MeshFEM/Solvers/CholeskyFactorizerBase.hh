@@ -94,17 +94,30 @@ struct CholeskyFactorizerBase {
     void assertFactorization(FactorizationType type)           const { if (!hasFactorization(type)) throw std::runtime_error("Factorization does not exist"); }
     void assertFactorization(CholeskySys sys = CholeskySys::A) const { if (!hasFactorization( sys)) throw std::runtime_error("Factorization does not exist"); }
 
+    virtual void solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {
+        // Brute-force reference implementation for solvers that don't support solving for multiple RHS at once.
+        if (size_t(B.rows()) != m()) throw std::runtime_error("Incorrect RHS size");
+        const size_t nrhs = B.cols();
+        if (nrhs < 1) throw std::runtime_error("Must specify at least one rhs.");
+
+        X.resize(B.rows(), B.cols());
+        for (size_t i = 0; i < nrhs; ++i)
+            X.col(i) = solve(B.col(i).eval());
+    }
+
     template<typename _Vec1, typename _Vec2>
     void solve(const _Vec1 &b, _Vec2 &x, CholeskySys sys = CholeskySys::A) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CholeskyFactorizerBase.solve");
         assert(size_t(b.size()) == m());
         x.resize(n());
         m_solveScratch.resize(n()); // always the full unreduced size to support swapping with `x`
 
         if (hasFixedVars()) {
             if (preferInPlaceSolve()) {
-                removeFixedEntries(b, m_solveScratch.head(n_reduced()));
-                solveRawReducedInPlace(m_solveScratch.data(), sys);
-                extractFullSolution(m_solveScratch.head(n_reduced()), x);
+                const bool permute = supportsPrePermutation();
+                removeFixedEntries(b, m_solveScratch.head(n_reduced()), permute);
+                solveRawReducedInPlace(m_solveScratch.data(), sys, /* alreadyPermuted = */ permute);
+                extractFullSolution(m_solveScratch.head(n_reduced()), x, permute);
             }
             else {
                 removeFixedEntries(b, m_solveScratch.head(n_reduced()));
@@ -126,35 +139,74 @@ struct CholeskyFactorizerBase {
         return x;
     }
 
+    // `permute`: whether to also apply the permutation/inverse permutation in a fused operation.
     template<class VecIn, class VecOut>
-    void extractFullSolution(const VecIn &xReduced, VecOut &&x) const {
-        if (m_varIsFixed.empty()) throw std::logic_error("Variables were not fixed");
-        if (size_t(xReduced.size()) != n_reduced()) throw std::runtime_error("Invalid xReduced size");
-        x.resize(n());
-        size_t back = 0;
-        for (decltype(x.size()) i = 0; i < x.size(); ++i) {
-            if (!m_varIsFixed[i]) x[i] = xReduced[back++];
-            else             x[i] = 0.0;
+    void extractFullSolution(const VecIn &xReduced, VecOut &&x, bool permute = false) const {
+        if (m_reducedRowForRow.size() != n()) throw std::logic_error("Variables were not fixed");
+        if (size_t(xReduced.rows()) != n_reduced()) throw std::runtime_error("Invalid xReduced size");
+        x.resize(n(), xReduced.cols());
+
+        const SuiteSparse_long *reducedRowForRow = m_reducedRowForRow.data();
+        if (permute) {
+            m_populatePermutedReducedRowForRow();
+            reducedRowForRow = m_permutedReducedRowForRow.data();
+        }
+
+        if (xReduced.cols() > 1) {
+            parallel_for_range(x.rows(), [&](size_t i) {
+                SuiteSparse_long row = reducedRowForRow[i];
+                if (row != SuiteSparseMatrix::INDEX_NONE) x.row(i) = xReduced.row(row);
+                else                                      x.row(i).setZero();
+            });
+        }
+        else {
+            const Real *xR_ptr = xReduced.data();
+            Real *x_ptr  = x.data();
+            for (decltype(x.size()) i = 0; i < x.size(); ++i) {
+                SuiteSparse_long row = reducedRowForRow[i];
+                x_ptr[i] = (row != SuiteSparseMatrix::INDEX_NONE) ? xR_ptr[row] : 0.0;
+            }
         }
     }
 
     template<class VecIn, class VecOut>
-    void removeFixedEntries(const VecIn &x, VecOut &&xReduced) const {
-        if (m_varIsFixed.empty()) throw std::logic_error("Variables were not fixed");
-        if (size_t(x.size()) != n()) throw std::runtime_error("Invalid x size");
-        xReduced.resize(n_reduced());
-        size_t back = 0;
-        for (decltype(x.size()) i = 0; i < x.size(); ++i)
-            if (!m_varIsFixed[i]) xReduced[back++] = x[i];
+    void removeFixedEntries(const VecIn &x, VecOut &&xReduced = false, bool permute = false) const {
+        if (m_reducedRowForRow.size() != n()) throw std::logic_error("Variables were not fixed");
+        if (size_t(x.rows()) != n()) throw std::runtime_error("Invalid x size");
+
+        const SuiteSparse_long *reducedRowForRow = m_reducedRowForRow.data();
+        if (permute) {
+            m_populatePermutedReducedRowForRow();
+            reducedRowForRow = m_permutedReducedRowForRow.data();
+        }
+
+        xReduced.resize(n_reduced(), x.cols());
+        if (x.cols() > 1)  {
+            parallel_for_range(x.rows(), [&](size_t i) {
+                SuiteSparse_long row = reducedRowForRow[i];
+                if (row != SuiteSparseMatrix::INDEX_NONE) xReduced.row(row) = x.row(i);
+            });
+        }
+        else {
+            Real *xR_ptr = xReduced.data();
+            const Real *x_ptr  = x.data();
+            for (decltype(x.size()) i = 0; i < x.size(); ++i) {
+                SuiteSparse_long row = reducedRowForRow[i];
+                if (row != SuiteSparseMatrix::INDEX_NONE) xR_ptr[row] = x_ptr[i];
+            }
+        }
     }
 
     // Raw pointer versions (Use with care! Caller must allocate/own both pointers)
     // These calls are for the *reduced* system obtained after row/col reduction.
     // (b and x should be the reduced right-hand-side and x, respectively).
-    virtual void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A) const = 0;
-    virtual void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A) const { UNUSED(bx); UNUSED(sys); throw std::runtime_error("Unimplemented"); }
+    virtual void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const = 0;
+    virtual void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const { UNUSED(bx); UNUSED(sys); throw std::runtime_error("Unimplemented"); }
     // Which version of solve is "native"?
     virtual bool preferInPlaceSolve() const = 0;
+    // Whether the solver allows us to apply the permutation (accepts `alreadyPermuted = true`).
+    // This enables an optimization where the permutation is fused with the row removal operation.
+    virtual bool supportsPrePermutation() const = 0;
 
     virtual CholeskyProvider provider() const = 0;
 
@@ -164,9 +216,9 @@ protected:
 
     // Functionality for efficient solves under variable pins
     std::vector<size_t> m_fixedVars;
-    std::vector<bool> m_varIsFixed;
     std::vector<SuiteSparse_long> m_reducedEntryForEntry;
     std::vector<SuiteSparse_long> m_reducedRowForRow;
+    mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
     std::unique_ptr<SuiteSparseMatrix> m_Areduced;
     using VXd = VecX_T<Real>;
     mutable VXd m_solveScratch;
@@ -178,10 +230,11 @@ protected:
         m_fixedVars = pinnedVars;
 
         m_Areduced = std::make_unique<SuiteSparseMatrix>(mat);
-        m_varIsFixed.assign(mat.n, false);
-        for (size_t var : pinnedVars) m_varIsFixed[var] = true;
+        std::vector<bool> varIsFixed;
+        varIsFixed.assign(mat.n, false);
+        for (size_t var : pinnedVars) varIsFixed[var] = true;
 
-        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return m_varIsFixed[i]; }, &m_reducedRowForRow, &m_reducedEntryForEntry);
+        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_reducedEntryForEntry);
         return m_Areduced.get();
     }
 
@@ -199,6 +252,8 @@ protected:
         }
         return m_Areduced.get();
     }
+
+    virtual void m_populatePermutedReducedRowForRow() const { throw std::runtime_error("Unimplemented"); }
 };
 
 #endif /* end of include guard: CHOLESKYFACTORIZERBASE_HH */

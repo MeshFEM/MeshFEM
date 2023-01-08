@@ -493,6 +493,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // hold values from the previous iteration (before the final linesearch
     // step).
     void update_factorizations(const WorkingSet &ws) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("update_factorizations");
         m_factorizationUpdate(ws, options.beta, std::min(options.beta, 1e-6));
     }
 

@@ -1,4 +1,6 @@
 #include <MeshFEM/SparseMatrices.hh>
+#include "CatamariFactorizer.hh"
+#include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
 
 extern "C" {
 #include <cholmod.h>
@@ -92,6 +94,52 @@ void CatamariFactorizer::m_factorizeInjectedEntries() {
                                  std::to_string(cmat.NumColumns()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
     }
     m_factorizationType = FactorizationType::Numeric;
+}
+
+void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {
+    BENCHMARK_SCOPED_TIMER_SECTION otimer("solveMultiRHS");
+    // Brute-force reference implementation for solvers that don't support solving for multiple RHS at once.
+    if (size_t(B.rows()) != m()) throw std::runtime_error("Incorrect RHS size");
+    const size_t nrhs = B.cols();
+    if (nrhs < 1) throw std::runtime_error("Must specify at least one rhs.");
+
+    Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> X_scratch;
+
+    if (hasFixedVars()) {
+        removeFixedEntries(B, X_scratch, /* permute = */ true);
+
+#if 1
+        catamari::BlasMatrixView<double> v;
+        const size_t s = n_reduced();
+        v.height = s;
+        v.width = nrhs;
+        v.leading_dim = s;
+        v.data = X_scratch.data();
+
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
+            m_ldl.Solve(&v, /* alreadyPermuted = */ true);
+        }
+#else
+        for (size_t i = 0; i < nrhs; ++i) {
+            catamari::BlasMatrixView<double> v;
+            const size_t s = n_reduced();
+            v.height = s;
+            v.width = 1;
+            v.leading_dim = s;
+            v.data = X_scratch.col(i).data();
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
+                m_ldl.Solve(&v, /* alreadyPermuted = */ true);
+            }
+        }
+#endif
+
+        extractFullSolution(X_scratch, X, /* permute = */ true);
+    }
+    else {
+        throw std::runtime_error("Unimplemented");
+    }
 }
 
 #endif
