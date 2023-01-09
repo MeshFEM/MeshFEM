@@ -201,7 +201,7 @@ struct CholeskyFactorizerBase {
     // These calls are for the *reduced* system obtained after row/col reduction.
     // (b and x should be the reduced right-hand-side and x, respectively).
     virtual void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const = 0;
-    virtual void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const { UNUSED(bx); UNUSED(sys); throw std::runtime_error("Unimplemented"); }
+    virtual void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const { UNUSED(bx); UNUSED(sys); UNUSED(alreadyPermuted); throw std::runtime_error("Unimplemented"); }
     // Which version of solve is "native"?
     virtual bool preferInPlaceSolve() const = 0;
     // Whether the solver allows us to apply the permutation (accepts `alreadyPermuted = true`).
