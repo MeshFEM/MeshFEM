@@ -173,7 +173,7 @@ struct CatamariConverter {
                 else {
                     for (SuiteSparse_long ii = 0; ii < A.nz; ++ii) {
                         SuiteSparse_long loc = m_locForEntry[ii];
-                        if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
+                        if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
                         if (loc < lowerBlockOffset) df->values_[loc                   ] = A.Ax[ii];
                         else                        lf->values_[loc - lowerBlockOffset] = A.Ax[ii];
                     }
