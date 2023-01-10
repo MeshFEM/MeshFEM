@@ -306,7 +306,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // We have an LDL^T factorization; we need to check that all entries of D are positive.
         // Cholmod stores these entries on the diagonal of "L"
         const size_t numCols = m_L->n;
-        assert(numCols == n());
+        assert(numCols == n_reduced());
         SuiteSparse_long *colPointers = (SuiteSparse_long *) m_L->p;
         double *values = (double *) m_L->x;
         assert((colPointers != nullptr) && (values != nullptr));

@@ -212,6 +212,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     CatamariFactorizer() {
         m_ldlControl.SetFactorizationType(catamari::kCholeskyFactorization);
+        m_ldlControl.supernodal_strategy = catamari::kSupernodalFactorization;
         m_ldlControl.supernodal_control.algorithm = catamari::kRightLookingLDL;
     }
 

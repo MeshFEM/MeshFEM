@@ -100,6 +100,8 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
             else {
                 s.factorizeNumeric(H);
             }
+
+            if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite"); // Needed in case CHOLMOD decides on an LDL factorization...
             break;
         }
         catch (std::exception &e) {
