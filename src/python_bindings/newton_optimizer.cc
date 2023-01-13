@@ -74,10 +74,10 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
-                                                     py::return_value_policy::reference)
+                                                     py::return_value_policy::reference_internal)
         .def_property("hessianUpdateController",     [](const NewtonOptimizerOptions &opts) -> HessianUpdateController & { return opts.getHessianUpdateController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianUpdateController &h) { opts.setHessianUpdateController(h); },
-                                                     py::return_value_policy::reference)
+                                                     py::return_value_policy::reference_internal)
         ;
     addSerializationBindings<NewtonOptimizerOptions, PyNOO, NewtonOptimizerOptions::StateBackwardCompat, NewtonOptimizerOptions::StateBackwardCompat2>(pyNewtonOptimizerOptions);
 
@@ -116,7 +116,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("numVars",                &NewtonProblem::numVars)
         .def("applyBoundConstraints",  &NewtonProblem::applyBoundConstraints)
         .def("activeBoundConstraints", &NewtonProblem::activeBoundConstraints, py::arg("vars"), py::arg("g"), py::arg("tol") = 1e-8)
-        .def("boundConstraints",       &NewtonProblem::boundConstraints, py::return_value_policy::reference)
+        .def("boundConstraints",       &NewtonProblem::boundConstraints, py::return_value_policy::reference_internal)
         .def("feasible",               &NewtonProblem::feasible)
         .def("feasibleStepLength",     py::overload_cast<const Eigen::VectorXd &>(&NewtonProblem::feasibleStepLength, py::const_))
         .def("iterationCallback",      &NewtonProblem::iterationCallback)
@@ -152,7 +152,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 opt.newton_step(step, prob.gradient(false), workingSet, beta, betaMin, feasibility);
                 return step;
             }, py::arg("feasibility") = false)
-        .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference)
+        .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
         .def("setFixedVars", &NewtonOptimizer::setFixedVars, py::arg("fixedVars"))
         .def_readwrite("options", &NewtonOptimizer::options)
         ;

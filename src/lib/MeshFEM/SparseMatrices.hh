@@ -971,10 +971,8 @@ struct CSCMatrix {
         return result;
     }
 
-    // Construct a new CSCMatrix with a different symmetry mode. Currently
-    // only conversions between upper- and lower-triangle symmetric matrix
-    // representations are supported.
-    CSCMatrix toSymmetryMode(SymmetryMode newMode) const {
+    template<class ValueGetter>
+    CSCMatrix toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
         if (newMode == symmetry_mode) return *this;
         if (m != n) throw std::runtime_error("Matrix is not symmetric");
 
@@ -1006,24 +1004,25 @@ struct CSCMatrix {
                 for (_Index j = 0; j < n; ++j) {
                     for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                         const _Index i = Ai[inLoc];
-                        builder.insert(i, j, Ax[inLoc]);
-                        if (i != j) builder.insert(j, i, Ax[inLoc]);
+                        builder.insert(i, j, value(inLoc));
+                        if (i != j) builder.insert(j, i, value(inLoc));
                     }
                 }
             }
             else {
+                if (symmetry_mode != SymmetryMode::LOWER_TRIANGLE) throw std::logic_error("Unexpected conversion request");
                 // Insert strict upper triangle (reflected part) first...
                 for (_Index j = 0; j < n; ++j) {
                     for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                         const _Index i = Ai[inLoc];
-                        if (i != j) builder.insert(j, i, Ax[inLoc]);
+                        if (i != j) builder.insert(j, i, value(inLoc));
                     }
                 }
                 // Followed by lower triangle
                 for (_Index j = 0; j < n; ++j) {
                     for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                         const _Index i = Ai[inLoc];
-                        builder.insert(i, j, Ax[inLoc]);
+                        builder.insert(i, j, value(inLoc));
                     }
                 }
             }
@@ -1047,7 +1046,7 @@ struct CSCMatrix {
                 for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                     const _Index i = Ai[inLoc];
                     if ((i == j) || ((i < j) == (newMode == SymmetryMode::UPPER_TRIANGLE)))
-                        builder.insert(i, j, Ax[inLoc]);
+                        builder.insert(i, j, value(inLoc));
                 }
             }
 
@@ -1058,6 +1057,19 @@ struct CSCMatrix {
         CSCMatrix result = transpose(/* force = */ true);
         result.symmetry_mode = newMode;
         return result;
+    }
+
+    // Construct a new CSCMatrix with a different symmetry mode. Currently
+    // only conversions between upper- and lower-triangle symmetric matrix
+    // representations are supported.
+    CSCMatrix toSymmetryMode(SymmetryMode newMode) const {
+        return toSymmetryModeImpl(newMode, [this](_Index ii) { return Ax[ii]; });
+    }
+
+    // Convert the sparsity pattern of this matrix into a different symmetry mode
+    // (discarding values).
+    CSCMatrix toSymmetryModeSparsityOnly(SymmetryMode newMode, _Real val = 0.0) const {
+        return toSymmetryModeImpl(newMode, [val](_Index /* ii */) { return val; });
     }
 
     void reflectUpperTriangle() {
@@ -1348,6 +1360,32 @@ struct CSCMatrix {
             }
         }
         assert(bit == bite && "b's sparsity not a subset of ours");
+    }
+
+    void addWithSubSparsityFast(const CSCMatrix &b, const _Index offset = 0) {
+        auto it  = begin(), bit  = b.begin(),
+             ite = end(),   bite = b.end();
+        auto bi = [&]() { return offset + bit.get_i(); };
+        auto bj = [&]() { return offset + bit.get_j(); };
+
+        for (_Index jA = offset; jA < n; ++jA) {
+            _Index jB = jA - offset;
+
+            _Index iiA = Ap[jA], iiB = b.Ap[jB];
+            _Index endA = Ap[jA + 1], endB = b.Ap[jB + 1];
+            while ((iiA != endA) && (iiB != endB)) {
+                _Index rA = Ai[iiA], rB = b.Ai[iiB];
+                if (rA == rB) {
+                    Ax[iiA] += b.Ax[iiB];
+                    ++iiA, ++iiB;
+                }
+                else {
+                    assert(rA < rB && "b's sparsity not a subset of ours");
+                    ++iiA;
+                }
+            }
+            assert(iiB == endB && "Hit end of column A before end of column B :(");
+        }
     }
 
     // Perform the operation:

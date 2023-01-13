@@ -50,7 +50,7 @@ struct CatamariConverter {
         m_result.FlushEntryQueues();
 #else
         {
-            SuiteSparseMatrix A_full = Asp.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::NONE);
+            SuiteSparseMatrix A_full = Asp.toSymmetryModeSparsityOnly(SuiteSparseMatrix::SymmetryMode::NONE);
 
             catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
             for (SuiteSparse_long j = 0; j < A_full.n; ++j) {
@@ -111,9 +111,20 @@ struct CatamariConverter {
             auto reducedVarIndex = [&](SuiteSparse_long  i) { return reducedRowForRow.empty() ? i : reducedRowForRow[i]; };
             auto nonzeroRemoved  = [&](SuiteSparse_long ii) { return reducedEntryForEntry.size() && (reducedEntryForEntry[ii] == SuiteSparseMatrix::INDEX_NONE); };
 
+            // First, locate the supernode corresponding to each column.
+            Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1> supernodeForCol(A.n);
+            if (sno[num_supernodes] != A.n) throw std::runtime_error("Columns missing from supernodes");
+            for (Int supernode = 0; supernode < num_supernodes; ++supernode) {
+                for (Int col = sno[supernode]; col < sno[supernode + 1]; ++col) {
+                    if (col >= A.n) throw std::runtime_error("Supernode column index out of bounds");
+                    supernodeForCol[col] = supernode;
+                }
+            }
+
             // For each entry in the (upper triangle) input matrix, figure out where it goes
             // in the *lower triangle* of the factorization structure...
             parallel_for_range(A.n, [&](SuiteSparse_long j_orig) {
+                const Int *guess = nullptr; // guess for index search performed inside...
                 for (SuiteSparse_long ii = A.Ap[j_orig]; ii < A.Ap[j_orig + 1]; ++ii) {
                     if (nonzeroRemoved(ii)) continue;
 
@@ -123,16 +134,7 @@ struct CatamariConverter {
                     // Locate (i_perm, j_perm) in the supernode structure
 
                     // Find the supernode
-                    const Int supernode = std::distance(sno.Data(), std::upper_bound(sno.Data(), sno.Data() + num_supernodes + 1, j_perm)) - 1;
-                    if (supernode >= num_supernodes) {
-                        std::cout << "Failed to find column " << j_perm << std::endl;
-                        std::cout << "sno[0]: " << sno[0] << std::endl;
-                        std::cout << "sno[num_supernodes]: " << sno[num_supernodes] << std::endl;
-                        std::cout << "A.m: " << A.m << std::endl;
-                        std::cout << "A.m: " << A.m << std::endl;
-                        throw std::runtime_error("Couldn't locate supernode");
-                    }
-
+                    const Int supernode = supernodeForCol[j_perm];
                     catamari::BlasMatrixView<double>& diagonal_block = df->blocks[supernode];
                     catamari::BlasMatrixView<double>& lower_block = lf->blocks[supernode];
 
@@ -148,10 +150,20 @@ struct CatamariConverter {
                         m_locForEntry[ii] = dbIndex;
                     }
                     else {
-                        const Int* index_beg = lf->StructureBeg(supernode);
-                        const Int* index_end = lf->StructureEnd(supernode);
-                        const Int *iter = std::lower_bound(index_beg, index_end, i_perm);
-                        if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index in supernode");
+                        const Int *index_beg = lf->StructureBeg(supernode);
+                        const Int *index_end = lf->StructureEnd(supernode);
+
+                        // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
+                        // first checking at `*guess` (which will be correct for consecutive
+                        // strips of entries).
+                        const Int *iter;
+                        if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
+                        else {
+                            iter = std::lower_bound(index_beg, index_end, i_perm);
+                            if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index in supernode");
+                        }
+                        guess = iter + 1;
+
                         const Int i_rel = std::distance(index_beg, iter);
                         size_t lbIndex = std::distance(lf->values_.Data(), lower_block.Pointer(i_rel, j_rel));
                         m_locForEntry[ii] = lowerBlockOffset + lbIndex;
