@@ -112,7 +112,7 @@ struct CatamariConverter {
             auto nonzeroRemoved  = [&](SuiteSparse_long ii) { return reducedEntryForEntry.size() && (reducedEntryForEntry[ii] == SuiteSparseMatrix::INDEX_NONE); };
 
             // First, locate the supernode corresponding to each column of the reduced matrix.
-            const size_t nReducedVars = ldl.NumRows();
+            const Int nReducedVars = ldl.NumRows();
             Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1> supernodeForReducedCol(nReducedVars);
             if (sno[num_supernodes] != nReducedVars) throw std::runtime_error("Columns missing from supernodes");
             for (Int supernode = 0; supernode < num_supernodes; ++supernode) {
@@ -290,7 +290,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
     CholeskyProvider provider() const override { return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari; }
 
-    virtual ~CatamariFactorizer() { }
+    virtual ~CatamariFactorizer();
 
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
 

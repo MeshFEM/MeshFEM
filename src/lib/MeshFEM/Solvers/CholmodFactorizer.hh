@@ -278,15 +278,6 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         clearStashedFactorization();
     }
 
-    virtual ~CholmodFactorizer() {
-        clearFactors();
-
-        if (m_Y) cholmod_l_free_dense(&m_Y, m_c.get());
-        if (m_E) cholmod_l_free_dense(&m_E, m_c.get());
-
-        cholmod_l_finish(m_c.get());
-    }
-
     static void error_handler(int status, const char *file, int line, const char *message) {
         std::cout << "Caught error." << std::endl;
         if (status < 0)
@@ -326,6 +317,15 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     }
 
     virtual CholeskyProvider provider() const override { return CholeskyProvider::CHOLMOD; }
+
+    virtual ~CholmodFactorizer() {
+        clearFactors();
+
+        if (m_Y) cholmod_l_free_dense(&m_Y, m_c.get());
+        if (m_E) cholmod_l_free_dense(&m_E, m_c.get());
+
+        cholmod_l_finish(m_c.get());
+    }
 
 private:
     std::unique_ptr<SuiteSparseMatrix> m_Ashift;

@@ -142,4 +142,8 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
     }
 }
 
+CatamariFactorizer::~CatamariFactorizer() {
+    if (m_c) cholmod_l_finish(m_c.get());
+}
+
 #endif
