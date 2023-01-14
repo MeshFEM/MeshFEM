@@ -111,13 +111,14 @@ struct CatamariConverter {
             auto reducedVarIndex = [&](SuiteSparse_long  i) { return reducedRowForRow.empty() ? i : reducedRowForRow[i]; };
             auto nonzeroRemoved  = [&](SuiteSparse_long ii) { return reducedEntryForEntry.size() && (reducedEntryForEntry[ii] == SuiteSparseMatrix::INDEX_NONE); };
 
-            // First, locate the supernode corresponding to each column.
-            Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1> supernodeForCol(A.n);
-            if (sno[num_supernodes] != A.n) throw std::runtime_error("Columns missing from supernodes");
+            // First, locate the supernode corresponding to each column of the reduced matrix.
+            const size_t nReducedVars = ldl.NumRows();
+            Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1> supernodeForReducedCol(nReducedVars);
+            if (sno[num_supernodes] != nReducedVars) throw std::runtime_error("Columns missing from supernodes");
             for (Int supernode = 0; supernode < num_supernodes; ++supernode) {
                 for (Int col = sno[supernode]; col < sno[supernode + 1]; ++col) {
                     if (col >= A.n) throw std::runtime_error("Supernode column index out of bounds");
-                    supernodeForCol[col] = supernode;
+                    supernodeForReducedCol[col] = supernode;
                 }
             }
 
@@ -134,7 +135,7 @@ struct CatamariConverter {
                     // Locate (i_perm, j_perm) in the supernode structure
 
                     // Find the supernode
-                    const Int supernode = supernodeForCol[j_perm];
+                    const Int supernode = supernodeForReducedCol[j_perm];
                     catamari::BlasMatrixView<double>& diagonal_block = df->blocks[supernode];
                     catamari::BlasMatrixView<double>& lower_block = lf->blocks[supernode];
 
