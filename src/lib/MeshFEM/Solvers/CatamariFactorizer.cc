@@ -18,7 +18,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
         size_t n_zero = 4;
         std::string padded_num = std::to_string(i++);
         padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
-        A->dumpBinary("symbolic_mat_" + padded_num + ".bin");
+        A_reduced->dumpBinary("symbolic_mat_" + padded_num + ".bin");
     }
 #endif
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
@@ -67,7 +67,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
 #if DUMP_MATRICES
     {
-        const SuiteSparse *A = m_rowColRemoval(mat);
+        const SuiteSparseMatrix *A = m_rowColRemoval(mat);
         static size_t i = 0;
         size_t n_zero = 4;
         std::string padded_num = std::to_string(i++);

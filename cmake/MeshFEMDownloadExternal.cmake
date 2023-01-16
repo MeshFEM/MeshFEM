@@ -44,6 +44,8 @@ function(meshfem_download_eigen)
     meshfem_download_project(eigen
         URL     https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.gz
         URL_MD5 9e30f67e8531477de4117506fe44669b
+        # URL     https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+        # URL_MD5 4c527a9171d71a72a9d4186e65bea559
     )
 endfunction()
 
@@ -99,6 +101,6 @@ endfunction()
 function(meshfem_download_catamari)
     meshfem_download_project(catamari
         GIT_REPOSITORY https://github.com/jpanetta/catamari.git
-        GIT_TAG        175c907d4c66a6601a8370670c1b3da26fa53c3e
+        GIT_TAG        9640fb8e6dfb5cb1a9bc18e3bee58ac61d3a6649
     )
 endfunction()

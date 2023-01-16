@@ -227,12 +227,17 @@ protected:
     // the resulting reduced matrix is re-used for factorization
     const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
         if (pinnedVars.empty()) return &mat;
-        m_fixedVars = pinnedVars;
 
         m_Areduced = std::make_unique<SuiteSparseMatrix>(mat);
+
+        // Deduplicate fixed vars and construct mask needed for efficient row/col removal.
+        m_fixedVars.clear();
         std::vector<bool> varIsFixed;
         varIsFixed.assign(mat.n, false);
-        for (size_t var : pinnedVars) varIsFixed[var] = true;
+        for (size_t var : pinnedVars) {
+            if (!varIsFixed[var]) m_fixedVars.push_back(var);
+            varIsFixed[var] = true;
+        }
 
         m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_reducedEntryForEntry);
         return m_Areduced.get();

@@ -416,6 +416,27 @@ public:
             });
     }
 
+    // Evaluate approximate volumetric strain (combining stretching and
+    // bending) for each element at the thickness coordinate `z`.
+    std::vector<M2d> getElementVolumetricStrains(Real z) const {
+        auto result = getC();
+        for (auto e : mesh().elements()) {
+            size_t ei = e.index();
+            result[ei] = 0.5 * (result[ei] - M2d::Identity()) + z * (m_II[ei] - m_restII[ei]);
+        }
+        return result;
+    }
+
+    // Evaluate approximate volumetric strain (combining stretching and
+    // bending) at the thickness coordinate `z`, averaged onto the vertices.
+    std::vector<M2d> getVertexVolumetricStrains(Real z) const {
+        return vertexAveragedField(mesh(), [this, z](size_t ei, const EvalPtK &) {
+                auto e = mesh().element(ei);
+                M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+                return (0.5 * (FB.transpose() * FB - M2d::Identity()) + z * (m_II[ei] - m_restII)).eval();
+            });
+    }
+
     const VXd &getAlphas()       const { return m_alphas;       }
     const VXd &getSourceAlphas() const { return m_sourceAlphas; }
 
