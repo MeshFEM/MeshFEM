@@ -422,7 +422,8 @@ public:
         auto result = getC();
         for (auto e : mesh().elements()) {
             size_t ei = e.index();
-            result[ei] = 0.5 * (result[ei] - M2d::Identity()) + z * (m_II[ei] - m_restII[ei]);
+            const M32d &B = m_B[ei];
+            result[ei] = 0.5 * (result[ei] - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B;
         }
         return result;
     }
@@ -432,8 +433,9 @@ public:
     std::vector<M2d> getVertexVolumetricStrains(Real z) const {
         return vertexAveragedField(mesh(), [this, z](size_t ei, const EvalPtK &) {
                 auto e = mesh().element(ei);
+                const M32d &B = m_B[ei];
                 M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
-                return (0.5 * (FB.transpose() * FB - M2d::Identity()) + z * (m_II[ei] - m_restII)).eval();
+                return (0.5 * (FB.transpose() * FB - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B).eval();
             });
     }
 
