@@ -64,30 +64,12 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
         : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
 
-    // Degree-changing constructor
+    // Copy and degree-changing constructor
     template<size_t Deg2>
-    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {
-        m_mesh = std::make_shared<Mesh>(es.mesh());
-        m_energyDensities = es.m_energyDensities;
-        auto oldDeformation = es.deformedPositions();
-
-        const auto &m = mesh();
-        // Transfer/interpolate deformation field to our new mesh.
-        m_x.resize(numNodes(), size_t(N));
-        for (const auto n : m.nodes()) {
-            const size_t ni = n.index();
-            if (n.isVertexNode()) m_x.row(ni) = oldDeformation.row(ni);
-            else if (n.isEdgeNode()) {
-                static_assert((Deg2 == 1) || (Deg2 == 2), "Only Degree 1 and 2 implemented");
-                if (Deg2 == 2) { m_x.row(ni) = oldDeformation.row(ni); }
-                else           { m_x.row(ni) = 0.5 * (oldDeformation.row(n.halfEdge().tail().index())
-                                                  + oldDeformation.row(n.halfEdge(). tip().index())); }
-            }
-            else throw std::runtime_error("Unimplemented");
-        }
-
-        setDeformedPositions(m_x);
-    }
+    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) { m_copy(es); }
+    // Note: the degree-changing constructor template is excluded from overload resolution,
+    // and the implicitly copy constructor is deleted due to the `m_varLocks` member...
+    ElasticSolid(const ElasticSolid &es) { m_copy(es); }
 
     size_t numElements() const { return mesh().numElements(); }
     size_t numVertices() const { return mesh().numVertices(); }
@@ -221,32 +203,38 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
-        auto accumulate_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
-            const auto &m = mesh();
-            const auto &e = m.element(ei);
-            PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
 
-            // Accumulate vertical strips into the global Sparse matrix.
-            for (const auto n_b : e.nodes()) {
-                for (size_t c_b = 0; c_b < N; ++c_b) {
-                    size_t  var_b = N * n_b.localIndex() + c_b;
-                    size_t gvar_b = N * n_b.index() + c_b;
-                    for (const auto n_a : e.nodes()) {
-                        size_t  var_a = N * n_a.localIndex();
-                        size_t gvar_a = N * n_a.index();
-                        if (gvar_a > gvar_b) continue;
+        auto &varLocks = m_getVarLocks();
+        get_hessian_assembly_arena().execute([&H, &varLocks, this, projectionMask]() {
+            parallel_for_range(mesh().numElements(), [&H, &varLocks, this, projectionMask](size_t ei) {
+                const auto &m = mesh();
+                const auto &e = m.element(ei);
+                PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
 
-                        Vector block;
-                        size_t len = std::min(size_t(N), gvar_b - gvar_a + 1);
-                        for (size_t c = 0; c < len; ++c)
-                            block[c] = contrib(perElementHessianFlattening(var_a + c, var_b));
-                        Hout.addNZStrip(gvar_a, gvar_b, block.topRows(len));
+                for (const auto n_b : e.nodes()) {
+                    for (size_t c_b = 0; c_b < N; ++c_b) {
+                        size_t  var_b = N * n_b.localIndex() + c_b;
+                        size_t gvar_b = N * n_b.index() + c_b;
+
+                        while (varLocks[gvar_b].exchange(true, std::memory_order_acquire)); // lock column gvar_b
+
+                        // Accumulate vertical strips to column gvar_b
+                        for (const auto n_a : e.nodes()) {
+                            size_t  var_a = N * n_a.localIndex();
+                            size_t gvar_a = N * n_a.index();
+                            if (gvar_a > gvar_b) continue;
+
+                            Vector block;
+                            size_t len = std::min(size_t(N), gvar_b - gvar_a + 1);
+                            for (size_t c = 0; c < len; ++c)
+                                block[c] = contrib(perElementHessianFlattening(var_a + c, var_b));
+                            H.addNZStrip(gvar_a, gvar_b, block.topRows(len));
+                        }
+                        varLocks[gvar_b].store(false, std::memory_order_release); // unlock column gvar_b
                     }
                 }
-            }
-        };
-
-        assemble_parallel(accumulate_per_element_contrib, H, numElements());
+            });
+        });
     }
 
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
@@ -490,6 +478,42 @@ protected:
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>
     friend struct ElasticSolid;
+
+    // Spin locks used for parallel Hessian assembly.
+    mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
+    auto &m_getVarLocks() const {
+        if (!m_varLocks) {
+            const size_t nv = numVars(VariableMask::All);
+            m_varLocks = std::make_unique<std::vector<std::atomic<bool>>>(nv);
+            for (size_t i = 0; i < nv; ++i)
+                atomic_init(&(*m_varLocks)[i], false);
+        }
+        return *m_varLocks;
+    }
+
+    template<size_t Deg2>
+    void m_copy(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {
+        m_mesh = std::make_shared<Mesh>(es.mesh());
+        m_energyDensities = es.m_energyDensities;
+        auto oldDeformation = es.deformedPositions();
+
+        const auto &m = mesh();
+        // Transfer/interpolate deformation field to our new mesh.
+        m_x.resize(numNodes(), size_t(N));
+        for (const auto n : m.nodes()) {
+            const size_t ni = n.index();
+            if (n.isVertexNode()) m_x.row(ni) = oldDeformation.row(ni);
+            else if (n.isEdgeNode()) {
+                static_assert((Deg2 == 1) || (Deg2 == 2), "Only Degree 1 and 2 implemented");
+                if (Deg2 == 2) { m_x.row(ni) = oldDeformation.row(ni); }
+                else           { m_x.row(ni) = 0.5 * (oldDeformation.row(n.halfEdge().tail().index())
+                                                    + oldDeformation.row(n.halfEdge(). tip().index())); }
+            }
+            else throw std::runtime_error("Unimplemented");
+        }
+
+        setDeformedPositions(m_x);
+    }
 };
 
 #endif /* end of include guard: ELASTICSOLID_HH */
