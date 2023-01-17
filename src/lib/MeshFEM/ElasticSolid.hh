@@ -21,6 +21,8 @@
 #include "FieldSamplerMatrix.hh"
 #include <Eigen/Sparse>
 
+#include <atomic>
+
 #include "RigidMotionPins.hh"
 #include "FieldPostProcessing.hh"
 #include "InterpolantRestriction.hh"
