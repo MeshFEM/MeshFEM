@@ -249,7 +249,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced);
 
     if (orderingMethod == OrderingMethod::Catamari)
-        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl);
+        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
     else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)) {
         if (!m_c) {
             m_c = std::make_unique<cholmod_common>();
@@ -275,7 +275,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
             }
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else throw std::runtime_error("Unknown orderingMethod");
     m_factorizationType = FactorizationType::Symbolic;
