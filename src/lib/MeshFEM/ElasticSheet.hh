@@ -151,19 +151,26 @@ public:
         {
             m_creaseEdgeIndexForEdge.assign(m_numEdges, -1);
             m_halfEdgeForCreaseAngle.reserve(m_numCreases);
+            m_creaseAngles.resize(m_numCreases);
             for (size_t i = 0; i < m_numCreases; ++i) {
                 size_t a = creases(i, 0),
                        b = creases(i, 1);
                 int hidx = std::max<int>(m->halfEdgeIndex(a, b),
                                          m->halfEdgeIndex(b, a));
                 if (hidx < 0) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " not in mesh");
-                if (m->halfEdge(hidx).isBoundary()) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " is on the boundary.");
+                auto he = m->halfEdge(hidx);
+                if (he.isBoundary()) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " is on the boundary.");
                 int &creaseIdx = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]];
                 if (creaseIdx >= 0) throw std::runtime_error("Duplicate crease edge " + std::to_string(a) + ", " + std::to_string(b));
                 m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]] = m_halfEdgeForCreaseAngle.size();
                 m_halfEdgeForCreaseAngle.push_back(hidx);
+
+                // Initialize the crease angle variables as the (signed) dihedral angles.
+                // This is usually want we want, and is necessary for a
+                // piecewise flat sheet to be initialized with flat rest triangles (i.e., m_restII = 0).
+                m_creaseAngles[creaseIdx] = atan2(he.tri()->normal().cross(he.opposite().tri()->normal()).dot((he.tip().node()->p - he.tail().node()->p).normalized()),
+                                                  he.tri()->normal()  .dot(he.opposite().tri()->normal()));
             }
-            m_creaseAngles.setZero(m_numCreases);
             assert(m_halfEdgeForCreaseAngle.size() == m_numCreases);
         }
 
