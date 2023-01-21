@@ -1,12 +1,11 @@
 #include <MeshFEM/SparseMatrices.hh>
-#include "CatamariFactorizer.hh"
 #include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
+
+#if MESHFEM_WITH_CATAMARI
 
 extern "C" {
 #include <cholmod.h>
 }
-
-#if MESHFEM_WITH_CATAMARI
 
 #include <catamari/apply_sparse.hpp>
 #include <catamari/blas_matrix.hpp>
@@ -91,16 +90,6 @@ struct CatamariConverter {
 
         if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
 
-        size_t nthreads = get_max_num_tbb_threads();
-        if (nthreads >= 2) {
-            setZeroParallel(catamari::eigenMap(df->values_));
-            setZeroParallel(catamari::eigenMap(lf->values_));
-        }
-        else {
-            catamari::eigenMap(df->values_).setZero();
-            catamari::eigenMap(lf->values_).setZero();
-        }
-
         if (m_locForEntry.empty()) {
             BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
 
@@ -172,15 +161,35 @@ struct CatamariConverter {
             });
         }
 
+        size_t nthreads = get_max_num_tbb_threads();
+        if (nthreads >= 2) {
+            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
+            setZeroParallel(catamari::eigenMap(df->values_));
+            setZeroParallel(catamari::eigenMap(lf->values_));
+        }
+        else {
+            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
+            catamari::eigenMap(df->values_).setZero();
+            catamari::eigenMap(lf->values_).setZero();
+        }
+
+
         {
             if (B_optional == nullptr || sigma == 0) {
                 if (nthreads > 1) {
-                    parallel_for_range(A.nz, [&](size_t ii) {
-                            SuiteSparse_long loc = m_locForEntry[ii];
-                            if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
-                            if (loc < lowerBlockOffset) df->values_[loc                   ] = A.Ax[ii];
-                            else                        lf->values_[loc - lowerBlockOffset] = A.Ax[ii];
-                        });
+                    const double *Ax = A.Ax.data();
+                    double *df_vals = df->values_.Data();
+                    double *lf_vals = lf->values_.Data();
+                    static tbb::affinity_partitioner ap;
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, A.nz),
+                                      [&](const tbb::blocked_range<size_t> &r) {
+                                           for (size_t ii = r.begin(); ii < r.end(); ++ii) {
+                                                SuiteSparse_long loc = m_locForEntry[ii];
+                                                if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
+                                                if (loc < lowerBlockOffset) df_vals[loc                   ] = Ax[ii];
+                                                else                        lf_vals[loc - lowerBlockOffset] = Ax[ii];
+                                           }
+                    }, ap);
                 }
                 else {
                     for (SuiteSparse_long ii = 0; ii < A.nz; ++ii) {

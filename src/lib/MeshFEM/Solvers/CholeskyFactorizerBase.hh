@@ -10,7 +10,7 @@
 #include "MeshFEM/unused.hh"
 
 enum class CholeskyProvider {
-    CHOLMOD, Catamari, CatamariNesdis
+    CHOLMOD, Catamari, CatamariNesdis, PARDISO
 };
 
 // Eigen provides a `swap` method rather than overloading `std::swap`

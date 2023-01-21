@@ -124,10 +124,14 @@ if(NOT TARGET tinyexpr::tinyexpr)
 endif()
 
 # Cholmod solver
+if (MESHFEM_WITH_CHOLMOD)
 find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
+endif()
 
 # UmfPack solver
+if (MESHFEM_WITH_UMFPACK)
 find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
+endif()
 
 ################################################################################
 # Optional libraries

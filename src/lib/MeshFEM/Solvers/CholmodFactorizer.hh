@@ -1,6 +1,8 @@
 #ifndef CHOLMODFACTORIZER_HH
 #define CHOLMODFACTORIZER_HH
 
+#if MESHFEM_WITH_CHOLMOD
+
 extern "C" {
 #include <cholmod.h>
 }
@@ -342,5 +344,71 @@ private:
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
     }
 };
+
+#else
+
+struct CholmodSparseWrapper {
+    template<typename... Args>
+    CholmodSparseWrapper(Args&&...) {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    template<typename _Vector>
+    _Vector apply(const _Vector &) const { throw std::runtime_error("CHOLMOD support not compiled"); }
+    void applyRaw(const double *, double *, const bool = false) const { throw std::runtime_error("CHOLMOD support not compiled"); }
+};
+
+struct CholmodFactorizer final : public CholeskyFactorizerBase {
+    size_t m_reduced() const override { return 0; }
+    size_t n_reduced() const override { return 0; }
+
+    CholmodFactorizer(bool = false, bool = false, bool = false) {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    // Perform only the symbolic factorization for the given matrix `mat`.
+    void factorizeSymbolic(const SuiteSparseMatrix &, const std::vector<size_t> &) override {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    void factorizeNumeric(const SuiteSparseMatrix &, bool =false) override {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    // Compute the numeric factorization of `A + sigma * B`, reusing the
+    // symbolic factorization if it exists.
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    void factorize(const SuiteSparseMatrix &, const std::vector<size_t> & = std::vector<size_t>(), bool = false) override {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    // Raw pointer version (Use with care! Caller must allocate/own both pointers)
+    void solveRawReduced(const Real *, Real *, CholeskySys = CholeskySys::A, bool = false) const override {
+        throw std::runtime_error("CHOLMOD support not compiled");
+    }
+
+    void        stashFactorization()       override { throw std::runtime_error("CHOLMOD support not compiled"); }
+    bool   hasStashedFactorization() const override { throw std::runtime_error("CHOLMOD support not compiled"); }
+    void  swapStashedFactorization()       override { throw std::runtime_error("CHOLMOD support not compiled"); }
+    void clearStashedFactorization()       override { throw std::runtime_error("CHOLMOD support not compiled"); }
+
+    bool preferInPlaceSolve() const override { return false; }
+    bool supportsPrePermutation() const override { return false; }
+
+    CholmodSparseWrapper getL() { return CholmodSparseWrapper(); }
+
+    void clearFactors() override { }
+
+    bool checkPosDef() const override { return false; }
+
+    virtual CholeskyProvider provider() const override { return CholeskyProvider::CHOLMOD; }
+
+    virtual ~CholmodFactorizer() { }
+};
+
+#endif
 
 #endif /* end of include guard: CHOLMODFACTORIZER_HH */

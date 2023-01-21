@@ -88,6 +88,7 @@ add_library(MeshFEM SHARED
         utils.hh
         VonMises.hh
         Solvers/CatamariFactorizer.cc
+        Solvers/PardisoFactorizer.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh
@@ -152,8 +153,6 @@ target_link_libraries(${PROJECT_NAME}
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
-        umfpack::umfpack
-        cholmod::cholmod
         meshfem::boost
         meshfem::spectra
         rotation_optimization
@@ -161,6 +160,10 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
         warnings::all
 )
+
+if (MESHFEM_WITH_UMFPACK)
+    target_link_libraries(${PROJECT_NAME} PUBLIC umfpack::umfpack)
+endif()
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
 #target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
@@ -196,7 +199,25 @@ if(MESHFEM_WITH_UMFPACK)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
 endif()
 
+if(MESHFEM_WITH_CHOLMOD)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CHOLMOD)
+    target_link_libraries(${PROJECT_NAME} PUBLIC cholmod::cholmod)
+endif()
+
 if (MESHFEM_WITH_CATAMARI)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CATAMARI)
     target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
+endif()
+
+if (MESHFEM_WITH_MKL_PARDISO)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_MKL_PARDISO)
+endif()
+
+if (MESHFEM_WITH_PARDISO)
+    set(MKLROOT /opt/intel/mkl)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_PARDISO)
+    target_link_libraries(${PROJECT_NAME} PUBLIC
+        /home/jpanetta/software/pardiso/libpardiso600-GNU800-X86-64.so
+         -L${MKLROOT}/lib/intel64 -lmkl_rt -Wl,--no-as-needed -lpthread -lm -ldl -lgomp
+        -lgfortran)
 endif()

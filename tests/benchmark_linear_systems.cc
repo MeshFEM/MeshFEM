@@ -32,6 +32,9 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
         throw std::runtime_error("Catamari not included");
 #endif
     }
+    else if (method == "pardiso") {
+        factorizer = make_cholesky_factorizer(CholeskyProvider::PARDISO);
+    }
     else throw std::runtime_error("Unknown method");
 
     SuiteSparseMatrix Asp(sparsityPatternPath);

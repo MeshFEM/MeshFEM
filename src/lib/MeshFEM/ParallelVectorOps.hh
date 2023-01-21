@@ -13,6 +13,7 @@
 #include <Eigen/Dense>
 #include <MeshFEM/Parallelism.hh>
 #include <tbb/parallel_reduce.h>
+#include <tbb/partitioner.h>
 
 extern "C" {
 
@@ -26,22 +27,24 @@ int ddot_(const int *N,
 
 template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result) {
+    static tbb::affinity_partitioner ap;
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, result.rows()),
                       [&out](const tbb::blocked_range<size_t> &r) {
             out.middleRows(r.begin(), r.size()).setZero();
-        });
+        }, ap);
 }
 
 template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result, size_t rows, size_t cols) {
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
 
+    static tbb::affinity_partitioner ap;
     out.derived().resize(rows, cols);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, rows),
                       [&out](const tbb::blocked_range<size_t> &r) {
             out.middleRows(r.begin(), r.size()).setZero();
-        });
+        }, ap);
 }
 
 template<class Derived>
@@ -49,10 +52,11 @@ void copyParallel(const Eigen::MatrixBase<Derived> &in, const Eigen::MatrixBase<
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
 
     out.derived().resize(in.rows(), in.cols());
+    static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, in.rows()),
                       [&out, &in](const tbb::blocked_range<size_t> &r) {
             out.middleRows(r.begin(), r.size()) = in.middleRows(r.begin(), r.size());
-        });
+        }, ap);
 }
 
 template<class Derived>

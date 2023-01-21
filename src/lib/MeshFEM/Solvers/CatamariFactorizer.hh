@@ -3,16 +3,16 @@
 
 #include "CholeskyFactorizerBase.hh"
 #include "MeshFEM/SparseMatrices.hh"
-#include <SuiteSparse_config.h>
 #include <stdexcept>
 
 #if MESHFEM_WITH_CATAMARI
 
 #include <MeshFEM/Parallelism.hh>
 #include "CholmodFactorizer.hh"
+#include <SuiteSparse_config.h>
 #include <MeshFEM_export.h>
 
-// Forward declarlations of Catamari types.
+// Forward declarations of Catamari types.
 struct CatamariConverter;
 namespace catamari {
     template <typename Field>

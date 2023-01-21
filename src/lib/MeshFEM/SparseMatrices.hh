@@ -34,13 +34,8 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/AutomaticDifferentiation.hh>
 
-extern "C" {
-#include <umfpack.h>
-#include <cholmod.h>
-}
-
 #ifndef SuiteSparse_long
-#define SuiteSparse_long UF_long
+using SuiteSparse_long = long;
 #endif
 
 template<typename Real>
@@ -1870,14 +1865,19 @@ using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 
 #include "Solvers/CholeskyFactorizerBase.hh"
 #include "Solvers/CholmodFactorizer.hh"
+#if MESHFEM_WITH_UMFPACK
 #include "Solvers/UmfpackFactorizer.hh"
+#endif
 #include "Solvers/CatamariFactorizer.hh"
+#include "Solvers/PardisoFactorizer.hh"
 
 template<typename... Args>
 std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider, Args&&... args) {
     switch (provider) {
         case CholeskyProvider::CHOLMOD:
             return std::make_unique<CholmodFactorizer>(std::forward<Args>(args)...);
+        case CholeskyProvider::PARDISO:
+            return std::make_unique<PardisoFactorizer>();
         case CholeskyProvider::Catamari:
         case CholeskyProvider::CatamariNesdis:
 #if MESHFEM_WITH_CATAMARI
@@ -1902,6 +1902,25 @@ inline CholeskyProvider get_default_cholesky_provider() noexcept {
     return CholeskyProvider::CHOLMOD;
 #endif
 }
+
+#ifndef DefaultLUFactorizer
+struct DefaultLUFactorizer {
+    template<typename... Args>
+    DefaultLUFactorizer(Args&&...) {
+        throw std::runtime_error("No LU factorizer available");
+    }
+
+    template<typename... Args>
+    void updateFactorization(Args&&...) {
+        throw std::runtime_error("No LU factorizer available");
+    }
+
+    template<typename... Args>
+    void solve(Args&&...) {
+        throw std::runtime_error("No LU factorizer available");
+    }
+};
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 /*! Wraps a (constrained) SPSD system that can be solved for several
