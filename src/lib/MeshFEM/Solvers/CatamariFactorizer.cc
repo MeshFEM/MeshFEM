@@ -12,6 +12,7 @@ extern "C" {
 #include <catamari/norms.hpp>
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
+#include <atomic>
 
 #define DUMP_MATRICES 0
 
@@ -90,10 +91,10 @@ struct CatamariConverter {
 
         if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
 
-        if (m_locForEntry.empty()) {
+        static tbb::affinity_partitioner ap;
+        if (m_conversionPlan.empty()) {
             BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
 
-            m_locForEntry.resize(A.nz, SuiteSparseMatrix::INDEX_NONE);
             if (size_t(A.nz) != A.Ai.size()) throw std::runtime_error("Incorrect nonzero count");
 
             auto reducedVarIndex = [&](SuiteSparse_long  i) { return reducedRowForRow.empty() ? i : reducedRowForRow[i]; };
@@ -110,9 +111,15 @@ struct CatamariConverter {
                 }
             }
 
+            const Int nc = m_result.NumColumns();
+            std::vector<std::atomic<bool>> colLocks(nc);
+            m_conversionPlan.resize(nc);
+            for (Int i = 0; i < nc; ++i) atomic_init(&(colLocks)[i], false);
+
             // For each entry in the (upper triangle) input matrix, figure out where it goes
             // in the *lower triangle* of the factorization structure...
-            parallel_for_range(A.n, [&](SuiteSparse_long j_orig) {
+            tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, A.n), [&](const tbb::blocked_range<catamari::Int> &r) {
+                for (catamari::Int j_orig = r.begin(); j_orig < r.end(); ++j_orig) {
                 const Int *guess = nullptr; // guess for index search performed inside...
                 for (SuiteSparse_long ii = A.Ap[j_orig]; ii < A.Ap[j_orig + 1]; ++ii) {
                     if (nonzeroRemoved(ii)) continue;
@@ -133,9 +140,11 @@ struct CatamariConverter {
                     const Int j_rel = j_perm - supernode_start;
                     if (i_perm < supernode_start) throw std::runtime_error("i_perm before start");
 
+                    size_t locForEntry;
+
                     if (i_perm < supernode_end) {
                         const Int i_rel = i_perm - supernode_start;
-                        m_locForEntry[ii] = std::distance(f_vals, diagonal_block.Pointer(i_rel, j_rel));
+                        locForEntry = std::distance(f_vals, diagonal_block.Pointer(i_rel, j_rel));
                     }
                     else {
                         const Int *index_beg = lf->StructureBeg(supernode);
@@ -153,44 +162,60 @@ struct CatamariConverter {
                         guess = iter + 1;
 
                         const Int i_rel = std::distance(index_beg, iter);
-                        m_locForEntry[ii] = std::distance(f_vals, lower_block.Pointer(i_rel, j_rel));
+                        locForEntry = std::distance(f_vals, lower_block.Pointer(i_rel, j_rel));
                     }
+
+                    while (colLocks[j_perm].exchange(true, std::memory_order_acquire)); // lock column
+                    m_conversionPlan[j_perm].push_back({locForEntry, ii});
+                    colLocks[j_perm].store(false, std::memory_order_release); // unlock column
                 }
-            });
+            }}, ap);
+
+            // parallel_for_range(m_conversionPlan.size(), [&](SuiteSparse_long j) {
+            //     auto &c = m_conversionPlan[j];
+            //     std::sort(c.begin(), c.end(), [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.first < b.first; });
+            // });
         }
 
         size_t nthreads = get_max_num_tbb_threads();
-        if (nthreads >= 2) {
-            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
-            setZeroParallel(catamari::eigenMap(f->factor_values_));
-        }
-        else {
-            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
-            catamari::eigenMap(f->factor_values_).setZero();
-        }
 
         {
-            BENCHMARK_SCOPED_TIMER_SECTION ztimer("copy");
+            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zero and copy");
             if (B_optional == nullptr || sigma == 0) {
-                if (nthreads > 1) {
-                    const double *Ax = A.Ax.data();
-                    static tbb::affinity_partitioner ap;
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0, A.nz),
-                              [&](const tbb::blocked_range<size_t> &r) {
-                                   for (size_t ii = r.begin(); ii < r.end(); ++ii) {
-                                        SuiteSparse_long loc = m_locForEntry[ii];
-                                        if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
-                                        f_vals[loc] = Ax[ii];
-                                   }
-                    }, ap);
-                }
-                else {
-                    for (SuiteSparse_long ii = 0; ii < A.nz; ++ii) {
-                        SuiteSparse_long loc = m_locForEntry[ii];
-                        if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
-                        f_vals[loc] = A.Ax[ii];
-                    }
-                }
+                const double *Ax = A.Ax.data();
+                tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes),
+                      [&](const tbb::blocked_range<catamari::Int> &r) {
+                           for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+                                auto &db = df->blocks[supernode];
+                                auto &lb = lf->blocks[supernode];
+                                catamari::BlasMatrixView<double> front;
+                                front.data = db.Data();
+                                front.height = front.leading_dim = db.leading_dim;
+                                front.width = db.width;
+                                const Int supernode_start = sno[supernode];
+                                const Int supernode_end   = sno[supernode + 1];
+                                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
+                                    Int j_rel = j_perm - supernode_start;
+                                    const Int outSize = front.height - j_rel;
+                                    double *outPtr = front.Pointer(j_rel, j_rel);
+
+#if 0 // Single-pass version (apparently slower than using Eigen, and requires sorting)
+                                    double *endOutPtr = outPtr + outSize;
+                                    const auto cpEnd = m_conversionPlan[j_perm].end();
+                                    for (auto it = m_conversionPlan[j_perm].begin(); it != cpEnd; ++it) {
+                                        double *dst = f_vals + it->first;
+                                        while (outPtr < dst) *outPtr++ = 0.0;
+                                        *outPtr++ = Ax[it->second];
+                                    }
+                                    while (outPtr < endOutPtr) *outPtr++ = 0.0;
+#else
+                                    catamari::eigenMap(outPtr, outSize).setZero();
+                                    for (const auto &c : m_conversionPlan[j_perm])
+                                        f_vals[c.first] = Ax[c.second];
+#endif
+                                }
+                           }
+                        }, ap);
             }
             else {
                 // Factorize with shift.
@@ -198,11 +223,26 @@ struct CatamariConverter {
                 SuiteSparse_long nc = A.m;
                 if ((B.m != nc) || (B.n != nc)) throw std::runtime_error("Unexpected input shape(s)");
                 if (B.Ai.size() != A.Ai.size()) throw std::runtime_error("B must have the same sparsity pattern as A");
-                parallel_for_range(A.nz, [&](size_t ii) {
-                        SuiteSparse_long loc = m_locForEntry[ii];
-                        if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
-                        f_vals[loc] = A.Ax[ii] + sigma * B.Ax[ii];
-                    });
+                const double *Ax = A.Ax.data();
+                tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes),
+                      [&](const tbb::blocked_range<catamari::Int> &r) {
+                           for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+                                auto &db = df->blocks[supernode];
+                                auto &lb = lf->blocks[supernode];
+                                catamari::BlasMatrixView<double> front;
+                                front.data = db.Data();
+                                front.height = front.leading_dim = db.leading_dim;
+                                front.width = db.width;
+                                const Int supernode_start = sno[supernode];
+                                const Int supernode_end   = sno[supernode + 1];
+                                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
+                                    Int j_rel = j_perm - supernode_start;
+                                    catamari::eigenMap(front.Pointer(j_rel, j_rel), front.height - j_rel).setZero();
+                                    for (const auto &c : m_conversionPlan[j_perm])
+                                        f_vals[c.first] = Ax[c.second] + sigma * B.Ax[c.second];
+                                }
+                           }
+                        }, ap);
             }
         }
     }
@@ -212,7 +252,7 @@ struct CatamariConverter {
 
 private:
     CMat m_result;
-    std::vector<SuiteSparse_long> m_locForEntry;
+    std::vector<std::vector<std::pair<catamari::Int, catamari::Int>>> m_conversionPlan; // Sparse record of destination row and source entry for each input matrix entry in the lower factor.
 };
 
 CatamariFactorizer::CatamariFactorizer() {
