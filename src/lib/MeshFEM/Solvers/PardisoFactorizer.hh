@@ -55,13 +55,16 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
 private:
     std::unique_ptr<SuiteSparseMatrix> m_Ashift;
 
-    std::array<int, 64>    iparm{};
-    std::array<double, 64> dparm{};
-    void *pt[64]; // Internal solver memory pointer
+    Eigen::ArrayXi ia, ja;
+    SuiteSparseMatrix A_transpose;
+
+    mutable std::array<int, 64>    iparm{};
+    mutable std::array<double, 64> dparm{};
+    mutable void *pt[64]; // Internal solver memory pointer
 
     int m_reducedSize = 0;
 
-    void m_pardisoFactorization(int phase, const SuiteSparseMatrix &A_reduced);
+    void m_pardisoFactorization(int phase);
 
     int mtype  = -2;  // We expect/only want to succeed on symmetric positive definite matrices.
     int maxfct = 1;  // Maximum number of numerical factorizations

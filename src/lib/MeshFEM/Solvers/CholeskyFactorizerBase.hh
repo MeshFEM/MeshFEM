@@ -107,6 +107,7 @@ struct CholeskyFactorizerBase {
 
     template<typename _Vec1, typename _Vec2>
     void solve(const _Vec1 &b, _Vec2 &x, CholeskySys sys = CholeskySys::A) const {
+        assertFactorization(sys);
         BENCHMARK_SCOPED_TIMER_SECTION timer("CholeskyFactorizerBase.solve");
         assert(size_t(b.size()) == m());
         x.resize(n());

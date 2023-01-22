@@ -81,12 +81,12 @@ struct CatamariConverter {
 
         auto &df = f->diagonal_factor_;
         auto &lf = f->lower_factor_;
+        double *f_vals = f->factor_values_.Data();
 
         using Int = catamari::Int;
         auto &o  = f->ordering_;
         auto &sno = o.supernode_offsets;
         const Int num_supernodes = o.supernode_sizes.Size();
-        const SuiteSparse_long lowerBlockOffset = df->values_.Size();
 
         if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
 
@@ -135,8 +135,7 @@ struct CatamariConverter {
 
                     if (i_perm < supernode_end) {
                         const Int i_rel = i_perm - supernode_start;
-                        size_t dbIndex = std::distance(df->values_.Data(), diagonal_block.Pointer(i_rel, j_rel));
-                        m_locForEntry[ii] = dbIndex;
+                        m_locForEntry[ii] = std::distance(f_vals, diagonal_block.Pointer(i_rel, j_rel));
                     }
                     else {
                         const Int *index_beg = lf->StructureBeg(supernode);
@@ -154,8 +153,7 @@ struct CatamariConverter {
                         guess = iter + 1;
 
                         const Int i_rel = std::distance(index_beg, iter);
-                        size_t lbIndex = std::distance(lf->values_.Data(), lower_block.Pointer(i_rel, j_rel));
-                        m_locForEntry[ii] = lowerBlockOffset + lbIndex;
+                        m_locForEntry[ii] = std::distance(f_vals, lower_block.Pointer(i_rel, j_rel));
                     }
                 }
             });
@@ -164,39 +162,33 @@ struct CatamariConverter {
         size_t nthreads = get_max_num_tbb_threads();
         if (nthreads >= 2) {
             BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
-            setZeroParallel(catamari::eigenMap(df->values_));
-            setZeroParallel(catamari::eigenMap(lf->values_));
+            setZeroParallel(catamari::eigenMap(f->factor_values_));
         }
         else {
             BENCHMARK_SCOPED_TIMER_SECTION ztimer("zeroing");
-            catamari::eigenMap(df->values_).setZero();
-            catamari::eigenMap(lf->values_).setZero();
+            catamari::eigenMap(f->factor_values_).setZero();
         }
 
-
         {
+            BENCHMARK_SCOPED_TIMER_SECTION ztimer("copy");
             if (B_optional == nullptr || sigma == 0) {
                 if (nthreads > 1) {
                     const double *Ax = A.Ax.data();
-                    double *df_vals = df->values_.Data();
-                    double *lf_vals = lf->values_.Data();
                     static tbb::affinity_partitioner ap;
                     tbb::parallel_for(tbb::blocked_range<size_t>(0, A.nz),
-                                      [&](const tbb::blocked_range<size_t> &r) {
-                                           for (size_t ii = r.begin(); ii < r.end(); ++ii) {
-                                                SuiteSparse_long loc = m_locForEntry[ii];
-                                                if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
-                                                if (loc < lowerBlockOffset) df_vals[loc                   ] = Ax[ii];
-                                                else                        lf_vals[loc - lowerBlockOffset] = Ax[ii];
-                                           }
+                              [&](const tbb::blocked_range<size_t> &r) {
+                                   for (size_t ii = r.begin(); ii < r.end(); ++ii) {
+                                        SuiteSparse_long loc = m_locForEntry[ii];
+                                        if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
+                                        f_vals[loc] = Ax[ii];
+                                   }
                     }, ap);
                 }
                 else {
                     for (SuiteSparse_long ii = 0; ii < A.nz; ++ii) {
                         SuiteSparse_long loc = m_locForEntry[ii];
                         if (loc == SuiteSparseMatrix::INDEX_NONE) continue; // skip removed entries
-                        if (loc < lowerBlockOffset) df->values_[loc                   ] = A.Ax[ii];
-                        else                        lf->values_[loc - lowerBlockOffset] = A.Ax[ii];
+                        f_vals[loc] = A.Ax[ii];
                     }
                 }
             }
@@ -209,9 +201,7 @@ struct CatamariConverter {
                 parallel_for_range(A.nz, [&](size_t ii) {
                         SuiteSparse_long loc = m_locForEntry[ii];
                         if (loc == SuiteSparseMatrix::INDEX_NONE) return; // skip removed entries
-                        double value = A.Ax[ii] + sigma * B.Ax[ii];
-                        if (loc < lowerBlockOffset) df->values_[loc                   ] = value;
-                        else                        lf->values_[loc - lowerBlockOffset] = value;
+                        f_vals[loc] = A.Ax[ii] + sigma * B.Ax[ii];
                     });
             }
         }

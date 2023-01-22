@@ -69,6 +69,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("Catamari",       CholeskyProvider::Catamari)
         .value("CatamariNesdis", CholeskyProvider::CatamariNesdis)
 #endif
+#if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
+        .value("PARDISO", CholeskyProvider::PARDISO)
+#endif
         ;
 
     using SymmetryModePicklingType = std::underlying_type_t<SMode>;
