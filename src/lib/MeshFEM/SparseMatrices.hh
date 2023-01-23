@@ -948,33 +948,56 @@ struct CSCMatrix {
         CSCMatrix &m_result;
     };
 
+    CSCMatrix transpose(bool force = false) const {
+        return transposeImpl(force, [&](size_t ii) { return Ax[ii]; });
+    }
+
     // Note: assumes entries within each column are sorted and unique.
     // Produces a sorted, unique output matrix.
-    CSCMatrix transpose(bool force = false) const {
-        if ((symmetry_mode != SymmetryMode::NONE) && !force) return *this;
-        CSCMatrix result(n, m);
+    template<typename T = _Real, class ValueGetter>
+    CSCMatrix<_Index, T> transposeImpl(bool force, const ValueGetter &value) const {
+        using Result = CSCMatrix<_Index, T>;
+        Result result(n, m);
+        if ((symmetry_mode != SymmetryMode::NONE) && !force) {
+            // No-op.
+            result.Ap = Ap;
+            result.Ai = Ai;
+            result.Ax.reserve(Ax.size());
+            for (SuiteSparse_long ii = 0; ii < nz; ++ii)
+                result.Ax[ii] = value(ii);
+            return result;
+        }
 
-        InOrderBuilder builder(result, [this](_Index *colSizes) { for (_Index i : Ai) ++colSizes[i]; });
+        typename Result::InOrderBuilder builder(result, [this](_Index *colSizes) { for (_Index i : Ai) ++colSizes[i]; });
         assert(result.nz == nz);
 
         // Add entries into the transposed matrix in sorted order
         for (_Index c = 0; c < n; ++c) {
             for (_Index inLoc = Ap[c]; inLoc < Ap[c + 1]; ++inLoc)
-                builder.insert(c, Ai[inLoc], spmat_helper::transpose_block(Ax[inLoc]));
+                builder.insert(c, Ai[inLoc], spmat_helper::transpose_block(value(inLoc)));
         }
 
         return result;
     }
 
-    template<class ValueGetter>
-    CSCMatrix toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
-        if (newMode == symmetry_mode) return *this;
+    template<typename T = _Real, class ValueGetter>
+    CSCMatrix<_Index, T> toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
+        using Result = CSCMatrix<_Index, T>;
+        if (newMode == symmetry_mode) {
+            Result result(m, n);
+            result.Ap = Ap;
+            result.Ai = Ai;
+            result.Ax.reserve(Ax.size());
+            for (SuiteSparse_long ii = 0; ii < nz; ++ii)
+                result.Ax[ii] = value(ii);
+            return result;
+        }
         if (m != n) throw std::runtime_error("Matrix is not symmetric");
 
         // Replicating an upper/lower triangle matrix to a full matrix.
         if (newMode == SymmetryMode::NONE) {
-            CSCMatrix result(m, n);
-            InOrderBuilder builder(result, [this](_Index *colSizes) {
+            Result result(m, n);
+            typename Result::InOrderBuilder builder(result, [this](_Index *colSizes) {
                 for (_Index j = 0; j < n; ++j) {
                     for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                         const _Index i = Ai[inLoc];
@@ -1026,9 +1049,9 @@ struct CSCMatrix {
         // Discard the strict lower or upper triangle of a symmetric matrix
         // with both parts explicitly stored.
         if (symmetry_mode == SymmetryMode::NONE) {
-            CSCMatrix result(m, n);
-            result.symmetry_mode = newMode;
-            InOrderBuilder builder(result, [this, newMode](_Index *colSizes) {
+            Result result(m, n);
+            result.symmetry_mode = typename Result::SymmetryMode(newMode);
+            typename Result::InOrderBuilder builder(result, [this, newMode](_Index *colSizes) {
                 for (_Index j = 0; j < n; ++j) {
                     for (_Index inLoc = Ap[j]; inLoc < Ap[j + 1]; ++inLoc) {
                         const _Index i = Ai[inLoc];
@@ -1048,10 +1071,13 @@ struct CSCMatrix {
             return result;
         }
 
-        // Transpose the triangular part stored into the opposite triangle.
-        CSCMatrix result = transpose(/* force = */ true);
-        result.symmetry_mode = newMode;
-        return result;
+        // Conversion between UPPER_TRIANGLE and LOWER_TRIANGLE
+        {
+            // Transpose the triangular part stored into the opposite triangle.
+            Result result = transposeImpl<T>(/* force = */ true, value);
+            result.symmetry_mode = typename Result::SymmetryMode(newMode);
+            return result;
+        }
     }
 
     // Construct a new CSCMatrix with a different symmetry mode. Currently
@@ -1748,12 +1774,12 @@ struct CSCMatrix {
     }
 
     // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively.
-    // If passed, `reducedEntryForEntry` will be filled with the destination
-    // location in the new, smaller `Ax` of each original matrix entry
+    // If passed, `entryForReducedEntry` will be filled with the source
+    // location of each entry in the new, smaller `Ax`.
     // (or INDEX_NONE if that entry was removed).
-    // If no rows/cols are removed, then `reducedEntryForEntry` will be resized to zero.
+    // If no rows/cols are removed, then `entryForReducedEntry` will be resized to zero.
     template<class Predicate>
-    void rowColRemoval(const Predicate &shouldRemove, std::vector<_Index> *reducedRowForRow = nullptr, std::vector<_Index> *reducedEntryForEntry = nullptr) {
+    void rowColRemoval(const Predicate &shouldRemove, std::vector<_Index> *reducedRowForRow = nullptr, std::vector<_Index> *entryForReducedEntry = nullptr) {
         if (m != n) throw std::runtime_error("rowColRemoval only implemented for square matrices");
 
         // Determine the mapping from old row indices to new (reduced) row indices.
@@ -1768,9 +1794,9 @@ struct CSCMatrix {
             replacementRowIdx[i] = reducedIdx++;
         }
 
-        if (reducedEntryForEntry) {
-            if (toRemove == 0) reducedEntryForEntry->clear(); // rowColRemoval was a NOP operation; reducedEntryForEntry is the identity.
-            else               reducedEntryForEntry->resize(nz, INDEX_NONE);
+        if (entryForReducedEntry) {
+            if (toRemove == 0) entryForReducedEntry->clear(); // rowColRemoval was a NOP operation; entryForReducedEntry is the identity.
+            else               entryForReducedEntry->resize(nz, INDEX_NONE);
         }
 
         if (toRemove == 0) return;
@@ -1789,7 +1815,7 @@ struct CSCMatrix {
                 if (shouldRemove(i)) continue;
                 Ai[entry_back] = replacementRowIdx[i];
                 Ax[entry_back] = Ax[idx];
-                if (reducedEntryForEntry) (*reducedEntryForEntry)[idx] = entry_back;
+                if (entryForReducedEntry) (*entryForReducedEntry)[entry_back] = idx;
                 ++entry_back;
             }
             idx_begin = idx_end;
@@ -1805,6 +1831,7 @@ struct CSCMatrix {
         Ax.resize(nz);
         Ai.resize(nz);
         Ap.resize(n + 1);
+        if (entryForReducedEntry) (*entryForReducedEntry).resize(nz);
     }
 
     // Remove from the sparsity pattern all entries that are identically zero

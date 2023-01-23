@@ -17,17 +17,7 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
 
     // Compute the numeric factorization of `A + sigma * B`, reusing the
     // symbolic factorization if it exists.
-    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override {
-        if (!m_Ashift) {
-            m_Ashift = std::make_unique<SuiteSparseMatrix>(A);
-            m_Ashift->data() += sigma * B.data();
-        }
-        else {
-            m_Ashift->data() = A.data() + sigma * B.data();
-        }
-
-        factorizeNumeric(*m_Ashift, isInTryCatch);
-    }
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override;
 
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         factorizeSymbolic(mat, fixedVars);
@@ -56,7 +46,10 @@ private:
     std::unique_ptr<SuiteSparseMatrix> m_Ashift;
 
     Eigen::ArrayXi ia, ja;
+    // The row/col-removed, lower-triangular matrix that is actually factorized by Paridso.
     SuiteSparseMatrix A_transpose;
+
+    std::vector<SuiteSparse_long> m_sourceEntry; // source entry for each entry in `A_transpose`.
 
     mutable std::array<int, 64>    iparm{};
     mutable std::array<double, 64> dparm{};

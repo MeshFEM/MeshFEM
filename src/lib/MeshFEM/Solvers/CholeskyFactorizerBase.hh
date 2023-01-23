@@ -217,7 +217,7 @@ protected:
 
     // Functionality for efficient solves under variable pins
     std::vector<size_t> m_fixedVars;
-    std::vector<SuiteSparse_long> m_reducedEntryForEntry;
+    std::vector<SuiteSparse_long> m_entryForReducedEntry;
     std::vector<SuiteSparse_long> m_reducedRowForRow;
     mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
     std::unique_ptr<SuiteSparseMatrix> m_Areduced;
@@ -240,7 +240,7 @@ protected:
             varIsFixed[var] = true;
         }
 
-        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_reducedEntryForEntry);
+        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
         return m_Areduced.get();
     }
 
@@ -248,14 +248,10 @@ protected:
         // Inject values of `A` into row-col-removed matrix
         if (!hasFixedVars()) return &mat;
         if (!m_Areduced)  throw std::logic_error("Variables were not fixed");
-        if (m_reducedEntryForEntry.size() != size_t(mat.nz)) throw std::runtime_error("Nonzero count mismatch");
 
         auto &A_reduced = *m_Areduced;
-        for (SuiteSparse_long i = 0; i < mat.nz; ++i) {
-            SuiteSparse_long loc = m_reducedEntryForEntry[i];
-            if (loc == SuiteSparseMatrix::INDEX_NONE) continue;
-            A_reduced.Ax[loc] = mat.Ax[i];
-        }
+        for (SuiteSparse_long ii = 0; ii < A_reduced.nz; ++ii)
+            A_reduced.Ax[ii] = mat.Ax[m_entryForReducedEntry[ii]];
         return m_Areduced.get();
     }
 

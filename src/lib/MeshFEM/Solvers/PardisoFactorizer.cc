@@ -1,6 +1,7 @@
 #include <MeshFEM/SparseMatrices.hh>
 
 #include <stdexcept>
+#include <tbb/partitioner.h>
 
 #if MESHFEM_WITH_MKL_PARDISO
 #include <mkl_pardiso.h>
@@ -78,11 +79,36 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
     iparm[0] = 1;
     iparm[1] = 2;
+#if MESHFEM_WITH_MKL_PARDISO
+    // iparm[1] = 3; // use parallel nested dissection
+#endif
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");
     // Pardiso expects the upper triangle of a matrix in CSR format, which
     // due to symmetry is the lower triangle of a CSC matrix.
-    A_transpose = A_reduced->toSymmetryMode(SuiteSparseMatrix::SymmetryMode::LOWER_TRIANGLE);
+    // Get an integer-valued lower-triangular sparse matrix where each entry
+    // holds the index of the source upper triangle entry that generated it.
+    // BENCHMARK_START_TIMER_SECTION("Transpose");
+    auto Asp = A_reduced->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::LOWER_TRIANGLE, [](size_t ii) { return ii; });
+    // BENCHMARK_STOP_TIMER_SECTION("Transpose");
+
+    A_transpose.m = Asp.m;
+    A_transpose.n = Asp.n;
+    A_transpose.symmetry_mode = SuiteSparseMatrix::SymmetryMode::LOWER_TRIANGLE;
+    A_transpose.Ai = std::move(Asp.Ai);
+    A_transpose.Ap = std::move(Asp.Ap);
+    A_transpose.Ax.resize(Asp.nz);
+    A_transpose.nz = Asp.nz;
+
+    if (m_entryForReducedEntry.size()) {
+        m_sourceEntry.resize(Asp.nz);
+        for (SuiteSparse_long ii = 0; ii < Asp.nz; ++ii)
+            m_sourceEntry[ii] = m_entryForReducedEntry[Asp.Ax[ii]];
+    }
+    else {
+        m_sourceEntry = std::move(Asp.Ax);
+    }
+
     ia = fortranIndexArrayFromCIndexArray(A_transpose.Ap); // row pointers   (column pointers of transpose)
     ja = fortranIndexArrayFromCIndexArray(A_transpose.Ai); // column indices (row indices of transpose)
 
@@ -90,10 +116,35 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     m_factorizationType = FactorizationType::Symbolic;
 }
 
-void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &fullMat, bool isInTryCatch) {
+void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
-    const SuiteSparseMatrix &A_reduced = *m_rowColRemoval(fullMat);
-    A_transpose = A_reduced.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::LOWER_TRIANGLE);
+
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
+        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
+            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii)
+                A_transpose.Ax[ii] = A.Ax[m_sourceEntry[ii]];
+        }, ap);
+
+    m_pardisoFactorization(/* numeric factorization phase only */ 22);
+    m_factorizationType = FactorizationType::Numeric;
+}
+
+void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
+    if (sigma == 0) return factorizeNumeric(A);
+
+    if ((B.m != A.m) || (B.n != A.n)) throw std::runtime_error("Unexpected input shape(s)");
+    if (B.Ai.size() != A.Ai.size()) throw std::runtime_error("B must have the same sparsity pattern as A");
+
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
+        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
+            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii) {
+                SuiteSparse_long src = m_sourceEntry[ii];
+                A_transpose.Ax[ii] = A.Ax[src] + sigma * B.Ax[src];
+            }
+        }, ap);
 
     m_pardisoFactorization(/* numeric factorization phase only */ 22);
     m_factorizationType = FactorizationType::Numeric;
@@ -114,7 +165,7 @@ void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys,
 #else
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
             &ncols, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
-            iparm.data(), &msglvl, b, x, &error, dparm.data());
+            iparm.data(), &msglvl, const_cast<double *>(b), x, &error, dparm.data());
 #endif
 
     if (error != 0) {

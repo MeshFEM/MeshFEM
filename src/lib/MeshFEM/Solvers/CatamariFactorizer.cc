@@ -40,16 +40,11 @@ struct CatamariConverter {
         // Convert upper triangle sparsity pattern to a full symmetric sparsity
         // pattern in Catamari format.
         m_result.Resize(Asp.m, Asp.n);
-#if 0
-        m_result.ReserveEntryAdditions(Asp.Ax.size() * 2 - Asp.Ap.size());
-        for (auto t : Asp) {
-            m_result.                QueueEntryAddition(t.i, t.j, t.v);
-            if (t.i != t.j) m_result.QueueEntryAddition(t.j, t.i, t.v);
-        }
-        m_result.FlushEntryQueues();
-#else
+
         {
-            SuiteSparseMatrix A_full = Asp.toSymmetryModeSparsityOnly(SuiteSparseMatrix::SymmetryMode::NONE);
+            // Get an integer-valued sparse matrix where each entry holds the
+            // index of the source upper triangle entry that generated it.
+            CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full = Asp.toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
 
             catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
             for (SuiteSparse_long j = 0; j < A_full.n; ++j) {
@@ -62,18 +57,17 @@ struct CatamariConverter {
             }
 
             m_result.SetSortedEntries(std::move(new_entries));
+            m_sourceReducedEntryForFullMatrixEntry = std::move(A_full.Ax);
         }
-#endif
     }
+    std::vector<SuiteSparse_long> m_sourceReducedEntryForFullMatrixEntry;
 
     // Achieve the same result as
     // `catamari::supernodal_ldl::InitializeBlockColumn` for sparse matrix `A`
     // or `A + sigma B` (with B of identical sparsity pattern to `A`) after
     // possibly converting `A` and `B` into "reduced" versions by removing rows
     // and columns corresponding to pinned vars.
-    // This row/column removal is effectively implemented by the
-    // `reducedRowForRow` and `reducedEntryForEntry` arguments.
-    void injectEntries(catamari::SparseLDL<double> &ldl, const SuiteSparseMatrix &A, std::vector<SuiteSparse_long> &reducedRowForRow, std::vector<SuiteSparse_long> &reducedEntryForEntry, double sigma = 0.0, const SuiteSparseMatrix *B_optional = nullptr) {
+    void injectEntries(const catamari::SparseLDL<double> &ldl, const SuiteSparseMatrix &A, double sigma = 0.0, const SuiteSparseMatrix *B_optional = nullptr) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Inject entries");
         auto f = ldl.supernodal_factorization.get();
         if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
@@ -85,100 +79,15 @@ struct CatamariConverter {
         double *f_vals = f->factor_values_.Data();
 
         using Int = catamari::Int;
-        auto &o  = f->ordering_;
+        auto &o   = f->ordering_;
         auto &sno = o.supernode_offsets;
         const Int num_supernodes = o.supernode_sizes.Size();
 
-        if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
-
         static tbb::affinity_partitioner ap;
-        if (m_conversionPlan.empty()) {
-            BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
 
-            if (size_t(A.nz) != A.Ai.size()) throw std::runtime_error("Incorrect nonzero count");
-
-            auto reducedVarIndex = [&](SuiteSparse_long  i) { return reducedRowForRow.empty() ? i : reducedRowForRow[i]; };
-            auto nonzeroRemoved  = [&](SuiteSparse_long ii) { return reducedEntryForEntry.size() && (reducedEntryForEntry[ii] == SuiteSparseMatrix::INDEX_NONE); };
-
-            // First, locate the supernode corresponding to each column of the reduced matrix.
-            const Int nReducedVars = ldl.NumRows();
-            Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1> supernodeForReducedCol(nReducedVars);
-            if (sno[num_supernodes] != nReducedVars) throw std::runtime_error("Columns missing from supernodes");
-            for (Int supernode = 0; supernode < num_supernodes; ++supernode) {
-                for (Int col = sno[supernode]; col < sno[supernode + 1]; ++col) {
-                    if (col >= A.n) throw std::runtime_error("Supernode column index out of bounds");
-                    supernodeForReducedCol[col] = supernode;
-                }
-            }
-
-            const Int nc = m_result.NumColumns();
-            std::vector<std::atomic<bool>> colLocks(nc);
-            m_conversionPlan.resize(nc);
-            for (Int i = 0; i < nc; ++i) atomic_init(&(colLocks)[i], false);
-
-            // For each entry in the (upper triangle) input matrix, figure out where it goes
-            // in the *lower triangle* of the factorization structure...
-            tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, A.n), [&](const tbb::blocked_range<catamari::Int> &r) {
-                for (catamari::Int j_orig = r.begin(); j_orig < r.end(); ++j_orig) {
-                const Int *guess = nullptr; // guess for index search performed inside...
-                for (SuiteSparse_long ii = A.Ap[j_orig]; ii < A.Ap[j_orig + 1]; ++ii) {
-                    if (nonzeroRemoved(ii)) continue;
-
-                    Int i_perm = o.permutation[reducedVarIndex(A.Ai[ii])];
-                    Int j_perm = o.permutation[reducedVarIndex(j_orig)];
-                    if (i_perm < j_perm) std::swap(i_perm, j_perm); // write lower triangle entry!
-                    // Locate (i_perm, j_perm) in the supernode structure
-
-                    // Find the supernode
-                    const Int supernode = supernodeForReducedCol[j_perm];
-                    catamari::BlasMatrixView<double>& diagonal_block = df->blocks[supernode];
-                    catamari::BlasMatrixView<double>& lower_block = lf->blocks[supernode];
-
-                    const Int supernode_start = sno[supernode    ];
-                    const Int supernode_end   = sno[supernode + 1];
-
-                    const Int j_rel = j_perm - supernode_start;
-                    if (i_perm < supernode_start) throw std::runtime_error("i_perm before start");
-
-                    size_t locForEntry;
-
-                    if (i_perm < supernode_end) {
-                        const Int i_rel = i_perm - supernode_start;
-                        locForEntry = std::distance(f_vals, diagonal_block.Pointer(i_rel, j_rel));
-                    }
-                    else {
-                        const Int *index_beg = lf->StructureBeg(supernode);
-                        const Int *index_end = lf->StructureEnd(supernode);
-
-                        // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
-                        // first checking at `*guess` (which will be correct for consecutive
-                        // strips of entries).
-                        const Int *iter;
-                        if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
-                        else {
-                            iter = std::lower_bound(index_beg, index_end, i_perm);
-                            if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index in supernode");
-                        }
-                        guess = iter + 1;
-
-                        const Int i_rel = std::distance(index_beg, iter);
-                        locForEntry = std::distance(f_vals, lower_block.Pointer(i_rel, j_rel));
-                    }
-
-                    while (colLocks[j_perm].exchange(true, std::memory_order_acquire)); // lock column
-                    m_conversionPlan[j_perm].push_back({locForEntry, ii});
-                    colLocks[j_perm].store(false, std::memory_order_release); // unlock column
-                }
-            }}, ap);
-
-            // parallel_for_range(m_conversionPlan.size(), [&](SuiteSparse_long j) {
-            //     auto &c = m_conversionPlan[j];
-            //     std::sort(c.begin(), c.end(), [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.first < b.first; });
-            // });
-        }
+        if (m_conversionPlan.empty()) throw std::runtime_error("Conversion plan was not constructed");
 
         size_t nthreads = get_max_num_tbb_threads();
-
         {
             BENCHMARK_SCOPED_TIMER_SECTION ztimer("zero and copy");
             if (B_optional == nullptr || sigma == 0) {
@@ -199,10 +108,12 @@ struct CatamariConverter {
                                     const Int outSize = front.height - j_rel;
                                     double *outPtr = front.Pointer(j_rel, j_rel);
 
+                                    const auto cpBegin = m_conversionPlan.columnData(j_perm);
+                                    const auto cpEnd   = m_conversionPlan.columnData(j_perm + 1);
+
 #if 0 // Single-pass version (apparently slower than using Eigen, and requires sorting)
                                     double *endOutPtr = outPtr + outSize;
-                                    const auto cpEnd = m_conversionPlan[j_perm].end();
-                                    for (auto it = m_conversionPlan[j_perm].begin(); it != cpEnd; ++it) {
+                                    for (auto it = cpBegin; it != cpEnd; ++it) {
                                         double *dst = f_vals + it->first;
                                         while (outPtr < dst) *outPtr++ = 0.0;
                                         *outPtr++ = Ax[it->second];
@@ -210,8 +121,8 @@ struct CatamariConverter {
                                     while (outPtr < endOutPtr) *outPtr++ = 0.0;
 #else
                                     catamari::eigenMap(outPtr, outSize).setZero();
-                                    for (const auto &c : m_conversionPlan[j_perm])
-                                        f_vals[c.first] = Ax[c.second];
+                                    for (auto it = cpBegin; it != cpEnd; ++it)
+                                        f_vals[it->dst] = Ax[it->src];
 #endif
                                 }
                            }
@@ -238,8 +149,11 @@ struct CatamariConverter {
                                 for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
                                     Int j_rel = j_perm - supernode_start;
                                     catamari::eigenMap(front.Pointer(j_rel, j_rel), front.height - j_rel).setZero();
-                                    for (const auto &c : m_conversionPlan[j_perm])
-                                        f_vals[c.first] = Ax[c.second] + sigma * B.Ax[c.second];
+
+                                    const auto cpBegin = m_conversionPlan.columnData(j_perm);
+                                    const auto cpEnd   = m_conversionPlan.columnData(j_perm + 1);
+                                    for (auto it = cpBegin; it != cpEnd; ++it)
+                                        f_vals[it->dst] = Ax[it->src];
                                 }
                            }
                         }, ap);
@@ -250,9 +164,165 @@ struct CatamariConverter {
     // Get the most recently converted matrix.
     const CMat &get() const { return m_result; }
 
+    void printDebugEntries(size_t maxEntries = 15) const {
+        std::cout << "entries:";
+        for (size_t i = 0; i < std::min<size_t>(m_result.NumEntries(), maxEntries); ++i) {
+            const auto &e = m_result.Entry(i);
+            std::cout << "\t" << e.row << ", " << e.column;
+        }
+        std::cout << std::endl;
+
+        std::cout << "Row offsets";
+        for (size_t i = 0; i < std::min<size_t>(m_result.NumRows(), maxEntries); ++i) {
+            std::cout << "\t" << m_result.RowEntryOffset(i);
+        }
+        std::cout << std::endl;
+    }
+
+    // Sparse record of destination location and source entry for each input
+    // matrix entry in the lower factor. This is stored in a
+    // compressed-sparse-column-type format.
+    struct ConversionPlan {
+        using Int = catamari::Int;
+
+        // Destination and source of each input matrix entry appearing in the factor.
+        // Crucially does no value initialization, unlike std::pair!
+        struct Entry { Int dst, src; };
+
+        void resize(size_t size) { m_entries.Resize(size); }
+        bool empty() const { return m_entries.Size() == 0; }
+
+        const Entry *entries() const { return m_entries.Data(); }
+              Entry *entries()       { return m_entries.Data(); }
+        const Entry *columnData(int j) const { return entries() + columnOffsets[j]; }
+
+        Eigen::Array<Int, Eigen::Dynamic, 1> columnOffsets;
+    private:
+        catamari::Buffer<Entry> m_entries;
+    };
+
+    void constructConversionPlan(catamari::SparseLDL<double> &ldl, std::vector<SuiteSparse_long> &entryForReducedEntry) {
+        BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
+        auto f = ldl.supernodal_factorization.get();
+        if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
+
+        const auto &df = f->diagonal_factor_;
+        const auto &lf = f->lower_factor_;
+
+        using Int = catamari::Int;
+        auto &o  = f->ordering_;
+        auto &sno = o.supernode_offsets;
+        const double *f_vals = f->factor_values_.Data();
+        const Int num_supernodes = o.supernode_sizes.Size();
+        if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
+
+        const Int nc = m_result.NumColumns();
+        m_conversionPlan.columnOffsets.resize(nc + 1);
+
+        // Count the lower-triangular entries *in the permuted matrix*.
+        // We work with the *full* (non-triangular) matrix so that we can efficiently loop over all nonzeros in a given
+        // column of the *permuted* lower factor.
+        Int *columnSizes = m_conversionPlan.columnOffsets.data() + 1;
+        static tbb::affinity_partitioner ap;
+        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
+            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+                const Int supernode_end = sno[supernode + 1];
+                for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
+                    Int j_orig = o.inverse_permutation[j_perm];
+                    const Int col_entries_end = m_result.RowEntryOffset(j_orig + 1);
+                    Int colSize = 0;
+                    for (Int ii = m_result.RowEntryOffset(j_orig); ii < col_entries_end; ++ii)
+                        if (o.permutation[m_result.Entry(ii).column] >= j_perm) ++colSize; // entry in lower triangle?
+                    columnSizes[j_perm] = colSize;
+                }
+            }
+        }, ap);
+
+        // Convert sizes to offsets and allocate conversion plan entries.
+        m_conversionPlan.columnOffsets[0] = 0;
+        Int *columnBacks = m_conversionPlan.columnOffsets.data() + 1; // Back indices of the (initially empty) column buckets
+                                                                      // These will be incremented and eventually become the column end indices.
+        {
+            Int back = 0;
+            for (Int i = 0; i < nc; ++i) {
+                // Note: we are updating in-place (columnSizes == columnBacks)!
+                Int s = columnSizes[i];
+                columnBacks[i] = back;
+                back += s;
+            }
+
+            m_conversionPlan.resize(back);
+        }
+
+
+        BENCHMARK_START_TIMER_SECTION("Build");
+
+        // For each entry in the full (non-triangular) row-col-removed input matrix `m_result`,
+        // determine whether/where its permuted instance goes in the *lower triangle* of the factorization
+        // as well as which original matrix entry it originated from.
+        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
+            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+                const Int supernode_start = sno[supernode    ];
+                const Int supernode_end   = sno[supernode + 1];
+                catamari::BlasMatrixView<double>& db = df->blocks[supernode];
+                catamari::BlasMatrixView<double>& lb = lf->blocks[supernode];
+                const Int *index_beg = lf->StructureBeg(supernode);
+                const Int *index_end = lf->StructureEnd(supernode);
+
+                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
+                    Int j_orig = o.inverse_permutation[j_perm];
+                    Int columnBack = columnBacks[j_perm];
+
+                    // Note: catamari::CoordinateMatrix is row major, hence the implicit transpose happening here...
+                    const Int col_entries_begin = m_result.RowEntryOffset(j_orig);
+                    const Int col_entries_end   = m_result.RowEntryOffset(j_orig + 1);
+                    const Int *guess = nullptr;
+                    for (Int ii = col_entries_begin; ii < col_entries_end; ++ii) {
+                        const catamari::MatrixEntry<double> &e = m_result.Entry(ii);
+                        Int i_perm = o.permutation[e.column];
+                        if (i_perm < j_perm) continue; // Skip the strict upper triangle.
+
+                        // Locate (i_perm, j_perm) in the supernode structure.
+                        Int locForEntry; // destination location
+
+                        const Int j_rel = j_perm - supernode_start;
+                        if (i_perm < supernode_end) {
+                            const Int i_rel = i_perm - supernode_start;
+                            locForEntry = std::distance(f_vals, (const double *) db.Pointer(i_rel, j_rel));
+                        }
+                        else {
+                            // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
+                            // first checking at `*guess` (which will be correct for consecutive
+                            // strips of entries).
+                            const Int *iter;
+                            if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
+                            else {
+                                iter = std::lower_bound(index_beg, index_end, i_perm);
+                                if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index " + std::to_string(i_perm) + " in supernode " + std::to_string(supernode) + " containing rows in [" + std::to_string(*index_beg) + ", " +  std::to_string(*index_end) + ")");
+                            }
+                            guess = iter + 1;
+
+                            const Int i_rel = std::distance(index_beg, iter);
+                            locForEntry = std::distance(f_vals, (const double *) lb.Pointer(i_rel, j_rel));
+                        }
+
+                        // Record which source entry should be read for `locForEntry`
+                        SuiteSparse_long srcEntry = m_sourceReducedEntryForFullMatrixEntry.at(ii);
+                        if (entryForReducedEntry.size()) srcEntry = entryForReducedEntry[srcEntry];
+                        m_conversionPlan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
+                    }
+                    columnBacks[j_perm] = columnBack;
+                    // std::sort(m_conversionPlan[j_perm].begin(), m_conversionPlan[j_perm].end(),
+                    //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.first < b.first; });
+                }
+            }
+        });
+        BENCHMARK_STOP_TIMER_SECTION("Build");
+    }
+
 private:
     CMat m_result;
-    std::vector<std::vector<std::pair<catamari::Int, catamari::Int>>> m_conversionPlan; // Sparse record of destination row and source entry for each input matrix entry in the lower factor.
+    ConversionPlan m_conversionPlan;
 };
 
 CatamariFactorizer::CatamariFactorizer() {
@@ -317,6 +387,8 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else throw std::runtime_error("Unknown orderingMethod");
+
+    m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
     m_factorizationType = FactorizationType::Symbolic;
 }
 
@@ -331,12 +403,12 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
         A->dumpBinary("numeric_mat_" + padded_num + ".bin");
     }
 #endif
-    m_catamariConverter->injectEntries(*m_ldl, mat, m_reducedRowForRow, m_reducedEntryForEntry);
+    m_catamariConverter->injectEntries(*m_ldl, mat);
     m_factorizeInjectedEntries();
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
-    m_catamariConverter->injectEntries(*m_ldl, A, m_reducedRowForRow, m_reducedEntryForEntry, sigma, &B);
+    m_catamariConverter->injectEntries(*m_ldl, A, sigma, &B);
     m_factorizeInjectedEntries();
 }
 
