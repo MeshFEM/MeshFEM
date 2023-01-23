@@ -312,8 +312,9 @@ struct CatamariConverter {
                         m_conversionPlan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
                     }
                     columnBacks[j_perm] = columnBack;
-                    // std::sort(m_conversionPlan[j_perm].begin(), m_conversionPlan[j_perm].end(),
-                    //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.first < b.first; });
+                    // Sorting doesn't seem to help :(
+                    // std::sort(m_conversionPlan.columnData(j_perm), m_conversionPlan.columnData(j_perm + 1),
+                    //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.dst < b.dst; });
                 }
             }
         });
