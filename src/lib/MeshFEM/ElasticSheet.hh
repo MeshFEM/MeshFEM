@@ -424,25 +424,40 @@ public:
     }
 
     // Evaluate approximate volumetric strain (combining stretching and
-    // bending) for each element at the thickness coordinate `z`.
-    std::vector<M2d> getElementVolumetricStrains(Real z) const {
-        auto result = getC();
-        for (auto e : mesh().elements()) {
-            size_t ei = e.index();
-            const M32d &B = m_B[ei];
-            result[ei] = 0.5 * (result[ei] - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        }
-        return result;
+    // bending) for element `ei` at the thickness coordinate `z`.
+    M2d getElementVolumetricStrain(size_t ei, Real z) const {
+        const auto &e = mesh().element(ei);
+        const auto &B = m_B[ei];
+        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        return 0.5 * (FB.transpose() * FB - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+    }
+
+    // Evaluate approximate volumetric stress for element `ei` at the thickness
+    // coordinate `z`.
+    M2d getElementVolumetricPlaneStress(size_t ei, Real z) const {
+        M2d strain = getElementVolumetricStrain(ei, z);
+        return elementETensor(ei).doubleContract(SM2d(strain)).matrix();
+    }
+
+    M3d getElementVolumetricStress(size_t ei, Real z) const {
+        M2d plane_stress = getElementVolumetricPlaneStress(ei, z);
+        const auto &B = m_B[ei];
+        return B * plane_stress * B.transpose();
     }
 
     // Evaluate approximate volumetric strain (combining stretching and
     // bending) at the thickness coordinate `z`, averaged onto the vertices.
     std::vector<M2d> getVertexVolumetricStrains(Real z) const {
         return vertexAveragedField(mesh(), [this, z](size_t ei, const EvalPtK &) {
-                auto e = mesh().element(ei);
-                const M32d &B = m_B[ei];
-                M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
-                return (0.5 * (FB.transpose() * FB - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B).eval();
+                return getElementVolumetricStrain(ei, z);
+            });
+    }
+
+    // Evaluate approximate volumetric strain (combining stretching and
+    // bending) at the thickness coordinate `z`, averaged onto the vertices.
+    std::vector<M3d> getVertexVolumetricStresses(Real z) const {
+        return vertexAveragedField(mesh(), [this, z](size_t ei, const EvalPtK &) {
+                return getElementVolumetricStress(ei, z);
             });
     }
 
