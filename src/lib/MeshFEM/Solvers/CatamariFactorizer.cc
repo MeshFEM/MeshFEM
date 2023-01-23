@@ -30,6 +30,7 @@ extern "C" {
 // entry pointers in a lookup table.
 struct CatamariConverter {
     using CMat = catamari::CoordinateMatrix<double>;
+    using ConversionPlan = catamari::ConversionPlan;
 
     CatamariConverter(const SuiteSparseMatrix &Asp) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter");
@@ -179,28 +180,8 @@ struct CatamariConverter {
         std::cout << std::endl;
     }
 
-    // Sparse record of destination location and source entry for each input
-    // matrix entry in the lower factor. This is stored in a
-    // compressed-sparse-column-type format.
-    struct ConversionPlan {
-        using Int = catamari::Int;
 
-        // Destination and source of each input matrix entry appearing in the factor.
-        // Crucially does no value initialization, unlike std::pair!
-        struct Entry { Int dst, src; };
-
-        void resize(size_t size) { m_entries.Resize(size); }
-        bool empty() const { return m_entries.Size() == 0; }
-
-        const Entry *entries() const { return m_entries.Data(); }
-              Entry *entries()       { return m_entries.Data(); }
-        const Entry *columnData(int j) const { return entries() + columnOffsets[j]; }
-
-        Eigen::Array<Int, Eigen::Dynamic, 1> columnOffsets;
-    private:
-        catamari::Buffer<Entry> m_entries;
-    };
-
+    const ConversionPlan &conversionPlan() const { return m_conversionPlan; }
     void constructConversionPlan(catamari::SparseLDL<double> &ldl, std::vector<SuiteSparse_long> &entryForReducedEntry) {
         BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
         auto f = ldl.supernodal_factorization.get();
@@ -405,7 +386,13 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
     }
 #endif
     m_catamariConverter->injectEntries(*m_ldl, mat);
-    m_factorizeInjectedEntries();
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(mat.Ax.data(), m_catamariConverter->conversionPlan());
+    if (size_t(result.num_successful_pivots) != n_reduced()) {
+        m_factorizationType = FactorizationType::Symbolic;
+        throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
+                                 std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
+    }
+    m_factorizationType = FactorizationType::Numeric;
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
