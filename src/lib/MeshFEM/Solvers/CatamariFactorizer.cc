@@ -385,8 +385,8 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
         A->dumpBinary("numeric_mat_" + padded_num + ".bin");
     }
 #endif
-    m_catamariConverter->injectEntries(*m_ldl, mat);
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(mat.Ax.data(), m_catamariConverter->conversionPlan());
+
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), mat.Ax.data());
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
@@ -396,18 +396,11 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
-    m_catamariConverter->injectEntries(*m_ldl, A, sigma, &B);
-    m_factorizeInjectedEntries();
-}
-
-void CatamariFactorizer::m_factorizeInjectedEntries() {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
-    const auto &cmat = m_catamariConverter->get(); // TODO: remove matrix argument from RefactorWithFixedSparsityPattern.
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(cmat);
-    if (result.num_successful_pivots != cmat.NumColumns()) {
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, B.Ax.data());
+    if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
-                                 std::to_string(cmat.NumColumns()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
+                                 std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
     }
     m_factorizationType = FactorizationType::Numeric;
 }

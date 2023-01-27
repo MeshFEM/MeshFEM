@@ -83,7 +83,6 @@ private:
     std::unique_ptr<catamari::SparseLDLControl<double>> m_ldlControl;
 
     std::unique_ptr<CatamariConverter> m_catamariConverter;
-    void m_factorizeInjectedEntries();
 
     std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
 

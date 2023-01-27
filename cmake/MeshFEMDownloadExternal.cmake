@@ -101,6 +101,6 @@ endfunction()
 function(meshfem_download_catamari)
     meshfem_download_project(catamari
         GIT_REPOSITORY https://github.com/jpanetta/catamari.git
-        GIT_TAG        e828495fab5c7a7c496f3eba82e652088c53740b
+        GIT_TAG        a055dddca5c306e42e840ea8d526bb2ca873b610
     )
 endfunction()
