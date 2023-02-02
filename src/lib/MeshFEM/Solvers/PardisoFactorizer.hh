@@ -61,7 +61,7 @@ private:
 
     void m_pardisoFactorization(int phase);
 
-    int mtype  = -2;  // We expect/only want to succeed on symmetric positive definite matrices.
+    int mtype  = 2;  // We expect/only want to succeed on symmetric positive definite matrices.
     int maxfct = 1;  // Maximum number of numerical factorizations
     int mnum   = 1;  // Which factorization to use
 

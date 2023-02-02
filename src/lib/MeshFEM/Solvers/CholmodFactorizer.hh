@@ -164,6 +164,14 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         cholmod_sparse A = cholmod_sparse_view(mat);
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);
 
+        // {
+        //     static size_t i = 0;
+        //     size_t n_zero = 4;
+        //     std::string padded_num = std::to_string(i++);
+        //     padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
+        //     mat.dumpBinary("numeric_mat_" + padded_num + ".bin");
+        // }
+
         if ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n))) {
             // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
             throw std::runtime_error("Symbolic factorization does not match size of matrix passed to `factorize`: "
