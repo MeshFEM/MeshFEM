@@ -196,6 +196,20 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         factorizeNumeric(*m_Ashift, isInTryCatch);
     }
 
+    // Compute the numeric factorization of `A + sigma * B`, reusing the
+    // symbolic factorization if it exists.
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool isInTryCatch=false) override {
+        if (!m_Ashift) {
+            m_Ashift = std::make_unique<SuiteSparseMatrix>(A);
+        }
+        else {
+            m_Ashift->data() = A.data();
+        }
+        m_Ashift->addScaledIdentity(sigma);
+
+        factorizeNumeric(*m_Ashift, isInTryCatch);
+    }
+
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         clearFactors();
         factorizeSymbolic(mat, fixedVars);

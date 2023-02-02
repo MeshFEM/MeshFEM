@@ -19,6 +19,10 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
     // symbolic factorization if it exists.
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override;
 
+    // Compute the numeric factorization of `A + sigma * I`, reusing the
+    // symbolic factorization if it exists.
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool isInTryCatch=false) override;
+
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         factorizeSymbolic(mat, fixedVars);
         factorizeNumeric(mat, isInTryCatch);
@@ -43,8 +47,6 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
 
     ~PardisoFactorizer();
 private:
-    std::unique_ptr<SuiteSparseMatrix> m_Ashift;
-
     Eigen::ArrayXi ia, ja;
     // The row/col-removed, lower-triangular matrix that is actually factorized by Paridso.
     SuiteSparseMatrix A_transpose;

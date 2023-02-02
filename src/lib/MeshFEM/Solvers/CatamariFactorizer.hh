@@ -37,6 +37,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     void factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override;
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A,                             Real sigma, bool isInTryCatch=false) override;
 
     // (Re)compute both symbolic and numeric factorizations
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) override {

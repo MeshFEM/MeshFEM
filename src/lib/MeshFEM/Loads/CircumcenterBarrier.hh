@@ -161,7 +161,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
 
             F.resize(8, 4);  // 8  subtetrahedra
             int Fback = 0;
-            foreach_subelement(ei, [&](const AK1i &e, auto B, auto x) {
+            foreach_subelement(ei, [&](const AK1i &e, auto /* B */, auto x) {
                 if (V.rows() == 0)
                     V = x;
                 F.row(Fback++) = e;
@@ -280,7 +280,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                 result = std::min(result, circumcenter(o.deformedPositions(), elementCorners(e.index())).minCoeff());
 
                 if (m_subdivisionBarrier) {
-                    foreach_subelement(e.index(), [&](const AK1i &sube, auto B, auto x) {
+                    foreach_subelement(e.index(), [&](const AK1i &sube, auto /* B */, auto x) {
                         result = std::min(result, circumcenter(x, sube).minCoeff());
                     });
                 }
@@ -295,7 +295,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                 result += elementEnergy(o.deformedPositions(), elementCorners(e.index()));
 
                 if (m_subdivisionBarrier) {
-                    foreach_subelement(e.index(), [&](const AK1i &sube, auto B, auto x) {
+                    foreach_subelement(e.index(), [&](const AK1i &sube, auto /* B */, auto x) {
                         result += elementEnergy(x, sube);
                     });
                 }

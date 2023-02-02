@@ -150,6 +150,19 @@ void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, co
     m_factorizationType = FactorizationType::Numeric;
 }
 
+void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
+        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
+            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii)
+                A_transpose.Ax[ii] = A.Ax[m_sourceEntry[ii]];
+        }, ap);
+    A_transpose.addScaledIdentity(sigma);
+
+    m_pardisoFactorization(/* numeric factorization phase only */ 22);
+    m_factorizationType = FactorizationType::Numeric;
+}
+
 void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys, bool alreadyPermuted) const {
     iparm[7] = 0; // No iterative refinement.
     iparm[6] = 0; // Do not solve in-place.

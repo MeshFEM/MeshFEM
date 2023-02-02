@@ -341,10 +341,8 @@ getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
     if (numValues == m.numElements()) {
         result.resize(4 * m.numElements(), numComponents);
         for (auto e : m.elements()) {
-            for (auto f : e.halfFaces()) {
-                for (auto v : f.vertices())
-                    result.row(4 * e.index() + f.localIndex()).leftCols(field.cols()) = field.row(e.index());
-            }
+            for (auto v : e.vertices())
+                result.row(4 * e.index() + v.localIndex()).leftCols(field.cols()) = field.row(e.index());
         }
     }
 

@@ -78,7 +78,7 @@ private:
     M2d m_Q;
     V2d m_Lambda;
 
-    bool m_degenerate;
+    bool m_degenerate = false;
 };
 
 #endif /* end of include guard: EIGSENSITIVITY_HH */

@@ -65,6 +65,10 @@ struct CholeskyFactorizerBase {
     // symbolic factorization if it exists.
     virtual void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) = 0;
 
+    // Compute the numeric factorization of `A + sigma * I`, reusing the
+    // symbolic factorization if it exists.
+    virtual void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool isInTryCatch=false) = 0;
+
     // (Re)compute both symbolic and numeric factorizations
     virtual void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) = 0;
     virtual void clearFactors() = 0;

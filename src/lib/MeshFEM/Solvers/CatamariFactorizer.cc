@@ -405,6 +405,16 @@ void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, c
     m_factorizationType = FactorizationType::Numeric;
 }
 
+void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, nullptr);
+    if (size_t(result.num_successful_pivots) != n_reduced()) {
+        m_factorizationType = FactorizationType::Symbolic;
+        throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
+                                 std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
+    }
+    m_factorizationType = FactorizationType::Numeric;
+}
+
 void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool alreadyPermuted) const {
     assertFactorization(sys);
     if (sys != CholeskySys::A) {

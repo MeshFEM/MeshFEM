@@ -83,7 +83,7 @@ struct IncompressibleBalloonEnergy {
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 private:
-    Real m_trace_C, m_det_C;
+    Real m_trace_C = 2, m_det_C = 1;
     M2d m_grad_det_C;
     M2d m_C;
 };
