@@ -17,7 +17,7 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
 
     // Compute the numeric factorization of `A + sigma * B`, reusing the
     // symbolic factorization if it exists.
-    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override;
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
 
     // Compute the numeric factorization of `A + sigma * I`, reusing the
     // symbolic factorization if it exists.

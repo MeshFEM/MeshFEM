@@ -160,6 +160,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     //       is negative, CHOLMOD will not complain about it. Use checkPosDef() to
     //       further ensure it is spd.
     void factorizeNumeric(const SuiteSparseMatrix &fullMat, bool isInTryCatch=false) override {
+        assertFactorization(FactorizationType::Symbolic);
         const SuiteSparseMatrix &mat = *m_rowColRemoval(fullMat);
         cholmod_sparse A = cholmod_sparse_view(mat);
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);
@@ -192,7 +193,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     // Compute the numeric factorization of `A + sigma * B`, reusing the
     // symbolic factorization if it exists.
-    void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) override {
+    void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override {
         if (!m_Ashift) {
             m_Ashift = std::make_unique<SuiteSparseMatrix>(A);
             m_Ashift->data() += sigma * B.data();

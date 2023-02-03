@@ -375,6 +375,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
 }
 
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
 #if DUMP_MATRICES
     {
         const SuiteSparseMatrix *A = m_rowColRemoval(mat);
@@ -395,7 +396,8 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
     m_factorizationType = FactorizationType::Numeric;
 }
 
-void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
+void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
     auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, B.Ax.data());
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
@@ -406,6 +408,7 @@ void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, c
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
     auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, nullptr);
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;

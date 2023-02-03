@@ -9,6 +9,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(sparse_matrices, m) {
     m.doc() = "Sparse Representations and Solvers";
+    py::module detail_module = m.def_submodule("detail");
     // Bind TripletMatrix (with getSparseCSC format, and SPSDSystem)
     // Enough to convert to scipy and solve.
 
@@ -63,17 +64,6 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("LOWER_TRIANGLE", SMode::LOWER_TRIANGLE)
         ;
 
-    py::enum_<CholeskyProvider>(m, "CholeskyProvider")
-        .value("CHOLMOD",  CholeskyProvider::CHOLMOD)
-#if MESHFEM_WITH_CATAMARI
-        .value("Catamari",       CholeskyProvider::Catamari)
-        .value("CatamariNesdis", CholeskyProvider::CatamariNesdis)
-#endif
-#if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
-        .value("PARDISO", CholeskyProvider::PARDISO)
-#endif
-        ;
-
     using SymmetryModePicklingType = std::underlying_type_t<SMode>;
     auto ss_matrix = py::class_<SuiteSparseMatrix, std::shared_ptr<SuiteSparseMatrix>>(m, "SuiteSparseMatrix", "Sparse matrix in a Suite Sparse-compatible compressed column format")
         .def(py::init<TMatrix>(), py::arg("tripletMatrix"),     "Construct from triplet matrix")
@@ -87,7 +77,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
         .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
         .def("fill",           &SuiteSparseMatrix::fill)
-        .def("setIdentity",    &SuiteSparseMatrix::setIdentity)
+        .def("setIdentity",    &SuiteSparseMatrix::setIdentity, py::arg("preserveSparsity"))
         .def("trace",          &SuiteSparseMatrix::trace)
         .def("transpose",      &SuiteSparseMatrix::transpose)
         .def("toSymmetryMode", &SuiteSparseMatrix::toSymmetryMode)
@@ -151,4 +141,49 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("dumpBinary", &SuiteSparseMatrix::dumpBinary)
         .def("readBinary", &SuiteSparseMatrix::readBinary)
         ;
+    ////////////////////////////////////////////////////////////////////////////
+    /// Solvers
+    ////////////////////////////////////////////////////////////////////////////
+    py::enum_<CholeskyProvider>(m, "CholeskyProvider")
+        .value("CHOLMOD",  CholeskyProvider::CHOLMOD)
+#if MESHFEM_WITH_CATAMARI
+        .value("Catamari",       CholeskyProvider::Catamari)
+        .value("CatamariNesdis", CholeskyProvider::CatamariNesdis)
+#endif
+#if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
+        .value("PARDISO", CholeskyProvider::PARDISO)
+#endif
+        ;
+
+    using CFB = CholeskyFactorizerBase;
+    py::class_<CFB> pyCFB(detail_module, "CholeskyFactorizerBase");
+    py::enum_<CFB::FactorizationType>(pyCFB, "FactorizationType")
+        .value("None",     CFB::FactorizationType::None)
+        .value("Symbolic", CFB::FactorizationType::Symbolic)
+        .value("Numeric",  CFB::FactorizationType::Numeric)
+        ;
+
+    pyCFB
+        .def("m", &CFB::m)
+        .def("n", &CFB::n)
+        .def("m_reduced",    &CFB::m_reduced)
+        .def("n_reduced",    &CFB::n_reduced)
+        .def("hasFixedVars", &CFB::hasFixedVars)
+        .def("getFixedVars", &CFB::getFixedVars)
+        .def("varIsFixed",   &CFB::varIsFixed, py::arg("i"))
+        .def("factorizeSymbolic", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
+                c.factorizeSymbolic(mat, pinnedVars); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>())
+        .def("factorizeNumeric", &CFB::factorizeNumeric, py::arg("mat"), py::arg("isInTryCatch") = false)
+        .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma                            , bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma   , isInTryCatch); }, py::arg("mat"), py::arg("sigma")              , py::arg("isInTryCatch") = false)
+        .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma, const SuiteSparseMatrix &B, bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma, B, isInTryCatch); }, py::arg("mat"), py::arg("sigma"), py::arg("B"), py::arg("isInTryCatch") = false)
+        .def("factorize", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool isInTryCatch) {
+                    c.factorize(mat, pinnedVars, isInTryCatch); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>(), py::arg("isInTryCatch") = false)
+        .def("clearFactors", &CFB::clearFactors)
+        .def("checkPosDef",  &CFB::checkPosDef)
+        .def("hasFactorization", [](const CFB &c, CFB::FactorizationType type) { return c.hasFactorization(type); }, py::arg("type"))
+        .def("solve", [](const CFB &c, Eigen::VectorXd &rhs) { return c.solve(rhs); }, py::arg("rhs"))
+        .def("provider", &CFB::provider)
+        ;
+
+    m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());
 }

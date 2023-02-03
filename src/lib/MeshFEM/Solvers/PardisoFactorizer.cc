@@ -55,7 +55,6 @@ Eigen::ArrayXi fortranIndexArrayFromCIndexArray(const IdxVec &ivec) {
 
 void PardisoFactorizer::m_pardisoFactorization(int phase) {
     m_reducedSize = A_transpose.m;
-    m_factorizationType = FactorizationType::None;
 
     int error = 0;
 
@@ -112,11 +111,13 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     ia = fortranIndexArrayFromCIndexArray(A_transpose.Ap); // row pointers   (column pointers of transpose)
     ja = fortranIndexArrayFromCIndexArray(A_transpose.Ai); // column indices (row indices of transpose)
 
+    m_factorizationType = FactorizationType::None;
     m_pardisoFactorization(/* symbolic factorization phase only */ 11);
     m_factorizationType = FactorizationType::Symbolic;
 }
 
 void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
 
     static tbb::affinity_partitioner ap;
@@ -130,7 +131,8 @@ void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isI
     m_factorizationType = FactorizationType::Numeric;
 }
 
-void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool /* isInTryCatch */) {
+void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
     if (sigma == 0) return factorizeNumeric(A);
 
@@ -151,6 +153,7 @@ void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, co
 }
 
 void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    assertFactorization(FactorizationType::Symbolic);
     static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
         [&](const tbb::blocked_range<SuiteSparse_long> &r) {
@@ -164,8 +167,9 @@ void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Re
 }
 
 void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys, bool alreadyPermuted) const {
+    assertFactorization(sys);
     iparm[7] = 0; // No iterative refinement.
-    iparm[6] = 0; // Do not solve in-place.
+    iparm[5] = 0; // Do not solve in-place.
     int phase = 33;
     int ncols = n_reduced();
 
@@ -185,6 +189,8 @@ void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys,
         std::cout << "ERROR during solve phase: " << error << std::endl;
         throw std::runtime_error("ERROR during solve phase: " + std::to_string(error));
     }
+
+    // std::cout << "Applied " << iparm[6] << " iterative refinement steps" << std::endl;
 }
 
 PardisoFactorizer::~PardisoFactorizer()  {

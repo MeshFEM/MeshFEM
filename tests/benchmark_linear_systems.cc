@@ -52,7 +52,8 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
             continue;
         }
 
-        factorizer->solve(b);
+        // auto x = factorizer->solve(b);
+        // std::cout << "Relative error: " << (A.apply(x) - b).norm() / b.norm() << std::endl;
     }
 
     BENCHMARK_REPORT();

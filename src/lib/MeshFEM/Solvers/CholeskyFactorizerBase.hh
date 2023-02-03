@@ -63,7 +63,7 @@ struct CholeskyFactorizerBase {
 
     // Compute the numeric factorization of `A + sigma * B`, reusing the
     // symbolic factorization if it exists.
-    virtual void factorizeNumericWithShift(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B, Real sigma, bool isInTryCatch=false) = 0;
+    virtual void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) = 0;
 
     // Compute the numeric factorization of `A + sigma * I`, reusing the
     // symbolic factorization if it exists.
@@ -95,7 +95,7 @@ struct CholeskyFactorizerBase {
         return hasFactorization(FactorizationType::Symbolic);
     }
 
-    void assertFactorization(FactorizationType type)           const { if (!hasFactorization(type)) throw std::runtime_error("Factorization does not exist"); }
+    void assertFactorization(FactorizationType type)           const { if (!hasFactorization(type)) throw std::runtime_error(((type == FactorizationType::Numeric) ? "Numeric" : "Symbolic") + std::string(" factorization does not exist")); }
     void assertFactorization(CholeskySys sys = CholeskySys::A) const { if (!hasFactorization( sys)) throw std::runtime_error("Factorization does not exist"); }
 
     virtual void solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {

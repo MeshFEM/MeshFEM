@@ -55,7 +55,7 @@ struct OptionallyModifiedHessian {
     }
 
     operator const SuiteSparseMatrix &() const { return *get(); }
-    operator bool() const { return get() != nullptr; }
+    explicit operator bool() const { return get() != nullptr; }
 private:
     const SuiteSparseMatrix *m_H;
     std::unique_ptr<SuiteSparseMatrix> m_H_tmp;
@@ -95,7 +95,7 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
                     if (ws.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), ws);
                 }
 
-                s.factorizeNumericWithShift(H, M, tau * currentTauScale);
+                s.factorizeNumericWithShift(H, tau * currentTauScale, M);
             }
             else {
                 s.factorizeNumeric(H);
