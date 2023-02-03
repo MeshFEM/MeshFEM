@@ -52,6 +52,8 @@ struct MESHFEM_EXPORT NewtonProblem {
         return *m_cachedHessian;
     }
 
+    virtual bool providesMetric() const { return false; }
+
     // Positive definite matrix defining the metric used to define trust regions.
     // For efficiency, it must have the same sparsity pattern as the Hessian.
     // (This matrix is added to indefinite Hessians to produce a positive definite modified Hessian.)
@@ -218,6 +220,15 @@ struct MESHFEM_EXPORT NewtonProblem {
 
     bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
     void invalidateCachedHessian() { m_cachedHessianUpToDate = false; }
+
+    // When nonzero, the matrix `H + hessianShift I` is factorized at each
+    // Newton step rather than `H` itself. This is intended for problems
+    // with a Hessian nullspace due to, e.g., rigid motion, that can be
+    // removed by a *small* shift.
+    // Note: if `H + hessianShift I` is indefinite, then the
+    // Hessian modification `H + sigma M` *replaces* this shift rather than
+    // adding to it.
+    Real hessianShift = 0.0;
 
 protected:
     // Clear the cached per-iterate quantities

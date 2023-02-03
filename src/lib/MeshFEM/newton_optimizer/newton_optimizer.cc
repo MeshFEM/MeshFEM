@@ -89,16 +89,23 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
     while (true) {
         try {
             if (tau != 0) {
-                if (!M) {
-                    BENCHMARK_SCOPED_TIMER_SECTION solve("Eval metric");
-                    M.set(prob->metric());
-                    if (ws.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), ws);
+                if (options.useIdentityMetric || !(prob->providesMetric())) {
+                    s.factorizeNumericWithShift(H, tau * currentTauScale);
                 }
+                else {
+                    if (!M) {
+                        BENCHMARK_SCOPED_TIMER_SECTION solve("Eval metric");
+                        M.set(prob->metric());
+                        if (ws.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), ws);
+                    }
 
-                s.factorizeNumericWithShift(H, tau * currentTauScale, M);
+                    s.factorizeNumericWithShift(H, tau * currentTauScale, M);
+                }
             }
             else {
-                s.factorizeNumeric(H);
+                if (prob->hessianShift == 0)
+                    s.factorizeNumeric(H);
+                else s.factorizeNumericWithShift(H, prob->hessianShift);
             }
 
             if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite"); // Needed in case CHOLMOD decides on an LDL factorization...
@@ -106,7 +113,7 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
         }
         catch (std::exception &e) {
             std::cout << "Caught exception: " << e.what() << std::endl;
-            tau  = std::max(  4 * tau, beta);
+            tau  = std::max(4.0 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
             if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << "\n";
             if (currentTauScale == 0) currentTauScale = tauScale();
