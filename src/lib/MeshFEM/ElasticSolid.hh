@@ -264,7 +264,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return result;
     }
 
-    CSCMat scalarHessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
+    CSCMat hessianBlockSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         TripletMatrix<Triplet<Real>> triplet_result(numNodes(), numNodes());
         triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;

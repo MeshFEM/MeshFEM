@@ -83,7 +83,7 @@ struct ElasticSolidBinder {
                 return result;
               }, "Useful for detecting collapsed elements...")
           .def("deformedElementVolumes", &ES::deformedElementVolumes, "Numerical approximation of each element's volume in the deformed config.")
-          .def("scalarHessianSparsityPattern", &ES::scalarHessianSparsityPattern, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
+          .def("hessianBlockSparsityPattern", &ES::hessianBlockSparsityPattern, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
          ;
         if constexpr (K == 3) {
             pyES.def("shrunkenTetVisualizationGeometry", [](const ES &obj, double tetShrinkFactor) {
