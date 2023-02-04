@@ -488,10 +488,10 @@ class PythreejsViewerBase(ViewerBase):
         mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
         return mr
 
-    def antialiasedImage(self, renderScale=2, outputScale=1):
+    def antialiasedImage(self, renderScale=2, outputScale=1, lineWidthScale = 1):
         orender = self.offscreenRenderer(scale=renderScale)
         for m in orender.meshes:
-            m.lineWidth *= renderScale
+            m.lineWidth *= lineWidthScale * renderScale
         orender.render()
         return orender.scaledImage(outputScale / renderScale)
 
