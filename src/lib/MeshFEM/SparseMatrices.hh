@@ -1651,6 +1651,8 @@ struct CSCMatrix {
 
     ColumnRange col(_Index j) const { return ColumnRange(*this, j); }
 
+    _Index columnSize(_Index j) const { return Ap[j + 1] - Ap[j]; }
+
     // Matrix-vector multiply
     template<typename _Vector>
     _Vector apply(const _Vector &x, const bool transpose = false) const {
