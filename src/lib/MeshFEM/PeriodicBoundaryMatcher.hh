@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <bitset>
+#include <array>
 #include <limits>
 #include <stdexcept>
 #include <iostream>
@@ -47,6 +48,11 @@ struct FaceMembership {
             membership[d]     = std::abs(p[d] - cell.minCorner[d]) <= epsilon;
             membership[N + d] = std::abs(p[d] - cell.maxCorner[d]) <= epsilon;
         }
+    }
+
+    FaceMembership(const std::array<bool, 2 * N> &onFace) {
+        for (size_t i = 0; i < 2 * N; ++i)
+            membership[i] = onFace[i];
     }
 
     static FaceMembership AllFaces() {
