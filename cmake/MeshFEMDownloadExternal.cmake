@@ -93,7 +93,7 @@ endfunction()
 function(meshfem_download_spectra)
     meshfem_download_project(spectra
         GIT_REPOSITORY https://github.com/yixuan/spectra.git
-        GIT_TAG        ec27cfd2210a9b2322825c4cb8e5d47f014e1ac3
+        GIT_TAG        8c7242e08f0fb7f6a0022cfe232e3dc5b5bd4eb4
     )
 endfunction()
 

@@ -4,8 +4,11 @@
 #include <Spectra/SymEigsSolver.h>
 #include <Spectra/SymGEigsSolver.h>
 #include <Spectra/MatOp/SparseCholesky.h>
+#include <Spectra/Util/CompInfo.h>
+#include <Spectra/Util/GEigsMode.h>
 
 struct SuiteSparseMatrixProd {
+    using Scalar = Real;
     SuiteSparseMatrixProd(const SuiteSparseMatrix &A) : m_A(A) { }
 
     int rows() const { return m_A.m; }
@@ -21,6 +24,7 @@ private:
 };
 
 struct SuiteSparseMatrixProdParallel {
+    using Scalar = Real;
     SuiteSparseMatrixProdParallel(const SuiteSparseMatrix &A) {
         m_Afull = A.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::NONE);
     }
@@ -47,12 +51,12 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
     using ProdOp = SuiteSparseMatrixProd;
 
     ProdOp op(A);
-    Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, ProdOp> eigs(&op, 1, 5);
+    Spectra::SymEigsSolver<ProdOp> eigs(op, 1, 5);
     eigs.init();
     const size_t maxIters = 1000;
-    eigs.compute(maxIters, tol);
+    eigs.compute(Spectra::SortRule::LargestMagn, maxIters, tol);
     // std::cout << "Eigensolver took " << eigs.num_iterations() << " iterations" << std::endl;
-    if (eigs.info() != Spectra::SUCCESSFUL) {
+    if (eigs.info() != Spectra::CompInfo::Successful) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         std::cout << "Using " << ((A.symmetry_mode == SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE) ? "symmetric" : "asymmetric") << " matrix" << std::endl;
     }
@@ -60,6 +64,8 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
 }
 
 struct ShiftedGeneralizedOp {
+    using Scalar = Real;
+
     ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, CholeskyFactorizerBase &M_LLt, CholmodSparseWrapper &&L)
         : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt), m_L(std::move(L))
     {
@@ -109,13 +115,13 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
 
     ShiftedGeneralizedOp op(Hshift_inv, *M_LLt, M_LLt->getL());
 
-    Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, ShiftedGeneralizedOp> eigs(&op, 1, 5);
+    Spectra::SymEigsSolver<ShiftedGeneralizedOp> eigs(op, 1, 5);
     eigs.init();
     const size_t maxIters = 20; // if the tau estimate is good, we should barely need to iterate; otherwise we give up on computing the negative curavture direction
-    eigs.compute(maxIters, tol);
+    eigs.compute(Spectra::SortRule::LargestMagn, maxIters, tol);
 
     // std::cout << "Eigensolver took " << eigs.num_iterations() << " iterations" << std::endl;
-    if (eigs.info() != Spectra::SUCCESSFUL) {
+    if (eigs.info() != Spectra::CompInfo::Successful) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         return Eigen::VectorXd::Zero(Hshift_inv.m());
     }
@@ -142,6 +148,8 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
 }
 
 struct MatvecCallbackOp {
+    using Scalar = Real;
+
     MatvecCallbackOp(const MatvecCallback &matvec, size_t n)
         : m_matvec(matvec), m_n(n) { }
 
@@ -198,7 +206,7 @@ std::pair<Real, Eigen::VectorXd> nthLargestEigenvalueAndEigenvectorGen(const Mat
     MatvecCallbackOp Aop(A, B.m);
 #if 1
     CholmodCholeskyOp Bop(B);
-    Spectra::SymGEigsSolver<Real, Spectra::LARGEST_MAGN, MatvecCallbackOp, CholmodCholeskyOp, Spectra::GEIGS_CHOLESKY> eigs(&Aop, &Bop, nev, /* ncv = */5);
+    Spectra::SymGEigsSolver<MatvecCallbackOp, CholmodCholeskyOp, Spectra::GEigsMode::Cholesky> eigs(Aop, Bop, nev, /* ncv = */5);
 #else
     auto Bfull = B.getTripletMatrix();
     Bfull.reflectUpperTriangle();
@@ -210,9 +218,9 @@ std::pair<Real, Eigen::VectorXd> nthLargestEigenvalueAndEigenvectorGen(const Mat
 
     eigs.init();
     const size_t maxIters = 10000;
-    eigs.compute(maxIters, tol, Spectra::LARGEST_MAGN); // order with descending magnitude
+    eigs.compute(Spectra::SortRule::LargestMagn, maxIters, tol, Spectra::SortRule::LargestMagn); // order with descending magnitude
 
-    if (eigs.info() != Spectra::SUCCESSFUL) {
+    if (eigs.info() != Spectra::CompInfo::Successful) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         throw std::runtime_error("Spectra unsuccessful after " + std::to_string(eigs.num_iterations()) + " iterations");
     }
@@ -226,6 +234,8 @@ std::pair<Real, Eigen::VectorXd> nthLargestEigenvalueAndEigenvectorGen(const Mat
 }
 
 struct KernelProjectedOp {
+    using Scalar = Real;
+
     KernelProjectedOp(const MatvecCallback &B, Eigen::Ref<const Eigen::MatrixXd> Z)
         : m_B(B), m_n(Z.rows()) {
         int k = Z.cols();
@@ -292,13 +302,13 @@ std::pair<Eigen::VectorXd, Eigen::MatrixXd> smallestNonzeroGenEigenpairsPSDKnown
         Aop = std::make_unique<CholmodCholeskyOp>(Ashift);
     }
 
-    Spectra::SymGEigsSolver<Real, Spectra::LARGEST_MAGN, KernelProjectedOp, CholmodCholeskyOp, Spectra::GEIGS_CHOLESKY> eigs(&BPrime, Aop.get(), nev, /* ncv = */5);
+    Spectra::SymGEigsSolver<KernelProjectedOp, CholmodCholeskyOp, Spectra::GEigsMode::Cholesky> eigs(BPrime, *Aop, nev, /* ncv = */5);
 
     eigs.init();
     const size_t maxIters = 10000;
-    eigs.compute(maxIters, tol, Spectra::LARGEST_MAGN); // order with descending magnitude
+    eigs.compute(Spectra::SortRule::LargestMagn, maxIters, tol, Spectra::SortRule::LargestMagn); // order with descending magnitude
 
-    if (eigs.info() != Spectra::SUCCESSFUL) {
+    if (eigs.info() != Spectra::CompInfo::Successful) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         throw std::runtime_error("Spectra unsuccessful after " + std::to_string(eigs.num_iterations()) + " iterations");
     }
