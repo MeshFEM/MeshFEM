@@ -84,14 +84,16 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
 
             fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
             analytic_delta_E = g.dot(perturb)
-            err += np.abs(analytic_delta_E - fd_delta_E)
+            err += np.abs(analytic_delta_E - fd_delta_E) / np.abs(fd_delta_E)
         return err
 
     lowIdx, upIdx = 0, len(perturb)
     while upIdx > lowIdx:
-        # print([lowIdx, upIdx])
         mid = (lowIdx + upIdx) // 2
-        if errForRange(lowIdx, mid) > errForRange(mid + 1, upIdx):
+        error_low = errForRange(lowIdx, mid)
+        error_up  = errForRange(mid + 1, upIdx)
+        # print([lowIdx, mid, upIdx, error_low, error_up])
+        if error_low > error_up:
             upIdx = mid
         else:
             lowIdx = mid + 1

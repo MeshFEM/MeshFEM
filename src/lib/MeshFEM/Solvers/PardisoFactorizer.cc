@@ -154,6 +154,7 @@ void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Re
 
 void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
     static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
         [&](const tbb::blocked_range<SuiteSparse_long> &r) {

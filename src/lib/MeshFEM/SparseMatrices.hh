@@ -104,6 +104,7 @@ namespace spmat_helper {
         using container_type = typename ContainerType<T>::type;
         static Scalar valueMagnitudeSq(const T &v) { return v * v; }
         static void setZero(T &v) { v = 0; }
+        static void setZero(T *v, size_t count) { Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>(v, count).setZero(); }
         static T Zero() { return 0.0; }
     };
 
@@ -117,6 +118,7 @@ namespace spmat_helper {
         using container_type = typename ContainerType<T>::type;
         static Scalar valueMagnitudeSq(const T &v) { return v * v; }
         static void setZero(T &v) { v = 0; }
+        static void setZero(T *v, size_t count) { for (size_t i = 0; i < count; ++i) setZero(v[i]); }
         static T Zero() { return 0.0; }
     };
 
@@ -132,6 +134,7 @@ namespace spmat_helper {
             static_assert((rows != Eigen::Dynamic) && (cols != Eigen::Dynamic), "Only fixed-size blocks are currently supported");
             v.setZero();
         }
+        static void setZero(EigenT *v, size_t count) { for (size_t i = 0; i < count; ++i) setZero(v[i]); }
         static auto Zero() { return EigenT::Zero().eval(); }
     };
 
@@ -175,6 +178,7 @@ namespace spmat_helper {
     };
 
     template<typename T> void          setZero(     T &&v) {        value_traits<std::decay_t<T>>::setZero(v); }
+    template<typename T> void      setZero(T *v, size_t c) {        value_traits<std::decay_t<T>>::setZero(v, c); }
     template<typename T> auto valueMagnitudeSq(const T &v) { return value_traits<std::decay_t<T>>::valueMagnitudeSq(v); }
 
     // Transpose of a dense matrix block
@@ -1669,16 +1673,35 @@ struct CSCMatrix {
         const bool swapIndices = transpose && (symmetry_mode == SymmetryMode::NONE);
 
         size_t len = transpose ? n : m;
-        for (size_t i = 0; i < len; ++i)
-            spmat_helper::setZero(result[i]);
+        spmat_helper::setZero(result, len);
 
-        const auto ende = end();
-        for (auto it = begin(); it != ende; ++it) {
-            _Index i = it.get_i(), j = it.get_j();
-            if (swapIndices) std::swap(i, j);
-            result[i] += it.get_val() * x[j];
-            if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
-                result[j] += it.get_val() * x[i];
+        if (swapIndices) {
+            for (_Index j = 0; j < n; ++j) {
+                for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii)
+                    result[j] += spmat_helper::transpose_block(Ax[ii]) * x[Ai[ii]];
+            }
+        }
+        else {
+            if (transpose) {
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii) {
+                        _Index i = Ai[ii];
+                        result[i] += spmat_helper::transpose_block(Ax[ii]) * x[j];
+                        if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
+                            result[j] += Ax[ii] * x[i];
+                    }
+                }
+            }
+            else {
+                for (_Index j = 0; j < n; ++j) {
+                    for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii) {
+                        _Index i = Ai[ii];
+                        result[i] += Ax[ii] * x[j];
+                        if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
+                            result[j] += spmat_helper::transpose_block(Ax[ii]) * x[i];
+                    }
+                }
+            }
         }
     }
 

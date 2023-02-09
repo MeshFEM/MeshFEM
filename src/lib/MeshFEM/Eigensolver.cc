@@ -1,4 +1,5 @@
 #include "Eigensolver.hh"
+#include "MeshFEM/SparseMatrices.hh"
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <Spectra/SymEigsSolver.h>
 #include <Spectra/SymGEigsSolver.h>
@@ -10,20 +11,43 @@ struct SuiteSparseMatrixProd {
     int rows() const { return m_A.m; }
     int cols() const { return m_A.n; }
     void perform_op(const Real *x_in, Real *y_out) const {
-        //BENCHMARK_START_TIMER("Apply matrix");
+        BENCHMARK_START_TIMER("Apply matrix");
         m_A.applyRaw(x_in, y_out);
-        //BENCHMARK_STOP_TIMER("Apply matrix");
+        BENCHMARK_STOP_TIMER("Apply matrix");
     }
 
 private:
     const SuiteSparseMatrix &m_A;
 };
 
+struct SuiteSparseMatrixProdParallel {
+    SuiteSparseMatrixProdParallel(const SuiteSparseMatrix &A) {
+        m_Afull = A.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::NONE);
+    }
+
+    int rows() const { return m_Afull.m; }
+    int cols() const { return m_Afull.n; }
+    void perform_op(const Real *x_in, Real *y_out) const {
+        BENCHMARK_START_TIMER("Apply matrix");
+        using VXd = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+        m_Afull.applyTransposeParallel(Eigen::Map<const VXd>( x_in, cols()),
+                                       Eigen::Map<      VXd>(y_out, rows()));
+        BENCHMARK_STOP_TIMER("Apply matrix");
+    }
+
+private:
+    SuiteSparseMatrix m_Afull;
+};
+
 Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("largestMagnitudeEigenvalue");
     if (A.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only symmetric matrices are supported");
-    SuiteSparseMatrixProd op(A);
-    Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, SuiteSparseMatrixProd> eigs(&op, 1, 5);
+
+    // using ProdOp = SuiteSparseMatrixProdParallel;
+    using ProdOp = SuiteSparseMatrixProd;
+
+    ProdOp op(A);
+    Spectra::SymEigsSolver<Real, Spectra::LARGEST_MAGN, ProdOp> eigs(&op, 1, 5);
     eigs.init();
     const size_t maxIters = 1000;
     eigs.compute(maxIters, tol);

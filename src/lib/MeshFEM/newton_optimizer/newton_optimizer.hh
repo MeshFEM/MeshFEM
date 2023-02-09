@@ -72,7 +72,7 @@ struct MESHFEM_EXPORT NewtonProblem {
         return *m_cachedMetric;
     }
 
-    Real hessianL2Norm() const { return largestMagnitudeEigenvalue(hessian(), 1e-2); }
+    Real hessianL2Norm() const { return largestMagnitudeEigenvalue(hessian(), 1e-1); }
 
     // Since computing the L2 norm is slightly expensive, we assume that it remains
     // constant throughout the solve. This is exactly true for ElasticRods, and should be
@@ -80,8 +80,8 @@ struct MESHFEM_EXPORT NewtonProblem {
     // Also, an exact result should not be necessary since it's only used to determine a reasonable
     // initial guess for the Hessian modification magnitude.
     Real metricL2Norm() const {
-        if (m_useIdentityMetric) return 1.0;
-        if (m_metricL2Norm <= 0) m_metricL2Norm = largestMagnitudeEigenvalue(metric(), 1e-2);
+        if (!providesMetric() || m_useIdentityMetric) return 1.0;
+        if (m_metricL2Norm <= 0) m_metricL2Norm = largestMagnitudeEigenvalue(metric(), 1e-1);
         return m_metricL2Norm;
     }
     void setUseIdentityMetric(bool useIdentityMetric) { m_useIdentityMetric = useIdentityMetric; }
