@@ -50,6 +50,15 @@ struct FaceMembership {
         }
     }
 
+    template<class Point>
+    FaceMembership(const Point &p, const BBox<VectorND<N>> &cell, Real epsilon, const FaceMembership &mask) {
+        for (size_t d = 0; d < N; ++d) {
+            membership[d]     = std::abs(p[d] - cell.minCorner[d]) <= epsilon;
+            membership[N + d] = std::abs(p[d] - cell.maxCorner[d]) <= epsilon;
+        }
+        membership &= mask.membership;
+    }
+
     FaceMembership(const std::array<bool, 2 * N> &onFace) {
         for (size_t i = 0; i < 2 * N; ++i)
             membership[i] = onFace[i];
@@ -60,6 +69,9 @@ struct FaceMembership {
         result.membership.set();
         return result;
     }
+
+    void setOnMinFace(size_t d, bool v = true) { assert(d < N); membership.set(    d, v); }
+    void setOnMaxFace(size_t d, bool v = true) { assert(d < N); membership.set(N + d, v); }
 
     bool      onMinFace(size_t d) const { assert(d < N); return membership[    d]; }
     bool      onMaxFace(size_t d) const { assert(d < N); return membership[N + d]; }
@@ -118,12 +130,12 @@ template<size_t N, class PointCollection>
 void determineCellBoundaryFaceMembership(const PointCollection &bdryPoints,
         const BBox<VectorND<int(N)>> &cell,
         std::vector<FaceMembership<N>> &faceMembership,
-        Real epsilon = 1e-5)
+        Real epsilon = 1e-5, const FaceMembership<N> &mask = FaceMembership<N>::AllFaces())
 {
     faceMembership.clear(), faceMembership.reserve(bdryPoints.size());
     for (const auto &p : bdryPoints) {
-        faceMembership.emplace_back(p, cell, epsilon);
-        assert(faceMembership.back().valid());
+        faceMembership.emplace_back(p, cell, epsilon, mask);
+        if (!faceMembership.back().valid()) throw std::runtime_error("Invalid face membership (node on max + min boundaries)");
     }
 }
 

@@ -465,19 +465,15 @@ public:
         bdryPts.reserve(mesh.numBoundaryNodes());
         for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
 
-        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
-                cell, m_periodicBoundariesForBoundaryNode, epsilon);
-
-        // Remove boundary vertices on ignored cell faces by removing appropriate cell face memberships.
-        if (ignoreDims.size() > 0) {
-            for (size_t i = 0; i < m_periodicBoundariesForBoundaryNode.size(); i++) {
-                for (size_t d : ignoreDims) {
-                    if (d > _N) throw std::runtime_error("ignoreDims entry out of bounds");
-                    m_periodicBoundariesForBoundaryNode[i].membership[d] = false;
-                    m_periodicBoundariesForBoundaryNode[i].membership[d + _N] = false;
-                }
-            }
+        auto membershipMask = PeriodicBoundaryMatcher::FaceMembership<_N>::AllFaces();
+        for (size_t d : ignoreDims) {
+            if (d > _N) throw std::runtime_error("ignoreDims entry out of bounds");
+            membershipMask.setOnMinFace(d, false);
+            membershipMask.setOnMaxFace(d, false);
         }
+
+        PeriodicBoundaryMatcher::determineCellBoundaryFaceMembership(bdryPts,
+                cell, m_periodicBoundariesForBoundaryNode, epsilon, membershipMask);
 
         // Determine identified boundary nodes.
         std::vector<std::vector<size_t> > bdryNodeSets;
