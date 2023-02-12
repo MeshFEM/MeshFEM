@@ -220,6 +220,11 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     }
 
     const auto &fixedVars = prob->fixedVars();
+    {
+        const size_t nv = prob->numVars();
+        for (size_t fv : fixedVars)
+            if (fv >= nv) throw std::runtime_error("fixedVars out of bounds");
+    }
     auto zeroOutFixedVarsInPlace = [&](Eigen::VectorXd &g) { for (size_t var : fixedVars) g[var] = 0.0; };
     auto zeroOutFixedVars = [&](Eigen::VectorXd g) { zeroOutFixedVarsInPlace(g); return g; };
 
@@ -328,12 +333,12 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << '\n';
             Eigen::VectorXd d;
             if (options.useIdentityMetric || !(prob->providesMetric())) {
-                d = negativeCurvatureDirection(solver(), nullptr, 1e-6);
+                d = negativeCurvatureDirection(solver(), nullptr, 1e-3);
             }
             else {
                 OptionallyModifiedHessian M(prob->metric());
                 if (workingSet.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), workingSet);
-                d = negativeCurvatureDirection(solver(), M.get(), 1e-6);
+                d = negativeCurvatureDirection(solver(), M.get(), 1e-3);
             }
 
             Real dnorm = d.norm();
