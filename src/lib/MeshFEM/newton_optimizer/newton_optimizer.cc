@@ -326,30 +326,34 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Negative curvature dir");
             // std::cout.precision(19);
             std::cout << "Computing negative curvature direction for scaled tau = " << tau / prob->metricL2Norm() << '\n';
-
-            OptionallyModifiedHessian M(prob->metric());
-            if (workingSet.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), workingSet);
-            auto d = negativeCurvatureDirection(solver(), *M.get(), 1e-6);
-            {
-                Real dnorm = d.norm();
-                if (dnorm != 0.0) {
-                    workingSet.getFreeComponentInPlace(d); // Enforce the active bound constraints.
-                    // {
-                    //     const SuiteSparseMatrix &H = prob->hessian();
-                    //     H.applyRaw(d.data(), tmp.data());
-                    //     Real lambda = d.dot(tmp);
-                    //     std::cout << "Found negative curvature direction with eigenvalue " << lambda << std::endl;
-                    // }
-                    if (d.dot(*neg_g_ws_free_ptr) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
-                    const Real cd = prob->characteristicDistance(d);
-                    if (cd <= 0) // problem doesn't provide one
-                        step += std::sqrt(step.squaredNorm() / d.squaredNorm()) * d; // TODO: find a better balance between newton step and negative curvature.
-                    else {
-                        step += 1e-2 * (d / cd);
-                    }
-                }
-                else { std::cout << "Negative curvature direction calculation failed" << std::endl; }
+            Eigen::VectorXd d;
+            if (options.useIdentityMetric || !(prob->providesMetric())) {
+                d = negativeCurvatureDirection(solver(), nullptr, 1e-6);
             }
+            else {
+                OptionallyModifiedHessian M(prob->metric());
+                if (workingSet.size()) fixVariablesInWorkingSet(*prob, *M.getMutable(), workingSet);
+                d = negativeCurvatureDirection(solver(), M.get(), 1e-6);
+            }
+
+            Real dnorm = d.norm();
+            if (dnorm != 0.0) {
+                workingSet.getFreeComponentInPlace(d); // Enforce the active bound constraints.
+                // {
+                //     const SuiteSparseMatrix &H = prob->hessian();
+                //     H.applyRaw(d.data(), tmp.data());
+                //     Real lambda = d.dot(tmp);
+                //     std::cout << "Found negative curvature direction with eigenvalue " << lambda << std::endl;
+                // }
+                if (d.dot(*neg_g_ws_free_ptr) > 0) d *= -1; // Move in the opposite direction as the gradient (So we still produce a descent direction)
+                const Real cd = prob->characteristicDistance(d);
+                if (cd <= 0) // problem doesn't provide one
+                    step += std::sqrt(step.squaredNorm() / d.squaredNorm()) * d; // TODO: find a better balance between newton step and negative curvature.
+                else {
+                    step += 1e-2 * (d / cd);
+                }
+            }
+            else { std::cout << "Negative curvature direction calculation failed" << std::endl; }
         }
 
         } // End of 'Compute descent direction' timer

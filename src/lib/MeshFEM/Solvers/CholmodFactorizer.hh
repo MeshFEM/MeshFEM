@@ -45,7 +45,7 @@ struct CholmodSparseWrapper {
 
     // y = mat * x
     void applyRaw(const double *x, double *y, const bool transpose = false) const {
-        if (m_mat == nullptr) throw std::runtime_error("No matrix to apply");
+        if (!exists()) throw std::runtime_error("No matrix to apply");
 
         // Wrap x, y values into a cholmod_dense struct
         auto cholx = cholmod_dense_wrap_vector_ptr(n, const_cast<double *>(x)); // Suitesparse won't actually modify the input vector data, so this const_cast should be safe.
@@ -62,7 +62,10 @@ struct CholmodSparseWrapper {
         return *this;
     }
 
-    ~CholmodSparseWrapper() { if (m_mat != nullptr) cholmod_l_free_sparse(&m_mat, m_c.get()); }
+    bool exists() const { return m_mat != nullptr; }
+    operator bool() const { return exists(); }
+
+    ~CholmodSparseWrapper() { if (exists()) cholmod_l_free_sparse(&m_mat, m_c.get()); }
 private:
     size_t n;
     cholmod_sparse *m_mat;
@@ -280,7 +283,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
     // to a vector.
-    CholmodSparseWrapper getL() {
+    CholmodSparseWrapper getL() const {
         // According to the documentation, cholmod_copy_factor will convert our numeric
         // factorization m_L back into a symbolic one, which will break future solves.
         // So we operate on a copy of m_L.

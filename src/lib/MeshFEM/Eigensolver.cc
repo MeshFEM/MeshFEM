@@ -1,4 +1,5 @@
 #include "Eigensolver.hh"
+#include "MeshFEM/Solvers/CholmodFactorizer.hh"
 #include "MeshFEM/SparseMatrices.hh"
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <Spectra/SymEigsSolver.h>
@@ -6,6 +7,7 @@
 #include <Spectra/MatOp/SparseCholesky.h>
 #include <Spectra/Util/CompInfo.h>
 #include <Spectra/Util/GEigsMode.h>
+#include <memory>
 
 struct SuiteSparseMatrixProd {
     using Scalar = Real;
@@ -63,57 +65,77 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
     return eigs.eigenvalues()[0];
 }
 
+// Applies the shifted inverse operator:
+//      L^T P (H_reduced + sigma M_reduced)^{-1} P^T L
+// where P M P^T = L L^T is a Cholesky factorization of mass matrix `M`.
+// The operator `(H_reduced + sigma M_reduced)^{-1}` is applied using the existing factorization `Hshift_inv`.
+// When `M` is the identity matrix, indicated by `M_LLt == nullptr`, then this
+// reduces to an application of `Hshift_inv`.
+// Note: for efficiency, these operations are all performed on *reduced* quantities,
+// meaning rows and columns corresponding to pinned variables have been
+// removed. This avoids repeated conversions between "full" and "reduced" vectors
+// at each step of `perform_op`.
 struct ShiftedGeneralizedOp {
     using Scalar = Real;
 
-    ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, CholeskyFactorizerBase &M_LLt, CholmodSparseWrapper &&L)
-        : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt), m_L(std::move(L))
+    ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, const CholmodFactorizer *M_LLt)
+        : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt)
     {
         if (rows() != cols()) throw std::runtime_error("Operator must be square");
         m_workspace1.resize(rows());
         m_workspace2.resize(rows());
+
+        if (m_M_LLt) m_L = std::make_unique<CholmodSparseWrapper>(m_M_LLt->getL());
     }
 
+    // This operator acts on redued, row-eliminated vectors!
     int rows() const { return m_Hshift_inv.m_reduced(); }
     int cols() const { return m_Hshift_inv.n_reduced(); }
 
     void perform_op(const Real *x_in, Real *y_out) const {
         //BENCHMARK_START_TIMER("Apply iteration matrix");
 
-        // m_Hshift_inv.solveRaw(x_in, y_out, CholeskySys::A); // Hshift_inv x
+        if (m_M_LLt == nullptr) // Ordinary eigenvalue problem.
+            return m_Hshift_inv.solveRawReduced(x_in, y_out);
 
-        m_L.         applyRaw(x_in,                m_workspace1.data());             // L x
-        m_M_LLt.     solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
-        m_Hshift_inv.solveRawReduced(m_workspace2.data(), m_workspace1.data(), CholeskySys::A ); // Hshift_inv P^T L x
-        m_M_LLt.     solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
-        m_L.         applyRaw(m_workspace2.data(), y_out,     /* transpose */ true); // L^T P Hshift_inv PT L x
+        m_L->        applyRaw(x_in,                m_workspace1.data());             // L x
+        m_M_LLt->    solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::Pt); // P^T L x
+        m_Hshift_inv.solveRawReduced(m_workspace2.data(), m_workspace1.data()                 ); // Hshift_inv P^T L x
+        m_M_LLt->    solveRawReduced(m_workspace1.data(), m_workspace2.data(), CholeskySys::P ); // P Hshift_inv P^T L x
+        m_L->        applyRaw(m_workspace2.data(), y_out,     /* transpose */ true); // L^T P Hshift_inv PT L x
 
         //BENCHMARK_STOP_TIMER("Apply iteration matrix");
     }
 
 private:
     mutable std::vector<Real> m_workspace1, m_workspace2; // storage for intermediate results (for ping-ponging the matvecs)
-    CholeskyFactorizerBase &m_Hshift_inv, &m_M_LLt;
-    CholmodSparseWrapper m_L;
+    CholeskyFactorizerBase &m_Hshift_inv;
+    const CholmodFactorizer *m_M_LLt;
+    std::unique_ptr<CholmodSparseWrapper> m_L;
 };
 
-Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix &M, Real tol) {
+// Compute the eigenvector of the single smallest generalized eigenvalue solving:
+//      H d = lambda M d
+// using an inverse iteration.
+// The special case `M = I` can be requested by passing `M = nullptr`
+Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("negativeCurvatureDirection");
-    if (Hshift_inv.m() != size_t(M.m)) throw std::runtime_error("Argument matrices Hshift_inv and M must be the same size");
 
     std::unique_ptr<CholmodFactorizer> M_LLt;
-    {
+    if (M != nullptr) {
+        if (Hshift_inv.m() != size_t(M->m)) throw std::runtime_error("Argument matrices Hshift_inv and M must be the same size");
         // M was constructed with the same sparsity pattern as H to accelerate
         // calculation of H + tau * M. But this means a lot of unnecessary work
         // for factorizing M itself, especially if M is diagonal.
         // Remove the unused entries before factorizing.
-        SuiteSparseMatrix Mcompressed(M);
+        SuiteSparseMatrix Mcompressed(*M);
         Mcompressed.removeZeros();
+        // We are forced to use CholmodFactorizer until the other factorizers implement solves against M/L/P/etc.
         M_LLt = std::make_unique<CholmodFactorizer>(false, /* final_ll: force LL^T instead of LDL^T */ true);
         M_LLt->factorize(Mcompressed, Hshift_inv.getFixedVars()); // Compute P M P^T = L L^T
     }
 
-    ShiftedGeneralizedOp op(Hshift_inv, *M_LLt, M_LLt->getL());
+    ShiftedGeneralizedOp op(Hshift_inv, M_LLt.get());
 
     Spectra::SymEigsSolver<ShiftedGeneralizedOp> eigs(op, 1, 5);
     eigs.init();
@@ -129,10 +151,10 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
     // Eigenvector "y" is for the transformed, ordinary eigenvalue problem.
     Eigen::VectorXd y = eigs.eigenvectors().col(0);
 
-    // Compute eigenvector for the original generalized eigenvalue problem:
-    // d = P L^-T y
-    Eigen::VectorXd d(y.size());
-    {
+    if (M_LLt) {
+        // Compute eigenvector for the original generalized eigenvalue problem:
+        // d = P L^-T y
+        Eigen::VectorXd d(y.size());
         Eigen::VectorXd tmp(y.size());
         M_LLt->solveRawReduced(y.data(), tmp.data(), CholeskySys::Lt);
         M_LLt->solveRawReduced(tmp.data(), d.data(), CholeskySys::Pt);
@@ -140,10 +162,14 @@ Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, c
         // Normalize d so that ||d||_M = 1
         // M.applyRaw(d.data(), tmp.data());
         // d /= d.dot(tmp);
+        y.swap(d);
     }
 
+    // Eigenvector calculation was done in reduced vars
+    if (!Hshift_inv.hasFixedVars()) return y;
+
     Eigen::VectorXd d_full;
-    Hshift_inv.extractFullSolution(d, d_full);
+    Hshift_inv.extractFullSolution(y, d_full);
     return d_full;
 }
 

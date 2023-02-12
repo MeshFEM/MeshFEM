@@ -34,7 +34,9 @@ namespace myswap {
 //        x = P^T b when sys = Pt
 enum class CholeskySys { A, L, Lt, P, Pt };
 
-// Interface to a CHOLMOD-like Cholesky factorization class.
+// Interface to a Cholesky factorization class supporting the enforcement of
+// pin constraints of the form:
+//      x[fixedVars] = 0
 struct CholeskyFactorizerBase {
     enum class FactorizationType : int {
         None = 0, Symbolic = 1, Numeric = 2
@@ -147,6 +149,12 @@ struct CholeskyFactorizerBase {
     // `permute`: whether to also apply the permutation/inverse permutation in a fused operation.
     template<class VecIn, class VecOut>
     void extractFullSolution(const VecIn &xReduced, VecOut &&x, bool permute = false) const {
+        if (!hasFixedVars()) {
+            if (permute) throw std::runtime_error("Unimplemented");
+            x = xReduced;
+            return;
+        }
+
         if (m_reducedRowForRow.size() != n()) throw std::logic_error("Variables were not fixed");
         if (size_t(xReduced.rows()) != n_reduced()) throw std::runtime_error("Invalid xReduced size");
         x.resize(n(), xReduced.cols());
@@ -175,7 +183,13 @@ struct CholeskyFactorizerBase {
     }
 
     template<class VecIn, class VecOut>
-    void removeFixedEntries(const VecIn &x, VecOut &&xReduced = false, bool permute = false) const {
+    void removeFixedEntries(const VecIn &x, VecOut &&xReduced, bool permute = false) const {
+        if (!hasFixedVars()) {
+            if (permute) throw std::runtime_error("Unimplemented");
+            xReduced = x;
+            return;
+        }
+
         if (m_reducedRowForRow.size() != n()) throw std::logic_error("Variables were not fixed");
         if (size_t(x.rows()) != n()) throw std::runtime_error("Invalid x size");
 
