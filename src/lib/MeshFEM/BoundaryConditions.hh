@@ -613,6 +613,13 @@ public:
         return m_nodesForDoF.at(m_dofForNode.at(vni));
     }
 
+    bool hasSinglePair(size_t vni) const { return identifiedNodes(vni).size() == 2; }
+    size_t pairedNode(size_t vni) const {
+        const auto &inodes = identifiedNodes(vni);
+        if (inodes.size() != 2) throw std::runtime_error("Only defined for an identified node pair.");
+        return (inodes[0] == vni) ? inodes[1] : inodes[0];
+    }
+
     // Return 0 if boundary node bni is not on the d^th min or max cell face
     // Return -1 if it's on the min face
     // Return  1 if it's on the max face
