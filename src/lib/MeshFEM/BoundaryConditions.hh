@@ -454,6 +454,7 @@ class PeriodicCondition {
 public:
     static constexpr size_t NO_PAIR = std::numeric_limits<size_t>::max();
     static constexpr size_t NO_DOF  = std::numeric_limits<size_t>::max();
+    using FM = PeriodicBoundaryMatcher::FaceMembership<_N>;
 
     template<typename Mesh>
     PeriodicCondition(const Mesh &mesh, Real epsilon = 1e-7, bool ignoreMismatch = false, const std::vector<size_t> &ignoreDims = std::vector<size_t>())
@@ -465,7 +466,7 @@ public:
         bdryPts.reserve(mesh.numBoundaryNodes());
         for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
 
-        auto membershipMask = PeriodicBoundaryMatcher::FaceMembership<_N>::AllFaces();
+        auto membershipMask = FM::AllFaces();
         for (size_t d : ignoreDims) {
             if (d > _N) throw std::runtime_error("ignoreDims entry out of bounds");
             membershipMask.setOnMinFace(d, false);
@@ -625,10 +626,14 @@ public:
     // Return  1 if it's on the max face
     int bdryNodeOnMinOrMaxPeriodCellFace(size_t bni, size_t d) const {
         assert(d < _N);
-        const auto &bdry = m_periodicBoundariesForBoundaryNode.at(bni);
+        const FM &bdry = m_periodicBoundariesForBoundaryNode.at(bni);
         if (bdry.onMinFace(d)) return -1;
         if (bdry.onMaxFace(d)) return  1;
         return 0;
+    }
+
+    const FM &periodicBoundariesForBoundaryNode(size_t bni) const {
+        return m_periodicBoundariesForBoundaryNode.at(bni);
     }
 
     // Determines whether the set of periodic cell faces on which node "a"
@@ -650,7 +655,7 @@ public:
 private:
     std::vector<bool> m_isPeriodicBoundaryElement;
     // Which periodic boundaries is a boundary node on?
-    std::vector<PeriodicBoundaryMatcher::FaceMembership<_N>> m_periodicBoundariesForBoundaryNode;
+    std::vector<FM> m_periodicBoundariesForBoundaryNode;
     std::vector<size_t> m_dofForNode; // Guaranteed monotonically increasing with (lowest identified) node index
     std::vector<std::vector<size_t>> m_nodesForDoF;
     std::vector<size_t> m_ignoreDims;
