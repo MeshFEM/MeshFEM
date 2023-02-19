@@ -1676,30 +1676,39 @@ struct CSCMatrix {
         spmat_helper::setZero(result, len);
 
         if (swapIndices) {
+            // Use applyTransposeParallel?
             for (_Index j = 0; j < n; ++j) {
+                auto r_j = result[j];
                 for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii)
-                    result[j] += spmat_helper::transpose_block(Ax[ii]) * x[Ai[ii]];
+                    r_j += spmat_helper::transpose_block(Ax[ii]) * x[Ai[ii]];
+                result[j] = r_j;
             }
         }
         else {
             if (transpose) {
+                assert(symmetry_mode != SymmetryMode::NONE); // asymmetric transpose handled above...
                 for (_Index j = 0; j < n; ++j) {
+                    auto x_j = x[j];
+                    auto r_j = result[j];
                     for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii) {
                         _Index i = Ai[ii];
-                        result[i] += spmat_helper::transpose_block(Ax[ii]) * x[j];
-                        if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
-                            result[j] += Ax[ii] * x[i];
+                        r_j += spmat_helper::transpose_block(Ax[ii]) * x[i];
+                        if (i != j) result[i] += Ax[ii] * x_j;
                     }
+                    result[j] = r_j;
                 }
             }
             else {
                 for (_Index j = 0; j < n; ++j) {
+                    auto x_j = x[j];
+                    auto r_j = result[j];
                     for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii) {
                         _Index i = Ai[ii];
-                        result[i] += Ax[ii] * x[j];
+                        result[i] += Ax[ii] * x_j;
                         if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
-                            result[j] += spmat_helper::transpose_block(Ax[ii]) * x[i];
+                            r_j += spmat_helper::transpose_block(Ax[ii]) * x[i];
                     }
+                    result[j] = r_j;
                 }
             }
         }

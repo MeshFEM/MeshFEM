@@ -235,6 +235,7 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
 
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::energy(const EnergyType etype) const {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.energy");
     return summation_parallel([this, etype](size_t ei) { return elementEnergy(ei, etype); },
                               mesh().numElements());
 }
@@ -291,7 +292,7 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
 
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updatedSource, VariableMask vars, const EnergyType etype) const {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Gradient");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.gradient");
     if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     const auto &m = mesh();
     auto accumulate_per_element_contrib = [this, updatedSource, etype, &m](size_t ei, VXd &g_out) {
@@ -796,30 +797,39 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
         throw std::logic_error("Invalid reference frame sizes");
     }
 
-    mesh().visitEdges([this](HEHandle he, size_t edgeIndex) {
-        M3d &f_ref = m_referenceFrame[edgeIndex];
-        f_ref.col(0) = (deformedEdgeVector(he)).normalized().transpose();
-        const M3d &f_src = m_sourceReferenceFrame[edgeIndex];
-        // if (edgeIndex == 0) {
-        //     std::cout << "Parallel transporting from " << f_src.col(0).transpose()
-        //                                      << " to " << f_ref.col(0).transpose() << std::endl;
-        //     std::cout << "vector: " << f_src.col(1).transpose() << std::endl;
-        //     std::cout << "result: " << parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(1)).transpose() << std::endl;
-        // }
-        f_ref.col(1) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(1));
-        f_ref.col(2) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(2));
-
-        auto hop = he.opposite();
-        // Measure the ccw angle around the edge tangent from reference director d1 to the triangle normal.
-        if (hop.tri()) { m_alphas[hop.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[hop.tri().index()].normal()); }
-                       { m_alphas[ he.index()] = angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[he .tri().index()].normal()); }
-    });
-
     // Use the source alphas to resolve the 2 * Pi ambiguity in alpha
     // definition by enforcing temporal continuity.
     // (Choose 2 pi offset to minimize change from source alpha)
     // Temporal coherence: choose 2 Pi offset to minimize change from previous theta.
-    m_alphas += (2 * M_PI) * stripAutoDiff((m_sourceAlphas - m_alphas) / (2 * M_PI)).array().round().matrix();
+    auto setCoherentAngle = [this](size_t hei, Real alpha) {
+        m_alphas[hei] = alpha + (2 * M_PI) * std::round(stripAutoDiff((m_sourceAlphas[hei] - alpha) / (2 * M_PI)));
+    };
+
+    const auto &m = mesh();
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
+                      [&](const tbb::blocked_range<size_t> &r) {
+        for (size_t edgeIndex = r.begin(); edgeIndex < r.end(); ++edgeIndex) {
+            auto he = m.halfEdge(m_halfedgeForEdge[edgeIndex]);
+            M3d f_ref;
+            f_ref.col(0) = (deformedEdgeVector(he)).normalized().transpose();
+            const M3d &f_src = m_sourceReferenceFrame[edgeIndex];
+            // if (edgeIndex == 0) {
+            //     std::cout << "Parallel transporting from " << f_src.col(0).transpose()
+            //                                      << " to " << f_ref.col(0).transpose() << std::endl;
+            //     std::cout << "vector: " << f_src.col(1).transpose() << std::endl;
+            //     std::cout << "result: " << parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(1)).transpose() << std::endl;
+            // }
+            f_ref.col(1) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(1));
+            f_ref.col(2) = parallelTransportNormalized<Real>(f_src.col(0), f_ref.col(0), f_src.col(2));
+
+            auto hop = he.opposite();
+            // Measure the ccw angle around the edge tangent from reference director d1 to the triangle normal.
+            if (hop.tri()) { setCoherentAngle(hop.index(), angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[hop.tri().index()].normal())); }
+                           { setCoherentAngle( he.index(), angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[he .tri().index()].normal())); }
+            m_referenceFrame[edgeIndex] = f_ref;
+       }
+    }, ap);
 
     m_updateMidedgeNormals();
     m_updateShapeOperators();
@@ -828,39 +838,52 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateMidedgeNormals() {
     m_midedgeNormals.resize(m_numEdges, 3);
-    for (size_t i = 0; i < m_numEdges; ++i) {
-        m_midedgeNormals.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
-                                  std::sin(m_thetas[i]) * m_referenceFrame[i].col(2);
-    }
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
+                      [&](const tbb::blocked_range<size_t> &r) {
+        for (size_t i = r.begin(); i < r.end(); ++i) {
+            m_midedgeNormals.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
+                                      std::sin(m_thetas[i]) * m_referenceFrame[i].col(2);
+        }
+    }, ap);
 }
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
     const auto &m = mesh();
     m_deformedElements.resize(m.numElements());
-    for (const auto e : m.elements()) {
-        m_deformedElements[e.index()].embed(m_deformedPositions.row(e.vertex(0).index()).transpose(),
-                                            m_deformedPositions.row(e.vertex(1).index()).transpose(),
-                                            m_deformedPositions.row(e.vertex(2).index()).transpose());
-    }
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
+                      [&](const tbb::blocked_range<size_t> &r) {
+        for (size_t ei = r.begin(); ei < r.end(); ++ei) {
+            const auto &e = m.element(ei);
+            m_deformedElements[e.index()].embed(m_deformedPositions.row(e.vertex(0).index()).transpose(),
+                                                m_deformedPositions.row(e.vertex(1).index()).transpose(),
+                                                m_deformedPositions.row(e.vertex(2).index()).transpose());
+        }
+    }, ap);
 }
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
     const auto &m = mesh();
     m_II.resize(m.numTris());
-    auto gammas = getGammas();
 
-    for (const auto e : m.elements()) {
-        auto &result = m_II[e.index()];
-        result.setZero();
-        const auto &deformedElement = m_deformedElements[e.index()];
-        for (const auto he : e.halfEdges()) {
-            auto glambda_ref = e->gradBarycentric().col(he.localIndex());
-            Real len = deformedEdgeVector(he).norm();
-            result += ((4 * gammas[he.index()] * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
+                      [&](const tbb::blocked_range<size_t> &r) {
+        for (size_t ei = r.begin(); ei < r.end(); ++ei) {
+            auto &result = m_II[ei];
+            result.setZero();
+            const auto &deformedElement = m_deformedElements[ei];
+            const auto &e = m.element(ei);
+            for (const auto he : e.halfEdges()) {
+                auto glambda_ref = e->gradBarycentric().col(he.localIndex());
+                Real len = deformedEdgeVector(he).norm();
+                result += ((4 * getGamma(he.index()) * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
+            }
         }
-    }
+    }, ap);
 }
 
 template <class Psi_2x2>

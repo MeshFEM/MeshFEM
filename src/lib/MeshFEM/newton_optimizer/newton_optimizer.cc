@@ -112,7 +112,7 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
             break;
         }
         catch (std::exception &e) {
-            std::cout << "Caught exception: " << e.what() << std::endl;
+            // std::cout << "Caught exception: " << e.what() << std::endl;
             tau  = std::max(4.0 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
             if (options.verboseNonPosDef) std::cout << e.what() << "; increasing tau to " << tau << "\n";

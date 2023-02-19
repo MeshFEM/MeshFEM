@@ -144,6 +144,7 @@ public:
         m_edgeForHalfEdge.resize(m->numHalfEdges());
         m->visitEdges([this](CHEHandle he, size_t edgeIndex) {
             m_edgeForHalfEdge.at(he.index()) = edgeIndex;
+            m_halfedgeForEdge.push_back(he.index());
             auto hopp = he.opposite();
             if (hopp) m_edgeForHalfEdge.at(hopp.index()) = edgeIndex;
         });
@@ -564,6 +565,7 @@ public:
 
 private:
     void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.m_setDefoVars");
         if (size_t(vars.rows()) != numDefoVars()) throw std::runtime_error("Invalid vars size");
 
         m_thetas = vars.segment(thetaOffset(), m_numEdges);
@@ -605,7 +607,7 @@ private:
     VXd  m_creaseAngles; // per-crease-edge angles
 
     // Map from the half edge index to our edge indices.
-    std::vector<size_t> m_edgeForHalfEdge;
+    std::vector<size_t> m_edgeForHalfEdge, m_halfedgeForEdge;
     std::vector<int>    m_creaseEdgeIndexForEdge; // -1 for non-crease edges
     std::vector<size_t> m_halfEdgeForCreaseAngle; // Arbitrary half-edge of the edge associated with each crease angle var
 
