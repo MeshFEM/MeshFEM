@@ -1701,14 +1701,12 @@ struct CSCMatrix {
             else {
                 for (_Index j = 0; j < n; ++j) {
                     auto x_j = x[j];
-                    auto r_j = result[j];
                     for (_Index ii = Ap[j]; ii < Ap[j + 1]; ++ii) {
                         _Index i = Ai[ii];
                         result[i] += Ax[ii] * x_j;
                         if ((symmetry_mode != SymmetryMode::NONE) && (i != j))
-                            r_j += spmat_helper::transpose_block(Ax[ii]) * x[i];
+                            result[j] += spmat_helper::transpose_block(Ax[ii]) * x[i];
                     }
-                    result[j] = r_j;
                 }
             }
         }
