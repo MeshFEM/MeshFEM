@@ -119,11 +119,21 @@ auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
     get_gradient_assembly_arena().execute([&]() {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
                           DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
-    });
 
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
-    for (const auto &d : localData)
-        if (!d.needs_reset) addScaledInPlace(A, d.A); // this if statement skips thread 0's unused storage.
+        std::vector<const DenseMatrixType *> toAdd;
+        toAdd.reserve(localData.size());
+        for (const auto &d : localData)
+            if (!d.needs_reset) toAdd.push_back(&d.A); // skips unused storage (e.g., if number of threads was reduced after localData was constructed)
+        if (toAdd.empty()) return;
+
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
+        static tbb::affinity_partitioner ap;
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, A.rows(), 1024),
+                          [&](const tbb::blocked_range<size_t> &r) {
+                for (size_t i = 0; i < toAdd.size(); ++i)
+                    A.middleRows(r.begin(), r.size()) += toAdd[i]->middleRows(r.begin(), r.size());
+            }, ap);
+    });
 }
 
 // Returns thread local storage collection so that it might be re-used.
