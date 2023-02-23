@@ -29,7 +29,7 @@ template<size_t _K, size_t _Deg>
 struct MESHFEM_EXPORT QuadratureTable {
     static constexpr size_t numPoints = 0;
     inline static constexpr std::array<EvalPt<_K>, numPoints> points{};
-    // TODO: weights!
+    inline static constexpr std::array<double,     numPoints> weights{};
 };
 
 // Edge function (1D)
@@ -116,14 +116,17 @@ template<size_t _Deg, typename F, typename std::enable_if<(function_traits<F>::a
 typename function_traits<F>::result_type integrate_tri(const F &f, Real vol = 1.0) {
     if (_Deg <= 1) { return vol * f(1 / 3.0, 1 / 3.0, 1 / 3.0); }
     if (_Deg == 2) {
-        // More accurate than the simpler midpoint rule
         constexpr double c0 = 2 / 3.0;
         constexpr double c1 = 1 / 6.0;
+#if 0
         typename function_traits<F>::result_type result(f(c0, c1, c1));
         result += f(c1, c0, c1);
         result += f(c1, c1, c0);
         result *= vol / 3.0;
         return result;
+#else // This version seems faster...
+        return (vol / 3.0) * (f(c0, c1, c1) + f(c1, c0, c1) + f(c1, c1, c0));
+#endif
     }
     if (_Deg == 3) {
         constexpr double c0 = 3 / 5.0;
@@ -285,12 +288,16 @@ typename function_traits<F>::result_type integrate_tet(const F &f, Real vol = 1.
     if (_Deg == 2) {
         constexpr double c0 = 0.58541019662496845446; // (5 + 3 sqrt(5)) / 20
         constexpr double c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
+#if 0
         typename function_traits<F>::result_type result(f(c0, c1, c1, c1));
         result += f(c1, c0, c1, c1);
         result += f(c1, c1, c0, c1);
         result += f(c1, c1, c1, c0);
         result *= vol / 4;
         return result;
+#else // This version seems faster...
+        return (0.5 * vol) * (f(c0, c1, c1, c1) + f(c1, c0, c1, c1) + f(c1, c1, c0, c1) + f(c1, c1, c1, c0));
+#endif
     }
     if (_Deg == 3) {
         // http://www.cs.rpi.edu/~flaherje/pdf/fea6.pdf
