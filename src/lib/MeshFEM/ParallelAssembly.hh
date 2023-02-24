@@ -112,28 +112,45 @@ private:
 };
 
 template<typename PerElemAssembler, class Derived, class DenseMatrixType>
-auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, DALocalData<DenseMatrixType> &localData) {
+void assemble_parallel_noarena(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, DALocalData<DenseMatrixType> &localData) {
     for (auto &d : localData)
         d.needs_reset = true;
 
-    get_gradient_assembly_arena().execute([&]() {
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
-                          DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
+                      DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
 
-        std::vector<const DenseMatrixType *> toAdd;
-        toAdd.reserve(localData.size());
+    if (A.rows() < 10 * 1024) { // Parallel recombine threshold
         for (const auto &d : localData)
-            if (!d.needs_reset) toAdd.push_back(&d.A); // skips unused storage (e.g., if number of threads was reduced after localData was constructed)
-        if (toAdd.empty()) return;
+            if (!d.needs_reset) A += d.A;
+        return;
+    }
 
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
-        static tbb::affinity_partitioner ap;
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, A.rows(), 1024),
-                          [&](const tbb::blocked_range<size_t> &r) {
-                for (size_t i = 0; i < toAdd.size(); ++i)
-                    A.middleRows(r.begin(), r.size()) += toAdd[i]->middleRows(r.begin(), r.size());
-            }, ap);
-    });
+    std::vector<const DenseMatrixType *> toAdd;
+    toAdd.reserve(localData.size());
+    for (const auto &d : localData)
+        if (!d.needs_reset) toAdd.push_back(&d.A); // skips unused storage (e.g., if number of threads was reduced after localData was constructed)
+    if (toAdd.empty()) return;
+
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
+    static tbb::affinity_partitioner ap;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, A.rows(), 1024),
+                      [&](const tbb::blocked_range<size_t> &r) {
+            for (size_t i = 0; i < toAdd.size(); ++i)
+                A.middleRows(r.begin(), r.size()) += toAdd[i]->middleRows(r.begin(), r.size());
+        }, ap);
+}
+
+template<typename PerElemAssembler, class Derived>
+auto assemble_parallel_noarena(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
+    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
+    auto daLocalData = std::make_unique<DALocalData<DenseMatrixType>>();
+    assemble_parallel_noarena(assembler, A, numElems, *daLocalData);
+    return daLocalData;
+}
+
+template<typename PerElemAssembler, class Derived, class DenseMatrixType>
+void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, DALocalData<DenseMatrixType> &localData) {
+    get_gradient_assembly_arena().execute([&]() { assemble_parallel_noarena(assembler, A, numElems, localData); });
 }
 
 // Returns thread local storage collection so that it might be re-used.
