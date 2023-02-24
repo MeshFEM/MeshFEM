@@ -14,6 +14,15 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
         m_deformedPositions.row(v.index()) = v.node()->p.transpose();
     m_updateDeformedElements();
 
+    // Initialize the crease angle variables as the (signed) dihedral angles of
+    // the rest mesh. This is usually want we want, and is necessary for a
+    // piecewise flat sheet to be initialized with flat rest triangles (i.e., m_restII = 0).
+    for (size_t i = 0; i < m_numCreases; ++i) {
+        auto he = mesh().halfEdge(m_halfEdgeForCreaseAngle[i]);
+        m_creaseAngles[i] = atan2(he.tri()->normal().cross(he.opposite().tri()->normal()).dot((he.tip().node()->p - he.tail().node()->p).normalized()),
+                                  he.tri()->normal()  .dot(he.opposite().tri()->normal()));
+    }
+
     initializeMidedgeNormals();
 
     this->m_defoConfigUpdated();

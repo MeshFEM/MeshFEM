@@ -149,6 +149,7 @@ public:
             if (hopp) m_edgeForHalfEdge.at(hopp.index()) = edgeIndex;
         });
 
+        // Allocate crease variables.
         {
             m_creaseEdgeIndexForEdge.assign(m_numEdges, -1);
             m_halfEdgeForCreaseAngle.reserve(m_numCreases);
@@ -159,20 +160,15 @@ public:
                 int hidx = std::max<int>(m->halfEdgeIndex(a, b),
                                          m->halfEdgeIndex(b, a));
                 if (hidx < 0) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " not in mesh");
-                auto he = m->halfEdge(hidx);
+                auto he = m->halfEdge(hidx).primary();
+                hidx = he.index();
+
                 if (he.isBoundary()) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " is on the boundary.");
                 int &creaseIdx = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]];
                 if (creaseIdx >= 0) throw std::runtime_error("Duplicate crease edge " + std::to_string(a) + ", " + std::to_string(b));
-                m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]] = m_halfEdgeForCreaseAngle.size();
+                creaseIdx = i;
                 m_halfEdgeForCreaseAngle.push_back(hidx);
-
-                // Initialize the crease angle variables as the (signed) dihedral angles.
-                // This is usually want we want, and is necessary for a
-                // piecewise flat sheet to be initialized with flat rest triangles (i.e., m_restII = 0).
-                m_creaseAngles[creaseIdx] = atan2(he.tri()->normal().cross(he.opposite().tri()->normal()).dot((he.tip().node()->p - he.tail().node()->p).normalized()),
-                                                  he.tri()->normal()  .dot(he.opposite().tri()->normal()));
             }
-            assert(m_halfEdgeForCreaseAngle.size() == m_numCreases);
         }
 
         setIdentityDeformation();
