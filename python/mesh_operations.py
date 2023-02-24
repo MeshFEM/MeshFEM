@@ -109,10 +109,10 @@ def removeDanglingVertices(V, F, vtxData = None):
         Optional per-vertex data to propagate to the renumbered vertices
     """
     nv = V.shape[0]
-    Vkeep = np.zeros(nv, dtype=np.bool)
+    Vkeep = np.zeros(nv, dtype=bool)
     Vkeep[F.ravel()] = True
     Vkept = V[Vkeep]
-    renumber = np.zeros(nv, dtype=np.int)
+    renumber = np.zeros(nv, dtype=int)
     renumber[Vkeep] = np.arange(Vkept.shape[0])
     Frenumbered = renumber[F]
     if vtxData is not None: return Vkept, Frenumbered, np.array(vtxData)[Vkeep]
@@ -132,8 +132,8 @@ def boundaryLoops(m):
     """
     V, BE = m.vertices(), m.boundaryElements()
     nv = V.shape[0]
-    visited = np.ones(nv, dtype=np.bool) # mark internal vertices as visited so they are skipped
-    next_bv = np.empty(nv, dtype=np.int)
+    visited = np.ones(nv, dtype=bool) # mark internal vertices as visited so they are skipped
+    next_bv = np.empty(nv, dtype=int)
     for be in BE:
         visited[be[0]] = False
         next_bv[be[0]] = be[1]

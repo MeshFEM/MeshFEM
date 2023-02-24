@@ -113,13 +113,19 @@ private:
 
 template<typename PerElemAssembler, class Derived, class DenseMatrixType>
 void assemble_parallel_noarena(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, DALocalData<DenseMatrixType> &localData) {
+    if (get_max_num_tbb_threads() == 1) {
+        for (size_t i = 0; i < numElems; ++i)
+            assembler(i, A.derived());
+        return;
+    }
+
     for (auto &d : localData)
         d.needs_reset = true;
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems, 100),
                       DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
 
-    if (A.rows() < 10 * 1024) { // Parallel recombine threshold
+    if (A.rows() < 10 * 1024) { // Threshold for parallel reduction of per-thread results.
         for (const auto &d : localData)
             if (!d.needs_reset) A += d.A;
         return;
@@ -132,12 +138,14 @@ void assemble_parallel_noarena(const PerElemAssembler &assembler, Eigen::MatrixB
     if (toAdd.empty()) return;
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Combine per-thread dense results");
-    static tbb::affinity_partitioner ap;
+    // WARNING: using `tbb::affinity_partitioner` for this loop appears to cause
+    // a memory bug on macOS (EXC_BAD_ACCESS in tbb code, hangs in scheduler, etc.)
+    // This is most likely a tbb bug :(
     tbb::parallel_for(tbb::blocked_range<size_t>(0, A.rows(), 1024),
                       [&](const tbb::blocked_range<size_t> &r) {
             for (size_t i = 0; i < toAdd.size(); ++i)
                 A.middleRows(r.begin(), r.size()) += toAdd[i]->middleRows(r.begin(), r.size());
-        }, ap);
+        });
 }
 
 template<typename PerElemAssembler, class Derived>
