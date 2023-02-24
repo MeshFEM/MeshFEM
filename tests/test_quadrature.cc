@@ -25,16 +25,31 @@ typedef double Real;
 
 template<size_t K, size_t Deg, typename F>
 void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
+    using QR = Quadrature<K, Deg>;
     for (size_t d = 0; d <= Deg; ++d) {
         for (size_t i = 0; i < funcs[d].size(); ++i) {
-            Real val = Quadrature<K, Deg>::integrate(funcs[d][i], 1.0);
-            Real relError = std::abs((val - ints.at(d).at(i)) / ints.at(d).at(i));
-            if (relError > 1e-15) {
-                cerr << "Error on " << K << "D deg " << d << " function " << i
-                     << " (Deg " << Deg << " quadrature): " << relError << endl;
-                cerr << "computed: " << val << ", true: " << ints.at(d).at(i) << endl;
+            auto check = [d, i, &ints](Real val) {
+                Real relError = std::abs((val - ints.at(d).at(i)) / ints.at(d).at(i));
+                if (relError > 1e-15) {
+                    cerr << "Error on " << K << "D deg " << d << " function " << i
+                         << " (Deg " << Deg << " quadrature): " << relError << endl;
+                    cerr << "computed: " << val << ", true: " << ints.at(d).at(i) << endl;
+                }
+                REQUIRE(relError <= 1e-15);
+            };
+
+            const auto &f = funcs[d][i];
+            check(QR::integrate(f, 1.0));
+            {
+                // Check table-based quadrature.
+                Real val = 0;
+                QR::foreach([&](const EvalPt<K> &x, Real w) {
+                    if constexpr (K == 1) val += w * f(x[0], x[1]);
+                    if constexpr (K == 2) val += w * f(x[0], x[1], x[2]);
+                    if constexpr (K == 3) val += w * f(x[0], x[1], x[2], x[3]);
+                });
+                check(val);
             }
-            REQUIRE(relError <= 1e-15);
         }
     }
 }
