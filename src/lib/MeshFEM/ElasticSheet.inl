@@ -815,7 +815,6 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
     };
 
     const auto &m = mesh();
-    static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t edgeIndex = r.begin(); edgeIndex < r.end(); ++edgeIndex) {
@@ -838,7 +837,7 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
                            { setCoherentAngle( he.index(), angle<Real>(f_ref.col(0), f_ref.col(1), m_deformedElements[he .tri().index()].normal())); }
             m_referenceFrame[edgeIndex] = f_ref;
        }
-    }, ap);
+    });
 
     m_updateMidedgeNormals();
     m_updateShapeOperators();
@@ -847,21 +846,19 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateMidedgeNormals() {
     m_midedgeNormals.resize(m_numEdges, 3);
-    static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t i = r.begin(); i < r.end(); ++i) {
             m_midedgeNormals.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
                                       std::sin(m_thetas[i]) * m_referenceFrame[i].col(2);
         }
-    }, ap);
+    });
 }
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
     const auto &m = mesh();
     m_deformedElements.resize(m.numElements());
-    static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t ei = r.begin(); ei < r.end(); ++ei) {
@@ -870,7 +867,7 @@ void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
                                                 m_deformedPositions.row(e.vertex(1).index()).transpose(),
                                                 m_deformedPositions.row(e.vertex(2).index()).transpose());
         }
-    }, ap);
+    });
 }
 
 template <class Psi_2x2>
@@ -878,7 +875,6 @@ void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
     const auto &m = mesh();
     m_II.resize(m.numTris());
 
-    static tbb::affinity_partitioner ap;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t ei = r.begin(); ei < r.end(); ++ei) {
@@ -892,7 +888,7 @@ void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
                 result += ((4 * getGamma(he.index()) * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
             }
         }
-    }, ap);
+    });
 }
 
 template <class Psi_2x2>
