@@ -132,12 +132,15 @@ protected:
 template<typename _Real>
 std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(ElasticObject<_Real> &obj, const LoadCollection<_Real> &loads,
                                                            const std::vector<size_t> &fixedVars,
-                                                           const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
+                                                           const NewtonOptimizerOptions &opts, CallbackFunction customCallback,
+                                                           Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6,
+                                                           Real hessianShift = 0.0) {
     auto problem = std::make_unique<EquilibriumProblem<_Real>>(obj, loads);
     problem->addFixedVariables(fixedVars);
     problem->setCustomIterationCallback(customCallback);
     problem->systemEnergyIncreaseFactorLimit = systemEnergyIncreaseFactorLimit;
     problem->energyLimitingThreshold = energyLimitingThreshold;
+    problem->hessianShift = hessianShift;
     auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
     opt->options = opts;
     return opt;
@@ -145,8 +148,8 @@ std::unique_ptr<NewtonOptimizer> get_equilibrium_optimizer(ElasticObject<_Real> 
 
 template<typename _Real>
 ConvergenceReport equilibrium_newton(ElasticObject<_Real> &obj, const LoadCollection<_Real> &loads,
-                                     const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6) {
-    return get_equilibrium_optimizer(obj, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold)->optimize();
+                                     const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6, Real hessianShift = 0.0) {
+    return get_equilibrium_optimizer(obj, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold, hessianShift)->optimize();
 }
 
 #endif /* end of include guard: EQUILIBRIUMSOLVER_HH */
