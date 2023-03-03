@@ -464,7 +464,11 @@ public:
 
         std::vector<VectorND<_N>> bdryPts;
         bdryPts.reserve(mesh.numBoundaryNodes());
-        for (auto bn : mesh.boundaryNodes()) bdryPts.push_back(bn.volumeNode()->p);
+        m_boundaryNodeIndexForNode.resize(mesh.numNodes(), NO_DOF);
+        for (auto bn : mesh.boundaryNodes()) {
+            m_boundaryNodeIndexForNode[bn.volumeNode().index()] = bdryPts.size();
+            bdryPts.push_back(bn.volumeNode()->p);
+        }
 
         auto membershipMask = FM::AllFaces();
         for (size_t d : ignoreDims) {
@@ -533,6 +537,17 @@ public:
         for (size_t i = 0; i < mesh.numNodes(); ++i) {
             assert(m_dofForNode[i] != NO_DOF);
             assert(m_dofForNode[i] < numPeriodicDoFs());
+        }
+
+        // Build boundary nodes for dof.
+        m_boundaryNodesForDoF.clear(), m_boundaryNodesForDoF.reserve(m_nodesForDoF.size());
+        for (auto &ns : m_nodesForDoF) {
+            std::vector<size_t> bns;
+            for (size_t ni : ns) {
+                auto bn = mesh.node(ni).boundaryNode();
+                if (bn) bns.push_back(bn.index());
+            }
+            m_boundaryNodesForDoF.push_back(std::move(bns));
         }
     }
 
@@ -614,13 +629,21 @@ public:
         return m_nodesForDoF.at(m_dofForNode.at(vni));
     }
 
+    const std::vector<size_t> identifiedNodesInBoundaryNodeIndex(int vni) const {
+        return m_boundaryNodesForDoF.at(m_dofForNode.at(vni));
+    }
+
+    size_t getBoundaryNodeIndexForNode(int vni) const{
+        return m_boundaryNodeIndexForNode.at(vni);
+    }
+
     bool hasSinglePair(size_t vni) const { return identifiedNodes(vni).size() == 2; }
     size_t pairedNode(size_t vni) const {
         const auto &inodes = identifiedNodes(vni);
         if (inodes.size() != 2) throw std::runtime_error("Only defined for an identified node pair.");
         return (inodes[0] == vni) ? inodes[1] : inodes[0];
     }
-
+    
     // Return 0 if boundary node bni is not on the d^th min or max cell face
     // Return -1 if it's on the min face
     // Return  1 if it's on the max face
@@ -659,6 +682,8 @@ private:
     std::vector<size_t> m_dofForNode; // Guaranteed monotonically increasing with (lowest identified) node index
     std::vector<std::vector<size_t>> m_nodesForDoF;
     std::vector<size_t> m_ignoreDims;
+    std::vector<size_t> m_boundaryNodeIndexForNode;
+    std::vector<std::vector<size_t>> m_boundaryNodesForDoF;
 };
 
 #endif /* end of include guard: BOUNDARYCONDITIONS_HH */
