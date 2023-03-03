@@ -32,7 +32,7 @@ class VertexMerger:
 
 def mergedMesh(meshes, vtxData = None):
     """
-    Construct a single mesh including a copy of all the triangles of the input meshes,
+    Construct a single mesh including a copy of all the elements of the input meshes,
     but with duplicate vertices merged and dangling vertices removed.
 
     `meshes`:  list of meshes
@@ -41,22 +41,22 @@ def mergedMesh(meshes, vtxData = None):
                an arbitrary one of these values is selected.
     """
     vm = VertexMerger()
-    mergedTris = []
+    mergedElements = []
     mergedData = None
     outData = None if vtxData is None else []
     for mi, mesh in enumerate(meshes):
         if isinstance(mesh, list) or isinstance(mesh, tuple):
             V, F = mesh
         else:
-            V, F = mesh.vertices(), mesh.triangles()
+            V, F = mesh.vertices(), mesh.elements()
         if vtxData is None:
-            mergedTris.append(np.vectorize(lambda i: vm.add(V[i]))(F))
+            mergedElements.append(np.vectorize(lambda i: vm.add(V[i]))(F))
         else:
             offset = vm.numVertices()
-            mergedTris.append(np.vectorize(lambda i: vm.add_and_set_origin_idx(V[i], i))(F))
+            mergedElements.append(np.vectorize(lambda i: vm.add_and_set_origin_idx(V[i], i))(F))
             outData.append(vtxData[mi][np.array(vm.originVertexIdx[offset:])])
-    if outData is None: return vm.vertices(), np.vstack(mergedTris)
-    else:               return vm.vertices(), np.vstack(mergedTris), np.concatenate(outData)
+    if outData is None: return vm.vertices(), np.vstack(mergedElements)
+    else:               return vm.vertices(), np.vstack(mergedElements), np.concatenate(outData)
 
 # Concatenate a collection of meshes, dropping dangling vertices.
 def concatenateMeshes(meshes):
@@ -211,7 +211,8 @@ def clippedMesh(m, region):
 def reflectMesh(V, F, axes = None):
     """
     Generates a periodic mesh by merging copies of the mesh (V, F) reflected across the
-    coordinate planes `x_i = 0` for i in `axes`.
+    coordinate planes `x_i = x_min_i` for i in `axes`, where `x_min_i` is the minimum
+    coordinate along axis `i`.
 
     If `axes` is `None, reflection is performed across all nonempty dimensions
     occupied by `V` (default behavior).
@@ -219,11 +220,11 @@ def reflectMesh(V, F, axes = None):
     N = V.shape[1]
     if axes is None:
         axes = [d for d in range(N) if np.linalg.norm(V[:, d]) != 0]
+    origin = V.min(axis=0)
 
     def reflected_mesh(s):
         flips = np.sum(np.array(s) != 1)
-        V_refl = V.copy()
-        V_refl[:, 0:len(s)] = V[:, 0:len(s)] @ np.diag(s)
+        V_refl = V @ np.diag(s) + (np.diag(s) @ origin - origin)
         cornerPermutation = [1, 0, 2] if F.shape[1] == 3 else [1, 0, 2, 3]
         F_refl = F if (flips % 2 == 0) else F[:, cornerPermutation]
         return (V_refl, F_refl)
