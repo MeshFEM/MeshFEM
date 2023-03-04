@@ -34,20 +34,6 @@
 #include "EnergyDensities/CorotatedLinearElasticity.hh"
 #include <rotation_optimization.hh>
 
-// (theta - sin(theta)) / theta^3
-template<typename Real_>
-Real_ theta_minus_sin_div_theta_cubed(Real_ theta, Real_ theta_sq) {
-    if (theta_sq < theta_sq_crossover_threshold) { return 1.0 / 6.0 - theta_sq / 120.0; }
-    return (theta - sin(theta)) / (theta * theta_sq);
-}
-
-// (3 sin(theta) - theta * (2 + cos(theta))) / theta^4
-template<typename Real_>
-Real_ three_sin_minus_theta_times_two_plus_cos_div_theta_pow_5(Real_ theta, Real_ theta_sq) {
-    if (theta_sq < theta_sq_crossover_threshold) { return -1.0 / 60.0 + theta_sq / 1260.0; }
-    return (3 * sin(theta) - theta * (2 + cos(theta))) / (theta_sq * theta_sq * theta);
-}
-
 template<typename Real, size_t N>
 struct RotExtrap;
 
