@@ -49,7 +49,7 @@ struct CholeskyFactorizerBase {
     virtual size_t n_reduced() const = 0;
 
     bool hasFixedVars() const { return !m_fixedVars.empty(); }
-    const std::vector<size_t> getFixedVars() const { return m_fixedVars; }
+    const std::vector<size_t> &getFixedVars() const { return m_fixedVars; }
     bool varIsFixed(size_t i) const { return hasFixedVars() && m_fixedVars[i]; }
 
     // Perform only the symbolic factorization for the given matrix `mat` after removing the
