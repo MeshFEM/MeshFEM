@@ -25,7 +25,7 @@ set(MY_FLAGS
         -Wcast-qual
         # -Wmissing-noreturn # this is super annoying and sometimes buggy, it seems
         -Wmissing-format-attribute
-        -Wredundant-decls
+        # -Wredundant-decls # triggered by tbb
 
         # -Werror=implicit # Not valid for C++ according to GCC 9.2
         -Werror=nonnull

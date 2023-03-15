@@ -43,6 +43,11 @@ mark_as_advanced(
     CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
 )
 
+# # Enable address sanitizer in debug mode.
+# set (CMAKE_C_FLAGS_DEBUG      "${CMAKE_C_FLAGS_DEBUG}      -fno-omit-frame-pointer -fsanitize=address")
+# set (CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG}    -fno-omit-frame-pointer -fsanitize=address")
+# set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+
 if(NOT CMAKE_BUILD_TYPE)
     message(STATUS "No build type selected, default to RelWithAssert")
     set(CMAKE_BUILD_TYPE "RelWithAssert")

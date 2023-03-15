@@ -68,8 +68,8 @@ endfunction()
 ## TBB
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
-        GIT_REPOSITORY https://github.com/wjakob/tbb.git
-        GIT_TAG        141b0e310e1fb552bdca887542c9c1a8544d6503
+        GIT_REPOSITORY https://github.com/oneapi-src/oneTBB
+        GIT_TAG        c9497714821c3d443ee44c732609eb6850195ffb
     )
 endfunction()
 

@@ -166,7 +166,6 @@ if (MESHFEM_WITH_UMFPACK)
 endif()
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
-#target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
 target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
 if(MESHFEM_VECTORIZE)
     CHECK_CXX_COMPILER_FLAG(-march=native COMPILER_SUPPORTS_MARCH_NATIVE)
