@@ -77,16 +77,12 @@ endif()
 
 # TBB library
 if(NOT TARGET tbb::tbb)
-    set(TBB_BUILD_STATIC OFF CACHE BOOL " " FORCE)
-    set(TBB_BUILD_SHARED ON CACHE BOOL " " FORCE)
-    set(TBB_BUILD_TBBMALLOC ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
-    set(TBB_BUILD_TBBMALLOC_PROXY OFF CACHE BOOL " " FORCE)
+    set(TBBMALLOC_BUILD ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
+    set(TBBMALLOC_PROXY_BUILD OFF CACHE BOOL " " FORCE)
     set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 
     meshfem_download_tbb()
     add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb EXCLUDE_FROM_ALL)
-    #set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
-    #set_target_properties(tbb_static PROPERTIES COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter -Wno-keyword-macro")
 
     add_library(tbb_tbb INTERFACE)
     # Note: declaring TBB as a system header results in the local `tbb` include directory being listed
