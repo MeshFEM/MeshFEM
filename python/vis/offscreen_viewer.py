@@ -40,8 +40,8 @@ class OffscreenViewerBase(ViewerBase):
             self.recorder.finish()
             del self.recorder
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        super().update(preserveExisting=preserveExisting, mesh=mesh, updateModelMatrix=updateModelMatrix, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
+        super().update(preserveExisting=preserveExisting, mesh=mesh, updateModelMatrix=updateModelMatrix, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent, displacementField=displacementField)
         if self.isRecording():
             self.recorder.writeFrame()
 
