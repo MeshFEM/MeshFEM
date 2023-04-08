@@ -26,11 +26,11 @@ class OffscreenViewerBase(ViewerBase):
         else: self.renderer.setMesh(P, F, N, C)
 
     # Start recording to an image sequence/video
-    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None):
+    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None, framerate=30):
         if codec is None:
             if path[-4:] == '.mp4': codec = vw.Codec.H264
             else: codec = vw.Codec.ImgSeq
-        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, streaming=streaming, outWidth=outWidth, outHeight=outHeight)
+        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, streaming=streaming, outWidth=outWidth, outHeight=outHeight, framerate=framerate)
         if writeFirstFrame: self.recorder.writeFrame()
 
     def isRecording(self): return hasattr(self, 'recorder')
