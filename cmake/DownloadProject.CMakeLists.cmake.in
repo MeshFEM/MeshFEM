@@ -5,6 +5,12 @@ cmake_minimum_required(VERSION 3.1)
 
 project(${DL_ARGS_PROJ}-download NONE)
 
+# CMP0135: when extracting external projects, overwrite the file timestamps
+# with the extraction time rather than preserving the archived timestamps.
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 include(ExternalProject)
 ExternalProject_Add(${DL_ARGS_PROJ}-download
                     ${DL_ARGS_UNPARSED_ARGUMENTS}
