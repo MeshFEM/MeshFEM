@@ -195,6 +195,51 @@ public:
         m_outStream << "$End" << sectionHeader << std::endl;
     }
 
+    // Add a field using a raw Eigen-based data type where each
+    // scalar/vector/matrix value is encoded in a row of `f`.
+    void addFieldEigen(const std::string &name, const Eigen::MatrixXd &f,
+                       DomainType type = DomainType::GUESS) {
+        std::string sectionHeader;
+        std::runtime_error invalidSize("Invalid field domain size.");
+        std::runtime_error invalidDim("Invalid field dimension.");
+
+        // We might be writing a subset of the domainSize() entries.
+        size_t numEntries = 0;
+        m_determineDomainTypeAndNumEntries(f.rows(), type, numEntries);
+
+        if      (type == DomainType::PER_ELEMENT) sectionHeader = "ElementData";
+        else if (type == DomainType::PER_NODE)    sectionHeader = "NodeData";
+        else throw std::runtime_error("Unsupported DomainType");
+
+        size_t dim = f.cols();
+        size_t paddedDim = dim;
+        if (dim == 2) paddedDim = 3; // pad 2D vectors to 3D.
+        if ((paddedDim != 1) && (paddedDim != 3) && (paddedDim != 9))
+            throw std::runtime_error("Unsupported field dimension " + std::to_string(dim) + " ((only 1, 2, 3, and 9 are supported, where 9 corresponds to a 3x3 matrix)");
+
+        m_outStream << '$' << sectionHeader << std::endl
+                    << '1' << std::endl // One string tag: field name
+                    << '"' << name << '"' << std::endl
+                    << '0' << std::endl // No real tags
+                    << '3' << std::endl // 3 Integer tags:
+                    << '0' << std::endl // Time step 0 (ignored)
+                    << paddedDim << std::endl // dimension
+                    << numEntries << std::endl;
+        for (size_t i = 1; i <= numEntries; ++i) {
+            auto val = f.row(i - 1);
+            if (m_binary) { int out = int(i); m_outStream.write((char *) &out, sizeof(int)); }
+            else            m_outStream << i;
+            for (size_t c = 0; c < paddedDim; ++c) {
+                double value = ((c < dim) ? val[c] : 0);
+                if (m_binary) m_outStream.write((char *) &value, sizeof(double));
+                else          m_outStream << ' ' << value;
+            }
+            if (!m_binary)
+                m_outStream << std::endl;
+        }
+        m_outStream << "$End" << sectionHeader << std::endl;
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Vector of interpolant suppport.
     ////////////////////////////////////////////////////////////////////////////

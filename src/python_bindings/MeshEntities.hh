@@ -186,6 +186,27 @@ template<class _Mesh>
 typename std::enable_if<_Mesh::K == 3, Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 3>>::type
 getPerCornerNormals(const _Mesh &m, double normalCreaseAngle) { return getPerCornerNormals(m.boundaryElements(), normalCreaseAngle); }
 
+// Nodal shape functions averaged over subsets of a mesh
+#include <MeshFEM/GaussQuadrature.hh>
+template<class _Mesh>
+Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 1>
+averagedShapeFunctionsOverElements(const _Mesh &m, const std::vector<size_t> &elements) {
+    using VXd = Eigen::Matrix<typename _Mesh::Real, Eigen::Dynamic, 1>;
+    VXd result = VXd::Zero(m.numNodes());
+    Real totalVolume = 0;
+    const auto isf = integratedShapeFunctions<_Mesh::Deg, _Mesh::K>();
+    for (size_t ei : elements) {
+        if (ei > m.numElements()) throw std::runtime_error("Element index " + std::to_string(ei) + " out of bounds");
+        const auto &e = m.element(ei);
+        auto iphis = e->integratedPhis();
+        for (auto n : e.nodes())
+            result[n.index()] += iphis[n.localIndex()];
+        totalVolume += e->volume();
+    }
+    result /= totalVolume;
+    return result;
+}
+
 // Convert the field data to per-visualization-tri or per-visualization-vtx
 // (NOP for triangle meshes, extract boundary data for tet meshes).
 template<class Mesh, class FieldType>

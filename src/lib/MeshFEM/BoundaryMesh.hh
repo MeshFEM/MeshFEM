@@ -141,6 +141,7 @@ struct BoundaryMesh<_FEMMesh, VolK, true> : public BoundaryMesh<_FEMMesh, VolK, 
     using Base = BoundaryMesh<_FEMMesh, VolK, false>;
     using Base::Base;
     using VolMesh = _FEMMesh;
+    using Real = typename VolMesh::Real;
 
     static constexpr size_t Deg = VolMesh::Deg;
 

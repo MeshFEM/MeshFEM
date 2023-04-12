@@ -1,3 +1,4 @@
+#include "MeshFEM/GaussQuadrature.hh"
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -32,6 +33,7 @@ struct MeshBindingsBase {
     static constexpr size_t K = Mesh::K;
     static constexpr size_t EmbeddingDimension = Mesh::EmbeddingDimension;
     using VNd    = Eigen::Matrix<Real, EmbeddingDimension, 1>;
+    using VXd    = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, EmbeddingDimension>;
     using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic,     3>;
     using MXKp1i = Eigen::Matrix< int, Eigen::Dynamic, K + 1>;
@@ -79,6 +81,11 @@ struct MeshBindingsBase {
               })
           .def_static("integratedShapeFunctions",         []() { return integratedShapeFunctions<Mesh::Deg, Mesh::    K>(); })
           .def_static("integratedBoundaryShapeFunctions", []() { return integratedShapeFunctions<Mesh::Deg, Mesh::K - 1>(); })
+
+          .def("averagedShapeFunctionsOverElements", &averagedShapeFunctionsOverElements<Mesh>, py::arg("elements"), "Average each (scalar-valued) node shape function over the elements listed in `elements`")
+          .def("averagedShapeFunctionsOverBoundaryElements", [](const Mesh &m, const std::vector<size_t> &boundaryElements) {
+                  return averagedShapeFunctionsOverElements(m.boundary(), boundaryElements);
+          }, py::arg("boundaryElements"), "Average each (scalar-valued) boundary node shape function over the boundary elements listed in `boundaryElements`")
 
           .def("visualizationTriangles", &getVisualizationTriangles<Mesh>)
           .def("visualizationVertices",  &getVisualizationVertices <Mesh>)
