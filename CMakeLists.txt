@@ -43,11 +43,6 @@ mark_as_advanced(
     CMAKE_STATIC_LINKER_FLAGS_RELWITHASSERT
 )
 
-# # Enable address sanitizer in debug mode.
-# set (CMAKE_C_FLAGS_DEBUG      "${CMAKE_C_FLAGS_DEBUG}      -fno-omit-frame-pointer -fsanitize=address")
-# set (CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG}    -fno-omit-frame-pointer -fsanitize=address")
-# set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-
 if(NOT CMAKE_BUILD_TYPE)
     message(STATUS "No build type selected, default to RelWithAssert")
     set(CMAKE_BUILD_TYPE "RelWithAssert")
@@ -98,9 +93,17 @@ option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factor
 option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"    ON)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
+option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
 
 if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
     message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
+endif()
+
+if (MESHFEM_ADDRESS_SANITIZER)
+    # Enable address sanitizer in debug mode.
+    set (CMAKE_C_FLAGS_DEBUG      "${CMAKE_C_FLAGS_DEBUG}      -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+    set (CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG}    -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+    set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
 endif()
 
 ################################################################################
