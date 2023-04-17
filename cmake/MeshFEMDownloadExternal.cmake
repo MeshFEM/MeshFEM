@@ -26,8 +26,8 @@ endfunction()
 ## Catch2
 function(meshfem_download_catch)
     meshfem_download_project(Catch2
-	URL     https://github.com/catchorg/Catch2/archive/v2.13.3.tar.gz
-        URL_MD5 57612324e1e0b49dfc8eab68c03f8473
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG 182c910b4b63ff587a3440e08f84f70497e49a81 # Version 2.13.10
     )
 endfunction()
 
