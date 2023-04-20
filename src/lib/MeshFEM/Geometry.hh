@@ -762,6 +762,25 @@ Vec3_T<Real_> getPerpendicularVector(const Vec3_T<Real_> &t) {
         candidate1.normalized() : candidate2.normalized();
 }
 
+// [t | t_perp]
+template<typename Real_>
+Mat2_T<Real_> getAdaptedFrame(const Vec2_T<Real_> &t) {
+    Mat2_T<Real_> R;
+    R.col(0) = t;
+    R.col(1) << -t[1], t[0];
+    return R;
+}
+
+// [t | t_perp | t.cross(t_perp)]
+template<typename Real_>
+Mat3_T<Real_> getAdaptedFrame(const Vec3_T<Real_> &t) {
+    Mat3_T<Real_> R;
+    R.col(0) = t;
+    R.col(1) = getPerpendicularVector(t);
+    R.col(2) = t.cross(R.col(1));
+    return R;
+}
+
 // Compute the curvature binormal for a vertex between two edges with tangents
 // e0 and e1, respectively
 // (edge tangent vectors not necessarily normalized)
