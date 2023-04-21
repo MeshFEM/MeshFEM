@@ -305,7 +305,7 @@ def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vector
         cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
     if reflection.isVoxelFEMSimulator(obj):
         raise Exception('Use VoxelFEM Viewer')
-    return cls(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, superView=superView, transparent=transparent, wireframe=wireframe)
+    return reflection.evalWithCustomArgs(cls, {'width': width, 'height': height, 'textureMap': textureMap, 'scalarField': scalarField, 'vectorField': vectorField, 'superView': superView, 'transparent': transparent, 'wireframe': wireframe}, [obj])
 
 def concatVisGeometries(A, B):
     return (np.vstack([A[0], B[0]]), # Stacked V

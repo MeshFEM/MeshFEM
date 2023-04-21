@@ -26,11 +26,11 @@ class OffscreenViewerBase(ViewerBase):
         else: self.renderer.setMesh(P, F, N, C)
 
     # Start recording to an image sequence/video
-    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None):
+    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None, framerate=30):
         if codec is None:
             if path[-4:] == '.mp4': codec = vw.Codec.H264
             else: codec = vw.Codec.ImgSeq
-        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, streaming=streaming, outWidth=outWidth, outHeight=outHeight)
+        self.recorder = vw.MeshRendererVideoWriter(path, self.renderer, codec=codec, streaming=streaming, outWidth=outWidth, outHeight=outHeight, framerate=framerate)
         if writeFirstFrame: self.recorder.writeFrame()
 
     def isRecording(self): return hasattr(self, 'recorder')
@@ -40,8 +40,8 @@ class OffscreenViewerBase(ViewerBase):
             self.recorder.finish()
             del self.recorder
 
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False):
-        super().update(preserveExisting=preserveExisting, mesh=mesh, updateModelMatrix=updateModelMatrix, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
+    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
+        super().update(preserveExisting=preserveExisting, mesh=mesh, updateModelMatrix=updateModelMatrix, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent, displacementField=displacementField)
         if self.isRecording():
             self.recorder.writeFrame()
 

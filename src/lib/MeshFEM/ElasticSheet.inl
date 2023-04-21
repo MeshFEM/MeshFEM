@@ -476,8 +476,9 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
         Psi psi(elementPsi(ei), UninitializedDeformationTag());
-        psi.setDeformationGradient(FB, projectionMask ? EvalLevel::Hessian
-                                                      : EvalLevel::HessianWithDisabledProjection);
+        const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
+        psi.setDeformationGradient(FB, membraneProjection ? EvalLevel::Hessian
+                                                          : EvalLevel::HessianWithDisabledProjection);
 
         for (const auto v_b : e.vertices()) {
             VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));

@@ -258,3 +258,58 @@ def linesearchValidationPlot(obj, direction, alphaMax = 1e-5, width=12, height=6
         if k is not None: plt.title(k)
         plt.grid()
     plt.tight_layout()
+
+
+
+def fdSecondDerivative(obj, fd_eps, xeval = None, customArgs = None, fixedVars = []):
+    xold, xeval, perturb = preamble(obj, xeval, None, customArgs, fixedVars)
+
+    if (hasMethod(obj, 'energy')):
+        def evalAt(x):
+            setVars(obj, x, customArgs)
+            return evalWithCustomArgs(obj.energy, customArgs)
+    elif (hasMethod(obj, 'value')):
+        def evalAt(x):
+            setVars(obj, x, customArgs)
+            return evalWithCustomArgs(obj.value, customArgs)
+    else: raise Exception('Object does not implement `energy` or `value`')
+
+    fd_delta_E = (evalAt(xeval + fd_eps) + evalAt(xeval - fd_eps) - 2 * evalAt(xeval)) / (fd_eps ** 2)
+    setVars(obj, xold, customArgs)
+    return fd_delta_E
+
+def validateSecondDerivative(obj, fd_eps = 1e-6, xeval = None, customArgs = None, fixedVars = [], second_derivative = None):
+    xold, xeval, perturb = preamble(obj, xeval, None, customArgs, fixedVars)
+    setVars(obj, xeval, customArgs)
+    if (second_derivative is None): second_derivative = evalWithCustomArgs(obj.secondDerivative, customArgs)
+    fd_delta_E = fdSecondDerivative(obj, fd_eps, xeval, customArgs, fixedVars)
+
+    return (fd_delta_E, second_derivative)
+
+def secondDerivativeConvergence(obj, customArgs=None, fixedVars = [], epsilons=None):
+    if epsilons is None:
+        epsilons = np.logspace(-9, -3, 100)
+    errors = []
+    second_derivative = evalWithCustomArgs(obj.secondDerivative, customArgs)
+    for eps in epsilons:
+        fd, an = validateSecondDerivative(obj, second_derivative=second_derivative, customArgs=customArgs, fd_eps=eps, fixedVars=fixedVars)
+        err = np.linalg.norm(an - fd) / np.linalg.norm(an)
+        # print(f'{err=}')
+        errors.append(err)
+    return (epsilons, errors, an)
+
+
+from matplotlib import pyplot as plt
+def secondDerivativeConvergencePlotRaw(obj, customArgs=None, fixedVars = [], epsilons=None):
+    eps, errors, ignore = secondDerivativeConvergence(obj, customArgs, fixedVars, epsilons=epsilons)
+    plt.loglog(eps, errors, label='grad')
+    plt.grid()
+
+def secondDerivativeConvergencePlot(obj, customArgs=None, fixedVars = [], epsilons=None):
+    secondDerivativeConvergencePlotRaw(obj, customArgs, fixedVars, epsilons=epsilons)
+    title = 'Directional derivative fd test for second derivative'
+    if hasattr(obj, 'name'): title += ' - ' + obj.name()
+    plt.title(title)
+    plt.ylabel('Relative error')
+    plt.xlabel('Step size')
+    

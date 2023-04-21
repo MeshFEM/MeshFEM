@@ -354,8 +354,8 @@ struct AutoHessianProjection : Psi_F {
         Hessian H = evaluate_d2energy_dF2(*(Psi_F *)(this));
 
         ESolver Hes(H);
-        // m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
-        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().asDiagonal() * Hes.eigenvectors().transpose();
+        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        // m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().asDiagonal() * Hes.eigenvectors().transpose();
     }
 
     template<class Mat_>

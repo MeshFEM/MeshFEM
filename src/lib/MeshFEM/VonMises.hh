@@ -74,7 +74,7 @@ ElasticityTensor<Real, N> deviatoricExtractor() {
 }
 
 template<size_t N> ElasticityTensor<Real, N> vonMisesExtractor();
-template<> ElasticityTensor<Real, 3> vonMisesExtractor<3>() {
+template<> inline ElasticityTensor<Real, 3> vonMisesExtractor<3>() {
     auto result = deviatoricExtractor<3>();
     result *= sqrt(3.0 / 2.0);
     return result;
@@ -86,7 +86,7 @@ template<> ElasticityTensor<Real, 3> vonMisesExtractor<3>() {
 // tensor mapping to a 2x2 tensor whose Frobenius norm equals the von Mises
 // stress scalar value.
 // See derivation in file header.
-template<> ElasticityTensor<Real, 2> vonMisesExtractor<2>() {
+template<> inline ElasticityTensor<Real, 2> vonMisesExtractor<2>() {
     ElasticityTensor<Real, 2> result; // zero-inits
     Real a = -sqrt(2.0 - sqrt(3)) / 2.0,
          b =  sqrt(2.0 + sqrt(3)) / 2.0;
@@ -115,7 +115,7 @@ vonMises(const _SymMat &sm) {
 }
 
 // DynamicSymmetricMatrix must be handled separately (needed for msh_processor)
-DynamicSymmetricMatrix<Real> vonMises(const DynamicSymmetricMatrix<Real> &dsm) {
+inline DynamicSymmetricMatrix<Real> vonMises(const DynamicSymmetricMatrix<Real> &dsm) {
     // Note: double contraction doesn't yet work for Dynamic-sized matrices--it
     // treats DynamicSymmetricMatrix as 3x3.
     if (dsm.size() == 2) {

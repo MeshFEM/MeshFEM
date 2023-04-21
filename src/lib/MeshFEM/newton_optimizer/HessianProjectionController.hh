@@ -56,7 +56,7 @@ struct HessianProjectionNever : public HessianProjectionController {
 // By default we start with the projection active
 // (since the problem is generally indefinite at the start).
 struct HessianProjectionAdaptive : public HessianProjectionController {
-    size_t numProjectionStepsBeforeSwitch = 15;
+    size_t numProjectionStepsBeforeSwitch = 10;
     size_t numConsecutiveIndefiniteStepsBeforeSwitch = 5;
 
     HessianProjectionAdaptive() { reset(); }

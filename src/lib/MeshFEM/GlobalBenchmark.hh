@@ -5,6 +5,10 @@
 #include <iostream>
 #include <MeshFEM_export.h>
 
+#if __APPLE__ || __linux__
+#include <sys/resource.h>
+#endif
+
 #ifdef BENCHMARK
 #include <MeshFEM/Timer.hh>
 
@@ -27,6 +31,19 @@ inline void BENCHMARK_REPORT() {
     for (const auto &message : g_benchmarkMessages)
         std::cout << message << std::endl;
     g_timer.report(std::cout);
+
+#if __APPLE__ || __linux__
+    // Also report peak memory usage (resident size)
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    double memoryBytes = 0;
+#if __APPLE__
+    memoryBytes = double(usage.ru_maxrss) / 1024 / 1024; // macOS reports resident size in bytes
+#else
+    memoryBytes = double(usage.ru_maxrss) / 1024; // Linux reports resident size in kbytes
+#endif
+    std::cout << "Peak memory (MB):\t" << memoryBytes << std::endl;
+#endif
 }
 
 inline void BENCHMARK_REPORT_NO_MESSAGES() {

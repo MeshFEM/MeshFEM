@@ -224,7 +224,7 @@ def reflectMesh(V, F, axes = None):
 
     def reflected_mesh(s):
         flips = np.sum(np.array(s) != 1)
-        V_refl = V @ np.diag(s) + (np.diag(s) @ origin - origin)
+        V_refl = V @ np.diag(s) + (origin - np.diag(s) @ origin)
         cornerPermutation = [1, 0, 2] if F.shape[1] == 3 else [1, 0, 2, 3]
         F_refl = F if (flips % 2 == 0) else F[:, cornerPermutation]
         return (V_refl, F_refl)

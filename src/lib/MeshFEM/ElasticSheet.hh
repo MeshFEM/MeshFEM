@@ -46,6 +46,7 @@
 
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
+#include "FieldPostProcessing.hh"
 
 #include <atomic>
 
@@ -403,6 +404,8 @@ public:
         return C;
     }
 
+    // Note: for nonzero Poisson's ratio, there will be strain along the
+    // thickness direction that is omitted here.
     std::vector<M2d> getMembraneGreenStrains() const {
         auto result = getC();
         for (auto &r : result) {
@@ -412,6 +415,8 @@ public:
     }
 
     // Membrane green strains averaged onto the vertices.
+    // Note: for nonzero Poisson's ratio, there will be strain along the
+    // thickness direction that is omitted here.
     std::vector<M2d> vertexGreenStrains() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &) {
                 auto e = mesh().element(ei);
@@ -420,8 +425,10 @@ public:
             });
     }
 
-    // Evaluate approximate volumetric strain (combining stretching and
+    // Evaluate approximate volumetric Green strain (combining stretching and
     // bending) for element `ei` at the thickness coordinate `z`.
+    // Note: for nonzero Poisson's ratio, there will be strain along the
+    // thickness direction that is omitted here.
     M2d getElementVolumetricStrain(size_t ei, Real z) const {
         const auto &e = mesh().element(ei);
         const auto &B = m_B[ei];
@@ -436,10 +443,22 @@ public:
         return elementETensor(ei).doubleContract(SM2d(strain)).matrix();
     }
 
-    M3d getElementVolumetricStress(size_t ei, Real z) const {
+    // Sample the implied PK2 stress field for element `ei` at thickness coordinate `z`.
+    // (This is really analogous to a PK2 stress, since to derive the bending energy term
+    //  we use a St. Venant Kirchhoff model wherein the Green strain is plugged into
+    //  elementETensor(ei)'s quadratic form.)
+    M3d getElementVolumetricPK2Stress(size_t ei, Real z) const {
         M2d plane_stress = getElementVolumetricPlaneStress(ei, z);
         const auto &B = m_B[ei];
         return B * plane_stress * B.transpose();
+    }
+
+    M3d getElementCauchyStress(size_t ei, Real z) const {
+        const auto &e = mesh().element(ei);
+        M2d plane_PK2_stress = getElementVolumetricPlaneStress(ei, z); // PK2 stress in tri-local coordinate system
+        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+        Real J = std::sqrt((FB.transpose() * FB).determinant());
+        return (FB * plane_PK2_stress * FB.transpose()) / J;
     }
 
     // Evaluate approximate volumetric strain (combining stretching and
@@ -452,9 +471,9 @@ public:
 
     // Evaluate approximate volumetric strain (combining stretching and
     // bending) at the thickness coordinate `z`, averaged onto the vertices.
-    std::vector<M3d> getVertexVolumetricStresses(Real z) const {
+    std::vector<M3d> getVertexCauchyStresses(Real z) const {
         return vertexAveragedField(mesh(), [this, z](size_t ei, const EvalPtK &) {
-                return getElementVolumetricStress(ei, z);
+                return getElementCauchyStress(ei, z);
             });
     }
 

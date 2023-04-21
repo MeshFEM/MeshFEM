@@ -179,13 +179,18 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
                 psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                                                    : EvalLevel::Hessian);
                 Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
+                auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into N^2 x N^2 matrix using a column-major ordering
+                if (!disableProjection) {
+                    Eigen::SelfAdjointEigenSolver<decltype(d2psi)> Hes(d2psi);
+                    d2psi = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                }
 
                 for (const auto n_b : e.nodes()) {
                     VSFJ gradPhi_b(0, gradPhis.col(n_b.localIndex()));
                     for (size_t c_b = 0; c_b < N; ++c_b) {
                         size_t var_b = N * n_b.localIndex() + c_b;
                         gradPhi_b.c = c_b;
-                        Matrix delta_denergy = psi.delta_denergy(gradPhi_b);
+                        Matrix delta_denergy = applyFlattened4thOrderTensor(d2psi, gradPhi_b);
                         for (const auto n_a : e.nodes()) {
                             VSFJ gradPhi_a(0, gradPhis.col(n_a.localIndex()));
                             for (size_t c_a = 0; c_a < N; ++c_a) {

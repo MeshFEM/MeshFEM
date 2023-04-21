@@ -28,6 +28,34 @@ def getBBoxVars(obj, face, displacementComponents = [0, 1, 2], displacementsOnly
         varIdxs.extend(obj.thetaOffset() + np.where(np.abs(EX[:, axis] - val) < tol)[0])
     return varIdxs
 
+def getBBoxBoundaryElements(obj, face, tol=1e-8, restPos=True):
+    """
+    Get the indices of boundary elements in `obj` that lie on a specified
+    bounding box face.
+    """
+    m = obj.mesh()
+    X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()
+    axis = np.abs(face.value) - 1
+    beCentroids = X[m.boundaryElements()].mean(axis=1)
+    coords = X[:, axis]
+    val = coords.min() if face.value < 0 else coords.max()
+    return np.where(np.abs(beCentroids[:, axis] - val) < tol)[0]
+
+def getBoundaryFaceCentroidAttachmentPointCoordinate(obj, face, coordinate=0):
+    """
+    Get an `AttachmentPointCoordinate` object that computes the deformed position
+    of the material point at the centroid of the geometry incident on a particular
+    `face` of the bounding box in the rest configuration.
+    """
+    import loads
+    faceElements = getBBoxBoundaryElements(obj, face)
+    m = obj.mesh()
+    asf = m.averagedShapeFunctionsOverBoundaryElements(faceElements)
+    asfi = np.where(asf)[0]
+    asfv = asf[asfi]
+    asfi = 3 * m.boundaryNodes()[asfi] + coordinate
+    return loads.AttachmentPointCoordinate(asfi, asfv)
+
 def rigidModes(obj, restPos=False):
     X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()
     D = obj.dimension
