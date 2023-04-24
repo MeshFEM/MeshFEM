@@ -57,6 +57,7 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
     }
 
     BENCHMARK_REPORT();
+    unset_max_num_tbb_threads();
 }
 
 int main(int argc, const char *argv[]) {
