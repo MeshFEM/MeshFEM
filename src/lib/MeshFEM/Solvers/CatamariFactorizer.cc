@@ -180,6 +180,7 @@ struct CatamariConverter {
         std::cout << std::endl;
     }
 
+    void freeCatamariMatrix() { m_result.Empty(); m_sourceReducedEntryForFullMatrixEntry.clear(); m_sourceReducedEntryForFullMatrixEntry.shrink_to_fit(); }
 
     const ConversionPlan &conversionPlan() const { return m_conversionPlan; }
     void constructConversionPlan(catamari::SparseLDL<double> &ldl, std::vector<SuiteSparse_long> &entryForReducedEntry) {
@@ -288,7 +289,7 @@ struct CatamariConverter {
                         }
 
                         // Record which source entry should be read for `locForEntry`
-                        SuiteSparse_long srcEntry = m_sourceReducedEntryForFullMatrixEntry.at(ii);
+                        SuiteSparse_long srcEntry = m_sourceReducedEntryForFullMatrixEntry[ii];
                         if (entryForReducedEntry.size()) srcEntry = entryForReducedEntry[srcEntry];
                         m_conversionPlan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
                     }
@@ -371,6 +372,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
     else throw std::runtime_error("Unknown orderingMethod");
 
     m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
+    m_catamariConverter->freeCatamariMatrix();
     m_factorizationType = FactorizationType::Symbolic;
 }
 
