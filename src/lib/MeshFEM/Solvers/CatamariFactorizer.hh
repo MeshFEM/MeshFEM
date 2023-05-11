@@ -67,10 +67,10 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     bool preferInPlaceSolve() const override { return true; }
     bool supportsPrePermutation() const override { return true; }
 
-    void        stashFactorization()       override { throw std::runtime_error("Stashing unimplemented"); }
-    bool   hasStashedFactorization() const override { throw std::runtime_error("Stashing unimplemented"); }
-    void  swapStashedFactorization()       override { throw std::runtime_error("Stashing unimplemented"); }
-    void clearStashedFactorization()       override { throw std::runtime_error("Stashing unimplemented"); }
+    void        stashFactorization()       override;
+    bool   hasStashedFactorization() const override;
+    void  swapStashedFactorization()       override;
+    void clearStashedFactorization()       override;
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
     CholeskyProvider provider() const override { return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari; }
@@ -80,7 +80,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
 
 private:
-    std::unique_ptr<catamari::SparseLDL<double>> m_ldl;
+    std::unique_ptr<catamari::SparseLDL<double>> m_ldl, m_ldlStash;
     std::unique_ptr<catamari::SparseLDLControl<double>> m_ldlControl;
 
     std::unique_ptr<CatamariConverter> m_catamariConverter;

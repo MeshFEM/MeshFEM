@@ -502,6 +502,12 @@ void CatamariFactorizer::m_populatePermutedReducedRowForRow() const {
     }
 }
 
+// Stashing support
+void CatamariFactorizer::       stashFactorization()       { m_ldlStash = m_ldl->Clone(); }
+bool CatamariFactorizer::  hasStashedFactorization() const { return bool(m_ldlStash); }
+void CatamariFactorizer:: swapStashedFactorization()       { if (!hasStashedFactorization()) { throw std::runtime_error("No stashed factorization"); } std::swap(m_ldl, m_ldlStash); }
+void CatamariFactorizer::clearStashedFactorization()       { m_ldlStash.reset(); }
+
 CatamariFactorizer::~CatamariFactorizer() {
     if (m_c) cholmod_l_finish(m_c.get());
 }
