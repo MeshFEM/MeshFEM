@@ -22,7 +22,7 @@ def getBBoxVars(obj, face, displacementComponents = [0, 1, 2], displacementsOnly
     X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()
     coords = X[:, axis]
     val = coords.min() if face.value < 0 else coords.max()
-    varIdxs = [3 * i + c for i in np.where(np.abs(coords - val) < tol)[0] for c in displacementComponents]
+    varIdxs = [obj.dimension * i + c for i in np.where(np.abs(coords - val) < tol)[0] for c in displacementComponents]
     if (not displacementsOnly) and hasattr(obj, 'thetaOffset'):
         EX = obj.restEdgeMidpoints() if restPos else obj.edgeMidpoints()
         varIdxs.extend(obj.thetaOffset() + np.where(np.abs(EX[:, axis] - val) < tol)[0])
@@ -53,7 +53,7 @@ def getBoundaryFaceCentroidAttachmentPointCoordinate(obj, face, coordinate=0):
     asf = m.averagedShapeFunctionsOverBoundaryElements(faceElements)
     asfi = np.where(asf)[0]
     asfv = asf[asfi]
-    asfi = 3 * m.boundaryNodes()[asfi] + coordinate
+    asfi = obj.dimension * m.boundaryNodes()[asfi] + coordinate
     return loads.AttachmentPointCoordinate(asfi, asfv)
 
 def rigidModes(obj, restPos=False):
