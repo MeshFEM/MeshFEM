@@ -53,6 +53,7 @@ struct ElasticSheetBinder {
             ;
 
         pyES
+          .def_property_readonly_static("dimension",   [](py::object /* self */) { return 3; })
           .def("mesh",                     py::overload_cast<>(&ES::mesh), py::return_value_policy::reference_internal)
           .def("numThetas",                &ES::numThetas)
           .def("numCreases",               &ES::numCreases)
