@@ -476,8 +476,8 @@ private:
 };
 
 struct MESHFEM_EXPORT NewtonOptimizer {
-    NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) {
-        prob = std::move(p);
+    NewtonOptimizer(const std::shared_ptr<NewtonProblem> &p) {
+        prob = p;
     }
 
     void setFixedVars(const std::vector<size_t> &fixedVars) {
@@ -535,7 +535,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     mutable CachedHessianL2Norm m_cachedHessianL2Norm;
 
 private:
-    std::unique_ptr<NewtonProblem> prob;
+    std::shared_ptr<NewtonProblem> prob;
     std::shared_ptr<CholeskyFactorizerBase> m_solver;
 
     Real m_factorizationUpdate(const WorkingSet &ws, Real &beta, const Real betaMin);
