@@ -49,7 +49,7 @@ void bind(py::module &m) {
     addComputeEquilibriumBinding<EO>(pyEO);
 
     using EQProb = EquilibriumProblem<Real_>;
-    py::class_<EQProb, NewtonProblem>(m, ("EquilibriumProblem" + floatingPointTypeSuffix<Real_>()).c_str())
+    py::class_<EQProb, NewtonProblem, std::shared_ptr<EQProb>>(m, ("EquilibriumProblem" + floatingPointTypeSuffix<Real_>()).c_str())
         .def("loads", &EQProb::loads, py::return_value_policy::reference)
         ;
 }

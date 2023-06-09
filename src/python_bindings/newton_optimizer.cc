@@ -102,7 +102,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("feasibleStepLength", &BC::feasibleStepLength, py::arg("vars"), py::arg("step"))
         ;
 
-    py::class_<NewtonProblem>(m, "NewtonProblem")
+    py::class_<NewtonProblem, std::shared_ptr<NewtonProblem>>(m, "NewtonProblem")
         .def("energy",                 &NewtonProblem::energy)
         .def("gradient",               &NewtonProblem::gradient, py::arg("freshIterate") = false)
         .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = false)

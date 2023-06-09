@@ -49,7 +49,7 @@ void addComputeEquilibriumBinding(PYEs &pyES) {
                            py::scoped_estream_redirect>())
         .def("EquilibriumProblem",
             [](EQObj &obj, const LC &loads) {
-                return std::make_unique<EQProb>(obj, loads);
+                return std::make_shared<EQProb>(obj, loads);
             },
             py::arg("loads") = LC())
         ;
