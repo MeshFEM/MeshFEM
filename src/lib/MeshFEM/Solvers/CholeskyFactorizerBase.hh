@@ -259,6 +259,7 @@ protected:
         }
 
         m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
+        m_permutedReducedRowForRow.clear();
         return m_Areduced.get();
     }
 

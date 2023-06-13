@@ -332,13 +332,6 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
     }
 #endif
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    // Catamari doesn't currently support computing only the symbolic factorization...
-    // It looks like it may be possible to hack a true `factorizeSymbolic` implementation
-    // by creating a copy of the `Factor` routine that omits this part:
-    //      https://gitlab.com/hodge_star/catamari/-/blob/master/include/catamari/sparse_ldl/supernodal/factorization/common-impl.hpp#L328
-    // However, the overhead of doing a numeric factorization is quite low, especially since
-    // we often run the symbolic factorization on a singular matrix with the sparsity pattern
-    // filled with ones (in which case, the numeric factorization fails quickly).
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced);
 
     if (orderingMethod == OrderingMethod::Catamari)
