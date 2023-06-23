@@ -94,10 +94,10 @@ private:
 // Helper struct implementations
 ////////////////////////////////////////////////////////////////////////////////
 // Replicate "Dim" into N dimension arguments for NDArray (to implement cube array type)
-template<typename T, size_t N, size_t Dim, size_t... Dims>
-struct NDCAHelper<T, N, Dim, Dims...> : public NDCAHelper<T, N - 1, Dim, Dim, Dims...> { };
-template<typename T, size_t Dim, size_t... Dims>
-struct NDCAHelper<T, 0, Dim, Dims...> : public NDArray<T, sizeof...(Dims), Dims...> { };
+template<typename T, size_t N, size_t Dim, size_t... ReplicatedDims>
+struct NDCAHelper<T, N, Dim, ReplicatedDims...> : public NDCAHelper<T, N - 1, Dim, Dim, ReplicatedDims...> { };
+template<typename T, size_t Dim, size_t... ReplicatedDims>
+struct NDCAHelper<T, 0, Dim, ReplicatedDims...> : public NDArray<T, sizeof...(ReplicatedDims), ReplicatedDims...> { };
 
 template<size_t N, size_t Dim, size_t... Dims>
 struct NDArrayIndexer<N, Dim, Dims...> {

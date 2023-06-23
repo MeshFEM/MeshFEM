@@ -344,29 +344,27 @@ struct AutoHessianProjection : Psi_F {
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         Base::setDeformationGradient(F, elevel);
 
-        // For efficiency, we only construct H and decompose H if we are
-        // actually applying a Hessian projection.
-        // See WARNING below!
         m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
-        if (!usingProjection() || elevel < EvalLevel::Hessian)
-            return;
+        if (elevel < EvalLevel::Hessian) return;
 
-        Hessian H = evaluate_d2energy_dF2(*(Psi_F *)(this));
-
-        ESolver Hes(H);
-        m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
-        // m_projectedHessian = Hes.eigenvectors() * Hes.eigenvalues().asDiagonal() * Hes.eigenvectors().transpose();
+        m_hessian = evaluate_d2energy_dF2(*(Psi_F *)(this));
+        if (usingProjection()) {
+            ESolver Hes(m_hessian);
+            m_hessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        }
     }
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const {
-        if (usingProjection())
-            return applyFlattened4thOrderTensor(m_projectedHessian, dF);
-        return Base::delta_denergy(dF);
+        return applyFlattened4thOrderTensor(m_hessian, dF);
     }
 
     Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
         return doubleContract(delta_denergy(dF_lhs), dF_rhs);
+    }
+
+    const Hessian &d2energy() const {
+        return m_hessian;
     }
 
     template<class Mat_, class Mat2_>
@@ -378,20 +376,20 @@ struct AutoHessianProjection : Psi_F {
         return Base::delta2_denergy(dF_a, dF_b);
     }
 
-    VXd eigenvalues() const { return ESolver(m_projectedHessian).eigenvalues(); }
+    VXd eigenvalues() const { return ESolver(m_hessian).eigenvalues(); }
 
     std::vector<Matrix> eigenmatrices() const {
         constexpr size_t n = N * N;
         std::vector<Matrix> result(n);
 
-        ESolver es(m_projectedHessian);
+        ESolver es(m_hessian);
         for (size_t i = 0; i < n; ++i)
             result[i] = Eigen::Map<const Matrix>(es.eigenvectors().col(i).data());
         return result;
     }
 
     // Undefined behavior if usingProjection() was false on the last call to setDeformationGradient...
-    const Hessian &projectedHessian() const { return m_projectedHessian; }
+    const Hessian &projectedHessian() const { return m_hessian; }
 
     bool usingProjection() const { return projectionEnabled && m_projectionMask; }
 
@@ -401,7 +399,7 @@ struct AutoHessianProjection : Psi_F {
     bool projectionEnabled = true;
 
 private:
-    Hessian m_projectedHessian;
+    Hessian m_hessian;
     bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
 };
 

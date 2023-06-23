@@ -420,8 +420,7 @@ struct TripletMatrix {
 
     // WARNING: Assumes sumRepeated() has already been called.
     template<typename _Index, typename _Real>
-    void getCompressedColumn(_Index *Ap, _Index *Ai,
-                             _Real *Ax) const {
+    void getCompressedColumn(_Index *Ap, _Index *Ai, _Real *Ax) const {
         const size_t num_nz = nnz();
         for (size_t i = 0; i < num_nz; ++i) {
             Ai[i] = nz[i].row();
@@ -821,6 +820,11 @@ struct CSCMatrix {
     using index_type = _Index;
     using value_type = _Real;
     using container_type = typename spmat_helper::value_traits<value_type>::container_type;
+
+    using DataType = Eigen::Matrix<_Real, Eigen::Dynamic, 1>;
+    using DataMap  = Eigen::Map<      Eigen::Matrix<_Real, Eigen::Dynamic, 1>>;
+    using DataCMap = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>;
+
     IdxVector  Ap, Ai;   // Column pointer and row index arrays
                          // Note: the row index array must be sorted!
     container_type Ax;   // Value array (aligned if necessary)
@@ -833,6 +837,7 @@ struct CSCMatrix {
     static constexpr _Index INDEX_NONE = std::numeric_limits<_Index>::max();
 
     size_t nnz() const { return nz; }
+    index_type col_nnz(size_t j) const { return Ap[j + 1] - Ap[j]; }
     void reserve(size_t nnz_request) { if (_Index(nnz_request) > nz) throw std::runtime_error("CSCMatrix cannot be resized by `reserve` (" + std::to_string(nnz_request) + " vs " + std::to_string(nz) + ")"); }
 
     CSCMatrix(_Index mm = 0, _Index nn = 0)
@@ -853,9 +858,8 @@ struct CSCMatrix {
     template<typename T> CSCMatrix(TripletMatrix<T>  &mat) { setFromTMatrix(mat); }
     template<typename T> CSCMatrix(TripletMatrix<T> &&mat) { setFromTMatrix(std::move(mat)); }
 
-    using DataType = Eigen::Matrix<_Real, Eigen::Dynamic, 1>;
-    Eigen::Map<      DataType> data()       { return Eigen::Map<      DataType>(Ax.data(), Ax.size()); }
-    Eigen::Map<const DataType> data() const { return Eigen::Map<const DataType>(Ax.data(), Ax.size()); }
+    DataMap  data()       { return DataMap (Ax.data(), Ax.size()); }
+    DataCMap data() const { return DataCMap(Ax.data(), Ax.size()); }
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) { data().setConstant(val); }
@@ -1265,7 +1269,7 @@ struct CSCMatrix {
     template<class Derived>
     _Index addNZStrip(_Index idx, const Eigen::DenseBase<Derived> &values) {
         static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
-        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + idx, values.rows()) += values;
+        DataMap(Ax.data() + idx, values.rows()) += values;
         return idx + values.size();
     }
 
@@ -1322,8 +1326,8 @@ struct CSCMatrix {
         return *this;
     }
 
-    _Real max()    const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).maxCoeff(); }
-    _Real absMax() const { return Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
+    _Real max()    const { return DataCMap(Ax.data(), Ax.size()).maxCoeff(); }
+    _Real absMax() const { return DataCMap(Ax.data(), Ax.size()).cwiseAbs().maxCoeff(); }
     _Real maxRelError(CSCMatrix &b) const {
         CSCMatrix diff(*this);
         diff.addWithIdenticalSparsity(b, -1.0);
@@ -1344,8 +1348,8 @@ struct CSCMatrix {
     void addWithIdenticalSparsity(const CSCMatrix<_Index, _Real, IdxVector2> &b, double alpha = 1.0) {
         if (b.Ax.size() != Ax.size()) throw std::runtime_error("nnz mismatch");
         if constexpr (std::is_arithmetic_v<_Real>) {
-            Eigen::Map<      Eigen::Matrix<_Real, Eigen::Dynamic, 1>>  AEigen(  Ax.data(),   Ax.size());
-            Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>> bAEigen(b.Ax.data(), b.Ax.size());
+            DataMap   AEigen(  Ax.data(),   Ax.size());
+            DataCMap bAEigen(b.Ax.data(), b.Ax.size());
             addScaledInPlace(AEigen, bAEigen, alpha);
         }
         else {
@@ -1354,7 +1358,7 @@ struct CSCMatrix {
         }
     }
 
-    void scale(_Real alpha) { Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) *= alpha; }
+    void scale(_Real alpha) { DataMap(Ax.data(), Ax.size()) *= alpha; }
     CSCMatrix &operator*=(_Real alpha) { scale(alpha); return *this; }
 
     // Perform the operation:
@@ -1522,7 +1526,7 @@ struct CSCMatrix {
             Ax.resize(nz);
             std::iota(Ap.begin(), Ap.end(), 0);
             std::iota(Ai.begin(), Ai.end(), 0);
-            Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data(), Ax.size()) = diag;
+            DataMap(Ax.data(), Ax.size()) = diag;
         }
     }
 
@@ -1919,6 +1923,69 @@ struct CSCMatrix {
         return result;
     }
 };
+
+// Efficient conversion of a triplet-style sparsity pattern into a CSC format
+// (arrays Ap and Ai). Note that only the sparsity pattern is
+// referenced/converted, and no values are accessed.
+template<class TripletList, class IndexVec>
+void sparsityPatternToCSC(size_t n, const TripletList &nz, IndexVec &Ap, IndexVec &Ai) {
+    static constexpr size_t INDEX_NONE = std::numeric_limits<size_t>::max();
+
+    std::vector<size_t> bucketStart(n + 1);
+    {
+        // Compute bucket offsets in bucketStart[1:]: first calculate size
+        for (const auto &t : nz) ++bucketStart[t.j + 1];
+        // Next, compute bucketStart[2:] = cumsum(bucketStart[1:])
+        size_t cumsum = 0;
+        for (size_t j = 1; j <= n; ++j) {
+            size_t colsize_j = bucketStart[j];
+            bucketStart[j] = cumsum;
+            cumsum += colsize_j;
+        }
+        assert(cumsum == nz.size());
+    }
+
+    Eigen::Matrix<size_t, Eigen::Dynamic, 1> columnBuckets(nz.size());
+    {
+        // Fill the index buckets; note incrementing the offsets in
+        // bucketStart[1:] by the size of each bucket converts these into the
+        // end offsets.
+        size_t *bucketBack = bucketStart.data() + 1;
+        for (const auto &t : nz) {
+            size_t newEntry = bucketBack[t.j]++;
+            columnBuckets[newEntry] = t.i;
+        }
+    }
+
+    Ap.resize(n + 1);
+
+    // Sort each bucket in parallel and deduplicate.
+    parallel_for_range(n, [&](size_t j) {
+        auto start = columnBuckets.data() + bucketStart[j];
+        auto end   = columnBuckets.data() + bucketStart[j + 1];
+        std::sort(start, end);
+        end = std::unique(start, end);
+        Ap[j] = std::distance(start, end); // Write deduplicated bucket size
+    });
+
+    // Calculate column pointer array using cumulative sum.
+    size_t newNNZ = 0;
+    for (size_t j = 0; j < n; ++j) {
+        size_t colsize_j = Ap[j];
+        Ap[j] = newNNZ;
+        newNNZ += colsize_j;
+    }
+    Ap[n] = newNNZ;
+
+    // Fill row index array `Ai`
+    Ai.resize(newNNZ);
+    // for (size_t j = 0; j < n; ++j) { // could be parallelized
+    parallel_for_range(n, [&](size_t j) {
+        size_t offset = bucketStart[j];
+        for (size_t ii = Ap[j]; ii < Ap[j + 1]; ++ii)
+            Ai[ii] = columnBuckets[offset++];
+    });
+}
 
 using SuiteSparseMatrix = CSCMatrix<SuiteSparse_long, double>;
 

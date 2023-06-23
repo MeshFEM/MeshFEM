@@ -13,6 +13,7 @@
 #include "MeshIO.hh"
 #include "ParallelAssembly.hh"
 #include "SparseMatrices.hh"
+#include "SystemAssembler.hh"
 #include "Flattening.hh"
 #include "Types.hh"
 #include "Functions.hh"
@@ -43,7 +44,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     static_assert(std::is_convertible<typename Energy::Real, Real>::value, "Incompatible real number types");
 
     using Base = ElasticObject<Real>;
-    using CSCMat  = typename Base::CSCMat;
+    using CSCMat = typename Base::CSCMat;
     using Base::numVars;
     using VariableMask = typename Base::VariableMask;
 
@@ -64,7 +65,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     using GradPhis = typename Mesh::ElementData::GradPhis;
 
     ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
-        : m_mesh(mesh), m_energyDensities{{energy}} { setIdentityDeformation(); }
+        : m_mesh(mesh), m_energyDensities{{energy}}, m_assembler(mesh->numNodes()) { setIdentityDeformation(); }
 
     // Copy and degree-changing constructor
     template<size_t Deg2>
@@ -169,34 +170,34 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
                        : j + (i * (i + 1)) / 2;
     }
 
-    using PerElementHessian = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
-    PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
+    using PerElementHessianFlat = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
+    PerElementHessianFlat elementHessian(size_t ei, bool disableProjection = false) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &m = mesh();
         const auto &e = m.element(ei);
+
         return QuadratureRule::integrate([&](const EvalPtK &x) {
                 GradPhis gradPhis = e->gradPhis(x);
                 psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                                                    : EvalLevel::Hessian);
-                Eigen::Matrix<Real, flatLen(numElementLocalVars), 1> contribution;
+                PerElementHessianFlat contribution;
                 auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into N^2 x N^2 matrix using a column-major ordering
                 if (!disableProjection) {
                     Eigen::SelfAdjointEigenSolver<decltype(d2psi)> Hes(d2psi);
                     d2psi = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
                 }
 
-                for (const auto n_b : e.nodes()) {
-                    VSFJ gradPhi_b(0, gradPhis.col(n_b.localIndex()));
+                for (size_t lni_b = 0; lni_b < numNodesPerElement; ++lni_b) {
+                    VSFJ gradPhi_b(0, gradPhis.col(lni_b));
                     for (size_t c_b = 0; c_b < N; ++c_b) {
-                        size_t var_b = N * n_b.localIndex() + c_b;
+                        size_t var_b = N * lni_b + c_b;
                         gradPhi_b.c = c_b;
                         Matrix delta_denergy = applyFlattened4thOrderTensor(d2psi, gradPhi_b);
-                        for (const auto n_a : e.nodes()) {
-                            VSFJ gradPhi_a(0, gradPhis.col(n_a.localIndex()));
+                        for (size_t lni_a = 0; lni_a <= lni_b; ++lni_a) {
+                            Vector contrib = delta_denergy * gradPhis.col(lni_a);
                             for (size_t c_a = 0; c_a < N; ++c_a) {
-                                size_t var_a = N * n_a.localIndex() + c_a;
-                                gradPhi_a.c = c_a;
-                                contribution[perElementHessianFlattening(var_a, var_b)] = doubleContract(gradPhi_a, delta_denergy);
+                                size_t var_a = N * lni_a + c_a;
+                                contribution[perElementHessianFlattening(var_a, var_b)] = contrib[c_a];
                             }
                         }
                     }
@@ -216,7 +217,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
             parallel_for_range(mesh().numElements(), [&H, &varLocks, this, projectionMask](size_t ei) {
                 const auto &m = mesh();
                 const auto &e = m.element(ei);
-                PerElementHessian contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
+                PerElementHessianFlat contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
 
                 for (const auto n_b : e.nodes()) {
                     for (size_t c_b = 0; c_b < N; ++c_b) {
@@ -244,48 +245,59 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         });
     }
 
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        TripletMatrix<Triplet<Real>> triplet_result(numVars(), numVars());
-        triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
+    using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
+    PerElementHessian elementHessianNew(size_t ei, bool disableProjection = false) const {
+        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
+        const auto &e = mesh().element(ei);
 
-        for (const auto e : mesh().elements()) {
-            for (const auto n_b : e.nodes()) {
+        PerElementHessian result;
+        result.template triangularView<Eigen::Upper>().setZero();
+
+        for (size_t i = 0; i < QuadratureRule::numPoints; ++i) {
+            double w = (e->volume() * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
+            GradPhis gradPhis = e->gradPhis(QuadratureRule::points[i]);
+            psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
+                                                                                               : EvalLevel::Hessian);
+            auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into N^2 x N^2 matrix using a column-major ordering.
+
+            for (size_t lni_b = 0; lni_b < numNodesPerElement; ++lni_b) {
+                VSFJ gradPhi_b(0, w * gradPhis.col(lni_b));
                 for (size_t c_b = 0; c_b < N; ++c_b) {
-                    for (const auto n_a : e.nodes()) {
-                        for (size_t c_a = 0; c_a < N; ++c_a) {
-                            size_t var_b = N * n_b.index() + c_b,
-                                   var_a = N * n_a.index() + c_a;
-                            if (var_a > var_b) continue;
-                            triplet_result.addNZ(var_a, var_b, 1.0);
-                        }
-                    }
+                    size_t var_b = N * lni_b + c_b;
+                    gradPhi_b.c = c_b;
+                    Matrix delta_denergy = applyFlattened4thOrderTensor(d2psi, gradPhi_b);
+#if 0 // somehow this is slower :(
+                    Eigen::Map<Eigen::Matrix<Real, N, Eigen::Dynamic>>(result.col(var_b).data(), N, lni_b + 1) += delta_denergy * gradPhis.leftCols(lni_b + 1);
+#else
+                    for (size_t lni_a = 0; lni_a <= lni_b; ++lni_a)
+                        result.col(var_b).template segment<N>(N * lni_a) += delta_denergy * gradPhis.col(lni_a);
+#endif
                 }
             }
         }
-
-        CSCMat result(std::move(triplet_result));
-        result.fill(val);
+        result.template triangularView<Eigen::Lower>() = result.transpose();
         return result;
+    }
+
+    void hessian_new(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian_new");
+
+        m_assembler.assembleHessian(H, mesh(), [&](size_t ei) {
+            return elementHessianNew(ei, /* disableProjection */ !projectionMask);
+        });
+    }
+
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+        CSCMat blockHsp = m_assembler.blockSparsityPatternForMesh(mesh());
+        return m_assembler.blockHessianSparsityPatternToScalar(blockHsp, val);
     }
 
     CSCMat hessianBlockSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        TripletMatrix<Triplet<Real>> triplet_result(numNodes(), numNodes());
-        triplet_result.symmetry_mode = TripletMatrix<Triplet<Real>>::SymmetryMode::UPPER_TRIANGLE;
-
-        for (const auto e : mesh().elements()) {
-            for (const auto n_b : e.nodes()) {
-                for (const auto n_a : e.nodes()) {
-                    size_t var_b = n_b.index(),
-                           var_a = n_a.index();
-                    if (var_a > var_b) continue;
-                    triplet_result.addNZ(var_a, var_b, 1.0);
-                }
-            }
-        }
-
-        CSCMat result(std::move(triplet_result));
+        CSCMat result = m_assembler.blockSparsityPatternForMesh(mesh());
         result.fill(val);
         return result;
     }
@@ -502,6 +514,8 @@ protected:
 
     // Deformed positions for each node
     MXNd m_x;
+
+    SystemAssembler<N> m_assembler;
 
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>

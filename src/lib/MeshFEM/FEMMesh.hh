@@ -101,6 +101,7 @@ public:
     static constexpr size_t K   = _K;
     static constexpr size_t Deg = _Deg;
     static constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
+    static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
     using EmbeddingSpace = _EmbeddingSpace;
     using Real = typename EmbeddingSpace::Scalar;
 
