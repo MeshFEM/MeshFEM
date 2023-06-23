@@ -69,10 +69,12 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     // Copy and degree-changing constructor
     template<size_t Deg2>
-    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) { m_copy(es); }
+    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es)
+        : m_assembler(es.mesh().numNodes()) { m_copy(es); }
     // Note: the degree-changing constructor template is excluded from overload resolution,
     // and the implicitly copy constructor is deleted due to the `m_varLocks` member...
-    ElasticSolid(const ElasticSolid &es) { m_copy(es); }
+    ElasticSolid(const ElasticSolid &es)
+        : m_assembler(es.mesh().numNodes()) { m_copy(es); }
 
     size_t numElements() const { return mesh().numElements(); }
     size_t numVertices() const { return mesh().numVertices(); }
@@ -535,6 +537,8 @@ protected:
 
     template<size_t Deg2>
     void m_copy(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {
+        // WARNING: this currently can only be called from a copy constructor
+        // which properly initializes `m_assembler`!!!
         m_mesh = std::make_shared<Mesh>(es.mesh());
         m_energyDensities = es.m_energyDensities;
         auto oldDeformation = es.deformedPositions();

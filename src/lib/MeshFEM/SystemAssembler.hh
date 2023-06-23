@@ -161,6 +161,7 @@ struct SystemAssembler {
     SystemAssembler(Args... args)
         : m_vars(args...)
     {
+        static_assert(sizeof...(Args) > 0, "Variables must be initialized!");
         size_t numLocks = m_vars.numBlocks();
         m_varLocks = std::make_unique<std::vector<std::atomic<bool>>>(numLocks);
         for (size_t i = 0; i < numLocks; ++i)
