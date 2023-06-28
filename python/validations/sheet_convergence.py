@@ -21,8 +21,8 @@ def Phi(X):
     L = x.max() - x.min()
     R = L / (2 * np.pi)
     r = R + z
-    theta = -(2 * np.pi / L) * x
-    return np.column_stack((r * np.cos(theta), y, r * np.sin(theta)))
+    theta = -(2 * np.pi / L) * (x - x.min())
+    return np.column_stack((-r * np.sin(theta), y, r * (1 - np.cos(theta))))
 
 def runSimulation(obj):
     obj.setDeformedPositions(Phi(obj.getRestPositions()))

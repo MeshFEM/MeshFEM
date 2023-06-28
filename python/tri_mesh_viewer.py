@@ -6,7 +6,7 @@ from vis.pythreejs_viewer import *
 try:
     from vis.offscreen_viewer import *
     HAS_OFFSCREEN = True
-except Exception as e: 
+except Exception as e:
     print("Failed to load offscreen viewer:", e)
     HAS_OFFSCREEN = False
 
@@ -239,7 +239,7 @@ def _makeTetMeshViewer(BaseClass):
                 else:
                     return self.mesh.shrunkenTetVisualizationField(data)
 
-        def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        def __init__(self, tetmesh, width=1024, height=1024, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
             super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
 
         def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
@@ -251,7 +251,7 @@ def _makeTetMeshViewer(BaseClass):
                         mesh = TetMeshViewer.TetMeshWrapper(mesh)
                         # Copy current shrink factor, if any (silently fails if
                         # current mesh is not actually a tetrahedral mesh).
-                        mesh.tetShrinkFactor = self.mesh.tetShrinkFactor 
+                        mesh.tetShrinkFactor = self.mesh.tetShrinkFactor
                 except: pass
 
             super().update(preserveExisting=preserveExisting, mesh=mesh,
@@ -285,7 +285,7 @@ TetMeshViewer = _makeTetMeshViewer(TriMeshViewer)
 # Offscreen versions of the viewers (where supported)
 if HAS_OFFSCREEN:
     class OffscreenTriMeshViewer(OffscreenViewerBase):
-        def __init__(self, trimesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, wireframe=False):
+        def __init__(self, trimesh, width=1024, height=1024, textureMap=None, scalarField=None, vectorField=None, transparent=False, wireframe=False):
             if isinstance(trimesh, tuple): # accept (V, F) tuples as meshes, wrapping in a RawMesh
                 trimesh = RawMesh(*trimesh)
             super().__init__(trimesh, width, height, textureMap, scalarField, vectorField, superView=None, transparent=transparent)
@@ -297,7 +297,10 @@ if HAS_OFFSCREEN:
         def __init__(self, V, F, *args, **kwargs):
             super().__init__(QuadHexMeshWrapper(V, F), *args, **kwargs)
 
-def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False, offscreen=False):
+def Viewer(obj, width=None, height=None, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False, offscreen=False):
+    """
+    Note: width and height default to 512 for onscreen viewer, 1024 for offscreen.
+    """
     import reflection
     cls = OffscreenTriMeshViewer if offscreen else TriMeshViewer # Default to generic [Offscreen]TriMeshViewer
     if reflection.hasMethod(obj, 'shrunkenTetVisualizationGeometry'):
@@ -305,7 +308,10 @@ def Viewer(obj, width=512, height=512, textureMap=None, scalarField=None, vector
         cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
     if reflection.isVoxelFEMSimulator(obj):
         raise Exception('Use VoxelFEM Viewer')
-    return reflection.evalWithCustomArgs(cls, {'width': width, 'height': height, 'textureMap': textureMap, 'scalarField': scalarField, 'vectorField': vectorField, 'superView': superView, 'transparent': transparent, 'wireframe': wireframe}, [obj])
+    kwargs = {'textureMap': textureMap, 'scalarField': scalarField, 'vectorField': vectorField, 'superView': superView, 'transparent': transparent, 'wireframe': wireframe}
+    if width  is not None: kwargs[ 'width'] = width
+    if height is not None: kwargs['height'] = height
+    return reflection.evalWithCustomArgs(cls, kwargs, [obj])
 
 def concatVisGeometries(A, B):
     return (np.vstack([A[0], B[0]]), # Stacked V
@@ -313,3 +319,18 @@ def concatVisGeometries(A, B):
             np.vstack([A[2], B[2]])) # Stacked N
 def concatWithColors(A, colorA, B, colorB):
     return concatVisGeometries(A, B), np.vstack([np.tile(colorA, [len(A[0]), 1]), np.tile(colorB, [len(B[0]), 1])])
+
+class ViewUpdater:
+    """
+    Newton callback function object for updating the viewer.
+    """
+    def __init__(self, view, updateFrequency=1, showStress=False):
+        self.view, self.updateFrequency, self.showStress = view, updateFrequency, showStress
+    def __call__(self, prob, it):
+        if it % self.updateFrequency != 0: return
+        sf = None
+        if self.showStress:
+            es = self.view.mesh.mesh
+            m = es.mesh()
+            sf = [np.linalg.eigvalsh(es.cauchyStress(ei)).max() for ei in range(m.numElements())]
+        self.view.update(scalarField=sf)
