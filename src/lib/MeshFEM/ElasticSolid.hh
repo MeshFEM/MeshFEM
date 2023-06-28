@@ -72,7 +72,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es)
         : m_assembler(es.mesh().numNodes()) { m_copy(es); }
     // Note: the degree-changing constructor template is excluded from overload resolution,
-    // and the implicitly copy constructor is deleted due to the `m_varLocks` member...
+    // and the implicitly copy constructor is deleted due to the `m_assembler` member...
     ElasticSolid(const ElasticSolid &es)
         : m_assembler(es.mesh().numNodes()) { m_copy(es); }
 
@@ -167,88 +167,8 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     // Simple columnwise flattening operation for (the upper triangle of) symmetric
     // matrices. Indices in the lower triangle are mapped to the upper triangle.
-    static constexpr size_t perElementHessianFlattening(size_t i, size_t j) {
-        return (i < j) ? i + (j * (j + 1)) / 2
-                       : j + (i * (i + 1)) / 2;
-    }
-
-    using PerElementHessianFlat = Eigen::Matrix<Real, flatLen(numElementLocalVars), 1>;
-    PerElementHessianFlat elementHessian(size_t ei, bool disableProjection = false) const {
-        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &m = mesh();
-        const auto &e = m.element(ei);
-
-        return QuadratureRule::integrate([&](const EvalPtK &x) {
-                GradPhis gradPhis = e->gradPhis(x);
-                psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
-                                                                                                   : EvalLevel::Hessian);
-                PerElementHessianFlat contribution;
-                auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into N^2 x N^2 matrix using a column-major ordering
-                if (!disableProjection) {
-                    Eigen::SelfAdjointEigenSolver<decltype(d2psi)> Hes(d2psi);
-                    d2psi = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
-                }
-
-                for (size_t lni_b = 0; lni_b < numNodesPerElement; ++lni_b) {
-                    VSFJ gradPhi_b(0, gradPhis.col(lni_b));
-                    for (size_t c_b = 0; c_b < N; ++c_b) {
-                        size_t var_b = N * lni_b + c_b;
-                        gradPhi_b.c = c_b;
-                        Matrix delta_denergy = applyFlattened4thOrderTensor(d2psi, gradPhi_b);
-                        for (size_t lni_a = 0; lni_a <= lni_b; ++lni_a) {
-                            Vector contrib = delta_denergy * gradPhis.col(lni_a);
-                            for (size_t c_a = 0; c_a < N; ++c_a) {
-                                size_t var_a = N * lni_a + c_a;
-                                contribution[perElementHessianFlattening(var_a, var_b)] = contrib[c_a];
-                            }
-                        }
-                    }
-                }
-
-                return contribution;
-            },
-            e->volume());
-    }
-
-    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
-
-        auto &varLocks = m_getVarLocks();
-        get_hessian_assembly_arena().execute([&H, &varLocks, this, projectionMask]() {
-            parallel_for_range(mesh().numElements(), [&H, &varLocks, this, projectionMask](size_t ei) {
-                const auto &m = mesh();
-                const auto &e = m.element(ei);
-                PerElementHessianFlat contrib = elementHessian(ei, /* disableProjection */ !projectionMask);
-
-                for (const auto n_b : e.nodes()) {
-                    for (size_t c_b = 0; c_b < N; ++c_b) {
-                        size_t  var_b = N * n_b.localIndex() + c_b;
-                        size_t gvar_b = N * n_b.index() + c_b;
-
-                        while (varLocks[gvar_b].exchange(true, std::memory_order_acquire)); // lock column gvar_b
-
-                        // Accumulate vertical strips to column gvar_b
-                        for (const auto n_a : e.nodes()) {
-                            size_t  var_a = N * n_a.localIndex();
-                            size_t gvar_a = N * n_a.index();
-                            if (gvar_a > gvar_b) continue;
-
-                            Vector block;
-                            size_t len = std::min(size_t(N), gvar_b - gvar_a + 1);
-                            for (size_t c = 0; c < len; ++c)
-                                block[c] = contrib(perElementHessianFlattening(var_a + c, var_b));
-                            H.addNZStrip(gvar_a, gvar_b, block.topRows(len));
-                        }
-                        varLocks[gvar_b].store(false, std::memory_order_release); // unlock column gvar_b
-                    }
-                }
-            });
-        });
-    }
-
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
-    PerElementHessian elementHessianNew(size_t ei, bool disableProjection = false) const {
+    PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &e = mesh().element(ei);
 
@@ -281,12 +201,12 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return result;
     }
 
-    void hessian_new(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
+    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian_new");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
 
         m_assembler.assembleHessian(H, mesh(), [&](size_t ei) {
-            return elementHessianNew(ei, /* disableProjection */ !projectionMask);
+            return elementHessian(ei, /* disableProjection */ !projectionMask);
         });
     }
 
@@ -522,18 +442,6 @@ protected:
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>
     friend struct ElasticSolid;
-
-    // Spin locks used for parallel Hessian assembly.
-    mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
-    auto &m_getVarLocks() const {
-        if (!m_varLocks) {
-            const size_t nv = numVars(VariableMask::All);
-            m_varLocks = std::make_unique<std::vector<std::atomic<bool>>>(nv);
-            for (size_t i = 0; i < nv; ++i)
-                atomic_init(&(*m_varLocks)[i], false);
-        }
-        return *m_varLocks;
-    }
 
     template<size_t Deg2>
     void m_copy(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {

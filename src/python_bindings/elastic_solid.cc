@@ -54,11 +54,6 @@ struct ElasticSolidBinder {
           .def("getDeformedPositions",      &ES::deformedPositions)
           .def("getRestPositions",          &ES::restNodePositions)
           .def("getNodeDisplacements",      &ES::nodeDisplacements)
-          .def("hessian_new",               [](const ES &es) {
-                                                typename ES::CSCMat H = es.hessianSparsityPattern();
-                                                es.hessian_new(H);
-                                                return H;
-                                            })
           .def("getEnergyDensity",          &ES::getEnergyDensity, py::arg("ei"), py::return_value_policy::reference_internal)
           .def("greenStrain",               [](const ES &es, size_t ei) { return es.greenStrain(ei); }, py::arg("ei"))
           .def("greenStrain",               [](const ES &es, size_t ei, const typename ES::EvalPtK &baryCoords) { return es.greenStrain(ei, baryCoords); }, py::arg("ei"), py::arg("baryCoords"))

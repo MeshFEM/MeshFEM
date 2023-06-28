@@ -186,7 +186,7 @@ struct SingleVertexOptProblem {
                     const size_t vo = N * v.localIndex();
                     for (size_t c_a = 0; c_a < N; ++c_a) {
                         for (size_t c_b = 0; c_b < N; ++c_b)
-                            result(c_a, c_b) += H[Object::perElementHessianFlattening(vo + c_a, vo + c_b)];
+                            result(c_a, c_b) += H(vo + c_a, vo + c_b);
                     }
                     found = true;
                 }
