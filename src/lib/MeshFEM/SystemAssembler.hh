@@ -26,7 +26,7 @@
 template<size_t... BlockDimensions_>
 struct OptimizationVarStructure {
     static constexpr size_t NumBlockTypes = sizeof...(BlockDimensions_);
-    static constexpr std::array<size_t, NumBlockTypes> BlockDimensions{BlockDimensions_...};
+    static constexpr std::array<size_t, NumBlockTypes> BlockDimensions{{BlockDimensions_...}};
     static constexpr size_t NONE = std::numeric_limits<size_t>::max();
 
     struct Block { size_t start, size; };
