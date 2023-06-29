@@ -296,7 +296,7 @@ struct SystemAssembler {
         // for (size_t j = 0; j < n; ++j) { // could be parallelized
         parallel_for_range(n, [&](size_t j) {
             size_t offset = bucketStart[j];
-            for (size_t ii = Ap[j]; ii < Ap[j + 1]; ++ii)
+            for (index_type ii = Ap[j]; ii < Ap[j + 1]; ++ii)
                 Ai[ii] = columnBuckets[offset++];
         });
 #endif
@@ -386,7 +386,7 @@ private:
                 auto [gvar_i, bsi] = m_vars.blockInfo(bi);
                 if (gvar_i < gvar_j) {
                     index_type idx = H.findEntry(gvar_i, gvar_j);
-                    for (index_type c = 0; c < bsj; ++c) {
+                    for (size_t c = 0; c < bsj; ++c) {
                         typename SPMat::DataMap(H.Ax.data() + idx, bsj) += H_e.col(lvar_j + c).segment(lvar_i, bsj);
                         // Advance to the start of the block in the next columnn
                         // (assuming the next column has an identical sparsity
@@ -396,7 +396,7 @@ private:
                 }
                 else if (gvar_i == gvar_j) {
                     index_type idx = H.findDiagEntry(gvar_i); // Top of strip to add
-                    for (index_type c = 0; c < bsj; ++c) {
+                    for (size_t c = 0; c < bsj; ++c) {
                         typename SPMat::DataMap(H.Ax.data() + idx, c + 1) += H_e.col(lvar_j + c).segment(lvar_i, c + 1);
                         idx += H.col_nnz(gvar_j + c);
                     }
