@@ -1,0 +1,3 @@
+[submodule "3rdparty/MeshFEM_dev"]
+	path = 3rdparty/MeshFEM
+	url = git@github.com:MeshFEM/MeshFEM_dev
