@@ -54,17 +54,14 @@ struct MESHFEM_EXPORT NewtonProblem {
     // For efficiency, it must have the same sparsity pattern as the Hessian.
     // (This matrix is added to indefinite Hessians to produce a positive definite modified Hessian.)
     const SuiteSparseMatrix &metric() const {
-        if (m_useIdentityMetric) {
-            if (!m_identityMetric) {
-                m_identityMetric = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern());
-                m_identityMetric->setIdentity(true);
-            }
-            return *m_identityMetric;
-        }
-        if (disableCaching || !m_cachedMetric) {
+        if (!m_cachedMetric) { m_cachedMetric = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern()); }
+        if (disableCaching || !m_cachedMetricUpToDate) {
             m_cachedMetric = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern());
             m_evalMetric(*m_cachedMetric);
+            m_cachedMetricUpToDate = true;
         }
+        if (m_useIdentityMetric)
+            m_cachedMetric->setIdentity(/*preserveSparsity*/ true);
         return *m_cachedMetric;
     }
 
@@ -94,6 +91,8 @@ struct MESHFEM_EXPORT NewtonProblem {
         hsp.rowColRemoval([&isFixed] (size_t i) { return isFixed[i]; });
         return hsp;
     }
+    bool sparsityPatternFactorizationUpToDate() const { return m_sparsityPatternFactorizationUpToDate; }
+    void sparsityPatternFactorizationUpToDate(bool val) { m_sparsityPatternFactorizationUpToDate = val; }
 
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
     size_t numFixedVars() const { return fixedVars().size(); }
@@ -199,7 +198,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     }
 
     // Get feasible step length and the index of the step-limiting bound
-    std::pair<Real, size_t> feasibleStepLength(const VXd &vars, const VXd &step) const {
+    virtual std::pair<Real, size_t> feasibleStepLength(const VXd &vars, const VXd &step) const {
         Real alpha = std::numeric_limits<Real>::max();
         size_t blocking_idx = std::numeric_limits<size_t>::max();
 
@@ -228,7 +227,7 @@ struct MESHFEM_EXPORT NewtonProblem {
 
 protected:
     // Clear the cached per-iterate quantities
-    void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
+    void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetricUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
     // Called at the start of each new iteration (after line search has been performed)
     virtual void m_iterationCallback(size_t /* i */) { }
 
@@ -243,8 +242,10 @@ protected:
     // Cached values for the mass matrix and its L2 norm
     // Mass matrix is recomputed each iteration; L2 norm is estimated only
     // once across the entire solve.
-    mutable std::unique_ptr<SuiteSparseMatrix> m_cachedHessian, m_cachedMetric, m_identityMetric;
+    mutable std::unique_ptr<SuiteSparseMatrix> m_cachedHessian, m_cachedMetric;
     mutable bool m_cachedHessianUpToDate = false;
+    mutable bool m_cachedMetricUpToDate = false;
+    mutable bool m_sparsityPatternFactorizationUpToDate = false;
     mutable Real m_metricL2Norm = -1;
 };
 
@@ -462,17 +463,19 @@ private:
 };
 
 struct MESHFEM_EXPORT NewtonOptimizer {
-    NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) : solver(p->hessianReducedSparsityPattern()) {
+    NewtonOptimizer(std::unique_ptr<NewtonProblem> &&p) {
         prob = std::move(p);
+        updateSymbolicFactorization(prob->hessianReducedSparsityPattern());
+        const std::vector<size_t> fixedVars = prob->fixedVars();
         isFixed.assign(prob->numVars(), false);
-        for (size_t fv : prob->fixedVars()) isFixed[fv] = true;
+        for (size_t fv : fixedVars) isFixed[fv] = true;
     }
 
     void setFixedVars(const std::vector<size_t> &fixedVars) {
         prob->setFixedVars(fixedVars);
         isFixed.assign(prob->numVars(), false);
         for (size_t fv : fixedVars) isFixed[fv] = true;
-        solver.updateSymbolicFactorization(prob->hessianReducedSparsityPattern());
+        m_solver->updateSymbolicFactorization(prob->hessianReducedSparsityPattern());
     }
 
     ConvergenceReport optimize();
@@ -499,6 +502,20 @@ struct MESHFEM_EXPORT NewtonOptimizer {
         // "solver" and (if applicable) the kkt_solver as a side-effect.
         Eigen::VectorXd dummy;
         newton_step(dummy, Eigen::VectorXd::Zero(prob->numVars()), ws, options.beta, std::min(options.beta, 1e-6));
+    }
+
+    void updateSymbolicFactorization(const SuiteSparseMatrix &H) {
+        m_solver = std::make_unique<CholmodFactorizer>(H);
+        m_solver->factorizeSymbolic();
+        prob->sparsityPatternFactorizationUpToDate(true);
+    }
+
+    CholmodFactorizer &solver() { 
+        if (!m_solver) {
+            m_solver = std::make_unique<CholmodFactorizer>(prob->hessianReducedSparsityPattern());
+            m_solver->factorizeSymbolic();
+        }
+        return *m_solver;
     }
 
     void update_factorizations() { update_factorizations(WorkingSet(*prob)); }
@@ -540,7 +557,6 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     }
 
     NewtonOptimizerOptions options;
-    CholmodFactorizer solver;
     KKTSolver kkt_solver;
     // We fix variables by constraining the newton step to have zeros for these entries
     std::vector<char> isFixed;
@@ -548,6 +564,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
 
 private:
     std::unique_ptr<NewtonProblem> prob;
+    std::unique_ptr<CholmodFactorizer> m_solver;
 };
 
 #endif /* end of include guard: NEWTON_OPTIMIZER_HH */
