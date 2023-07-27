@@ -1144,6 +1144,18 @@ struct CSCMatrix {
         }
     }
 
+    // Add a vertical strip of contiguous nonzero values *ending* at (i, i)
+    template<class Derived>
+    void addDiagNZStrip(_Index i, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
+
+        _Index idx = findDiagEntry(i);
+        for (SuiteSparse_long k = values.size() - 1; k >= 0; --k, --idx) { // upper triangle only
+            Ax[idx] += values[k];
+        }
+    }
+
     void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
     void addScaledIdentity(_Real v) {
