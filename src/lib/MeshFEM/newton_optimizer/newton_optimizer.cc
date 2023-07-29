@@ -322,11 +322,19 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         size_t blocking_idx;
         std::tie(feasible_alpha, blocking_idx) = prob->feasibleStepLength(vars, step);
 
-        // To add multiple nearby bounds to the working set at once, we allow the
-        // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
-        // evaluating the objective). Then all bounds violated by the step length obtaining
-        // sufficient decrease are added to the working set.
-        alpha = std::min(1.0, feasible_alpha * 2);
+        if (prob->hasCollisions() && prob->hasLEQConstraint()) {
+            throw std::runtime_error("Cannot handle collisions and LEQ constraints at the same time, yet.");  // TODO
+        }
+        else if (prob->hasCollisions()) {
+            alpha = std::min(1.0, feasible_alpha);  // no overshoot, or we might miss collisions
+        }
+        else if (prob->hasLEQConstraint()) {
+            // To add multiple nearby bounds to the working set at once, we allow the
+            // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
+            // evaluating the objective). Then all bounds violated by the step length obtaining
+            // sufficient decrease are added to the working set.
+            alpha = std::min(1.0, feasible_alpha * 2);
+        }
 
         const Real c_1 = 1e-2;
         size_t bit;

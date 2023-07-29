@@ -104,6 +104,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     void setFixedVars(const std::vector<size_t> &fv) { m_fixedVars = fv; }
     void addFixedVariables(const std::vector<size_t> &fv) { m_fixedVars.insert(std::end(m_fixedVars), std::begin(fv), std::end(fv)); }
 
+    virtual bool         hasCollisions()          const { return false; }
     virtual bool         hasLEQConstraint()       const { return false; }
     virtual Eigen::VectorXd LEQConstraintMatrix() const { return Eigen::VectorXd(); }
     virtual Real            LEQConstraintRHS()    const { return 0.0; }
