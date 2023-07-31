@@ -62,7 +62,7 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         if (prob->hasLEQConstraint()) {
             // TODO: handle more than a single constraint...
             Eigen::VectorXd a = removeFixedEntries(ws.getFreeComponent(prob->LEQConstraintMatrix()));
-            kkt_solver.update(solver, a);
+            kkt_solver.update(solver(), a);
             const Real r = feasibility ? prob->LEQConstraintResidual() : 0.0;
             extractFullSolution(kkt_solver.solve(-x, r), step);
         }
@@ -73,11 +73,11 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 
     Eigen::VectorXd g_free = ws.getFreeComponent(g); // Zero out the entries with active bound constraints.
 
-    if (solver.hasFactorization()) {
+    if (solver().hasFactorization()) {
         if (!hUpdtCtr.needsUpdate() && (ws.size() == 0)) { // TODO: Reusing factorizations with bound constraints needs more care
             hUpdtCtr.reusedHessian();
             gReduced = removeFixedEntries(g_free);
-            solver.solveExistingFactorization(gReduced, x);
+            solver().solveExistingFactorization(gReduced, x);
             postprocessSolution();
             return NAN; // tau is unknown/undefined since we're reusing an old factorization; no negative curvature direction will be attempted by caller.
         }
@@ -89,6 +89,8 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
         fixVariablesInWorkingSet(*prob, H_reduced, ws);
         H_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
     }
+    if(!prob->sparsityPatternFactorizationUpToDate())
+        updateSymbolicFactorization(H_reduced);
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
     while (true) {
@@ -103,17 +105,17 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
 
                 auto Hmod = H_reduced;
                 Hmod.addWithIdenticalSparsity(*M_reduced, tau * currentTauScale); // Note: rows/cols corresponding to vars with active bounds will now have a nonzero value different from 1 on the diagonal, but this is fine since the RHS component is zero...
-                solver.updateFactorization(std::move(Hmod));
+                solver().updateFactorization(std::move(Hmod));
             }
             else {
-                solver.updateFactorization(H_reduced);
+                solver().updateFactorization(H_reduced);
             }
 
             BENCHMARK_SCOPED_TIMER_SECTION solve("Solve");
 
             gReduced = removeFixedEntries(g_free);
-            solver.solve(gReduced, x);
-            if (!solver.checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
+            solver().solve(gReduced, x);
+            if (!solver().checkPosDef()) throw std::runtime_error("System matrix is not positive definite");
             postprocessSolution();
 
             break;
@@ -161,7 +163,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     Real beta = options.beta;
     const Real betaMin = std::min(beta, 1e-10); // Initial shift "tau" to use when an indefinite matrix is detected.
 
-    solver.setSuppressWarnings(!options.verboseNonPosDef);
+    solver().setSuppressWarnings(!options.verboseNonPosDef);
 
     m_cachedHessianL2Norm.reset();
 
@@ -281,7 +283,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             auto M_reduced = prob->metric();
             fixVariablesInWorkingSet(*prob, M_reduced, workingSet);
             M_reduced.rowColRemoval([&](SuiteSparse_long i) { return isFixed[i]; });
-            auto d = negativeCurvatureDirection(solver, M_reduced, 1e-6);
+            auto d = negativeCurvatureDirection(solver(), M_reduced, 1e-6);
             {
                 Real dnorm = d.norm();
                 if (dnorm != 0.0) {
@@ -320,11 +322,19 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         size_t blocking_idx;
         std::tie(feasible_alpha, blocking_idx) = prob->feasibleStepLength(vars, step);
 
-        // To add multiple nearby bounds to the working set at once, we allow the
-        // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
-        // evaluating the objective). Then all bounds violated by the step length obtaining
-        // sufficient decrease are added to the working set.
-        alpha = std::min(1.0, feasible_alpha * 2);
+        if (prob->hasCollisions() && prob->hasLEQConstraint()) {
+            throw std::runtime_error("Cannot handle collisions and LEQ constraints at the same time, yet.");  // TODO
+        }
+        else if (prob->hasCollisions()) {
+            alpha = std::min(1.0, feasible_alpha);  // no overshoot, or we might miss collisions
+        }
+        else if (prob->hasLEQConstraint()) {
+            // To add multiple nearby bounds to the working set at once, we allow the
+            // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
+            // evaluating the objective). Then all bounds violated by the step length obtaining
+            // sufficient decrease are added to the working set.
+            alpha = std::min(1.0, feasible_alpha * 2);
+        }
 
         const Real c_1 = 1e-2;
         size_t bit;

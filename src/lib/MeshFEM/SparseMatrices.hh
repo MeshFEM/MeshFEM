@@ -1144,6 +1144,18 @@ struct CSCMatrix {
         }
     }
 
+    // Add a vertical strip of contiguous nonzero values *ending* at (i, i)
+    template<class Derived>
+    void addDiagNZStrip(_Index i, const Eigen::DenseBase<Derived> &values) {
+        static_assert(Derived::ColsAtCompileTime == 1, "Only column vectors can be added with addNZStrip");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only implemented for UPPER_TRIANGLE matrices");
+
+        _Index idx = findDiagEntry(i);
+        for (SuiteSparse_long k = values.size() - 1; k >= 0; --k, --idx) { // upper triangle only
+            Ax[idx] += values[k];
+        }
+    }
+
     void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
 
     void addScaledIdentity(_Real v) {
@@ -1333,26 +1345,29 @@ struct CSCMatrix {
     }
 
     // Perform the operation:
-    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    // a[offset:, offset:] + alpha * b[blockStart:blockEnd, blockStart:blockEnd]
     // Sparsity pattern of RHS can be arbitrary.
-    void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+    static CSCMatrix addWithDistinctSparsityPattern(const CSCMatrix &a, const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
         _Index inputSize = std::min(b.m, blockEnd) - blockStart;
         if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
-        if ((m != inputSize + offset) || (n != inputSize + offset)) throw std::runtime_error("Size mismatch");
-        if (b.nz == 0) return;
-        if (nz == 0) { *this = b; return; }
+        if ((a.m != inputSize + offset) || (a.n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+        if (b.nz == 0) return a;
+        if (a.nz == 0) return b;
 
-        auto it  = begin(), bit  = b.begin(),
-             ite = end(),   bite = b.end();
+        auto it  = a.begin(), bit  = b.begin(),
+             ite = a.end(),   bite = b.end();
         auto inRange = [&](_Index i) { return (i >= blockStart) && (i < blockEnd); };
         auto bi   = [&]() { return offset + bit.get_i();   };
         auto bj   = [&]() { return offset + bit.get_j();   };
         auto bval = [&]() { return  alpha * bit.get_val(); };
-        std::vector<_Index> newAp, newAi;
-        container_type  newAx;
-        newAp.reserve(Ap.size());
-        newAi.reserve(Ai.size());
-        newAx.reserve(Ax.size());
+
+        CSCMatrix result(a.m, a.n);
+        result.symmetry_mode = a.symmetry_mode;
+        auto &newAp = result.Ap, &newAi = result.Ai;
+        auto &newAx = result.Ax;
+        newAp.reserve(a.Ap.size());
+        newAi.reserve(a.Ai.size());
+        newAx.reserve(a.Ax.size());
 
         // Merge sorted triplets into the new result
         _Index currCol = 0;
@@ -1383,18 +1398,27 @@ struct CSCMatrix {
             if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val() + bval()); ++it; ++bit; }
             if (!takeA &&  takeB) { insertEntry(      bi(),       bj(),                bval());       ++bit; }
         }
-        if (currCol >= n) throw std::runtime_error("Column index out of bounds");
+        if (currCol >= a.n) throw std::runtime_error("Column index out of bounds");
 
         // Terminate all remaining columns
-        for (_Index c = currCol; c < n; ++c)
+        for (_Index c = currCol; c < a.n; ++c)
             newAp.push_back(newAi.size());
 
-        assert(newAp.size() == size_t(n + 1));
+        assert(newAp.size() == size_t(a.n + 1));
+        result.nz = newAi.size();
+        return result;
+    }
 
-        Ai = std::move(newAi);
-        Ap = std::move(newAp);
-        Ax = std::move(newAx);
-        nz = Ai.size();
+    // Perform the operation:
+    //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        *this = addWithDistinctSparsityPattern(*this, b, alpha, offset, blockStart, blockEnd);
+    }
+
+    bool sparsityPatternsMatch(const CSCMatrix &b) const {
+        return (m == b.m) && (n == b.n) && (nnz() == b.nnz())
+               && std::equal(Ap.begin(), Ap.end(), b.Ap.begin(), b.Ap.end())
+               && std::equal(Ai.begin(), Ai.end(), b.Ai.begin(), b.Ai.end());
     }
 
     // Set from a triplet matrix
