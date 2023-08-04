@@ -170,7 +170,7 @@ struct SystemAssembler {
 
     template<class FEMMesh_>
     CSCMat blockSparsityPatternForMesh(const FEMMesh_ &m) const {
-        return blockSparsityPattern(m.numNodes(), m.numElements(),
+        return blockSparsityPattern(m.numElements(),
                 [&](size_t ei) {
                     std::array<size_t, FEMMesh_::NumNodesPerElement> blockVarsForElement;
                     auto e = m.element(ei);
@@ -180,9 +180,10 @@ struct SystemAssembler {
     }
 
     template<class ElemBlockVarsForElement>
-    CSCMat blockSparsityPattern(size_t numBlockVars, size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
+    CSCMat blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("blockSparsityPattern");
 
+        const size_t numBlockVars = m_vars.numBlocks();
 #if 0
         struct SparsityTriplet { size_t i, j; };
         std::vector<SparsityTriplet> nz;
