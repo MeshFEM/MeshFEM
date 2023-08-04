@@ -125,21 +125,18 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     ElementGradient elementGradient(size_t ei) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
         const auto &e = mesh().element(ei);
-        return QuadratureRule::integrate([&](const EvalPtK &x) {
-                  ElementGradient integrand;
-                  GradPhis gradPhis = e->gradPhis(x);
-                  psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
-                  Matrix denergy = psi.denergy();
+        ElementGradient result;
+        result.setZero();
+        for (size_t i = 0; i < QuadratureRule::numPoints; ++i) {
+            double w = (e->volume() * QuadratureRule::weights[i]);
+            GradPhis gradPhis = e->gradPhis(QuadratureRule::points[i]);
+            psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
+            Matrix denergy = w * psi.denergy();
 
-                  for (const auto n : e.nodes()) {
-                      VSFJ gradPhi(0, gradPhis.col(n.localIndex()));
-                      for (size_t c = 0; c < N; ++c) {
-                          gradPhi.c = c;
-                          integrand[N * n.localIndex() + c] = doubleContract(gradPhi, denergy);
-                      }
-                  }
-                return integrand;
-            }, e->volume());
+            for (size_t ni = 0; ni < e.numNodes(); ++ni)
+                result.template segment<N>(N * ni) += denergy * gradPhis.col(ni);
+        }
+        return result;
     }
 
     // Gradient of the full object's energy with respect to all deformation variables.

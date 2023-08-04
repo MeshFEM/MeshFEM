@@ -62,7 +62,7 @@ struct OptimizationVarStructure {
 
     template <typename... Args>
     OptimizationVarStructure(Args... args)
-        : m_numBlocksPerType{args...}
+        : m_numBlocksPerType{{args...}}
     {
         m_typeBlockOffsets[0] = 0;
         m_typeVarOffsets[0] = 0;
