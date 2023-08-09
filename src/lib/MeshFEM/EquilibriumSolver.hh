@@ -100,7 +100,7 @@ struct EquilibriumProblem : public NewtonProblem {
 
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
-        result.setZero();
+        result.data().setZero();
         m_obj.hessian(result, projectionMask);
         for (const auto &l : m_loads)
             l->hessian(result, projectionMask);
@@ -112,7 +112,9 @@ protected:
     }
 
     virtual bool m_iterationCallback(size_t i) override {
-        m_currSystemEnergy = m_obj.energy();
+        if (systemEnergyIncreaseFactorLimit == safe_numeric_limits<Real>::max())
+            m_currSystemEnergy = safe_numeric_limits<Real>::max();
+        else m_currSystemEnergy = m_obj.energy();
         m_obj.updateParametrization();
         if (m_customCallback) return m_customCallback(*this, i);
         return false; // don't exit early

@@ -32,8 +32,8 @@ MESHFEM_EXPORT tbb::task_arena &get_hessian_assembly_arena();
 MESHFEM_EXPORT tbb::task_arena &get_gradient_assembly_arena();
 
 template<typename Partitioner = tbb::auto_partitioner, typename F>
-void parallel_for_range(size_t start, size_t end, F &&f) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(start, end),
+void parallel_for_range(size_t start, size_t end, F &&f, size_t grain_size = 1) {
+    tbb::parallel_for(tbb::blocked_range<size_t>(start, end, grain_size),
                       [&f](const tbb::blocked_range<size_t> &r) {
         for (size_t i = r.begin(); i < r.end(); ++i)
             f(i);
@@ -43,6 +43,16 @@ void parallel_for_range(size_t start, size_t end, F &&f) {
 template<typename Partitioner = tbb::auto_partitioner, typename F>
 void parallel_for_range(size_t n, F &&f) {
     parallel_for_range<Partitioner>(0, n, f);
+}
+
+template<typename Partitioner = tbb::auto_partitioner, typename F>
+void parallel_for_range(size_t n, F &&f, size_t grain_size, size_t parallelism_threshold) {
+    if (n >= parallelism_threshold)
+        parallel_for_range<Partitioner>(0, n, f, grain_size);
+    else {
+        for (size_t i = 0; i < n; ++i)
+            f(i);
+    }
 }
 
 #else // !MESHFEM_WITH_TBB

@@ -822,8 +822,14 @@ struct CSCMatrix {
     using container_type = typename spmat_helper::value_traits<value_type>::container_type;
 
     using DataType = Eigen::Matrix<_Real, Eigen::Dynamic, 1>;
-    using DataMap  = Eigen::Map<      Eigen::Matrix<_Real, Eigen::Dynamic, 1>>;
-    using DataCMap = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>;
+
+    template<int Rows = Eigen::Dynamic>
+    using SizedDataMap  = Eigen::Map<      Eigen::Matrix<_Real, Rows, 1>>;
+    template<int Rows = Eigen::Dynamic>
+    using SizedDataCMap = Eigen::Map<const Eigen::Matrix<_Real, Rows, 1>>;
+
+    using DataMap  = SizedDataMap<Eigen::Dynamic>;
+    using DataCMap = SizedDataCMap<Eigen::Dynamic>;
 
     IdxVector  Ap, Ai;   // Column pointer and row index arrays
                          // Note: the row index array must be sorted!
@@ -1206,6 +1212,11 @@ struct CSCMatrix {
             addDiagEntry(i, v);
     }
 
+    template<class _InVector>
+    void addDiag(const _InVector &d) {
+        for (_Index i = 0; i < m; ++i) addDiagEntry(i, d[i]);
+    }
+
     template<bool _detectMissing = false>
     _Index findEntry(_Index i, _Index j) const {
         // Find the entry in the sparsity pattern.
@@ -1391,13 +1402,14 @@ struct CSCMatrix {
         assert(bit == bite && "b's sparsity not a subset of ours");
     }
 
-    void addWithSubSparsityFast(const CSCMatrix &b, const _Index offset = 0) {
+    template<bool parallel = true>
+    void addWithSubSparsityFast(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
         auto it  = begin(), bit  = b.begin(),
              ite = end(),   bite = b.end();
         auto bi = [&]() { return offset + bit.get_i(); };
         auto bj = [&]() { return offset + bit.get_j(); };
 
-        for (_Index jA = offset; jA < n; ++jA) {
+        auto addColumn = [&](_Index jA) {
             _Index jB = jA - offset;
 
             _Index iiA = Ap[jA], iiB = b.Ap[jB];
@@ -1405,7 +1417,7 @@ struct CSCMatrix {
             while ((iiA != endA) && (iiB != endB)) {
                 _Index rA = Ai[iiA], rB = b.Ai[iiB];
                 if (rA == rB) {
-                    Ax[iiA] += b.Ax[iiB];
+                    Ax[iiA] += alpha * b.Ax[iiB];
                     ++iiA, ++iiB;
                 }
                 else {
@@ -1414,6 +1426,24 @@ struct CSCMatrix {
                 }
             }
             assert(iiB == endB && "Hit end of column A before end of column B :(");
+        };
+
+        if (parallel) {
+#if 0
+            // This one seems slower :(
+            static tbb::affinity_partitioner ap;
+            tbb::parallel_for(tbb::blocked_range<_Index>(offset, n),
+                [&](const tbb::blocked_range<_Index> &r) {
+                    for (_Index i = r.begin(); i < r.end(); ++i)
+                        addColumn(i);
+                }, ap);
+#else
+            parallel_for_range(offset, n, addColumn);
+#endif
+        }
+        else {
+            for (_Index jA = offset; jA < n; ++jA)
+                addColumn(jA);
         }
     }
 
@@ -1421,6 +1451,8 @@ struct CSCMatrix {
     // a[offset:, offset:] + alpha * b[blockStart:blockEnd, blockStart:blockEnd]
     // Sparsity pattern of RHS can be arbitrary.
     static CSCMatrix addWithDistinctSparsityPattern(const CSCMatrix &a, const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix.addWithDistinctSparsityPattern");
+
         _Index inputSize = std::min(b.m, blockEnd) - blockStart;
         if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
         if ((a.m != inputSize + offset) || (a.n != inputSize + offset)) throw std::runtime_error("Size mismatch");
@@ -1485,6 +1517,7 @@ struct CSCMatrix {
     // Perform the operation:
     //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
     void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        if (b.nz == 0) return;
         *this = addWithDistinctSparsityPattern(*this, b, alpha, offset, blockStart, blockEnd);
     }
 
@@ -1794,11 +1827,7 @@ struct CSCMatrix {
             }
         };
 
-#if MESHFEM_WITH_TBB
-        parallel_for_range(n, computeEntry);
-#else
-        for (index_type j = 0; j < n; ++j) computeEntry(j);
-#endif
+        parallel_for_range(n, computeEntry, 32, 100);
     }
 
     template<typename _Vector>
@@ -1807,6 +1836,36 @@ struct CSCMatrix {
         Result result;
         applyTransposeParallel(x, result);
         return result;
+    }
+
+    template<class _InVector>
+    value_type evalQuadraticForm(const _InVector &x) const {
+        // BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix.evalQuadraticForm");
+        if (size_t(x.rows()) != size_t(m)) throw std::runtime_error("evalQuadraticForm size mismatch.");
+        if (symmetry_mode == SymmetryMode::UPPER_TRIANGLE) {
+            return summation_parallel([&](size_t j) {
+                const index_type col_begin = Ap[j],
+                                 col_end   = Ap[j + 1];
+                value_type result = 0;
+                for (index_type entry = col_begin; entry < col_end; ++entry) {
+                    size_t i = Ai[entry];
+                    result += ((i == j) ? 1 : 2) * Ax[entry] * x[i];
+                }
+                return result * x[j];
+            }, n);
+        }
+        if (symmetry_mode == SymmetryMode::NONE) {
+            return summation_parallel([&](size_t j) {
+                const index_type col_begin = Ap[j],
+                                 col_end   = Ap[j + 1];
+                value_type result = 0;
+                for (index_type entry = col_begin; entry < col_end; ++entry)
+                    result += Ax[entry] * x[Ai[entry]];
+                return result * x[j];
+            }, n);
+        }
+
+        throw std::runtime_error("Unsupported SymmetryMode");
     }
 
     // Remove the rows i and columns j for which remove[i] and remove[j] is true, respectively.

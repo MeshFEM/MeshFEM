@@ -190,7 +190,6 @@ public:
     template<template<class> class _Handle> using  HR = HandleRange<      FEMMesh, _Handle>;
     template<template<class> class _Handle> using CHR = HandleRange<const FEMMesh, _Handle>;
 
-public:
     HR< VHandle>         vertices() { return HR< VHandle>(*this); }
     HR< NHandle>            nodes() { return HR< NHandle>(*this); }
     HR< EHandle>         elements() { return HR< EHandle>(*this); }
@@ -215,6 +214,22 @@ public:
     CHR<BVHandle> constBoundaryVertices() const { return CHR<BVHandle>(*this); }
     CHR<BNHandle>    constBoundaryNodes() const { return CHR<BNHandle>(*this); }
     CHR<BEHandle> constBoundaryElements() const { return CHR<BEHandle>(*this); }
+
+    std::array<size_t, NumNodesPerElement> elementNodeIndices(size_t ei) const {
+        std::array<size_t, NumNodesPerElement> result;
+        elementNodeIndices(ei, result);
+        return result;
+    }
+
+    template<typename T>
+    void elementNodeIndices(size_t ei, std::array<T, NumNodesPerElement> &nodeIndices) const {
+        constexpr size_t nsv = Simplex::numVertices(_K);
+        constexpr size_t nse = Simplex::numEdges   (_K);
+        const size_t     nv  = BaseMesh::numVertices();
+
+                               for (size_t i = 0; i < nsv; ++i) nodeIndices[      i] = BaseMesh::V[nsv * ei + i];
+        if constexpr (Deg > 1) for (size_t i = 0; i < nse; ++i) nodeIndices[nsv + i] =    nv + m_N[nse * ei + i];
+    }
 
     // (re-)embed the mesh elements.
     // Mesh vertex nodes are read from the passed vertex position array and edge

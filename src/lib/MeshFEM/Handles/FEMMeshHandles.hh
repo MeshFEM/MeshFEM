@@ -107,7 +107,8 @@ protected:
     using VH = typename _Mesh::template VHandle<_Mesh>;
 public:
     static constexpr size_t numNodes() { return Simplex::numNodes(BaseMesh<_Mesh>::K, BaseMesh<_Mesh>::Deg); }
-    NH node(size_t i) const { return NH(m_mesh.m_nodeOfElement(i, m_idx), m_mesh); }
+    int nodeIndex(size_t i)  const { return m_mesh.m_nodeOfElement(i, m_idx); }
+    NH node(size_t i) const { return NH(nodeIndex(i), m_mesh); }
 
     // Support range-based for over nodes
     struct NRangeTraits { using SEHType = NH; using EHType = EHandle; static constexpr size_t count = numNodes(); static constexpr auto get = &EHType::node; };

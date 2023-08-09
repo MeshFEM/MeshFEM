@@ -60,10 +60,10 @@ private:
 };
 
 template<typename PerElemSummand>
-return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, const size_t numElems) {
+return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, const size_t numElems, size_t grain_size = 24) {
     using Real_ = return_type<PerElemSummand>;
     SumLocalData<Real_> localData;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems, grain_size),
                       SummandEvaluator<PerElemSummand, Real_>(summand, localData));
 
     Real_ result = 0;

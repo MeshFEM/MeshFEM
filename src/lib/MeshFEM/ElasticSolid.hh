@@ -142,17 +142,15 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
-        VXd g(VXd::Zero(numVars()));
-
-        auto accumulate_per_element_contrib = [&](size_t ei, VXd &g_out) {
-            ElementGradient contrib = elementGradient(ei);
-            for (const auto n : mesh().element(ei).nodes())
-                g_out.template segment<N>(N * n.index()) += contrib.template segment<N>(N * n.localIndex());
-        };
-
-        assemble_parallel(accumulate_per_element_contrib, g, numElements());
-
+#if 1
+        VXd g(numVars());
+        m_assembler.assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
+#else
+        VXd g = VXd::Zero(numVars());
+        m_assembler.assembleGradient(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
+#endif
         return g;
     }
 
@@ -202,7 +200,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
 
-        m_assembler.assembleHessian(H, mesh(), [&](size_t ei) {
+        m_assembler.assembleHessian(H, mesh(), [this, projectionMask](size_t ei) {
             return elementHessian(ei, /* disableProjection */ !projectionMask);
         });
     }
