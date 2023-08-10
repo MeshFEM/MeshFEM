@@ -33,6 +33,8 @@
 #include "Laplacian.hh"
 #include "VonMises.hh"
 
+#include "SolidElement.hh"
+
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
@@ -54,14 +56,14 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
-    using QuadratureRule = Quadrature<N, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
-    using EvalPtK = EvalPt<K>;
-    using Vector = Eigen::Matrix<Real, N, 1>;
-    using Matrix = Eigen::Matrix<Real, N, N>;
-    using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
-    using MXNd = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
-    using Mesh = FEMMesh<K, Deg, Vector>;
-    using VSFJ = VectorizedShapeFunctionJacobian<N, Vector>;
+    using SE = SolidElement<Real, K, Deg>;
+
+    using EvalPtK  = EvalPt<K>;
+    using Vector   = Eigen::Matrix<Real, N, 1>;
+    using Matrix   = Eigen::Matrix<Real, N, N>;
+    using VXd      = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+    using MXNd     = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
+    using Mesh     = FEMMesh<K, Deg, Vector>;
     using GradPhis = typename Mesh::ElementData::GradPhis;
 
     ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
@@ -105,38 +107,19 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     // Energy stored in the full object.
     virtual Real energy() const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("energy");
-        return summation_parallel([this](size_t ei) { return elementEnergy(ei); },
-                                  mesh().numElements());
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.energy");
+        return summation_parallel([this](size_t ei) { return elementEnergy(ei); }, mesh().numElements());
     }
 
     // Energy stored in a single element.
     Real elementEnergy(size_t ei) const {
-        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        return QuadratureRule::integrate(
-            [ei, &psi, this](const EvalPtK &x) {
-                psi.setDeformationGradient(getDeformationGradient(ei, x), EvalLevel::EnergyOnly);
-                return psi.energy();
-            }, mesh().element(ei)->volume());
+        return SE::energy(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
     // Gradient of a single element's energy with respect to its nodes' deformed positions..
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t ei) const {
-        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &e = mesh().element(ei);
-        ElementGradient result;
-        result.setZero();
-        for (size_t i = 0; i < QuadratureRule::numPoints; ++i) {
-            double w = (e->volume() * QuadratureRule::weights[i]);
-            GradPhis gradPhis = e->gradPhis(QuadratureRule::points[i]);
-            psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), EvalLevel::Gradient);
-            Matrix denergy = w * psi.denergy();
-
-            for (size_t ni = 0; ni < e.numNodes(); ++ni)
-                result.template segment<N>(N * ni) += denergy * gradPhis.col(ni);
-        }
-        return result;
+        return SE::gradient(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
     // Gradient of the full object's energy with respect to all deformation variables.
@@ -144,7 +127,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
-#if 1
+#if 0
         VXd g(numVars());
         m_assembler.assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
 #else
@@ -160,40 +143,9 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return H;
     }
 
-    // Simple columnwise flattening operation for (the upper triangle of) symmetric
-    // matrices. Indices in the lower triangle are mapped to the upper triangle.
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
-        Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        const auto &e = mesh().element(ei);
-
-        PerElementHessian result;
-        result.template triangularView<Eigen::Upper>().setZero();
-
-        for (size_t i = 0; i < QuadratureRule::numPoints; ++i) {
-            double w = (e->volume() * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
-            GradPhis gradPhis = e->gradPhis(QuadratureRule::points[i]);
-            psi.setDeformationGradient(getDeformationGradient(ei, gradPhis), disableProjection ? EvalLevel::HessianWithDisabledProjection
-                                                                                               : EvalLevel::Hessian);
-            auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into N^2 x N^2 matrix using a column-major ordering.
-
-            for (size_t lni_b = 0; lni_b < numNodesPerElement; ++lni_b) {
-                VSFJ gradPhi_b(0, w * gradPhis.col(lni_b));
-                for (size_t c_b = 0; c_b < N; ++c_b) {
-                    size_t var_b = N * lni_b + c_b;
-                    gradPhi_b.c = c_b;
-                    Matrix delta_denergy = applyFlattened4thOrderTensor(d2psi, gradPhi_b);
-#if 0 // somehow this is slower :(
-                    Eigen::Map<Eigen::Matrix<Real, N, Eigen::Dynamic>>(result.col(var_b).data(), N, lni_b + 1) += delta_denergy * gradPhis.leftCols(lni_b + 1);
-#else
-                    for (size_t lni_a = 0; lni_a <= lni_b; ++lni_a)
-                        result.col(var_b).template segment<N>(N * lni_a) += delta_denergy * gradPhis.col(lni_a);
-#endif
-                }
-            }
-        }
-        result.template triangularView<Eigen::Lower>() = result.transpose();
-        return result;
+        return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection);
     }
 
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
@@ -250,15 +202,20 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return m_energyDensities.at(ei);
     }
 
+    // Extract the values of `f` at the nodes of element `ei`.
+    using NodePositions = Eigen::Matrix<Real, numNodesPerElement, N, Eigen::RowMajor>;
+    auto extractNodePositions(size_t ei, const MXNd &f) const {
+        NodePositions nodalValues;
+        auto enodes = mesh().elementNodeIndices(ei);
+        for (size_t lni = 0; lni < numNodesPerElement; ++lni)
+            nodalValues.row(lni) = f.row(enodes[lni]);
+        return nodalValues;
+    }
+
     // Evaluate F = \nabla f within element `ei` using a linear combination of
     // the element's shape function gradients `gradPhis`.
     Matrix jacobian(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const MXNd &f) const {
-        Matrix F(Matrix::Zero());
-        const auto &e = mesh().element(ei);
-        for (const auto n : e.nodes()) {
-            F += (gradPhis.col(n.localIndex()) * f.row(n.index())).transpose();
-        }
-        return F;
+        return (gradPhis * extractNodePositions(ei, f)).transpose();
     }
 
     // Evaluate F = \nabla f at barycentric coordinates `bc` in element `ei`.
@@ -272,6 +229,14 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     Matrix getDeformationGradient(size_t ei, const EvalPtK &x) const {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
+    }
+
+    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const NodePositions &nodalValues) const {
+        return (gradPhis * nodalValues).transpose();
+    }
+
+    Matrix getDeformationGradient(size_t ei, const EvalPtK &x, const NodePositions &nodalValues) const {
+        return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x), nodalValues);
     }
 
     Vector deformedPosition(size_t ei, const EvalPtK &x) const {
@@ -375,7 +340,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         VXd result(m.numElements());
         for (const auto e : m.elements()) {
             result[e.index()] =
-                QuadratureRule::integrate([&](const EvalPt<K> &x) {
+                SE::QuadratureRule::integrate([&](const EvalPt<K> &x) {
                         return getDeformationGradient(e.index(), x).determinant();
                     }, e->volume());
         }

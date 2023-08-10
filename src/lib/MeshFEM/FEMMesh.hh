@@ -283,6 +283,13 @@ public:
         return vol;
     }
 
+    const ElementData &elementData(size_t ei) const {
+        if constexpr (K == 2) return BaseMesh::m_triData[ei];
+        if constexpr (K == 3) return BaseMesh::m_tetData[ei];
+    }
+
+    Real elementVolume(size_t ei) const { return elementData(ei).volume(); }
+
     EmbeddingSpace centerOfMass() const {
         EmbeddingSpace result(EmbeddingSpace::Zero());
         for (const auto e : elements()) {

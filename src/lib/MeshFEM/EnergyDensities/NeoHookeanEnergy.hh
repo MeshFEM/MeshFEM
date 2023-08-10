@@ -8,15 +8,14 @@
 #define NEOHOOKEANENERGY_HH
 
 #include <Eigen/Dense>
+// #include <unsupported/Eigen/KroneckerProduct>
 #include <cstdlib>
 
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 
-/**
- *  Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
- */
+// Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
 template<typename _Real, size_t _Dim, template<typename, size_t> class _Derived_T>
 struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
 {
@@ -42,10 +41,12 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
         setDeformationGradient(Matrix::Identity());
     }
 
-    void setDeformationGradient(const Matrix& deformation_gradient, const EvalLevel /* elevel */ = EvalLevel::Full) {
+    void setDeformationGradient(const Matrix& deformation_gradient, const EvalLevel elevel = EvalLevel::Full) {
         m_F = deformation_gradient;
         m_detF = deformation_gradient.determinant();
+        if (elevel < EvalLevel::Gradient) return;
         m_Finv = m_F.inverse();
+        m_Finv_T = m_Finv.transpose();
     }
 
     const Matrix &getDeformationGradient() const { return m_F; }
@@ -134,7 +135,7 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     // (d^3 I3 / dF^3) :: (dF_a \otimes dF_b)
     Matrix delta2_d_I3_d_F(const Matrix &dF_a, const Matrix &dF_b) const { return derived().delta2_d_I3_d_F(dF_a, dF_b); }
 
-    Matrix PK2Stress() const { return m_Finv * denergy(); }
+    Matrix PK2Stress() const { return m_Finv_T.transpose() * denergy(); }
 
     const Derived &derived() const { return *static_cast<const Derived *>(this); }
 protected:
@@ -164,12 +165,12 @@ protected:
     // (i.e., the 2x2 invariants for 2D, not including the C33 component)
     ////////////////////////////////////////////////////////////////////////////
     Real           unpaddedI3()     const { return m_detF * m_detF; }
-    Matrix       d_unpaddedI3_d_F() const { return (2 * unpaddedI3()) * m_Finv.transpose(); }
+    Matrix       d_unpaddedI3_d_F() const { return (2 * unpaddedI3()) * m_Finv_T; }
     template<typename Mat_>
-    Real delta_unpaddedI3(const Mat_ &dF) const { return (2 * unpaddedI3()) * doubleContract(m_Finv.transpose(), dF); }
+    Real delta_unpaddedI3(const Mat_ &dF) const { return (2 * unpaddedI3()) * doubleContract(m_Finv_T, dF); }
     template<typename Mat_>
     Matrix delta_d_unpaddedI3_d_F(const Mat_ &dF) const {
-        return (2 * delta_unpaddedI3(dF)) *  m_Finv.transpose()
+        return (2 * delta_unpaddedI3(dF)) *  m_Finv_T
              - (2 *       unpaddedI3()  ) * (m_Finv * dF * m_Finv).transpose();
     }
 
@@ -178,7 +179,7 @@ protected:
         Matrix delta_Finv_a = -(m_Finv * dF_a * m_Finv),
                delta_Finv_b = -(m_Finv * dF_b * m_Finv);
 
-        return (2 * delta2_unpaddedI3_ab)   *       m_Finv.transpose()
+        return (2 * delta2_unpaddedI3_ab)   *       m_Finv_T
              + (2 * delta_unpaddedI3(dF_a)) * delta_Finv_b.transpose()
              + (2 * delta_unpaddedI3(dF_b)) * delta_Finv_a.transpose()
              - (2 *       unpaddedI3()  ) * (delta_Finv_b * dF_a * m_Finv).transpose()
@@ -189,7 +190,7 @@ protected:
     Real m_mu = 0.0;     // Shear modulus
 
     // Cached deformation quantities.
-    Matrix m_F = Matrix::Identity(), m_Finv = Matrix::Identity();
+    Matrix m_F, m_Finv, m_Finv_T;
     Real m_detF = 1.0;
 };
 
@@ -253,7 +254,7 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
 
         Real FinvTCoeff = (d_C33_d_unpaddedI3() * unpaddedI3_eval);
         FinvTCoeff = (2 * unpaddedI3_eval) * d_psi_d_I3_eval * (FinvTCoeff + m_C33) + m_mu * FinvTCoeff;
-        return m_mu * m_F + FinvTCoeff * m_Finv.transpose();
+        return m_mu * m_F + FinvTCoeff * m_Finv_T;
     }
 
     static constexpr size_t N = Base::N;
@@ -272,16 +273,15 @@ struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHoo
                    coeff_2 *= coeff_2 * Base::d2_psi_d2_I3();
                    coeff_2 += (2 * d_C33_d_unpaddedI3_eval) * (d_psi_d_I3_eval - m_C33 * coeff_1 * (m_lambda / (m_lambda + 2 * m_mu)));
                    coeff_2  = 2 * (coeff_2 * unpaddedI3_eval * unpaddedI3_eval + delta_d_unpaddedI3_coeff);
-        const Matrix Finv_T = m_Finv.transpose(); // Enable transposed matrix to be stored contiguously in a SIMD register...
 
         for (size_t j = 0; j < N; ++j) {
             for (size_t i = 0; i < N; ++i) {
                 // delta_F = e_i \otimes e_j
-                Matrix delta_de = (coeff_2 * m_Finv(j, i)) * Finv_T
-                                - delta_d_unpaddedI3_coeff * (Finv_T.col(j) * m_Finv.col(i).transpose());
+                Matrix delta_de = (coeff_2 * m_Finv_T(i, j)) * m_Finv_T
+                                - delta_d_unpaddedI3_coeff * (m_Finv_T.col(j) * m_Finv.col(i).transpose());
                 delta_de(i, j) += d_psi_d_I1_eval;
                 delta_de *= 2;
-                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
+                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<Real, N * N, 1>>(delta_de.data());
             }
         }
 
@@ -358,6 +358,7 @@ protected:
 private:
     using Base::m_F;
     using Base::m_Finv;
+    using Base::m_Finv_T;
     using Base::m_detF;
     using Base::m_lambda;
     using Base::m_mu;
@@ -387,8 +388,48 @@ struct NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHoo
 
     Matrix delta2_d_I1_d_F(const Matrix &/* dF_a */, const Matrix /* &dF_b */) const { return Matrix::Zero(); }
     Matrix delta2_d_I3_d_F(const Matrix    &dF_a   , const Matrix    &dF_b   ) const { return this->delta2_d_unpaddedI3_d_F(dF_a, dF_b); }
+
+    using Base::denergy;
+    // Inlined and accelerated gradient calculation.
+    Matrix denergy() const {
+        return m_mu * m_F + ((0.5 * m_lambda) * (getI3() - 1) - m_mu) * m_Finv_T;
+    }
+
+    using Base::d2energy;
+    static constexpr size_t N = 3;
+    using Hessian = Eigen::Matrix<Real, N * N, N * N>;
+    Hessian d2energy() const {
+        Real I3_cache = getI3();
+        Real coeff = ((0.5 * m_lambda) * (I3_cache - 1) - m_mu);
+        Real coeff2 = m_lambda * I3_cache;
+
+        Hessian H;
+#if 1
+        auto vectorize = [](Matrix A) { return Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(A.data()); };
+        H = m_mu * Hessian::Identity() + (coeff2 * vectorize(m_Finv_T)) * vectorize(m_Finv_T).transpose();
+        for (size_t j = 0; j < N; ++j)
+            for (size_t i = 0; i < N; ++i)
+                Eigen::Map<Matrix>(H.col(i + j * N).data()) -= (coeff * m_Finv_T.col(j)) * m_Finv.col(i).transpose();
+
+        // H -= coeff * Eigen::kroneckerProduct(m_Finv, m_Finv_T); // is this really a Kronecker product operation with the transposes going on?
+#else
+        for (size_t j = 0; j < N; ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                // delta_F = e_i \otimes e_j
+                Matrix delta_de = (coeff2 * m_Finv_T(i, j)) * m_Finv_T
+                                - coeff * (m_Finv_T.col(j) * m_Finv.col(i).transpose());
+                delta_de(i, j) += m_mu;
+                H.col(i + j * N) = Eigen::Map<const Eigen::Matrix<double, N * N, 1>>(delta_de.data());
+            }
+        }
+#endif
+        return H;
+    }
+
 private:
     using Base::m_F;
+    using Base::m_Finv;
+    using Base::m_Finv_T;
     using Base::m_detF;
     using Base::m_lambda;
     using Base::m_mu;

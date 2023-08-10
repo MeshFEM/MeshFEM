@@ -151,10 +151,14 @@ void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, bool lumped = fal
         throw std::runtime_error("Unexpected output size");
     if (M.symmetry_mode != _SPMat::SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Unexpected symmetry mode (should be UPPER_TRIANGLE)");
 
+    bool skipping = (skipElem.size() == mesh.numElements());
+    if (!skipping && skipElem.size()) throw std::runtime_error("Invalid skipElem array size.");
+
     const size_t ne = mesh.numElements();
     if (lumped) {
         const auto lumpedM_e = Impl<Deg>::template lumpedElementMatrix<_FEMMesh>();
         for (size_t ei = 0; ei < ne; ++ei) {
+            if (skipping && skipElem[ei]) continue;
             auto blockVars = mesh.elementNodeIndices(ei);
             assert(int(blockVars.size()) >= lumpedM_e.rows());
             auto vol = mesh.element(ei)->volume();
@@ -167,6 +171,7 @@ void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, bool lumped = fal
     else {
         const auto M_e = Impl<Deg>::template elementMatrix<_FEMMesh>();
         for (size_t ei = 0; ei < ne; ++ei) {
+            if (skipping && skipElem[ei]) continue;
             auto blockVars = mesh.elementNodeIndices(ei);
             assert(int(blockVars.size()) >= M_e.rows());
             auto vol = mesh.element(ei)->volume();
