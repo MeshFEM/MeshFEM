@@ -132,9 +132,9 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     static constexpr size_t N = ES::N;
 
     using Real         = typename ES  ::Real;
-    using VNd          = typename ES  ::Vector;
+    using VNd          = typename ES  ::VNd;
     using VXd          = typename Base::VXd;
-    using MNd          = typename ES  ::Matrix;
+    using MNd          = typename ES  ::MNd;
     using MXNd         = typename ES  ::MXNd;
     using EvalPtK      = typename ES  ::EvalPtK;
     using CSCMat       = typename Base::CSCMat;

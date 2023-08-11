@@ -426,17 +426,39 @@ struct SystemAssembler {
         });
     }
 
+    template<class SPMat, class Mesh, class PEHEval>
+    void assembleBlockHessian(SPMat &H, const Mesh &m, const PEHEval &eval_He) const {
+        static_assert(SingleBlockDim, "Only implemented for SingleBlockDim case");
+        static constexpr size_t N = VarStructure::FirstBlockDim;
+        get_hessian_assembly_arena().execute([&H, &eval_He, &m, this]() {
+            parallel_for_range(m.numElements(), [&H, &eval_He, &m, this](size_t ei) {
+                auto H_e = eval_He(ei);
+                auto blockVars = m.elementNodeIndices(ei);
+                for (decltype(blockVars.size()) lbj = 0; lbj < blockVars.size(); ++lbj) {
+                    auto bj = blockVars[lbj];
+                    while ((*m_varLocks)[bj].exchange(true, std::memory_order_acquire)); // lock column gvar_j
+                    for (decltype(blockVars.size()) lbi = 0; lbi < blockVars.size(); ++lbi) {
+                        auto bi = blockVars[lbi];
+                        if (bi < bj)        H.addNZ(bi, bj,    H_e.template block<N, N>(N * lbi, N * lbj));
+                        else if (bi == bj)  H.addDiagEntry(bi, H_e.template block<N, N>(N * lbi, N * lbj));
+                    }
+                    (*m_varLocks)[bj].store(false, std::memory_order_release); // unlock column gvar_j
+                }
+            }, 1, 32);
+        });
+    }
+
     // *Accumulate* to `g` the per-element gradient `eval_ge(ei)` for element ei in 0..ne.
     // The element's global block variable indices are obtained by calling `element(ei)`,
     // which should return an array of variable indices.
     template<class Result, class PEGEval, class ElementGetter>
     void assembleGradient(Result &g, size_t ne, const PEGEval &eval_ge, const ElementGetter &element) const {
         auto accumulate_per_element_contrib = [&element, &eval_ge, this](size_t ei, Result &g_out) {
-            static_assert(SingleBlockDim, "Only SingleBlockDim is tested");
             const auto blockVars = element(ei);
             const auto ge = eval_ge(ei);
 
             if constexpr (SingleBlockDim) {
+                UNUSED(this); // Work around spurious unused warning in clang...
                 for (decltype(blockVars.size()) lbi = 0; lbi < blockVars.size(); ++lbi) {
                     g_out .template segment<VarStructure::FirstBlockDim>(VarStructure::FirstBlockDim * blockVars[lbi]) +=
                         ge.template segment<VarStructure::FirstBlockDim>(VarStructure::FirstBlockDim * lbi);

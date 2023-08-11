@@ -57,13 +57,14 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
     using SE = SolidElement<Real, K, Deg>;
+    using NodePositions = typename SE::NodePositions;
 
     using EvalPtK  = EvalPt<K>;
-    using Vector   = Eigen::Matrix<Real, N, 1>;
-    using Matrix   = Eigen::Matrix<Real, N, N>;
+    using VNd      = Eigen::Matrix<Real, N, 1>;
+    using MNd      = Eigen::Matrix<Real, N, N>;
     using VXd      = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using MXNd     = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
-    using Mesh     = FEMMesh<K, Deg, Vector>;
+    using Mesh     = FEMMesh<K, Deg, VNd>;
     using GradPhis = typename Mesh::ElementData::GradPhis;
 
     ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
@@ -143,15 +144,33 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return H;
     }
 
+    using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
         return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection);
     }
 
+    // Construct the Hessian in a block matrix form to estimate speed of
+    // a true block assembly.
+    void benchmarkBlockHessian(bool projectionMask = false) const {
+        CSCMat blockHsp = m_assembler.blockSparsityPatternForMesh(mesh());
+        CSCMatrix<SuiteSparse_long, MNd> blockH(blockHsp.m, blockHsp.n);
+        blockH.Ai = blockHsp.Ai;
+        blockH.Ap = blockHsp.Ap;
+        blockH.nz = blockHsp.nz;
+        blockH.Ax.resize(blockHsp.nz);
+
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Assemble Block Hessian");
+        m_assembler.assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {
+            return elementHessian(ei, /* disableProjection */ !projectionMask);
+        });
+    }
+
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
+        // benchmarkBlockHessian(projectionMask);
 
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
         m_assembler.assembleHessian(H, mesh(), [this, projectionMask](size_t ei) {
             return elementHessian(ei, /* disableProjection */ !projectionMask);
         });
@@ -183,7 +202,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return result;
     }
 
-    Vector getNodePosition(size_t node_index) const { return m_x.row(node_index); }
+    VNd getNodePosition(size_t node_index) const { return m_x.row(node_index); }
 
     auto deformedVertices() const { return m_x.topRows(numVertices()); } // return slice of m_x
     const MXNd &deformedPositions() const { return m_x; } // deformed positions for all nodes
@@ -203,7 +222,6 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Extract the values of `f` at the nodes of element `ei`.
-    using NodePositions = Eigen::Matrix<Real, numNodesPerElement, N, Eigen::RowMajor>;
     auto extractNodePositions(size_t ei, const MXNd &f) const {
         NodePositions nodalValues;
         auto enodes = mesh().elementNodeIndices(ei);
@@ -214,41 +232,41 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 
     // Evaluate F = \nabla f within element `ei` using a linear combination of
     // the element's shape function gradients `gradPhis`.
-    Matrix jacobian(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const MXNd &f) const {
+    MNd jacobian(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const MXNd &f) const {
         return (gradPhis * extractNodePositions(ei, f)).transpose();
     }
 
     // Evaluate F = \nabla f at barycentric coordinates `bc` in element `ei`.
-    Matrix jacobian(size_t ei, const EvalPtK &bc, const MXNd &f) const {
+    MNd jacobian(size_t ei, const EvalPtK &bc, const MXNd &f) const {
         return jacobian(ei, mesh().element(ei)->gradPhis(bc), f);
     }
 
-    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
+    MNd getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis) const {
         return jacobian(ei, gradPhis, m_x);
     }
 
-    Matrix getDeformationGradient(size_t ei, const EvalPtK &x) const {
+    MNd getDeformationGradient(size_t ei, const EvalPtK &x) const {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
     }
 
-    Matrix getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const NodePositions &nodalValues) const {
+    MNd getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const NodePositions &nodalValues) const {
         return (gradPhis * nodalValues).transpose();
     }
 
-    Matrix getDeformationGradient(size_t ei, const EvalPtK &x, const NodePositions &nodalValues) const {
+    MNd getDeformationGradient(size_t ei, const EvalPtK &x, const NodePositions &nodalValues) const {
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x), nodalValues);
     }
 
-    Vector deformedPosition(size_t ei, const EvalPtK &x) const {
-        Vector result(Vector::Zero());
+    VNd deformedPosition(size_t ei, const EvalPtK &x) const {
+        VNd result(VNd::Zero());
         const auto &e = mesh().element(ei);
         for (const auto n : e.nodes())
             result += shapeFunction<Deg, K>(n.localIndex(), x) * m_x.row(n.index()).transpose();
         return result;
     }
 
-    Vector deformedBoundaryPosition(size_t bei, const EvalPt<K - 1> &x) const {
-        Vector result(Vector::Zero());
+    VNd deformedBoundaryPosition(size_t bei, const EvalPt<K - 1> &x) const {
+        VNd result(VNd::Zero());
         const auto &be = mesh().boundaryElement(bei);
         for (const auto bn : be.nodes())
             result += shapeFunction<Deg, K - 1>(bn.localIndex(), x) * m_x.row(bn.volumeNode().index()).transpose();
@@ -256,14 +274,14 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Get the Green strain tensor at a particular point in element `ei`
-    Matrix greenStrain(size_t ei, const EvalPtK &x) const {
-        Matrix F = getDeformationGradient(ei, x);
-        return 0.5 * (F.transpose() * F - Matrix::Identity());
+    MNd greenStrain(size_t ei, const EvalPtK &x) const {
+        MNd F = getDeformationGradient(ei, x);
+        return 0.5 * (F.transpose() * F - MNd::Identity());
     }
 
-    Matrix cauchyStress(size_t ei, const EvalPtK &x) const {
+    MNd cauchyStress(size_t ei, const EvalPtK &x) const {
         Energy psi(getEnergyDensity(ei), UninitializedDeformationTag());
-        Matrix F = getDeformationGradient(ei, x);
+        MNd F = getDeformationGradient(ei, x);
         psi.setDeformationGradient(F);
         // For all energies *except* `LinearElaticEnergy`, `denergy`
         // returns the PK1 stress (dpsi/dF) which must be transformed
@@ -280,22 +298,22 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Get the average Green strain tensor over element `ei`
-    Matrix greenStrain(size_t ei) const {
+    MNd greenStrain(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // This quadrature rule is always exact
             [ei, this](const EvalPtK &x) { return greenStrain(ei, x); }, 1.0);
     }
 
     // Get the average cauchy stress tensor over element `ei`
-    Matrix cauchyStress(size_t ei) const {
+    MNd cauchyStress(size_t ei) const {
         return Quadrature<N, 2 * (Deg - 1)>::integrate( // Exact for linear elasticity
             [ei, this](const EvalPtK &x) { return cauchyStress(ei, x); }, 1.0);
     }
 
-    std::vector<Matrix> vertexGreenStrains() const {
+    std::vector<MNd> vertexGreenStrains() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &x) { return greenStrain(ei, x); });
     }
 
-    std::vector<Matrix> vertexCauchyStresses() const {
+    std::vector<MNd> vertexCauchyStresses() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &x) { return cauchyStress(ei, x); });
     }
 
@@ -348,8 +366,8 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Apply a rigid transformation `x --> R x + t` to the deformed configuration.
-    void applyRigidTransform(const Matrix &R, const Vector &t) {
-        if (((R.transpose() * R - Matrix::Identity()).norm() > 1e-8) || (R.determinant() < 0))
+    void applyRigidTransform(const MNd &R, const VNd &t) {
+        if (((R.transpose() * R - MNd::Identity()).norm() > 1e-8) || (R.determinant() < 0))
             throw std::runtime_error("R is not a rotation");
         setDeformedPositions(((m_x * R.transpose()).rowwise() + t.transpose()).eval());
     }

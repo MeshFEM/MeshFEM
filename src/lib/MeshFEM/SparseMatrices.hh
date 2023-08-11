@@ -1205,7 +1205,8 @@ struct CSCMatrix {
         }
     }
 
-    void addDiagEntry(_Index i, _Real v) { Ax[findDiagEntry(i)] += v; }
+    template<typename _Real2>
+    void addDiagEntry(_Index i, const _Real2 &v) { Ax[findDiagEntry(i)] += v; }
 
     void addScaledIdentity(_Real v) {
         for (_Index i = 0; i < m; ++i)

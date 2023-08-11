@@ -127,6 +127,17 @@ EmbeddingSpace truncateFromND(const Eigen::DenseBase<InputDerived> &p) {
     return result;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Convenience methods for mapping/reshaping data
+template<int Rows, int Cols, typename Scalar>
+auto eigen_map(Scalar *data) {
+    using Mat = Eigen::Matrix<std::remove_cv_t<Scalar>, Rows, Cols>;
+    return Eigen::Map<std::conditional_t<std::is_const_v<Scalar>, const Mat, Mat>>(data);
+}
+
+template<int Rows, int Cols, typename T>
+auto reshape(T &&A) { return eigen_map<Rows, Cols>(A.data()); }
+
 // Work around alignment issues for C++ versions before C++17:
 // http://eigen.tuxfamily.org/dox-devel/group__TopicStlContainers.html
 // #include <Eigen/StdVector> // <-- not needed in C++11 and above
