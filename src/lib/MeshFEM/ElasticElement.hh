@@ -1,5 +1,15 @@
-#ifndef SOLIDELEMENT_HH
-#define SOLIDELEMENT_HH
+////////////////////////////////////////////////////////////////////////////////
+// ElasticElement.hh
+////////////////////////////////////////////////////////////////////////////////
+/*! @file
+//  Reusable per-element elasticity calculations for solids and membrane
+//  simplicial elements.
+//  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
+//  Company:  University of California, Davis
+//  Created:  08/11/2023 10:42:05
+*///////////////////////////////////////////////////////////////////////////////
+#ifndef ELASTICELEMENT_HH
+#define ELASTICELEMENT_HH
 
 #include "GaussQuadrature.hh"
 #include "EnergyDensities/EnergyTraits.hh"
@@ -69,7 +79,7 @@ struct HyperelasticLagrangeElement {
         return gradient(psi_template, ElasticFGetter(deformedPositions), edata);
     }
 
-    template<class Psi, class FGetter, class EData>
+    template<bool SetLowerTri = false, class Psi, class FGetter, class EData>
     static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection) {
         Psi psi(psi_template, UninitializedDeformationTag());
         Hessian result;
@@ -103,13 +113,13 @@ struct HyperelasticLagrangeElement {
                 }
             }
         }
-        result.template triangularView<Eigen::Lower>() = result.transpose();
+        if constexpr (SetLowerTri) result.template triangularView<Eigen::Lower>() = result.transpose();
         return result;
     }
 
-    template<class Psi, class EData>
+    template<bool SetLowerTri = false, class Psi, class EData>
     static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection) {
-        return hessian(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection);
+        return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection);
     }
 };
 
@@ -125,4 +135,4 @@ using MembraneElement = HyperelasticLagrangeElement<Real, K, K + 1, Deg>;
 template<typename Real, size_t K>
 using ParametrizationElement = HyperelasticLagrangeElement<Real, K, K, 1>;
 
-#endif /* end of include guard: SOLIDELEMENT_HH */
+#endif /* end of include guard: ELASTICELEMENT_HH */

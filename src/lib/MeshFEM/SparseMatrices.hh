@@ -29,6 +29,7 @@
 #include <cmath>
 #include "Parallelism.hh"
 #include "ParallelVectorOps.hh"
+#include "Utilities/binary_search.hh"
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
@@ -775,8 +776,9 @@ struct TripletMatrix {
 // Search for "i" in "Ai" at indices in the range "[lb, ub)"
 template<typename _Index>
 _Index binary_search(_Index i, const _Index *Ai, _Index lb, _Index ub) {
-    return std::distance(Ai, std::lower_bound(Ai + lb, Ai + ub, i));
-#if 0
+#if 1
+    return std::distance(Ai, sb_lower_bound(Ai + lb, Ai + ub, i));
+#else
     while (ub - lb > 6) {
         _Index mid = (ub + lb) / 2;
         _Index row = Ai[mid];
@@ -1222,14 +1224,10 @@ struct CSCMatrix {
     _Index findEntry(_Index i, _Index j) const {
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
-        auto beginIt = &Ai[0] + Ap[j],
-               endIt = &Ai[0] + Ap[j + 1];
-        auto it = std::lower_bound(beginIt, endIt, i);
-        if (_detectMissing && (it == endIt)) return INDEX_NONE;
-        assert((it != endIt) && "Entry absent from sparsity pattern");
-        _Index idx = std::distance(&Ai[0], it);
-        if (_detectMissing && (Ai[idx] != i)) return INDEX_NONE;
-        assert((Ai[idx] == i) && "Entry absent from sparsity pattern");
+        const _Index colend = Ap[j + 1];
+        _Index idx = binary_search(i, Ai.data(), Ap[j], colend);
+        if (_detectMissing && ((idx == colend) || (Ai[idx] != i))) return INDEX_NONE;
+        assert((idx != colend) && (Ai[idx] == i) && "Entry absent from sparsity pattern");
         return idx;
     }
 
@@ -1336,6 +1334,16 @@ struct CSCMatrix {
         for (const auto &v : b.Ax) Ax.emplace_back(v);
         m = b.m; n = b.n; nz = b.nz; symmetry_mode = SymmetryMode(b.symmetry_mode);
         return *this;
+    }
+
+    // Copy just the shape/sparsity pattern of `b` (but not the values).
+    template<typename _Real2>
+    void copySparsityPattern(const CSCMatrix<_Index, _Real2> &b) {
+        m = b.m; n = b.n;
+        Ap = b.Ap; Ai = b.Ai;
+        nz = Ai.size();
+        symmetry_mode = SymmetryMode(b.symmetry_mode);
+        Ax.resize(nz);
     }
 
     _Real max()    const { return DataCMap(Ax.data(), Ax.size()).maxCoeff(); }
