@@ -42,18 +42,21 @@
 #include "EnergyDensities/EnergyTraits.hh"
 #include "EnergyDensities/EDensityAdaptors.hh"
 #include "EnergyDensities/TangentElasticityTensor.hh"
+#include "newton_optimizer/newton_optimizer.hh"
 #include "Geometry.hh"
 
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
+#include "ElasticElement.hh"
 
 #include <atomic>
 
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
 // intuitively expressed in the global 2D coordinate system; this is
-// enabled by the special case in m_updateB that uses the global x and y axes.
+// enabled by the special case in EmbeddedMembraneElementData::embeddingUpdated
+// that uses the global x and y axes.
 // However for shells with non-flat rest states, the energy density function is
 // expressed in terms of each triangle's distinct orthonormal coordinate system
 // m_B, which is probably quite inconvenient...
@@ -78,6 +81,9 @@ public:
     using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
     using Real    = typename Psi::Real;
     using ETensor = ElasticityTensor<Real, 2>;
+
+    using ME = MembraneElement<Real, 2, 1>;
+    using NodePositions = typename ME::NodePositions;
 
     using Base = ElasticObject<Real>;
     using CSCMat  = typename Base::CSCMat;
@@ -107,7 +113,6 @@ public:
 
     using  Mesh = FEMMesh<2, Deg, V3d>;
     using TMesh = typename Mesh::BaseMesh; // TriMesh data structure underlying FEMMesh
-    using VSFJ = VectorizedShapeFunctionJacobian<3, V3d>;
 
     using  HEHandle = typename TMesh::template HEHandle<      TMesh>;
     using CHEHandle = typename TMesh::template HEHandle<const TMesh>;
@@ -139,7 +144,10 @@ public:
           m_numEdges   (m->numEdges()),
           m_numCreases(creases.rows())
     {
-        m_updateB();
+        const size_t ne = m->numElements();
+        m_elementData.reserve(ne);
+        for (size_t ei = 0; ei < ne; ++ei)
+            m_elementData.emplace_back(*(m->element(ei)));
 
         // Build the halfedge -> edge map.
         m_edgeForHalfEdge.resize(m->numHalfEdges());
@@ -369,21 +377,23 @@ public:
     }
     const auto &deformedElement(size_t ei) const { return m_deformedElements.at(ei); }
 
-    // Get the deformed positions of triangle ti's corners as columns
+    // Get the deformed positions of triangle ti's corners as rows
     // of a 3x3 matrix.
-    M3d getCornerPositions(size_t ti) const {
+    NodePositions getCornerPositions(size_t ti) const {
         const auto &t = mesh().tri(ti);
-        M3d result;
-        result << m_deformedPositions.row(t.vertex(0).index()).transpose(),
-                  m_deformedPositions.row(t.vertex(1).index()).transpose(),
-                  m_deformedPositions.row(t.vertex(2).index()).transpose();
+        NodePositions result;
+        result << m_deformedPositions.row(t.vertex(0).index()),
+                  m_deformedPositions.row(t.vertex(1).index()),
+                  m_deformedPositions.row(t.vertex(2).index());
         return result;
     }
+
+    M32d getB (size_t ei) const { return m_elementData[ei].B(); }
+    M32d getFB(size_t ei) const { return (m_elementData[ei].BtGradBarycentric() * getCornerPositions(ei)).transpose(); }
 
     // Get the deformed/rest second fundamental forms
     const std::vector<M3d>  &getII()     const { return m_II;     }
     const std::vector<M3d>  &getRestII() const { return m_restII; }
-    const std::vector<M32d> &getB()      const { return m_B;      }
 
     // Set the rest state to be flat.
     void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M3d::Zero()); this->m_restConfigUpdated(); }
@@ -397,8 +407,7 @@ public:
         const auto &m = mesh();
         C.reserve(m.numElements());
         for (const auto e : m.elements()) {
-            const size_t ei = e.index();
-            M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+            M32d FB = getFB(e.index());
             C.push_back(FB.transpose() * FB);
         }
         return C;
@@ -419,8 +428,7 @@ public:
     // thickness direction that is omitted here.
     std::vector<M2d> vertexGreenStrains() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &) {
-                auto e = mesh().element(ei);
-                M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+                M32d FB = getFB(ei);
                 return (0.5 * (FB.transpose() * FB - M2d::Identity())).eval();
             });
     }
@@ -430,9 +438,8 @@ public:
     // Note: for nonzero Poisson's ratio, there will be strain along the
     // thickness direction that is omitted here.
     M2d getElementVolumetricStrain(size_t ei, Real z) const {
-        const auto &e = mesh().element(ei);
-        const auto &B = m_B[ei];
-        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * B);
+        const auto &B = m_elementData[ei].B();
+        M32d FB = getFB(ei);
         return 0.5 * (FB.transpose() * FB - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B;
     }
 
@@ -449,14 +456,13 @@ public:
     //  elementETensor(ei)'s quadratic form.)
     M3d getElementVolumetricPK2Stress(size_t ei, Real z) const {
         M2d plane_stress = getElementVolumetricPlaneStress(ei, z);
-        const auto &B = m_B[ei];
+        const auto &B = m_elementData[ei].B();
         return B * plane_stress * B.transpose();
     }
 
     M3d getElementCauchyStress(size_t ei, Real z) const {
-        const auto &e = mesh().element(ei);
         M2d plane_PK2_stress = getElementVolumetricPlaneStress(ei, z); // PK2 stress in tri-local coordinate system
-        M32d FB = getCornerPositions(ei) * (e->gradBarycentric().transpose() * m_B[ei]);
+        M32d FB = getFB(ei);
         Real J = std::sqrt((FB.transpose() * FB).determinant());
         return (FB * plane_PK2_stress * FB.transpose()) / J;
     }
@@ -593,6 +599,8 @@ private:
 
     void m_setRestVars(const Eigen::Ref<const VXd> & /* vars */) override {
         throw std::runtime_error("Unimplemented");
+        for (auto &d : m_elementData)
+            d.embeddingUpdated();
     }
 
     // Update the current midedge reference frame to adapt to the new deformed
@@ -607,10 +615,6 @@ private:
 
     // Update the second fundamental form (TODO: third fundamental form)
     void m_updateShapeOperators();
-
-    // Method to update the tangent space basis for each triangle
-    // (call after rest positions change, after element embeddings have been updated)
-    void m_updateB();
 
     ////////////////////////////////////////////////////////////////////////////
     // Member variables
@@ -668,9 +672,7 @@ private:
     // Sheet thickness
     Real m_h = 1.0;
 
-    // Orthonormal basis for each reference triangle's tangent space
-    std::vector<M32d> m_B;
-    std::vector<M32d> m_jacobianLambdaB;
+    std::vector<EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
 
     const size_t m_numVertices,
                  m_numEdges,
@@ -679,6 +681,8 @@ private:
     bool m_disableBending = false;
 
     HessianProjectionType m_hessianProjectionType = HessianProjectionType::Off;
+
+    std::unique_ptr<NewtonOptimizer> m_normalInferenceOptimizer;
 
     // Spin locks used for parallel Hessian assembly.
     mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;

@@ -76,7 +76,6 @@ struct ElasticSheetBinder {
           .def("updateSourceFrame",        &ES::updateSourceFrame)
           .def("getII",                    &ES::getII)
           .def("getRestII",                &ES::getRestII)
-          .def("getB",                     &ES::getB)
           .def("getC",                     &ES::getC)
           .def("getMembraneGreenStrains",  &ES::getMembraneGreenStrains)
           .def("vertexGreenStrains",       &ES::vertexGreenStrains)

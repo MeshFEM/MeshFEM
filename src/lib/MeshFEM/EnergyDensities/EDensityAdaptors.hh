@@ -286,13 +286,13 @@ auto evaluate_d2energy_dF2_impl(/* hack */ char, const Psi_F &psi) {
     static_assert(Psi_F::EDType == EDensityType::FBased
                || Psi_F::EDType == EDensityType::Membrane, "Psi_F must be F-based or Membrane");
     using Matrix  = typename Psi_F::Matrix;
-    static constexpr size_t N = Psi_F::N;
+    static constexpr size_t N = Matrix::ColsAtCompileTime;
     static constexpr size_t M = Matrix::RowsAtCompileTime; // Embedding dimension (may differ from N)
     using Hessian  = Eigen::Matrix<Real, M * N, M * N>;
 
     // Evaluate the full Hessian by probing it on a basis with delta_denergy.
     Hessian H;
-    CanonicalBasisMatrix<M, N, Real> probe(0, 0, 1.0);
+    CanonicalBasisMatrix<M, N, Real> probe(0, 0);
     for (size_t j = 0; j < N; ++j) {
         probe.j = j;
         for (size_t i = 0; i < M; ++i) {

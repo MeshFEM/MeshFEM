@@ -1,6 +1,4 @@
-#include "ElasticSheet.hh"
 #include "MeshFEM/GlobalBenchmark.hh"
-#include "newton_optimizer/newton_optimizer.hh"
 
 #define NORMAL_INFERENCE_PROBLEM_VERBOSITY 0
 
@@ -143,7 +141,7 @@ protected:
                 II_d += ((4 * gammas[he.index()] * (de.volume() / len)) * glambda) * glambda.transpose();
             }
 
-            M3d F = m_sheet.getCornerPositions(ei) * e->gradBarycentric().transpose();
+            M3d F = (e->gradBarycentric() * m_sheet.getCornerPositions(ei)).transpose();
             if ((II[ei] - F.transpose() * II_d * F).squaredNorm() / II[ei].squaredNorm() > 1e-18)
                 throw std::runtime_error("Second fundamental form pushforward mismatch.");
         }
@@ -203,11 +201,13 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
 
     // Finally, infer the "best" midedge normals by minimizing the bending energy with respect to theta.
     if (minimizeBending) {
-        auto problem = std::make_unique<NormalInferenceProblem<ElasticSheet>>(*this);
-        auto opt = std::make_unique<NewtonOptimizer>(std::move(problem));
-        opt->options.factorizer = CholeskyProvider::CHOLMOD;
-        opt->options.verbose = NORMAL_INFERENCE_PROBLEM_VERBOSITY;
-        opt->optimize();
+        if (!m_normalInferenceOptimizer) {
+            auto problem = std::make_unique<NormalInferenceProblem<ElasticSheet>>(*this);
+            m_normalInferenceOptimizer = std::make_unique<NewtonOptimizer>(std::move(problem));
+            m_normalInferenceOptimizer->options.factorizer = get_default_cholesky_provider();
+            m_normalInferenceOptimizer->options.verbose = NORMAL_INFERENCE_PROBLEM_VERBOSITY;
+        }
+        m_normalInferenceOptimizer->optimize();
     }
 }
 
@@ -218,28 +218,24 @@ template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t ei, const EnergyType etype) const {
     const auto &m = mesh();
 
-    const auto &e = m.element(ei);
-    const M32d &B = m_B[ei];
     Real result = 0.0;
 
     // Membrane energy contribution
-    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(elementPsi(ei), UninitializedDeformationTag());
-        psi.setDeformationGradient(FB, EvalLevel::EnergyOnly);
-        result += m_h * psi.energy();
-    }
+    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
+        result += m_h * ME::energy(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
 
     // Bending energy contribution
     // (Only an approximation unless Psi is actually St Venant Kirchhoff...)
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
+        const M32d &B = getB(ei);
+        Real vol = m_elementData[ei].volume();
         // We obtain a 2x2 second fundamental form in the reference configuration
         // using our orthonormal basis for the undeformed triangle.
         SM2d e_b = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        result += (std::pow(m_h, 3) / 24.0) * elementETensor(ei).doubleContract(e_b).doubleContract(e_b);
+        result += (std::pow(m_h, 3) / 24.0) * elementETensor(ei).doubleContract(e_b).doubleContract(e_b) * vol;
     }
 
-    return result * e->volume();
+    return result;
 }
 
 template <class Psi_2x2>
@@ -258,22 +254,12 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
 
     const auto &m = mesh();
     const auto &e = m.element(ei);
-    const M32d &B = m_B[ei];
+    const M32d &B = m_elementData[ei].B();
+    const auto &BtGL = m_elementData[ei].BtGradBarycentric();
 
     // Membrane energy contribution
-    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(elementPsi(ei), UninitializedDeformationTag());
-        psi.setDeformationGradient(FB, EvalLevel::Gradient);
-
-        // Derivative of `h * A * psi` with respect to FB
-        M32d d_psi_dFB = psi.denergy() * (e->volume() * m_h);
-
-        // d_psi_dFB : (e_c otimes B^T grad lambda_v)
-        //      = e_c . d_psi_dFB * (B^T grad lambda_v)
-        //      = (d_psi_dFB * (B^T grad lambda_v))_c
-        Eigen::Map<M3d>(g_e.data()) = d_psi_dFB * m_jacobianLambdaB[ei].transpose();
-    }
+    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
+        g_e.template head<3 * numNodesPerElement>() = m_h * ME::gradient(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
 
     // Bending energy contribution
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
@@ -284,10 +270,9 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
         const Real A = m_deformedElements[ei].volume();
 
         for (const auto he : e.halfEdges()) {
-            const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
             const Real len = deformedEdgeVector(he).norm();
-            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(Bt_glambda_ref); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
+            const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * stress.doubleContractRank1(BtGL.col(he.localIndex())); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
             // The derivative with respect to the theta variables is simple.
             g_e[to + he.localIndex()] = ((sign * (A / len))) * dE_d_A_gamma_div_len;
 
@@ -465,31 +450,20 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::PerElementHessian
 ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool projectionMask) const {
-    const auto &m = mesh();
-    const auto &e = m.element(ei);
-    const M32d &B = m_B[ei];
+    const auto &m  = mesh();
+    const auto &e  = m.element(ei);
+    const M32d &B  = m_elementData[ei].B();
+    const auto &BtGL = m_elementData[ei].BtGradBarycentric();
+    using VSFJ = VectorizedShapeFunctionJacobian<3, V2d>;
 
     PerElementHessian H_elem;
     H_elem.setZero();
 
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        Psi psi(elementPsi(ei), UninitializedDeformationTag());
         const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
-        psi.setDeformationGradient(FB, membraneProjection ? EvalLevel::Hessian
-                                                          : EvalLevel::HessianWithDisabledProjection);
-
-        for (const auto v_b : e.vertices()) {
-            VSFJ deltaF_b(0, e->gradBarycentric().col(v_b.localIndex()));
-            for (size_t c_b = 0; c_b < 3; ++c_b) {
-                deltaF_b.c = c_b;
-                size_t var_b = 3 * v_b.localIndex() + c_b;
-
-                M32d delta_d_psi_dFB = psi.delta_denergy(deltaF_b * B) * (e->volume() * m_h);
-                Eigen::Map<M3d>(H_elem.col(var_b).data()) += delta_d_psi_dFB * m_jacobianLambdaB[ei].transpose();
-            }
-        }
+        H_elem.template topLeftCorner<3 * numNodesPerElement, 3 * numNodesPerElement>()
+            = m_h * ME::template hessian<true>(elementPsi(ei), getCornerPositions(ei), m_elementData[ei], !membraneProjection);
     }
 
     // Bending energy contribution
@@ -505,7 +479,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             d_A_gamma_div_len_d_x_for_he[he.localIndex()] = d_A_gamma_div_len_d_x(he, true);
 
         for (const auto he : e.halfEdges()) {
-            const V2d Bt_glambda_ref = m_jacobianLambdaB[ei].row(he.localIndex()).transpose();
+            const V2d Bt_glambda_ref = BtGL.col(he.localIndex());
             const size_t edgeIdx = he.localIndex();
             const Real sign = he.isPrimary() ? 1.0 : -1.0;
             const V3d eVec = deformedEdgeVector(he);
@@ -522,7 +496,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             val *= 2 * (4 * 2 * dE_dpsi);
 
             for (const auto he_b : e.halfEdges()) {
-                const V2d Bt_glambda_ref_b = m_jacobianLambdaB[ei].row(he_b.localIndex()).transpose();
+                const V2d Bt_glambda_ref_b = BtGL.col(he_b.localIndex());
                 const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
                 const Real len_b = deformedEdgeVector(he_b).norm();
                 const size_t edgeIdx_b = he_b.localIndex();
@@ -785,8 +759,9 @@ typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatur
         // Sign conventions vary, but we take the (somewhat less common) convention that
         // a sphere's princinpal curvatures are positive.
         const size_t ei = e.index();
-        M32d FB = getCornerPositions(ei) * m_jacobianLambdaB[ei];
-        M2d S = (m_B[ei].transpose() * m_II[ei] * m_B[ei]) * (FB.transpose() * FB).inverse();
+        const auto &edata = m_elementData[ei];
+        M32d FB = getFB(ei);
+        M2d S = (edata.B().transpose() * m_II[ei] * edata.B()) * (FB.transpose() * FB).inverse();
 
         Eigen::EigenSolver<M2d> esolver(S);
         auto eigs = esolver.eigenvalues();
@@ -890,34 +865,4 @@ void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
             }
         }
     });
-}
-
-template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::m_updateB() {
-    // Generate an orthonormal basis for the tangent plane of each triangle.
-    const auto &m = mesh();
-    const size_t nt = m.numTris();
-
-    // First, check if we actually have a plate in the z = 0 plane; in this
-    // case we use the global 2D coordinate system's axis vectors as our
-    // orthonormal basis to ease specification of anisotropic materials.
-    if (std::abs(m.boundingBox().dimensions()[2]) < 1e-16) {
-        M32d globalB(M32d::Identity());
-        m_B.assign(nt, M32d::Identity().eval());
-    }
-    else {
-        m_B.resize(nt);
-        for (auto tri : m.elements()) {
-            V3d b0 = (tri.node(1)->p - tri.node(0)->p).normalized();
-            V3d b1 = tri->normal().cross(b0);
-            const size_t ti = tri.index();
-            m_B[ti].col(0) = b0;
-            m_B[ti].col(1) = b1;
-        }
-    }
-
-    m_jacobianLambdaB.reserve(nt);
-    m_jacobianLambdaB.clear();
-    for (const auto e : m.elements())
-        m_jacobianLambdaB.push_back(e->gradBarycentric().transpose() * m_B[e.index()]);
 }
