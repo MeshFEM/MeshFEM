@@ -160,7 +160,10 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
+        // BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
+        // m_assembler.assembleHessian(H, mesh(), [this, projectionMask](size_t ei) {
+        //     return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
+        // });
         m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask](size_t ei) {
             return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
         });

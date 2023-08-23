@@ -15,8 +15,8 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
     // Initialize the crease angle variables as the (signed) dihedral angles of
     // the rest mesh. This is usually want we want, and is necessary for a
     // piecewise flat sheet to be initialized with flat rest triangles (i.e., m_restII = 0).
-    for (size_t i = 0; i < m_numCreases; ++i) {
-        auto he = mesh().halfEdge(m_halfEdgeForCreaseAngle[i]);
+    for (size_t i = 0; i < numCreases(); ++i) {
+        auto he = mesh().halfEdge(halfEdgeForCreaseAngle(i));
         m_creaseAngles[i] = atan2(he.tri()->normal().cross(he.opposite().tri()->normal()).dot((he.tip().node()->p - he.tail().node()->p).normalized()),
                                   he.tri()->normal()  .dot(he.opposite().tri()->normal()));
     }
@@ -127,7 +127,6 @@ protected:
     void m_updateDeformedII() {
         const auto &m = m_sheet.mesh();
         m_deformedII.resize(m.numElements());
-        const auto &II = m_sheet.getII();
         const auto &gammas = m_sheet.getGammas();
 
         for (const auto e : m.elements()) {
@@ -142,7 +141,8 @@ protected:
             }
 
             M3d F = (e->gradBarycentric() * m_sheet.getCornerPositions(ei)).transpose();
-            if ((II[ei] - F.transpose() * II_d * F).squaredNorm() / II[ei].squaredNorm() > 1e-18)
+            M3d II = m_sheet.getII_3D(ei);
+            if ((II - F.transpose() * II_d * F).squaredNorm() / II.squaredNorm() > 1e-18)
                 throw std::runtime_error("Second fundamental form pushforward mismatch.");
         }
     }
@@ -158,7 +158,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
 
     // Initialize the reference frames.
     // We pick the averaged edge normals as the initial d1 frame vector and midedge normal.
-    m_referenceFrame.resize(m_numEdges);
+    m_referenceFrame.resize(numEdges());
     m.visitEdges([this](CHEHandle he, size_t edgeIndex) {
         V3d t  = (deformedEdgeVector(he)).normalized().transpose();
         V3d d1 = m_deformedElements[he.tri().index()].normal();
@@ -174,7 +174,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
     // (ccw with tip pointing toward us)
     m_alphas.resize(m.numHalfEdges());
     for (const auto he : m.halfEdges()) {
-        const auto &frame = m_referenceFrame[m_edgeForHalfEdge[he.index()]];
+        const auto &frame = m_referenceFrame[edgeForHalfEdge(he.index())];
 
         const auto &n = m_deformedElements[he.tri().index()].normal();
         m_alphas[he.index()] = angle<Real>(frame.col(0), frame.col(1), n);
@@ -188,7 +188,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
                 n_avg += m_deformedElements[he.opposite().tri().index()].normal();
             n_avg = n_avg.normalized();
             std::cout << "Averaged edge normal: " << n_avg.transpose() << std::endl << std::endl;
-            std::cout << "For he, edge: " << he.index() << ", " << m_edgeForHalfEdge[he.index()] << std::endl;
+            std::cout << "For he, edge: " << he.index() << ", " << edgeForHalfEdge(he.index()) << std::endl;
         }
     }
 
@@ -197,7 +197,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool minimizeBending) {
 
     // Initialize with midedge normals coinciding with the averaged edge normals.
     // Side effect: updates the cached shape operator and midedge normals.
-    setThetas(VXd::Zero(m_numEdges));
+    setThetas(VXd::Zero(numThetas()));
 
     // Finally, infer the "best" midedge normals by minimizing the bending energy with respect to theta.
     if (minimizeBending) {
@@ -222,18 +222,12 @@ typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t
 
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
-        result += m_h * ME::energy(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
+        result += getThickness() * ME::energy(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
 
     // Bending energy contribution
     // (Only an approximation unless Psi is actually St Venant Kirchhoff...)
-    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        const M32d &B = getB(ei);
-        Real vol = m_elementData[ei].volume();
-        // We obtain a 2x2 second fundamental form in the reference configuration
-        // using our orthonormal basis for the undeformed triangle.
-        SM2d e_b = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
-        result += (std::pow(m_h, 3) / 24.0) * elementETensor(ei).doubleContract(e_b).doubleContract(e_b) * vol;
-    }
+    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full)))
+        result += m_plate.energy(elementETensor(ei), m_II[ei], m_restII[ei], m_elementData[ei]);
 
     return result;
 }
@@ -259,12 +253,12 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
 
     // Membrane energy contribution
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
-        g_e.template head<3 * numNodesPerElement>() = m_h * ME::gradient(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
+        g_e.template head<3 * numNodesPerElement>() = getThickness() * ME::gradient(elementPsi(ei), getCornerPositions(ei), m_elementData[ei]);
 
     // Bending energy contribution
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-        const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        const Real dE_dpsi = (e->volume() * std::pow(getThickness(), 3) / 12.0);
+        const SM2d bendingStrain = m_II[ei] - m_restII[ei];
         const SM2d stress = elementETensor(ei).doubleContract(bendingStrain);
         constexpr size_t to = 3 * numNodesPerElement;
         const Real A = m_deformedElements[ei].volume();
@@ -300,7 +294,7 @@ typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updated
         const size_t to = thetaOffset();
         const size_t co = creaseAngleOffset();
         for (const auto he : e.halfEdges()) {
-            g_out[to + m_edgeForHalfEdge[he.index()]] += g_e[9 + he.localIndex()];
+            g_out[to + edgeForHalfEdge(he.index())] += g_e[9 + he.localIndex()];
             int ci = creaseForHalfEdge(he.index());
             if (ci >= 0) g_out[co + ci] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
         }
@@ -332,7 +326,7 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::d_A_gamma_div_len_d_x
     // Parallel transport term (reference frame rotation)
     // The reference frame only twists around the edge if the source frame is not updated!
     if (!updatedSource) {
-        const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
+        const size_t edgeIdx = edgeForHalfEdge(he.index());
         const auto &srcFrame = m_sourceReferenceFrame[edgeIdx];
         const auto &curFrame =       m_referenceFrame[edgeIdx];
         const auto &t   = curFrame.col(0), &ts  = srcFrame.col(0),
@@ -429,7 +423,7 @@ typename ElasticSheet<Psi_2x2>::M3d ElasticSheet<Psi_2x2>::delta_d_A_gamma_div_l
 
     // Parallel transport term Hessian (assuming updated source)
     if (d_eVec_dv_b != 0.0) {
-        const size_t edgeIdx = m_edgeForHalfEdge[he.index()];
+        const size_t edgeIdx = edgeForHalfEdge(he.index());
         const auto &t = m_referenceFrame[edgeIdx].col(0);
         delta_dcoeff_dedge -= sign * d_eVec_dv_b * (A_div_len / (2 * len * len)) * t.cross(M3d::Identity().col(c_b));
     }
@@ -463,13 +457,13 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
         H_elem.template topLeftCorner<3 * numNodesPerElement, 3 * numNodesPerElement>()
-            = m_h * ME::template hessian<true>(elementPsi(ei), getCornerPositions(ei), m_elementData[ei], !membraneProjection);
+            = getThickness() * ME::template hessian(elementPsi(ei), getCornerPositions(ei), m_elementData[ei], !membraneProjection);
     }
 
     // Bending energy contribution
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        const Real dE_dpsi = (e->volume() * std::pow(m_h, 3) / 12.0);
-        const SM2d bendingStrain = B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        const Real dE_dpsi = (e->volume() * std::pow(getThickness(), 3) / 12.0);
+        const SM2d bendingStrain = m_II[ei] - m_restII[ei];
         const SM2d stress = elementETensor(ei).doubleContract(bendingStrain);
         constexpr size_t lto = 9;
 
@@ -553,197 +547,65 @@ template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
     if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.hessian");
-    const auto &m = mesh();
-    // Version without per-thread copies
-    auto &varLocks = m_getVarLocks();
+    struct CustomHEAData {
+        CustomHEAData(const ElasticSheet &es, size_t ei, const EnergyType etype, bool projectionMask) {
+            H_e = es.elementHessian(ei, etype, projectionMask);
+            const auto &m = es.mesh();
+            evars.resize(9);
+            auto e = m.element(ei);
+            for (auto v : e.vertices())
+                evars[v.localIndex()] = v.index();
+            size_t numCreases = 0;
+            for (auto he : e.halfEdges()) {
+                evars[3 + he.localIndex()] = m.numVertices() + es.edgeForHalfEdge(he.index());
+                int ci = es.creaseForHalfEdge(he.index());
+                if (ci < 0) continue;
+                localHalfedgeForLocalCrease[numCreases] = he.localIndex();
+                creaseVarCoeffs[numCreases] = he.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle
+                evars[6 + numCreases++] = m.numVertices() + es.numEdges() + ci;
+            }
+            evars.conservativeResize(6 + numCreases);
+        }
 
-    get_hessian_assembly_arena().execute([&m, &H, &varLocks, this, etype, projectionMask]() {
-        parallel_for_range(m.numElements(), [&m, &H, &varLocks, this, etype, projectionMask](size_t ei) {
-            auto H_elem = elementHessian(ei, etype, projectionMask);
+        MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t bsa, size_t bsb) const {
+            // Derivatives with respect to corner positions and normal angles are taken directly from H_e
+            if (b < 12) return H_e.block(a, b, bsa, bsb);
 
-            const auto &e = m.element(ei);
-            for (const auto v_b : e.vertices()) {
-                for (size_t c_b = 0; c_b < 3; ++c_b) {
-                    const size_t var_b = 3 * v_b.index() + c_b;
+            // Derivatives with respect to a crease angle are just scaled
+            // versions of derivatives with respect to a midedge normal
+            // angle--rewrite the local variable indices accordingly.
+            size_t localCrease_b = b - 12;
+            b = 9 + localHalfedgeForLocalCrease[localCrease_b];
+            Real coeff = creaseVarCoeffs[localCrease_b];
 
-                    while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
-                    for (const auto v_a : e.vertices()) {
-                        if (v_a.index() > v_b.index()) continue;
-                        H.addNZStrip(3 * v_a.index(), var_b, H_elem.col(3 * v_b.localIndex() + c_b).segment(3 * v_a.localIndex(), (v_a.index() == v_b.index()) ? c_b + 1 : 3));
-                    }
-                    varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
-                }
+            if (a >= 12) {
+                size_t localCrease_a = a - 12;
+                a = 9 + localHalfedgeForLocalCrease[localCrease_a];
+                coeff *= creaseVarCoeffs[localCrease_a];
             }
 
-            // Theta vars
-            const size_t to = thetaOffset();
-            constexpr size_t lto = 9;
-            for (const auto he_b : e.halfEdges()) {
-                const size_t var_b = to + m_edgeForHalfEdge[he_b.index()];
-                while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
-                for (const auto v_a : e.vertices())
-                    H.addNZStrip(3 * v_a.index(), var_b, H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-                for (const auto he_a : e.halfEdges()) {
-                    const size_t var_a = to + m_edgeForHalfEdge[he_a.index()];
-                    if (var_a > var_b) continue;
-                    H.addNZ(var_a, var_b, H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
-                                                 lto + std::max(he_a.localIndex(), he_b.localIndex())));
-                }
-                varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
+            if (a > b) {
+                // The index rewriting above can reference the lower triangle of
+                // the (theta-theta) block--redirect to the upper triangle.
+                std::swap(a, b);
+                assert(bsa == bsb);
             }
 
-            // Crease angles (if they exist)
-            const size_t co = creaseAngleOffset();
-            for (const auto he_b : e.halfEdges()) {
-                int ci_b = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[he_b.index()]];
-                if (ci_b < 0) continue;
-                const size_t var_b = co + ci_b;
-                while (varLocks[var_b].exchange(true, std::memory_order_acquire)); // lock column var_b
+            return coeff * H_e.block(a, b, bsa, bsb);
+        }
+        PerElementHessian H_e;
+        EBlockVars evars;
+        Eigen::Vector3i localHalfedgeForLocalCrease;
+        Eigen::Vector3d creaseVarCoeffs;
+    };
 
-                // if (ci_b >= 0) g_out[co + ci_b] -= (he.isPrimary() ? 0.5 : -0.5) * g_e[9 + he.localIndex()];
-                const Real coeff_b = he_b.isPrimary() ? -0.5 : 0.5; // derivative of midedge normal angle with respect to crease angle b
-                for (const auto v_a : e.vertices())
-                    H.addNZStrip(3 * v_a.index(), var_b, coeff_b * H_elem.col(lto + he_b.localIndex()).template segment<3>(3 * v_a.localIndex()));
-                for (const auto he_a : e.halfEdges()) {
-                    size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
-                    // First, extract the derivative with respect to the midedge normal angles for he_a and he_b
-                    Real Hentry = H_elem(lto + std::min(he_a.localIndex(), he_b.localIndex()),
-                                         lto + std::max(he_a.localIndex(), he_b.localIndex()));
-                    { // Interaction with theta var
-                        const size_t var_a = to + edgeIdx_a;
-                        H.addNZ(var_a, var_b, coeff_b * Hentry);
-                    }
-                    { // Interaction with crease angle var
-                        int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
-                        const size_t var_a = (ci_a >= 0) ? co + ci_a : std::numeric_limits<size_t>::max();
-                        if (var_a > var_b) continue;
-
-                        const Real coeff_a = he_a.isPrimary() ? -0.5 : 0.5;
-                        H.addNZ(var_a, var_b, coeff_a * coeff_b * Hentry);
-                    }
-                }
-                varLocks[var_b].store(false, std::memory_order_release); // unlock column var_b
-            }
-        });
-    });
+    m_assembler.assembleHessian(H, mesh().numElements(), [this, etype, projectionMask](size_t ei) { return CustomHEAData(*this, ei, etype, projectionMask); });
 }
 
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val, VariableMask vmask) const {
-    if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-    CSCMat Hsp(numVars(), numVars());
-    Hsp.symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
-    Hsp.Ap.reserve(numVars() + 1);
-
-    auto &Ap = Hsp.Ap;
-    auto &Ai = Hsp.Ai;
-
-    const auto &m = mesh();
-
-    // Build the sparsity pattern in compressed form one column (variable) at a time.
-    Hsp.Ap.push_back(0);
-
-    auto finalizeCol = [&]() {
-        const size_t colStart = Ap.back();
-        const size_t colEnd = Ai.size();
-        Ap.push_back(colEnd);
-        std::sort(Ai.begin() + colStart, Ai.begin() + colEnd);
-    };
-
-    // Each vertex DoF interacts with the vertices in its one-ring
-    for (const auto v : m.vertices()) {
-        const size_t vi = v.index();
-
-        for (size_t v_comp = 0; v_comp < 3; ++v_comp) {
-            // Self-interaction (upper triangle)
-            for (size_t c = 0; c <= v_comp; ++c)
-                Ai.push_back(3 * vi + c);
-            for (const auto he : v.incidentHalfEdges()) {
-                const size_t ui = he.tail().index();
-                if (ui < vi) {
-                    for (size_t c = 0; c < 3; ++c)
-                        Ai.push_back(3 * ui + c);
-                }
-            }
-            finalizeCol();
-        }
-    }
-
-    // Each midedge normal angle interacts with the vertices and midedge normals in its attached triangles.
-    const size_t to = thetaOffset();
-    m.visitEdges([&](CHEHandle he, size_t edgeIndex) {
-        // Self-interaction
-        Ai.push_back(to + edgeIndex);
-
-        // Vertices within this triangle
-        for (const auto v : he.tri().vertices()) {
-            for (size_t c = 0; c < 3; ++c)
-                Ai.push_back(3 * v.index() + c);
-        }
-
-        // Single opposite vertex in opposite triangle
-        // (don't add edge endpoints twice)
-        if (he.opposite().tri()) {
-            size_t vopp = he.opposite().next().tip().index();
-            for (size_t c = 0; c < 3; ++c)
-                Ai.push_back(3 * vopp + c);
-        }
-
-        // Interaction with other variables in stencil
-        he.visitIncidentElements([&](size_t ti) {
-            const auto t = m.tri(ti);
-            // *Other* theta variables
-            for (const auto he_other : t.halfEdges()) {
-                size_t otherEdgeIdx = m_edgeForHalfEdge[he_other.index()];
-                if (otherEdgeIdx < edgeIndex)
-                    Ai.push_back(to + otherEdgeIdx);
-            }
-        });
-        finalizeCol();
-    });
-
-    // Each crease angle interacts with the vertices and midedge normal angles in its attached triangles.
-    const size_t co = creaseAngleOffset();
-    for (int ci = 0; ci < int(m_numCreases); ++ci) {
-        const auto &he = m.halfEdge(m_halfEdgeForCreaseAngle[ci]);
-        // Note: by construction, `he` must be an interior half edge
-        assert(!he.isBoundary());
-
-        // Vertices in this triangle
-        for (const auto v : he.tri().vertices()) {
-            for (size_t c = 0; c < 3; ++c)
-                Ai.push_back(3 * v.index() + c);
-        }
-
-        // Single opposite vertex in opposite triangle
-        // (don't add edge endpoints twice)
-        {
-            size_t vopp = he.opposite().next().tip().index();
-            for (size_t c = 0; c < 3; ++c)
-                Ai.push_back(3 * vopp + c);
-        }
-
-        // Variables on the edges of both attached triangles
-        // We avoid double-adding the variables on the edge to which "he" belongs
-        // by skipping "he" in the loop below (so only variables on its
-        // opposite half-edge are added)
-        he.visitIncidentElements([&](size_t ti) {
-            for (const auto he_a : m.tri(ti).halfEdges()) {
-                if (he_a.index() == he.index()) continue; // don't double-add vars on this edge
-                size_t edgeIdx_a = m_edgeForHalfEdge[he_a.index()];
-                Ai.push_back(to + edgeIdx_a);
-                int ci_a = m_creaseEdgeIndexForEdge[edgeIdx_a];
-                if ((ci_a >= 0) && (ci_a <= ci)) // existent crease vars in Hessian's upper tri
-                    Ai.push_back(co + ci_a);
-            }
-        });
-        finalizeCol();
-    }
-
-    Hsp.nz = Ai.size();
-    Hsp.Ax.assign(Hsp.nz, val);
-
-    return Hsp;
+    CSCMat blockHsp = m_assembler.blockSparsityPattern(mesh().numElements(), elementGetter());
+    return m_assembler.blockHessianSparsityPatternToScalar(blockHsp, val);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -761,7 +623,7 @@ typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatur
         const size_t ei = e.index();
         const auto &edata = m_elementData[ei];
         M32d FB = getFB(ei);
-        M2d S = (edata.B().transpose() * m_II[ei] * edata.B()) * (FB.transpose() * FB).inverse();
+        M2d S = m_II[ei] * (FB.transpose() * FB).inverse();
 
         Eigen::EigenSolver<M2d> esolver(S);
         auto eigs = esolver.eigenvalues();
@@ -777,8 +639,8 @@ typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatur
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
-    if ((m_sourceReferenceFrame.size() != m_numEdges)
-           || (m_referenceFrame.size() != m_numEdges)) {
+    if ((m_sourceReferenceFrame.size() != numEdges())
+           || (m_referenceFrame.size() != numEdges())) {
         throw std::logic_error("Invalid reference frame sizes");
     }
 
@@ -791,10 +653,10 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
     };
 
     const auto &m = mesh();
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numEdges()),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t edgeIndex = r.begin(); edgeIndex < r.end(); ++edgeIndex) {
-            auto he = m.halfEdge(m_halfedgeForEdge[edgeIndex]);
+            auto he = m.halfEdge(halfEdgeForEdge(edgeIndex));
             M3d f_ref;
             f_ref.col(0) = (deformedEdgeVector(he)).normalized().transpose();
             const M3d &f_src = m_sourceReferenceFrame[edgeIndex];
@@ -821,8 +683,8 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateMidedgeNormals() {
-    m_midedgeNormals.resize(m_numEdges, 3);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_numEdges),
+    m_midedgeNormals.resize(numEdges(), 3);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numEdges()),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t i = r.begin(); i < r.end(); ++i) {
             m_midedgeNormals.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
@@ -848,21 +710,9 @@ void ElasticSheet<Psi_2x2>::m_updateDeformedElements() {
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
-    const auto &m = mesh();
-    m_II.resize(m.numTris());
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
-                      [&](const tbb::blocked_range<size_t> &r) {
-        for (size_t ei = r.begin(); ei < r.end(); ++ei) {
-            auto &result = m_II[ei];
-            result.setZero();
-            const auto &deformedElement = m_deformedElements[ei];
-            const auto &e = m.element(ei);
-            for (const auto he : e.halfEdges()) {
-                auto glambda_ref = e->gradBarycentric().col(he.localIndex());
-                Real len = deformedEdgeVector(he).norm();
-                result += ((4 * getGamma(he.index()) * (deformedElement.volume() / len)) * glambda_ref) * glambda_ref.transpose();
-            }
-        }
+    m_II.resize(mesh().numTris());
+    parallel_for_range(m_II.size(), [this](size_t ei) {
+        m_II[ei] = m_plate.getII(getCornerPositions(ei), getTriGammas(ei),
+                                 m_deformedElements[ei].volume(), m_elementData[ei]);
     });
 }

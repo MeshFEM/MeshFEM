@@ -49,8 +49,9 @@
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
 #include "ElasticElement.hh"
+#include "PlateBendingElement.hh"
 
-#include <atomic>
+#include "SystemAssembler.hh"
 
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
@@ -72,8 +73,8 @@
 // energy (which would technically require a Taylor expansion in the thickness
 // direction).
 template <class _Psi_2x2>
-class ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
-public:
+struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
+    using Assembler = SystemAssembler<3, 1, 1>; // Variables: (Vertex positions, midedge normals, crease angles)
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
     using EvalPtK = EvalPt<2>;
 
@@ -123,47 +124,38 @@ public:
 
     struct Material {
         Material(const Psi_2x2 &psi_raw) : m_psi{psi_raw} { set(psi_raw); }
-
         void set(const Psi_2x2 &psi_raw) {
             m_psi = Psi(psi_raw, UninitializedDeformationTag());
             m_etensor = tangentElasticityTensor(psi_raw);
         }
-
         void setProjectionEnabled(bool project) { m_psi.projectionEnabled = project; }
-
-        const Psi     &    psi() const { return m_psi; }
+        const Psi         &psi() const { return m_psi; }
         const ETensor &etensor() const { return m_etensor; }
     private:
         Psi m_psi;         // Membrane energy density function.
         ETensor m_etensor; // Tangent elasticity tensor of `m_psi` used for bending energy.
     };
 
-    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
-        : m_mesh(m), m_materials{psi},
-          m_numVertices(m->numVertices()),
-          m_numEdges   (m->numEdges()),
-          m_numCreases(creases.rows())
-    {
-        const size_t ne = m->numElements();
-        m_elementData.reserve(ne);
-        for (size_t ei = 0; ei < ne; ++ei)
-            m_elementData.emplace_back(*(m->element(ei)));
-
-        // Build the halfedge -> edge map.
-        m_edgeForHalfEdge.resize(m->numHalfEdges());
-        m->visitEdges([this](CHEHandle he, size_t edgeIndex) {
-            m_edgeForHalfEdge.at(he.index()) = edgeIndex;
-            m_halfedgeForEdge.push_back(he.index());
-            auto hopp = he.opposite();
-            if (hopp) m_edgeForHalfEdge.at(hopp.index()) = edgeIndex;
-        });
-
-        // Allocate crease variables.
+    // Enumeration of edges and crease edges (used to allocate variables).
+    struct EdgeVariableStructure {
+        EdgeVariableStructure(const std::shared_ptr<Mesh> &m, const CreaseEdges &creases)
+            : numCreases(creases.rows())
         {
-            m_creaseEdgeIndexForEdge.assign(m_numEdges, -1);
-            m_halfEdgeForCreaseAngle.reserve(m_numCreases);
-            m_creaseAngles.resize(m_numCreases);
-            for (size_t i = 0; i < m_numCreases; ++i) {
+            numEdges = 0;
+            // Build the halfedge -> edge map.
+            edgeForHalfEdge.resize(m->numHalfEdges());
+            m->visitEdges([this](CHEHandle he, size_t edgeIndex) {
+                ++numEdges;
+                edgeForHalfEdge.at(he.index()) = edgeIndex;
+                halfedgeForEdge.push_back(he.index());
+                auto hopp = he.opposite();
+                if (hopp) edgeForHalfEdge.at(hopp.index()) = edgeIndex;
+            });
+
+            // Allocate crease variables.
+            creaseEdgeIndexForEdge.assign(numEdges, -1);
+            halfEdgeForCreaseAngle.reserve(numCreases);
+            for (size_t i = 0; i < numCreases; ++i) {
                 size_t a = creases(i, 0),
                        b = creases(i, 1);
                 int hidx = std::max<int>(m->halfEdgeIndex(a, b),
@@ -173,12 +165,31 @@ public:
                 hidx = he.index();
 
                 if (he.isBoundary()) throw std::runtime_error("Crease edge " + std::to_string(a) + ", " + std::to_string(b) + " is on the boundary.");
-                int &creaseIdx = m_creaseEdgeIndexForEdge[m_edgeForHalfEdge[hidx]];
+                int &creaseIdx = creaseEdgeIndexForEdge[edgeForHalfEdge[hidx]];
                 if (creaseIdx >= 0) throw std::runtime_error("Duplicate crease edge " + std::to_string(a) + ", " + std::to_string(b));
                 creaseIdx = i;
-                m_halfEdgeForCreaseAngle.push_back(hidx);
+                halfEdgeForCreaseAngle.push_back(hidx);
             }
         }
+
+        size_t numEdges, numCreases;
+        // Map from the half edge index to our edge indices.
+        std::vector<size_t> edgeForHalfEdge, halfedgeForEdge;
+        std::vector<int>    creaseEdgeIndexForEdge; // -1 for non-crease edges
+        std::vector<size_t> halfEdgeForCreaseAngle; // Arbitrary half-edge of the edge associated with each crease angle var
+    };
+
+    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
+        : m_mesh(m), m_materials{psi},
+          m_edgeVarStructure(m, creases),
+          m_numVertices(m->numVertices()),
+          m_assembler(m_numVertices, m_edgeVarStructure.numEdges, m_edgeVarStructure.numCreases)
+    {
+        m_creaseAngles.resize(numCreases());
+        const size_t ne = m->numElements();
+        m_elementData.reserve(ne);
+        for (size_t ei = 0; ei < ne; ++ei)
+            m_elementData.emplace_back(*(m->element(ei)));
 
         setIdentityDeformation();
 
@@ -192,30 +203,33 @@ public:
     const Mesh &mesh() const { return *m_mesh; }
           Mesh &mesh()       { return *m_mesh; }
 
-    // The variables consist of deformed vertex positions and midedge normal rotation angles.
-    size_t numDefoVars() const override {
-        return 3 * m_numVertices
-                 + m_numEdges
-                 + m_numCreases;
-    }
-
+    size_t numDefoVars() const override { return m_assembler.vars().numVars(); }
     size_t numRestVars() const override { return 3 * numVertices(); }
 
     size_t numVertices()  const { return m_numVertices;   }
-    size_t numThetas()    const { return m_numEdges;   }
-    size_t numCreases()   const { return m_numCreases; }
+    size_t numEdges()     const { return m_edgeVarStructure.numEdges;   }
+    size_t numThetas()    const { return numEdges();   }
+    size_t numCreases()   const { return m_edgeVarStructure.numCreases; }
 
-    static constexpr size_t xOffset(){ return 0; }
-    size_t       thetaOffset() const { return xOffset() + 3 * m_numVertices; }
-    size_t creaseAngleOffset() const { return thetaOffset() + m_numEdges; }
+    const auto &varStructure() const { return m_assembler.vars(); }
 
-    void setThickness(Real thickness) {
-        m_h = thickness;
-    }
+    size_t           xOffset() const { return varStructure().offsetForType(0); }
+    size_t       thetaOffset() const { return varStructure().offsetForType(1); }
+    size_t creaseAngleOffset() const { return varStructure().offsetForType(2); }
 
-    Real getThickness() const { return m_h; }
-    size_t edgeForHalfEdge(size_t hei) const { return m_edgeForHalfEdge.at(hei); }
-    int  creaseForHalfEdge(size_t hei) const { return m_creaseEdgeIndexForEdge[edgeForHalfEdge(hei)]; }
+    template<class VarVector> auto sliceDeformedPositions(      VarVector &vars) const { return Eigen::Map<      MX3d>(varStructure().variablesOfType(vars, 0).data(), numVertices(), 3); }
+    template<class VarVector> auto sliceDeformedPositions(const VarVector &vars) const { return Eigen::Map<const MX3d>(varStructure().variablesOfType(vars, 0).data(), numVertices(), 3); }
+    template<class VarVector> auto sliceThetas      (VarVector &vars) const { return varStructure().variablesOfType(vars, 1); }
+    template<class VarVector> auto sliceCreaseAngles(VarVector &vars) const { return varStructure().variablesOfType(vars, 2); }
+
+    void setThickness(Real h) { m_plate.setThickness(h); }
+    Real getThickness() const { return m_plate.getThickness(); }
+
+    size_t   edgeForHalfEdge(size_t hei)    const { return m_edgeVarStructure.edgeForHalfEdge[hei]; }
+    int    creaseEdgeIndexForEdge(size_t e) const { return m_edgeVarStructure.creaseEdgeIndexForEdge[e]; }
+    size_t        halfEdgeForEdge(size_t e) const { return m_edgeVarStructure.halfedgeForEdge[e]; }
+    size_t halfEdgeForCreaseAngle(size_t c) const { return m_edgeVarStructure.halfEdgeForCreaseAngle[c]; }
+    int  creaseForHalfEdge(size_t hei) const { return creaseEdgeIndexForEdge(edgeForHalfEdge(hei)); }
 
     void setDeformedPositions(Eigen::Ref<const MX3d> x) {
         if (size_t(x.rows()) != numVertices()) throw std::runtime_error("Invalid vertex position size");
@@ -228,7 +242,7 @@ public:
     const VXd &getCreaseAngles() const { return m_creaseAngles; }
 
     void setThetas(Eigen::Ref<const VXd> thetas) {
-        if (size_t(thetas.rows()) != m_numEdges) throw std::runtime_error("Invalid thetas size");
+        if (size_t(thetas.rows()) != numThetas()) throw std::runtime_error("Invalid thetas size");
         m_thetas = thetas;
 
         m_updateShapeOperators();
@@ -238,22 +252,20 @@ public:
     }
 
     void setCreaseAngles(Eigen::Ref<const VXd> creaseAngles) {
-        if (size_t(creaseAngles.rows()) != m_numCreases) throw std::runtime_error("Invalid creaseAngles size");
+        if (size_t(creaseAngles.rows()) != numCreases()) throw std::runtime_error("Invalid creaseAngles size");
         m_creaseAngles = creaseAngles;
         setThetas(m_thetas);
     }
 
     VXd getDefoVars() const override {
         VXd result(numDefoVars());
-        result.segment(          xOffset(), 3 * m_numVertices) = Eigen::Map<const VXd>(m_deformedPositions.data(), 3 * m_numVertices);
-        result.segment(      thetaOffset(),        m_numEdges) = m_thetas;
-        result.segment(creaseAngleOffset(),      m_numCreases) = m_creaseAngles;
+        sliceDeformedPositions(result) = m_deformedPositions;
+        sliceThetas(result) = m_thetas;
+        sliceCreaseAngles(result) = m_creaseAngles;
         return result;
     }
 
-    VXd getRestVars() const override {
-        return Eigen::Map<const VXd>(m_deformedPositions.data(), numRestVars());
-    }
+    VXd getRestVars() const override { return Eigen::Map<const VXd>(m_deformedPositions.data(), numRestVars()); }
 
     const MX3d &deformedPositions() const { return m_deformedPositions; }
     const VXd  &thetas()            const { return m_thetas;            }
@@ -313,6 +325,27 @@ public:
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
+    using EBlockVars = VecMaxN_T<SuiteSparse_long, 9>; // Up to 9 (block) vars influence each element
+    auto elementGetter() const {
+        const auto &m = mesh();
+        return [this, &m](size_t ei) {
+            EBlockVars blockVars(9);
+            auto e = m.element(ei);
+            for (auto v : e.vertices())
+                blockVars[v.localIndex()] = v.index();
+            size_t crease_back = 6;
+            for (auto he : e.halfEdges()) {
+                blockVars[3 + he.localIndex()] = m.numVertices() + edgeForHalfEdge(he.index());
+                int ci = creaseForHalfEdge(he.index());
+                if (ci < 0) continue;
+                blockVars[crease_back++] = numVertices() + numEdges() + ci;
+            }
+            blockVars.conservativeResize(crease_back);
+            return blockVars;
+        };
+    }
+
+    void hessianAlternate(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
     void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override;
 
@@ -334,7 +367,7 @@ public:
 
     // For debugging visualizations of the edge frames, we need their application points
     MX3d edgeMidpoints() const {
-        MX3d result(m_numEdges, 3);
+        MX3d result(numEdges(), 3);
         mesh().visitEdges([this, &result](CHEHandle he, size_t edgeIndex) {
             result.row(edgeIndex) = 0.5 * (m_deformedPositions.row(he.tip().index())
                                          + m_deformedPositions.row(he.tail().index()));
@@ -343,7 +376,7 @@ public:
     }
     // To assist boundary condition specification
     MX3d restEdgeMidpoints() const {
-        MX3d result(m_numEdges, 3);
+        MX3d result(numEdges(), 3);
         mesh().visitEdges([this, &result](CHEHandle he, size_t edgeIndex) {
             result.row(edgeIndex) = 0.5 * (mesh().node(he. tip().index())->p +
                                            mesh().node(he.tail().index())->p);
@@ -380,7 +413,7 @@ public:
     // Get the deformed positions of triangle ti's corners as rows
     // of a 3x3 matrix.
     NodePositions getCornerPositions(size_t ti) const {
-        const auto &t = mesh().tri(ti);
+        auto t = mesh().tri(ti);
         NodePositions result;
         result << m_deformedPositions.row(t.vertex(0).index()),
                   m_deformedPositions.row(t.vertex(1).index()),
@@ -388,15 +421,30 @@ public:
         return result;
     }
 
+    // Get the normal rotation angles at triangle ti's halfedge midpoints.
+    V3d getTriGammas(size_t ti) const {
+        auto t = mesh().tri(ti);
+        return V3d(getGamma(t.halfEdge(0).index()),
+                   getGamma(t.halfEdge(1).index()),
+                   getGamma(t.halfEdge(2).index()));
+    }
+
     M32d getB (size_t ei) const { return m_elementData[ei].B(); }
     M32d getFB(size_t ei) const { return (m_elementData[ei].BtGradBarycentric() * getCornerPositions(ei)).transpose(); }
 
-    // Get the deformed/rest second fundamental forms
-    const std::vector<M3d>  &getII()     const { return m_II;     }
-    const std::vector<M3d>  &getRestII() const { return m_restII; }
+    // Get the deformed/rest second fundamental forms (expressed in the
+    // reference triangle's orthonormal frame).
+    const std::vector<M2d>  &getII()     const { return m_II;     }
+    const std::vector<M2d>  &getRestII() const { return m_restII; }
+
+    // Deformed second fundamental forms expressed in the global frame.
+    M3d getII_3D(size_t ei) const {
+        M32d B = getB(ei);
+        return B * m_II[ei] * B.transpose();
+    }
 
     // Set the rest state to be flat.
-    void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M3d::Zero()); this->m_restConfigUpdated(); }
+    void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M2d::Zero()); this->m_restConfigUpdated(); }
     // Bake the current deformed state's curvature into the rest curvature (plastically deforming)
     void programRestCurvature() { m_restII = m_II; this->m_restConfigUpdated(); }
 
@@ -417,9 +465,8 @@ public:
     // thickness direction that is omitted here.
     std::vector<M2d> getMembraneGreenStrains() const {
         auto result = getC();
-        for (auto &r : result) {
+        for (auto &r : result)
             r = 0.5 * (r - M2d::Identity());
-        }
         return result;
     }
 
@@ -440,7 +487,7 @@ public:
     M2d getElementVolumetricStrain(size_t ei, Real z) const {
         const auto &B = m_elementData[ei].B();
         M32d FB = getFB(ei);
-        return 0.5 * (FB.transpose() * FB - M2d::Identity()) + z * B.transpose() * (m_II[ei] - m_restII[ei]) * B;
+        return 0.5 * (FB.transpose() * FB - M2d::Identity()) + z * (m_II[ei] - m_restII[ei]);
     }
 
     // Evaluate approximate volumetric stress for element `ei` at the thickness
@@ -495,7 +542,7 @@ public:
         // point in the opposite direction). Therefore we must negate gamma
         // for non-primary half edges.
         double sign = mesh().halfEdge(hei).isPrimary() ? 1.0 : -1.0;
-        result = sign * (m_thetas[m_edgeForHalfEdge[hei]] - m_alphas[hei]);
+        result = sign * (m_thetas[edgeForHalfEdge(hei)] - m_alphas[hei]);
 
         int ci = creaseForHalfEdge(hei);
         if (ci >= 0) {
@@ -523,7 +570,7 @@ public:
         const auto &m = mesh();
         VXd result(m.numElements());
         for (const auto e : m.elements())
-            result[e.index()] = e->volume() * m_h;
+            result[e.index()] = e->volume() * getThickness();
         return result;
     }
 
@@ -536,13 +583,13 @@ public:
 
         // Rotate the source reference frame so that setDeformedConfiguration()
         // produces the correct normals/shape operators/reference frame...
-        for (size_t i = 0; i < m_numEdges; ++i)
+        for (size_t i = 0; i < numEdges(); ++i)
             m_sourceReferenceFrame[i] = (R * m_sourceReferenceFrame[i]).eval();
 
         auto prerotationFrames = m_referenceFrame; // for validation
         setDeformedPositions((m_deformedPositions * R.transpose()).rowwise() + t.transpose());
 
-        for (size_t i = 0; i < m_numEdges; ++i) {
+        for (size_t i = 0; i < numEdges(); ++i) {
             if ((m_referenceFrame[i] - R * prerotationFrames[i]).norm() > 1e-8)
                 throw std::runtime_error("Frame update failure");
         }
@@ -589,10 +636,10 @@ private:
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.m_setDefoVars");
         if (size_t(vars.rows()) != numDefoVars()) throw std::runtime_error("Invalid vars size");
 
-        m_thetas = vars.segment(thetaOffset(), m_numEdges);
-        m_creaseAngles = vars.segment(creaseAngleOffset(), m_numCreases);
+        m_thetas            = sliceThetas(vars);
+        m_creaseAngles      = sliceCreaseAngles(vars);
+        m_deformedPositions = sliceDeformedPositions(vars);
 
-        m_deformedPositions = Eigen::Map<const MX3d>(vars.data(), numVertices(), 3);
         m_updateDeformedElements();
         m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
     }
@@ -620,15 +667,11 @@ private:
     // Member variables
     ////////////////////////////////////////////////////////////////////////////
     std::shared_ptr<Mesh> m_mesh;
+    EdgeVariableStructure m_edgeVarStructure; // must appear before m_assembler for proper initialization!
 
     MX3d m_deformedPositions;
     VXd  m_thetas; // per-edge thetas
     VXd  m_creaseAngles; // per-crease-edge angles
-
-    // Map from the half edge index to our edge indices.
-    std::vector<size_t> m_edgeForHalfEdge, m_halfedgeForEdge;
-    std::vector<int>    m_creaseEdgeIndexForEdge; // -1 for non-crease edges
-    std::vector<size_t> m_halfEdgeForCreaseAngle; // Arbitrary half-edge of the edge associated with each crease angle var
 
     // The reference frame with respect to which the midedge normals are expressed.
     // This frame is updated by parallel transport from the source configuration,
@@ -649,15 +692,16 @@ private:
     std::vector<LinearlyEmbeddedElement<2, 1, V3d>> m_deformedElements;
 
     // Second fundamental form (shape operator pulled back to the reference
-    // configuration). The discrete second fundamental form is a piecewise
-    // constant matrix field.
+    // configuration) *and expressed in the triangle's orthonormal basis*.
+    // The discrete second fundamental form is a piecewise constant matrix
+    // field.
     // Note: we use the same sign convention as [Grinspun2006], where the shape
     // operator computes the directional derivative of the normal (not its
     // negation). This is the opposite sign convention from most differential
     // geometry references, but actually the sign convention is irrelevant
     // for bending energy since only the square of the shape operator
     // enters into the elastic energy expression.
-    std::vector<M3d> m_II, m_restII;
+    std::vector<M2d> m_II, m_restII;
 
     // Properties for each distinct material in use.
     // To support multi-material sheets consisting of a small number
@@ -669,14 +713,10 @@ private:
     std::vector<size_t> m_materialForElement;
     std::vector<Material> m_materials;
 
-    // Sheet thickness
-    Real m_h = 1.0;
-
     std::vector<EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
+    PlateBendingElement<Real> m_plate;
 
-    const size_t m_numVertices,
-                 m_numEdges,
-                 m_numCreases;
+    const size_t m_numVertices;
 
     bool m_disableBending = false;
 
@@ -684,17 +724,7 @@ private:
 
     std::unique_ptr<NewtonOptimizer> m_normalInferenceOptimizer;
 
-    // Spin locks used for parallel Hessian assembly.
-    mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
-    auto &m_getVarLocks() const {
-        if (!m_varLocks) {
-            const size_t nv = numVars(VariableMask::All);
-            m_varLocks = std::make_unique<std::vector<std::atomic<bool>>>(nv);
-            for (size_t i = 0; i < nv; ++i)
-                atomic_init(&(*m_varLocks)[i], false);
-        }
-        return *m_varLocks;
-    }
+    Assembler m_assembler;
 };
 
 #include "ElasticSheet.inl"

@@ -8,6 +8,9 @@
 //  Company:  University of California, Davis
 //  Created:  06/19/2023 18:35:21
 *///////////////////////////////////////////////////////////////////////////////
+#ifndef SYSTEMASSEMBLER_HH
+#define SYSTEMASSEMBLER_HH
+
 #include <vector>
 #include <array>
 #include <atomic>
@@ -81,8 +84,14 @@ struct OptimizationVarStructure {
         m_numScalarVars = m_typeVarOffsets[NumBlockTypes];
     }
 
+    size_t offsetForType(size_t type_id) const { return m_typeVarOffsets[type_id]; }
+    size_t numVarsOfType(size_t type_id) const { return m_typeVarOffsets[type_id + 1] - m_typeVarOffsets[type_id]; }
+
     size_t numVars() const { return m_numScalarVars; }
     size_t numBlocks() const { return m_numBlocks; }
+
+    template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
+    template<class Derived> auto variablesOfType(const Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
 
 private:
     size_t m_numBlocks, m_numScalarVars;
@@ -175,6 +184,8 @@ struct SystemAssembler {
         for (size_t i = 0; i < numLocks; ++i)
             atomic_init(&(*m_varLocks)[i], false);
     }
+
+    const VarStructure &vars() const { return m_vars; }
 
     template<class FEMMesh_>
     CSCMat blockSparsityPatternForMesh(const FEMMesh_ &m) const {
@@ -408,27 +419,57 @@ struct SystemAssembler {
     ////////////////////////////////////////////////////////////////////////////
     // Scalar Hessian assembly.
     ////////////////////////////////////////////////////////////////////////////
+    template <class PEH, class EVars>
+    struct HessianElementAssemblyData {
+        auto block(size_t a, size_t b, size_t bsa, size_t bsb) const { return getBlock(H_e, a, b, bsa, bsb).eval(); }
+        PEH H_e;
+        EVars evars;
+    };
+
+    // Fully customizable Hessian assembly:
+    // For each element ei in 0..ne, obtain a data object from `edataGetter`
+    // whose `elementVars` method reports the global block variables corresponding to the element
+    // and whose `block` method provides accesses to blocks of the per-element Hessian.
+    // Note that this `block` method enables additional computation to be
+    // performed at assembly time, e.g., to implement chain rule expressions.
+    template<class SPMat, class ElementAssemblyDataGetter>
+    void assembleHessian(SPMat &H, size_t ne, const ElementAssemblyDataGetter &edataGetter) const {
+        get_hessian_assembly_arena().execute([&H, &edataGetter, ne, this]() {
+            parallel_for_range(ne, [&H, &edataGetter, this](size_t ei) {
+                auto edata = edataGetter(ei);
+                m_assembleHessianContrib(H, [&edata](size_t a, size_t b, size_t bsa, size_t bsb) {
+                    return edata.block(a, b, bsa, bsb);
+                }, edata.evars);
+            }, 1, 32);
+        });
+    }
+
+    // For each ei in 0..ne, evaluate per-element Hessian H_e = eval(ei) and
+    // then assemble it into H[element(ei), element(ei)] by accessing its blocks
+    // with `He_block(H_e, lni_a, lni_b, bsa, bsb)`.
+    template<class SPMat, class PEHEval, class HEBlock, class ElementGetter>
+    void assembleHessian(SPMat &H, size_t ne, const PEHEval &eval_He, const HEBlock &He_block, const ElementGetter &element) const {
+        using PEH = decltype(eval_He(0));
+        using EVars = decltype(element(0));
+        using HEAD = HessianElementAssemblyData<PEH, EVars>;
+        assembleHessian(H, ne, [&](size_t ei) { return HEAD{eval_He(ei), element(ei)}; });
+    }
+
     // Assemble the per-element Hessian `eval_He(ei)` for element ei in 0..ne.
     // The element's global block variable indices are obtained by calling
     // `element(ei)`, which should return an array of variable indices.
     template<class SPMat, class PEHEval, class ElementGetter>
     void assembleHessian(SPMat &H, size_t ne, const PEHEval &eval_He, const ElementGetter &element) const {
-        get_hessian_assembly_arena().execute([&H, &eval_He, &element, ne, this]() {
-            parallel_for_range(ne, [&H, &eval_He, &element, this](size_t ei) {
-                m_assembleHessianContrib(H, eval_He(ei), element(ei));
-            }, 1, 32);
-        });
+        assembleHessian(H, ne, eval_He, [](const auto &H_e, size_t a, size_t b, size_t bsa, size_t bsb) {
+            return getBlock(H_e, a, b, bsa, bsb).eval();
+        }, element);
     }
 
     // Convenience method for the typical case of assembling a per-element Hessian using
     // using nodal variables of a FEMMesh.
     template<class SPMat, class Mesh, class PEHEval>
     void assembleHessian(SPMat &H, const Mesh &m, const PEHEval &eval_He) const {
-        get_hessian_assembly_arena().execute([&H, &eval_He, &m, this]() {
-            parallel_for_range(m.numElements(), [&H, &eval_He, &m, this](size_t ei) {
-                m_assembleHessianContrib(H, eval_He(ei), m.elementNodeIndices(ei));
-            }, 1, 32);
-        });
+        assembleHessian(H, m.numElements(), eval_He, [&m](size_t ei) { return m.elementNodeIndices(ei); });
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -662,13 +703,9 @@ struct SystemAssembler {
     }
 
 private:
-    template<class SPMat, class PEH, class ElemBlockVars>
-    void m_assembleHessianContrib(SPMat &H, const PEH &H_e, const ElemBlockVars &blockVars) const {
+    template<class SPMat, class HeBlock, class ElemBlockVars>
+    void m_assembleHessianContrib(SPMat &H, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
         size_t lvar_j = 0;
-
-        auto He_block = [&H_e](size_t a, size_t b, size_t bsa, size_t bsb) {
-            return getBlock(H_e, a, b, bsa, bsb).eval();
-        };
 
         for (decltype(blockVars.size()) lbj = 0; lbj < blockVars.size(); ++lbj) {
             auto bj = blockVars[lbj];
@@ -682,13 +719,13 @@ private:
 
                 decltype(He_block(lvar_i, lvar_j, bsi, bsj)) block;
                 if (localUpperTri) block = He_block(lvar_i, lvar_j, bsi, bsj);
-                else               block = He_block(lvar_j, lvar_i, bsi, bsj).transpose();
+                else               block = He_block(lvar_j, lvar_i, bsj, bsi).transpose();
 
                 if (gvar_i < gvar_j) {
                     index_type idx = H.findEntry(gvar_i, gvar_j);
                     for (size_t c = 0; c < bsj; ++c) {
                         if constexpr (SingleBlockDim) typename SPMat::template SizedDataMap<VarStructure::FirstBlockDim>(H.Ax.data() + idx) += block.col(c);
-                        else                          typename SPMat::DataMap(H.Ax.data() + idx, bsj) += block.col(c);
+                        else                          typename SPMat::DataMap(H.Ax.data() + idx, bsi) += block.col(c);
 
                         // Advance to the start of the block in the next columnn
                         // (assuming the next column has an identical sparsity
@@ -699,7 +736,7 @@ private:
                 else if (gvar_i == gvar_j) {
                     index_type idx = H.findDiagEntry(gvar_i); // Top of strip to add
                     for (size_t c = 0; c < bsj; ++c) {
-                        typename SPMat::DataMap(H.Ax.data() + idx, c + 1) += H_e.col(lvar_j + c).segment(lvar_i, c + 1);
+                        typename SPMat::DataMap(H.Ax.data() + idx, c + 1) += block.col(c).topRows(c + 1);
                         idx += H.col_nnz(gvar_j + c);
                     }
                 }
@@ -718,3 +755,5 @@ private:
     mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
     VarStructure m_vars;
 };
+
+#endif /* end of include guard: SYSTEMASSEMBLER_HH */

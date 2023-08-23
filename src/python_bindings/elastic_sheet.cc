@@ -96,7 +96,7 @@ struct ElasticSheetBinder {
           .def("elementGradient",          [](const ES &es, size_t ei, bool us, EType etype) { return es.elementGradient(ei, us, etype); }, py::arg("ei"), py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
           .def("midedgeNormals",         &ES::midedgeNormals)
           .def("midedgeReferenceFrames", &ES::midedgeReferenceFrames)
-          .def("sourceReferenceFrames"  ,&ES::sourceReferenceFrames)
+          .def("sourceReferenceFrames",  &ES::sourceReferenceFrames)
           .def("edgeMidpoints",          &ES::edgeMidpoints)
           .def("restEdgeMidpoints",      &ES::restEdgeMidpoints)
 
