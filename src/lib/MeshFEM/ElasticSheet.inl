@@ -448,7 +448,6 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     const auto &e  = m.element(ei);
     const M32d &B  = m_elementData[ei].B();
     const auto &BtGL = m_elementData[ei].BtGradBarycentric();
-    using VSFJ = VectorizedShapeFunctionJacobian<3, V2d>;
 
     PerElementHessian H_elem;
     H_elem.setZero();
@@ -457,7 +456,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
         const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
         H_elem.template topLeftCorner<3 * numNodesPerElement, 3 * numNodesPerElement>()
-            = getThickness() * ME::template hessian(elementPsi(ei), getCornerPositions(ei), m_elementData[ei], !membraneProjection);
+            = getThickness() * ME::hessian(elementPsi(ei), getCornerPositions(ei), m_elementData[ei], !membraneProjection);
     }
 
     // Bending energy contribution
