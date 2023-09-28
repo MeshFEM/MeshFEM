@@ -175,12 +175,13 @@ struct HingePanelizationEnergy {
     }
 
     Real sigmoid(Real x) const {
-        return x;
+        Real x2 = x*x;
+        return x2 / (x2 + delta);
     }
 
     Real dsigmoid(Real x) const {
         Real x2 = x*x;
-        return 1;
+        return 2 * delta * x / ((x2 + delta) * (x2 + delta));
     }
 
     Real ddsigmoid(Real x) const {
