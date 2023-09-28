@@ -187,8 +187,11 @@ struct HingeEnergy {
         return 0.5 * (theta - theta_bar) * (theta - theta_bar) * e_bar_len / h_bar;
     }
 
-    Eigen::Matrix<Real, 3, 4> gradient() const {
-        return ((theta - theta_bar) * e_bar_len / h_bar) * gradTheta();
+    using Gradient = Eigen::Matrix<Real, 12, 1>;
+    Gradient gradient() const {
+        Gradient result;
+        Eigen::Map<Eigen::Matrix<Real, 3, 4>>(result.data()) = ((theta - theta_bar) * e_bar_len / h_bar) * gradTheta();
+        return result;
     }
 
     HessType hessian() const {
