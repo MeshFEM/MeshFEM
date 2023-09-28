@@ -15,15 +15,26 @@
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/ElasticElement.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
-#include "HingeEnergy.hh"
+
 #include <memory>
 #include <vector>
 
+template<class HalfEdge>
+inline std::array<int, 4> bendingHingeStencil(const HalfEdge &he) {
+    assert(he.isPrimary() && !he.isBoundary());
+    return {{ he.tail().index(),
+              he.tip ().index(),
+              he.opposite().next().tip().index(),
+              he           .next().tip().index() }};
+}
+
+template<template<typename> class HingeEnergy>
 struct DiscreteShell : public ElasticObject<double> {
     using V3d  = Eigen::Vector3d;
     using VXd  = Eigen::VectorXd;
     using MX3d = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
 
+    using HE = HingeEnergy<double>;
     using ME = MembraneElement<Real, 2, 1>;
     using NodePositions = typename ME::NodePositions;
 
@@ -165,7 +176,7 @@ private:
     MX3d m_x;
     SystemAssembler<3> m_assembler;
 
-    std::vector<HingeEnergy<double>> m_edgeHinges;
+    std::vector<HE> m_edgeHinges;
     std::vector<int> m_halfedgeForHinge;
     Psi m_psi; // Membrane energy density function.
 

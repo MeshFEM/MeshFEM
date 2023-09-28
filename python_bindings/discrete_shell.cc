@@ -6,11 +6,13 @@ namespace py = pybind11;
 
 #include "../DiscreteShell.hh"
 #include "../3rdparty//MeshFEM/src/python_bindings/MeshEntities.hh"
+#include "../HingeBendingEnergy.hh"
+#include "../HingePanelizationEnergy.hh"
 
 PYBIND11_MODULE(discrete_shell, m)
 {
     using EO = ElasticObject<double>;
-    using DS = DiscreteShell;
+    using DS = DiscreteShell<HingePanelizationEnergy>;
 
     using Mesh = DS::Mesh;
 
