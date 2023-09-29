@@ -165,6 +165,15 @@ static constexpr size_t N = 3;
         return result;
     }
 
+    void setDelta(Real delta) {
+        for (auto &he : m_edgeHinges)
+            he.delta = delta;
+    }
+
+    Real getDelta() const {
+        return m_edgeHinges[0].delta;
+    }
+
     double bendingStiffness = 1.0;
     double h = 1; // sheet thickness
 
