@@ -125,6 +125,8 @@ static constexpr size_t N = 3;
         return g;
     }
 
+    using Hessian = Eigen::Matrix<double, 12, 12>;
+    using ESolver  = Eigen::SelfAdjointEigenSolver<Hessian>;
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
         // Assemble membrane term.
         BENCHMARK_SCOPED_TIMER_SECTION timer("DiscreteShell.hessian");
@@ -134,7 +136,13 @@ static constexpr size_t N = 3;
 
         // Assemble bending term.
         m_assembler.assembleHessian(H, numHinges(),
-            [&](size_t hingeIndex) { return (bendingStiffness * m_edgeHinges[hingeIndex].hessian()).eval(); },
+            [&](size_t hingeIndex) -> Hessian {
+                auto H_e = (bendingStiffness * m_edgeHinges[hingeIndex].hessian()).eval();
+                if (!projectionMask) return H_e;
+
+                ESolver Hes(H_e);
+                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            },
             [&](size_t hingeIndex) { return hingeStencil(hingeIndex); }
         );
     }
