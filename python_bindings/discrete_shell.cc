@@ -8,6 +8,8 @@ namespace py = pybind11;
 #include "../3rdparty//MeshFEM/src/python_bindings/MeshEntities.hh"
 #include "../HingeBendingEnergy.hh"
 #include "../HingePanelizationEnergy.hh"
+#include <MeshFEM/Loads/Gravity.hh>
+
 
 PYBIND11_MODULE(discrete_shell, m)
 {
@@ -33,4 +35,13 @@ PYBIND11_MODULE(discrete_shell, m)
           ;
 
     py::module::import("elastic_object");
+    py::module::import("loads");
+    using GLoad = Loads::Gravity<DS>;
+    using Load = Loads::Load<double>;
+    py::class_<GLoad, Load, std::shared_ptr<GLoad>>(m, "Gravity")
+          .def(py::init([&](const std::shared_ptr<DS> &obj, double rho, const Eigen::Vector3d &g) {
+                return std::make_shared<GLoad>(obj, rho, g);
+            }), py::arg("obj"), py::arg("rho"), py::arg("g"))
+          .def_property("rho", &GLoad::get_rho, &GLoad::set_rho)
+          ;
 }

@@ -15,7 +15,7 @@
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/ElasticElement.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
-
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <memory>
 #include <vector>
 
@@ -30,17 +30,23 @@ inline std::array<int, 4> bendingHingeStencil(const HalfEdge &he) {
 
 template<template<typename> class HingeEnergy>
 struct DiscreteShell : public ElasticObject<double> {
+    static constexpr size_t Deg = 1;
+    static constexpr size_t K = 2;
+    static constexpr size_t N = 3;
+
     using V3d  = Eigen::Vector3d;
     using VXd  = Eigen::VectorXd;
     using MX3d = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
 
     using HE = HingeEnergy<double>;
-    using ME = MembraneElement<Real, 2, 1>;
+    using ME = MembraneElement<Real, K, Deg>;
     using NodePositions = typename ME::NodePositions;
 
-    using Mesh = FEMMesh<2, 1, V3d>; // Linear triangle mesh embedded in 3d.
-    using Psi_2x2 = NeoHookeanEnergy<double, 2>; // 2d energy density used to define the membrane energy
+    using Mesh = FEMMesh<K, Deg, V3d>; // Linear triangle mesh embedded in 3d.
+    using Psi_2x2 = NeoHookeanEnergy<double, K>; // 2d energy density used to define the membrane energy
     using Psi = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
+
+
 
     DiscreteShell(const std::shared_ptr<Mesh> &m, double Y = 200, double nu = 0.3)
         : m_mesh(m), m_assembler(m->numVertices()),
@@ -86,6 +92,7 @@ struct DiscreteShell : public ElasticObject<double> {
     const MX3d &deformedPositions() const { return m_x; }
 
     virtual double energy() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("DiscreteShell.energy");
         double result = 0;
         const auto &m = mesh();
 
@@ -101,12 +108,13 @@ struct DiscreteShell : public ElasticObject<double> {
     }
 
     virtual VXd gradient(bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("DiscreteShell.gradient");
         VXd g = VXd::Zero(numVars());
         const auto &m = mesh();
 
         // Membrane energy contribution
         m_assembler.assembleGradient(g, mesh(), [this](size_t ei) {
-            return h * ME::gradient(m_psi, getCornerPositions(ei), m_elementData[ei]);
+            return (h * ME::gradient(m_psi, getCornerPositions(ei), m_elementData[ei])).eval();
         });
 
         // Bending energy contribution
@@ -119,6 +127,7 @@ struct DiscreteShell : public ElasticObject<double> {
 
     virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
         // Assemble membrane term.
+        BENCHMARK_SCOPED_TIMER_SECTION timer("DiscreteShell.hessian");
         m_assembler.assembleHessian(H, mesh(), [&](size_t ei) {
             return (h * ME::hessian(m_psi, getCornerPositions(ei), m_elementData[ei], !projectionMask)).eval();
         });
