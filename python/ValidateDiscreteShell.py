@@ -1,41 +1,42 @@
 #%%
-import MeshFEM, mesh
+import MeshFEM, mesh    
 import discrete_shell, loads, sim_utils
 import numpy as np
 import vedo as vd 
-from matplotlib import pyplot as plt
+import py_newton_optimizer
+import benchmark
 vd.settings.default_backend='vtk'
-m = mesh.Mesh('../3rdparty/MeshFEM/misc/examples/meshes/lilium.msh', embeddingDimension=3)
-# %%
-def func(evt):                       ### called every time mouse moves!
-    msh = evt.actor
-    if not msh:
-        return                       # mouse hits nothing, return.
-    pt = evt.picked3d                # 3d coords of point under mouse
-
-    pid = msh.closest_point(pt, return_point_id=True)
-    n = msh.normal_at(pid)         # compute normals at pid
-    arw = vd.Arrow(pt, pt + n, s=0.001, c='orange5')
-    if len(plt.actors) > 3:
-        plt.pop()                    # remove the old flagpole
-
-    plt.add(arw).render()        # add Arrow and the new flagpole
-
-vdmesh = vd.Mesh([m.vertices(), m.elements()])
-vdmesh.computeNormals()
-plt = vd.Plotter(axes=1, bg2='lightblue')
-
-plt.add_callback('mouse move', func) # add the callback function
-plt.add_callback('keyboard', lambda evt: plt.remove(plt.actors[3:]).render())
-
-plt.show(vdmesh, __doc__, viewup='z')
-# %%
-ds = discrete_shell.DiscreteShell(m,youngModulus = 1)
-#g = discrete_shell.Gravity(ds, rho=1e-1, g=[0, -9.81, 0]) # mass density in kg/mm^3, gravitational acceleration in N/kg
-fixedVars = sim_utils.getBBoxVars(ds, sim_utils.BBoxFace.MIN_Z, tol=1e-2)
 
 #%%
-ds.computeEquilibrium(fixedVars=fixedVars)
+m = mesh.Mesh('../3rdparty/MeshFEM/misc/examples/meshes/lilium.msh', embeddingDimension=3)
+ds = discrete_shell.DiscreteShell(m,youngModulus = 1)
+g = discrete_shell.Gravity(ds, rho=1e-1, g=[0, -9.81, 0]) # mass density in kg/mm^3, gravitational acceleration in N/kg
+fixedVars = sim_utils.getBBoxVars(ds, sim_utils.BBoxFace.MIN_Z, tol=1e-2)
+attachmentPoints = [loads.AttachmentPointCoordinate([i], [1]) for i in range(ds.numVars())]
+targets = [loads.AttachmentPointCoordinate(v) for v in m.vertices().ravel()]
+s=discrete_shell.Springs(ds, attachmentPoints, targets, 1.0)
+# %%
+def func(evt):                   
+    msh = evt.actor
+    if not msh:
+        return                   
+    pt = evt.picked3d            
+    vdmesh = vd.Mesh([m.vertices(), m.elements()])
+    
+vdmesh = vd.Mesh([m.vertices(), m.elements()])
+plt = vd.Plotter(axes=1, bg2='lightblue')
+plt.show(vdmesh, viewup='z')
+
+#%%
+nopts = py_newton_optimizer.NewtonOptimizerOptions()
+nopts.niter = 100
+benchmark.reset()
+ds.computeEquilibrium(loads = [g,s], fixedVars=fixedVars,opts=nopts,cb = func)
+benchmark.report()
+
+#%%
+vdmesh = vd.Mesh([m.vertices(), m.elements()])
+vd.plot(vdmesh)
 #%%
 ds.setVars(ds.getVars() + 1e-3 * np.random.normal(size=ds.numVars()))
 #%%

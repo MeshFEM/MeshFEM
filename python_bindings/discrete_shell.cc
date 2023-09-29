@@ -9,7 +9,9 @@ namespace py = pybind11;
 #include "../HingeBendingEnergy.hh"
 #include "../HingePanelizationEnergy.hh"
 #include <MeshFEM/Loads/Gravity.hh>
+#include <MeshFEM/Loads/Springs.hh>
 
+using APC = Loads::AttachmentPointCoordinate<double>;
 
 PYBIND11_MODULE(discrete_shell, m)
 {
@@ -34,8 +36,6 @@ PYBIND11_MODULE(discrete_shell, m)
           .def_readwrite("h",                &DS::h)
           ;
 
-    py::module::import("elastic_object");
-    py::module::import("loads");
     using GLoad = Loads::Gravity<DS>;
     using Load = Loads::Load<double>;
     py::class_<GLoad, Load, std::shared_ptr<GLoad>>(m, "Gravity")
@@ -44,4 +44,14 @@ PYBIND11_MODULE(discrete_shell, m)
             }), py::arg("obj"), py::arg("rho"), py::arg("g"))
           .def_property("rho", &GLoad::get_rho, &GLoad::set_rho)
           ;
+      
+      using Springs = Loads::Springs<DS>;
+        using VXd  = Eigen::VectorXd;
+        py::class_<Springs, Load, std::shared_ptr<Springs>>(m, "Springs")
+            .def(py::init<const std::shared_ptr<DS> &, const std::vector<APC> &, const std::vector<APC> &, double>(),
+            py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffness"))
+            .def("getStiffnesses", &Springs::getStiffnesses)
+            .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
+            .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
+            ;
 }

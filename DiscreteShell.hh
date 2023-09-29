@@ -32,7 +32,7 @@ template<template<typename> class HingeEnergy>
 struct DiscreteShell : public ElasticObject<double> {
     static constexpr size_t Deg = 1;
     static constexpr size_t K = 2;
-    static constexpr size_t N = 3;
+static constexpr size_t N = 3;
 
     using V3d  = Eigen::Vector3d;
     using VXd  = Eigen::VectorXd;
