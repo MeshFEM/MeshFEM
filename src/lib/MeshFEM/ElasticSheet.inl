@@ -711,7 +711,6 @@ template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateShapeOperators() {
     m_II.resize(mesh().numTris());
     parallel_for_range(m_II.size(), [this](size_t ei) {
-        m_II[ei] = m_plate.getII(getCornerPositions(ei), getTriGammas(ei),
-                                 m_deformedElements[ei].volume(), m_elementData[ei]);
+        m_II[ei] = m_plate.getII(getCornerPositions(ei), getTriGammas(ei), m_elementData[ei]);
     });
 }

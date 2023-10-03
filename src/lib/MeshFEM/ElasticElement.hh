@@ -141,7 +141,7 @@ using ParametrizationElement = HyperelasticLagrangeElement<Real, K, K, 1>;
 // embedded in 2D). This class enriches a triangular `LinearlyEmbeddedElement`
 // with an orthonormal basis for its tangent plane and cached shape function
 // gradients in this 2D coordinate system.
-template<class LEElement>
+template<class LEElement, class StorageType = const LEElement &>
 struct EmbeddedMembraneElementData {
     static constexpr size_t K = LEElement::K;
     static constexpr size_t N = LEElement::EmbeddingSpace::RowsAtCompileTime;
@@ -205,7 +205,7 @@ struct EmbeddedMembraneElementData {
 private:
     M32d m_B;
     M23d m_BtGradBarycentric;
-    const LEElement &m_embeddedElement;
+    StorageType m_embeddedElement;
 };
 
 #endif /* end of include guard: ELASTICELEMENT_HH */

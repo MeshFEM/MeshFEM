@@ -2,7 +2,6 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-namespace py = pybind11;
 
 #include <MeshFEM/ElasticSheet.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
@@ -139,4 +138,32 @@ PYBIND11_MODULE(elastic_sheet, m)
     py::module::import("elastic_object");
 
     generateElasticSheetBindings(m, detail_module, ElasticSheetBinder());
+
+    // Standalone binding of PlateBendingElement for validation.
+    using PBE = PlateBendingElement<double, AngleFunctionSin>;
+    using CPos = typename PBE::CornerPositions;
+    using DE = typename PBE::DeformedElementQuantities;
+    using ET = typename PBE::ETensor;
+    using V3d = Eigen::Vector3d;
+    auto elementData = [](const CPos &x) {
+        using LEE = LinearlyEmbeddedElement<Simplex::Triangle, 1, V3d>;
+        LEE e;
+        e.embed(x.row(0).transpose(), x.row(1).transpose(), x.row(2).transpose());
+        return EmbeddedMembraneElementData<LEE, LEE>(e);
+    };
+    py::class_<PBE>(m, "PlateBendingElement")
+        .def(py::init<double>(), py::arg("thickness"))
+        .def("energy", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+                    const auto ref_edata = elementData(X);
+                    return e.energy(C, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+        .def("gradient", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+                    const auto ref_edata = elementData(X);
+                    return e.gradient(C, x, gamma, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+        .def("hessian", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+                    const auto ref_edata = elementData(X);
+                    return e.hessian(C, x, gamma, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+    ;
 }

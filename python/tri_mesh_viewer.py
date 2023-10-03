@@ -13,7 +13,7 @@ except Exception as e:
 import mesh_operations
 class RawMesh():
     def __init__(self, vertices, faces, normals = None, omitNormals = False):
-        if (faces.shape[1] != 3): raise Exception('RawMesh only supports triangle meshes!')
+        # if (faces.shape[1] != 3): raise Exception('RawMesh only supports triangle meshes!')
         if normals is None and (not omitNormals):
             normals = mesh_operations.getVertexNormalsRaw(vertices, faces)
         self.updateGeometry(vertices, faces, normals)
