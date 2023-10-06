@@ -34,6 +34,7 @@ PYBIND11_MODULE(discrete_shell, m)
           .def("visualizationField", [](const DS &ds, const Eigen::MatrixXd &f) { return getVisualizationField(ds.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
           .def_readwrite("bendingStiffness", &DS::bendingStiffness)
           .def_readwrite("h",                &DS::h)
+          .def_property("delta", &DS::getDelta, &DS::setDelta)
           ;
 
     using GLoad = Loads::Gravity<DS>;
