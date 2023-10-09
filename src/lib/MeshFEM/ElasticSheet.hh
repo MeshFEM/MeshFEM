@@ -49,7 +49,7 @@
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
 #include "ElasticElement.hh"
-#include "PlateBendingElement.hh"
+#include "Elements/PlateBending.hh"
 
 #include "SystemAssembler.hh"
 
@@ -85,6 +85,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
 
     using ME = MembraneElement<Real, 2, 1>;
     using NodePositions = typename ME::NodePositions;
+    using PBE = elements::PlateBending<Real>;
 
     using Base = ElasticObject<Real>;
     using CSCMat  = typename Base::CSCMat;
@@ -714,7 +715,7 @@ private:
     std::vector<Material> m_materials;
 
     std::vector<EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
-    PlateBendingElement<Real> m_plate;
+    PBE m_plate;
 
     const size_t m_numVertices;
 

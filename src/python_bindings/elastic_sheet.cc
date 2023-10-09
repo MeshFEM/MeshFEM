@@ -8,6 +8,7 @@
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
+#include <MeshFEM/Elements/DihedralAngle.hh>
 
 #include "BindingInstantiations.hh"
 
@@ -140,9 +141,8 @@ PYBIND11_MODULE(elastic_sheet, m)
     generateElasticSheetBindings(m, detail_module, ElasticSheetBinder());
 
     // Standalone binding of PlateBendingElement for validation.
-    using PBE = PlateBendingElement<double, AngleFunctionSin>;
+    using PBE = elements::PlateBending<double, elements::AngleFunctionSin>;
     using CPos = typename PBE::CornerPositions;
-    using DE = typename PBE::DeformedElementQuantities;
     using ET = typename PBE::ETensor;
     using V3d = Eigen::Vector3d;
     auto elementData = [](const CPos &x) {
@@ -165,5 +165,15 @@ PYBIND11_MODULE(elastic_sheet, m)
                     const auto ref_edata = elementData(X);
                     return e.hessian(C, x, gamma, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
                 }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+    ;
+
+    // Standalone binding of DihedralAngle for validation.
+    using DA = elements::DihedralAngle<double>;
+    py::class_<DA>(m, "DihedralAngle")
+        .def(py::init<>())
+        .def("configure", &DA::configure, py::arg("stencilPts"))
+        .def("value",    &DA::value)
+        .def("gradient", &DA::gradient)
+        .def("hessian",  &DA::hessian)
     ;
 }

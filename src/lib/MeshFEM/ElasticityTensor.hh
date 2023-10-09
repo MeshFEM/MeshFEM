@@ -457,9 +457,14 @@ public:
     }
 
     template<typename Real2, size_t N, class _Storage, class _ConstRef>
-    SymmetricMatrix<N, FlattenedRank2Tensor>
-    doubleContract(const ConstSymmetricMatrixBase<Real2, N, _Storage, _ConstRef> &b) const {
+    SMatrix doubleContract(const ConstSymmetricMatrixBase<Real2, N, _Storage, _ConstRef> &b) const {
         return SymmetricMatrix<N, FlattenedRank2Tensor>(applyD(shearDoubled(b.flattened())));
+    }
+
+    // Double contract with u⨂ u
+    template<class Derived>
+    SMatrix doubleContractRank1(const Eigen::MatrixBase<Derived> &u) const {
+        return doubleContract(SMatrix(u * u.transpose()));
     }
 
     // The following operation that we call "double double contract" maintains

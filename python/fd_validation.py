@@ -25,7 +25,7 @@ def basisDirection(obj, c):
     e_c[c] = 1.0
     return e_c
 
-def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
+def fdDelta(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVars = []):
     xold, xeval, perturb = preamble(obj, xeval, perturb, customArgs, fixedVars)
 
     if (hasMethod(obj, 'energy')):
@@ -43,6 +43,30 @@ def fdGrad(obj, fd_eps, xeval = None, perturb = None, customArgs = None, fixedVa
 
     return fd_delta_E
 
+def fdGrad(obj, fd_eps, xeval = None, customArgs = None, fixedVars = []):
+    """
+    Construct a finite difference approximation of the full gradient by perturbing one variable at a time.
+    """
+    return np.array([fdDelta(obj, fd_eps, perturb=basisDirection(obj, i), xeval=xeval, customArgs=customArgs, fixedVars=fixedVars) for i in range(obj.numVars())])
+
+def fdHessian(obj, fd_eps, xeval = None, customArgs = None, fixedVars = []):
+    """
+    Construct a finite difference approximation of the full Hessian by perturbing one variable at a time.
+    """
+    nv = obj.numVars()
+    fd_hess = np.zeros((nv, nv))
+    if (xeval is None): xeval = obj.getVars()
+    x = xeval.copy()
+    for i in range(nv):
+        d = basisDirection(obj, i)
+        obj.setVars(x + fd_eps * d)
+        g_plus = obj.gradient()
+        obj.setVars(x - fd_eps * d)
+        g_minus = obj.gradient()
+        obj.setVars(x)
+        fd_hess[:, i] = (g_plus - g_minus) / (2 * fd_eps)
+    return fd_hess
+
 def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = None, fixedVars = [], g = None):
     """
     Return (fd, an) where `fd` and `an` are the finite difference approximation and
@@ -56,7 +80,7 @@ def validateGrad(obj, fd_eps = 1e-6, xeval = None, perturb = None, customArgs = 
         analytic_delta_E = g.ravel().dot(perturb.ravel())
     analytic_delta_E = g.dot(perturb)              # Don't use `ravel()` in the case of vector-valued functions where "grad" is really a Jacobian...
 
-    fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
+    fd_delta_E = fdDelta(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
 
     return (fd_delta_E, analytic_delta_E)
 
@@ -82,7 +106,7 @@ def findBadGradComponent(obj, fd_eps, xeval = None, customArgs = None, fixedVars
             perturb[0:lowIdx] = 0
             perturb[upIdx + 1:] = 0
 
-            fd_delta_E = fdGrad(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
+            fd_delta_E = fdDelta(obj, fd_eps, xeval, perturb, customArgs, fixedVars)
             analytic_delta_E = g.dot(perturb)
             err += np.abs(analytic_delta_E - fd_delta_E) / np.abs(fd_delta_E)
         return err
@@ -312,4 +336,3 @@ def secondDerivativeConvergencePlot(obj, customArgs=None, fixedVars = [], epsilo
     plt.title(title)
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
-    
