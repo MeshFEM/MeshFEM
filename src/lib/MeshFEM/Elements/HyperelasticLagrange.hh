@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-// ElasticElement.hh
+// HyperelasticLagrange.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //  Reusable per-element elasticity calculations for solids and membrane
@@ -8,18 +8,20 @@
 //  Company:  University of California, Davis
 //  Created:  08/11/2023 10:42:05
 *///////////////////////////////////////////////////////////////////////////////
-#ifndef ELASTICELEMENT_HH
-#define ELASTICELEMENT_HH
+#ifndef HYPERELASTICLAGRANGE_HH
+#define HYPERELASTICLAGRANGE_HH
 
-#include "GaussQuadrature.hh"
-#include "EnergyDensities/EnergyTraits.hh"
-#include "EnergyDensities/Tensor.hh"
+#include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/EnergyDensities/EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/Tensor.hh>
+
+namespace elements {
 
 // A simplicial Lagrange element for hyperelasticity. The simplex dimension `K`
 // selects between edges/triangles/tetrahedra, while the embedding dimension `N`
 // specifies the dimenion of the deformation degrees of freedom.
 template<typename Real, size_t K, size_t N, size_t Deg>
-struct HyperelasticLagrangeElement {
+struct HyperelasticLagrange {
     static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
     static constexpr size_t NumVarsPerElement  = N * NumNodesPerElement;
     using QuadratureRule = Quadrature<K, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
@@ -127,13 +129,13 @@ struct HyperelasticLagrangeElement {
 // Specializations for various applications.
 ////////////////////////////////////////////////////////////////////////////////
 template<typename Real, size_t K, size_t Deg>
-using SolidElement = HyperelasticLagrangeElement<Real, K, K, Deg>;
+using Solid = HyperelasticLagrange<Real, K, K, Deg>;
 
 template<typename Real, size_t K, size_t Deg>
-using MembraneElement = HyperelasticLagrangeElement<Real, K, K + 1, Deg>;
+using Membrane = HyperelasticLagrange<Real, K, K + 1, Deg>;
 
 template<typename Real, size_t K>
-using ParametrizationElement = HyperelasticLagrangeElement<Real, K, K, 1>;
+using Parametrization = HyperelasticLagrange<Real, K, K, 1>;
 
 // Data for a triangular membrane element whose *rest configuration* is embedded
 // in 3D. This is useful for simulating shells (deformed configuration also
@@ -208,4 +210,6 @@ private:
     StorageType m_embeddedElement;
 };
 
-#endif /* end of include guard: ELASTICELEMENT_HH */
+}
+
+#endif /* end of include guard: HYPERELASTICLAGRANGE_HH */

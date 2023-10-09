@@ -48,7 +48,7 @@
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
-#include "ElasticElement.hh"
+#include "Elements/HyperelasticLagrange.hh"
 #include "Elements/PlateBending.hh"
 
 #include "SystemAssembler.hh"
@@ -83,7 +83,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using Real    = typename Psi::Real;
     using ETensor = ElasticityTensor<Real, 2>;
 
-    using ME = MembraneElement<Real, 2, 1>;
+    using ME = elements::Membrane<Real, 2, 1>;
     using NodePositions = typename ME::NodePositions;
     using PBE = elements::PlateBending<Real>;
 
@@ -714,7 +714,7 @@ private:
     std::vector<size_t> m_materialForElement;
     std::vector<Material> m_materials;
 
-    std::vector<EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
+    std::vector<elements::EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
     PBE m_plate;
 
     const size_t m_numVertices;

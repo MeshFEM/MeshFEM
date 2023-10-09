@@ -82,7 +82,6 @@ struct DihedralAngle {
         Hessian result;
         result.setZero();
 
-
         // n ⨂  ehatp_i term
         Real liSq = de[0].edgeVecDotProducts(HingeHE, HingeHE);
         {

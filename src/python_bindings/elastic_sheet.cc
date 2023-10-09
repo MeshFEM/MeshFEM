@@ -149,7 +149,7 @@ PYBIND11_MODULE(elastic_sheet, m)
         using LEE = LinearlyEmbeddedElement<Simplex::Triangle, 1, V3d>;
         LEE e;
         e.embed(x.row(0).transpose(), x.row(1).transpose(), x.row(2).transpose());
-        return EmbeddedMembraneElementData<LEE, LEE>(e);
+        return elements::EmbeddedMembraneElementData<LEE, LEE>(e);
     };
     py::class_<PBE>(m, "PlateBendingElement")
         .def(py::init<double>(), py::arg("thickness"))

@@ -34,7 +34,7 @@
 #include "Laplacian.hh"
 #include "VonMises.hh"
 
-#include "ElasticElement.hh"
+#include "Elements/HyperelasticLagrange.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
@@ -57,7 +57,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
-    using SE = SolidElement<Real, K, Deg>;
+    using SE = elements::Solid<Real, K, Deg>;
     using NodePositions = typename SE::NodePositions;
 
     using EvalPtK  = EvalPt<K>;
