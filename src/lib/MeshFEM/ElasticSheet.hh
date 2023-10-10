@@ -83,7 +83,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using Real    = typename Psi::Real;
     using ETensor = ElasticityTensor<Real, 2>;
 
-    using ME = elements::Membrane<Real, 2, 1>;
+    using ME = elements::Membrane<Psi, 2, 1>;
     using NodePositions = typename ME::NodePositions;
     using PBE = elements::PlateBending<Real>;
 

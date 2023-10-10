@@ -57,7 +57,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
-    using SE = elements::Solid<Real, K, Deg>;
+    using SE = elements::Solid<Energy, K, Deg>;
     using NodePositions = typename SE::NodePositions;
 
     using EvalPtK  = EvalPt<K>;

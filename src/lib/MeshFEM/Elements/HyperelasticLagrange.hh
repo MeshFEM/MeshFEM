@@ -17,15 +17,20 @@
 
 namespace elements {
 
+// TODO: Make ElasticFGetter a standalone class that is passed
+// as a template argument to HyperelasticLagrange so that an instance
+// can be passed to `configure` and stored.
+
 // A simplicial Lagrange element for hyperelasticity. The simplex dimension `K`
 // selects between edges/triangles/tetrahedra, while the embedding dimension `N`
 // specifies the dimenion of the deformation degrees of freedom.
-template<typename Real, size_t K, size_t N, size_t Deg>
+template<class Psi, size_t K, size_t N, size_t Deg>
 struct HyperelasticLagrange {
     static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
     static constexpr size_t NumVarsPerElement  = N * NumNodesPerElement;
     using QuadratureRule = Quadrature<K, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
     using EvalPtK        = EvalPt<K>;
+    using Real           = typename Psi::Real;
     using Gradient       = Eigen::Matrix<Real, NumVarsPerElement, 1>;
     using Hessian        = Eigen::Matrix<Real, NumVarsPerElement, NumVarsPerElement>;
     using MNKd           = Eigen::Matrix<Real, N, K>;
@@ -43,7 +48,7 @@ struct HyperelasticLagrange {
         const NodePositions &deformedPositions;
     };
 
-    template<class Psi, class FGetter, class EData>
+    template<class FGetter, class EData>
     static Real energy(const Psi &psi_template, const FGetter &getF, const EData &edata) {
         Psi psi(psi_template, UninitializedDeformationTag());
         return QuadratureRule::integrate(
@@ -54,12 +59,12 @@ struct HyperelasticLagrange {
             }, edata.volume());
     }
 
-    template<class Psi, class EData>
+    template<class EData>
     static Real energy(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata) {
         return energy(psi_template, ElasticFGetter(deformedPositions), edata);
     }
 
-    template<class Psi, class FGetter, class EData>
+    template<class FGetter, class EData>
     static Gradient gradient(const Psi &psi_template, const FGetter &getF, const EData &edata) {
         Psi psi(psi_template, UninitializedDeformationTag());
 
@@ -76,12 +81,12 @@ struct HyperelasticLagrange {
         return result;
     }
 
-    template<class Psi, class EData>
+    template<class EData>
     static Gradient gradient(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata) {
         return gradient(psi_template, ElasticFGetter(deformedPositions), edata);
     }
 
-    template<bool SetLowerTri = false, class Psi, class FGetter, class EData>
+    template<bool SetLowerTri = false, class FGetter, class EData>
     static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection) {
         Psi psi(psi_template, UninitializedDeformationTag());
         Hessian result;
@@ -119,7 +124,7 @@ struct HyperelasticLagrange {
         return result;
     }
 
-    template<bool SetLowerTri = false, class Psi, class EData>
+    template<bool SetLowerTri = false, class EData>
     static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection) {
         return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection);
     }
@@ -128,14 +133,14 @@ struct HyperelasticLagrange {
 ////////////////////////////////////////////////////////////////////////////////
 // Specializations for various applications.
 ////////////////////////////////////////////////////////////////////////////////
-template<typename Real, size_t K, size_t Deg>
-using Solid = HyperelasticLagrange<Real, K, K, Deg>;
+template<class Psi, size_t K, size_t Deg>
+using Solid = HyperelasticLagrange<Psi, K, K, Deg>;
 
-template<typename Real, size_t K, size_t Deg>
-using Membrane = HyperelasticLagrange<Real, K, K + 1, Deg>;
+template<class Psi, size_t K, size_t Deg>
+using Membrane = HyperelasticLagrange<Psi, K, K + 1, Deg>;
 
-template<typename Real, size_t K>
-using Parametrization = HyperelasticLagrange<Real, K, K, 1>;
+template<class Psi, size_t K>
+using Parametrization = HyperelasticLagrange<Psi, K, K, 1>;
 
 // Data for a triangular membrane element whose *rest configuration* is embedded
 // in 3D. This is useful for simulating shells (deformed configuration also
