@@ -1,13 +1,14 @@
 ////////////////////////////////////////////////////////////////////////////////
-// HingeEnergies.hh
+// HingeElement.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-// Implements a few energies as functions of a triangle flap dihedral angle.
+// Implements a generic hinge element whose energy is a nonlinear function
+// of a dihedral angle specified via the HingeElement
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 ////////////////////////////////////////////////////////////////////////////////
-#ifndef HINGEENERGY_HH
-#define HINGEENERGY_HH
+#ifndef HINGEELEMENT_HH
+#define HINGEELEMENT_HH
 
 #include <cmath>
 #include <Eigen/Dense>
@@ -16,17 +17,22 @@
 #include <MeshFEM/EnergyDensities//EnergyTraits.hh>
 
 template<class _Real>
-struct DiscreteShellRestState { Real theta, elen, h; };
-
-template<class _Real>
 struct DiscreteShellHingeEnergy {
-    struct RestState { Real theta, e_len, h; };
+    using Real = _Real;
+    struct RestState {
+        RestState(const elements::DihedralAngle<Real> &da) {
+            theta = da.value();
+            e_len = da.hingeEdgeLen();
+            h_bar = da.avgHeight() / 3; // see [Grinspun 2003], below (2)
+        }
+        Real theta, e_len, h_bar;
+    };
     using MaterialProperties = Real; // Bending stiffness
 
     void configure(const RestState &X, Real theta, MaterialProperties k, EvalLevel elevel = EvalLevel::Full) {
         m_theta = theta;
         m_theta_bar = X.theta;
-        m_weight = k * X.elen / X.h_bar;
+        m_weight = k * X.e_len / X.h_bar;
     }
 
     Real   energy() const { return 0.5 * (m_theta - m_theta_bar) * (m_theta - m_theta_bar) * m_weight; }
@@ -39,9 +45,11 @@ private:
 
 template<class _Real>
 struct PanelizationHingeEnergy {
-    struct RestState { };
-    struct MaterialProperties { Real delta, stiffness; };
     using Real = _Real;
+    struct RestState {
+        RestState(const elements::DihedralAngle<Real> &/* da */) { }
+    };
+    struct MaterialProperties { Real delta = 0.01, stiffness = 1; };
     void configure(const RestState /* X */, Real theta, const MaterialProperties &m, EvalLevel elevel = EvalLevel::Full) {
         m_theta = theta;
         m_k = m.stiffness;
@@ -62,29 +70,43 @@ private:
 
 template<class HingeEnergy>
 struct HingeElement {
-    using Real          = typename HingeEnergy::Real;
-    using DA            = elements::DihedralAngle<Real>;
-    using RestState     = typename HingeEnergy::RestState;
-    using DeformedState = typename DA::StencilPoints;
+    using Real      = typename HingeEnergy::Real;
+    using DA        = elements::DihedralAngle<Real>;
+    using RestState = typename HingeEnergy::RestState;
+    using Vars      = typename DA::StencilPoints;
 
     using Gradient = typename DA::Gradient;
     using Hessian  = typename DA::Hessian;
+    using MProps   = typename HingeEnergy::MaterialProperties;
 
-    void configure(const RestState &X, const DeformedState &x, class MaterialProperties &m, EvalLevel elevel = EvalLevel::Full) {
-        m_theta.configure(x);
-        m_he.configure(X, m_theta.value(), m, elevel);
+    HingeElement(const Vars &X, const MProps &m = MProps())
+        : m_theta(X), m_restState(m_theta) {
+        material = m;
     }
 
-    Real energy() const { return m_he.energy(); }
+    void setDeformedConfiguration(const Vars &x, EvalLevel elevel = EvalLevel::Full) {
+        m_theta.configure(x);
+        m_he.configure(m_restState, m_theta.value(), material, elevel); 
+    }
+
+    void setRestConfiguration(const Vars &X) {
+        m_theta.configure(X);
+        m_restState = m_restState(m_theta);
+    }
+
+    Real       energy() const { return m_he.energy(); }
     Gradient gradient() const { return m_he.gradient() * m_theta.gradient(); }
     Hessian   hessian() const {
         Gradient gradTheta = m_theta.gradient();
         return gradTheta * m_he.hessian() * gradTheta.transpose() + m_he.gradient() * m_theta.hessian();
     }
 
+    MProps material;
+
 private:
     HingeEnergy m_he;
     elements::DihedralAngle<Real> m_theta;
+    RestState m_restState;
 };
 
-#endif /* end of include guard: HINGEENERGY_HH */
+#endif /* end of include guard: HINGEELEMENT_HH */

@@ -16,6 +16,10 @@ if (NOT TARGET MeshFEM)
     add_subdirectory(${THIRD_PARTY_DIR}/MeshFEM)
 endif()
 
+# Color errors/warnings.
+list(APPEND CMAKE_MODULE_PATH ${THIRD_PARTY_DIR}/MeshFEM/cmake)
+include(UseColors)
+
 add_library(DiscreteShell INTERFACE)
 target_sources(DiscreteShell INTERFACE DiscreteShell.hh)
 target_link_libraries(DiscreteShell INTERFACE MeshFEM warnings::all)

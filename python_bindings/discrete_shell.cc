@@ -6,8 +6,7 @@ namespace py = pybind11;
 
 #include "../DiscreteShell.hh"
 #include "../3rdparty//MeshFEM/src/python_bindings/MeshEntities.hh"
-#include "../HingeBendingEnergy.hh"
-#include "../HingePanelizationEnergy.hh"
+#include "../HingeElement.hh"
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Springs.hh>
 
@@ -16,7 +15,7 @@ using APC = Loads::AttachmentPointCoordinate<double>;
 PYBIND11_MODULE(discrete_shell, m)
 {
     using EO = ElasticObject<double>;
-    using DS = DiscreteShell<HingePanelizationEnergy>;
+    using DS = DiscreteShell<PanelizationHingeEnergy>;
 
     using Mesh = DS::Mesh;
 
