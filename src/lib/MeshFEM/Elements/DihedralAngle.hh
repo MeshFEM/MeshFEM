@@ -45,6 +45,7 @@ struct DihedralAngle {
 
     using DTG = DeformedTriangleGeometry<Real>;
 
+    DihedralAngle(const StencilPoints &pts) { configure(pts); }
     DihedralAngle() { } // WARNING: leaves members uninitalized!
 
     void configure(const Eigen::Ref<const StencilPoints> &pts) {
@@ -60,6 +61,9 @@ struct DihedralAngle {
     }
 
     Real value() const { return theta; }
+
+    Real hingeEdgeLen() const { return de[0].edgeLens[HingeHE]; }
+    Real avgHeight()    const { return 0.5 * (de[0].h[HingeHE] + de[1].h[HingeHE]); }
 
     Gradient gradient() const {
         Gradient result;

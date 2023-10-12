@@ -215,8 +215,9 @@ public:
     CHR<BNHandle>    constBoundaryNodes() const { return CHR<BNHandle>(*this); }
     CHR<BEHandle> constBoundaryElements() const { return CHR<BEHandle>(*this); }
 
-    std::array<size_t, NumNodesPerElement> elementNodeIndices(size_t ei) const {
-        std::array<size_t, NumNodesPerElement> result;
+    template<typename T = size_t>
+    std::array<T, NumNodesPerElement> elementNodeIndices(size_t ei) const {
+        std::array<T, NumNodesPerElement> result;
         elementNodeIndices(ei, result);
         return result;
     }
