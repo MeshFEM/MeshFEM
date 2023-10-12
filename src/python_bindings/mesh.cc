@@ -119,16 +119,11 @@ struct MeshBindingsBase {
                     result[i++] = e.second;
                 return result;
           }, "Get the length of each mesh edge in arbitrary order")
+          .def("centerOfMass", [](const Mesh &m) { return m.centerOfMass(); })
           .def("barycenters", [](const Mesh &m) {
                 Eigen::Matrix<typename Mesh::Real, Eigen::Dynamic, EmbeddingDimension> result(m.numElements(), size_t(EmbeddingDimension));
-                for (const auto e : m.elements()) {
-                    auto b = result.row(e.index());
-                    b.setZero();
-                    for (const auto v : e.vertices()) {
-                        b += v.node()->p;
-                    }
-                    b /= e.numVertices();
-                }
+                for (size_t ei = 0; ei < m.numElements(); ++ei)
+                    result.row(ei) = m.elementBarycenter(ei);
                 return result;
               }, "Get the barycenters of each element")
           .def("visitVertexNeighbors", [](const Mesh &m, size_t vi, const std::function<bool(size_t)> &visitor) {
