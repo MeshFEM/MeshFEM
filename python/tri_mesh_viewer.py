@@ -239,7 +239,7 @@ def _makeTetMeshViewer(BaseClass):
                 else:
                     return self.mesh.shrunkenTetVisualizationField(data)
 
-        def __init__(self, tetmesh, width=1024, height=1024, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
+        def __init__(self, tetmesh, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, superView=None, transparent=False, wireframe=False):
             super().__init__(TetMeshViewer.TetMeshWrapper(tetmesh), width, height, textureMap, scalarField, vectorField, superView, transparent, wireframe)
 
         def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
@@ -309,6 +309,7 @@ def Viewer(obj, width=None, height=None, textureMap=None, scalarField=None, vect
     if reflection.isVoxelFEMSimulator(obj):
         raise Exception('Use VoxelFEM Viewer')
     kwargs = {'textureMap': textureMap, 'scalarField': scalarField, 'vectorField': vectorField, 'superView': superView, 'transparent': transparent, 'wireframe': wireframe}
+    if (width is None) and (height is None): width = height = (1024 if offscreen else 512)
     if width  is not None: kwargs[ 'width'] = width
     if height is not None: kwargs['height'] = height
     return reflection.evalWithCustomArgs(cls, kwargs, [obj])
