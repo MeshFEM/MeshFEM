@@ -122,3 +122,86 @@ def perforatedSheet(holes=[], maxArea = 0.0001, L = 1, holeEdgeLen = 0.01):
         edges.extend(np.column_stack([idxs, np.roll(idxs, -1)]))
 
     return mesh.Mesh(*mesh_operations.removeDanglingVertices(*triangulation.triangulate(pts, edges, holePts, triArea=maxArea)[0:2]), embeddingDimension=3)
+
+def triangulatedGrid(shape=[], bbox=None, dx=None):
+    """
+    Constructs a structured triangle or tetrahedral mesh by
+    triangulating a regular grid. The resulting finite element discretization
+    of the Laplacian will agree with the standard finite difference stencil.
+
+    Parameters
+    ----------
+    shape : [n_x, n_y, [n_z]]
+        The number of *cells* along each dimension of the grid.
+        (the number of vertices along each dimension is `shape + 1`)
+    bbox
+        The bottom-left and top-right corner of the grid.
+        If omitted, it is determined from `dx` below.
+    dx
+        The edge length of a square/cube element from which `bbox` can be determined
+        (placing the bottom-left corner at the origin).
+
+    Note that at most one of `bbox` or `dx` should be specified. If neither
+    is specified, we default to `dx = 1`.
+
+    Returns
+    ----------
+    V, T
+        Indexed element set representation of the output mesh.
+
+        Each grid cell `c` of the regular grid will be converted to t=2
+        triangles or t=5 tetrahedra (depending on the dimension) listed
+        consecutively in the grid. Therefore, the grid
+        cell index associated with a given simplex `ei` can be obtained
+        as `ei // t`.
+    """
+    shape = np.array(shape)
+    vtx_shape = shape + 1
+    dim = len(shape)
+    if dim not in [2, 3]: raise Exception('`shape` must be 2D or 3D')
+
+    if bbox is None:
+        dx = 1 if dx is None else dx
+        bbox = np.array([[0] * dim, [dx * s for s in shape]])
+    else:
+        if dx is not None: raise Exception('Specifying both `bbox` and `dx` is illegal')
+        bbox = np.array(bbox)
+        if bbox.shape != (2, dim): raise Exception('bbox is not of the correct shape')
+
+    # Generate the vertices of the grid indexed like:
+    #   3--4--5
+    #   |  |  |
+    #   0--1--2
+    coordinateSamples = [np.linspace(bbox[0, d], bbox[1, d], 1 + shape[d]) for d in range(dim)]
+    V = np.column_stack([C.ravel(order='F') for C in np.meshgrid(*coordinateSamples, indexing='ij')])
+
+    # Generate corner offset indices for the triangle/tet elements filling each grid cell
+    strides = np.cumproduct(vtx_shape)[:-1]
+    if dim == 2: elementCorners = [[0, 1, strides[0] + 1], [0, strides[0] + 1, strides[0]]]
+    if dim == 3:
+        # 3,_________,2
+        #  |\        |\             3
+        #  | 7---------6            *
+        #  | |       | |           / \`.
+        # 0|_|_______|1|          /   \ `* 2
+        #  \ |       \ |         / _.--\ /
+        #   \|        \|       0*-------* 1
+        #    +---------+
+        #   4           5
+        cube = [0, 1, strides[0] + 1, strides[0]]          # back  quad
+        cube.extend([strides[1] + s for s in cube]) # front quad
+        elementCorners = [
+           [cube[0], cube[4], cube[5], cube[7]], # tetrahedron at corner 4 (front-bottom-left)
+           [cube[5], cube[6], cube[2], cube[7]], # tetrahedron at corner 6 (front-top-right)
+           [cube[0], cube[5], cube[1], cube[2]], # tetrahedron at corner 1 (back-bottom-right)
+           [cube[2], cube[3], cube[0], cube[7]], # tetrahedron at corner 3 (back-top-left)
+           [cube[0], cube[7], cube[5], cube[2]]  # interior regular tetrahedron
+        ]
+    elementCorners = np.array(elementCorners, dtype=np.uint64)
+
+    simplicesPerCell = len(elementCorners)
+    numCells = np.prod(shape)
+
+    T = np.array([corners + gridPtIdx for gridPtIdx in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(shape), dtype=np.uint64), shape, order='F'), vtx_shape, order='F') for corners in elementCorners])
+
+    return V, T
