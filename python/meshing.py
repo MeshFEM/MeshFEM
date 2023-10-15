@@ -123,7 +123,7 @@ def perforatedSheet(holes=[], maxArea = 0.0001, L = 1, holeEdgeLen = 0.01):
 
     return mesh.Mesh(*mesh_operations.removeDanglingVertices(*triangulation.triangulate(pts, edges, holePts, triArea=maxArea)[0:2]), embeddingDimension=3)
 
-def triangulatedGrid(shape=[], bbox=None, dx=None):
+def triangulatedGrid(shape=[], bbox=None, dx=None, triangulationRule = 0):
     """
     Constructs a structured triangle or tetrahedral mesh by
     triangulating a regular grid. The resulting finite element discretization
@@ -140,6 +140,11 @@ def triangulatedGrid(shape=[], bbox=None, dx=None):
     dx
         The edge length of a square/cube element from which `bbox` can be determined
         (placing the bottom-left corner at the origin).
+
+    triangulationRule : int (default: 0)
+        Select the rule for triangulating each grid cell. There are 2 rules in 2d; 13 in 3d.
+
+        Warning: only the first 8 rules in 3D produce valid simplicial complexes!
 
     Note that at most one of `bbox` or `dx` should be specified. If neither
     is specified, we default to `dx = 1`.
@@ -177,7 +182,16 @@ def triangulatedGrid(shape=[], bbox=None, dx=None):
 
     # Generate corner offset indices for the triangle/tet elements filling each grid cell
     strides = np.cumproduct(vtx_shape)[:-1]
-    if dim == 2: elementCorners = [[0, 1, strides[0] + 1], [0, strides[0] + 1, strides[0]]]
+    if dim == 2:
+        #   3--2
+        #   |  |
+        #   0--1
+        cellCorners = [0, 1, strides[0] + 1, strides[0]]
+        simplexCorners = [
+                [[0, 1, 2], [0, 2, 3]],
+                [[0, 1, 3], [3, 1, 2]]
+            ][triangulationRule]
+
     if dim == 3:
         # 3,_________,2
         #  |\        |\             3
@@ -188,20 +202,36 @@ def triangulatedGrid(shape=[], bbox=None, dx=None):
         #   \|        \|       0*-------* 1
         #    +---------+
         #   4           5
-        cube = [0, 1, strides[0] + 1, strides[0]]          # back  quad
-        cube.extend([strides[1] + s for s in cube]) # front quad
-        elementCorners = [
-           [cube[0], cube[4], cube[5], cube[7]], # tetrahedron at corner 4 (front-bottom-left)
-           [cube[5], cube[6], cube[2], cube[7]], # tetrahedron at corner 6 (front-top-right)
-           [cube[0], cube[5], cube[1], cube[2]], # tetrahedron at corner 1 (back-bottom-right)
-           [cube[2], cube[3], cube[0], cube[7]], # tetrahedron at corner 3 (back-top-left)
-           [cube[0], cube[7], cube[5], cube[2]]  # interior regular tetrahedron
-        ]
-    elementCorners = np.array(elementCorners, dtype=np.uint64)
+        cellCorners = [0, 1, strides[0] + 1, strides[0]]          # back  quad
+        cellCorners.extend([strides[1] + s for s in cellCorners]) # front quad
 
-    simplicesPerCell = len(elementCorners)
+        simplexCorners = [
+            [[0, 4, 5, 7], [5, 6, 2, 7], [0, 5, 1, 2], [2, 3, 0, 7], [0, 7, 5, 2]], # Default: the single 5-tet rule.
+
+            # The 6-tet subdivision rules from https://www.baumanneduard.ch/Splitting%20a%20cube%20in%20tetrahedras2.htm
+            # modified to ensure each tethrahedron is positively oriented.
+            [[0, 1, 3, 7], [1, 0, 4, 7], [1, 2, 3, 7], [2, 1, 6, 7], [1, 4, 5, 7], [1, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 4, 7], [1, 2, 3, 7], [2, 1, 5, 7], [1, 4, 5, 7], [2, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 4, 7], [1, 2, 3, 6], [3, 1, 6, 7], [1, 4, 5, 7], [1, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 5, 7], [0, 4, 5, 7], [1, 2, 3, 7], [2, 1, 5, 7], [2, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 5, 7], [0, 4, 5, 7], [1, 2, 3, 6], [3, 1, 6, 7], [1, 5, 6, 7]],
+            [[0, 1, 3, 4], [1, 2, 3, 7], [2, 1, 5, 7], [1, 3, 4, 7], [1, 4, 5, 7], [2, 5, 6, 7]],
+            [[0, 1, 3, 4], [1, 2, 3, 6], [1, 3, 4, 7], [3, 1, 6, 7], [1, 4, 5, 7], [1, 5, 6, 7]],
+
+            # Rules failing to produce a simplicial complex (adjacent tetrahedra disagree on the
+            # triangulation of their common plane so that their intersection is not a full face)
+            [[0, 1, 3, 7], [1, 0, 4, 7], [1, 2, 3, 5], [1, 4, 5, 7], [2, 3, 5, 6], [3, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 4, 7], [1, 2, 3, 5], [1, 4, 5, 7], [2, 3, 5, 7], [2, 5, 6, 7]],
+            [[0, 1, 3, 7], [1, 0, 5, 7], [0, 4, 5, 7], [1, 2, 3, 5], [2, 3, 5, 7], [2, 5, 6, 7]],
+            [[0, 1, 3, 4], [1, 2, 3, 5], [1, 3, 4, 7], [1, 4, 5, 7], [2, 3, 5, 6], [3, 5, 6, 7]],
+            [[0, 1, 3, 4], [1, 2, 3, 5], [1, 3, 4, 7], [1, 4, 5, 7], [2, 3, 5, 7], [2, 5, 6, 7]],
+        ][triangulationRule]
+
+    simplexCorners = np.array(cellCorners)[simplexCorners]
+
+    simplicesPerCell = len(simplexCorners)
     numCells = np.prod(shape)
 
-    T = np.array([corners + gridPtIdx for gridPtIdx in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(shape), dtype=np.uint64), shape, order='F'), vtx_shape, order='F') for corners in elementCorners])
+    T = np.array([corners + gridPtIdx for gridPtIdx in np.ravel_multi_index(np.unravel_index(np.arange(np.prod(shape), dtype=np.uint64), shape, order='F'), vtx_shape, order='F') for corners in simplexCorners])
 
     return V, T
