@@ -343,7 +343,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         // Hessian with respect to the deformed state H_xx
-        virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+        virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
             const auto &m = mesh();
             BENCHMARK_SCOPED_TIMER_SECTION timer("CircumcenterBarrier.hessian");
@@ -372,6 +372,8 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                         }
                     });
                 }
+
+                if (weight != 1.0) eH *= weight;
 
                 auto e = m.element(ei);
                 for (auto v_b : e.vertices()) {

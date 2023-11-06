@@ -200,13 +200,13 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     if (prob->hasLEQConstraint()) {
         if (!prob->LEQConstraintIsFeasible()) {
             if (options.feasibilitySolve) {
-                // std::cout << "Running feasibility solve with residual " << prob->LEQConstraintResidual() << ", energy " << prob->energy() << std::endl;
+                // std::cout << "Running feasibility solve with residual " << prob->LEQConstraintResidual() << ", energy " << prob->objective() << std::endl;
                 prob->iterationCallback(0);
                 newton_step(step, -prob->gradient(true), workingSet, beta, betaMin, true);
                 // We must take a full step to ensure feasibility
                 // TODO: use multiple iterations and a line search to get feasible?
                 prob->setVars(prob->applyBoundConstraints(step + prob->getVars()));
-                // std::cout << "Post feasibility solve residual " << prob->LEQConstraintResidual() << ", energy " << prob->energy() << std::endl;
+                // std::cout << "Post feasibility solve residual " << prob->LEQConstraintResidual() << ", energy " << prob->objective() << std::endl;
             }
             else {
                 prob->LEQStepFeasible();
@@ -276,7 +276,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         //  of each Newton iteration).
         vars = prob->getVars();
 
-        currEnergy = prob->energy();
+        currEnergy = prob->objective();
         neg_g = -prob->gradient(true);
 
         zeroOutFixedVarsInPlace(neg_g);
@@ -388,7 +388,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             steppedVars = vars + alpha * step;
             prob->applyBoundConstraintsInPlace(steppedVars);
             prob->setVars(steppedVars);
-            const Real steppedEnergy = prob->energy();
+            const Real steppedEnergy = prob->objective();
             const Real sufficientDecrease = -c_1 * alpha * directionalDerivative;
             Real decrease = currEnergy - steppedEnergy;
             if (std::isfinite(steppedEnergy) && !std::isfinite(currEnergy))
@@ -461,7 +461,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                 steppedVars = vars + alpha * (*neg_g_ws_free_ptr);
                 prob->applyBoundConstraintsInPlace(steppedVars);
                 prob->setVars(steppedVars);
-                Real steppedEnergy = prob->energy();
+                Real steppedEnergy = prob->objective();
 
                 if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
                     break;
@@ -478,7 +478,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     }
     projectOutLEQConstrainedComponents(neg_g);
     prob->customIterateReport(report);
-    reportIterate(it - 1, prob->energy(), workingSet.getFreeComponent(neg_g).norm(),
+    reportIterate(it - 1, prob->objective(), workingSet.getFreeComponent(neg_g).norm(),
                   /* force report under any nonzero verbosity level */ true);
     std::cout << std::flush;
 
@@ -487,9 +487,9 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         workingSet.report(prob->getVars(), neg_g);
     }
 
-    // std::cout << "Before apply bound constraints: " << prob->energy() << std::endl;
+    // std::cout << "Before apply bound constraints: " << prob->objective() << std::endl;
     // prob->setVars(prob->applyBoundConstraints(prob->getVars()));
-    // std::cout << "After  apply bound constraints: " << prob->energy() << std::endl;
+    // std::cout << "After  apply bound constraints: " << prob->objective() << std::endl;
     // std::cout << "Terminating with report.backtracking_failure = " << report.backtracking_failure << std::endl;
 
     BENCHMARK_STOP_TIMER_SECTION("Newton iterations");

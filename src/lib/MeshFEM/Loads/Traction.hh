@@ -56,7 +56,7 @@ struct Traction : public ObjectSpecificLoad<Object> {
     }
 
     // Traction's potential is linear with respect to the deformed state
-    virtual void hessian(SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
     virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
         const size_t nv = getObj().numVars();
         TripletMatrix<> Hsp(nv, nv);

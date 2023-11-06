@@ -57,10 +57,10 @@ struct EquilibriumProblem : public NewtonProblem {
     virtual void setVars(const VXd &vars) override {
         m_obj.setVars(vars.cast<Real>());
     }
-    virtual const VXd getVars() const override { return m_obj.getVars().template cast<double>(); }
+    virtual VXd getVars() const override { return m_obj.getVars().template cast<double>(); }
     virtual size_t numVars() const override { return m_obj.numVars(); }
 
-    virtual Real energy() const override {
+    virtual Real objective() const override {
         Real result = m_obj.energy();
         if (result > systemEnergyIncreaseFactorLimit * std::max(m_currSystemEnergy, energyLimitingThreshold))
              return safe_numeric_limits<Real>::max();
@@ -101,9 +101,9 @@ struct EquilibriumProblem : public NewtonProblem {
 protected:
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         result.data().setZero();
-        m_obj.hessian(result, projectionMask);
+        m_obj.accumulateHessian(1.0, result, projectionMask);
         for (const auto &l : m_loads)
-            l->hessian(result, projectionMask);
+            l->accumulateHessian(1.0, result, projectionMask);
     }
 
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override {

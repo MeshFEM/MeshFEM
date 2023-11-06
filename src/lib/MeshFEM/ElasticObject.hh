@@ -18,31 +18,61 @@
 
 #include "FieldSampler.hh"
 #include "SparseMatrices.hh"
+#include "newton_optimizer/MultiobjectiveProblem.hh"
+
+////////////////////////////////////////////////////////////////////////////
+// Generic variables:
+// An optimization can include variables parametrizing the deformed
+// configuration, the rest configuration, or both. The generic interface
+// here allows the user to specify which variables why wish to access via
+// a `VariableMask`.
+////////////////////////////////////////////////////////////////////////////
+enum class VariableMask { Defo, Rest, All };
 
 template<class _Real>
-struct ElasticObject {
+struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using CSCMat = CSCMatrix<SuiteSparse_long, _Real>;
     using NotificationCB = std::function<void()>;
+    using VariableMask = VariableMask;
 
     ////////////////////////////////////////////////////////////////////////////
-    // Generic variables:
-    // An optimization can include variables parametrizing the deformed
-    // configuration, the rest configuration, or both. The generic interface
-    // here allows the user to specify which variables why wish to access via
-    // a `VariableMask`.
+    // Wrapper methods implementing the NewtonVarsManager interface.
     ////////////////////////////////////////////////////////////////////////////
-    enum class VariableMask { Defo, Rest, All };
+    size_t numVars() const override { return numVars(VariableMask::Defo); }
+    void setVars(const VXd &vars) override { setVars(vars, VariableMask::Defo); }
+    VXd getVars() const override { return getVars(VariableMask::Defo); }
 
-    size_t numVars(VariableMask vmask = VariableMask::Defo) const {
+    ////////////////////////////////////////////////////////////////////////////
+    // Wrapper methods implementing the NewtonObjectiveTerm interface
+    ////////////////////////////////////////////////////////////////////////////
+    Real objective() const override { return energy(); }
+
+    virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
+        return accumulateGradient(weight, g, freshIterate, VariableMask::Defo);
+    }
+
+    using NewtonObjectiveTerm::hessian; // Don't shadow the `hessian` convenience method
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask) const override {
+        return accumulateHessian(weight, H, projectionMask, VariableMask::Defo);
+    }
+
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override {
+        return hessianSparsityPattern(0.0, VariableMask::Defo);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Custom interface
+    ////////////////////////////////////////////////////////////////////////////
+    size_t numVars(VariableMask vmask) const {
         if (vmask == VariableMask::Defo) return numDefoVars();
         if (vmask == VariableMask::Rest) return numRestVars();
         if (vmask == VariableMask::All ) return numDefoVars() + numRestVars();
         throw std::runtime_error("Unknown variable type");
     }
 
-    void setVars(const Eigen::Ref<const VXd> &vars, VariableMask vmask = VariableMask::Defo) {
+    void setVars(const Eigen::Ref<const VXd> &vars, VariableMask vmask) {
         if (size_t(vars.size()) != numVars(vmask)) throw std::runtime_error("Input vars size doesn't match vmask");
         if ((vmask == VariableMask::Defo) || (vmask == VariableMask::All))
             setDefoVars(vars.head(numDefoVars()));
@@ -50,7 +80,7 @@ struct ElasticObject {
             setRestVars(vars.tail(numRestVars()));
     }
 
-    VXd getVars(VariableMask vmask = VariableMask::Defo) const {
+    VXd getVars(VariableMask vmask) const {
         if (vmask == VariableMask::Defo) return getDefoVars();
         if (vmask == VariableMask::Rest) return getRestVars();
         if (vmask == VariableMask::All ) {
@@ -82,22 +112,25 @@ struct ElasticObject {
     // Energy and derivatives
     ////////////////////////////////////////////////////////////////////////////
     virtual Real  energy() const = 0;
-    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vmask = VariableMask::Defo) const = 0;
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const = 0;
+    virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization, VariableMask vmask) const = 0;
+    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask, VariableMask vmask) const = 0;
+    virtual CSCMat hessianSparsityPattern(Real val, VariableMask vmask) const = 0;
 
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const = 0;
+    // Convenience method
+    VXd gradient(bool updatedParametrization, VariableMask vmask = VariableMask::Defo) const {
+        VXd g = VXd::Zero(numVars());
+        accumulateGradient(1.0, g, updatedParametrization, vmask);
+        return g;
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Optional parts of the interface
     ////////////////////////////////////////////////////////////////////////////
     // Update parametrization of the system's DoFs. For `ElasticSheet`, this
     // means updating the source frame used for parallel transport.
-    virtual void updateParametrization() { }
     virtual CSCMat sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
 
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool /* lumped */) const { M.setIdentity(true); }
-    virtual Real   approxLinfVelocity(const VXd & /* d */) const { return -1.0; }
-    virtual Real characteristicLength()             const { return  1.0; }
 
     // Get a FieldSampler for sampling FEM fields defined on the reference configuration mesh.
     virtual std::unique_ptr<FieldSampler> referenceConfigSampler()                     const { throw std::runtime_error("Unimplemented"); }
@@ -128,12 +161,6 @@ struct ElasticObject {
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
-    CSCMat hessian(bool projectionMask = false) const {
-        CSCMat H(hessianSparsityPattern());
-        hessian(H, projectionMask);
-        return H;
-    }
-
     CSCMat massMatrix(bool updatedParametrization, bool lumped = false) const {
         CSCMat M(hessianSparsityPattern());
         massMatrix(M, updatedParametrization, lumped);

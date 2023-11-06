@@ -65,14 +65,14 @@ struct HyperelasticLagrange {
     }
 
     template<class FGetter, class EData>
-    static Gradient gradient(const Psi &psi_template, const FGetter &getF, const EData &edata) {
+    static Gradient gradient(const Psi &psi_template, const FGetter &getF, const EData &edata, Real weight = 1.0) {
         Psi psi(psi_template, UninitializedDeformationTag());
 
         Gradient result;
         if constexpr (NQP > 1) result.setZero();
 
         for (size_t i = 0; i < NQP; ++i) {
-            double w = (edata.volume() * QuadratureRule::weights[i]);
+            double w = (weight * edata.volume() * QuadratureRule::weights[i]);
             auto gphis = edata.gradPhis(QuadratureRule::points[i]);
             psi.setDeformationGradient(getF(gphis), EvalLevel::Gradient);
             if constexpr (NQP == 1) Eigen::Map<Eigen::Matrix<Real, N, NumNodesPerElement>>(result.data())  = w * psi.denergy() * gphis;
@@ -82,19 +82,19 @@ struct HyperelasticLagrange {
     }
 
     template<class EData>
-    static Gradient gradient(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata) {
-        return gradient(psi_template, ElasticFGetter(deformedPositions), edata);
+    static Gradient gradient(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, Real weight = 1.0) {
+        return gradient(psi_template, ElasticFGetter(deformedPositions), edata, weight);
     }
 
     template<bool SetLowerTri = false, class FGetter, class EData>
-    static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection) {
+    static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection, Real weight = 1.0) {
         Psi psi(psi_template, UninitializedDeformationTag());
         Hessian result;
 
         if constexpr (NQP > 1) result.template triangularView<Eigen::Upper>().setZero();
 
         for (size_t i = 0; i < NQP; ++i) {
-            double w = (edata.volume() * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
+            double w = ((edata.volume() * weight) * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
             auto gphis = edata.gradPhis(QuadratureRule::points[i]);
             psi.setDeformationGradient(getF(gphis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                       : EvalLevel::Hessian);
@@ -125,8 +125,8 @@ struct HyperelasticLagrange {
     }
 
     template<bool SetLowerTri = false, class EData>
-    static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection) {
-        return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection);
+    static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection, Real weight = 1.0) {
+        return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection, weight);
     }
 };
 
@@ -170,6 +170,11 @@ struct EmbeddedMembraneElementData {
 
     const M23d &BtGradBarycentric() const { return m_BtGradBarycentric; }
     const M32d &B() const { return m_B; }
+
+    GradPhis gradPhis() const {
+        if constexpr (Deg != 1) { throw std::runtime_error("This method is only meant for linear elements!"); }
+        return m_BtGradBarycentric;
+    }
 
     GradPhis gradPhis(const EvalPt<K> &x) const {
         if constexpr (Deg == 1) { return m_BtGradBarycentric; }

@@ -125,18 +125,17 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Gradient of the full object's energy with respect to all deformation variables.
-    virtual VXd gradient(bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
+    virtual void accumulateGradient(Real weight, VXd &g, bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
 #if 0
-        VXd g(numVars());
+        if (weight != 1.0) throw std::runtime_error("weighted gradient unimplemented");
         m_assembler.assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
 #else
-        VXd g = VXd::Zero(numVars());
-        m_assembler.assembleGradient(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
+        if (weight == 1.0) m_assembler.assembleGradient(g, mesh(), [this        ](size_t ei) { return elementGradient(ei); } );
+        else               m_assembler.assembleGradient(g, mesh(), [this, weight](size_t ei) { return (weight * elementGradient(ei)).eval(); } );
 #endif
-        return g;
     }
 
     CSCMat hessian(bool projectionMask = false) const {
@@ -157,16 +156,23 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Construct a scalar-valued Hessian.
-    virtual void hessian(CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+    virtual void accumulateHessian(Real weight, CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
         // BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
         // m_assembler.assembleHessian(H, mesh(), [this, projectionMask](size_t ei) {
         //     return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
         // });
-        m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask](size_t ei) {
-            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
-        });
+        if (weight == 1.0) {
+            m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask](size_t ei) {
+                return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);
+            });
+        }
+        else {
+            m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask, weight](size_t ei) {
+                return (weight * SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask)).eval();
+            });
+        }
     }
 
     // Construct a block-valued Hessian.

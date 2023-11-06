@@ -110,6 +110,8 @@ public:
     size_t numHalfEdges() const { return 12 * numTets(); }
     size_t numTets()      const { return   V.size() / 4; }
 
+    size_t numEdges() const { throw std::runtime_error("Not implemented"); }
+
     size_t numBoundaryVertices()  const { return              bV.size(); }
     size_t numBoundaryHalfEdges() const { return 3 * numBoundaryFaces(); }
     size_t numBoundaryFaces()     const { return              bO.size(); }

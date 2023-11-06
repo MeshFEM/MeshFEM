@@ -87,7 +87,7 @@ struct Inflation : public ObjectSpecificLoad<Object> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void hessian(SuiteSparseMatrix& H, bool /* projectionMask */ = true) const override {
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix& H, bool /* projectionMask */ = true) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Inflation load Hessian");
         const auto &sheet = getObj();
         const auto &m = sheet.mesh();
@@ -110,7 +110,7 @@ struct Inflation : public ObjectSpecificLoad<Object> {
                     const size_t vlother = 3 - (vla + vlb);
                     const double ordering_sign = (vlb == ((vla + 1) % 3)) ? 1.0 : -1.0;
                     // V3d contrib = (pressure * ordering_sign / 6.0) * triCornerPos.col(vlother);
-                    V3d contrib = (pressure * ordering_sign / 6.0) * sheet.deformedPositions().row(tri.vertex(vlother).index());// triCornerPos.col(vlother);
+                    V3d contrib = (weight * pressure * ordering_sign / 6.0) * sheet.deformedPositions().row(tri.vertex(vlother).index());// triCornerPos.col(vlother);
 
                     size_t hint;
                     hint = Hout.addNZ(a + 1, b + 0,  contrib[2]);

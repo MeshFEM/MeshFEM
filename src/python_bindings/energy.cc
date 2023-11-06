@@ -18,6 +18,8 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/EnergyDensities/StressToBiotStrain.hh>
+#include <MeshFEM/EnergyDensities/MetricFitting.hh>
+#include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
 
 template<class Energy>
 py::class_<Energy>
@@ -318,6 +320,18 @@ PYBIND11_MODULE(energy, m)
         .def(py::init<double>(), py::arg("young_moduls"))
         .def_property("youngModulus", &INeo_C::youngModulus, &INeo_C::setYoungModulus)
         .def_readwrite("stiffness",   &INeo_C::stiffness)
+        ;
+
+    using MFE = MetricFittingEnergy<double, 2>;
+    bindEnergyCBased<MFE>(detail_module)
+        .def_readwrite("targetMetric",          &MFE::targetMetric)
+        .def_property_readonly("currentMetric", &MFE::currentMetric)
+        ;
+
+    using CPE = CollapsePreventionEnergyDet<double, 2>;
+    bindEnergyCBased<CPE>(detail_module)
+        .def("det", &CPE::det)
+        .def_property("activationThreshold", &CPE::activationThreshold, &CPE::setActivationThreshold)
         ;
 
     bindWrinkleStrainProblem<  IsotropicWrinkleStrainProblem<StVenantKirchhoffEnergyCBased<double, 2>>>(m,   "IsotropicWrinkleStrainProblem");

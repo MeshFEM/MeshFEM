@@ -91,7 +91,7 @@ struct ElasticSheetBinder {
           // The following overloads of the EO bindings are needed for ES-specific arguments.
           .def("energy",                   [](const ES &es, EType etype) { return es.energy(etype); }, py::arg("etype") = EType::Full)
           .def("gradient",                 [](const ES &es, bool us, VariableMask vmask, EType etype) { return es.gradient(us, vmask, etype); }, py::arg("updatedSource") = false, py::arg("vmask") = VariableMask::Defo, py::arg("etype") = EType::Full)
-          .def("hessian",                  [](const ES &es, EType etype, bool projectionMask, VariableMask vmask) { auto H = es.hessianSparsityPattern(); es.hessian(H, etype, projectionMask, vmask); return H; }, py::arg("etype") = EType::Full, py::arg("projectionMask") = false, py::arg("vmask") = VariableMask::Defo)
+          .def("hessian",                  [](const ES &es, bool p, VariableMask vmask, EType etype) { return es.hessian(p, vmask, etype); }, py::arg("projectionMask") = false, py::arg("vmask") = VariableMask::Defo, py::arg("etype") = EType::Full)
           .def("elementEnergy",            [](const ES &es, size_t ei, EType etype) { return es.elementEnergy(ei, etype); }, py::arg("ei"), py::arg("etype") = EType::Full)
           .def("elementGradient",          [](const ES &es, size_t ei, bool us, EType etype) { return es.elementGradient(ei, us, etype); }, py::arg("ei"), py::arg("updatedSource") = false, py::arg("etype") = EType::Full)
           .def("midedgeNormals",         &ES::midedgeNormals)

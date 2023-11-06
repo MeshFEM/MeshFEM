@@ -83,23 +83,18 @@ struct AttachmentPointCoordinate {
     }
 };
 
-template<class Object>
-struct Springs : public ObjectSpecificLoad<Object> {
-    static constexpr size_t N = Object::N;
-    using Base = ObjectSpecificLoad<Object>;
-    using Real = typename Base::Real;
+struct Springs : public Load<Real> {
+    using Base = Load<Real>;
     using VXd  = typename Base::VXd;
-    using MXNd = Eigen::Matrix<Real, N, 1>;
     using APC = AttachmentPointCoordinate<Real>;
-    using Base::getObj;
 
     // Create uniaxial, axis-aligned springs connecting the attachment points
     // in `coordsA` with the corresponding attachment points in `coordsB`
-    Springs(std::weak_ptr<const Object> obj,
+    Springs(std::weak_ptr<NewtonVarsBase> vars,
             const std::vector<APC> &coordsA,
             const std::vector<APC> &coordsB,
             const Eigen::Ref<const VXd> &stiffnesses)
-        : Base(obj), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
+        : m_vars(vars), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
     {
         if (coordsA.size() != coordsB.size()) throw std::runtime_error("Attachment point size mismatch");
         if (size_t(stiffnesses.size()) != coordsA.size()) throw std::runtime_error("Spring stiffnesses size mismatch");
@@ -109,19 +104,19 @@ struct Springs : public ObjectSpecificLoad<Object> {
         m_updateCache();
     }
 
-    Springs(std::weak_ptr<const Object> obj,
+    Springs(std::weak_ptr<NewtonVarsBase> vars,
             const std::vector<APC> &coordsA,
             const std::vector<APC> &coordsB,
             Real stiffness)
-        : Springs(obj, coordsA, coordsB, Eigen::VectorXd::Constant(coordsA.size(), stiffness)) { }
+        : Springs(vars, coordsA, coordsB, Eigen::VectorXd::Constant(coordsA.size(), stiffness)) { }
 
     template<typename Stiffnesses>
-    Springs(std::weak_ptr<const Object> obj,
+    Springs(std::weak_ptr<NewtonVarsBase> vars,
             const SuiteSparseMatrix &deformationSamplerMatrix,
             Eigen::Ref<const Eigen::VectorXd> targetPositions,
             Stiffnesses stiffness)
-        : Springs(obj, APC::fromDeformationSamplerMatrix(deformationSamplerMatrix),
-                       APC::fromTargetPositions(targetPositions), stiffness) { }
+        : Springs(vars, APC::fromDeformationSamplerMatrix(deformationSamplerMatrix),
+                        APC::fromTargetPositions(targetPositions), stiffness) { }
 
     void setStiffnesses(Eigen::Ref<const Eigen::VectorXd> ks) { m_k = ks; m_updateCache(); }
     void setStiffnesses(Real k) { setStiffnesses(Eigen::VectorXd::Constant(m_coordsA.size(), k)); }
@@ -136,7 +131,7 @@ struct Springs : public ObjectSpecificLoad<Object> {
     virtual VXd grad_X() const override { return VXd::Zero(m_grad.size()); }
 
     // Hessian with respect to deformed configuration (H_xx)
-    virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
         const size_t ns = numSprings();
 
         auto addInteractions = [&](const APC &coords1, const APC &coords2, Real stiffness, bool crossTerms) {
@@ -150,14 +145,14 @@ struct Springs : public ObjectSpecificLoad<Object> {
             }
         };
         for (size_t s = 0; s < ns; ++s) {
-            addInteractions(m_coordsA[s], m_coordsA[s], m_k[s], false);
-            addInteractions(m_coordsB[s], m_coordsB[s], m_k[s], false);
-            addInteractions(m_coordsA[s], m_coordsB[s], m_k[s],  true);
+            addInteractions(m_coordsA[s], m_coordsA[s], weight * m_k[s], false);
+            addInteractions(m_coordsB[s], m_coordsB[s], weight * m_k[s], false);
+            addInteractions(m_coordsA[s], m_coordsB[s], weight * m_k[s],  true);
         }
     }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = getObj().numVars();
+        const size_t nv = m_vars->numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
         const size_t ns = numSprings();
@@ -187,6 +182,8 @@ struct Springs : public ObjectSpecificLoad<Object> {
     virtual ~Springs() { }
 
 private:
+    const std::shared_ptr<NewtonVarsBase> m_vars;
+
     std::vector<APC> m_coordsA, m_coordsB;
     Eigen::VectorXd m_k;
 
@@ -195,7 +192,7 @@ private:
     }
 
     void m_updateCache() {
-        const auto &x = getObj().getVars();
+        const auto &x = m_vars->getVars();
         const size_t ns = numSprings();
         VXd posA(ns), posB(ns);
         for (size_t s = 0; s < ns; ++s) {

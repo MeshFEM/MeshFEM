@@ -204,7 +204,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     const Mesh &mesh() const { return *m_mesh; }
           Mesh &mesh()       { return *m_mesh; }
 
-    size_t numDefoVars() const override { return m_assembler.vars().numVars(); }
+    size_t numDefoVars() const override { return varStructure().numVars(); }
     size_t numRestVars() const override { return 3 * numVertices(); }
 
     size_t numVertices()  const { return m_numVertices;   }
@@ -212,7 +212,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     size_t numThetas()    const { return numEdges();   }
     size_t numCreases()   const { return m_edgeVarStructure.numCreases; }
 
-    const auto &varStructure() const { return m_assembler.vars(); }
+    const auto &varStructure() const { return m_assembler.varStructure(); }
 
     size_t           xOffset() const { return varStructure().offsetForType(0); }
     size_t       thetaOffset() const { return varStructure().offsetForType(1); }
@@ -318,7 +318,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using ElementGradient = Eigen::Matrix<Real, numElementLocalVars, 1>;
     ElementGradient elementGradient(size_t, bool updatedSource, const EnergyType etype) const;
 
-    VXd  gradient(bool updatedSource, VariableMask vmask, const EnergyType etype = EnergyType::Full) const;
+    void accumulateGradient(Real weight, VXd &g, bool updatedSource, VariableMask vmask, const EnergyType etype = EnergyType::Full) const;
 
     // Hessian with respect to an individual element's corner positions and midedge normal angles.
     // (Note, we don't separately differentiate with respect to local crease angle vars;
@@ -346,14 +346,31 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         };
     }
 
-    void hessianAlternate(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
-    void hessian(CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+    void accumulateHessian(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override;
+
+    // Convenience methods
+    VXd gradient(bool updatedSource, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
+        VXd g = VXd::Zero(numVars());
+        accumulateGradient(1.0, g, updatedSource, vmask, etype);
+        return g;
+    }
+
+    SuiteSparseMatrix hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
+        SuiteSparseMatrix H(hessianSparsityPattern());
+        accumulateHessian(1.0, H, etype, projectionMask, vmask);
+        return H;
+    }
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
-    virtual VXd gradient(bool updatedParametrization = false,       VariableMask vmask = VariableMask::Defo) const override { return gradient(updatedParametrization, vmask, EnergyType::Full); }
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override { hessian(Hout, EnergyType::Full, projectionMask, vmask); }
+    virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
+        return accumulateGradient(weight, g, updatedParametrization, vmask, EnergyType::Full);
+    }
+    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        if (weight != 1.0) throw std::runtime_error("ElasticSheet::accumulateGradient does not support weight != 1.0");
+        accumulateHessian(weight, Hout, EnergyType::Full, projectionMask, vmask);
+    }
 
     template <class SHEHandle>
     M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;

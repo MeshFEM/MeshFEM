@@ -2,7 +2,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-namespace py = pybind11;
+namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/ElasticObject.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
@@ -15,31 +15,31 @@ void bind(py::module &m) {
     const std::string name = "ElasticObject" + floatingPointTypeSuffix<Real_>();
 
     using EO = ElasticObject<Real_>;
-
-    py::class_<EO, std::shared_ptr<EO>> pyEO(m, name.c_str());
-
+    using VXd = typename EO::VXd;
     using VM = typename EO::VariableMask;
+
+    py::module::import("py_newton_optimizer");
+
+    py::class_<EO, NewtonVarsBase, NewtonObjectiveTerm, std::shared_ptr<EO>> pyEO(m, name.c_str());
+
     py::enum_<VM>(pyEO, "VariableMask")
         .value("Defo", VM::Defo)
         .value("Rest", VM::Rest)
         .value( "All", VM::All)
         ;
 
-    pyEO.def( "setVars", &EO::setVars, py::arg("vars"), py::arg("vmask") = VM::Defo)
-        .def( "getVars", &EO::getVars,                  py::arg("vmask") = VM::Defo)
-        .def( "numVars", &EO::numVars,                  py::arg("vmask") = VM::Defo)
+    pyEO.def("setVars", [](EO &eo, const VXd &v, VM vm) { eo.setVars(v, vm); }, py::arg("vars"), py::arg("vmask") = VM::Defo)
+        .def( "getVars", py::overload_cast<VM>(&EO::getVars, py::const_), py::arg("vmask") = VM::Defo)
+        .def( "numVars", py::overload_cast<VM>(&EO::numVars, py::const_), py::arg("vmask") = VM::Defo)
         .def(  "energy", &EO::energy)
-        .def("gradient", &EO::gradient, py::arg("updatedParametrization") = false, py::arg("vmask") = VM::Defo)
+        .def("gradient", py::overload_cast<bool, VM>(&EO::gradient, py::const_), py::arg("updatedParametrization") = false, py::arg("vmask") = VM::Defo)
 
         .def("hessian", [](const EO &eo, bool projectionMask) { return eo.hessian(projectionMask); }, py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern",    &EO::hessianSparsityPattern, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
+        .def("hessianSparsityPattern",    [](const EO &eo, Real_ val, VM vm) { eo.hessianSparsityPattern(val, vm); }, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
         .def("massMatrix",                [](const EO &eo, bool up, bool l) { return eo.massMatrix(up, l); }, py::arg("updatedParametrization") = false, py::arg("lumped") = false)
         .def("sobolevInnerProductMatrix", &EO::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
 
         .def("updateParametrization",     &EO::updateParametrization)
-
-        .def("characteristicLength",      &EO::characteristicLength)
-        .def("approxLinfVelocity",        &EO::approxLinfVelocity, py::arg("d"))
 
         .def("referenceConfigSampler",    &EO::referenceConfigSampler)
         .def("deformationSamplerMatrix",  &EO::deformationSamplerMatrix, py::arg("pts"))
@@ -56,7 +56,7 @@ void bind(py::module &m) {
 
 PYBIND11_MODULE(elastic_object, m)
 {
-    m.doc() = "Bindings for the ElasticObject base class (not meant ot be user-accessible)";
+    m.doc() = "Bindings for the ElasticObject base class (not meant to be user-accessible)";
 #if MESHFEM_BIND_LONG_DOUBLE
     bind<long double>(m);
 #endif

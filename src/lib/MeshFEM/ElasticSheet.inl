@@ -52,9 +52,9 @@ struct NormalInferenceProblem : public NewtonProblem {
 
     virtual size_t numVars() const override { return m_sheet.numThetas(); }
     virtual void setVars(const VXd &vars) override { m_sheet.setThetas(vars.cast<typename ESheet::Real>()); m_updateDeformedII(); }
-    virtual const VXd getVars() const override { return m_sheet.getThetas().template cast<double>(); }
+    virtual VXd getVars() const override { return m_sheet.getThetas().template cast<double>(); }
 
-    virtual Real energy() const override {
+    virtual Real objective() const override {
         Real result = 0.0;
         const size_t ne = m_deformedII.size();
         for (size_t ei = 0; ei < ne; ++ei)
@@ -279,12 +279,13 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
 }
 
 template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updatedSource, VariableMask vars, const EnergyType etype) const {
+void ElasticSheet<Psi_2x2>::accumulateGradient(Real weight, VXd &g, bool updatedSource, VariableMask vars, const EnergyType etype) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.gradient");
     if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     const auto &m = mesh();
-    auto accumulate_per_element_contrib = [this, updatedSource, etype, &m](size_t ei, VXd &g_out) {
+    auto accumulate_per_element_contrib = [this, updatedSource, etype, weight, &m](size_t ei, VXd &g_out) {
         auto g_e = elementGradient(ei, updatedSource, etype);
+        if (weight != 1.0) g_e *= weight;
         const auto &e = m.element(ei);
 
         g_out.template segment<3>(3 * e.vertex(0).index()) += g_e.template segment<3>(0);
@@ -300,10 +301,7 @@ typename ElasticSheet<Psi_2x2>::VXd ElasticSheet<Psi_2x2>::gradient(bool updated
         }
     };
 
-    VXd g(VXd::Zero(numVars()));
     assemble_parallel(accumulate_per_element_contrib, g, m.numElements());
-
-    return g;
 }
 
 template <class Psi_2x2>
@@ -543,12 +541,13 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 }
 
 template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
+void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
     if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
     BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.hessian");
     struct CustomHEAData {
-        CustomHEAData(const ElasticSheet &es, size_t ei, const EnergyType etype, bool projectionMask) {
+        CustomHEAData(const ElasticSheet &es, Real weight, size_t ei, const EnergyType etype, bool projectionMask) {
             H_e = es.elementHessian(ei, etype, projectionMask);
+            if (weight != 1.0) H_e *= weight;
             const auto &m = es.mesh();
             evars.resize(9);
             auto e = m.element(ei);
@@ -598,7 +597,7 @@ void ElasticSheet<Psi_2x2>::hessian(CSCMat &H, const EnergyType etype, bool proj
         Eigen::Vector3d creaseVarCoeffs;
     };
 
-    m_assembler.assembleHessian(H, mesh().numElements(), [this, etype, projectionMask](size_t ei) { return CustomHEAData(*this, ei, etype, projectionMask); });
+    m_assembler.assembleHessian(H, mesh().numElements(), [this, etype, projectionMask, weight](size_t ei) { return CustomHEAData(*this, weight, ei, etype, projectionMask); });
 }
 
 template <class Psi_2x2>

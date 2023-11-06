@@ -14,13 +14,24 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/ElasticObject.hh>
 #include <MeshFEM/ParallelAssembly.hh>
+#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 
 namespace Loads {
 
 template<typename _Real = Real>
-struct Load {
+struct Load : public NewtonObjectiveTerm {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
+    using VM = VariableMask;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Wrapers adapting to the NewtonObjectiveTerm interface
+    ////////////////////////////////////////////////////////////////////////////
+    Real objective() const override { return energy(); }
+    virtual void accumulateGradient(Real w, VXd &g, bool freshIterate = false) const override {
+        if (w == 1.0) g +=     grad_x();
+        else          g += w * grad_x();
+    }
 
     virtual Real energy() const = 0;
 
@@ -30,15 +41,10 @@ struct Load {
     // Derivative with respect to rest configuration (for shape optimization)
     virtual VXd grad_X() const = 0;
 
-    // Hessian with respect to deformed configuration (H_xx)
-    virtual void hessian(SuiteSparseMatrix &H, bool projectionMask = true) const = 0;
+    // Notification from NewtonMultiobjectiveProblem that (deformation) variables have changed.
+    void varsUpdated() override { m_stateUpdated(VM::Defo); }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const = 0;
-    SuiteSparseMatrix constructHessian() const {
-        auto H = hessianSparsityPattern(0.0);
-        hessian(H);
-        return H;
-    }
+    virtual void m_stateUpdated(VM /* vmask */) { /* NOP */ }
 
     virtual ~Load() { }
 };

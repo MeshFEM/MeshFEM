@@ -87,7 +87,7 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
         }
 
         // Hessian with respect to the deformed state H_xx
-        virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+        virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
             const auto &m = o.mesh();
 
@@ -106,7 +106,7 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
                         return integrand;
                     }, bei);
 
-                contrib *= stiffness;
+                contrib *= weight * stiffness;
 
                 for (auto bn_b : m.boundaryElement(bei).nodes()) {
                     const size_t ni_b = bn_b.volumeNode().index();

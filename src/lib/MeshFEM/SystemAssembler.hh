@@ -167,6 +167,7 @@ struct PerElementHessian<Real_, true, numElemLocalVars> : public Eigen::Matrix<R
 };
 #endif
 
+
 template<size_t... BlockDimensions_>
 struct SystemAssembler {
     using index_type = SuiteSparse_long;
@@ -174,6 +175,7 @@ struct SystemAssembler {
     using VarStructure = OptimizationVarStructure<BlockDimensions_...>;
     static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
 
+    // Construct given a number of variables for each type.
     template <typename... Args>
     SystemAssembler(Args... args)
         : m_vars(args...)
@@ -185,7 +187,8 @@ struct SystemAssembler {
             atomic_init(&(*m_varLocks)[i], false);
     }
 
-    const VarStructure &vars() const { return m_vars; }
+    const VarStructure &varStructure() const { return m_vars; }
+    size_t numVars() const { return varStructure().numVars(); }
 
     template<class FEMMesh_>
     CSCMat blockSparsityPatternForMesh(const FEMMesh_ &m) const {
@@ -667,7 +670,7 @@ struct SystemAssembler {
     mutable VXd m_pregatherGradient;
     using NodeLocalNodeAdjacencyMatrix = CSCMatrix<SuiteSparse_long, char>;
     mutable std::shared_ptr<NodeLocalNodeAdjacencyMatrix> m_localNodesForNode;
-    template<class Result, class Mesh, class PEGEval>
+    template<bool Accumulate = true, class Result, class Mesh, class PEGEval>
     void assembleGradientScatterGather(Result &g, const Mesh &m, const PEGEval &eval_ge) const {
         static_assert(VarStructure::SingleBlockDim, "Only SingleBlockDim case is implemented");
         constexpr size_t N = VarStructure::FirstBlockDim;
@@ -698,7 +701,8 @@ struct SystemAssembler {
                 VecN_T<Real, N> g_n = m_pregatherGradient.template segment<N>(*idxPtr);
                 for (++idxPtr; idxPtr < colEnd; ++idxPtr)
                     g_n += m_pregatherGradient.template segment<N>(*idxPtr);
-                g.template segment<N>(N * ni) = g_n;
+                if constexpr (Accumulate) g.template segment<N>(N * ni) += g_n;
+                else                      g.template segment<N>(N * ni)  = g_n;
             }, 100, 100);
     }
 
@@ -755,5 +759,11 @@ private:
     mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
     VarStructure m_vars;
 };
+
+template<class VS>
+struct SystemAssemblerForVarStructure;
+
+template<size_t... BlockDimensions_>
+struct SystemAssemblerForVarStructure<OptimizationVarStructure<BlockDimensions_...>> : public SystemAssembler<BlockDimensions_...> { };
 
 #endif /* end of include guard: SYSTEMASSEMBLER_HH */

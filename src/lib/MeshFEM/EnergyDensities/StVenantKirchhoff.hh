@@ -42,7 +42,7 @@ struct StVenantKirchhoffEnergyCBased : public Concepts::StVKEnergy {
     }
 
     StVenantKirchhoffEnergyCBased(const StVenantKirchhoffEnergyCBased&) = default;
-    StVenantKirchhoffEnergyCBased &operator=(const StVenantKirchhoffEnergyCBased&) = default;
+    StVenantKirchhoffEnergyCBased &operator=(const StVenantKirchhoffEnergyCBased &) = default;
 
     // Constructor copying material properties only, not the current deformation
     StVenantKirchhoffEnergyCBased(const StVenantKirchhoffEnergyCBased &other,

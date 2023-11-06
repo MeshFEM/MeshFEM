@@ -155,12 +155,13 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     virtual VXd getRestVars() const override { return m_es.getRestVars(); }
 
     virtual Real energy() const override { return m_es.energy(); }
-    virtual VXd gradient(bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
+    virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolidRotExtrap.gradient");
         if (m_method != Method::ModalWarping) throw std::runtime_error("Only modal warping derivatives are implemented");
         if (vmask != VariableMask::Defo)      throw std::runtime_error("Only VariableMask::Defo is implemented");
         VXd g_es = m_es.gradient(updatedParametrization, vmask);
-        if (updatedParametrization) return g_es;
+        if (updatedParametrization) { g += weight * g_es; return; }
+        if (weight != 1.0) throw std::runtime_error("Non-unit weight not implemented");
 
         // Compute displacement from the source configuration.
         MXNd u = MXNdCMap(m_vars.data(), m_es.numNodes(), N) - m_source_x;
@@ -181,7 +182,6 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
                                                                      u.row(n.index()).transpose()));
         }
 
-        VXd g = VXd::Zero(g_es.size());
         EvalPtK centroid_bc;
         centroid_bc.fill(1.0 / centroid_bc.size());
         for (const auto e : m.elements()) {
@@ -202,12 +202,10 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
             VNd g_k = g_es.template segment<N>(N * n.index());
             g.template segment<N>(N * n.index()) += g_k + RE::apply_Rtilde((-node_w.row(n.index()).transpose()), g_k);
         }
-
-        return g;
     }
 
-    virtual void hessian(CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        m_es.hessian(Hout, projectionMask, vmask);
+    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        m_es.accumulateHessian(weight, Hout, projectionMask, vmask);
 
         const auto &m = mesh();
 
@@ -216,7 +214,8 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
             for (auto n : e.nodes())
                 totalWeight[n.index()] += e->volume();
 
-        VXd g = gradient(/* updatedParametrization = */ true);
+        VXd g = this->gradient(/* updatedParametrization = */ true);
+        if (weight != 1.0) g *= weight;
         EvalPtK centroid_bc;
         centroid_bc.fill(1.0 / centroid_bc.size());
         for (auto e : m.elements()) {

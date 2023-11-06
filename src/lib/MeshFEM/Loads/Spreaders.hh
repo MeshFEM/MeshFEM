@@ -89,7 +89,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void hessian(SuiteSparseMatrix &H, bool /* projectionMask */ = false) const override {
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = false) const override {
         if (m_disableHessian) return;
 
         // H = sum_e P_e^T [ H_e -H_e] P_e
@@ -108,7 +108,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
                     // Loop over combinations of [startEndpoint, endEndpoint]
                     for (int i = 0; i < 2; ++i) {
                         for (int j = 0; j < 2; ++j) {
-                            double sign = (i == j) ? 1.0 : -1.0;
+                            double sign = (i == j) ? weight : -weight;
                             // Accumulate contribution of H_e(ca, cb) to the global Hessian
                             for (const auto tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
                                 size_t hint = -1;

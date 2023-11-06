@@ -250,6 +250,60 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+// Composite energy densities
+////////////////////////////////////////////////////////////////////////////////
+template<class Psi1, class Psi2, typename /* Enable */ = void>
+struct CompositeEnergyDensity;
+
+// Composite C-based energy density
+template<class Psi1_C, class Psi2_C>
+struct CompositeEnergyDensity<Psi1_C, Psi2_C, std::enable_if_t<(Psi1_C::EDType == EDensityType::CBased) && (Psi2_C::EDType == EDensityType::CBased)>> {
+    static constexpr EDensityType EDType = EDensityType::CBased;
+    using Real = typename Psi1_C::Real;
+    static constexpr size_t N = Psi1_C::N;
+    using MNd = Eigen::Matrix<Real, N, N>;
+
+    static_assert(N == Psi2_C::N, "Psi1_C and Psi2_C must have the same dimension N");
+    static_assert(std::is_same<Real, typename Psi2_C::Real>::value, "Psi1_C and Psi2_C must have the same Real type");
+
+    CompositeEnergyDensity() { setC(MNd::Identity()); }
+
+    CompositeEnergyDensity(const CompositeEnergyDensity &other) = default;
+    CompositeEnergyDensity &operator=(const CompositeEnergyDensity &) = default;
+
+    // Constructor copying material properties only, not the current deformation
+    CompositeEnergyDensity(const CompositeEnergyDensity &other,
+                        UninitializedDeformationTag &&tag)
+        : psi1(other.psi1, UninitializedDeformationTag()),
+          psi2(other.psi2, UninitializedDeformationTag()) { }
+
+    static std::string name() { return Psi1_C::name() + std::string("Composite") + Psi2_C::name(); }
+
+    void setC(const MNd &C) {
+        psi1.setC(C);
+        psi2.setC(C);
+    }
+
+    Real energy() const {
+        return psi1.energy() + psi2.energy();
+    }
+
+    MNd PK2Stress() const { return psi1.PK2Stress() + psi2.PK2Stress(); }
+
+    template<class Mat_>
+    MNd delta_PK2Stress(const Mat_ &dC) const { return psi1.delta_PK2Stress(dC) + psi2.delta_PK2Stress(dC); }
+
+    template<class Mat1_, class Mat2_>
+    MNd delta2_PK2Stress(const Mat1_ &dC_a, const Mat2_ &dC_b) const {
+        return psi1.delta2_PK2Stress(dC_a, dC_b) + psi2.delta2_PK2Stress(dC_a, dC_b);
+    }
+
+    Psi1_C psi1;
+    Psi2_C psi2;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Convenience method for generating membrane energy densities.
 ////////////////////////////////////////////////////////////////////////////////
 template<class Psi, typename /* Enable */ = void>

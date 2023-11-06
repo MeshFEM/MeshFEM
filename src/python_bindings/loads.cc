@@ -13,7 +13,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-namespace py = pybind11;
+namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "LoadBinding.hh"
 
@@ -63,43 +63,6 @@ struct LoadBinder {
                 }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
              ;
 
-        ////////////////////////////////////////////////////////////////////////
-        // Springs
-        ////////////////////////////////////////////////////////////////////////
-        using Springs = Loads::Springs<Object>;
-        using VXd  = Eigen::VectorXd;
-        py::class_<Springs, Load, std::shared_ptr<Springs>>(detail_module, ("Springs" + NameMangler<Object>::name()).c_str())
-            .def("getStiffnesses", &Springs::getStiffnesses)
-            .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
-            .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
-            ;
-        module.def("Springs", [&](const std::shared_ptr<Object> &obj,
-                                  const std::vector<APC> &coordsA,
-                                  const std::vector<APC> &coordsB,
-                                  Eigen::Ref<const VXd> stiffnesses) {
-                    return std::make_shared<Springs>(obj, coordsA, coordsB, stiffnesses);
-                }, py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffnesses"))
-              .def("Springs", [&](const std::shared_ptr<Object> &obj,
-                                  const std::vector<APC> &coordsA,
-                                  const std::vector<APC> &coordsB,
-                                  typename Springs::Real stiffness) {
-                    return std::make_shared<Springs>(obj, coordsA, coordsB, stiffness);
-                }, py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffness"))
-              .def("Springs", [&](const std::shared_ptr<Object> &obj,
-                                  const SuiteSparseMatrix &dsm,
-                                  Eigen::Ref<const Eigen::VectorXd> tgt,
-                                  Eigen::Ref<const VXd> stiffnesses) {
-                    return std::make_shared<Springs>(obj, dsm, tgt, stiffnesses);
-                }, py::arg("obj"), py::arg("deformationSamplerMatrix"),
-                   py::arg("targetPositions"), py::arg("stiffnesses"))
-              .def("Springs", [&](const std::shared_ptr<Object> &obj,
-                                  const SuiteSparseMatrix &dsm,
-                                  Eigen::Ref<const Eigen::VectorXd> tgt,
-                                  typename Springs::Real stiffness) {
-                    return std::make_shared<Springs>(obj, dsm, tgt, stiffness);
-                }, py::arg("obj"), py::arg("deformationSamplerMatrix"),
-                   py::arg("targetPositions"), py::arg("stiffness"))
-             ;
     }
 
     template<class Object>
@@ -166,13 +129,12 @@ struct LoadBinder {
 
 PYBIND11_MODULE(loads, m)
 {
+    py::module::import("py_newton_optimizer");
     using Load = Loads::Load<double>;
-    py::class_<Load, std::shared_ptr<Load>>(m, "Load")
+    py::class_<Load, NewtonObjectiveTerm, std::shared_ptr<Load>>(m, "Load")
         .def("energy",               &Load::energy)
         .def("grad_x",               &Load::grad_x)
         .def("grad_X",               &Load::grad_X)
-        .def("hessian",                [](const Load &l) { auto H = l.hessianSparsityPattern(0.0); l.hessian(H); return H; })
-        .def("hessianSparsityPattern", [](const Load &l) { return l.hessianSparsityPattern(1.0); })
         ;
 
     py::module detail_module = m.def_submodule("detail");
@@ -186,5 +148,42 @@ PYBIND11_MODULE(loads, m)
         .def_readwrite("varIndices",   &APC::varIndices)
         .def_readwrite("coefficients", &APC::coefficients)
         ;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Springs
+    ////////////////////////////////////////////////////////////////////////////
+    using Springs = Loads::Springs;
+    using VXd  = Eigen::VectorXd;
+    py::class_<Springs, Load, std::shared_ptr<Springs>>(m, "Springs")
+        .def("getStiffnesses", &Springs::getStiffnesses)
+        .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
+        .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
+        .def(py::init([&](const std::shared_ptr<NewtonVarsBase> &obj,
+                          const std::vector<APC> &coordsA,
+                          const std::vector<APC> &coordsB,
+                          Eigen::Ref<const VXd> stiffnesses) {
+              return std::make_shared<Springs>(obj, coordsA, coordsB, stiffnesses);
+          }), py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffnesses"))
+        .def(py::init([&](const std::shared_ptr<NewtonVarsBase> &obj,
+                          const std::vector<APC> &coordsA,
+                          const std::vector<APC> &coordsB,
+                          typename Springs::Real stiffness) {
+              return std::make_shared<Springs>(obj, coordsA, coordsB, stiffness);
+          }), py::arg("obj"), py::arg("coordsA"), py::arg("coordsB"), py::arg("stiffness"))
+        .def(py::init([&](const std::shared_ptr<NewtonVarsBase> &obj,
+                          const SuiteSparseMatrix &dsm,
+                          Eigen::Ref<const Eigen::VectorXd> tgt,
+                          Eigen::Ref<const VXd> stiffnesses) {
+              return std::make_shared<Springs>(obj, dsm, tgt, stiffnesses);
+          }), py::arg("obj"), py::arg("deformationSamplerMatrix"),
+              py::arg("targetPositions"), py::arg("stiffnesses"))
+        .def(py::init([&](const std::shared_ptr<NewtonVarsBase> &obj,
+                          const SuiteSparseMatrix &dsm,
+                          Eigen::Ref<const Eigen::VectorXd> tgt,
+                          typename Springs::Real stiffness) {
+              return std::make_shared<Springs>(obj, dsm, tgt, stiffness);
+          }), py::arg("obj"), py::arg("deformationSamplerMatrix"),
+              py::arg("targetPositions"), py::arg("stiffness"))
+       ;
 }
 

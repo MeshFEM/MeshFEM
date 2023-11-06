@@ -1,11 +1,24 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 #include <pybind11/eigen.h>
 #include <pybind11/iostream.h>
-namespace py = pybind11;
+namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/newton_optimizer/newton_optimizer.hh>
+#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 #include "BindingUtils.hh"
+
+// Hack around a limitation of pybind11 where we cannot specify argument passing policies and
+// pybind11 tries to make a copy if the passed instance is not already registered:
+//      https://github.com/pybind/pybind11/issues/1200
+// We therefore make our Python callback interface use a raw pointer to forbid this copy (which
+// causes an error since NewtonProblem is not copyable).
+using PyCallbackFunction = std::function<bool(NewtonProblem *, size_t)>;
+
+NewtonMultiobjectiveProblem::CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
+    return [pcb](NewtonProblem &p, size_t i) -> bool { if (pcb) return pcb(&p, i); return false; };
+}
 
 template<class DerivedController, class BaseController>
 auto bindController(py::module &m, const char *name) {
@@ -103,7 +116,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         ;
 
     py::class_<NewtonProblem, std::shared_ptr<NewtonProblem>>(m, "NewtonProblem")
-        .def("energy",                 &NewtonProblem::energy)
+        .def("energy",                 &NewtonProblem::objective)
+        .def("objective",              &NewtonProblem::objective)
         .def("gradient",               &NewtonProblem::gradient, py::arg("freshIterate") = false)
         .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = false)
         .def("hessianSparsityPattern", &NewtonProblem::hessianSparsityPattern)
@@ -119,7 +133,11 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("boundConstraints",       &NewtonProblem::boundConstraints, py::return_value_policy::reference_internal)
         .def("feasible",               &NewtonProblem::feasible)
         .def("feasibleStepLength",     py::overload_cast<const Eigen::VectorXd &>(&NewtonProblem::feasibleStepLength, py::const_))
-        .def("iterationCallback",      &NewtonProblem::iterationCallback)
+        .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
+
+        .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
+
+        .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_unique<NewtonOptimizer>(prob); })
 
         .def_readwrite("disableCaching", &NewtonProblem::disableCaching)
         .def("invalidateCachedHessian",  &NewtonProblem::invalidateCachedHessian)
@@ -131,6 +149,53 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("fixesVariable", &WorkingSet::fixesVariable)
         .def("size", &WorkingSet::size)
         .def("getFreeComponent", &WorkingSet::getFreeComponent)
+        ;
+
+    using NVB = NewtonVarsBase;
+    py::class_<NVB, std::shared_ptr<NVB>>(m, "NewonVars")
+        .def("getVars", &NVB::getVars)
+        .def("setVars", &NVB::setVars)
+        .def("numVars", &NVB::numVars)
+        .def("updateParametrization", &NVB::updateParametrization)
+
+        .def("characteristicLength",  &NVB::characteristicLength)
+        .def("approxLinfVelocity",    &NVB::approxLinfVelocity, py::arg("d"))
+        ;
+
+    py::class_<ObjectiveIncreaseLimiter, std::shared_ptr<ObjectiveIncreaseLimiter>>(m, "ObjectiveIncreaseLimiter")
+        .def_readwrite("factor",        &ObjectiveIncreaseLimiter::factor)
+        .def_readwrite("threshold",     &ObjectiveIncreaseLimiter::threshold)
+        .def_readwrite("previousValue", &ObjectiveIncreaseLimiter::previousValue)
+        .def("valueExceedsLimit",       &ObjectiveIncreaseLimiter::valueExceedsLimit)
+        ;
+
+    using NOT = NewtonObjectiveTerm;
+
+    py::enum_<NOT::SparsityUpdateFrequency>(m, "SparsityUpdateFrequency")
+        .value("NEVER",     NOT::SparsityUpdateFrequency::NEVER)
+        .value("ALWAYS",    NOT::SparsityUpdateFrequency::ALWAYS)
+        .value("SOMETIMES", NOT::SparsityUpdateFrequency::SOMETIMES)
+        ;
+
+    py::class_<NewtonObjectiveTerm, std::shared_ptr<NewtonObjectiveTerm>>(m, "NewtonObjectiveTerm")
+        .def("objective", &NewtonObjectiveTerm::objective)
+        // gradient cannot be implemented without knowing variable size...
+        .def("hessian",   [](const NewtonObjectiveTerm &term, bool pm) { return term.hessian(pm); }, py::arg("projectionMask") = false)
+        .def("hessianSparsityPattern", &NewtonObjectiveTerm::hessianSparsityPattern, py::arg("val") = 0.0)
+        .def_readwrite("suppressSparsity", &NewtonObjectiveTerm::suppressSparsity, "Suppress sparsity pattern contributions from this term")
+        .def_property_readonly("sparsityUpdateFrequency", &NewtonObjectiveTerm::sparsityUpdateFrequency)
+        ;
+
+    py::class_<NewtonMultiobjectiveProblem, NewtonProblem, std::shared_ptr<NewtonMultiobjectiveProblem>>(m, "NewtonMultiobjectiveProblem")
+        .def(py::init<std::shared_ptr<NVB>, std::vector<std::shared_ptr<NOT>>>(), py::arg("vars"), py::arg("terms"))
+        .def("numTerms",   &NewtonMultiobjectiveProblem::numTerms)
+        .def("setTerms",   &NewtonMultiobjectiveProblem::setTerms)
+        .def("setWeights", &NewtonMultiobjectiveProblem::setWeights)
+        .def("term",       [](NewtonMultiobjectiveProblem &prob, size_t i) -> NewtonObjectiveTerm & { return prob.term(i); }, py::return_value_policy::reference_internal)
+        .def("setCustomIterationCallback",
+                [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction &cb) {
+                    prob.setCustomIterationCallback(callbackWrapper(cb));
+                }, py::arg("cb"))
         ;
 
     py::class_<NewtonOptimizer>(m, "NewtonOptimizer")

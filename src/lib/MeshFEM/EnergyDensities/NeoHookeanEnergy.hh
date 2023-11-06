@@ -35,7 +35,8 @@ struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
     { }
 
     // Construct from Lame's first parameter (lambda) and shear modulus (mu).
-    NeoHookeanEnergyBase(Real lambda, Real mu)
+    // (Defaults to E = 1, nu = 0.)
+    NeoHookeanEnergyBase(Real lambda = 0, Real mu = 0.5)
         : m_lambda(lambda), m_mu(mu)
     {
         setDeformationGradient(Matrix::Identity());
