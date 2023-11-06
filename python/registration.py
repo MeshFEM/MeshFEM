@@ -30,7 +30,7 @@ def register_points(P, Q, allowReflection = False):
         R = U @ Vh
     return R, Pcm - R @ Qcm
 
-def align_points_with_axes_xform(V, diagonal = False):
+def align_points_with_axes_xform(V, diagonal = False, axisPermutation = None):
     '''
     Get the rigid transformation (R, t) that positions the point cloud `V` at
     the origin and orients its longest axis along X, medium along y and
@@ -39,6 +39,10 @@ def align_points_with_axes_xform(V, diagonal = False):
     If `diagonal` is True, the longest axis is oriented along the diagonal of
     the XY plane (2D)
 
+    If passed, the `axisPermutation` parameter reorders the axes so that the
+    longest bounding box dimension is aligned with the axisPermutation[0] axis,
+    the medium with axisPermutation[1] and the shortest with axisPermutation[2].
+
     Returns
     -------
     (R, t)
@@ -46,8 +50,11 @@ def align_points_with_axes_xform(V, diagonal = False):
     '''
     c = np.mean(V, axis=0)
     Vcentered = V - c
-    R = np.linalg.eig(Vcentered.T @ Vcentered)[1]
-    if (np.linalg.det(R) < 0): R[:, 2] *= -1
+    R = np.linalg.eigh(Vcentered.T @ Vcentered)[1] # sorts eigenvalues ascending
+    R = R[:, ::-1] # reverse order to get descending eigenvalues
+    if (axisPermutation is not None):
+        R = R[:, axisPermutation]
+    if (np.linalg.det(R) < 0): R[:, -1] *= -1
     if diagonal:
         if (V.shape[1] != 2): raise Exception('Only 2D is implemented')
         R = [[np.sqrt(2), np.sqrt(2)], [-np.sqrt(2), np.sqrt(2)]] @ R

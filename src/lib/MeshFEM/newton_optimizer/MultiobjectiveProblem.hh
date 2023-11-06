@@ -22,7 +22,7 @@
 // increase in a single Newton step. This is useful, e.g., for deployable
 // structures actuated from a rest configuration (with zero elastic forces)
 // using a high deployment force.
-// 
+//
 // Increasing to below `valueLimitingThreshold` is always permitted.
 // After exceeding that threshold, we only allow values a factor of
 // `valueIncreaseFactorLimit` above the old value.
@@ -154,7 +154,7 @@ struct NewtonMultiobjectiveProblem : public NewtonProblem {
         VXd g = VXd::Zero(numVars());
         for (size_t ti = 0; ti < numTerms(); ++ti)
             term(ti).accumulateGradient(weight(ti), g, freshIterate);
-        
+
         return g;
     }
 

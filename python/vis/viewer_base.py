@@ -27,6 +27,38 @@ def replicateAttributesPerTriCorner(attr):
     #   https://github.com/mrdoob/three.js/pull/15198/commits/ea0db1988cd908167b1a24967cfbad5099bf644f
     attr['index'] = np.arange(len(idxs), dtype=np.uint32)
 
+class ViewUpdater:
+    """
+    Newton callback function object for updating the viewer.
+    """
+    def __init__(self, view, updateFrequency=1, showStress=False, scalarFieldEvaluator=None):
+        """
+        Parameters
+        ----------
+        view : ViewerBase
+            The viewer to update.
+
+        updateFrequency : int
+            How often to update the viewer (e.g., 1 means every iteration, 2 means every other iteration, etc.)
+
+        showStress : bool
+            Whether to visualize the maximum principal stress field
+
+        scalarFieldEvaluator : function
+            A callback function that evalutes a scalar field to display
+        """
+        self.view, self.updateFrequency, self.showStress, self.scalarFieldEvaluator = view, updateFrequency, showStress, scalarFieldEvaluator
+    def __call__(self, prob, it):
+        if it % self.updateFrequency != 0: return
+        sf = None
+        if self.scalarFieldEvaluator is not None:
+            sf = self.scalarFieldEvaluator()
+        elif self.showStress:
+            es = self.view.mesh.mesh
+            m = es.mesh()
+            sf = [np.linalg.eigvalsh(es.cauchyStress(ei)).max() for ei in range(m.numElements())]
+        self.view.update(scalarField=sf)
+
 # Generic viewer interface that is agnostic to the backend renderer (e.g., Pythreejs vs OffscreenRenderer)
 class ViewerBase:
     def __init__(self, obj, width=512, height=512, textureMap=None, scalarField=None, vectorField=None, transparent=False, isSubview=False):
@@ -45,6 +77,26 @@ class ViewerBase:
         self.vectorField = None
 
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
+
+    def updater(self, updateFrequency=1, showStress=False, scalarFieldEvaluator=None):
+        """
+        Returns a Newton callback function object for updating the viewer.
+
+        Parameters
+        ----------
+        view : ViewerBase
+            The viewer to update.
+
+        updateFrequency : int
+            How often to update the viewer (e.g., 1 means every iteration, 2 means every other iteration, etc.)
+
+        showStress : bool
+            Whether to visualize the maximum principal stress field
+
+        scalarFieldEvaluator : function
+            A callback function that evalutes a scalar field to display
+        """
+        return ViewUpdater(self, updateFrequency, showStress, scalarFieldEvaluator)
 
     def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         if (mesh is not None): self.mesh = mesh

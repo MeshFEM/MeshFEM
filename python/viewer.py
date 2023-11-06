@@ -2,6 +2,7 @@ import numpy as np
 
 from vis.fields import DomainType, VisualizationField, ScalarField, VectorField
 from vis.pythreejs_viewer import *
+from vis.viewer_base import ViewUpdater
 
 try:
     from vis.offscreen_viewer import *
@@ -320,18 +321,3 @@ def concatVisGeometries(A, B):
             np.vstack([A[2], B[2]])) # Stacked N
 def concatWithColors(A, colorA, B, colorB):
     return concatVisGeometries(A, B), np.vstack([np.tile(colorA, [len(A[0]), 1]), np.tile(colorB, [len(B[0]), 1])])
-
-class ViewUpdater:
-    """
-    Newton callback function object for updating the viewer.
-    """
-    def __init__(self, view, updateFrequency=1, showStress=False):
-        self.view, self.updateFrequency, self.showStress = view, updateFrequency, showStress
-    def __call__(self, prob, it):
-        if it % self.updateFrequency != 0: return
-        sf = None
-        if self.showStress:
-            es = self.view.mesh.mesh
-            m = es.mesh()
-            sf = [np.linalg.eigvalsh(es.cauchyStress(ei)).max() for ei in range(m.numElements())]
-        self.view.update(scalarField=sf)

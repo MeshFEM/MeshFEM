@@ -4,7 +4,7 @@
 /*! @file
 //  C-based energy density that simply fits the first fundamental form to
 //  a target value.
-//  
+//
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
 //  Created:  10/24/2023 22:57:20

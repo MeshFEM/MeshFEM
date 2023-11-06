@@ -48,7 +48,7 @@ struct HingeElement : public ElementBase<HingeElement<HingeEnergy>> {
 
     void setDeformedConfiguration(const LocalVars &x, EvalLevel elevel = EvalLevel::Full) {
         m_theta.configure(x);
-        m_he.configure(m_restState, m_theta.value(), elevel); 
+        m_he.configure(m_restState, m_theta.value(), elevel);
     }
 
     void setRestConfiguration(const LocalVars &X) {

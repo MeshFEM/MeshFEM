@@ -11,10 +11,30 @@ import mesh
 import parallelism
 from mesh import Mesh, PeriodicCondition
 
-from energy_building import *
-
 import importlib.util
 if importlib.util.find_spec('pythreejs') is not None:
     import tri_mesh_viewer
 
 import elastic_solid
+
+class EmbeddedMesh:
+    """
+    Wrapper to support using `sim_utils` and viewer on an embedding of a
+    mesh `m` specified by optimization variables `embeddingVars`
+    """
+    def __init__(self, m, embeddingVars, embeddingDimension = None):
+        self.dimension = m.embeddingDimension if embeddingDimension is None else embeddingDimension
+        self.m_mesh = m
+        self.evars = embeddingVars
+        self.numVertices = m.numVertices()
+        if self.evars.numVars() != m.numNodes() * self.dimension:
+            raise Exception('Unexpected variable size')
+        self.vis_mesh = mesh.Mesh(self.embeddedVertices(), m.elements())
+    def mesh(self): return self.m_mesh
+    def embeddedVertices(self):
+        return self.evars.getVars().reshape((-1, self.dimension))[:self.numVertices]
+    def visualizationGeometry(self, normalCreaseAngle, *args, **kwargs):
+        self.vis_mesh.setVertices(self.embeddedVertices())
+        return self.vis_mesh.visualizationGeometry(normalCreaseAngle=normalCreaseAngle, *args, **kwargs)
+    def visualizationField(self, *args, **kwargs):
+        return self.vis_mesh.visualizationField(*args, **kwargs)
