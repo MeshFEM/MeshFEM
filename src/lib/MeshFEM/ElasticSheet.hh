@@ -90,7 +90,6 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using Base = ElasticObject<Real>;
     using CSCMat  = typename Base::CSCMat;
     using Base::numVars;
-    using VariableMask = typename Base::VariableMask;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
     using V3d   = Eigen::Matrix<Real, 3, 1>;

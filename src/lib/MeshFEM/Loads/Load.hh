@@ -85,7 +85,7 @@ struct ObjectSpecificLoad : public Load<Real>, public EOStoragePolicy<EO> {
     using Real = typename EO::Real;
     using Base = Load<Real>;
     using SP   = EOStoragePolicy<EO>;
-    using VM   = typename EO::VariableMask;
+    using VM   = VariableMask;
     using SP::getObj;
 
     ObjectSpecificLoad(const typename SP::StorageType &obj)

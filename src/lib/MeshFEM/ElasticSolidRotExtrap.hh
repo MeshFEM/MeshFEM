@@ -138,7 +138,6 @@ struct ElasticSolidRotExtrap : public ElasticObject<typename _EmbeddingSpace::Sc
     using MXNd         = typename ES  ::MXNd;
     using EvalPtK      = typename ES  ::EvalPtK;
     using CSCMat       = typename Base::CSCMat;
-    using VariableMask = typename Base::VariableMask;
     using MXNdCMap     = Eigen::Map<const MXNd>;
     using RE           = RotExtrap<Real, N>;
     using WField       = typename RE::WField;

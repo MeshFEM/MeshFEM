@@ -31,7 +31,7 @@ struct ElasticSolidBinder {
         static constexpr size_t Deg = ES::Deg;
         using Real   = typename ES::Real;
         using EO     = ElasticObject<Real>;
-        using VM     = typename EO::VariableMask;
+        using VM     = VariableMask;
         using Energy = typename ES::Energy;
         using MXNd   = Eigen::Matrix<Real, Eigen::Dynamic, N>;
         using Mesh   = typename ES::Mesh;

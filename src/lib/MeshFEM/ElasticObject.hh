@@ -35,7 +35,6 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using CSCMat = CSCMatrix<SuiteSparse_long, _Real>;
     using NotificationCB = std::function<void()>;
-    using VariableMask = VariableMask;
 
     ////////////////////////////////////////////////////////////////////////////
     // Wrapper methods implementing the NewtonVarsManager interface.

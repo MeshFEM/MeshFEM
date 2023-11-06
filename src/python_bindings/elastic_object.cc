@@ -16,7 +16,7 @@ void bind(py::module &m) {
 
     using EO = ElasticObject<Real_>;
     using VXd = typename EO::VXd;
-    using VM = typename EO::VariableMask;
+    using VM = VariableMask;
 
     py::module::import("py_newton_optimizer");
 

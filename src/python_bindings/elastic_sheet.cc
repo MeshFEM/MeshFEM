@@ -23,8 +23,6 @@ struct ElasticSheetBinder {
         using Real   = typename ES::Real;
         using EO     = ElasticObject<Real>;
 
-        using VariableMask = typename ES::VariableMask;
-
         using CreaseEdges = typename ES::CreaseEdges;
         module.def("ElasticSheet", [](const std::shared_ptr<Mesh> &m, const Energy &e, const CreaseEdges &creases) {
                 return std::make_shared<ES>(m, e, creases); }, py::arg("mesh"), py::arg("energy"), py::arg("creaseEdges") = CreaseEdges());

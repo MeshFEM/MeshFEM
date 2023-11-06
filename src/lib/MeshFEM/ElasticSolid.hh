@@ -49,7 +49,6 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     using Base = ElasticObject<Real>;
     using CSCMat = typename Base::CSCMat;
     using Base::numVars;
-    using VariableMask = typename Base::VariableMask;
 
     static constexpr size_t K = _K;
     static constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;
