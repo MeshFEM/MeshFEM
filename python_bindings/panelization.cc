@@ -1,12 +1,8 @@
-#include <pybind11/eigen.h>
-#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <pybind11/eigen.h>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
-#include <MeshFEM/../../python_bindings/BindMembraneMaterial.hh>
 #include <MeshFEM/../../python_bindings/MeshEnergyBinder.hh>
-
 #include "../PanelizationHingeEnergy.hh"
 
 PYBIND11_MODULE(panelization, m)

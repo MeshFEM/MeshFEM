@@ -29,17 +29,14 @@ struct MetricFitter : public NewtonMultiobjectiveProblem {
     MetricFitter(std::shared_ptr<Mesh> m)
         : MetricFitter(m, std::make_shared<Vars>(*m)) { }
 
-    M32d getFB(size_t ei) const {
-        return m_mf.elements[ei].getFB();
-    }
+    M32d getFB(size_t ei) const { return m_mf.elements[ei].getFB(); }
+    M2d   getC(size_t ei) const { M32d FB = getFB(ei); return FB.transpose() * FB; }
 
     // Let the collapse prevention kick in when the element is compressed to
     // 1/4 the area requested by the metric
     void setTargetMetric(size_t ei, const M2d &metric, double relativeCollapsePreventionThreshold = 0.25) {
-        auto &mf = metricFittingTerm();
-
-        auto &psi_fit = mf.materials[ei].psi.psi1;
-        auto &psi_cpe = mf.materials[ei].psi.psi2;
+        auto &psi_fit = m_mf.materials[ei].psi.psi1;
+        auto &psi_cpe = m_mf.materials[ei].psi.psi2;
         psi_fit.targetMetric = metric;
 
         // (Cauchy deformation gradient det relativeCollapsePreventionThreshold^2 times the target metric determinant).
@@ -48,31 +45,19 @@ struct MetricFitter : public NewtonMultiobjectiveProblem {
     }
 
     void programCurrentMetric() {
-        auto &mf = metricFittingTerm();
-        for (size_t ei = 0; ei < mf.numElements(); ++ei) {
-            auto FB = mf.elements[ei].getFB();
-            setTargetMetric(ei, FB.transpose() * FB);
-        }
+        for (size_t ei = 0; ei < m_mf.numElements(); ++ei)
+            setTargetMetric(ei, getC(ei));
     }
 
     VXd metricDistSq() const {
         VXd result(m_mf.numElements());
-        for (size_t ei = 0; ei < m_mf.numElements(); ++ei) {
-            auto FB = getFB(ei);
-            result(ei) = (FB.transpose() * FB - m_mf.materials[ei].psi.psi1.targetMetric).squaredNorm();
-        }
+        for (size_t ei = 0; ei < m_mf.numElements(); ++ei)
+            result[ei] = (getC(ei) - m_mf.materials[ei].psi.psi1.targetMetric).squaredNorm();
         return result;
     }
 
     Real bendingStiffness() const { return m_br.materials[0].stiffness; }
     void setBendingStiffness(Real s) { m_br.materials[0].stiffness = s; }
-
-          MetricFittingMeshEnergy &metricFittingTerm()       { return m_mf; }
-    const MetricFittingMeshEnergy &metricFittingTerm() const { return m_mf; }
-
-    auto ravel(const M2d &M) {
-        return Eigen::Map<const Eigen::VectorXd>(M.data(), M.size());
-    }
 
 private:
     MetricFitter(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars)
