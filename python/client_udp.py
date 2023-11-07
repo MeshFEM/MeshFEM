@@ -24,21 +24,23 @@ class Client:
         return message
     
     async def send_single_message(self, message):
-        try:
-            # Prompt user for a message to send
-            self.client.send(pickle.dumps(message))
-            # data = await asyncio.wait_for(self.client.recv(), timeout=5)
-            data = await self.client.recv()
-            message = pickle.loads(data)
-            print(f"Message recieved: {message.string}")
-            print(f"Data recieved: {message.data!r}")
-        except asyncio.TimeoutError:
-            print("Timed out waiting for response")
-            return None
-        except ConnectionRefusedError:
-            print("Connection refused")
-            return None
-        return message
+            if isinstance(message, str):
+                message = Message(message)
+            try:
+                # Prompt user for a message to send
+                self.client.send(pickle.dumps(message))
+                data = await asyncio.wait_for(self.client.recv(), timeout=5)
+                # data = await self.client.recv()
+                message = pickle.loads(data)
+                print(f"Message recieved: {message.string}")
+                print(f"Data recieved: {message.data!r}")
+            except asyncio.TimeoutError:
+                print("Timed out waiting for response")
+                return None
+            except ConnectionRefusedError:
+                print("Connection refused")
+                return None
+            return message
     
     async def connect(self):
         try:

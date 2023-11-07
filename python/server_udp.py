@@ -56,12 +56,7 @@ class Server:
         while True:
             buffer, addr = await self.server.recvfrom()
             message = pickle.loads(buffer)
-            print(f"Received command: {message.string}")
-            if message.data is not None:
-                reply = self.callbacks[message.string](message.data)
-            else:
-                reply = self.callbacks[message.string]()
-            print(f"Sent message: {reply.string}")
+            reply = self.callbacks[message.string](message.data) if message.data is not None else self.callbacks[message.string]()
             buf = pickle.dumps(reply)
             self.server.sendto(buf,addr)
             await asyncio.sleep(0.001)
