@@ -43,21 +43,28 @@ class Client:
                 return None
             return message
     
-    async def connect(self, loop=None):
-        self.client = await open_udp_connection((self.host, self.port))
+    def connect(self, loop=None):
+        self.event_loop = loop
+        if self.event_loop is None:
+            self.client = asyncio.run(open_udp_connection((self.host, self.port)))
+        else:
+            self.client = self.event_loop.run_until_complete(open_udp_connection((self.host, self.port)))
         logging.debug("Connection successful" if self.client else "Connection refused")
     
-    async def close(self):
-        self.client.close()
-        if self.debug:
-            print("Connection closed")
-        return True
-    
-    def  emit(self,message,data=None):
+    def emit(self,message,data=None) -> Message:
         if self.event_loop is None:
             return asyncio.run(self.send_single_message(Message(message,data)))
         else:
             return self.event_loop.run_until_complete(self.send_single_message(Message(message,data)))
+
+    def emit_from_qt(self,message,data=None) -> Message:
+        return
+
+    async def close(self):
+        self.client.close()
+        logging.debug("Connection closed")
+        return True
+    
     
     def __del__(self):
         self.client.close()

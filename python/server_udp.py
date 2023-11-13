@@ -19,7 +19,7 @@ class Server:
                           "stop": self.onStop,
                           "get": self.onGet,
                           "quit": self.onQuit,
-                          "setData": self.onSetData}
+                          "set_data": self.onSetData}
         self.one_iteration = one_iteration
         self._processing_enabled = False
         self._server_task = None
