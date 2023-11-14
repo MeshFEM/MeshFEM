@@ -17,6 +17,7 @@ class ValidateDiscreteShellServer(Server):
         self.em = None
         self.V = None
         self.F = None
+        self.panelization_obj = None
 
     def initialize(self, data):
         self.V = data["V"]
@@ -25,7 +26,7 @@ class ValidateDiscreteShellServer(Server):
         optVars = mesh_energy.NodalVars(m, 3) # Create per-node position variables (the variable dimension 3 here can also be inferred).
         self.em = MeshFEM.EmbeddedMesh(m, optVars) # A wrapper object used to visualize the deformation described by `optVars`.
         # Create the objective terms
-        panelization_obj = panelization.Panelization(m, optVars)
+        self.panelization_obj = panelization.Panelization(m, optVars)
         material = mesh_energy.MembraneMaterial(energy.NeoHookeanYoungPoisson(2, 1000, 0.3))
         membrane = mesh_energy.NeoHookeanMembrane(m, optVars, material)
         membrane.suppressSparsity = True # Negligible acceleration: membrane term Hessian sparsity is a subset of the hinge energy...
@@ -35,14 +36,14 @@ class ValidateDiscreteShellServer(Server):
         targets = [loads.AttachmentPointCoordinate(v) for v in m.vertices().ravel()]
         springs = loads.Springs(optVars, attachmentPoints, targets, 1e3)
 
-        prob = py_newton_optimizer.NewtonMultiobjectiveProblem(optVars, [panelization_obj, membrane, springs])
+        prob = py_newton_optimizer.NewtonMultiobjectiveProblem(optVars, [self.panelization_obj, membrane, springs])
         self.opt = prob.optimizer() # Create a solver
 
         # Keep the mesh boundary vertices on the ground (but alllow them to slide in plane)
         prob.setFixedVars(sim_utils.getBBoxVars(self.em, sim_utils.BBoxFace.MIN_Z, tol=1e-2, displacementComponents=[2]))
 
 
-        panelization_obj.materialForElement(0).delta = 0.1
+        self.panelization_obj.materialForElement(0).delta = 0.1
         springs.setStiffnesses(1e3)
         self.opt.options.niter = 1
         return Message("initialized", None)

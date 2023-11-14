@@ -1,28 +1,29 @@
 #%%
-import MeshFEM, mesh
-import numpy as np
-from client_udp import Client, Message
-import asyncio
-import nest_asyncio
-nest_asyncio.apply()
-import pyvista, pyvistaqt
-pyvista.set_jupyter_backend('trame')
-from qasync import QEventLoop
-#%%
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+#%%
+import MeshFEM, mesh
+import numpy as np
+from udp_com import Client, Message
+import asyncio
+import nest_asyncio
+nest_asyncio.apply()
+import vedo
+
+vedo.settings.default_backend = 'vtk'
+
+
 # %%
 # start the viewer and get the event loop
-plt = pyvistaqt.BackgroundPlotter()
-loop = QEventLoop(plt.app)
+plt = vedo.Plotter()
 
 client = Client('localhost', 12345)
-client.connect(loop)
+client.connect()
 #%%
 def add_mesh_to_viewer(V,F):
-    vmesh = pyvista.PolyData(V, np.hstack((np.full((F.shape[0],1), 3), F)))
-    plt.add_mesh(vmesh)
+    vmesh = vedo.Mesh([V, F])
+    plt.add(vmesh)
     return vmesh
 
 def load_mesh_from_server():
@@ -33,12 +34,9 @@ def load_mesh_from_server():
         return None
     return add_mesh_to_viewer(V,F)
 
-def update_mesh_vertices():
+def update_mesh_vertices(obj, ename):
     mes = client.emit("get")
-    if mes is None:
-        return
-    vf = {"V":mes.data.astype(np.float32),"F":m.elements()}
-    plt.update_coordinates(vf)
+    vmesh.points(mes.data)
     plt.render()
 
 def set_mesh_from_file(filename):
@@ -51,47 +49,45 @@ def set_mesh_from_file(filename):
     return add_mesh_to_viewer(V,F)
     
 
-def start_stop_server(flag):
-    if flag:
+def start_stop_server(obj, ename):
+    if btn_startstop.status() == "start":
         mes = client.emit("start")
         print(mes.string)
     else:
         mes = client.emit("stop")
         print(mes.string)
+    btn_startstop.switch()
 
+def start_stop_update_timer(obj, ename):
+    if btn_timer.status() == "start":
+        ida = plt.timer_callback("start", dt=1000, timer_id=timer_id, one_shot=True)
+    else:
+        ida = plt.timer_callback("stop", timer_id=timer_id)
+    btn_timer.switch()
+
+vmesh = set_mesh_from_file("../3rdparty/MeshFEM/misc/examples/meshes/ball.msh")
+
+def add_button(func,states):
+    btn = plt.add_button(
+        func,
+        states=states,  # text for each state
+    )
+    add_button.offset +=0.05
+    btn.pos((0.0, add_button.offset),justify="left-bottom")
+    return btn
+add_button.offset = 0
+
+btn_startstop = add_button(start_stop_server, states=["start", "stop"])
+btn_timer = add_button(start_stop_update_timer, states=["start timer", "stop timer"])
+btn_update_mesh_once = add_button(update_mesh_vertices, states=["update mesh once"])
+btn_reducedelta = add_button(lambda obj, ename: client.emit('run_command','self.panelization_obj.materialForElement(0).delta /= 2'), states=["reduce delta"])
+timer_id = plt.add_callback("timer", update_mesh_vertices)
 
 # %%
-# from PyQt5.QtCore import pyqtSlot, QTimer
-# @pyqtSlot()
-# def mycallback():
-#     print("Timer fired!")
-
-# from IPython.lib import backgroundjobs as bg
-# jobs = bg.BackgroundJobManager()
-# jobs.new(loop.run_until_complete,mycallback())
-set_mesh_from_file("../3rdparty/MeshFEM/misc/examples/meshes/ball.msh")
+plt.show()
 
 #%%
-a=1
-async def atest():
-    global a
-    a+=1
-    await asyncio.sleep(1)
-    a+=1
-
-def test(flag):
-    global a
-    if flag:
-        a+=1
-        loop.run_until_complete(atest)
-    else:
-        print("stop")
-
-btn = plt.add_checkbox_button_widget(test, value = False)
-
-input("press enter to exit")
-
-
+msg = client.emit('run_command','self.panelization_obj.materialForElement(0).delta')
 
 # %%
 # plt.add_callback(update_mesh_vertices,interval=1000)

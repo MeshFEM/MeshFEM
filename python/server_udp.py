@@ -3,6 +3,9 @@ import random
 import pickle
 from jetblack_datagram import start_udp_server
 import sys
+import io
+from contextlib import redirect_stdout
+
 # note: if using IPython, add the following lines to the top of the file:
 # import nest_asyncio
 # nest_asyncio.apply()
@@ -15,7 +18,8 @@ class Message:
 class Server:
     def __init__(self, one_iteration):
         self.last_result = None
-        self.callbacks = {"start": self.onStart,
+        self.callbacks = {"run_command": self.onRunCommand,
+                          "start": self.onStart,
                           "stop": self.onStop,
                           "get": self.onGet,
                           "quit": self.onQuit,
@@ -32,6 +36,13 @@ class Server:
             if self._processing_enabled:
                 self.last_result = self.one_iteration()
             await asyncio.sleep(0.001)
+    def onRunCommand(self, command):
+        try:
+            with redirect_stdout(io.StringIO()) as f:
+                exec(command,{'self':self})
+        except Exception as e:
+            return Message(f"error running command {command}", str(e))
+        return Message(f"ran command: {command}", f.getvalue())
     
     def onStart(self):
         self._processing_enabled = True
