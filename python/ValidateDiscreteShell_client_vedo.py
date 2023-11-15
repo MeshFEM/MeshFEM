@@ -12,7 +12,29 @@ nest_asyncio.apply()
 import vedo
 
 vedo.settings.default_backend = 'vtk'
+# %%
+from IPython.core.magic import register_line_magic
 
+@register_line_magic
+def return_from_server(line):
+    """
+    A magic function that runs the contents of the cell on the server.
+    """
+    msg = client.emit("run_command", "a=" + line)
+    return msg.data[1]['a']
+
+@register_line_magic
+def run_on_server(line):
+    """
+    A magic function that runs the contents of the cell on the server.
+    """
+    msg = client.emit("run_command", line)
+    return msg.data[1]
+
+# To be able to use our new magic command,
+# we need to explicitly load it:
+
+#get_ipython().register_magic_function(run_on_server, magic_kind='line')
 
 # %%
 # start the viewer and get the event loop
@@ -34,7 +56,7 @@ def load_mesh_from_server():
         return None
     return add_mesh_to_viewer(V,F)
 
-def update_mesh_vertices(obj, ename):
+def update_mesh_vertices(obj, ename = None):
     mes = client.emit("get")
     vmesh.points(mes.data)
     plt.render()
@@ -58,12 +80,16 @@ def start_stop_server(obj, ename):
         print(mes.string)
     btn_startstop.switch()
 
+timer_id = None
 def start_stop_update_timer(obj, ename):
-    if btn_timer.status() == "start":
-        ida = plt.timer_callback("start", dt=1000, timer_id=timer_id, one_shot=True)
+    global timer_id
+    if btn_timer.status() == "start timer":
+        timer_id = plt.timer_callback("start", dt=100)
     else:
         ida = plt.timer_callback("stop", timer_id=timer_id)
     btn_timer.switch()
+
+timer_cb_id = plt.add_callback("timer", update_mesh_vertices)
 
 vmesh = set_mesh_from_file("../3rdparty/MeshFEM/misc/examples/meshes/ball.msh")
 
@@ -81,7 +107,6 @@ btn_startstop = add_button(start_stop_server, states=["start", "stop"])
 btn_timer = add_button(start_stop_update_timer, states=["start timer", "stop timer"])
 btn_update_mesh_once = add_button(update_mesh_vertices, states=["update mesh once"])
 btn_reducedelta = add_button(lambda obj, ename: client.emit('run_command','self.panelization_obj.materialForElement(0).delta /= 2'), states=["reduce delta"])
-timer_id = plt.add_callback("timer", update_mesh_vertices)
 
 # %%
 plt.show()
