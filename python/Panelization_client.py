@@ -1,7 +1,7 @@
 #%%
 import logging
 import sys
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+#logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 #%%
 import MeshFEM, mesh
 import numpy as np
@@ -10,6 +10,7 @@ import asyncio
 import nest_asyncio
 nest_asyncio.apply()
 import vedo
+import multiprocessing as mp
 
 vedo.settings.default_backend = 'vtk'
 # %%
@@ -72,24 +73,36 @@ def set_mesh_from_file(filename):
     
 
 def start_stop_server(obj, ename):
-    if btn_startstop.status() == "start":
+    if btn_startstop_opt.status() == "start":
         mes = client.emit("start")
         print(mes.string)
     else:
         mes = client.emit("stop")
         print(mes.string)
-    btn_startstop.switch()
+    btn_startstop_opt.switch()
 
 timer_id = None
 def start_stop_update_timer(obj, ename):
     global timer_id
-    if btn_timer.status() == "start timer":
+    if btn_startstop_timer.status() == "update view":
         timer_id = plt.timer_callback("start", dt=100)
+        print(timer_id)
     else:
+        print(timer_id)
         ida = plt.timer_callback("stop", timer_id=timer_id)
-    btn_timer.switch()
+    btn_startstop_timer.switch()
 
-timer_cb_id = plt.add_callback("timer", update_mesh_vertices)
+def start_update_timer(obj, ename):
+    global timer_id
+    timer_id = plt.timer_callback("start", dt=100)
+    print(f"started: {timer_id}")
+
+def stop_update_timer(obj, ename):
+    global timer_id
+    print(f"stopped: {timer_id}")
+    plt.timer_callback("stop", timer_id=timer_id)
+
+timer_cb_id = plt.add_callback("timer", update_mesh_vertices, enable_picking=False)
 
 vmesh = set_mesh_from_file("../3rdparty/MeshFEM/misc/examples/meshes/ball.msh")
 
@@ -103,43 +116,10 @@ def add_button(func,states):
     return btn
 add_button.offset = 0
 
-btn_startstop = add_button(start_stop_server, states=["start", "stop"])
-btn_timer = add_button(start_stop_update_timer, states=["start timer", "stop timer"])
-btn_update_mesh_once = add_button(update_mesh_vertices, states=["update mesh once"])
+btn_startstop_opt = add_button(start_stop_server, states=["start", "stop"])
+btn_startstop_timer = add_button(start_stop_update_timer, states=["update view", "stop update view"])
+btn_update_mesh_once = add_button(update_mesh_vertices, states=["update view once"])
 btn_reducedelta = add_button(lambda obj, ename: client.emit('run_command','self.panelization_obj.materialForElement(0).delta /= 2'), states=["reduce delta"])
 
 # %%
 plt.show()
-
-#%%
-msg = client.emit('run_command','self.panelization_obj.materialForElement(0).delta')
-
-# %%
-# plt.add_callback(update_mesh_vertices,interval=1000)
-# flag = True
-# async def start_stop_update():
-#     global flag
-#     while flag:
-#         mes = emit("get")
-#         if mes is None:
-#             break
-#         vistamesh.points=mes.data
-#         plt.render()
-#         await asyncio.sleep(0.1)
-
-# await start_stop_update()
-# # %%
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
-# logging.getLogger("asyncio").setLevel(logging.DEBUG)
-# loop = QEventLoop(plt.app)
-# flag = True
-# async def test():
-#     #do 5 times
-#     for i in range(5):
-#         print("wait")
-#         await asyncio.sleep(1)
-#         print("done")
-# loop.create_task(test())
-
-# # %%
