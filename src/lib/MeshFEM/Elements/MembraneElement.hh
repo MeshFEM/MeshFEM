@@ -4,7 +4,7 @@
 #include <MeshFEM/EmbeddedElement.hh>
 #include <MeshFEM/Elements/HyperelasticLagrange.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
-#include <MeshFEM/MeshEnergy.hh>
+#include "ElementBase.hh"
 
 template<size_t Deg, class Psi_2x2>
 struct MembraneElement;
@@ -29,39 +29,34 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2>> {
     using Real     = typename Psi_2x2::Real;
     using Base     = ElementBase<MembraneElement>;
     using Material = typename Base::Material;
-    using Psi      = typename Material::Psi;
 
-    using HLE = elements::HyperelasticLagrange<Psi, K, N, Deg>;
+    using HLE = elements::HyperelasticLagrange<typename Material::Psi, K, N, Deg>;
     using LocalVars = typename HLE::NodePositions;
     using Gradient  = typename HLE::Gradient;
     using Hessian   = typename HLE::Hessian;
-    using VNd = VecN_T<Real, N>;
 
     static std::string name() { return "Membrane"; }
 
-    static constexpr bool CachesDeformedQuantities = true;
+    static constexpr bool CachesDeformedQuantities = false;
 
     template<class Mesh>
-    MembraneElement(size_t ei, const Mesh &m, const LocalVars &x, MaterialAssignment<Material> &materials)
-        : Base(ei, materials), elementData(*(m.element(ei))), deformedNodePositions(x) {
-    }
+    MembraneElement(size_t ei, const Mesh &m, MaterialAssignment<Material> &materials)
+        : Base(ei, materials), elementData(*(m.element(ei))) { }
 
-    void setDeformedConfiguration(const LocalVars &x, EvalLevel elevel = EvalLevel::Full) {
-        deformedNodePositions = x;
-    }
-
-    auto getFB() const { return typename HLE::ElasticFGetter(deformedNodePositions)(elementData.gradPhis()); }
+    auto getFB(const LocalVars &x) const { return typename HLE::ElasticFGetter(x)(elementData.gradPhis()); }
 
     // void setRestConfiguration(const LocalVars &X) {
     // }
 
-    Real       energy(                                ) const { const auto &m = Base::material(); return HLE::  energy(m.psi, deformedNodePositions, elementData) * m.thickness; }
-    Gradient gradient(Real weight                     ) const { const auto &m = Base::material(); return HLE::gradient(m.psi, deformedNodePositions, elementData, (weight * m.thickness)); }
-    Hessian   hessian(Real weight, bool projectionMask) const { const auto &m = Base::material(); return HLE:: hessian(m.psi, deformedNodePositions, elementData, /* projectionDisabled  = */ !projectionMask, (weight * m.thickness)); }
+    Real       energy(                                const LocalVars &x) const { const auto &m = Base::material(); return HLE::  energy(m.psi, x, elementData) * m.thickness; }
+    Gradient gradient(Real weight,                    const LocalVars &x) const { const auto &m = Base::material(); return HLE::gradient(m.psi, x, elementData, (weight * m.thickness)); }
+    template<bool SetLowerTri = false>
+    Hessian hessian(Real weight, bool projectionMask, const LocalVars &x) const { const auto &m = Base::material(); return HLE::template hessian<SetLowerTri>(m.psi, x, elementData, /* projectionDisabled  = */ !projectionMask, (weight * m.thickness)); }
 
-    LocalVars deformedNodePositions;
-    elements::EmbeddedMembraneElementData<LinearlyEmbeddedElement<K, Deg, VNd>> elementData;
+    elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, N>> elementData;
 };
+
+#include "../MeshEnergy.hh"
 
 template<class Psi_2x2, size_t Deg = 1>
 using MembraneMeshEnergy = MeshEnergy<FEMMesh<2, Deg, Vector3D>, NodalVars<3>, ElementStencil<2, Deg, 3>, MembraneElement<Deg, Psi_2x2>>;

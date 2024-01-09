@@ -220,6 +220,10 @@ private:
     StorageType m_embeddedElement;
 };
 
-}
+#include "../EmbeddedElement.hh"
+template<size_t K, size_t Deg, class VNd>
+using EmbeddedMembraneEData = EmbeddedMembraneElementData<LinearlyEmbeddedElement<K, Deg, VNd>>;
+
+} // namespace elements
 
 #endif /* end of include guard: HYPERELASTICLAGRANGE_HH */

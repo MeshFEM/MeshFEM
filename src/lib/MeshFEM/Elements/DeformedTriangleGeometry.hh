@@ -19,7 +19,7 @@ namespace elements {
 template<class Real>
 struct DeformedTriangleGeometry {
     static constexpr size_t NumCorners = 3;
-    using CornerPositions = Eigen::Matrix<Real, NumCorners, 3, Eigen::RowMajor>;
+    using CornerPositions = Eigen::Matrix<Real, NumCorners, 3, Eigen::RowMajor>; // One position in each row
     using V3d = Vec3_T<Real>;
     using M3d = Mat3_T<Real>;
 
@@ -44,8 +44,10 @@ struct DeformedTriangleGeometry {
         h = dblArea / edgeLens.array(); // height of the triangle over each edge.
         normal /= dblArea;
         unitEdgePerpendiculars = edgeVecs.colwise().cross(-normal) * edgeLens.asDiagonal().inverse();
+        A = 0.5 * dblArea;
     }
 
+    Real A;
     V3d normal, edgeLens, h;
     M3d edgeVecs,               // e_i in *column* i
         unitEdgePerpendiculars, // ehatperp_i in *column* i

@@ -2,7 +2,7 @@
 // ElasticSheet.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Simulate an thin elastic sheet with a potentially curved rest configuration
+//  Simulate a thin elastic sheet with a potentially curved rest configuration
 //  (modeling either plates or shells). The simulation consists of a membrane
 //  term (capturing the energy due to in-plane stretching) and a bending energy
 //  term.
@@ -48,8 +48,8 @@
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
-#include "Elements/HyperelasticLagrange.hh"
 #include "Elements/PlateBending.hh"
+#include "Elements/MembraneElement.hh"
 
 #include "SystemAssembler.hh"
 
@@ -79,13 +79,14 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using EvalPtK = EvalPt<2>;
 
     using Psi_2x2 = _Psi_2x2;
-    using Psi     = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
-    using Real    = typename Psi::Real;
+    using Real    = typename Psi_2x2::Real;
     using ETensor = ElasticityTensor<Real, 2>;
 
-    using ME = elements::Membrane<Psi, 2, 1>;
-    using NodePositions = typename ME::NodePositions;
-    using PBE = elements::PlateBending<Real>;
+    using ME = MembraneElement</* Deg = */ 1, Psi_2x2>;
+    using CornerPositions = typename ME::LocalVars; // One position per row; row-major
+    using PBE    = PlateBending<Real>;
+    using PBEMat = typename PBE::Material;
+    using MEMat  = typename  ME::Material;
 
     using Base = ElasticObject<Real>;
     using CSCMat  = typename Base::CSCMat;
@@ -121,20 +122,6 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
 
     enum class EnergyType { Full, Membrane, Bending };
     enum class HessianProjectionType { Off, MembraneFBased, FullXBased };
-
-    struct Material {
-        Material(const Psi_2x2 &psi_raw) : m_psi{psi_raw} { set(psi_raw); }
-        void set(const Psi_2x2 &psi_raw) {
-            m_psi = Psi(psi_raw, UninitializedDeformationTag());
-            m_etensor = tangentElasticityTensor(psi_raw);
-        }
-        void setProjectionEnabled(bool project) { m_psi.projectionEnabled = project; }
-        const Psi         &psi() const { return m_psi; }
-        const ETensor &etensor() const { return m_etensor; }
-    private:
-        Psi m_psi;         // Membrane energy density function.
-        ETensor m_etensor; // Tangent elasticity tensor of `m_psi` used for bending energy.
-    };
 
     // Enumeration of edges and crease edges (used to allocate variables).
     struct EdgeVariableStructure {
@@ -179,25 +166,47 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         std::vector<size_t> halfEdgeForCreaseAngle; // Arbitrary half-edge of the edge associated with each crease angle var
     };
 
-    ElasticSheet(const std::shared_ptr<Mesh> &m, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
-        : m_mesh(m), m_materials{psi},
-          m_edgeVarStructure(m, creases),
-          m_numVertices(m->numVertices()),
+    ElasticSheet(const std::shared_ptr<Mesh> &mptr, const Psi_2x2 &psi, const CreaseEdges &creases = CreaseEdges(0, 2))
+        : m_mesh(mptr),
+          m_edgeVarStructure(mptr, creases),
+          m_numVertices(mptr->numVertices()),
+          m_membraneMaterials(mptr->numElements()),
+          m_plateMaterials(mptr->numElements()),
           m_assembler(m_numVertices, m_edgeVarStructure.numEdges, m_edgeVarStructure.numCreases)
     {
-        m_creaseAngles.resize(numCreases());
-        const size_t ne = m->numElements();
-        m_elementData.reserve(ne);
+        const auto &m = mesh();
+
+        m_membraneMaterials[0].psi = psi;
+        m_membraneMaterials[0].thickness = 1.0;
+        m_plateMaterials   [0].setPsi(psi);
+        m_plateMaterials   [0].setThickness(1.0);
+
+        const size_t ne = m.numElements();
+        m_membraneElements.reserve(ne);
         for (size_t ei = 0; ei < ne; ++ei)
-            m_elementData.emplace_back(*(m->element(ei)));
+            m_membraneElements.emplace_back(ei, m, m_membraneMaterials);
+
+        // Construct and initialize plate elements (assuming gamma = 0)
+        m_plateElements.reserve(ne);
+        for (size_t ei = 0; ei < ne; ++ei)
+            m_plateElements.emplace_back(ei, m_membraneElements[ei].elementData, m_plateMaterials);
 
         setIdentityDeformation();
 
         // Apply this resulting shape operator as the rest shape operator
         // (To handle curved shells.)
-        m_restII = m_II;
+        programRestCurvature();
 
         setHessianProjectionType(HessianProjectionType::Off);
+    }
+
+    typename PBE::LocalVars extractPlateVars(size_t ei) const {
+        const auto &e = m_mesh->element(ei);
+        typename PBE::LocalVars x;
+        for (auto v : e.vertices())
+            x.template segment<3>(3 * v.localIndex()) = m_deformedPositions.row(v.index());
+        x.template segment<3>(3 * numNodesPerElement) = getTriGammas(ei);
+        return x;
     }
 
     const Mesh &mesh() const { return *m_mesh; }
@@ -222,9 +231,6 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     template<class VarVector> auto sliceThetas      (VarVector &vars) const { return varStructure().variablesOfType(vars, 1); }
     template<class VarVector> auto sliceCreaseAngles(VarVector &vars) const { return varStructure().variablesOfType(vars, 2); }
 
-    void setThickness(Real h) { m_plate.setThickness(h); }
-    Real getThickness() const { return m_plate.getThickness(); }
-
     size_t   edgeForHalfEdge(size_t hei)    const { return m_edgeVarStructure.edgeForHalfEdge[hei]; }
     int    creaseEdgeIndexForEdge(size_t e) const { return m_edgeVarStructure.creaseEdgeIndexForEdge[e]; }
     size_t        halfEdgeForEdge(size_t e) const { return m_edgeVarStructure.halfedgeForEdge[e]; }
@@ -233,9 +239,8 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
 
     void setDeformedPositions(Eigen::Ref<const MX3d> x) {
         if (size_t(x.rows()) != numVertices()) throw std::runtime_error("Invalid vertex position size");
-        VXd fullVars = getDefoVars();
-        fullVars.head(3 * numVertices()) = Eigen::Map<const VXd>(x.data(), x.size());
-        Base::setDefoVars(fullVars);
+        m_deformedPositions = x;
+        m_defoConfigUpdated(/* positionsUpdated = */ true);
     }
 
     const VXd &getThetas()       const { return m_thetas;       }
@@ -244,11 +249,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     void setThetas(Eigen::Ref<const VXd> thetas) {
         if (size_t(thetas.rows()) != numThetas()) throw std::runtime_error("Invalid thetas size");
         m_thetas = thetas;
-
-        m_updateShapeOperators();
-        m_updateMidedgeNormals();
-
-        this->m_defoConfigUpdated();
+        m_defoConfigUpdated(/* positionsUpdated = */ false);
     }
 
     void setCreaseAngles(Eigen::Ref<const VXd> creaseAngles) {
@@ -280,33 +281,6 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     }
 
     MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
-
-    size_t numMaterials() const { return m_materials.size(); }
-    const Material &material(size_t i) const { return m_materials.at(i); }
-          Material &material(size_t i)       { return m_materials.at(i); }
-    const Material &elementMaterial(size_t ei) const {
-        if (m_materialForElement.empty()) return m_materials.front();
-        return m_materials.at(m_materialForElement.at(ei));
-    }
-
-    void setMaterials(const std::vector<Psi_2x2> &mats) {
-        if (mats.empty()) throw std::runtime_error("Must specify at least one material");
-        clearMaterialAssignments();
-        m_materials.reserve(mats.size());
-        m_materials.clear();
-        for (const auto &psi : mats) m_materials.emplace_back(psi);
-    }
-
-    void clearMaterialAssignments() { m_materialForElement.clear(); }
-    void setElementMaterialAssignments(const std::vector<size_t> &mfore) {
-        if (mfore.size() != mesh().numElements())               throw std::runtime_error("Element size mismatch");
-        for (size_t mi : mfore) { if (mi >= m_materials.size()) throw std::runtime_error("Material index is out of bounds"); }
-        m_materialForElement = mfore;
-    }
-    const std::vector<size_t> elementMaterialAssignments() const { return m_materialForElement; }
-
-    const Psi     &elementPsi    (size_t ei) const { return elementMaterial(ei).psi(); }
-    const ETensor &elementETensor(size_t ei) const { return elementMaterial(ei).etensor(); }
 
     Real elementEnergy(size_t ei, const EnergyType etype) const;
     Real energy(const EnergyType etype) const;
@@ -361,6 +335,13 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         return H;
     }
 
+    void accumulateHessianNew(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+    SuiteSparseMatrix hessianNew(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
+        SuiteSparseMatrix H(hessianSparsityPattern());
+        accumulateHessianNew(1.0, H, etype, projectionMask, vmask);
+        return H;
+    }
+
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
@@ -371,18 +352,22 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         accumulateHessian(weight, Hout, EnergyType::Full, projectionMask, vmask);
     }
 
-    template <class SHEHandle>
-    M3d d_A_gamma_div_len_d_x(const SHEHandle &he, bool updatedSource) const;
-    template <class SHEHandle>
-    M3d d2_A_gamma_div_len_d_x_dtheta(const SHEHandle &he) const;
-    template <class SHEHandle, class SVHandle>
-    M3d delta_d_A_gamma_div_len_d_x(const SHEHandle &he, const SVHandle &v_b, const size_t c_b) const;
-
-    const MX3d &midedgeNormals()                       const { return m_midedgeNormals; }
     const std::vector<Frame> &midedgeReferenceFrames() const { return m_referenceFrame; }
     const std::vector<Frame> & sourceReferenceFrames() const { return m_sourceReferenceFrame; }
 
     // For debugging visualizations of the edge frames, we need their application points
+    MX3d midedgeNormals() const {
+        MX3d result(numEdges(), 3);
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, numEdges()),
+                          [&](const tbb::blocked_range<size_t> &r) {
+            for (size_t i = r.begin(); i < r.end(); ++i) {
+                result.row(i) = std::cos(m_thetas[i]) * m_referenceFrame[i].col(1) +
+                                std::sin(m_thetas[i]) * m_referenceFrame[i].col(2);
+            }
+        });
+        return result;
+    }
+
     MX3d edgeMidpoints() const {
         MX3d result(numEdges(), 3);
         mesh().visitEdges([this, &result](CHEHandle he, size_t edgeIndex) {
@@ -408,8 +393,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     void setIdentityDeformation() override;
 
     // (Re-)initialize the midedge normals (thetas), inferring them from the midsurface.
-    // TODO: possibly make this infer crease angle as well?
-    void initializeMidedgeNormals(bool minimizeBending = true);
+    void initializeMidedgeNormals(bool inferCreaseAngles = true, bool minimizeBending = true);
 
     void updateSourceFrame() {
         m_sourceReferenceFrame = m_referenceFrame;
@@ -423,15 +407,15 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     template<class HEType>
     auto deformedEdgeVector(const HEType &he) const {
         return (m_deformedPositions.row(he. tip().index())
-             - m_deformedPositions.row(he.tail().index())).eval();
+              - m_deformedPositions.row(he.tail().index())).eval();
     }
     const auto &deformedElement(size_t ei) const { return m_deformedElements.at(ei); }
 
     // Get the deformed positions of triangle ti's corners as rows
     // of a 3x3 matrix.
-    NodePositions getCornerPositions(size_t ti) const {
+    CornerPositions getCornerPositions(size_t ti) const {
         auto t = mesh().tri(ti);
-        NodePositions result;
+        CornerPositions result;
         result << m_deformedPositions.row(t.vertex(0).index()),
                   m_deformedPositions.row(t.vertex(1).index()),
                   m_deformedPositions.row(t.vertex(2).index());
@@ -446,45 +430,46 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
                    getGamma(t.halfEdge(2).index()));
     }
 
-    M32d getB (size_t ei) const { return m_elementData[ei].B(); }
-    M32d getFB(size_t ei) const { return (m_elementData[ei].BtGradBarycentric() * getCornerPositions(ei)).transpose(); }
+    const M32d &getB (size_t ei) const { return m_membraneElements[ei].elementData.B(); }
+    M32d getFB(size_t ei)        const { return m_membraneElements[ei].getFB(getCornerPositions(ei)); }
+
+    SM2d getBendingStrain(size_t ei) const { return m_plateElements[ei].bendingStrain(); }
 
     // Get the deformed/rest second fundamental forms (expressed in the
     // reference triangle's orthonormal frame).
-    const std::vector<M2d>  &getII()     const { return m_II;     }
-    const std::vector<M2d>  &getRestII() const { return m_restII; }
+    M2d     getII(size_t ei) const { return m_plateElements[ei].    II; }
+    M2d getRestII(size_t ei) const { return m_plateElements[ei].restII; }
 
     // Deformed second fundamental forms expressed in the global frame.
     M3d getII_3D(size_t ei) const {
         M32d B = getB(ei);
-        return B * m_II[ei] * B.transpose();
+        return B * getII(ei) * B.transpose();
     }
 
     // Set the rest state to be flat.
-    void programFlatRestCurvature() { m_restII.assign(mesh().numElements(), M2d::Zero()); this->m_restConfigUpdated(); }
+    void programFlatRestCurvature() {
+        for (auto &pe : m_plateElements) pe.programFlatRestCurvature();
+        this->m_restConfigUpdated();
+    }
+
     // Bake the current deformed state's curvature into the rest curvature (plastically deforming)
-    void programRestCurvature() { m_restII = m_II; this->m_restConfigUpdated(); }
+    void programRestCurvature() {
+        for (auto &pe : m_plateElements) pe.programRestCurvature();
+        this->m_restConfigUpdated();
+    }
 
     // Get the per-element right Cauchy-Green deformation tensors/first
     // fundamentals form representing the deformation.
-    std::vector<M2d> getC() const {
-        std::vector<M2d> C;
-        const auto &m = mesh();
-        C.reserve(m.numElements());
-        for (const auto e : m.elements()) {
-            M32d FB = getFB(e.index());
-            C.push_back(FB.transpose() * FB);
-        }
-        return C;
+    M2d getC(size_t ei) const {
+        M32d FB = getFB(ei);
+        return FB.transpose() * FB;
     }
 
     // Note: for nonzero Poisson's ratio, there will be strain along the
     // thickness direction that is omitted here.
-    std::vector<M2d> getMembraneGreenStrains() const {
-        auto result = getC();
-        for (auto &r : result)
-            r = 0.5 * (r - M2d::Identity());
-        return result;
+    M2d getMembraneGreenStrain(size_t ei) const {
+        M32d FB = getFB(ei);
+        return 0.5 * (FB.transpose() * FB - M2d::Identity());
     }
 
     // Membrane green strains averaged onto the vertices.
@@ -492,8 +477,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     // thickness direction that is omitted here.
     std::vector<M2d> vertexGreenStrains() const {
         return vertexAveragedField(mesh(), [this](size_t ei, const EvalPtK &) {
-                M32d FB = getFB(ei);
-                return (0.5 * (FB.transpose() * FB - M2d::Identity())).eval();
+                return getMembraneGreenStrain(ei);
             });
     }
 
@@ -502,16 +486,15 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     // Note: for nonzero Poisson's ratio, there will be strain along the
     // thickness direction that is omitted here.
     M2d getElementVolumetricStrain(size_t ei, Real z) const {
-        const auto &B = m_elementData[ei].B();
         M32d FB = getFB(ei);
-        return 0.5 * (FB.transpose() * FB - M2d::Identity()) + z * (m_II[ei] - m_restII[ei]);
+        return getMembraneGreenStrain(ei) + z * (getII(ei) - getRestII(ei));
     }
 
     // Evaluate approximate volumetric stress for element `ei` at the thickness
     // coordinate `z`.
     M2d getElementVolumetricPlaneStress(size_t ei, Real z) const {
         M2d strain = getElementVolumetricStrain(ei, z);
-        return elementETensor(ei).doubleContract(SM2d(strain)).matrix();
+        return m_plateMaterials[ei].C.doubleContract(SM2d(strain)).matrix();
     }
 
     // Sample the implied PK2 stress field for element `ei` at thickness coordinate `z`.
@@ -520,7 +503,7 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     //  elementETensor(ei)'s quadratic form.)
     M3d getElementVolumetricPK2Stress(size_t ei, Real z) const {
         M2d plane_stress = getElementVolumetricPlaneStress(ei, z);
-        const auto &B = m_elementData[ei].B();
+        const auto &B = getB(ei);
         return B * plane_stress * B.transpose();
     }
 
@@ -571,13 +554,15 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     }
 
     VXd getGammas() const {
-        const auto &m = mesh();
-        const size_t nhe = m.numHalfEdges();
-        VXd gammas(nhe);
+        const size_t nhe = mesh().numHalfEdges();
+        VXd result(nhe);
         for (size_t hei = 0; hei < nhe; ++hei)
-            gammas[hei] = getGamma(hei);
-        return gammas;
+            result[hei] = getGamma(hei);
+        return result;
     }
+
+    template<class Result>
+    void accumulateGradGamma(Real weight, size_t ei, size_t lhi, bool updatedSource, Result &&result) const;
 
     // Get the principal curvatures of the deformed sheet geometry.
     MX2d getPrincipalCurvatures() const;
@@ -587,7 +572,21 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         const auto &m = mesh();
         VXd result(m.numElements());
         for (const auto e : m.elements())
-            result[e.index()] = e->volume() * getThickness();
+            result[e.index()] = e->volume() * m_plateMaterials[e.index()].getThickness();
+        return result;
+    }
+
+    void setThickness(Real t) {
+        m_membraneMaterials.foreach([t](MEMat  &mat) { mat.thickness = t; });
+        m_plateMaterials   .foreach([t](PBEMat &mat) { mat.setThickness(t); });
+    }
+
+    Real getThickness() const {
+        Real result = m_plateMaterials[0].getThickness();
+        m_plateMaterials.foreach([&result](const PBEMat &mat) {
+            if (mat.getThickness() != result)
+                throw std::runtime_error("Inconsistent thicknesses");
+        });
         return result;
     }
 
@@ -632,9 +631,27 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     void setHessianProjectionType(HessianProjectionType hp) {
         m_hessianProjectionType = hp;
         bool projectPsi = (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
-        for (auto &mat : m_materials)
-            mat.setProjectionEnabled(projectPsi);
+        m_membraneMaterials.foreach([projectPsi](MEMat &mat) { mat.psi.projectionEnabled = projectPsi; });
     }
+
+    void setMaterials(const std::vector<Psi_2x2> &psis, const std::vector<size_t> &materialForElement = {}) {
+        std::vector< MEMat>  membraneMaterials(psis.size());
+        std::vector<PBEMat>     plateMaterials(psis.size());
+
+        Real h = getThickness();
+
+        for (size_t mi = 0; mi < psis.size(); ++mi) {
+            membraneMaterials[mi].psi = psis[mi];
+            membraneMaterials[mi].thickness = h;
+            plateMaterials   [mi].setPsi(psis[mi]);
+            plateMaterials   [mi].setThickness(h);
+        }
+
+        m_membraneMaterials.setSpatiallyVarying(membraneMaterials, materialForElement);
+        m_plateMaterials   .setSpatiallyVarying(   plateMaterials, materialForElement);
+    }
+
+    const std::vector<size_t> &materialForElement() const { return m_membraneMaterials.materialForElement(); }
 
     HessianProjectionType getHessianProjectionType() const {
         return m_hessianProjectionType;
@@ -657,28 +674,30 @@ private:
         m_creaseAngles      = sliceCreaseAngles(vars);
         m_deformedPositions = sliceDeformedPositions(vars);
 
-        m_updateDeformedElements();
-        m_adaptReferenceFrame(); // Side effect: update shape operators/midedge normals
+        m_defoConfigUpdated();
     }
 
     void m_setRestVars(const Eigen::Ref<const VXd> & /* vars */) override {
         throw std::runtime_error("Unimplemented");
-        for (auto &d : m_elementData)
-            d.embeddingUpdated();
+        for (auto &me : m_membraneElements)
+            me.elementData.embeddingUpdated();
     }
 
     // Update the current midedge reference frame to adapt to the new deformed
-    // edge tagents. This also calls m_updateMidedgeNormals and m_updateShapeOperators.
+    // edge tagents.
     void m_adaptReferenceFrame();
 
-    // Update the midedge normals (Whenever the thetas or reference frames change...)
-    void m_updateMidedgeNormals();
+    void m_updateElementEmbedding();
 
     // Update geometric data cached for the deformed elements.
-    void m_updateDeformedElements();
+    void m_updateDeformedElements(bool positionsUpdated = true);
 
-    // Update the second fundamental form (TODO: third fundamental form)
-    void m_updateShapeOperators();
+    // Update all cached deformation-dependent quantities (when either positions
+    // or midedge normal angles change).
+    void m_defoConfigUpdated(bool positionsUpdated = true) {
+        m_updateDeformedElements(positionsUpdated);
+        Base::m_defoConfigUpdated(); // Call base implementation to dispatch notifications
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Member variables
@@ -708,30 +727,11 @@ private:
     // Geometric information/shape functions for the deformed elements.
     std::vector<LinearlyEmbeddedElement<2, 1, V3d>> m_deformedElements;
 
-    // Second fundamental form (shape operator pulled back to the reference
-    // configuration) *and expressed in the triangle's orthonormal basis*.
-    // The discrete second fundamental form is a piecewise constant matrix
-    // field.
-    // Note: we use the same sign convention as [Grinspun2006], where the shape
-    // operator computes the directional derivative of the normal (not its
-    // negation). This is the opposite sign convention from most differential
-    // geometry references, but actually the sign convention is irrelevant
-    // for bending energy since only the square of the shape operator
-    // enters into the elastic energy expression.
-    std::vector<M2d> m_II, m_restII;
+    MaterialAssignment<typename  ME::Material> m_membraneMaterials;
+    MaterialAssignment<typename PBE::Material> m_plateMaterials;
 
-    // Properties for each distinct material in use.
-    // To support multi-material sheets consisting of a small number
-    // of distinct materials (e.g., 2), we use a level of indirection,
-    // where `m_materialForElement[e]` gives the index into `m_materials`
-    // for the material in use. For single-material sheets,
-    // `m_materialForElement` will be emtpy and `m_materials` will hold only
-    // one material.
-    std::vector<size_t> m_materialForElement;
-    std::vector<Material> m_materials;
-
-    std::vector<elements::EmbeddedMembraneElementData<typename Mesh::ElementData>> m_elementData;
-    PBE m_plate;
+    std::vector< ME> m_membraneElements;
+    std::vector<PBE> m_plateElements;
 
     const size_t m_numVertices;
 

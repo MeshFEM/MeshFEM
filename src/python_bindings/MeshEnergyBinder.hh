@@ -43,23 +43,51 @@ struct ElementSpecificMEBindings<HingeMeshEnergy<HingeEnergy>> {
     }
 };
 
+// The MeshEnergy material class creates its own wrappers around, e.g.,
+// volumetric elastic energy density objects. We need to convert
+// from this underlying `RawMaterial` type to the `Material` type
+// actually used by the `MeshEnergy`.
+// In some cases the two types are the same, and so no conversion
+// is necessary.
+template<class Material, class RawMaterial>
+auto convertMaterial(const RawMaterial &m) {
+    if constexpr (std::is_same_v<RawMaterial, Material>)
+        return m;
+    else
+        return Material(m);
+}
+
+template<class Material, class RawMaterial>
+auto convertMaterialList(const std::vector<RawMaterial> &materials) {
+    if constexpr (std::is_same_v<RawMaterial, Material>)
+        return materials;
+    else {
+        std::vector<Material> result;
+        result.reserve(materials.size());
+        for (const auto &m : materials)
+            result.emplace_back(m);
+        return result;
+    }
+}
+
 // Bind a single MeshEnergy instantiation.
-template<class ME>
+template<class ME, class RawMaterial = typename ME::Material>
 auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) {
     using Mesh = typename ME::Mesh;
     using Vars = typename ME::Vars;
     using Material = typename ME::Material;
+
     py::class_<ME, MeshEnergyBase, std::shared_ptr<ME>> pyME(detail, (name + getMeshName<Mesh>()).c_str());
-    pyME.def("setHomogeneousMaterial",      [](ME &me, Material material) { me.setHomogeneousMaterial(material); }, py::arg("material"))
-        .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<Material> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(mats, materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
+    pyME.def("setHomogeneousMaterial",      [](ME &me, RawMaterial material) { me.setHomogeneousMaterial(convertMaterial<Material>(material)); }, py::arg("material"))
+        .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<RawMaterial> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(convertMaterialList<Material>(mats), materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
         ;
 
-    m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<NewtonVarsBase> varsBase, Material material) {
+    m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<NewtonVarsBase> varsBase, RawMaterial material) {
         auto me = std::make_shared<ME>(mesh, downcastVars<Vars>(varsBase));
-        me->setHomogeneousMaterial(material);
+        me->setHomogeneousMaterial(convertMaterial<Material>(material));
         return me;
-    }, py::arg("mesh"), py::arg("vars"), py::arg("material") = Material());
+    }, py::arg("mesh"), py::arg("vars"), py::arg("material") = RawMaterial());
 
     ElementSpecificMEBindings<ME>::bind(pyME);
 

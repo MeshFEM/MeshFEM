@@ -14,7 +14,7 @@
 #include <Eigen/Dense>
 #include <array>
 #include <MeshFEM/Elements/DihedralAngle.hh>
-#include <MeshFEM/EnergyDensities//EnergyTraits.hh>
+#include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/MeshEnergy.hh>
 
 template<class HingeEnergy>

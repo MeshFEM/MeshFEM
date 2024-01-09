@@ -273,7 +273,7 @@ struct CompositeEnergyDensity<Psi1_C, Psi2_C, std::enable_if_t<(Psi1_C::EDType =
 
     // Constructor copying material properties only, not the current deformation
     CompositeEnergyDensity(const CompositeEnergyDensity &other,
-                        UninitializedDeformationTag &&tag)
+                        UninitializedDeformationTag &&/* tag */)
         : psi1(other.psi1, UninitializedDeformationTag()),
           psi2(other.psi2, UninitializedDeformationTag()) { }
 
@@ -387,6 +387,8 @@ struct AutoHessianProjection : Psi_F {
     using ESolver  = Eigen::SelfAdjointEigenSolver<Hessian>;
 
     using Base::Base;
+    AutoHessianProjection(const Base &b) : Base(b) { }
+
     AutoHessianProjection(const AutoHessianProjection &b, UninitializedDeformationTag &&)
         : Base(b, UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
 

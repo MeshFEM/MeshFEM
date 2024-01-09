@@ -18,7 +18,6 @@ struct ElasticSheetBinder {
         using Energy = typename ES::Psi_2x2;
         using Mesh   = typename ES::Mesh;
         using MX3d   = Eigen::Matrix<Real, Eigen::Dynamic, 3>;
-        using Mat    = typename ES::Material;
 
         using Real   = typename ES::Real;
         using EO     = ElasticObject<Real>;
@@ -28,13 +27,6 @@ struct ElasticSheetBinder {
                 return std::make_shared<ES>(m, e, creases); }, py::arg("mesh"), py::arg("energy"), py::arg("creaseEdges") = CreaseEdges());
 
         py::class_<ES, EO, std::shared_ptr<ES>> pyES(detail_module, NameMangler<ES>::name().c_str());
-        py::class_<Mat>(pyES, "Material")
-            .def("set", &Mat::set)
-            .def_property_readonly("psi",     &Mat::psi)
-            .def_property_readonly("etensor", &Mat::etensor)
-            .def("setProjectionEnabled",      &Mat::setProjectionEnabled)
-            ;
-
 
         using EType = typename ES::EnergyType;
         py::enum_<EType>(pyES, "EnergyType")
@@ -70,12 +62,12 @@ struct ElasticSheetBinder {
           .def("applyRigidTransform",      &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",   &ES::prepareRigidMotionPins)
           .def("filterRMPinArtifacts",     &ES::filterRMPinArtifacts, py::arg("pinVertices"))
-          .def("initializeMidedgeNormals", &ES::initializeMidedgeNormals, py::arg("minimizeBending") = true)
+          .def("initializeMidedgeNormals", &ES::initializeMidedgeNormals, py::arg("inferCreaseAngles") = true, py::arg("minimizeBending") = true)
           .def("updateSourceFrame",        &ES::updateSourceFrame)
-          .def("getII",                    &ES::getII)
-          .def("getRestII",                &ES::getRestII)
-          .def("getC",                     &ES::getC)
-          .def("getMembraneGreenStrains",  &ES::getMembraneGreenStrains)
+          .def("getII",                    &ES::getII, py::arg("ei"))
+          .def("getRestII",                &ES::getRestII, py::arg("ei"))
+          .def("getC",                     &ES::getC, py::arg("ei"))
+          .def("getMembraneGreenStrain",   &ES::getMembraneGreenStrain, py::arg("ei"))
           .def("vertexGreenStrains",       &ES::vertexGreenStrains)
           .def("getElementVolumetricStrain",  &ES::getElementVolumetricStrain, py::arg("ei"), py::arg("z"))
           .def("getElementCauchyStress",      &ES::getElementCauchyStress, py::arg("ei"), py::arg("z"))
@@ -98,14 +90,8 @@ struct ElasticSheetBinder {
           .def("edgeMidpoints",          &ES::edgeMidpoints)
           .def("restEdgeMidpoints",      &ES::restEdgeMidpoints)
 
-          .def("elementPsi",        &ES::elementPsi, py::arg("ei"))
-          .def("elementETensor",    &ES::elementETensor, py::arg("ei"))
-
-          .def("numMaterials", &ES::numMaterials)
-          .def("getMaterial",  [](ES &es, size_t mi) { return es.material(mi); }, py::return_value_policy::reference_internal)
-          .def("setMaterials", &ES::setMaterials, py::arg("psiList"))
-          .def("clearMaterialAssignments", &ES::clearMaterialAssignments)
-          .def_property("elementMaterialAssignments", &ES::elementMaterialAssignments, &ES::setElementMaterialAssignments)
+          .def("setMaterials", [](ES &es, const std::vector<Energy> &psis, const std::vector<size_t> &materialForElement = {}) { es.setMaterials(psis, materialForElement); }, py::arg("psis"), py::arg("materialForElement") = nullptr)
+          .def("materialForElement", &ES::materialForElement, py::return_value_policy::reference_internal)
 
           .def("visualizationGeometry", [](const ES &obj, double normalCreaseAngle) {
                 FEMMesh<Mesh::K, 1, typename Mesh::EmbeddingSpace> visMesh(getF(obj.mesh()), obj.deformedPositions());
@@ -138,32 +124,31 @@ PYBIND11_MODULE(elastic_sheet, m)
 
     generateElasticSheetBindings(m, detail_module, ElasticSheetBinder());
 
-    // Standalone binding of PlateBendingElement for validation.
-    using PBE = elements::PlateBending<double, elements::AngleFunctionSin>;
-    using CPos = typename PBE::CornerPositions;
-    using ET = typename PBE::ETensor;
-    using V3d = Eigen::Vector3d;
-    auto elementData = [](const CPos &x) {
-        using LEE = LinearlyEmbeddedElement<Simplex::Triangle, 1, V3d>;
-        LEE e;
-        e.embed(x.row(0).transpose(), x.row(1).transpose(), x.row(2).transpose());
-        return elements::EmbeddedMembraneElementData<LEE, LEE>(e);
-    };
-    py::class_<PBE>(m, "PlateBendingElement")
-        .def(py::init<double>(), py::arg("thickness"))
-        .def("energy", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
-                    const auto ref_edata = elementData(X);
-                    return e.energy(C, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
-                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
-        .def("gradient", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
-                    const auto ref_edata = elementData(X);
-                    return e.gradient(C, x, gamma, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
-                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
-        .def("hessian", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
-                    const auto ref_edata = elementData(X);
-                    return e.hessian(C, x, gamma, e.getII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
-                }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
-    ;
+    // // Standalone binding of PlateBendingElement for validation.
+    // using PBE = PlateBending<double, AngleFunctionSin>;
+    // using CPos = typename PBE::CornerPositions;
+    // using V3d = Eigen::Vector3d;
+    // auto elementData = [](const CPos &x) {
+    //     using LEE = LinearlyEmbeddedElement<Simplex::Triangle, 1, V3d>;
+    //     LEE e;
+    //     e.embed(x.row(0).transpose(), x.row(1).transpose(), x.row(2).transpose());
+    //     return elements::EmbeddedMembraneElementData<LEE, LEE>(e);
+    // };
+    // py::class_<PBE>(m, "PlateBendingElement")
+    //     .def(py::init<double>(), py::arg("thickness"))
+    //     .def("energy", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+    //                 const auto ref_edata = elementData(X);
+    //                 return e.energy(C, e.computeII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+    //             }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+    //     .def("gradient", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+    //                 const auto ref_edata = elementData(X);
+    //                 return e.gradient(C, x, gamma, e.computeII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+    //             }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+    //     .def("hessian", [&elementData](const PBE &e, const ET &C, const CPos &X, const CPos &x, const Eigen::Vector3d &gamma) {
+    //                 const auto ref_edata = elementData(X);
+    //                 return e.hessian(C, x, gamma, e.computeII(x, gamma, ref_edata), Eigen::Matrix2d::Zero(), ref_edata);
+    //             }, py::arg("C"), py::arg("X"), py::arg("x"), py::arg("gamma"))
+    // ;
 
     // Standalone binding of DihedralAngle for validation.
     using DA = elements::DihedralAngle<double>;

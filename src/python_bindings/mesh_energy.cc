@@ -7,24 +7,27 @@
 //  Company:  University of California, Davis
 //  Created:  11/05/2023 23:01:37
 *///////////////////////////////////////////////////////////////////////////////
+#define PYBIND11_DETAILED_ERROR_MESSAGES
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
-#include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
 #include <memory>
 
 #include <MeshFEM/Utilities/NameMangling.hh>
 
 #include <MeshFEM/Elements/HingeElement.hh>
 #include <MeshFEM/Elements/MembraneElement.hh>
+#include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/Elements/DiscreteShellHingeEnergy.hh>
 #include <MeshFEM/Stencils.hh>
+#include "MeshBindings.hh"
 #include "BindMembraneMaterial.hh"
 #include "MeshEnergyBinder.hh"
 
+#include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
 #include <MeshFEM/EnergyDensities/MetricFitting.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
@@ -69,6 +72,12 @@ PYBIND11_MODULE(mesh_energy, m)
     bindMembraneMaterial<NHE>(m, detail);
 
     bindMeshEnergy<MembraneMeshEnergy<NHE>>("NeoHookeanMembrane", m, detail);
-
     bindMeshEnergy<DiscreteShellHingeMeshEnergy<double>>("DiscreteShellBending", m, detail);
+
+    // Bind solid element mesh energies
+    using NHE3D = NeoHookeanEnergy<double, 3>;
+    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("NeoHookeanSolid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("NeoHookeanSolid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
 }
