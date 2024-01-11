@@ -73,8 +73,7 @@ struct Inflation : public ObjectSpecificLoad<Object> {
         const size_t ne = m.numElements();
         VXd result = VXd::Zero(sheet.numVars());
         for (size_t i = 0; i < ne; ++i) {
-            const auto &e = sheet.deformedElement(i);
-            V3d contrib = (-pressure * e.volume() / 3.0) * e.normal();
+            V3d contrib = (-pressure * sheet.deformedArea(i) / 3.0) * sheet.deformedTriNormal(i);
             for (const auto v : m.element(i).vertices())
                 result.template segment<3>(3 * v.index()) += contrib;
         }

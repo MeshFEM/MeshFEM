@@ -184,6 +184,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("hessianSparsityPattern", &NewtonObjectiveTerm::hessianSparsityPattern, py::arg("val") = 0.0)
         .def_readwrite("suppressSparsity", &NewtonObjectiveTerm::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NewtonObjectiveTerm::sparsityUpdateFrequency)
+        .def_readonly("increaseLimiter", &NewtonObjectiveTerm::increaseLimiter, py::return_value_policy::reference_internal)
         ;
 
     py::class_<NewtonMultiobjectiveProblem, NewtonProblem, std::shared_ptr<NewtonMultiobjectiveProblem>>(m, "NewtonMultiobjectiveProblem")

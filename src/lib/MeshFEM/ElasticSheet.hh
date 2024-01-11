@@ -409,7 +409,9 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
         return (m_deformedPositions.row(he. tip().index())
               - m_deformedPositions.row(he.tail().index())).eval();
     }
-    const auto &deformedElement(size_t ei) const { return m_deformedElements.at(ei); }
+    const auto &deformedTriGeometry(size_t ei) const { return m_plateElements[ei].de; }
+    Real     deformedArea(size_t ei) const { return deformedTriGeometry(ei).A; }
+    V3d deformedTriNormal(size_t ei) const { return deformedTriGeometry(ei).normal; }
 
     // Get the deformed positions of triangle ti's corners as rows
     // of a 3x3 matrix.
@@ -723,9 +725,6 @@ private:
 
     // Cached derived state quantities
     MX3d m_midedgeNormals;
-
-    // Geometric information/shape functions for the deformed elements.
-    std::vector<LinearlyEmbeddedElement<2, 1, V3d>> m_deformedElements;
 
     MaterialAssignment<typename  ME::Material> m_membraneMaterials;
     MaterialAssignment<typename PBE::Material> m_plateMaterials;

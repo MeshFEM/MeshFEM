@@ -52,27 +52,29 @@ struct NormalInferenceProblem : public NewtonProblem {
         Real result = 0.0;
         const size_t ne = m_deformedII.size();
         for (size_t ei = 0; ei < ne; ++ei)
-            result += 0.5 * m_sheet.deformedElement(ei).volume() * m_deformedII[ei].squaredNorm();
+            result += 0.5 * m_sheet.deformedArea(ei) * m_deformedII[ei].squaredNorm();
         return result;
     }
 
+    // TODO: reimplement using deformedTriGeometry instead of
     virtual VXd gradient(bool /* freshIterate */ = false) const override {
         VXd g(VXd::Zero(numVars()));
         for (const auto e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
             const auto &II = m_deformedII[ei];
-            const auto &de = m_sheet.deformedElement(ei);
-            const Real A = de.volume();
+            const auto &dtg = m_sheet.deformedTriGeometry(ei);
+            const Real A = dtg.A;
             const Real dE_dpsi = A;
             for (const auto he : e.halfEdges()) {
                 const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
+                const size_t lhi = he.localIndex();
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
-                const Real len = m_sheet.deformedEdgeVector(he).norm();
+                const Real len = dtg.edgeLens[lhi];
 
-                const auto &glambda = de.gradBarycentric().col(he.localIndex());
+                const auto glambda = (dtg.unitEdgePerpendiculars.col(lhi) / dtg.h[lhi]).eval();
                 const Real dE_d_A_gamma_div_len = (4 * dE_dpsi) * (II * glambda).dot(glambda); // Derivative of the energy with respect to the coefficient of `glambda \otimes glambda` in the shape operator.
                 // The derivative with respect to the theta variables is simple
-                g[edgeIdx] += ((sign * (A / len))) * dE_d_A_gamma_div_len;
+                g[edgeIdx] += ((sign * (dtg.A / len))) * dE_d_A_gamma_div_len;
             }
         }
 
@@ -86,23 +88,25 @@ protected:
         result.setZero();
         for (const auto e : m_sheet.mesh().elements()) {
             const size_t ei = e.index();
-            const auto &de = m_sheet.deformedElement(ei);
-            const Real A = de.volume();
+            const auto &dtg = m_sheet.deformedTriGeometry(ei);
+            const Real A = dtg.A;
             const Real dE_dpsi = A;
             for (const auto he : e.halfEdges()) {
+                const size_t lhi = he.localIndex();
                 const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
                 const Real sign = he.isPrimary() ? 1.0 : -1.0;
-                const Real len = m_sheet.deformedEdgeVector(he).norm();
+                const Real len = dtg.edgeLens[lhi];
 
-                const auto &glambda = de.gradBarycentric().col(he.localIndex());
+                const auto &glambda = (dtg.unitEdgePerpendiculars.col(lhi) / dtg.h[lhi]).eval();
                 for (const auto he_b : e.halfEdges()) {
+                    const size_t lhi_b = he_b.localIndex();
+                    const Real len_b = dtg.edgeLens[lhi_b];
                     const size_t edgeIdx_b = m_sheet.edgeForHalfEdge(he_b.index());
                     if (edgeIdx > edgeIdx_b) continue;
 
-                    const auto &glambda_b = de.gradBarycentric().col(he_b.localIndex());
+                    const auto &glambda_b = (dtg.unitEdgePerpendiculars.col(lhi_b) / dtg.h[lhi_b]).eval();
 
                     const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
-                    const Real len_b = m_sheet.deformedEdgeVector(he_b).norm();
                     const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * dE_dpsi) * std::pow(glambda.dot(glambda_b), 2);
 
                     // (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
@@ -127,11 +131,11 @@ protected:
             const size_t ei = e.index();
             auto &II_d = m_deformedII[ei];
             II_d.setZero();
-            const auto &de = m_sheet.deformedElement(e.index());
+            const auto &dtg = m_sheet.deformedTriGeometry(ei);
             for (const auto he : e.halfEdges()) {
-                auto glambda = de.gradBarycentric().col(he.localIndex());
+                auto glambda = (dtg.unitEdgePerpendiculars.col(he.localIndex()) / dtg.h[he.localIndex()]).eval();
                 Real len = m_sheet.deformedEdgeVector(he).norm();
-                II_d += ((4 * gammas[he.index()] * (de.volume() / len)) * glambda) * glambda.transpose();
+                II_d += ((4 * gammas[he.index()] * (dtg.A / len)) * glambda) * glambda.transpose();
             }
 
             M3d F = (e->gradBarycentric() * m_sheet.getCornerPositions(ei)).transpose();
@@ -167,14 +171,14 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool inferCreaseAngles, boo
     m_referenceFrame.resize(numEdges());
     m.visitEdges([this](CHEHandle he, size_t edgeIndex) {
         V3d t  = (deformedEdgeVector(he)).normalized().transpose();
-        V3d d1 = m_plateElements[he.tri().index()].de.normal;
-        if (!he.isBoundary()) d1 += m_plateElements[he.opposite().tri().index()].de.normal;
+        V3d d1 = deformedTriNormal(he.tri().index());
+        if (!he.isBoundary()) d1 += deformedTriNormal(he.opposite().tri().index());
         d1 = d1.normalized();
 
         if (std::abs(t.dot(d1)) > 1e-14) {
             std::cout << "Perpendicularity error for edge " << edgeIndex << std::endl;
-            std::cout << "tri n = " << m_plateElements[he.tri().index()].de.normal.transpose() << std::endl;
-            if (!he.isBoundary()) std::cout << "opp n = " << m_plateElements[he.opposite().tri().index()].de.normal.transpose() << std::endl;
+            std::cout << "tri n = " << deformedTriNormal(he.tri().index()).transpose() << std::endl;
+            if (!he.isBoundary()) std::cout << "opp n = " << deformedTriNormal(he.opposite().tri().index()).transpose() << std::endl;
             std::cout << "averaged d1 = " << d1.transpose() << std::endl;
             std::cout << "t = " << t.transpose() << std::endl;
             throw std::logic_error("Non-perpendicular averaged edge normal: " + std::to_string(t.dot(d1)));
@@ -189,7 +193,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool inferCreaseAngles, boo
     for (const auto he : m.halfEdges()) {
         const auto &frame = m_referenceFrame[edgeForHalfEdge(he.index())];
 
-        const auto &n = m_plateElements[he.tri().index()].de.normal;
+        const auto &n = deformedTriNormal(he.tri().index());
         m_alphas[he.index()] = angle<Real>(/* axis */ frame.col(0), frame.col(1), n);
         if (std::abs(m_alphas[he.index()]) > M_PI / 2) { // Shouldn't happen except for sharp creases
             std::cout << "WARNING: Large alpha: " << m_alphas[he.index()] << std::endl;
@@ -198,7 +202,7 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool inferCreaseAngles, boo
 
             V3d n_avg = n;
             if (he.opposite().tri())
-                n_avg += m_plateElements[he.opposite().tri().index()].de.normal;
+                n_avg += deformedTriNormal(he.opposite().tri().index());
             n_avg = n_avg.normalized();
             std::cout << "Averaged edge normal: " << n_avg.transpose() << std::endl << std::endl;
             std::cout << "For he, edge: " << he.index() << ", " << edgeForHalfEdge(he.index()) << std::endl;
@@ -260,7 +264,7 @@ template <class Psi_2x2>
 template <class Result>
 void ElasticSheet<Psi_2x2>::accumulateGradGamma(Real weight, size_t ei, size_t lhi, bool updatedSource, Result &&result) const {
     typename PBE::CPosMap gradCornerPos(result.data()); // Corner positions in each row
-    const auto &de = m_plateElements[ei].de;
+    const auto &de = deformedTriGeometry(ei);
 
     if (!updatedSource) {
         // Parallel transport
@@ -385,7 +389,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 
         // Gamma Hessian term
         auto g = m_plateElements[ei].gradient(1.0); // TODO: avoid unnecessary calculation of grad_x
-        const auto &de = m_plateElements[ei].de;
+        const auto &de = deformedTriGeometry(ei);
         for (size_t lhi = 0; lhi < 3; ++lhi) {
             // Accumulate dE_dɣ d2gamma_i_dx2 directly to the Hessian
             Real d2E_dgamma_i = g[PBE::GammaOffset + lhi];
@@ -412,7 +416,7 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 
             Real coeff = d2E_dgamma_i / (liSq * de.h[lhi]);
             for (size_t l = 0; l < 3; ++l) {
-                for (size_t k = 0; k < 3; ++k) {
+                for (size_t k = 0; k <= l; ++k) {
                     H_elem.template block<3, 3>(3 * k, 3 * l) += (coeff * de.edgeVecDotProducts(lhi, l) / de.h[k]) * de.normal * de.unitEdgePerpendiculars.col(k).transpose()
                                                               +  (coeff * de.edgeVecDotProducts(lhi, k) / de.h[l]) * de.unitEdgePerpendiculars.col(l) * de.normal.transpose();
                 }
@@ -563,8 +567,8 @@ void ElasticSheet<Psi_2x2>::m_adaptReferenceFrame() {
 
             auto hop = he.opposite();
             // Measure the ccw angle around the edge tangent from reference director d1 to the triangle normal.
-            if (hop.tri()) { setCoherentAngle(hop.index(), angle<Real>(f_ref.col(0), f_ref.col(1), m_plateElements[hop.tri().index()].de.normal)); }
-                           { setCoherentAngle( he.index(), angle<Real>(f_ref.col(0), f_ref.col(1), m_plateElements[he .tri().index()].de.normal)); }
+            if (hop.tri()) { setCoherentAngle(hop.index(), angle<Real>(f_ref.col(0), f_ref.col(1), deformedTriNormal(hop.tri().index()))); }
+                           { setCoherentAngle( he.index(), angle<Real>(f_ref.col(0), f_ref.col(1), deformedTriNormal(he .tri().index()))); }
             m_referenceFrame[edgeIndex] = f_ref;
        }
     });
@@ -574,7 +578,6 @@ template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::m_updateElementEmbedding() {
     const auto &m = mesh();
     const size_t ne = m.numElements();
-    m_deformedElements.resize(ne);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m.numElements()),
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t ei = r.begin(); ei < r.end(); ++ei) {
@@ -583,10 +586,6 @@ void ElasticSheet<Psi_2x2>::m_updateElementEmbedding() {
             cpos << m_deformedPositions.row(e.vertex(0).index()),
                     m_deformedPositions.row(e.vertex(1).index()),
                     m_deformedPositions.row(e.vertex(2).index());
-
-            m_deformedElements[ei].embed(cpos.row(0).transpose(),
-                                         cpos.row(1).transpose(),
-                                         cpos.row(2).transpose());
             m_plateElements[ei].embed(cpos);
         }
     });
