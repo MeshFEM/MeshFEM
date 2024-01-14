@@ -56,7 +56,6 @@ struct NormalInferenceProblem : public NewtonProblem {
         return result;
     }
 
-    // TODO: reimplement using deformedTriGeometry instead of
     virtual VXd gradient(bool /* freshIterate */ = false) const override {
         VXd g(VXd::Zero(numVars()));
         for (const auto e : m_sheet.mesh().elements()) {
@@ -233,27 +232,9 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool inferCreaseAngles, boo
 // Elastic Energy
 ////////////////////////////////////////////////////////////////////////////////
 template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::elementEnergy(size_t ei, const EnergyType etype) const {
-    const auto &m = mesh();
-
-    Real result = 0.0;
-
-    // Membrane energy contribution
-    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
-        result += m_membraneElements[ei].energy(getCornerPositions(ei));
-
-    // Bending energy contribution
-    // (Only an approximation unless Psi is actually St Venant Kirchhoff...)
-    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full)))
-        result += m_plateElements[ei].energy();
-
-    return result;
-}
-
-template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::Real ElasticSheet<Psi_2x2>::energy(const EnergyType etype) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.energy");
-    return summation_parallel([this, etype](size_t ei) { return elementEnergy(ei, etype); },
+    return summation_parallel([this, etype](size_t ei) { return m_shellElements[ei].energy(etype); },
                               mesh().numElements());
 }
 
@@ -296,16 +277,12 @@ void ElasticSheet<Psi_2x2>::accumulateGradGamma(Real weight, size_t ei, size_t l
 }
 
 template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGradient(size_t ei, bool updatedSource, const EnergyType etype) const {
-    ElementGradient g_e(ElementGradient::Zero());
-
-    // Membrane energy contribution
-    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full))
-        g_e.template head<3 * numNodesPerElement>() = m_membraneElements[ei].gradient(1.0, getCornerPositions(ei));
-
-    // Bending energy contribution
-    if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        g_e += m_plateElements[ei].gradient(1.0);
+void ElasticSheet<Psi_2x2>::accumulateGradient(Real weight, VXd &g, bool updatedSource, VariableMask vars, const EnergyType etype) const {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.gradient");
+    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+    const auto &m = mesh();
+    auto accumulate_per_element_contrib = [this, updatedSource, etype, weight, &m](size_t ei, VXd &g_out) {
+        auto g_e = m_shellElements[ei].gradient(weight, etype);
 
         // Chain rule accounting for gamma changes due to parallel transport and
         // rotating triangle normals.
@@ -313,21 +290,8 @@ typename ElasticSheet<Psi_2x2>::ElementGradient ElasticSheet<Psi_2x2>::elementGr
             Real dE_dgamma_i = g_e[PBE::GammaOffset + lhi];
             accumulateGradGamma(dE_dgamma_i, ei, lhi, updatedSource, g_e);
         }
-    }
 
-    return g_e;
-}
-
-template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::accumulateGradient(Real weight, VXd &g, bool updatedSource, VariableMask vars, const EnergyType etype) const {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.gradient");
-    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-    const auto &m = mesh();
-    auto accumulate_per_element_contrib = [this, updatedSource, etype, weight, &m](size_t ei, VXd &g_out) {
-        auto g_e = elementGradient(ei, updatedSource, etype);
-        if (weight != 1.0) g_e *= weight;
         const auto &e = m.element(ei);
-
         g_out.template segment<3>(3 * e.vertex(0).index()) += g_e.template segment<3>(0);
         g_out.template segment<3>(3 * e.vertex(1).index()) += g_e.template segment<3>(3);
         g_out.template segment<3>(3 * e.vertex(2).index()) += g_e.template segment<3>(6);
@@ -356,20 +320,11 @@ void ElasticSheet<Psi_2x2>::accumulateGradient(Real weight, VXd &g, bool updated
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::PerElementHessian
 ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool projectionMask) const {
-    PerElementHessian H_elem;
-    H_elem.setZero();
+    const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
+    PerElementHessian H_elem = m_shellElements[ei].hessian(1.0, membraneProjection, etype);
 
-    // Membrane energy contribution
-    if ((etype == EnergyType::Membrane) || (etype == EnergyType::Full)) {
-        const bool membraneProjection = projectionMask && (m_hessianProjectionType == HessianProjectionType::MembraneFBased);
-        H_elem.template topLeftCorner<3 * numNodesPerElement, 3 * numNodesPerElement>()
-            = m_membraneElements[ei].hessian(1.0, membraneProjection, getCornerPositions(ei));
-    }
-
-    // Bending energy contribution
+    // Chain rule for bending energy term.
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
-        m_plateElements[ei].accumulateHessian(H_elem, 1.0, /* projectionMask  = */ false);
-
         Eigen::Matrix<Real, 3, 9, Eigen::RowMajor> dGamma_dx;
         dGamma_dx.setZero();
         for (size_t lhi = 0; lhi < 3; ++lhi)
@@ -388,11 +343,11 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
         H_elem.template topRightCorner<9, 3>() += xGammaBlockContrib;
 
         // Gamma Hessian term
-        auto g = m_plateElements[ei].gradient(1.0); // TODO: avoid unnecessary calculation of grad_x
+        auto g_gamma = m_shellElements[ei].plate.grad_gamma();
         const auto &de = deformedTriGeometry(ei);
         for (size_t lhi = 0; lhi < 3; ++lhi) {
             // Accumulate dE_dɣ d2gamma_i_dx2 directly to the Hessian
-            Real d2E_dgamma_i = g[PBE::GammaOffset + lhi];
+            Real d2E_dgamma_i = g_gamma[lhi];
 
             // Note that the derivative of the parallel transport term is purely
             // skew symmetric and only acts to cancel the skew symmetric part of
@@ -519,7 +474,7 @@ typename ElasticSheet<Psi_2x2>::MX2d ElasticSheet<Psi_2x2>::getPrincipalCurvatur
         // a sphere's princinpal curvatures are positive.
         const size_t ei = e.index();
         M32d FB = getFB(ei);
-        M2d S = m_plateElements[ei].II * (FB.transpose() * FB).inverse();
+        M2d S = plateElement(ei).II * (FB.transpose() * FB).inverse();
 
         Eigen::EigenSolver<M2d> esolver(S);
         auto eigs = esolver.eigenvalues();
@@ -582,11 +537,11 @@ void ElasticSheet<Psi_2x2>::m_updateElementEmbedding() {
                       [&](const tbb::blocked_range<size_t> &r) {
         for (size_t ei = r.begin(); ei < r.end(); ++ei) {
             const auto &e = m.element(ei);
-            typename PBE::CornerPositions cpos;
-            cpos << m_deformedPositions.row(e.vertex(0).index()),
-                    m_deformedPositions.row(e.vertex(1).index()),
-                    m_deformedPositions.row(e.vertex(2).index());
-            m_plateElements[ei].embed(cpos);
+            m_shellElements[ei].embed(
+                (CornerPositions() << m_deformedPositions.row(e.vertex(0).index()),
+                                      m_deformedPositions.row(e.vertex(1).index()),
+                                      m_deformedPositions.row(e.vertex(2).index())).finished()
+            );
         }
     });
 }
@@ -597,7 +552,8 @@ void ElasticSheet<Psi_2x2>::m_updateDeformedElements(bool positionsUpdated) {
         m_updateElementEmbedding();
         m_adaptReferenceFrame();
     }
+
     const size_t ne = mesh().numElements();
     for (size_t ei = 0; ei < ne; ++ei)
-        m_plateElements[ei].setGammas(getTriGammas(ei));
+        m_shellElements[ei].setGammas(getTriGammas(ei));
 }

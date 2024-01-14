@@ -58,17 +58,14 @@ struct PlateBendingMaterialProperties : public MaterialBase {
         C = tangentElasticityTensor(psi);
     }
 
-    void setThickness(Real thickness) {
-        m_h = thickness;
+    void setThickness(Real h) {
+        m_h = h;
         m_weight = std::pow(m_h, 3) / 12.0;
     }
 
     Real getThickness() const { return m_h; }
     Real getWeight() const { return m_weight; }
-
-    Real quadraticForm(const SM2d &e_b) const {
-        return (0.5 * m_weight) * e_b.doubleContract(stress(e_b));
-    }
+    Real quadraticForm(const SM2d &e_b) const { return (0.5 * m_weight) * e_b.doubleContract(stress(e_b)); }
 
     SM2d stress(const SM2d &e_b) const { return C.doubleContract(e_b); }
 
@@ -79,17 +76,17 @@ private:
                     // quadratic form  0.5 (e_b : C : e_b)
 };
 
-template<typename Real, class AngleFunction, class EData>
+template<typename Real, class AngleFunction, class EData, class CustomMat_>
 struct PlateBending;
 
-template<typename Real, class AngleFunction, class EData>
-struct ElementTraits<PlateBending<Real, AngleFunction, EData>> {
-    using Material = PlateBendingMaterialProperties<Real>;
+template<typename Real, class AngleFunction, class EData, class CustomMat_>
+struct ElementTraits<PlateBending<Real, AngleFunction, EData, CustomMat_>> {
+    using Material = CustomMat_;
 };
 
 template<typename Real, class AngleFunction = AngleFunctionIdentity,
-         class EData = const elements::EmbeddedMembraneEData<2, 1, Vec3_T<Real>> &>
-struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction>> {
+         class EData = const elements::EmbeddedMembraneEData<2, 1, Vec3_T<Real>> &, class CustomMat_ = PlateBendingMaterialProperties<Real>>
+struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData, CustomMat_>> {
     using  V3d = Eigen::Matrix<Real, 3, 1>;
     using  M2d = Eigen::Matrix<Real, 2, 2>;
     using  M3d = Eigen::Matrix<Real, 3, 3>;
@@ -127,9 +124,7 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction>> {
 
     // Update the triangle's deformed embedding.
     template<class CPosDerived>
-    void embed(const Eigen::MatrixBase<CPosDerived> &cpos) {
-        de.configure(cpos);
-    }
+    void embed(const Eigen::MatrixBase<CPosDerived> &cpos) { de.configure(cpos); }
 
     // Update the gamma variables at the mid-edges
     void setGammas(const Eigen::Ref<const V3d> &g, EvalLevel /* elevel */ = EvalLevel::Full) {
@@ -207,19 +202,34 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction>> {
 
     SM2d bendingStrain() const { return II - restII; }
 
-    Real energy() const {
-        return m_edata.volume() * Base::material().quadraticForm(bendingStrain());
-    }
+    Real energy() const { return m_edata.volume() * Base::material().quadraticForm(bendingStrain()); }
 
-    Gradient gradient(Real weight) const {
+    void accumulateGradient(Gradient &result, Real weight) const {
         const auto &m = Base::material();
         SM2d stress = m.stress(bendingStrain());
         weight *= m.getWeight();
 
-        Gradient result = Gradient::Zero();
         for (size_t i = 0; i < NumEdges; ++i)
             accumulateGradCoeff(result, (weight * m_edata.volume()) * stress.doubleContractRank1(m_edata.BtGradBarycentric().col(i)), i, gamma, de);
+    }
 
+    V3d grad_gamma() const {
+        const auto &m = Base::material();
+        SM2d stress = m.stress(bendingStrain());
+        Real weight = m.getWeight();
+
+        V3d result;
+        for (size_t i = 0; i < NumEdges; ++i) {
+            Real scale = (weight * m_edata.volume()) * stress.doubleContractRank1(m_edata.BtGradBarycentric().col(i));
+            result[i] = 2 * scale * de.h[i] * AF::df(gamma[i]); // ∂/∂Ɣ_i term (h_i constant)
+        }
+
+        return result;
+    }
+
+    Gradient gradient(Real weight) const {
+        Gradient result = Gradient::Zero();
+        accumulateGradient(result, weight);
         return result;
     }
 
@@ -275,7 +285,7 @@ private:
 };
 
 // struct PlateBendingElementTriangleAveraged {
-//     
+//
 // };
 
 #endif /* end of include guard: PLATEBENDINGELEMENT_HH */
