@@ -440,6 +440,8 @@ struct SystemAssembler {
         get_hessian_assembly_arena().execute([&H, &edataGetter, ne, this]() {
             parallel_for_range(ne, [&H, &edataGetter, this](size_t ei) {
                 auto edata = edataGetter(ei);
+                // edata.H_e.template triangularView<Eigen::StrictlyLower>().setZero();
+                // std::cout << "H_e: " << std::endl << edata.H_e << std::endl;
                 m_assembleHessianContrib(H, [&edata](size_t a, size_t b, size_t bsa, size_t bsb) {
                     return edata.block(a, b, bsa, bsb);
                 }, edata.evars);
@@ -447,25 +449,15 @@ struct SystemAssembler {
         });
     }
 
-    // For each ei in 0..ne, evaluate per-element Hessian H_e = eval(ei) and
-    // then assemble it into H[element(ei), element(ei)] by accessing its blocks
-    // with `He_block(H_e, lni_a, lni_b, bsa, bsb)`.
-    template<class SPMat, class PEHEval, class HEBlock, class ElementGetter>
-    void assembleHessian(SPMat &H, size_t ne, const PEHEval &eval_He, const HEBlock &He_block, const ElementGetter &element) const {
-        using PEH = decltype(eval_He(0));
-        using EVars = decltype(element(0));
-        using HEAD = HessianElementAssemblyData<PEH, EVars>;
-        assembleHessian(H, ne, [&](size_t ei) { return HEAD{eval_He(ei), element(ei)}; });
-    }
-
     // Assemble the per-element Hessian `eval_He(ei)` for element ei in 0..ne.
     // The element's global block variable indices are obtained by calling
     // `element(ei)`, which should return an array of variable indices.
     template<class SPMat, class PEHEval, class ElementGetter>
     void assembleHessian(SPMat &H, size_t ne, const PEHEval &eval_He, const ElementGetter &element) const {
-        assembleHessian(H, ne, eval_He, [](const auto &H_e, size_t a, size_t b, size_t bsa, size_t bsb) {
-            return getBlock(H_e, a, b, bsa, bsb).eval();
-        }, element);
+        using PEH = decltype(eval_He(0));
+        using EVars = decltype(element(0));
+        using HEAD = HessianElementAssemblyData<PEH, EVars>;
+        assembleHessian(H, ne, [&](size_t ei) { return HEAD{eval_He(ei), element(ei)}; });
     }
 
     // Convenience method for the typical case of assembling a per-element Hessian using
@@ -719,7 +711,7 @@ private:
             for (decltype(blockVars.size()) lbi = 0; lbi < blockVars.size(); ++lbi) {
                 auto bi = blockVars[lbi];
                 auto [gvar_i, bsi] = m_vars.blockInfo(bi);
-                bool localUpperTri = lbi < lbj;
+                bool localUpperTri = lbi <= lbj;
 
                 decltype(He_block(lvar_i, lvar_j, bsi, bsj)) block;
                 if (localUpperTri) block = He_block(lvar_i, lvar_j, bsi, bsj);

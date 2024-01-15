@@ -35,7 +35,7 @@ void bind(py::module &m) {
         .def("gradient", py::overload_cast<bool, VM>(&EO::gradient, py::const_), py::arg("updatedParametrization") = false, py::arg("vmask") = VM::Defo)
 
         .def("hessian", [](const EO &eo, bool projectionMask) { return eo.hessian(projectionMask); }, py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern",    [](const EO &eo, Real_ val, VM vm) { eo.hessianSparsityPattern(val, vm); }, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
+        .def("hessianSparsityPattern",    [](const EO &eo, Real_ val, VM vm) { return eo.hessianSparsityPattern(val, vm); }, py::arg("val") = 0, py::arg("vmask") = VM::Defo)
         .def("massMatrix",                [](const EO &eo, bool up, bool l) { return eo.massMatrix(up, l); }, py::arg("updatedParametrization") = false, py::arg("lumped") = false)
         .def("sobolevInnerProductMatrix", &EO::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
 

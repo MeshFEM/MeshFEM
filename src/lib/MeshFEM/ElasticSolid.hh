@@ -137,12 +137,6 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
 #endif
     }
 
-    CSCMat hessian(bool projectionMask = false) const {
-        CSCMat H(hessianSparsityPattern());
-        hessian(H, projectionMask);
-        return H;
-    }
-
     using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
@@ -159,19 +153,15 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
         // BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
-        // m_assembler.assembleHessian(H, mesh(), [this, projectionMask](size_t ei) {
-        //     return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
-        // });
-        if (weight == 1.0) {
-            m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask](size_t ei) {
-                return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);
-            });
-        }
-        else {
-            m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask, weight](size_t ei) {
-                return (weight * SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask)).eval();
-            });
-        }
+#if 0
+        m_assembler.assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
+            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask, weight);
+        });
+#else
+        m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask, weight](size_t ei) {
+            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask, weight);
+        });
+#endif
     }
 
     // Construct a block-valued Hessian.
