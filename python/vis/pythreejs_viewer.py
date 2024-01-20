@@ -9,8 +9,20 @@ from vis.viewer_base import *
 # corner of the original rectangular texture. We then adjust these texture
 # coordinates to map to the padded, square texture.
 class TextureMap:
-    # "uv"  should be a 2D numpy array of shape (#V, 2)
-    # "tex" should be a 3D numpy array of shape (h, w, 4)
+    """
+    Stores a texture map for a triangle mesh, specified by a texture image and UV coordinates for each vertex.
+
+    Parameters
+    ----------
+    uv : numpy.ndarray of shape (#V, 2)
+        UV coordinates for each vertex, in [0, 1]^2
+    tex : numpy.ndarray of shape (h, w, 3) or (h, w, 4)
+        Image with or without an alpha channel represented as an array of floats in [0, 1] or uint8s in [0, 255]
+    normalizeUV : bool
+        If True, the UV coordinates are normalized to [0, 1]^2
+    powerOfTwo : bool
+        If True, the texture will be padded to a power of two in each dimension
+    """
     def __init__(self, uv, tex, normalizeUV = False, powerOfTwo = False):
         self.uv = uv.copy()
 
@@ -23,9 +35,13 @@ class TextureMap:
         h, w = tex.shape[0:2]
         s = max(w, h)
         if (powerOfTwo): s = int(np.exp2(np.ceil(np.log2(s))))
+        if tex.dtype != np.uint8: tex = (255 * tex).astype(np.uint8)
         padded = np.pad(tex, [(s - h, 0), (0, s - w), (0, 0)], 'constant', constant_values=128) # pad top, right
 
-        self.dataTex = pythreejs.DataTexture(data=padded, format='RGBAFormat', type='UnsignedByteType')
+        numChannels = tex.shape[2]
+        fmt = 'RGBAFormat' if (numChannels == 4) else 'RGBFormat'
+
+        self.dataTex = pythreejs.DataTexture(data=padded, format=fmt, type='UnsignedByteType')
         self.dataTex.wrapS     = 'ClampToEdgeWrapping'
         self.dataTex.magFilter = 'LinearFilter'
         self.dataTex.minFilter = 'LinearMipMapLinearFilter'
@@ -93,6 +109,8 @@ class MaterialLibrary:
             args['vertexColors'] = 'VertexColors'
         if textureMapDataTex is not None:
             args['map'] = textureMapDataTex
+            if (textureMapDataTex.format == 'RGBAFormat'): # Enable transparency if we have an alpha channel
+                args['transparent'] = True
         if (useVertexColors == False) and (textureMapDataTex is None):
             args['color'] = solidColor
         return args
