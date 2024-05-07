@@ -144,7 +144,7 @@ PYBIND11_MODULE(loads, m)
         .def(py::init<Eigen::Ref<const typename APC::VXi>, Eigen::Ref<const typename APC::VXd>>(), py::arg("varIndices"), py::arg("coefficients"), "Material attachment point coordinate")
         .def(py::init<typename APC::Real                                                      >(), py::arg("coordinate"),                          "Fixed anchor point coordinate")
         .def("isFixedAnchor", &APC::isFixedAnchor)
-        .def("getPosition",   &APC::getPosition, py::arg("vars"))
+        .def("getPosition",   [](const APC &apc, const APC::VXd &vars) { return apc.getPosition(vars); }, py::arg("vars"))
         .def_readwrite("varIndices",   &APC::varIndices)
         .def_readwrite("coefficients", &APC::coefficients)
         ;
