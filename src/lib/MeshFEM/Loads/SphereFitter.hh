@@ -20,7 +20,7 @@ template<class Object>
 struct SphereFitter : public ObjectSpecificLoad<Object> {
         using Real = typename Object::Real;
         using Base = ObjectSpecificLoad<Object>;
-        using ST   = typename Base::SP::StorageType;
+        using ST   = typename Base::EOStorageType;
         using VXd  = typename Object::VXd;
 
         static constexpr size_t N   = Object::N;

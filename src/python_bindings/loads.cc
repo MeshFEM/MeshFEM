@@ -131,7 +131,7 @@ PYBIND11_MODULE(loads, m)
 {
     py::module::import("py_newton_optimizer");
     using Load = Loads::Load<double>;
-    py::class_<Load, NewtonObjectiveTerm, std::shared_ptr<Load>>(m, "Load")
+    py::class_<Load, NewtonObjectiveTermBase, std::shared_ptr<Load>>(m, "Load")
         .def("energy",               &Load::energy)
         .def("grad_x",               &Load::grad_x)
         .def("grad_X",               &Load::grad_X)

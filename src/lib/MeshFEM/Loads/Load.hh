@@ -24,6 +24,9 @@ struct Load : public NewtonObjectiveTerm {
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using VM = VariableMask;
 
+    Load(const NewtonObjectiveTerm::NVStorageType &vars)
+        : NewtonObjectiveTerm(vars) { }
+
     ////////////////////////////////////////////////////////////////////////////
     // Wrapers adapting to the NewtonObjectiveTerm interface
     ////////////////////////////////////////////////////////////////////////////
@@ -49,58 +52,35 @@ struct Load : public NewtonObjectiveTerm {
     virtual ~Load() { }
 };
 
-template<class EO>
-struct EOStoragePolicyWeakPtr {
-    using StorageType = std::weak_ptr<const EO>;
-
-    EOStoragePolicyWeakPtr(const std::weak_ptr<const EO> &obj) : m_obj(obj) { }
-
-    const EO &getObj() const {
-        if (auto o = m_obj.lock()) return *o;
-        throw std::runtime_error("Object was destroyed");
-    }
-
-    std::shared_ptr<const EO> getObjPtr() const { return m_obj.lock(); }
-
-private:
-    StorageType m_obj;
-};
-
-template<class EO>
-struct EOStoragePolicyReference {
-    using StorageType = const EO &;
-    EOStoragePolicyReference(const EO &obj) : m_obj(obj) { }
-    const EO &getObj() const { return m_obj; }
-    const EO *getObjPtr() const { return &m_obj; }
-private:
-    StorageType m_obj;
-};
-
 // Load that depends on the deformed and/or rest state of an ElasticObject.
 // This base class manages the elastic object pointers for derived load classes
 // along with the callbacks needed for them to leverage `ElasticObject`'s state
 // update notification infrastructure.
-template<class EO, template<typename T> class EOStoragePolicy = EOStoragePolicyWeakPtr>
-struct ObjectSpecificLoad : public Load<Real>, public EOStoragePolicy<EO> {
+template<class EO>
+struct ObjectSpecificLoad : public Load<Real> {
     using Real = typename EO::Real;
     using Base = Load<Real>;
-    using SP   = EOStoragePolicy<EO>;
     using VM   = VariableMask;
-    using SP::getObj;
+    using EOStorageType = std::weak_ptr<const EO>; // See note below in `getObj`...
 
-    ObjectSpecificLoad(const typename SP::StorageType &obj)
-        : SP(obj)
-    {
-        m_defoUpdateCallbackID = getObj().registerUpdateCallback(VM::Defo, [this]() { m_stateUpdated(VM::Defo); });
-        m_restUpdateCallbackID = getObj().registerUpdateCallback(VM::Rest, [this]() { m_stateUpdated(VM::Rest); });
+    ObjectSpecificLoad(const std::weak_ptr<const EO> &eo)
+        : Load(eo), m_eo(eo) { }
+
+    const EO &getObj() const {
+        // The following `dynamic_cast` approach unfortunately breaks
+        // (at least when compiled in debug mode), probably because of
+        // difficulties casting across shared library boundaries.
+        // Even though the RTTI names do match, the cast throws a
+        // `std::bad_cast` exception)
+        //      std::cout << "Attempting to cast nvars of dynamic type " << typeid(Base::getNVars()).name() << " to " << typeid(EO).name() << std::endl;
+        //      return dynamic_cast<const EO &>(Base::getNVars());
+        // We therefore resort to maintaining a separate typed pointer from
+        // the one maintained by `Load`)
+        if (auto eo_ptr = m_eo.lock()) return *eo_ptr;
+        throw std::runtime_error("ElasticObject was destroyed");
     }
 
-    virtual ~ObjectSpecificLoad() {
-        if (auto o = this->getObjPtr()) {
-            o->deregisterUpdateCallback(m_defoUpdateCallbackID);
-            o->deregisterUpdateCallback(m_restUpdateCallbackID);
-        }
-    }
+    virtual ~ObjectSpecificLoad() { }
 
 private:
     // Called whenever the elastic object rest state or deformed state updates.
@@ -108,7 +88,7 @@ private:
     // to be recomputed separately by the energy/gradient/hessian methods.
     virtual void m_stateUpdated(VM /* vmask */) { /* NOP */ }
 
-    int m_defoUpdateCallbackID, m_restUpdateCallbackID;
+    EOStorageType m_eo;
 };
 
 }

@@ -30,7 +30,7 @@
 enum class VariableMask { Defo, Rest, All };
 
 template<class _Real>
-struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
+struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public NewtonVarsBase {
     using Real = _Real;
     using VXd  = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using CSCMat = CSCMatrix<SuiteSparse_long, _Real>;
@@ -40,11 +40,13 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
     // Wrapper methods implementing the NewtonVarsManager interface.
     ////////////////////////////////////////////////////////////////////////////
     size_t numVars() const override { return numVars(VariableMask::Defo); }
-    void setVars(const VXd &vars) override { setVars(vars, VariableMask::Defo); }
-    VXd getVars() const override { return getVars(VariableMask::Defo); }
+    VXd    getVars() const override { return getVars(VariableMask::Defo); }
+
+    size_t numParameters() const override { return numVars(VariableMask::Rest); }
+    VXd    getParameters() const override { return getVars(VariableMask::Rest); }
 
     ////////////////////////////////////////////////////////////////////////////
-    // Wrapper methods implementing the NewtonObjectiveTerm interface
+    // Wrapper methods implementing the NewtonObjectiveTermBase interface
     ////////////////////////////////////////////////////////////////////////////
     Real objective() const override { return energy(); }
 
@@ -52,7 +54,7 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
         return accumulateGradient(weight, g, freshIterate, VariableMask::Defo);
     }
 
-    using NewtonObjectiveTerm::hessian; // Don't shadow the `hessian` convenience method
+    using NewtonObjectiveTermBase::hessian; // Don't shadow the `hessian` convenience method
     virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask) const override {
         return accumulateHessian(weight, H, projectionMask, VariableMask::Defo);
     }
@@ -71,6 +73,7 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
         throw std::runtime_error("Unknown variable type");
     }
 
+    using NewtonVarsBase::setVars;
     void setVars(const Eigen::Ref<const VXd> &vars, VariableMask vmask) {
         if (size_t(vars.size()) != numVars(vmask)) throw std::runtime_error("Input vars size doesn't match vmask");
         if ((vmask == VariableMask::Defo) || (vmask == VariableMask::All))
@@ -100,12 +103,8 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
     virtual VXd getDefoVars() const = 0;
     virtual VXd getRestVars() const = 0;
 
-    void setDefoVars(const Eigen::Ref<const VXd> &vars) { if (size_t(vars.size()) != numDefoVars()) throw std::runtime_error("Size of input vars doesn't match numDefoVars!");
-        m_setDefoVars(vars); m_defoConfigUpdated(); 
-    }
-    void setRestVars(const Eigen::Ref<const VXd> &vars) { if (size_t(vars.size()) != numRestVars()) throw std::runtime_error("Size of input vars doesn't match numRestVars!");
-        m_setRestVars(vars); m_restConfigUpdated(); 
-    }
+    void setDefoVars(const Eigen::Ref<const VXd> &vars) { NewtonVarsBase::setVars(vars); }
+    void setRestVars(const Eigen::Ref<const VXd> &vars) { NewtonVarsBase::setParameters(vars); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Energy and derivatives
@@ -143,18 +142,7 @@ struct ElasticObject : public NewtonObjectiveTerm, public NewtonVarsBase {
     // The callback interface is not considered part of the elastic object's
     // state and therefore the register/deregister methods are marked const.
     int registerUpdateCallback(VariableMask type, const NotificationCB &cb) const {
-        if ((type != VariableMask::Defo) && (type != VariableMask::Rest))
-            throw std::runtime_error("`type` must be VariableMask::Defo or VariableMask::Rest");
-        int id;
-        while (m_updateCBs.count(id = rand()));
-        m_updateCBs.emplace(id, CBRecord{type, cb});
-        return id;
-    }
-
-    void deregisterUpdateCallback(int id) const {
-        auto it = m_updateCBs.find(id);
-        if (it == m_updateCBs.end()) throw std::runtime_error("Attempted to deregister nonexistent callback");
-        m_updateCBs.erase(it);
+        return NewtonVarsBase::registerUpdateCallback(m_vtypeForVariableMask(type), cb);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -173,26 +161,20 @@ private:
     virtual void m_setDefoVars(const Eigen::Ref<const VXd> &vars) = 0;
     virtual void m_setRestVars(const Eigen::Ref<const VXd> &vars) = 0;
 
-    // Deformed state update notifications
-    struct CBRecord {
-        VariableMask type;
-        NotificationCB cb;
-    };
-    mutable std::map<int, CBRecord> m_updateCBs;
-
-    void m_issueNotifications(VariableMask type) const {
-        for (const auto &it : m_updateCBs) {
-            const CBRecord &record = it.second;
-            if (record.type == type)
-                record.cb();
-        }
+    static VarType m_vtypeForVariableMask(VariableMask type) {
+        if ((type != VariableMask::Defo) && (type != VariableMask::Rest))
+            throw std::runtime_error("`type` must be VariableMask::Defo or VariableMask::Rest");
+        return (type == VariableMask::Defo) ? VarType::Variable : VarType::Parameter;
     }
+
+    virtual void m_setVarsImpl(const VXd &vars) override { m_setDefoVars(vars); }           // Note: NewtonVarsBase::setVars already dispatches notification!
+    virtual void m_setParametersImpl(const VXd &params) override { m_setRestVars(params); } // Note: NewtonVarsBase::setParameters already dispatches notification!
 
 protected:
     // Subclasses are free to define other interfaces for mutating subsets of
     // variables (in which case, they must manually issue update notifications)
-    void m_defoConfigUpdated() const { m_issueNotifications(VariableMask::Defo); }
-    void m_restConfigUpdated() const { m_issueNotifications(VariableMask::Rest); }
+    void m_defoConfigUpdated() const { m_issueNotifications(VarType::Variable); }
+    void m_restConfigUpdated() const { m_issueNotifications(VarType::Parameter); }
 };
 
 #endif /* end of include guard: ELASTICOBJECT_HH */

@@ -15,7 +15,7 @@
 #include <MeshFEM/GaussQuadrature.hh>
 
 namespace Loads {
-    template<class Object, template<typename T> class EOStoragePolicy = EOStoragePolicyWeakPtr>
+    template<class Object>
     struct Gravity;
 
     namespace detail {
@@ -43,11 +43,11 @@ namespace Loads {
         };
     }
 
-    template<class Object, template<typename T> class EOStoragePolicy>
-    struct Gravity : public ObjectSpecificLoad<Object, EOStoragePolicy> {
+    template<class Object>
+    struct Gravity : public ObjectSpecificLoad<Object> {
         using Real = typename Object::Real;
-        using Base = ObjectSpecificLoad<Object, EOStoragePolicy>;
-        using ST   = typename Base::SP::StorageType;
+        using Base = ObjectSpecificLoad<Object>;
+        using ST   = typename Base::EOStorageType;
         using VXd  = typename Object::VXd;
         using V3d  = Eigen::Matrix<Real, 3, 1>;
 

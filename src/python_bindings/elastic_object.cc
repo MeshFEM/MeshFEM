@@ -20,7 +20,7 @@ void bind(py::module &m) {
 
     py::module::import("py_newton_optimizer");
 
-    py::class_<EO, NewtonVarsBase, NewtonObjectiveTerm, std::shared_ptr<EO>> pyEO(m, name.c_str());
+    py::class_<EO, NewtonVarsBase, NewtonObjectiveTermBase, std::shared_ptr<EO>> pyEO(m, name.c_str());
 
     py::enum_<VM>(pyEO, "VariableMask")
         .value("Defo", VM::Defo)

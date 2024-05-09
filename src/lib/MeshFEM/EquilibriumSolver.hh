@@ -56,6 +56,7 @@ struct EquilibriumProblem : public NewtonProblem {
 
     virtual void setVars(const VXd &vars) override {
         m_obj.setVars(vars.cast<Real>());
+        for (auto &l : m_loads) l->varsUpdated();
     }
     virtual VXd getVars() const override { return m_obj.getVars().template cast<double>(); }
     virtual size_t numVars() const override { return m_obj.numVars(); }

@@ -3,8 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //  Base class hierarchy and implementation for a multiobjective optimization
-//  problem composed of a number of NewtonObjectiveTerm instances, each
-//  a function of the optimization variables described by `NewtonVars`.
+//  problem composed of a number of `NewtonObjectiveTermBase` instances, each
+//  a function of the optimization variables described by `NewtonVarsBase`.
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
 *///////////////////////////////////////////////////////////////////////////////
@@ -41,12 +41,25 @@ struct ObjectiveIncreaseLimiter {
 ////////////////////////////////////////////////////////////////////////////////
 // Interface for a class holding the variables of a Newton optimization.
 ////////////////////////////////////////////////////////////////////////////////
-struct NewtonVarsBase {
+struct MESHFEM_EXPORT NewtonVarsBase {
     using VXd = Eigen::VectorXd;
+    using NotificationCB = std::function<void()>;
 
-    virtual void setVars(const VXd &vars) = 0;
-    virtual VXd getVars() const = 0; // TODO: avoid copy here for managers that return by reference?
     virtual size_t numVars() const = 0;
+    virtual VXd getVars() const = 0; // TODO: avoid copy here for managers that return by reference?
+    void setVars(const VXd &vars) {
+        if (vars.size() != numVars()) throw std::runtime_error("Variable size mismatch");
+        m_setVarsImpl(vars);
+        m_issueNotifications(VarType::Variable);
+    }
+
+    virtual size_t numParameters() const = 0;
+    virtual VXd getParameters() const = 0;
+    void setParameters(const VXd &params) {
+        if (params.size() != numParameters()) throw std::runtime_error("Parameter size mismatch");
+        m_setParametersImpl(params);
+        m_issueNotifications(VarType::Parameter);
+    }
 
     virtual Real   approxLinfVelocity(const VXd & /* d */) const { return -1.0; }
     virtual Real characteristicLength() const { return  1.0; }
@@ -55,28 +68,87 @@ struct NewtonVarsBase {
     // configuration to be reparametrized.
     virtual void updateParametrization() { }
 
+    ////////////////////////////////////////////////////////////////////////////////
+    // Variable update notification mechanism
+    // (Allow objective terms to register for automatic updates when variables
+    // or parameters change).
+    ////////////////////////////////////////////////////////////////////////////////
+    // Distinguish between the optimization variables
+    // (e.g., deformed state of an equilibrium problem) and
+    // parameters of the objective function (e.g., the rest state).
+    enum class VarType { Variable, Parameter };
+
+    int registerUpdateCallback(VarType type, const NotificationCB &cb) const {
+        if ((type != VarType::Variable) && (type != VarType::Parameter))
+            throw std::runtime_error("`type` must be VarType::Variable or VarType::Parameter");
+        int id;
+        while (m_updateCBs.count(id = rand()));
+        m_updateCBs.emplace(id, CBRecord{type, cb});
+        return id;
+    }
+
+    void deregisterUpdateCallback(int id) const {
+        auto it = m_updateCBs.find(id);
+        if (it == m_updateCBs.end()) throw std::runtime_error("Attempted to deregister nonexistent callback");
+        m_updateCBs.erase(it);
+    }
+
     virtual ~NewtonVarsBase() { }
+protected:
+    void m_issueNotifications(VarType type) const {
+        for (const auto &it : m_updateCBs) {
+            const CBRecord &record = it.second;
+            if (record.type == type)
+                record.cb();
+        }
+    }
+
+private:
+    // State update notifications
+    struct CBRecord {
+        VarType type;
+        NotificationCB cb;
+    };
+
+    virtual void m_setVarsImpl(const VXd &vars) = 0;
+    virtual void m_setParametersImpl(const VXd &params) = 0;
+
+    mutable std::map<int, CBRecord> m_updateCBs;
 };
 
 // Default implementation: store the variables in an Eigen array.
-struct NewtonVars : public NewtonVarsBase {
+struct MESHFEM_EXPORT NewtonVars : public NewtonVarsBase {
     using VXd = Eigen::VectorXd;
 
-    NewtonVars(size_t n) : m_x(n) { }
+    NewtonVars(size_t n, size_t numParams = 0) : m_x(n), m_p(numParams) { }
     NewtonVars(const VXd &v) : m_x(v) { }
 
-    virtual void setVars(const VXd &vars) override { m_x = vars; }
-    virtual VXd getVars() const override { return m_x; }
     virtual size_t numVars() const override { return m_x.size(); }
+    virtual VXd getVars() const override { return m_x; }
+
+    virtual size_t numParameters() const override { return m_p.size(); }
+    virtual VXd getParameters() const override { return m_p; }
 
     // For storage-backed variables, we can return by reference.
-    const VXd &vars() const { return m_x; }
+    const VXd &  vars() const { return m_x; }
+    const VXd &params() const { return m_p; }
 protected:
-    VXd m_x;
+    VXd m_x, m_p;
+private:
+    virtual void m_setVarsImpl(const VXd &vars) override { m_x = vars; }
+    virtual void m_setParametersImpl(const VXd &params) override { m_p = params; }
 };
 
-struct NewtonObjectiveTerm {
+// The main objective term interface (but without any storage/access to the
+// optimizaton variables). Most objective terms will instead want to derive from
+// `NewtonObjectiveTerm`, which will allows access to variables and supports
+// notifications of variable changes.
+// This base class is appropriate for classes like `ElasticObject` that
+// implement both the `NewtonVarsBase` and `NewtonObjectiveTermBase` interfaces
+// (and so can keep track of variable updates themselves).
+struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     using VXd = Eigen::VectorXd;
+    using VT = NewtonVarsBase::VarType;
 
     // Inform the multiobjective class about how dynamic the sparsity pattern is:
     //      NEVER     -- Sparsity pattern is constant
@@ -91,12 +163,7 @@ struct NewtonObjectiveTerm {
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0) const = 0;
     virtual SparsityUpdateFrequency sparsityUpdateFrequency() const { return SparsityUpdateFrequency::NEVER; }
 
-    virtual ~NewtonObjectiveTerm() { }
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Notifications
-    ////////////////////////////////////////////////////////////////////////////
-    virtual void varsUpdated() { }
+    virtual ~NewtonObjectiveTermBase() { }
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
@@ -114,16 +181,51 @@ struct NewtonObjectiveTerm {
     bool suppressSparsity = false;
 };
 
+struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
+    using VXd = Eigen::VectorXd;
+    using NVStorageType = std::weak_ptr<const NewtonVarsBase>;
+    using VT = NewtonVarsBase::VarType;
+
+    NewtonObjectiveTerm(const NVStorageType &nvars)
+        : m_nvars(nvars)
+    {
+        m_variablesUpdateCallbackID = getNVars().registerUpdateCallback(VT::Variable,  [this]() {   varsUpdated(); });
+        m_parameterUpdateCallbackID = getNVars().registerUpdateCallback(VT::Parameter, [this]() { paramsUpdated(); });
+    }
+
+    const NewtonVarsBase &getNVars() const {
+        if (auto v = m_nvars.lock()) return *v;
+        throw std::runtime_error("NewtonVars were destroyed");
+    }
+
+    std::shared_ptr<const NewtonVarsBase> getNVarsPtr() const { return m_nvars.lock(); }
+
+    virtual ~NewtonObjectiveTerm() {
+        if (auto nv = getNVarsPtr()) {
+            nv->deregisterUpdateCallback(m_variablesUpdateCallbackID);
+            nv->deregisterUpdateCallback(m_parameterUpdateCallbackID);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Notifications
+    ////////////////////////////////////////////////////////////////////////////
+    virtual void   varsUpdated() { }
+    virtual void paramsUpdated() { }
+private:
+    int m_variablesUpdateCallbackID, m_parameterUpdateCallbackID;
+    NVStorageType m_nvars;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // A generic multiobjective optimization composed of a "variable manager"
 // (responsible for the setVars/getVars/etc. part of the NewtonProblem
-// interface) and a number of NewtonObjectiveTerm instances.
+// interface) and a number of NewtonObjectiveTermBase instances.
 ////////////////////////////////////////////////////////////////////////////////
-struct NewtonMultiobjectiveProblem : public NewtonProblem {
+struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
     using CallbackFunction = std::function<bool(NewtonProblem &, size_t)>;
 
-    using TermPtr = std::shared_ptr<NewtonObjectiveTerm>;
+    using TermPtr = std::shared_ptr<NewtonObjectiveTermBase>;
     using NVMPtr  = std::shared_ptr<NewtonVarsBase>;
 
     NewtonMultiobjectiveProblem(NVMPtr vars, std::vector<TermPtr> terms)
@@ -167,10 +269,6 @@ struct NewtonMultiobjectiveProblem : public NewtonProblem {
     void   setVars(const VXd &vars) override {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Incorrect variable size");
         m_vars->setVars(vars);
-
-        for (auto &t : m_terms) t->varsUpdated();
-
-        // TODO: update sparsity patterns
     }
 
     Real weight(size_t i) const { return m_weights[i]; }
@@ -186,8 +284,8 @@ struct NewtonMultiobjectiveProblem : public NewtonProblem {
         m_weights = weights;
     }
 
-    const NewtonObjectiveTerm &term(size_t i) const { return *m_terms[i]; }
-          NewtonObjectiveTerm &term(size_t i)       { return *m_terms[i]; }
+    const NewtonObjectiveTermBase &term(size_t i) const { return *m_terms[i]; }
+          NewtonObjectiveTermBase &term(size_t i)       { return *m_terms[i]; }
 
     // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
     // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)

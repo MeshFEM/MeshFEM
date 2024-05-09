@@ -94,6 +94,9 @@ using NodalVars = MeshEnergyVars<MeshVarSpecification<MeshVarType::PER_NODE, N>>
 
 
 struct MESHFEM_EXPORT MeshEnergyBase : public NewtonObjectiveTerm { 
+    MeshEnergyBase(std::shared_ptr<NewtonVarsBase> vars)
+        : NewtonObjectiveTerm(vars) { }
+
     MaterialBase &materialForElement(size_t ei) {
         if (ei >= numElements()) throw std::runtime_error("Element index out of bounds");
         auto &mat = m_getMaterial(ei);
@@ -122,7 +125,7 @@ struct MeshEnergy : public MeshEnergyBase {
     using MA        = MaterialAssignment<Material>;
 
     MeshEnergy(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars)
-        : m_mesh(m), stencils(*m), m_vars_ptr(vars), m_vars(*vars), m_assembler(vars->assembler()), materials(stencils.size()) {
+        : MeshEnergyBase(vars), m_mesh(m), stencils(*m), m_vars_ptr(vars), m_vars(*vars), m_assembler(vars->assembler()), materials(stencils.size()) {
         const size_t ns = stencils.size();
         elements.reserve(ns);
 
@@ -185,10 +188,10 @@ struct MeshEnergy : public MeshEnergyBase {
     SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {
         const size_t nv = m_vars.numVars();
 
-        SuiteSparseMatrix Hsp_block = m_assembler.blockSparsityPattern(elements.size(), [&](size_t ei) {
+        auto Hsp_block = m_assembler.blockSparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
-        return m_assembler.blockHessianSparsityPatternToScalar(Hsp_block, val);
+        return Hsp_block.toScalar(val);
     }
 
     void varsUpdated() override {

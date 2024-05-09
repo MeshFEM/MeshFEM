@@ -123,7 +123,7 @@ private:
         _CoordinateType pos;
         spmat_helper::setZero(pos);
         foreach_var([&](size_t vi, Real coeff) {
-            pos += extract(vars, iremap(varIndices[vi])) * coefficients[vi];
+            pos += extract(vars, iremap(vi)) * coeff;
         });
 
         return pos;
@@ -133,7 +133,7 @@ private:
     void m_gradContributionImpl(const _CoordinateType &grad_p, Eigen::Ref<VXd> grad, const IndexRemaper &iremap) const {
         if (isFixedAnchor()) return; // Fixed anchor points do not contribute to the gradient
         foreach_var([&](size_t vi, Real coeff) {
-            extract(grad, iremap(varIndices[vi])) += coefficients[vi] * grad_p;
+            extract(grad, iremap(vi)) += coeff * grad_p;
         });
     }
 };
@@ -149,7 +149,7 @@ struct GenericSprings : public Load<Real> {
             const std::vector<APC_A> &coordsA,
             const std::vector<APC_B> &coordsB,
             const Eigen::Ref<const VXd> &stiffnesses)
-        : m_vars(vars), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
+        : Base(vars), m_coordsA(coordsA), m_coordsB(coordsB), m_k(stiffnesses)
     {
         if (coordsA.size() != coordsB.size()) throw std::runtime_error("Attachment point size mismatch");
         if (size_t(stiffnesses.size()) != coordsA.size()) throw std::runtime_error("Spring stiffnesses size mismatch");
@@ -207,7 +207,7 @@ struct GenericSprings : public Load<Real> {
     }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = m_vars->numVars();
+        const size_t nv = this->getNVars().numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
         const size_t ns = numSprings();
@@ -237,8 +237,6 @@ struct GenericSprings : public Load<Real> {
     virtual ~GenericSprings() { }
 
 private:
-    const std::shared_ptr<NewtonVarsBase> m_vars;
-
     std::vector<APC_A> m_coordsA;
     std::vector<APC_B> m_coordsB;
     Eigen::VectorXd m_k;
@@ -248,7 +246,7 @@ private:
     }
 
     void m_updateCache() {
-        const auto &x = m_vars->getVars();
+        const auto &x = this->getNVars().getVars();
         const size_t ns = numSprings();
         VXd posA(ns), posB(ns);
         for (size_t s = 0; s < ns; ++s) {

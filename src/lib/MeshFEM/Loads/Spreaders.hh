@@ -39,6 +39,8 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
     static constexpr size_t N = Object::N;
 
     using Base = ObjectSpecificLoad<Object>;
+    using ST   = typename Base::EOStorageType;
+
     using Real = typename Base::Real;
     using VXd  = typename Base::VXd;
     using VNd  = Eigen::Matrix<Real, N, 1>;
@@ -49,7 +51,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
 
     using Base::getObj;
 
-    Spreaders(std::weak_ptr<const Object> obj,
+    Spreaders(const ST &obj,
               const SuiteSparseMatrix &materialPointPositioner,
               const MX2i &connectivity,
               Real magnitude,
@@ -67,7 +69,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         m_updateCache();
     }
 
-    Spreaders(std::weak_ptr<const Object> obj,
+    Spreaders(const ST &obj,
               const std::vector<VXi> &clusterVtxs,
               const MX2i &connectivity,
               Real magnitude,

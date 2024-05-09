@@ -48,9 +48,7 @@ std::string getEnergyName() {
     return _Energy::name() + std::to_string(_Energy::N) + "D";
 }
 
-std::string
-getElasticityTensorName(size_t N)
-{
+inline std::string getElasticityTensorName(size_t N) {
     return "ElasticityTensor" + std::to_string(N) + "D";
 }
 
@@ -87,7 +85,7 @@ struct NameMangler<ElasticSolid<_K, _Degree, _EmbeddingSpace, _Energy>> {
 
 // ElasticSheet
 template <class _Psi_C>
-class ElasticSheet;
+struct ElasticSheet;
 
 template<class Psi_C>
 struct NameMangler<ElasticSheet<Psi_C>> {

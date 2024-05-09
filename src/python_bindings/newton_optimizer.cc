@@ -169,7 +169,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("valueExceedsLimit",       &ObjectiveIncreaseLimiter::valueExceedsLimit)
         ;
 
-    using NOT = NewtonObjectiveTerm;
+    using NOT = NewtonObjectiveTermBase;
 
     py::enum_<NOT::SparsityUpdateFrequency>(m, "SparsityUpdateFrequency")
         .value("NEVER",     NOT::SparsityUpdateFrequency::NEVER)
@@ -177,14 +177,14 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .value("SOMETIMES", NOT::SparsityUpdateFrequency::SOMETIMES)
         ;
 
-    py::class_<NewtonObjectiveTerm, std::shared_ptr<NewtonObjectiveTerm>>(m, "NewtonObjectiveTerm")
-        .def("objective", &NewtonObjectiveTerm::objective)
+    py::class_<NOT, std::shared_ptr<NOT>>(m, "NewtonObjectiveTerm")
+        .def("objective", &NOT::objective)
         // gradient cannot be implemented without knowing variable size...
-        .def("hessian",   [](const NewtonObjectiveTerm &term, bool pm) { return term.hessian(pm); }, py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern", &NewtonObjectiveTerm::hessianSparsityPattern, py::arg("val") = 0.0)
-        .def_readwrite("suppressSparsity", &NewtonObjectiveTerm::suppressSparsity, "Suppress sparsity pattern contributions from this term")
-        .def_property_readonly("sparsityUpdateFrequency", &NewtonObjectiveTerm::sparsityUpdateFrequency)
-        .def_readonly("increaseLimiter", &NewtonObjectiveTerm::increaseLimiter, py::return_value_policy::reference_internal)
+        .def("hessian",   [](const NOT &term, bool pm) { return term.hessian(pm); }, py::arg("projectionMask") = false)
+        .def("hessianSparsityPattern", &NOT::hessianSparsityPattern, py::arg("val") = 0.0)
+        .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
+        .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)
+        .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)
         ;
 
     py::class_<NewtonMultiobjectiveProblem, NewtonProblem, std::shared_ptr<NewtonMultiobjectiveProblem>>(m, "NewtonMultiobjectiveProblem")
@@ -192,7 +192,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("numTerms",   &NewtonMultiobjectiveProblem::numTerms)
         .def("setTerms",   &NewtonMultiobjectiveProblem::setTerms)
         .def("setWeights", &NewtonMultiobjectiveProblem::setWeights)
-        .def("term",       [](NewtonMultiobjectiveProblem &prob, size_t i) -> NewtonObjectiveTerm & { return prob.term(i); }, py::return_value_policy::reference_internal)
+        .def("term",       [](NewtonMultiobjectiveProblem &prob, size_t i) -> NOT & { return prob.term(i); }, py::return_value_policy::reference_internal)
         .def("setCustomIterationCallback",
                 [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction &cb) {
                     prob.setCustomIterationCallback(callbackWrapper(cb));
