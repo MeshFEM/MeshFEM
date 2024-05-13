@@ -68,16 +68,20 @@ struct ObjectSpecificLoad : public Load<Real> {
 
     const EO &getObj() const {
         // The following `dynamic_cast` approach unfortunately breaks
-        // (at least when compiled in debug mode), probably because of
-        // difficulties casting across shared library boundaries.
-        // Even though the RTTI names do match, the cast throws a
-        // `std::bad_cast` exception)
-        //      std::cout << "Attempting to cast nvars of dynamic type " << typeid(Base::getNVars()).name() << " to " << typeid(EO).name() << std::endl;
-        //      return dynamic_cast<const EO &>(Base::getNVars());
-        // We therefore resort to maintaining a separate typed pointer from
-        // the one maintained by `Load`)
+        // because of difficulties casting across shared library boundaries.
+        // We most likely need to add out-of-line virtual destructors to every
+        // EO class and explicitly instantiate these class templates in `libMeshFEM.dylib`.
+        // This issue is investigated more here: http://github.com/jpanetta/dynamic_cast_pitfalls
+#if 0
+        auto eo_ptr = std::dynamic_pointer_cast<const EO>(Base::getNVarsPtr());
+        if (eo_ptr == 0) throw std::logic_error(std::string("Dynamic cast to EO failed: ") + typeid(Base::getNVars()).name() + " to " + typeid(EO).name());
+        return dynamic_cast<const EO &>(Base::getNVars());
+#else
+        // For now, we resort to maintaining a separate typed pointer from
+        // the one maintained by `Load` (avoiding the need for `dynamic_cast`).
         if (auto eo_ptr = m_eo.lock()) return *eo_ptr;
         throw std::runtime_error("ElasticObject was destroyed");
+#endif
     }
 
     virtual ~ObjectSpecificLoad() { }

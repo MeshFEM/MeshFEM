@@ -48,7 +48,7 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     virtual size_t numVars() const = 0;
     virtual VXd getVars() const = 0; // TODO: avoid copy here for managers that return by reference?
     void setVars(const VXd &vars) {
-        if (vars.size() != numVars()) throw std::runtime_error("Variable size mismatch");
+        if (size_t(vars.size()) != numVars()) throw std::runtime_error("Variable size mismatch");
         m_setVarsImpl(vars);
         m_issueNotifications(VarType::Variable);
     }
@@ -56,7 +56,7 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     virtual size_t numParameters() const = 0;
     virtual VXd getParameters() const = 0;
     void setParameters(const VXd &params) {
-        if (params.size() != numParameters()) throw std::runtime_error("Parameter size mismatch");
+        if (size_t(params.size()) != numParameters()) throw std::runtime_error("Parameter size mismatch");
         m_setParametersImpl(params);
         m_issueNotifications(VarType::Parameter);
     }

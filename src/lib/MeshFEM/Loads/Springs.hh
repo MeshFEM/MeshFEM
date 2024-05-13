@@ -30,6 +30,9 @@ struct AttachmentPointCoordinate {
     using VXi = Eigen::Matrix< int, Eigen::Dynamic, 1>;
     static constexpr size_t BlockSize = (CTraits::rows * CTraits::cols);
 
+    // Type of the derivative of an output coordinate with respect to a block variable
+    using JacobianBlock = Eigen::Matrix<Real, BlockSize, BlockSize>;
+
     VXi varIndices;
     VXd coefficients;
     AttachmentPointCoordinate(Eigen::Ref<const VXi> vidxs, Eigen::Ref<const VXd> coeffs)
@@ -101,7 +104,6 @@ struct AttachmentPointCoordinate {
         m_gradContributionImpl(grad_p, grad, [](size_t vari) { return vari; });
     }
 
-
     // Versions of `getPosition` and `gradContribution` that employ an index
     // remapping from local indices `varIndices` to global indices
     // `globalVarForLocalVar[varIndices]`.
@@ -113,8 +115,19 @@ struct AttachmentPointCoordinate {
         m_gradContributionImpl(grad_p, grad, [&](size_t vari) { return globalVarForLocalVar[vari]; });
     }
 
+    // Accumulate the contribution of this attachment point coordinate's second
+    // derivative to the spring energy Hessian `H`. This is the expression
+    // `dE_dp . d2p_dvar2`, where dE_dp is the gradient of the spring energy
+    // with respect to the attachment point coordinate. When the attachment
+    // point is a linear function of the variables (as is the case for this base
+    // implementation), the second derivative is zero.
+    template<class SpMat> void accumulate_contract_d2_dvar2(const _CoordinateType &/* grad_p */, SpMat &/* H */                                                    ) const { }
+    template<class SpMat> void accumulate_contract_d2_dvar2(const _CoordinateType &/* grad_p */, SpMat &/* H */, const std::vector<int> &/* globalVarForLocalVar */) const { }
+
     template<class Derived> static auto  extract(const Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
     template<class Derived> static auto &extract(      Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
+
+    auto d_dvar(size_t vi) const { return JacobianBlock::Identity() * coefficients[vi]; }
 
 private:
     template<typename IndexRemaper>
@@ -142,6 +155,8 @@ template<class APC_A, class APC_B>
 struct GenericSprings : public Load<Real> {
     using Base = Load<Real>;
     using VXd = typename Base::VXd;
+    static_assert(APC_A::BlockSize == APC_B::BlockSize, "APC variable block sizes must match");
+    static constexpr size_t BlockSize = APC_A::BlockSize;
 
     // Create uniaxial, axis-aligned springs connecting the attachment points
     // in `coordsA` with the corresponding attachment points in `coordsB`
@@ -189,20 +204,14 @@ struct GenericSprings : public Load<Real> {
     virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
         const size_t ns = numSprings();
 
-        auto addInteractions = [&](const APC_A &coords1, const APC_B &coords2, Real stiffness, bool crossTerms) {
-            Real sign = crossTerms ? -1.0 : 1.0;
-            for (int ii = 0; ii < coords1.varIndices.size(); ++ii) {
-                for (int jj = (crossTerms ? 0 : ii); jj < coords2.varIndices.size(); ++jj) { // Visit each unordered pair once
-                    int i = coords1.varIndices[ii],
-                        j = coords2.varIndices[jj];
-                    H.addNZ(std::min(i, j), std::max(i, j), sign * coords1.coefficients[ii] * coords2.coefficients[jj] * stiffness);
-                }
-            }
-        };
         for (size_t s = 0; s < ns; ++s) {
-            addInteractions(m_coordsA[s], m_coordsA[s], weight * m_k[s], false);
-            addInteractions(m_coordsB[s], m_coordsB[s], weight * m_k[s], false);
-            addInteractions(m_coordsA[s], m_coordsB[s], weight * m_k[s],  true);
+            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsA[s], m_coordsA[s],  weight * m_k[s]);
+            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsB[s], m_coordsB[s],  weight * m_k[s]);
+            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsA[s], m_coordsB[s], -weight * m_k[s]);
+            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsB[s], m_coordsA[s], -weight * m_k[s]);
+
+            m_coordsA[s].accumulate_contract_d2_dvar2( APC_A::extract(m_forces, s), H);
+            m_coordsB[s].accumulate_contract_d2_dvar2(-APC_B::extract(m_forces, s), H);
         }
     }
 
@@ -212,19 +221,10 @@ struct GenericSprings : public Load<Real> {
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
         const size_t ns = numSprings();
 
-        auto addInteractions = [&](const APC_A &coords1, const APC_B &coords2, bool crossTerms) {
-            for (int ii = 0; ii < coords1.varIndices.size(); ++ii) {
-                for (int jj = (crossTerms ? 0 : ii); jj < coords2.varIndices.size(); ++jj) { // Visit each unordered pair once
-                    int i = coords1.varIndices[ii],
-                        j = coords2.varIndices[jj];
-                    Hsp.addNZ(std::min(i, j), std::max(i, j), 1.0);
-                }
-            }
-        };
         for (size_t s = 0; s < ns; ++s) {
-            addInteractions(m_coordsA[s], m_coordsA[s], false);
-            addInteractions(m_coordsB[s], m_coordsB[s], false);
-            addInteractions(m_coordsA[s], m_coordsB[s],  true);
+            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsA[s], m_coordsA[s], 1.0);
+            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsB[s], m_coordsB[s], 1.0);
+            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsA[s], m_coordsB[s], 1.0);
         }
 
         SuiteSparseMatrix Hsp_csc(Hsp);
@@ -254,19 +254,37 @@ private:
             APC_B::extract(posB, s) = m_coordsB[s].getPosition(x);
         }
         VXd diff = posA - posB;
-        VXd forces = (m_k.array() * (posA - posB).array());
-        m_energy = 0.5 * diff.dot(forces);
+        m_forces = (m_k.array() * (posA - posB).array());
+        m_energy = 0.5 * diff.dot(m_forces);
 
         m_grad.setZero(x.size());
         for (size_t s = 0; s < ns; ++s) {
-            m_coordsA[s].gradContribution( APC_A::extract(forces, s), m_grad);
-            m_coordsB[s].gradContribution(-APC_B::extract(forces, s), m_grad);
+            m_coordsA[s].gradContribution( APC_A::extract(m_forces, s), m_grad);
+            m_coordsB[s].gradContribution(-APC_B::extract(m_forces, s), m_grad);
         }
     }
 
+    // dc1_dx^T * dc2_dx
+    template<bool SparsityOnly, class SpMat, class APC1, class APC2>
+    void m_addJacobianOuterProducts(SpMat &H, const APC1 &c1, const APC2 &c2, Real stiffness) const {
+        static constexpr size_t BS = APC1::BlockSize;
+        static_assert(APC2::BlockSize == BS, "APC variable block sizes must match");
+        for (int ii = 0; ii < c1.varIndices.size(); ++ii) {
+            for (int jj = 0; jj < c2.varIndices.size(); ++jj) {
+                int i = c1.varIndices[ii],
+                    j = c2.varIndices[jj];
+                if (i > j) continue;
+                // TODO: do assembly using a SystemAssembler with the
+                // correct block variable structure...
+                if constexpr (SparsityOnly) H.addNZBlock(BS * i, BS * j, Eigen::Matrix<Real, BS, BS>::Ones());
+                else                        H.addNZBlock(BS * i, BS * j, stiffness * c1.d_dvar(ii).transpose() * c2.d_dvar(jj));
+            }
+        }
+    };
+
     // Cached state
     Real m_energy;
-    VXd m_grad;
+    VXd m_grad, m_forces;
 };
 
 using Springs = GenericSprings<AttachmentPointCoordinate<Real>, AttachmentPointCoordinate<Real>>;
