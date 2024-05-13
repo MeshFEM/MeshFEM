@@ -130,6 +130,7 @@ add_library(MeshFEM SHARED
         newton_optimizer/newton_optimizer.cc
         newton_optimizer/newton_optimizer.hh
         newton_optimizer/ConvergenceReport.hh
+        newton_optimizer/MultiobjectiveProblem.cc
 
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh

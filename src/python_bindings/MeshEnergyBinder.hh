@@ -19,15 +19,6 @@
 
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
-// Note: MEVars_ has not necessarily been bound as a subclass of NewtonVarsBase
-// on the Python side, so we cannot rely on pybind11 to do the downcast for us.
-template<class MEVars_>
-static auto downcastVars(std::shared_ptr<NewtonVarsBase> varsBase) {
-    auto vars = std::dynamic_pointer_cast<MEVars_>(varsBase);
-    if (!vars) throw std::runtime_error("Incompatible vars type");
-    return vars;
-}
-
 template<class ME>
 struct ElementSpecificMEBindings {
     template<class PyME>
@@ -83,8 +74,8 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
         ;
 
-    m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<NewtonVarsBase> varsBase, RawMaterial material) {
-        auto me = std::make_shared<ME>(mesh, downcastVars<Vars>(varsBase));
+    m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<Vars> vars, RawMaterial material) {
+        auto me = std::make_shared<ME>(mesh, vars);
         me->setHomogeneousMaterial(convertMaterial<Material>(material));
         return me;
     }, py::arg("mesh"), py::arg("vars"), py::arg("material") = RawMaterial());

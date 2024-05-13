@@ -32,6 +32,7 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
 
+// Bind the "NodalVars" factory method on each mesh type.
 struct NodalVarsBinder {
     template<class FEMMesh_>
     void bind(py::module &m, py::module &detail) {
@@ -44,6 +45,11 @@ struct NodalVarsBinder {
     }
 };
 
+template<class NVars>
+void bind_nvars(py::module &detail) {
+    py::class_<NVars, NewtonVarsBase, std::shared_ptr<NVars>>(detail, NameMangler<NVars>::name().c_str());
+}
+
 PYBIND11_MODULE(mesh_energy, m)
 {
     m.doc() = "Bindings for the generic mesh energy infrastructure";
@@ -53,11 +59,16 @@ PYBIND11_MODULE(mesh_energy, m)
     py::module::import("py_newton_optimizer");
     py::module::import("energy");
 
+    // Bind per-vertex scalar and vector-valued variables.
+    bind_nvars<NodalVars<1>>(detail);
+    bind_nvars<NodalVars<2>>(detail);
+    bind_nvars<NodalVars<3>>(detail);
+
     generateMeshSpecificBindings(m, detail, NodalVarsBinder());
 
     py::class_<MaterialBase> pyMB(detail, "MaterialBase");
 
-    py::class_<MeshEnergyBase, NewtonObjectiveTerm, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
+    py::class_<MeshEnergyBase, NewtonObjectiveTermBase, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
         .def("materialForElement", &MeshEnergyBase::materialForElement, py::arg("ei"), py::return_value_policy::reference_internal)
         .def("numElements", &MeshEnergyBase::numElements)
         ;

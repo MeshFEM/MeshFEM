@@ -93,7 +93,7 @@ struct MESHFEM_EXPORT NewtonVarsBase {
         m_updateCBs.erase(it);
     }
 
-    virtual ~NewtonVarsBase() { }
+    virtual ~NewtonVarsBase();
 protected:
     void m_issueNotifications(VarType type) const {
         for (const auto &it : m_updateCBs) {
@@ -132,6 +132,8 @@ struct MESHFEM_EXPORT NewtonVars : public NewtonVarsBase {
     // For storage-backed variables, we can return by reference.
     const VXd &  vars() const { return m_x; }
     const VXd &params() const { return m_p; }
+
+    ~NewtonVars();
 protected:
     VXd m_x, m_p;
 private:
@@ -163,7 +165,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0) const = 0;
     virtual SparsityUpdateFrequency sparsityUpdateFrequency() const { return SparsityUpdateFrequency::NEVER; }
 
-    virtual ~NewtonObjectiveTermBase() { }
+    virtual ~NewtonObjectiveTermBase();
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
@@ -200,12 +202,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
 
     std::shared_ptr<const NewtonVarsBase> getNVarsPtr() const { return m_nvars.lock(); }
 
-    virtual ~NewtonObjectiveTerm() {
-        if (auto nv = getNVarsPtr()) {
-            nv->deregisterUpdateCallback(m_variablesUpdateCallbackID);
-            nv->deregisterUpdateCallback(m_parameterUpdateCallbackID);
-        }
-    }
+    virtual ~NewtonObjectiveTerm();
 
     ////////////////////////////////////////////////////////////////////////////
     // Notifications
@@ -294,6 +291,8 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
     }
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
+
+    virtual ~NewtonMultiobjectiveProblem();
 
 private:
     NVMPtr m_vars;
