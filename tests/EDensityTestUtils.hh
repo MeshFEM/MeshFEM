@@ -13,6 +13,11 @@ void requireApproxEqual(const A &a, const B &b) {
     }
 }
 
+template<class A, class B>
+auto relerror(const A &a, const B & b) {
+    return (a - b).norm() / b.norm();
+}
+
 // Note: C-based energies cannot detect inverted elements and thus will
 // assign them different energies! Therefore, any energy built using
 // `EnergyDensityCBasedFromFBased` will disagree with the underlying

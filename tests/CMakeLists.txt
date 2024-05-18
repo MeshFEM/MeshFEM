@@ -19,6 +19,7 @@ add_executable(unit_tests
     test_femmesh_traversal.cc
     test_edensity_adaptors.cc
     test_edensities.cc
+    test_field_sampler.cc
     )
 
 target_link_libraries(unit_tests PUBLIC
@@ -33,13 +34,12 @@ target_link_libraries(solve_system MeshFEM)
 add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
 target_link_libraries(benchmark_linear_systems MeshFEM)
 
-
 if (MSVC)
 else ()
 target_compile_options(unit_tests PRIVATE -Wno-unused-parameter)
 endif()
 
-target_compile_definitions(unit_tests PRIVATE -DMESHFEM_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(unit_tests PRIVATE -DMESHFEM_DIR="${CMAKE_CURRENT_LIST_DIR}/../")
 
 # Register tests
 include(CTest)
