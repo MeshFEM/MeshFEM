@@ -82,7 +82,7 @@ struct VariableCoefficientPoisson {
         });
 
         // Accumulate the Neumann load to right-hand side
-        auto integratedBoundaryShapeFunctions = integratedShapeFunctions<Deg, K>();
+        auto integratedBoundaryShapeFunctions = integratedShapeFunctions<Deg, K - 1>();
         for (int i = 0; i < neumannBoundaryElements.size(); ++i) {
             size_t bei = neumannBoundaryElements[i];
             if (bei > m.numBoundaryElements()) throw std::runtime_error("Boundary element index out of range");

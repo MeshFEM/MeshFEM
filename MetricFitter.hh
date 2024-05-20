@@ -29,7 +29,7 @@ struct MetricFitter : public NewtonMultiobjectiveProblem {
     MetricFitter(std::shared_ptr<Mesh> m)
         : MetricFitter(m, std::make_shared<Vars>(*m)) { }
 
-    M32d getFB(size_t ei) const { return m_mf.elements[ei].getFB(); }
+    M32d getFB(size_t ei) const { return m_mf.elements[ei].getFB(m_mf.extractLocalVars(ei)); }
     M2d   getC(size_t ei) const { M32d FB = getFB(ei); return FB.transpose() * FB; }
 
     // Let the collapse prevention kick in when the element is compressed to
@@ -73,7 +73,7 @@ private:
     MetricFittingMeshEnergy &m_mf;
     BendingRegularizationMeshEnergy &m_br;
 
-    static std::vector<std::shared_ptr<NewtonObjectiveTerm>> m_construct_terms(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars) {
+    static std::vector<std::shared_ptr<NewtonObjectiveTermBase>> m_construct_terms(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars) {
         auto  mfe = std::make_shared<        MetricFittingMeshEnergy>(m, vars);
         auto brme = std::make_shared<BendingRegularizationMeshEnergy>(m, vars);
         mfe->materials.allocatePerElement(); // we need a separate target metric per element
