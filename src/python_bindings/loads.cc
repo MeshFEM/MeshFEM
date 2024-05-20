@@ -4,6 +4,7 @@
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
+#include <MeshFEM/Loads/ProjectedAttachmentPoint.hh>
 #include <MeshFEM/Loads/SphereFitter.hh>
 #include <MeshFEM/Loads/CircumcenterBarrier.hh>
 #include <MeshFEM/Loads/Traction.hh>
@@ -127,9 +128,50 @@ struct LoadBinder {
     }
 };
 
+template<class Springs>
+auto bindSprings(py::module &m, const std::string name) {
+    using Load = Loads::Load<double>;
+    using VXd  = Eigen::VectorXd;
+    py::class_<Springs, Load, std::shared_ptr<Springs>> pySprings(m, name.c_str());
+    pySprings
+        .def("getStiffnesses", &Springs::getStiffnesses)
+        .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
+        .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
+        .def("attachmentPointA", &Springs::attachmentPointA, py::arg("s"))
+        .def("attachmentPointB", &Springs::attachmentPointB, py::arg("s"))
+        .def("numSprings",       &Springs::numSprings)
+        ;
+    return pySprings;
+}
+
+template<size_t N>
+void bindProjectedSprings(py::module &m, py::module &detail_module) {
+    using Load = Loads::Load<double>;
+    using VXd  = Eigen::VectorXd;
+    using VNd  = VecN_T<double, N>;
+
+    using  APC = Loads::AttachmentPointCoordinate<VNd>;
+    using PAPC = Loads:: ProjectedAttachmentPoint<VNd>;
+    using Springs = Loads::GenericSprings<APC, PAPC>;
+
+    py::class_<PAPC>(detail_module, ("ProjectedAttachmentPoint" + std::to_string(N)).c_str())
+        .def("getPosition", [](const PAPC &p) { return p.getPosition(); })
+        .def("d_dvar",      &PAPC::d_dvar, py::arg("vi"))
+        .def("get_dp_dq",   &PAPC::get_dp_dq)
+        .def("projector",   &PAPC::projector)
+
+        .def_readwrite("preprojectionAttachmentPoint", &PAPC::preprojectionAttachmentPoint)
+        ;
+
+    bindSprings<Springs>(m, "ProjectedSprings" + std::to_string(N))
+        ;
+}
+
 PYBIND11_MODULE(loads, m)
 {
     py::module::import("py_newton_optimizer");
+    py::module::import("closest_point_projection");
+
     using Load = Loads::Load<double>;
     py::class_<Load, NewtonObjectiveTermBase, std::shared_ptr<Load>>(m, "Load")
         .def("energy",               &Load::energy)
@@ -154,10 +196,7 @@ PYBIND11_MODULE(loads, m)
     ////////////////////////////////////////////////////////////////////////////
     using Springs = Loads::Springs;
     using VXd  = Eigen::VectorXd;
-    py::class_<Springs, Load, std::shared_ptr<Springs>>(m, "Springs")
-        .def("getStiffnesses", &Springs::getStiffnesses)
-        .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
-        .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
+    bindSprings<Springs>(m, "Springs")
         .def(py::init([&](const std::shared_ptr<NewtonVarsBase> &obj,
                           const std::vector<APC> &coordsA,
                           const std::vector<APC> &coordsB,
@@ -185,5 +224,8 @@ PYBIND11_MODULE(loads, m)
           }), py::arg("obj"), py::arg("deformationSamplerMatrix"),
               py::arg("targetPositions"), py::arg("stiffness"))
        ;
+
+    bindProjectedSprings<2>(m, detail_module);
+    bindProjectedSprings<3>(m, detail_module);
 }
 

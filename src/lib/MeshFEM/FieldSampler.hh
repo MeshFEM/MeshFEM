@@ -17,16 +17,16 @@
 
 #include <memory>
 #include <stdexcept>
+#include <MeshFEM_export.h>
 #include "Types.hh"
 #include "Functions.hh"
 #include "Utilities/MeshConversion.hh"
+#include "ClosestPointProjection.hh"
+#include "Parallelism.hh"
 
 #include "TetMesh.hh"
 #include "EmbeddedElement.hh"
-
 #include "TemplateHacks.hh"
-
-#include <MeshFEM_export.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Factory Function Declarations
@@ -56,7 +56,7 @@ struct MESHFEM_EXPORT FieldSampler {
     virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
                                         Eigen::VectorXd &sq_dists,
                                         Eigen::VectorXi &I,
-                                        Eigen::MatrixXd &C) const = 0;
+                                        Eigen::MatrixXd &C, bool parallel = true) const = 0;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Get the closest element (codimension 0) to each query point and the
@@ -67,7 +67,7 @@ struct MESHFEM_EXPORT FieldSampler {
     *///////////////////////////////////////////////////////////////////////////
     virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
                                              Eigen::VectorXi &I,
-                                             Eigen::MatrixXd &B) const = 0;
+                                             Eigen::MatrixXd &B, bool parallel = true) const = 0;
 
     ////////////////////////////////////////////////////////////////////////////
     /*! Get the closest node to each query point and the distance from the query
@@ -78,16 +78,16 @@ struct MESHFEM_EXPORT FieldSampler {
     *///////////////////////////////////////////////////////////////////////////
     virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P,
                                       Eigen::VectorXi &NI,
-                                      Eigen::VectorXd &sqDist) const = 0;
+                                      Eigen::VectorXd &sqDist, bool parallel = true) const = 0;
 
     // Check whether the sampler mesh contains each query point.
     // Note: even if the point lies within the mesh, the distance libigl computes may be
     // slightly nonzero; we use the `eps` to get around this.
-    Eigen::Array<bool, Eigen::Dynamic, 1> contains(Eigen::Ref<const Eigen::MatrixXd> P, Real eps = 1e-10) const {
+    Eigen::Array<bool, Eigen::Dynamic, 1> contains(Eigen::Ref<const Eigen::MatrixXd> P, Real eps = 1e-10, bool parallel = true) const {
         Eigen::VectorXi I;
         Eigen::VectorXd sq_dists;
         Eigen::MatrixXd C;
-        closestElementAndPoint(P, sq_dists, I, C);
+        closestElementAndPoint(P, sq_dists, I, C, parallel);
         return sq_dists.array() <= eps * eps;
     }
 
@@ -95,54 +95,72 @@ struct MESHFEM_EXPORT FieldSampler {
     // (This is a piecewise linear field for RawMeshFieldSampler instances, or
     //  a FEMMesh field for MeshFieldSampler instances).
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
-                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const = 0;
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues, bool parallel = true) const = 0;
 
     virtual ~FieldSampler() { }
 };
 
-
-template<size_t N>
-struct SamplerAABB;
-
 // Dimension-specific implementation
 template<size_t N>
-struct MESHFEM_EXPORT FieldSamplerImpl : public FieldSampler {
-    FieldSamplerImpl(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+struct FieldSamplerImpl : public FieldSampler {
+    FieldSamplerImpl(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
+        : m_closestPtProjector(V, F) { }
 
     virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
                                         Eigen::VectorXd &sq_dists,
                                         Eigen::VectorXi &I,
-                                        Eigen::MatrixXd &C) const override {
-        m_closestElementAndPointImpl(P, sq_dists, I, C);
+                                        Eigen::MatrixXd &C, bool parallel = true) const override {
+        sq_dists.resize(P.rows());
+        I.resize(P.rows());
+        C.resize(P.rows(), P.cols());
+        auto impl = [&](size_t i) {
+            auto result = m_closestPtProjector.project(P.row(i), /* computeJacobian = */ false);
+            sq_dists[i] = result.squaredDist;
+            I[i]        = result.element;
+            C.row(i)    = result.p;
+        };
+
+        if (parallel) parallel_for_range(P.rows(), impl);
+        else          for (int i = 0; i < P.rows(); ++i) { impl(i); }
     }
 
     virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
                                              Eigen::VectorXi &I,
-                                             Eigen::MatrixXd &B) const override {
-        Eigen::VectorXd sq_dists;
-        Eigen::MatrixXd C; // closest points in 3D
-        m_closestElementAndBaryCoordsImpl(P, sq_dists, I, B, C);
+                                             Eigen::MatrixXd &B, bool parallel = true) const override {
+        I.resize(P.rows());
+        B.resize(P.rows(), m_closestPtProjector.numElementCorners());
+        auto impl = [&](size_t i) {
+            auto result = m_closestPtProjector.project(P.row(i), /* computeJacobian = */ false);
+            I[i]     = result.element;
+            B.row(i) = result.barycoords;
+        };
+
+        if (parallel) parallel_for_range(P.rows(), impl);
+        else          for (int i = 0; i < P.rows(); ++i) { impl(i); }
     }
 
-    // Need out-of-line destructor since SamplerAABB is an incomplete type
-    virtual ~FieldSamplerImpl();
+    void closestElementPointAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
+                                          Eigen::VectorXi &I,
+                                          Eigen::MatrixXd &C, Eigen::MatrixXd &B, bool parallel = true) const {
+        I.resize(P.rows());
+        C.resize(P.rows(), P.cols());
+        B.resize(P.rows(), m_closestPtProjector.numElementCorners());
+        auto impl = [&](size_t i) {
+            auto result = m_closestPtProjector.project(P.row(i), /* computeJacobian = */ false);
+            I[i]     = result.element;
+            C.row(i) = result.p;
+            B.row(i) = result.barycoords;
+        };
+
+        if (parallel) parallel_for_range(P.rows(), impl);
+        else          for (int i = 0; i < P.rows(); ++i) { impl(i); }
+    }
+
+    const ClosestPointProjection<VecN_T<double, N>> &projector() const { return m_closestPtProjector; }
+
+    virtual ~FieldSamplerImpl() { }
 protected:
-    void m_closestElementAndPointImpl(Eigen::Ref<const Eigen::MatrixXd> P,
-                                      Eigen::VectorXd &sq_dists,
-                                      Eigen::VectorXi &I,
-                                      Eigen::MatrixXd &C) const;
-
-    // Our implementation for getting barycentric coordinates needs to compute
-    // the closest point information anyway, so we expose it too...
-    void m_closestElementAndBaryCoordsImpl(Eigen::Ref<const Eigen::MatrixXd> P,
-                                           Eigen::VectorXd &sq_dists,
-                                           Eigen::VectorXi &I,
-                                           Eigen::MatrixXd &B,
-                                           Eigen::MatrixXd &C) const;
-
-    std::unique_ptr<SamplerAABB<N>> m_samplerAABB;
-    Eigen::MatrixXd m_V;
-    Eigen::MatrixXi m_F;
+    ClosestPointProjection<VecN_T<double, N>> m_closestPtProjector;
 };
 
 // Mesh type-specific implementations
@@ -152,26 +170,28 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
     using Base::Base;
 
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
-                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues, bool parallel = true) const override {
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
-        this->closestElementAndBaryCoords(P, I, B);
+        this->closestElementAndBaryCoords(P, I, B, parallel);
         const int numCorners = B.cols();
-        if (B.cols() != m_F.cols()) throw std::logic_error("Barycentric coordinates size mismatch");
+        if (B.cols() != this->m_closestPtProjector.numElementCorners()) throw std::logic_error("Barycentric coordinates size mismatch");
 
         const int np = P.rows();
         Eigen::MatrixXd outSamples(np, fieldValues.cols());
+        const auto &projector = this->projector();
 
-        if (fieldValues.rows() == m_V.rows()) {
+        if (fieldValues.rows() == projector.numVertices()) {
+            const auto &F = projector.F();
             for (int p = 0; p < np; ++p) {
-                auto ele = m_F.row(I[p]);
+                auto ele = F.row(I[p]);
                 auto b   = B.row(p);
                 outSamples.row(p) = b[0] * fieldValues.row(ele[0]);
                 for (int j = 1; j < numCorners; ++j)
                     outSamples.row(p) += b[j] * fieldValues.row(ele[j]);
             }
         }
-        else if (fieldValues.rows() == m_F.rows()) {
+        else if (fieldValues.rows() == projector.numElements()) {
             for (int p = 0; p < np; ++p)
                 outSamples.row(p) = fieldValues.row(I[p]);
         }
@@ -184,13 +204,9 @@ struct MESHFEM_EXPORT RawMeshFieldSampler : public FieldSamplerImpl<N> {
 
     virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> /* P */,
                                       Eigen::VectorXi &/* NI */,
-                                      Eigen::VectorXd &/* sqDist */) const override {
+                                      Eigen::VectorXd &/* sqDist */, bool /* parallel */ = true) const override {
         throw std::runtime_error("Unsupported for raw meshes");
     }
-
-protected:
-    using Base::m_V;
-    using Base::m_F;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -263,11 +279,10 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 
     virtual void closestElementAndBaryCoords(Eigen::Ref<const Eigen::MatrixXd> P,
                                              Eigen::VectorXi &I,
-                                             Eigen::MatrixXd &B) const override {
+                                             Eigen::MatrixXd &B, bool parallel = true) const override {
         // Get the closest points in the triangles/half-faces of the mesh
-        Eigen::VectorXd sq_dists;
         Eigen::MatrixXd C;
-        Base::m_closestElementAndBaryCoordsImpl(P, sq_dists, I, B, C);
+        Base::closestElementPointAndBaryCoords(P, I, C, B, parallel);
         if (!isTetMesh()) return;
 
         // For tet meshes, we still must figure out which tet the closest point
@@ -309,9 +324,9 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
     virtual void closestElementAndPoint(Eigen::Ref<const Eigen::MatrixXd> P,
                                         Eigen::VectorXd &sq_dists,
                                         Eigen::VectorXi &I,
-                                        Eigen::MatrixXd &C) const override {
+                                        Eigen::MatrixXd &C, bool parallel = true) const override {
         // Get the closest points in the triangles/half-faces of the mesh
-        Base::m_closestElementAndPointImpl(P, sq_dists, I, C);
+        Base::closestElementAndPoint(P, sq_dists, I, C, parallel);
         if (!isTetMesh()) return;
 
         // Get barycentric coordinates of the closest point in the *tets*
@@ -335,13 +350,13 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
     // auto-detected based on its size as either per-vertex, per-element, or
     // per-node.
     virtual Eigen::MatrixXd sample(Eigen::Ref<const Eigen::MatrixXd> P,
-                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues) const override {
+                                   Eigen::Ref<const Eigen::MatrixXd> fieldValues, bool parallel = true) const override {
         const auto &m = mesh();
 
         // Look up the sample points' closest elements and barycentric coordinates
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
-        this->closestElementAndBaryCoords(P, I, B);
+        this->closestElementAndBaryCoords(P, I, B, parallel);
         if (B.cols() != FEMMesh_::K + 1) throw std::logic_error("Barycentric coordinates size mismatch");
 
         const int np = P.rows();
@@ -378,10 +393,10 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
         return outSamples;
     }
 
-    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P, Eigen::VectorXi &NI, Eigen::VectorXd &sqDist) const override {
+    virtual void closestNodeAndSqDist(Eigen::Ref<const Eigen::MatrixXd> P, Eigen::VectorXi &NI, Eigen::VectorXd &sqDist, bool parallel = true) const override {
         Eigen::VectorXi I;
         Eigen::MatrixXd B;
-        this->closestElementAndBaryCoords(P, I, B);
+        this->closestElementAndBaryCoords(P, I, B, parallel);
         const size_t np = P.rows();
         NI.resize(np);
         sqDist.resize(np);
@@ -403,8 +418,6 @@ struct MESHFEM_EXPORT MeshFieldSampler : public FieldSamplerImpl<FEMMesh_::Embed
 protected:
     MeshHolderType m_meshHolder;
     std::vector<size_t> halfFaceForFace;
-    using Base::m_V;
-    using Base::m_F;
 
 private:
     MeshFieldSampler(const detail::TrisOfMesh &tris, MeshHolderType m)
@@ -422,6 +435,14 @@ std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FE
 template<class FEMMesh_>
 std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const FEMMesh_ &mesh) {
     return MeshFieldSampler<FEMMesh_, const FEMMesh_ &>::construct(mesh);
+}
+
+template<class DerivedV, class DerivedF>
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const Eigen::MatrixBase<DerivedV> &V,
+                                                        const Eigen::MatrixBase<DerivedF> &F) {
+    if      (V.cols() == 3) return std::make_unique<RawMeshFieldSampler<3>>(V, F);
+    else if (V.cols() == 2) return std::make_unique<RawMeshFieldSampler<2>>(V, F);
+    else throw std::runtime_error("Only 2D and 3D samplers are implemented.");
 }
 
 #endif /* end of include guard: FIELDSAMPLER_HH */

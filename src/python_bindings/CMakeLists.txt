@@ -80,6 +80,10 @@ pybind11_add_module(field_sampler field_sampler.cc)
 set_target_properties(field_sampler PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(field_sampler PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(closest_point_projection closest_point_projection.cc)
+set_target_properties(closest_point_projection PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(closest_point_projection PUBLIC MeshFEM intel_pybind_14_hack)
+
 pybind11_add_module(parametrization parametrization.cc)
 set_target_properties(parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(parametrization PUBLIC MeshFEM intel_pybind_14_hack)

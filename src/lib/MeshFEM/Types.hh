@@ -36,6 +36,7 @@ template<typename Real_> using Mat3X_T = Eigen::Matrix<Real_, 3, Eigen::Dynamic>
 template<typename Real_, size_t N> using VecN_T = Eigen::Matrix<Real_, N, 1>;
 template<typename Real_, size_t N> using MatMaxN_T = Eigen::Matrix<Real_, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor, N, N>;
 template<typename Real_, size_t N> using VecMaxN_T = Eigen::Matrix<Real_, Eigen::Dynamic, 1, Eigen::ColMajor, N>;
+template<typename Real_, size_t N> using RowVecN_T = Eigen::Matrix<Real_, 1, N>;
 
 // Very general detection of Eigen types.
 // Detect if T is an Eigen type (or evaluates to an Eigen type).

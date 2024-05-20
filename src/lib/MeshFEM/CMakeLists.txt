@@ -26,7 +26,6 @@ add_library(MeshFEM SHARED
         function_traits.hh
         Functions.hh
         Future.hh
-        FieldSampler.cc
         FieldSampler.hh
         GaussQuadrature.hh
         Geometry.hh
@@ -137,6 +136,8 @@ add_library(MeshFEM SHARED
 
         ElasticSolid.hh
         ElasticSheet.hh
+
+        ClosestPointProjection.cc
 )
 
 # Include directories

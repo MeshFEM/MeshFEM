@@ -27,7 +27,7 @@ struct AttachmentPointCoordinate {
     using CTraits = spmat_helper::value_traits<_CoordinateType>;
     using Real = typename CTraits::Scalar;
     using VXd = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
-    using VXi = Eigen::Matrix< int, Eigen::Dynamic, 1>;
+    using VXi = Eigen::VectorXi;
     static constexpr size_t BlockSize = (CTraits::rows * CTraits::cols);
 
     // Type of the derivative of an output coordinate with respect to a block variable
@@ -96,6 +96,10 @@ struct AttachmentPointCoordinate {
             f(varIndices[vi], coefficients[vi]);
     }
 
+    // NOP: the basic `AttachmentPointCoordinate` class does not maintain state.
+    void setVars(const Eigen::Ref<const VXd> &/* vars */) const { }
+    void setVars(const Eigen::Ref<const VXd> &/* vars */, const std::vector<int> &/* globalVarForLocalVar */) const { }
+
     _CoordinateType getPosition(const Eigen::Ref<const VXd> &vars) const {
         return m_getPositionImpl(vars, [](size_t vari) { return vari; });
     }
@@ -124,8 +128,8 @@ struct AttachmentPointCoordinate {
     template<class SpMat> void accumulate_contract_d2_dvar2(const _CoordinateType &/* grad_p */, SpMat &/* H */                                                    ) const { }
     template<class SpMat> void accumulate_contract_d2_dvar2(const _CoordinateType &/* grad_p */, SpMat &/* H */, const std::vector<int> &/* globalVarForLocalVar */) const { }
 
-    template<class Derived> static auto  extract(const Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
-    template<class Derived> static auto &extract(      Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
+    template<class Derived> static decltype(auto) extract(const Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
+    template<class Derived> static decltype(auto) extract(      Eigen::MatrixBase<Derived> &vars, size_t i) { return spmat_helper::SegmentGetter<BlockSize, Derived>::get(vars, i); }
 
     auto d_dvar(size_t vi) const { return JacobianBlock::Identity() * coefficients[vi]; }
 
@@ -232,6 +236,9 @@ struct GenericSprings : public Load<Real> {
         return Hsp_csc;
     }
 
+    const APC_A &attachmentPointA(size_t s) const { return m_coordsA.at(s); }
+    const APC_B &attachmentPointB(size_t s) const { return m_coordsB.at(s); }
+
     size_t numSprings() const { return m_coordsA.size(); }
 
     virtual ~GenericSprings() { }
@@ -250,6 +257,11 @@ private:
         const size_t ns = numSprings();
         VXd posA(ns), posB(ns);
         for (size_t s = 0; s < ns; ++s) {
+            // Allow the attachment point class to update
+            // its cached state (if necessary).
+            m_coordsA[s].setVars(x);
+            m_coordsB[s].setVars(x);
+
             APC_A::extract(posA, s) = m_coordsA[s].getPosition(x);
             APC_B::extract(posB, s) = m_coordsB[s].getPosition(x);
         }
