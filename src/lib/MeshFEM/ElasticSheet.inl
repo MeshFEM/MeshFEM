@@ -410,7 +410,7 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
         MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t bsa, size_t bsb) const {
             // x-x block
             if (b < 9) {
-                assert(a < b);
+                assert(a <= b);
                 return H_e.block(a, b, bsa, bsb);
             }
 
@@ -445,6 +445,9 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
             return coeff * H_e.block(a, b, bsa, bsb);
         }
 
+        // Number of block variables in the typical case.
+        static constexpr size_t TypicalNumVars() { return 6; }
+
         PerElementHessian H_e;
         EBlockVars evars;
         Eigen::Vector3i localHalfedgeForLocalCrease;
@@ -456,8 +459,8 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
 
 template <class Psi_2x2>
 typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val, VariableMask vmask) const {
-    CSCMat blockHsp = m_assembler.blockSparsityPattern(mesh().numElements(), elementGetter());
-    return m_assembler.blockHessianSparsityPatternToScalar(blockHsp, val);
+    auto blockHsp = m_assembler.blockSparsityPattern(mesh().numElements(), elementGetter());
+    return blockHsp.toScalar(val);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

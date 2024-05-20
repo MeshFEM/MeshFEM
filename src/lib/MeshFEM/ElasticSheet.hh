@@ -74,7 +74,7 @@
 // energy (which would technically require a Taylor expansion in the thickness
 // direction).
 template <class _Psi_2x2>
-struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
+struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     using Assembler = SystemAssembler<3, 1, 1>; // Variables: (Vertex positions, midedge normals, crease angles)
     using QuadratureRule = Quadrature<3, 1>; // Due to the bending strain discretization we use only linear FEM
     using EvalPtK = EvalPt<2>;
@@ -649,6 +649,8 @@ struct ElasticSheet : public ElasticObject<typename _Psi_2x2::Real> {
     virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
+
+    virtual ~ElasticSheet() { }
 
 private:
     void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {

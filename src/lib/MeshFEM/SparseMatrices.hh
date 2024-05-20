@@ -918,7 +918,7 @@ struct CSCMatrix {
         // inserting each in sorted order exactly once.
         // This is convenient for cases like transposing a CSCMatrix.
         template<typename SizeCalculator>
-        InOrderBuilder(CSCMatrix &mat, SizeCalculator &&columnSizeCalculator)
+        InOrderBuilder(CSCMatrix &mat, SizeCalculator &&columnSizeCalculator, bool sparsityOnly = false)
             : m_result(mat)
         {
             const _Index out_n = mat.n;
@@ -946,7 +946,7 @@ struct CSCMatrix {
                 }
             }
             m_result.Ai.resize(accum_nz);
-            m_result.Ax.resize(accum_nz);
+            if (!sparsityOnly) m_result.Ax.resize(accum_nz);
             m_result.nz = accum_nz;
 
             // Current column end pointers for each incomplete column bucket.
@@ -957,6 +957,13 @@ struct CSCMatrix {
             _Index entry = m_colEnd[j];
             m_result.Ai[entry] = i;
             m_result.Ax[entry] = v;
+            ++m_colEnd[j];
+        }
+
+        // Version that only sets sparsity pattern.
+        void insert(_Index i, _Index j) {
+            _Index entry = m_colEnd[j];
+            m_result.Ai[entry] = i;
             ++m_colEnd[j];
         }
     private:

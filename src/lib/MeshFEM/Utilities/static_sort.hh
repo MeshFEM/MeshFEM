@@ -8,6 +8,8 @@
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+// Taken from https://github.com/Vectorized/Static-Sort
+
 #ifndef static_sort_h
 #define static_sort_h
 
@@ -86,7 +88,7 @@ template <unsigned NumElements> class StaticSort
 
 	template <class A, class C, int I, int M> struct PS <A, C, I, M, 1>
 	{
-		inline PS(A &a, C c) {}
+		inline PS(A &/* a */, C /* c */) {}
 	};
 
 public:
@@ -182,7 +184,7 @@ template <unsigned NumElements> class StaticTimSort
 	template <class A, class C> struct Intro
 	{
 		template <class T>
-		static inline void reverse(T _, A &a)
+		static inline void reverse(T /* _ */, A &a)
 		{
 			if (NumElements > 1) {
 				unsigned left = 0, right = NumElements - 1;
@@ -303,4 +305,15 @@ public:
 			StaticSort<NumElements>()(arr, lt);
 	};
 };
+
+#include <algorithm>
+// JP: A sorting method tuned for sorting arrays of size `N` (via a static sort)
+// but that still can sort other-sized arrays via a fallback to `std::sort`.
+template<size_t N, typename T>
+void mostlyStaticSort(T *data, size_t n) {
+    StaticTimSort<N> sorter;
+    if (n == N) sorter(data);
+    else std::sort(data, data + n);
+}
+
 #endif

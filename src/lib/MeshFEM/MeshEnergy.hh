@@ -59,7 +59,7 @@ template<MeshVarType MVT, size_t N> struct MeshVarSpecification {
 };
 
 template<typename... MVSpec>
-struct MeshEnergyVars : public NewtonVars {
+struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
     using Assembler = SystemAssembler<MVSpec::BlockDimension...>;
 
     template<class Mesh>
@@ -78,6 +78,7 @@ struct MeshEnergyVars : public NewtonVars {
     const VXd &globalVars() const { return m_x; }
     const Assembler &assembler() const { return m_assembler; }
 
+    virtual ~MeshEnergyVars() { }
 private:
     Assembler m_assembler;
 };
@@ -92,8 +93,7 @@ struct NameMangler<MeshEnergyVars<MVSpec...>> {
 template<size_t N>
 using NodalVars = MeshEnergyVars<MeshVarSpecification<MeshVarType::PER_NODE, N>>;
 
-
-struct MESHFEM_EXPORT MeshEnergyBase : public NewtonObjectiveTerm { 
+struct MeshEnergyBase : public NewtonObjectiveTerm { 
     MeshEnergyBase(std::shared_ptr<NewtonVarsBase> vars)
         : NewtonObjectiveTerm(vars) { }
 

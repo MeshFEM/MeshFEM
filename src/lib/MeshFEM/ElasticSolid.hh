@@ -40,7 +40,7 @@
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
 template<size_t _K, size_t _Deg, class _EmbeddingSpace, class _Energy>
-struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
+struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     using EmbeddingSpace = _EmbeddingSpace;
     using Real   = typename EmbeddingSpace::Scalar;
     using Energy = _Energy;
@@ -143,7 +143,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection);
     }
 
-    CSCMat &getBlockHsp() const {
+    const auto &getBlockHsp() const {
         if (!m_blockHsp) m_blockHsp = m_assembler.blockSparsityPatternForMesh(mesh());
         return m_blockHsp.value();
     }
@@ -152,7 +152,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     virtual void accumulateHessian(Real weight, CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
-        // BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
 #if 0
         m_assembler.assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
             return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask, weight);
@@ -165,7 +165,7 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
     }
 
     // Construct a block-valued Hessian.
-    void blockHessian(CSCMat &H, bool projectionMask = false) const {
+    CSCMatrix<SuiteSparse_long, MNd> blockHessian(bool projectionMask = false) const {
         CSCMatrix<SuiteSparse_long, MNd> blockH;
         blockH.copySparsityPattern(getBlockHsp());
 
@@ -173,17 +173,18 @@ struct ElasticSolid : public ElasticObject<typename _EmbeddingSpace::Scalar> {
         m_assembler.assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {
             return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
         });
+        return blockH;
     }
 
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        return m_assembler.blockHessianSparsityPatternToScalar(getBlockHsp(), val);
+        return getBlockHsp().toScalar(val);
     }
 
-    const CSCMat &hessianBlockSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
+    const CSCMat hessianBlockSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        CSCMat &result = getBlockHsp();
+        CSCMat result = getBlockHsp();
         result.fill(val);
         return result;
     }
@@ -415,8 +416,8 @@ protected:
 
     SystemAssembler<N> m_assembler;
 
-    // Block Hessian sparisty pattern.
-    mutable std::optional<CSCMat> m_blockHsp;
+    // Block Hessian sparsity pattern.
+    mutable std::optional<BlockCSCHessian<OptimizationVarStructure<N>>> m_blockHsp;
 
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>
