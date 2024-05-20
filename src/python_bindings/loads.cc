@@ -163,8 +163,24 @@ void bindProjectedSprings(py::module &m, py::module &detail_module) {
         .def_readwrite("preprojectionAttachmentPoint", &PAPC::preprojectionAttachmentPoint)
         ;
 
-    bindSprings<Springs>(m, "ProjectedSprings" + std::to_string(N))
+    bindSprings<Springs>(detail_module, "ProjectedSprings" + std::to_string(N))
         ;
+
+    m.def("ProjectedSprings", [](const std::shared_ptr<NewtonVarsBase> &obj,
+                                 const SuiteSparseMatrix &dsm,
+                                 std::shared_ptr<ClosestPointProjection<VNd>> proj,
+                                 const VXd &stiffnesses) {
+              return std::make_shared<Springs>(obj, APC::fromDeformationSamplerMatrix(dsm), PAPC::fromDeformationSamplerMatrix(dsm, proj), stiffnesses);
+          }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("closestPointProjector"), py::arg("stiffnesses"))
+     ;
+
+    m.def("ProjectedSprings", [](const std::shared_ptr<NewtonVarsBase> &obj,
+                                 const SuiteSparseMatrix &dsm,
+                                 std::shared_ptr<ClosestPointProjection<VNd>> proj,
+                                 double stiffness) {
+              return std::make_shared<Springs>(obj, APC::fromDeformationSamplerMatrix(dsm), PAPC::fromDeformationSamplerMatrix(dsm, proj), stiffness);
+          }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("closestPointProjector"), py::arg("stiffness") = 1.0)
+     ;
 }
 
 PYBIND11_MODULE(loads, m)

@@ -28,7 +28,7 @@ struct MESHFEM_EXPORT ClosestPointProjection {
     struct ProjectionResult {
         _CoordinateType p;
         int element;
-        VecMaxN_T<Real, D> barycoords;
+        VecMaxN_T<Real, D + 1> barycoords;
         Real squaredDist;
 
         // Jacobian of the projected point with respect to the query point.

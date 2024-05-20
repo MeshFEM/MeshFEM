@@ -54,6 +54,13 @@ struct ProjectedAttachmentPoint {
          preprojectionAttachmentPoint.gradContribution(dp_dq * grad_p, grad, globalVarForLocalVar); 
     }
 
+    void validate() const {
+        if (coefficients.size() != varIndices.size())
+            throw std::runtime_error("ProjectedAttachmentPoint: coefficients and varIndices must have the same size (" + std::to_string(coefficients.size()) + " != " + std::to_string(varIndices.size()) + ")");
+        if (m_projector == nullptr)
+            throw std::runtime_error("ProjectedAttachmentPoint: projector must be non-null");
+    }
+
     // The second derivative is zero (assuming the point is not moving between
     // tangent planes). Also, it would not contribute to the Hessian of the
     // spring energy ||x - P(x)|| due to the envelope theorem...
