@@ -161,6 +161,7 @@ struct GenericSprings : public Load<Real> {
     using VXd = typename Base::VXd;
     static_assert(APC_A::BlockSize == APC_B::BlockSize, "APC variable block sizes must match");
     static constexpr size_t BlockSize = APC_A::BlockSize;
+    using MXBd = Eigen::Matrix<Real, Eigen::Dynamic, BlockSize>;
 
     // Create uniaxial, axis-aligned springs connecting the attachment points
     // in `coordsA` with the corresponding attachment points in `coordsB`
@@ -255,7 +256,7 @@ private:
     void m_updateCache() {
         const auto &x = this->getNVars().getVars();
         const size_t ns = numSprings();
-        VXd posA(ns), posB(ns);
+        VXd posA(ns * BlockSize), posB(ns * BlockSize);
         for (size_t s = 0; s < ns; ++s) {
             // Allow the attachment point class to update
             // its cached state (if necessary).
@@ -266,7 +267,9 @@ private:
             APC_B::extract(posB, s) = m_coordsB[s].getPosition(x);
         }
         VXd diff = posA - posB;
-        m_forces = (m_k.array() * (posA - posB).array());
+
+        m_forces.resize(diff.size());
+        Eigen::Map<MXBd>(m_forces.data(), ns, BlockSize) = (m_k.asDiagonal() * Eigen::Map<const MXBd>(diff.data(), ns, BlockSize));
         m_energy = 0.5 * diff.dot(m_forces);
 
         m_grad.setZero(x.size());

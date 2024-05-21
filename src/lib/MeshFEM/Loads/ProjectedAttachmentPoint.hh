@@ -32,6 +32,10 @@ struct ProjectedAttachmentPoint {
           m_projector(closestPtProjector)
     { }
 
+    // Default copy constructor links the reference members incorrectly!!
+    ProjectedAttachmentPoint(const ProjectedAttachmentPoint &b)
+        : ProjectedAttachmentPoint(b.preprojectionAttachmentPoint, b.m_projector) { }
+
     static std::vector<ProjectedAttachmentPoint> fromDeformationSamplerMatrix(const SuiteSparseMatrix &dsm, std::shared_ptr<CP> closestPtProjector) {
         std::vector<ProjectedAttachmentPoint> result;
         for (const APC &apc : APC::fromDeformationSamplerMatrix(dsm))
