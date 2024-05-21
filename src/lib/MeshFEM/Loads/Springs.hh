@@ -68,6 +68,21 @@ struct AttachmentPointCoordinate {
         return result;
     }
 
+    static std::vector<AttachmentPointCoordinate> fromBlockVars(const Eigen::VectorXi &blockVars) {
+        std::vector<AttachmentPointCoordinate> result;
+        const int nbv = blockVars.size();
+        result.reserve(nbv);
+
+        VXd coeffs = VXd::Ones(1);
+        Eigen::VectorXi vidxs(1);
+
+        for (int i = 0; i < nbv; ++i) {
+            vidxs[0] = i;
+            result.emplace_back(vidxs, coeffs);
+        }
+        return result;
+    }
+
     static std::vector<AttachmentPointCoordinate> fromTargetPositions(const Eigen::Ref<const Eigen::VectorXd> &targetPositions) {
         std::vector<AttachmentPointCoordinate> result;
         if (targetPositions.size() % BlockSize != 0) throw std::runtime_error("targetPositions.size() must be divisible by " + std::to_string(BlockSize));

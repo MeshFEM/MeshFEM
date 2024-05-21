@@ -137,8 +137,8 @@ auto bindSprings(py::module &m, const std::string name) {
         .def("getStiffnesses", &Springs::getStiffnesses)
         .def("setStiffnesses", [](Springs &s, double     val ) { s.setStiffnesses(val ); }, py::arg("val"))
         .def("setStiffnesses", [](Springs &s, const VXd &vals) { s.setStiffnesses(vals); }, py::arg("vals"))
-        .def("attachmentPointA", &Springs::attachmentPointA, py::arg("s"))
-        .def("attachmentPointB", &Springs::attachmentPointB, py::arg("s"))
+        .def("attachmentPointA", &Springs::attachmentPointA, py::arg("s"), py::return_value_policy::reference_internal)
+        .def("attachmentPointB", &Springs::attachmentPointB, py::arg("s"), py::return_value_policy::reference_internal)
         .def("numSprings",       &Springs::numSprings)
         ;
     return pySprings;
@@ -155,16 +155,17 @@ void bindProjectedSprings(py::module &m, py::module &detail_module) {
     using Springs = Loads::GenericSprings<APC, PAPC>;
 
     py::class_<PAPC>(detail_module, ("ProjectedAttachmentPoint" + std::to_string(N)).c_str())
-        .def("getPosition", [](const PAPC &p) { return p.getPosition(); })
         .def("d_dvar",      &PAPC::d_dvar, py::arg("vi"))
         .def("get_dp_dq",   &PAPC::get_dp_dq)
         .def("projector",   &PAPC::projector)
 
+        .def_property_readonly("position", [](const PAPC &p) { return p.getPosition(); })
+        .def_property_readonly("preprojectedPosition", [](const PAPC &p) { return p.getPreprojectedPoint(); })
+
         .def_readwrite("preprojectionAttachmentPoint", &PAPC::preprojectionAttachmentPoint)
         ;
 
-    bindSprings<Springs>(detail_module, "ProjectedSprings" + std::to_string(N))
-        ;
+    bindSprings<Springs>(detail_module, "ProjectedSprings" + std::to_string(N));
 
     m.def("ProjectedSprings", [](const std::shared_ptr<NewtonVarsBase> &obj,
                                  const SuiteSparseMatrix &dsm,
@@ -180,6 +181,24 @@ void bindProjectedSprings(py::module &m, py::module &detail_module) {
                                  double stiffness) {
               return std::make_shared<Springs>(obj, APC::fromDeformationSamplerMatrix(dsm), PAPC::fromDeformationSamplerMatrix(dsm, proj), stiffness);
           }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("closestPointProjector"), py::arg("stiffness") = 1.0)
+     ;
+
+    m.def("ProjectedSprings", [](const std::shared_ptr<NewtonVarsBase> &obj,
+                                 const Eigen::VectorXi &blockVars,
+                                 std::shared_ptr<ClosestPointProjection<VNd>> proj,
+                                 const VXd &stiffnesses) {
+              std::vector<APC> apc = APC::fromBlockVars(blockVars);
+              return std::make_shared<Springs>(obj, apc, PAPC::fromAttachmentPoints(apc, proj), stiffnesses);
+          }, py::arg("obj"), py::arg("blockVars"), py::arg("closestPointProjector"), py::arg("stiffnesses"))
+     ;
+
+    m.def("ProjectedSprings", [](const std::shared_ptr<NewtonVarsBase> &obj,
+                                 const Eigen::VectorXi &blockVars,
+                                 std::shared_ptr<ClosestPointProjection<VNd>> proj,
+                                 double stiffnesses) {
+              std::vector<APC> apc = APC::fromBlockVars(blockVars);
+              return std::make_shared<Springs>(obj, apc, PAPC::fromAttachmentPoints(apc, proj), stiffnesses);
+          }, py::arg("obj"), py::arg("blockVars"), py::arg("closestPointProjector"), py::arg("stiffness") = 1.0)
      ;
 }
 

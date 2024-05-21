@@ -276,10 +276,12 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
         m_weights.resize(numTerms(), 1.0);
     }
 
-    void setWeights(std::vector<Real> weights) {
-        if (m_weights.size() != numTerms()) throw std::runtime_error("Must have one weight per term");
+    void setWeights(const std::vector<Real> &weights) {
+        if (weights.size() != numTerms()) throw std::runtime_error("Must have one weight per term (" + std::to_string(numTerms()) + " terms, " + std::to_string(weights.size()) + " weights)");
         m_weights = weights;
     }
+
+    const std::vector<Real> &getWeights() const { return m_weights; }
 
     const NewtonObjectiveTermBase &term(size_t i) const { return *m_terms[i]; }
           NewtonObjectiveTermBase &term(size_t i)       { return *m_terms[i]; }

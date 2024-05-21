@@ -192,6 +192,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("numTerms",   &NewtonMultiobjectiveProblem::numTerms)
         .def("setTerms",   &NewtonMultiobjectiveProblem::setTerms)
         .def("setWeights", &NewtonMultiobjectiveProblem::setWeights)
+        .def("getWeights", &NewtonMultiobjectiveProblem::getWeights)
         .def("term",       [](NewtonMultiobjectiveProblem &prob, size_t i) -> NOT & { return prob.term(i); }, py::return_value_policy::reference_internal)
         .def("setCustomIterationCallback",
                 [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction &cb) {
