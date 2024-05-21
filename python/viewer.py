@@ -14,6 +14,9 @@ except Exception as e:
 import mesh_operations
 class RawMesh():
     def __init__(self, vertices, faces, normals = None, omitNormals = False):
+        # Zero-pad 2D point data to 3D
+        if (vertices.shape[1] == 2):
+            vertices = np.pad(vertices, [(0, 0), (0, 1)], 'constant')
         # if (faces.shape[1] != 3): raise Exception('RawMesh only supports triangle meshes!')
         if normals is None and (not omitNormals):
             normals = mesh_operations.getVertexNormalsRaw(vertices, faces)
@@ -309,6 +312,10 @@ def Viewer(obj, width=None, height=None, textureMap=None, scalarField=None, vect
         cls = OffscreenTetMeshViewer if offscreen else TetMeshViewer
     if reflection.isVoxelFEMSimulator(obj):
         raise Exception('Use VoxelFEM Viewer')
+    # check if is tuple of (V, E) where E is a list of edges
+    if isinstance(obj, tuple) and len(obj) == 2 and obj[1].shape[1] == 2:
+        if offscreen: raise Exception('LineMeshViewer not supported in offscreen mode')
+        cls = LineMeshViewer
     kwargs = {'textureMap': textureMap, 'scalarField': scalarField, 'vectorField': vectorField, 'superView': superView, 'transparent': transparent, 'wireframe': wireframe}
     if (width is None) and (height is None): width = height = (1024 if offscreen else 512)
     if width  is not None: kwargs[ 'width'] = width
