@@ -200,7 +200,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 }, py::arg("cb"))
         ;
 
-    py::class_<NewtonOptimizer>(m, "NewtonOptimizer")
+    py::class_<NewtonOptimizer, std::shared_ptr<NewtonOptimizer>>(m, "NewtonOptimizer")
         .def("optimize", [](NewtonOptimizer &nopt) {
                   py::scoped_ostream_redirect stream1(std::cout, py::module::import("sys").attr("stdout"));
                   py::scoped_ostream_redirect stream2(std::cerr, py::module::import("sys").attr("stderr"));
