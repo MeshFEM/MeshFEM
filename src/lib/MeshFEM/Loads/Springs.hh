@@ -12,7 +12,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef SPRINGS_HH
 #define SPRINGS_HH
+
 #include "Load.hh"
+#include "../Parallelism.hh"
 
 namespace Loads {
 
@@ -269,10 +271,12 @@ private:
     }
 
     void m_updateCache() {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("GenericSprings::m_updateCache");
+
         const auto &x = this->getNVars().getVars();
         const size_t ns = numSprings();
         VXd posA(ns * BlockSize), posB(ns * BlockSize);
-        for (size_t s = 0; s < ns; ++s) {
+        parallel_for_range(ns, [&](size_t s) {
             // Allow the attachment point class to update
             // its cached state (if necessary).
             m_coordsA[s].setVars(x);
@@ -280,7 +284,8 @@ private:
 
             APC_A::extract(posA, s) = m_coordsA[s].getPosition(x);
             APC_B::extract(posB, s) = m_coordsB[s].getPosition(x);
-        }
+        });
+
         VXd diff = posA - posB;
 
         m_forces.resize(diff.size());

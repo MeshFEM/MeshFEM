@@ -148,7 +148,7 @@ IGLAABB_INLINE void iglaabb::point_simplex_squared_distance(
   Eigen::MatrixBase<Derivedc> & c)
 {
   // Use Dynamic because we don't know Ele.cols() at compile time.
-  Eigen::Matrix<typename Derivedc::Scalar,1,Eigen::Dynamic> b;
+  Eigen::Matrix<typename Derivedc::Scalar, 1, Eigen::Dynamic, Eigen::RowMajor, /* MaxRows = */ 1, /* MaxCols = */ 3> b;
   point_simplex_squared_distance<DIM>( p, V, Ele, primitive, sqr_d, c, b );
 }
 

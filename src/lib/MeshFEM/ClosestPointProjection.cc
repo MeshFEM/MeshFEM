@@ -40,7 +40,12 @@ ClosestPointProjection<CT>::project(const VecN_T<Real, D> &q, bool computeJacobi
     double dist;
     Eigen::Matrix<Real, 1, Eigen::Dynamic, Eigen::RowMajor, 1, /* MaxCols */ 3> baryCoords(m_F.cols());
     RowVecN_T<Real, D> dummy; // (reprojection--unneeded)
-    iglaabb::point_simplex_squared_distance<D>(closestPt, m_V, m_F, result.element, dist, dummy, baryCoords);
+    // Compute barycentric coordinates of the closest point projection
+    // (TODO: modify `squared_distance` to return barycentric coordinates directly)
+    // Note, that we must use the original query point `q` here instead of `closestPt` because
+    // the latter can lead to slightly interior baricentric coordinates for points that
+    // project precisely onto vertices or edges.
+    iglaabb::point_simplex_squared_distance<D>(q.transpose().eval(), m_V, m_F, result.element, dist, dummy, baryCoords);
 
     result.barycoords = baryCoords.transpose();
 
