@@ -87,7 +87,7 @@ static void test() {
     auto fs = FieldSampler::construct(m);
 
     {
-        constexpr size_t ntests = 200;
+        constexpr size_t ntests = 1000;
         for (size_t t = 0; t < ntests; ++t) {
             QP q(m);
             Eigen::VectorXi I;
@@ -132,7 +132,7 @@ void testBarycoords() {
 
     auto fs = FieldSampler::construct(m);
 
-    constexpr size_t ntests = 200;
+    constexpr size_t ntests = 2000;
     // Generic barycoords test (codim 0)
     {
         for (size_t t = 0; t < ntests; ++t) {
@@ -146,28 +146,33 @@ void testBarycoords() {
         }
     }
 
+    // Interior barycentric coordinates on a halfedge he
+    struct InteriorEdgePt {
+        InteriorEdgePt(const Mesh::HEHandle<Mesh> &he) {
+            const double margin = 1e-3;
+            double alpha = margin + (1 - 2 * margin) * (double(random()) / RAND_MAX);
+            p = (1 - alpha) * he.tail().node()->p + alpha * he.tip().node()->p;
+            bc[(he.localIndex() + 1) % 3] = (1 - alpha); // tail BC
+            bc[(he.localIndex() + 2) % 3] = alpha;       // tip  BC
+            bc[he.localIndex()] = 0;
+        }
+
+        VNd p, bc;
+    };
+
     // Barycoords test for points away from internal edges
     {
         for (size_t t = 0; t < ntests; ++t) {
-            QueryPoint<K, N> q(m, 1);
-
+            // Pick a random interior halfedge
             int hei = -1;
             while (hei == -1) {
-                // Determine the (half)edge that the query
-                // point lies on.
-                {
-                    auto tri = m.element(q.eidx);
-                    for (auto v : tri.vertices()) {
-                        if (q.bc[v.localIndex()] == 0)
-                            hei = tri.halfEdge(v.localIndex()).index();
-                    }
-                }
-                assert(hei != -1);
-                if (m.halfEdge(hei).isBoundary()) { hei = -1; q.regenerate(m, 1); continue; }
+                hei = random() % m.numHalfEdges();
+                if (m.halfEdge(hei).isBoundary()) hei = -1;
             }
 
             auto he = m.halfEdge(hei);
-            if (he.isBoundary()) continue;
+
+            InteriorEdgePt q(he);
 
             auto n0 = he.tri()->normal();
             auto n1 = he.opposite().tri()->normal();
@@ -182,11 +187,11 @@ void testBarycoords() {
             //                       +
             if (n0.cross(n1).dot(he.tip().node()->p - he.tail().node()->p) < 0) n_avg *= -1;
 
-            Eigen::RowVector3d p = q.p + 1e-4 * n_avg; // Small enough that projection doesn't jump to another triangle....
+            q.p += 1e-4 * n_avg; // Small enough that projection doesn't jump to another triangle....
 
             Eigen::VectorXi I;
             Eigen::MatrixXd B;
-            fs->closestElementAndBaryCoords(p, I, B);
+            fs->closestElementAndBaryCoords(q.p.transpose().eval(), I, B);
             REQUIRE(((I[0] == he.tri().index())
                   || (I[0] == he.opposite().tri().index())));
 
@@ -194,7 +199,6 @@ void testBarycoords() {
                 // Point projected into the edge's other incident triangle.
                 // We need to rearrange the original barycentric coordinates `q.bc`
                 // so that they correspond to the other triangle.
-                assert(q.bc[he.localIndex()] == 0);
                 Eigen::Vector3d rearranged = Eigen::Vector3d::Zero();
                 auto hop = he.opposite();
                 rearranged[(hop.localIndex() + 1) % 3] = q.bc[(he.localIndex() + 2) % 3]; // Copy tail bc from tip bc in original triangle.
@@ -202,8 +206,8 @@ void testBarycoords() {
                 q.bc = rearranged;
                 he = hop;
             }
-            if (relerror(q.bc.transpose(), B) > 1e-10) {
-                std::cout << "q.bc: " << q.bc.transpose() << std::endl;
+            if (relerror(q.bc.transpose(), B) >= 1e-10) {
+                std::cout << "bc: " << q.bc.transpose() << std::endl;
                 std::cout << "B: " << B << std::endl;
             }
 
@@ -213,8 +217,82 @@ void testBarycoords() {
         }
     }
 
-    // TODO: Barycoords test for points away from vertices
-    // Determine the "concave direction" by averaging over outgoing edge vectors.
+    // Barycoords test for points away from boundary edges
+    {
+        for (size_t t = 0; t < ntests; ++t) {
+            size_t bei = size_t(random()) % m.numBoundaryEdges();
+            auto he = m.halfEdge(m.boundaryEdge(bei).volumeHalfEdge().index());
+
+            InteriorEdgePt q(he);
+
+            // Rotate the normal a small amount outward around the boundary edge
+            // so that the offset point will project back to the edge rather
+            // than the triangle interior.
+            auto n_rotated = (he.tri()->normal() - 1e-3 * he.tri()->gradBarycentric().col(he.localIndex()).normalized()).normalized().eval();
+            q.p += 1e-4 * n_rotated; // Small enough that projection doesn't jump to another triangle....
+
+            Eigen::VectorXi I;
+            Eigen::MatrixXd B;
+            fs->closestElementAndBaryCoords(q.p.transpose().eval(), I, B);
+            REQUIRE(I[0] == he.tri().index());
+
+            REQUIRE(relerror(q.bc.transpose(), B) < 1e-10);
+            assert(q.bc[he.localIndex()] == 0);
+            REQUIRE(B(0, he.localIndex()) == 0);
+        }
+    }
+
+    // Barycoords test for queries offset from vertices
+    {
+        for (size_t t = 0; t < ntests; ++t) {
+            // Find a vertex for which offsetting in the mean-curvature-normal
+            // direction is guaranteed to project back to that vertex. (Saddle
+            // vertices are inadmissible; only elliptic/parabolic points work.)
+            VNd n;
+            size_t vi;
+            while (true) {
+                vi = size_t(random()) % m.numVertices();
+                auto v = m.vertex(vi);
+                // Compute a "curvature normal" with a uniform Laplacian,
+                // averaging all the edge vectors. Then check that the one-ring
+                // is elliptic with all edges appearing on the opposite half-plane
+                // defined by the normal.
+                n = VNd::Zero();
+                for (auto he : v.incidentHalfEdges())
+                    n += he.tail().node()->p - v.node()->p;
+                if (n.norm() < 1e-10) continue;
+                n = -n.normalized();
+
+                // Hyperbolicity check: is the outward normal pointing away from
+                // each edge?
+                bool good = true;
+                for (auto he : v.incidentHalfEdges()) {
+                    if (n.dot(he.tail().node()->p - v.node()->p) > 0) {
+                        good = false;
+                        break;
+                    }
+                }
+                if (good) break;
+            }
+
+            VNd p = m.vertex(vi).node()->p + 1e-3 * n;
+
+            Eigen::VectorXi I;
+            Eigen::MatrixXd B;
+            fs->closestElementAndBaryCoords(p.transpose().eval(), I, B);
+            Eigen::Array3d bc = B.transpose();
+
+            // Precisely one barycentric coordinate should be nonzero.
+            REQUIRE((bc == 0).count() == 2);
+
+            // The nonzero barycentric coordinate should correspond to
+            // the vertex we offset from.
+            int localIndex;
+            bc.maxCoeff(&localIndex);
+
+            REQUIRE(size_t(m.tri(I[0]).vertex(localIndex).index()) == vi);
+        }
+    }
 }
 
 TEST_CASE("field sampler", "[field_sampler]") {
