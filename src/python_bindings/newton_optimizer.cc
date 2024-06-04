@@ -137,7 +137,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
 
-        .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_unique<NewtonOptimizer>(prob); })
+        .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 
         .def_readwrite("disableCaching", &NewtonProblem::disableCaching)
         .def("invalidateCachedHessian",  &NewtonProblem::invalidateCachedHessian)
