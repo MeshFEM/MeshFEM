@@ -21,8 +21,11 @@ struct MESHFEM_EXPORT NewtonProblem {
 
     // Called at the start of each new iteration (after line search has been performed)
     bool iterationCallback(size_t i) {
-        m_clearCache();
-        return m_iterationCallback(i);
+        bool earlyExit = m_iterationCallback(i);
+        m_clearCache(); // This must happen after `m_iterationCallback` in case
+                        // the user's callback calls `hessian` with the wrong
+                        // `projectionMask` or with incorrect variables.
+        return earlyExit;
     }
 
     virtual Real objective() const = 0;
