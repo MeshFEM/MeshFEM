@@ -18,6 +18,14 @@ VType<Mesh> getV(const Mesh &m) {
 }
 
 template<class Mesh>
+VType<Mesh> getNodes(const Mesh &m) {
+    VType<Mesh> V(Eigen::Index(m.numNodes()), Eigen::Index(VType<Mesh>::ColsAtCompileTime));
+    for (auto n : m.nodes())
+        V.row(n.index()) = n->p;
+    return V;
+}
+
+template<class Mesh>
 using FType = Eigen::Matrix<int, Eigen::Dynamic, Mesh::K + 1>;
 
 template<class Mesh>

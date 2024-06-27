@@ -21,6 +21,7 @@
 #include "EnergyDensities/EnergyTraits.hh"
 #include "FieldSamplerMatrix.hh"
 #include <Eigen/Sparse>
+#include "Utilities/MeshConversion.hh"
 
 #include <atomic>
 #include <optional>
@@ -205,13 +206,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
     auto deformedVertices() const { return m_x.topRows(numVertices()); } // return slice of m_x
     const MXNd &deformedPositions() const { return m_x; } // deformed positions for all nodes
-    MXNd restNodePositions() const {
-        MXNd rpos(numNodes(), size_t(N));
-        for (const auto n : mesh().nodes())
-            rpos.row(n.index()) = n->p;
-        return rpos;
-    }
-    MXNd nodeDisplacements() const { return deformedPositions() - restNodePositions(); }
+    MXNd restNodePositions() const { return getNodes(mesh()); }
 
     const Mesh &mesh() const { return *m_mesh; }
 

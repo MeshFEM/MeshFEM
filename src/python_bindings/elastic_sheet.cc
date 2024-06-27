@@ -58,7 +58,6 @@ struct ElasticSheetBinder {
           .def("setDeformedPositions",     &ES::setDeformedPositions)
           .def("getDeformedPositions",     &ES::deformedPositions)
           .def("getRestPositions",         &ES::restPositions)
-          .def("getNodeDisplacements",     &ES::nodeDisplacements)
           .def("applyRigidTransform",      &ES::applyRigidTransform, py::arg("R"), py::arg("t"))
           .def("prepareRigidMotionPins",   &ES::prepareRigidMotionPins)
           .def("filterRMPinArtifacts",     &ES::filterRMPinArtifacts, py::arg("pinVertices"))

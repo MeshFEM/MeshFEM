@@ -44,6 +44,7 @@
 #include "EnergyDensities/TangentElasticityTensor.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Geometry.hh"
+#include "Utilities/MeshConversion.hh"
 
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
@@ -260,21 +261,19 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return result;
     }
 
-    VXd getRestVars() const override { return Eigen::Map<const VXd>(m_deformedPositions.data(), numRestVars()); }
+    VXd getRestVars() const override {
+        const auto &m = mesh();
+        VXd result(m.numNodes() * 3);
+        for (const auto n : m.nodes())
+            result.template segment<3>(N * n.index()) = n->p;
+        return result;
+    }
 
     const MX3d &deformedPositions() const { return m_deformedPositions; }
     const VXd  &thetas()            const { return m_thetas;            }
     const VXd  &creaseAngles()      const { return m_creaseAngles;      }
 
-    MX3d restPositions() const {
-        const auto &m = mesh();
-        MX3d rpos(m.numNodes(), 3);
-        for (const auto n : m.nodes())
-            rpos.row(n.index()) = n->p;
-        return rpos;
-    }
-
-    MX3d nodeDisplacements() const { return deformedPositions() - restPositions(); }
+    MX3d restPositions() const { return getNodes(mesh()); }
 
     Real energy(const EnergyType etype) const;
 
@@ -664,10 +663,12 @@ private:
         m_defoConfigUpdated();
     }
 
-    void m_setRestVars(const Eigen::Ref<const VXd> & /* vars */) override {
-        throw std::runtime_error("Unimplemented");
+    void m_setRestVars(const Eigen::Ref<const VXd> &vars) override {
+        m_mesh->setNodePositions(Eigen::Map<const MX3d>(vars.data(), numVertices(), size_t(N)));
         for (auto &se : m_shellElements)
             se.elementData.embeddingUpdated();
+
+        m_updateDeformedElements(/* positionsUpdated = */ false);
     }
 
     // Update the current midedge reference frame to adapt to the new deformed
