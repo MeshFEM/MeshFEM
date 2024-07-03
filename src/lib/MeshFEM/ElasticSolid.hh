@@ -140,8 +140,18 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
     using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
-    PerElementHessian elementHessian(size_t ei, bool disableProjection = false) const {
-        return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection);
+    PerElementHessian elementHessian(size_t ei, bool disableProjection = false, Real weight = 1.0) const {
+        if (useXBasedProjection) disableProjection = true; // Don't also do an F-based projection
+        PerElementHessian result = SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection, weight);
+
+        // Apply x-based projection
+        if (useXBasedProjection) {
+            result.template triangularView<Eigen::Lower>() = result.transpose();
+            Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(result);
+            result = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+        }
+
+        return result;
     }
 
     const auto &getBlockHsp() const {
@@ -156,11 +166,11 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
 #if 0
         m_assembler.assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
-            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask, weight);
+            return elementHessian(ei, !projectionMask, weight);
         });
 #else
         m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask, weight](size_t ei) {
-            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask, weight);
+            return elementHessian(ei, !projectionMask, weight);
         });
 #endif
     }
@@ -172,7 +182,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("Assemble Block Hessian");
         m_assembler.assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {
-            return SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), !projectionMask);;
+            return elementHessian(ei, !projectionMask);
         });
         return blockH;
     }
@@ -386,6 +396,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
         return fieldSamplerMatrix(mesh(), N, P);
     }
+
+    bool useXBasedProjection = false;
 
 private:
     void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
