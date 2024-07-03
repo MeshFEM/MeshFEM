@@ -141,11 +141,12 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false, Real weight = 1.0) const {
-        if (useXBasedProjection) disableProjection = true; // Don't also do an F-based projection
-        PerElementHessian result = SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei), disableProjection, weight);
+        PerElementHessian result = SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei),
+                    /* disableProjection = */ (disableProjection || useXBasedProjection), // Don't also do an F-based projection
+                    weight);
 
-        // Apply x-based projection
-        if (useXBasedProjection) {
+        if (!disableProjection && useXBasedProjection) {
+            // Apply x-based projection
             result.template triangularView<Eigen::Lower>() = result.transpose();
             Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(result);
             result = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
