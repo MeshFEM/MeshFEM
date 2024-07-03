@@ -32,9 +32,11 @@
 // Factory Function Declarations
 ////////////////////////////////////////////////////////////////////////////////
 struct FieldSampler;
+
+template<class DerivedV, class DerivedF>
 MESHFEM_EXPORT
-std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(Eigen::Ref<const Eigen::MatrixXd> V,
-                                                        Eigen::Ref<const Eigen::MatrixXi> F);
+std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const Eigen::MatrixBase<DerivedV> &V,
+                                                        const Eigen::MatrixBase<DerivedF> &F);
 template<class FEMMesh_>
 MESHFEM_EXPORT
 std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(std::shared_ptr<const FEMMesh_> mesh);

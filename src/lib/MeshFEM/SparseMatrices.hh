@@ -35,8 +35,12 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/AutomaticDifferentiation.hh>
 
+#if MESHFEM_WITH_CHOLMOD
+#include <SuiteSparse_config.h>
+#else
 #ifndef SuiteSparse_long
 using SuiteSparse_long = long;
+#endif
 #endif
 
 template<typename Real>

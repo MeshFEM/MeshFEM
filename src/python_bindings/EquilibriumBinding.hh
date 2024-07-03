@@ -16,7 +16,7 @@ namespace py = pybind11;
 // causes an error since NewtonProblem is not copyable).
 using PyCallbackFunction = std::function<bool(NewtonProblem *, size_t)>;
 
-CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
+inline CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
     return [pcb](NewtonProblem &p, size_t i) -> bool { if (pcb) return pcb(&p, i); return false; };
 }
 
@@ -38,7 +38,7 @@ void addComputeEquilibriumBinding(PYEs &pyES) {
             py::call_guard<py::scoped_ostream_redirect,
                            py::scoped_estream_redirect>())
         .def("equilibriumOptimizer",
-            [](EQObj &obj, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb, Real systemEnergyIncreaseFactorLimit, Real energyLimitingThreshold, Real hessianShift) {
+            [](EQObj &obj, const LC &loads, const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, PyCallbackFunction pcb, Real systemEnergyIncreaseFactorLimit, Real energyLimitingThreshold, Real hessianShift) -> std::shared_ptr<NewtonOptimizer> {
                 return get_equilibrium_optimizer(obj, loads, fixedVars, opts, callbackWrapper(pcb), systemEnergyIncreaseFactorLimit, energyLimitingThreshold, hessianShift);
             },
             py::arg("loads") = LC(),
