@@ -171,9 +171,9 @@ struct EmbeddedMembraneElementData {
     const M23d &BtGradBarycentric() const { return m_BtGradBarycentric; }
     const M32d &B() const { return m_B; }
 
-    GradPhis gradPhis() const {
-        if constexpr (Deg != 1) { throw std::runtime_error("This method is only meant for linear elements!"); }
-        return m_BtGradBarycentric;
+    const M23d &gradPhis() const {
+        if constexpr (Deg == 1) return m_BtGradBarycentric;
+        throw std::runtime_error("This method is only meant for linear elements!");
     }
 
     GradPhis gradPhis(const EvalPt<K> &x) const {

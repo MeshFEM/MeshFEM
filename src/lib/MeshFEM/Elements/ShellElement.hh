@@ -76,8 +76,8 @@ struct ShellElement {
     struct FBGetter {
         FBGetter(const DTG &dtg) : dtg(dtg) { }
         auto operator()(const typename EData::GradPhis &gradPhis) const {
-            return dtg.edgeVecs.col(1) * gradPhis.col(0).transpose()
-                 - dtg.edgeVecs.col(0) * gradPhis.col(1).transpose();
+            return (dtg.edgeVecs.col(1) * gradPhis.col(0).transpose()
+                  - dtg.edgeVecs.col(0) * gradPhis.col(1).transpose()).eval();
         }
         const DTG &dtg;
     };
