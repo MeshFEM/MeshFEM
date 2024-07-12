@@ -530,7 +530,7 @@ struct TripletMatrix {
     //  @param[in]  pad         Whether to allow padding
     //  @param[in]  transpose   Whether to transpose B before appending.
     *///////////////////////////////////////////////////////////////////////////
-    void append(const TMatrix &B, AppendPos pos, bool pad = false,
+    void append(const TMatrix &B, AppendPos pos = APPEND_BELOW, bool pad = false,
                 bool transpose = false) {
         (void) (pad);
         size_t Bm = transpose ? B.n : B.m, Bn = transpose ? B.m : B.n;
