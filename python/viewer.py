@@ -23,7 +23,11 @@ class RawMesh():
         self.updateGeometry(vertices, faces, normals)
 
     def visualizationGeometry(self):
-        return self.vertices, self.faces, self.normals
+        # Note: a copy of the vertex data is needed here to ensure vertex
+        # position updates are properly displayed; otherwise `pythreejs` will
+        # see that the new vertex data pointer is the same as the old one in
+        # `geometry.attributes['position']` and skip the update.
+        return np.array(self.vertices), self.faces, self.normals
 
     def updateGeometry(self, vertices, faces, normals):
         self.vertices = np.array(vertices, dtype = np.float32)

@@ -76,6 +76,11 @@ class ViewerBase:
         self.scalarField = None
         self.vectorField = None
 
+        # Whether to maintain a copy of the currently displayed data, e.g., to support
+        # `saveColorizedObj`.
+        self._recordDisplayedData = False
+        self.displayedData = None
+
         self.update(True, obj, updateModelMatrix=True, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
 
     def updater(self, updateFrequency=1, showStress=False, scalarFieldEvaluator=None):
@@ -160,14 +165,14 @@ class ViewerBase:
         if needsReplication:
             replicateAttributesPerTriCorner(attrRaw)
 
-        # save a copy of the data we've displayed for, e.g., saveColorizedObj
-        def demoted_dtype(dtype):
-            if np.issubdtype(dtype, np.floating):        return np.float32
-            if np.issubdtype(dtype, np.unsignedinteger): return np.uint32
-            if np.issubdtype(dtype, np.signedinteger):   return np.int32
-            raise Exception('Unexpected type')
+        if self._recordDisplayedData:
+            def demoted_dtype(dtype):
+                if np.issubdtype(dtype, np.floating):        return np.float32
+                if np.issubdtype(dtype, np.unsignedinteger): return np.uint32
+                if np.issubdtype(dtype, np.signedinteger):   return np.int32
+                raise Exception('Unexpected type')
 
-        self.displayedData = { k: np.array(v, dtype=demoted_dtype(v.dtype)) for k, v in attrRaw.items() }
+            self.displayedData = { k: np.array(v, dtype=demoted_dtype(v.dtype)) for k, v in attrRaw.items() }
 
         self._setGeometryImpl(vertices, idxs, attrRaw, preserveExisting, updateModelMatrix, textureMap, scalarField, vectorField, transparent)
 
@@ -215,6 +220,8 @@ class ViewerBase:
         self.setNormalCreaseAngle(creaseAngle, doUpdate)
 
     def saveColorizedObj(self, path):
+        if self.displayedData is None:
+            raise Exception('No displayedData is recorded; check that recording is enabled')
         d = self.displayedData
         if 'color' not in d: raise Exception('Data is not colorized')
         C = d['color']
