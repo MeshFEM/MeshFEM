@@ -66,7 +66,8 @@ return_type<PerElemSummand> summation_parallel(const PerElemSummand &summand, co
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems, grain_size),
                       SummandEvaluator<PerElemSummand, Real_>(summand, localData));
 
-    Real_ result = 0;
+    Real_ result;
+    result = 0; // Not used as initialization above because that would break the Eigen::Array type...
     for (const auto &d : localData)
         result += d.v;
     return result;
