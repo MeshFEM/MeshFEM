@@ -138,6 +138,12 @@ void addBindings(py::module &m) {
         }
         throw std::runtime_error("Dimension must be 2 or 3");
     });
+
+    m.def("ElasticityTensor", [](size_t N, _Real E, _Real nu) -> py::object {
+        if (N == 2) return py::cast(ElasticityTensor<_Real, 2>(E, nu));
+        if (N == 3) return py::cast(ElasticityTensor<_Real, 3>(E, nu));
+        throw std::runtime_error("Dimension must be 2 or 3");
+    }, py::arg("N"), py::arg("E"), py::arg("nu"));
 }
 
 PYBIND11_MODULE(tensors, m) {

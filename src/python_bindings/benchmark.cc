@@ -16,13 +16,28 @@ PYBIND11_MODULE(_benchmark, m) {
         },
         py::arg("include_messages") = false);
 #ifdef BENCHMARK
+    struct BenchmarkRecord {
+        BenchmarkRecord(double t, int i) : time(t), invocations(i) { }
+        double time;
+        int invocations;
+        double averageTime() const { return time / invocations; }
+    };
+
+    py::class_<BenchmarkRecord>(m, "BenchmarkRecord")
+        .def_readonly("time", &BenchmarkRecord::time)
+        .def_readonly("invocations", &BenchmarkRecord::invocations)
+        .def_property_readonly("averageTime", &BenchmarkRecord::averageTime)
+        .def("__repr__", [](const BenchmarkRecord &r) { return std::to_string(r.time) + "s over " + std::to_string(r.invocations) + " invocations (" + std::to_string(r.averageTime()) + "s per invocation)"; })
+        .def(py::pickle([](const BenchmarkRecord &r)  { return std::tuple<double, int>(r.time, r.invocations); },
+                        [](const std::tuple<double, int> t) { return BenchmarkRecord(std::get<0>(t), std::get<1>(t)); }))
+        ;
+
     m.def("to_dict", []() {
-            std::map<std::string, std::pair<double, std::map<std::string, double>>> result;
+            std::map<std::string, BenchmarkRecord> result;
             for (const auto &sec : g_timer.sections()) {
-                result[sec.first] = std::make_pair(sec.second.elapsed(), std::map<std::string, double>());
-                auto &secResult = result[sec.first].second;
+                result.emplace(sec.first, BenchmarkRecord(sec.second.elapsed(), sec.second.invocations));
                 for (const auto &t : sec.second.timers)
-                    secResult[t.first] = t.second.time;
+                    result.emplace(t.first, BenchmarkRecord(t.second.elapsed(), t.second.invocations));
             }
             return result;
         });

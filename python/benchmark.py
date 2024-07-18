@@ -25,3 +25,50 @@ def benchmarkit_customname(name):
         return res
       return wrapper
   return named_benchmarkit
+
+################################################################################
+# Convenience routines for analyzing benchmark records returned by `to_dict`.
+################################################################################
+def query(pattern, d = None):
+    """
+    Return a dictionary holding all benchmark records with names matching `pattern`.
+    """
+    import re
+    p = re.compile(pattern)
+    if d is None: d = to_dict()
+    result = {}
+    for k in d:
+        if (re.search(p, k)):
+            result[k] = d[k]
+    return result
+
+def totalTime(pattern, d=None, default=None):
+    """
+    Total time across all benchmark records with names matching `pattern`.
+    """
+    d = query(pattern, d)
+    if len(d) == 0:
+        if default is not None: return default
+        raise Exception(f'No records matching pattern {pattern}')
+    result = 0
+    for b in d.values():
+        result += b.time
+    return result
+
+def totalTimePerInvocation(pattern, d=None, default=None):
+    """
+    Total time across all benchmark records with names matching `pattern`
+    divided by the number of invocations of those code sections.
+    Raises an exception if not all matching records have been invoked the same number of times.
+    """
+    d = query(pattern, d)
+    if len(d) == 0:
+        if default is not None: return default
+        raise Exception(f'No records matching pattern {pattern}')
+    total = 0
+    invocations = []
+    for b in d.values():
+        total += b.time
+        invocations.append(b.invocations)
+    if (min(invocations) != max(invocations)): raise Exception("Inconsistent invocation count")
+    return total / invocations[0]
