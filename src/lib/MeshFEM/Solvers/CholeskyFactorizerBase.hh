@@ -173,8 +173,8 @@ struct CholeskyFactorizerBase {
             });
         }
         else {
-            const Real *xR_ptr = xReduced.data();
-            Real *x_ptr  = x.data();
+            const auto *xR_ptr = xReduced.data();
+            auto *x_ptr  = x.data();
             for (decltype(x.size()) i = 0; i < x.size(); ++i) {
                 SuiteSparse_long row = reducedRowForRow[i];
                 x_ptr[i] = (row != SuiteSparseMatrix::INDEX_NONE) ? xR_ptr[row] : 0.0;
