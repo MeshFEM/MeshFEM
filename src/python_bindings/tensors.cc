@@ -92,23 +92,25 @@ void bindTensors(py::module& module, py::module& detail_module) {
         .def_property_readonly_static("dimension", [](const py::object &) { return N; })
         ;
 
-    py::class_<SMF>(detail_module, ("SymmetricMatrixField" + std::to_string(N) + "D" + floatingPointTypeSuffix<_Real>()).c_str())
-        .def("vonMises", [](const SMF &smf) {
-                SMF smf_vm = vonMises(smf);
-                Eigen::VectorXd result(smf_vm.domainSize());
-                for (size_t i = 0; i < smf_vm.domainSize(); ++i)
-                    result[i] = std::sqrt(smf_vm(i).frobeniusNormSq());
-                return result;
-            })
-        .def("eigendecomposition", [](const SMF &smf) {
-                std::vector<SMEigenDecompositionType<_Real, N>> result;
-                result.reserve(smf.domainSize());
-                for (size_t i = 0; i < smf.domainSize(); ++i)
-                    result.push_back(smf(i).eigenDecomposition());
-                return result;
-            })
-        .def("__call__", [](const SMF &smf, size_t i) { if (i >= smf.domainSize()) throw std::runtime_error("Index out of bounds."); return SMValue(smf(i)); })
-        ;
+    if constexpr (std::is_same_v<_Real, double>) { // Currently only instantiates properly for `double`
+        py::class_<SMF>(detail_module, ("SymmetricMatrixField" + std::to_string(N) + "D" + floatingPointTypeSuffix<_Real>()).c_str())
+            .def("vonMises", [](const SMF &smf) {
+                    SMF smf_vm = vonMises(smf);
+                    Eigen::VectorXd result(smf_vm.domainSize());
+                    for (size_t i = 0; i < smf_vm.domainSize(); ++i)
+                        result[i] = std::sqrt(smf_vm(i).frobeniusNormSq());
+                    return result;
+                })
+            .def("eigendecomposition", [](const SMF &smf) {
+                    std::vector<SMEigenDecompositionType<_Real, N>> result;
+                    result.reserve(smf.domainSize());
+                    for (size_t i = 0; i < smf.domainSize(); ++i)
+                        result.push_back(smf(i).eigenDecomposition());
+                    return result;
+                })
+            .def("__call__", [](const SMF &smf, size_t i) { if (i >= smf.domainSize()) throw std::runtime_error("Index out of bounds."); return SMValue(smf(i)); })
+            ;
+    }
 
     module.def("SymmetricMatrix", [](const SMValue                             &smat)       { return SMValue(      smat); }, py::arg("smat"));
     module.def("SymmetricMatrix", [](const Eigen::Matrix<_Real, flatLen(N), 1> &flatValues) { return SMValue(flatValues); }, py::arg("flatValues"));
@@ -116,38 +118,40 @@ void bindTensors(py::module& module, py::module& detail_module) {
 }
 
 template<typename _Real>
-void addBindings(py::module &m) {
-    py::module detail_module = m.def_submodule("detail");
-    py::class_<ETensorEigenDecomposition>(detail_module, "ETensorEigenDecomposition")
-        .def_readonly("eigenstrains", &ETensorEigenDecomposition::strains) // flattened symmetric matrix field
-        .def_readonly("eigenvalues",  &ETensorEigenDecomposition::lambdas)
-        ;
+void addBindings(py::module &m, py::module &detail_module) {
     bindTensors<_Real, 2>(m, detail_module);
     bindTensors<_Real, 3>(m, detail_module);
+}
+
+PYBIND11_MODULE(tensors, m) {
+    m.doc() = "Tensors and tensor fields used for elasticity simulations";
+
+    py::module detail_module = m.def_submodule("detail");
+    addBindings<double>(m, detail_module);
+    addBindings <float>(m, detail_module);
 
     m.def("IdentityRank4Tensor", [](size_t N) -> py::object {
         if (N == 2) {
-            ElasticityTensor<_Real, 2> E;
+            ElasticityTensor<double, 2> E;
             E.setIdentity();
             return py::cast(E);
         }
         if (N == 3) {
-            ElasticityTensor<_Real, 3> E;
+            ElasticityTensor<double, 3> E;
             E.setIdentity();
             return py::cast(E);
         }
         throw std::runtime_error("Dimension must be 2 or 3");
     });
 
-    m.def("ElasticityTensor", [](size_t N, _Real E, _Real nu) -> py::object {
-        if (N == 2) return py::cast(ElasticityTensor<_Real, 2>(E, nu));
-        if (N == 3) return py::cast(ElasticityTensor<_Real, 3>(E, nu));
+    m.def("ElasticityTensor", [](size_t N, double E, double nu) -> py::object {
+        if (N == 2) return py::cast(ElasticityTensor<double, 2>(E, nu));
+        if (N == 3) return py::cast(ElasticityTensor<double, 3>(E, nu));
         throw std::runtime_error("Dimension must be 2 or 3");
     }, py::arg("N"), py::arg("E"), py::arg("nu"));
-}
 
-PYBIND11_MODULE(tensors, m) {
-    m.doc() = "Tensors and tensor fields used for elasticity simulations";
-
-    addBindings<double>(m);
+    py::class_<ETensorEigenDecomposition>(detail_module, "ETensorEigenDecomposition")
+        .def_readonly("eigenstrains", &ETensorEigenDecomposition::strains) // flattened symmetric matrix field
+        .def_readonly("eigenvalues",  &ETensorEigenDecomposition::lambdas)
+        ;
 }

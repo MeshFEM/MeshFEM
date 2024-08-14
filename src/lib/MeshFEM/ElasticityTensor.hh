@@ -578,8 +578,8 @@ public:
         Eigen::SelfAdjointEigenSolver<DType> solver;
         solver.compute(mat);
 
-        Eigen::MatrixXd Q = solver.eigenvectors();
-        Eigen::VectorXd Lambda = solver.eigenvalues();
+        Eigen::MatrixXd Q = solver.eigenvectors().template cast<double>();
+        Eigen::VectorXd Lambda = solver.eigenvalues().template cast<double>();
         leftApplySqrtShearDoublerInverse(Q);
         return ETensorEigenDecomposition{Q, Lambda};
     }
