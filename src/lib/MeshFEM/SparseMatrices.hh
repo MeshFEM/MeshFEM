@@ -1632,7 +1632,7 @@ struct CSCMatrix {
         if ((symmetry_mode != SymmetryMode::NONE) &&
             (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) &&
             (symmetry_mode != SymmetryMode::LOWER_TRIANGLE)) {
-            throw std::runtime_error("Invalid symmetry_mode");
+            throw std::runtime_error("Invalid symmetry_mode: " + std::to_string(uint32_t(symmetry_mode)));
         }
 
         Ap.resize(n + 1);

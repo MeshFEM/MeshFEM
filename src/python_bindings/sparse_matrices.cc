@@ -170,7 +170,6 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("n_reduced",    &CFB::n_reduced)
         .def("hasFixedVars", &CFB::hasFixedVars)
         .def("getFixedVars", &CFB::getFixedVars)
-        .def("varIsFixed",   &CFB::varIsFixed, py::arg("i"))
         .def("factorizeSymbolic", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
                 c.factorizeSymbolic(mat, pinnedVars); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>())
         .def("factorizeNumeric", &CFB::factorizeNumeric, py::arg("mat"), py::arg("isInTryCatch") = false)

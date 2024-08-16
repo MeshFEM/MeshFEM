@@ -50,7 +50,22 @@ struct CholeskyFactorizerBase {
 
     bool hasFixedVars() const { return !m_fixedVars.empty(); }
     const std::vector<size_t> &getFixedVars() const { return m_fixedVars; }
-    bool varIsFixed(size_t i) const { return hasFixedVars() && m_fixedVars[i]; }
+
+    // Check if the currently set `m_fixedVars` are equivalent to `fv`.
+    bool fixesSameVarsAs(std::vector<size_t> &fv) const {
+        std::vector<bool> varIsFixed_a, varIsFixed_b;
+        varIsFixed_a.assign(n(), false);
+        varIsFixed_b.assign(n(), false);
+
+        for (size_t v : m_fixedVars) varIsFixed_a[v] = true;
+        for (size_t v : fv)          varIsFixed_b[v] = true;
+
+        // Verify masks agree on all variables fixed by `fv` or `m_fixedVars`.
+        for (size_t v : m_fixedVars) { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
+        for (size_t v : fv)          { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
+
+        return true;
+    }
 
     // Perform only the symbolic factorization for the given matrix `mat` after removing the
     // rows and columns indicated by the indices in `pinnedVars`.
