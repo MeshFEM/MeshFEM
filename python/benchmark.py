@@ -72,3 +72,12 @@ def totalTimePerInvocation(pattern, d=None, default=None):
         invocations.append(b.invocations)
     if (min(invocations) != max(invocations)): raise Exception("Inconsistent invocation count")
     return total / invocations[0]
+
+def numInvocations(pattern, d=None, default=None):
+    d = query(pattern, d)
+    if len(d) == 0:
+        if default is not None: return default
+        raise Exception(f'No records matching pattern {pattern}')
+    invocations = [b.invocations for b in d.values()]
+    if (min(invocations) != max(invocations)): raise Exception("Inconsistent invocation count")
+    return invocations[0]
