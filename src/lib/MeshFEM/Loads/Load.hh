@@ -45,7 +45,9 @@ struct Load : public NewtonObjectiveTerm {
     virtual VXd grad_X() const = 0;
 
     // Notification from NewtonMultiobjectiveProblem that (deformation) variables have changed.
-    void varsUpdated() override { m_stateUpdated(VM::Defo); }
+    void   varsUpdated() override { m_stateUpdated(VM::Defo); }
+    // Notification from NewtonMultiobjectiveProblem that parameters (rest state) have changed.
+    void paramsUpdated() override { m_stateUpdated(VM::Rest); }
 
     virtual void m_stateUpdated(VM /* vmask */) { /* NOP */ }
 
