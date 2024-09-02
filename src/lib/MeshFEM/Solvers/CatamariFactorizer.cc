@@ -1,5 +1,4 @@
-#include <MeshFEM/SparseMatrices.hh>
-#include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
+#include "CatamariFactorizer.hh"
 
 #if MESHFEM_WITH_CATAMARI
 

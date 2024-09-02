@@ -2,7 +2,6 @@
 #define CATAMARIFACTORIZER_HH
 
 #include "CholeskyFactorizerBase.hh"
-#include "MeshFEM/SparseMatrices.hh"
 #include <stdexcept>
 
 #if MESHFEM_WITH_CATAMARI

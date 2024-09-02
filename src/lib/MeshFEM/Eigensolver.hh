@@ -2,6 +2,7 @@
 #define EIGENSOLVER_HH
 
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/CholeskyFactorizerBase.hh>
 #include <MeshFEM_export.h>
 #include <functional>
 

@@ -1,7 +1,7 @@
 #ifndef PARDISOFACTORIZER_HH
 #define PARDISOFACTORIZER_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include "CholeskyFactorizerBase.hh"
 
 // Based on PARDISO example:
 // https://www.pardiso-project.org/manual/pardiso_sym.cpp

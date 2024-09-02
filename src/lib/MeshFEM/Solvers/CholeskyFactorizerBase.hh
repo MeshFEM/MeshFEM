@@ -4,10 +4,10 @@
 #include <stdexcept>
 #include <cassert>
 #include <memory>
-#include "../Types.hh"
-#include "../GlobalBenchmark.hh"
-#include "MeshFEM/SparseMatrices.hh"
-#include "MeshFEM/unused.hh"
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/unused.hh>
 
 enum class CholeskyProvider {
     CHOLMOD, Catamari, CatamariNesdis, PARDISO
@@ -110,6 +110,12 @@ struct CholeskyFactorizerBase {
             (sys == CholeskySys::L) ||
             (sys == CholeskySys::Lt)) return hasFactorization(FactorizationType::Numeric);
         return hasFactorization(FactorizationType::Symbolic);
+    }
+
+    bool hasNumericFactorization() const { return hasFactorization(FactorizationType::Numeric); }
+    void invalidateNumericFactorization() {
+        if (m_factorizationType >= FactorizationType::Numeric)
+            m_factorizationType = FactorizationType::Symbolic;
     }
 
     void assertFactorization(FactorizationType type)           const { if (!hasFactorization(type)) throw std::runtime_error(((type == FactorizationType::Numeric) ? "Numeric" : "Symbolic") + std::string(" factorization does not exist")); }

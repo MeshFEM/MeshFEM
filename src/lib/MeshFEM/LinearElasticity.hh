@@ -8,6 +8,7 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/Fields.hh>
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 #include <MeshFEM/Parallelism.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/OneForm.hh>

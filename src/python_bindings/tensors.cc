@@ -33,7 +33,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
                         throw std::runtime_error("Index out of bounds");
                     return E(i, j, k, l);
                 })
-        .def_property_readonly("D", [](const ETensor &E) {
+        .def_property("D", [](const ETensor &E) {
                     typename ETensor::DType D;
                     for (int i = 0; i < D.rows(); ++i) {
                         for (int j = 0; j < D.cols(); ++j) {
@@ -41,7 +41,7 @@ void bindTensors(py::module& module, py::module& detail_module) {
                         }
                     }
                     return D;
-                })
+                }, &ETensor::setD)
         .def("doubleContract", [](const ETensor &E, const SMValue &smat) { return E.doubleContract(smat); }, py::arg("smat"))
         .def("doubleContract", [](const ETensor &E, const SMF     & smf) { 
                     SMF result(smf.domainSize());

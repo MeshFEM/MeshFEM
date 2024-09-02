@@ -18,7 +18,7 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include "HessianProjectionController.hh"
 #include "HessianUpdateController.hh"
-#include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
+#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
 #include "NewtonProblem.hh"
 

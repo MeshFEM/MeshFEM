@@ -6,6 +6,7 @@ namespace py = pybind11;
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 
 PYBIND11_MODULE(sparse_matrices, m) {
     m.doc() = "Sparse Representations and Solvers";
@@ -72,9 +73,11 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def_readwrite("m",    &SuiteSparseMatrix::m)
         .def_readwrite("n",    &SuiteSparseMatrix::n)
         .def_readwrite("nz",   &SuiteSparseMatrix::nz)
-        .def_readwrite("Ap",   &SuiteSparseMatrix::Ap)
-        .def_readwrite("Ai",   &SuiteSparseMatrix::Ai)
-        .def_readwrite("Ax",   &SuiteSparseMatrix::Ax)
+
+        .def_property_readonly("Ap", [](SuiteSparseMatrix &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, "Offsets into Ai/Ax of the entries for each column")
+        .def_property_readonly("Ai", [](SuiteSparseMatrix &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, "Row indices of nonzero entries")
+        .def_property_readonly("Ax", [](SuiteSparseMatrix &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, "Values of nonzero entries")
+
         .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
         .def("fill",           &SuiteSparseMatrix::fill)
         .def("setIdentity",    &SuiteSparseMatrix::setIdentity, py::arg("preserveSparsity"))

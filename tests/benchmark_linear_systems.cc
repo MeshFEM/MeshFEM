@@ -9,6 +9,7 @@
 //  Created:  07/04/2022 17:35:25
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
 void benchmark_method(const std::string &method, const char *sparsityPatternPath, size_t numNumericMatrices,
                       const char **numericMatrices, size_t tbb_threads) {

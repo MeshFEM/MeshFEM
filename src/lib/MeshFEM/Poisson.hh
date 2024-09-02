@@ -14,6 +14,7 @@
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <vector>
 #include <array>

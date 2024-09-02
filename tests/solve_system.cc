@@ -1,4 +1,5 @@
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 #include <stdexcept>
 
 using TMatrix = TripletMatrix<>;

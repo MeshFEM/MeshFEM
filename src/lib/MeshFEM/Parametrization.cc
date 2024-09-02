@@ -2,6 +2,7 @@
 #include "Laplacian.hh"
 #include "MassMatrix.hh"
 #include "Eigensolver.hh"
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 
 namespace Parametrization {
 

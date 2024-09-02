@@ -1,4 +1,4 @@
-#include <MeshFEM/SparseMatrices.hh>
+#include "PardisoFactorizer.hh"
 
 #include <stdexcept>
 #include <tbb/partitioner.h>
