@@ -79,7 +79,7 @@ struct AttachmentPointCoordinate {
         Eigen::VectorXi vidxs(1);
 
         for (int i = 0; i < nbv; ++i) {
-            vidxs[0] = i;
+            vidxs[0] = blockVars[i];
             result.emplace_back(vidxs, coeffs);
         }
         return result;

@@ -709,9 +709,6 @@ private:
     // (preventing jumps in the measured gamma).
     VXd m_alphas, m_sourceAlphas;
 
-    // Cached derived state quantities
-    MX3d m_midedgeNormals;
-
     MaterialAssignment<ShellMaterial<Psi_2x2>> m_materials;
     std::vector<SE> m_shellElements;
 
