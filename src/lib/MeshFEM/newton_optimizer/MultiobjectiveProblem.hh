@@ -170,7 +170,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
-    virtual size_t numVars() const { throw std::runtime_error("numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
+    virtual size_t       numVars() const { throw std::runtime_error(      "numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
+    virtual size_t numParameters() const { throw std::runtime_error("numParameters must be implemented by subclass of NewtonObjectiveTermBase"); }
 
     SuiteSparseMatrix hessian(bool projectionMask = false) const {
         SuiteSparseMatrix H(hessianSparsityPattern());
@@ -208,7 +209,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
         throw std::runtime_error("NewtonVars were destroyed");
     }
 
-    virtual size_t numVars() const { return getNVars().numVars(); }
+    virtual size_t numVars()       const override { return getNVars().numVars(); }
+    virtual size_t numParameters() const override { return getNVars().numParameters(); }
 
     std::shared_ptr<const NewtonVarsBase> getNVarsPtr() const { return m_nvars.lock(); }
 
