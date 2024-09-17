@@ -50,6 +50,7 @@ namespace Loads {
         using ST   = typename Base::EOStorageType;
         using VXd  = typename Object::VXd;
         using V3d  = Eigen::Matrix<Real, 3, 1>;
+        using Base::numVars;
 
         Gravity(const ST &obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
             : Base(obj), m_rho(rho), m_g(g) {
@@ -62,7 +63,6 @@ namespace Loads {
         void set_g(V3d g)      { m_g = g; m_updateCache(); }
         V3d  get_g()     const { return m_g; }
 
-        size_t numVars() const { return Base::getObj().numVars(); }
         virtual Real energy() const override {
             return m_grad.dot(Base::getObj().getVars());
         }

@@ -170,10 +170,19 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
+    virtual size_t numVars() const { throw std::runtime_error("numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
+
     SuiteSparseMatrix hessian(bool projectionMask = false) const {
         SuiteSparseMatrix H(hessianSparsityPattern());
         accumulateHessian(1.0, H, projectionMask);
         return H;
+    }
+
+    virtual VXd gradient(Real weight = 1.0, bool freshIterate = false) const {
+        VXd g;
+        g.setZero(numVars());
+        accumulateGradient(weight, g, freshIterate);
+        return g;
     }
 
     ObjectiveIncreaseLimiter increaseLimiter;
@@ -194,11 +203,12 @@ struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
         m_variablesUpdateCallbackID = getNVars().registerUpdateCallback(VT::Variable,  [this]() {   varsUpdated(); });
         m_parameterUpdateCallbackID = getNVars().registerUpdateCallback(VT::Parameter, [this]() { paramsUpdated(); });
     }
-
     const NewtonVarsBase &getNVars() const {
         if (auto v = m_nvars.lock()) return *v;
         throw std::runtime_error("NewtonVars were destroyed");
     }
+
+    virtual size_t numVars() const { return getNVars().numVars(); }
 
     std::shared_ptr<const NewtonVarsBase> getNVarsPtr() const { return m_nvars.lock(); }
 

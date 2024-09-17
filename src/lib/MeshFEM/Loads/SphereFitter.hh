@@ -22,6 +22,7 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
         using Base = ObjectSpecificLoad<Object>;
         using ST   = typename Base::EOStorageType;
         using VXd  = typename Object::VXd;
+        using Base::numVars;
 
         static constexpr size_t N   = Object::N;
         static constexpr size_t K   = Object::K;
@@ -36,8 +37,6 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
         using PerBdryElementHessian  = Eigen::Matrix<Real, N * numBdryElemNodes, N * numBdryElemNodes>;
 
         SphereFitter(const ST &obj, Real r_tgt = 1, Real stiffness = 1) : Base(obj), r_tgt(r_tgt), stiffness(stiffness) { }
-
-        size_t numVars() const { return Base::getObj().numVars(); }
 
         virtual Real energy() const override {
             const auto &o = Base::getObj();

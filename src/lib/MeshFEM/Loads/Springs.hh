@@ -238,7 +238,7 @@ struct GenericSprings : public Load<Real> {
     }
 
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = this->getNVars().numVars();
+        const size_t nv = this->numVars();
         TripletMatrix<> Hsp(nv, nv);
         Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
         const size_t ns = numSprings();

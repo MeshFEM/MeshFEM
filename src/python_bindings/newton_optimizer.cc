@@ -179,8 +179,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
     py::class_<NOT, std::shared_ptr<NOT>>(m, "NewtonObjectiveTerm")
         .def("objective", &NOT::objective)
-        // gradient cannot be implemented without knowing variable size...
-        .def("hessian",   [](const NOT &term, bool pm) { return term.hessian(pm); }, py::arg("projectionMask") = false)
+        .def("gradient",  &NOT::gradient, py::arg("weight") = 1.0, py::arg("freshIterate") = false)
+        .def("hessian",   &NOT::hessian, py::arg("projectionMask") = false)
         .def("hessianSparsityPattern", &NOT::hessianSparsityPattern, py::arg("val") = 0.0)
         .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)

@@ -34,6 +34,8 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         using MXNd = typename Object::MXNd;
         using Barycooords = Eigen::Matrix<Real, K + 1, 1>;
 
+        using Base::numVars;
+
         CircumcenterBarrier(const ST &obj, Real bc_min, bool subdivisionBarrier = false) : Base(obj), bc_min(bc_min), m_subdivisionBarrier(subdivisionBarrier) {
             if (Deg != 1) throw std::runtime_error("CircumcenterBarrier is only intended for linear meshes");
             if (  K != N) throw std::runtime_error("CircumcenterBarrier is not intended for co-dimensional objects");
@@ -47,8 +49,6 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         const auto &mesh() const { return Base::getObj().mesh(); }
-
-        size_t numVars() const { return Base::getObj().numVars(); }
 
         static MKd getU(const MXNd &x, const AK1i &e) {
             MKd U;
