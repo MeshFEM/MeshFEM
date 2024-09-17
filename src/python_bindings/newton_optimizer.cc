@@ -193,7 +193,19 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("setTerms",   &NewtonMultiobjectiveProblem::setTerms)
         .def("setWeights", &NewtonMultiobjectiveProblem::setWeights)
         .def("getWeights", &NewtonMultiobjectiveProblem::getWeights)
-        .def("term",       [](NewtonMultiobjectiveProblem &prob, size_t i) -> NOT & { return prob.term(i); }, py::return_value_policy::reference_internal)
+
+        .def("setTermNames", &NewtonMultiobjectiveProblem::setTermNames, py::arg("names"))
+        .def("getTermNames", &NewtonMultiobjectiveProblem::getTermNames)
+        .def("termName",     &NewtonMultiobjectiveProblem::termName, py::arg("idx"))
+
+        .def("weight",       [](NewtonMultiobjectiveProblem &prob,                size_t i) { return prob.weight(i);    })
+        .def("weight",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) { return prob.weight(name); })
+        .def("term",       [](NewtonMultiobjectiveProblem &prob,                size_t i) -> NOT & { return prob.term(i);    }, py::return_value_policy::reference_internal)
+        .def("term",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) -> NOT & { return prob.term(name); }, py::return_value_policy::reference_internal)
+
+        .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
+        .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
+
         .def("setCustomIterationCallback",
                 [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction &cb) {
                     prob.setCustomIterationCallback(callbackWrapper(cb));

@@ -280,13 +280,23 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
         m_vars->setVars(vars);
     }
 
-    Real weight(size_t i) const { return m_weights[i]; }
-
     void setTerms(std::vector<TermPtr> terms) {
         m_terms = terms;
         m_termsAddedOrRemoved();
         m_weights.resize(numTerms(), 1.0);
+
+        m_names.resize(numTerms());
+        for (size_t i = 0; i < numTerms(); ++i)
+            m_names[i] = "Term " + std::to_string(i);
     }
+
+    void setTermNames(std::vector<std::string> names) {
+        if (names.size() != m_terms.size()) throw std::runtime_error("Term count mismatch");
+        m_names = names;
+    }
+
+    const std::string &termName(size_t i) const { return m_names.at(i); }
+    const std::vector<std::string> &getTermNames() const { return m_names; }
 
     void setWeights(const std::vector<Real> &weights) {
         if (weights.size() != numTerms()) throw std::runtime_error("Must have one weight per term (" + std::to_string(numTerms()) + " terms, " + std::to_string(weights.size()) + " weights)");
@@ -295,8 +305,35 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
 
     const std::vector<Real> &getWeights() const { return m_weights; }
 
+    Real weight(size_t i) const { return m_weights[i]; }
     const NewtonObjectiveTermBase &term(size_t i) const { return *m_terms[i]; }
           NewtonObjectiveTermBase &term(size_t i)       { return *m_terms[i]; }
+
+    // Accessing terms by name
+    size_t termIndex(const std::string &name) const {
+        auto it = std::find(m_names.begin(), m_names.end(), name);
+        if (it == m_names.end()) throw std::runtime_error("Term not found: " + name);
+        return std::distance(m_names.begin(), it);
+    }
+
+    Real weight(const std::string &name) const { return weight(termIndex(name)); }
+
+    const NewtonObjectiveTermBase &term(const std::string &name) const { return term(termIndex(name)); }
+          NewtonObjectiveTermBase &term(const std::string &name)       { return term(termIndex(name)); }
+
+    std::map<std::string, Real> termObjectives() const {
+        std::map<std::string, Real> result;
+        for (size_t i = 0; i < numTerms(); ++i)
+            result[m_names[i]] = term(i).objective();
+        return result;
+    }
+
+    std::map<std::string, VXd> termGradients() const {
+        std::map<std::string, VXd> result;
+        for (size_t i = 0; i < numTerms(); ++i)
+            result[m_names[i]] = term(i).gradient();
+        return result;
+    }
 
     // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
     // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)
@@ -312,6 +349,7 @@ private:
     NVMPtr m_vars;
     std::vector<TermPtr> m_terms;
     std::vector<Real> m_weights;
+    std::vector<std::string> m_names;
 
     SuiteSparseMatrix m_hessianSparsity, m_staticSparsityPattern;
     CallbackFunction m_customCallback;
