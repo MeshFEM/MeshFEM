@@ -1009,6 +1009,7 @@ struct CSCMatrix {
 
     template<typename T = _Real, class ValueGetter>
     CSCMatrix<_Index, T> toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
+        if (Ax.size() != size_t(nz)) throw std::runtime_error("Inconsistent nonzero count (is this a sparsity-only matrix with empty `Ax`?)");
         using Result = CSCMatrix<_Index, T>;
         if (newMode == symmetry_mode) {
             Result result(m, n);
