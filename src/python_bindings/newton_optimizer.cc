@@ -233,6 +233,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
             }, py::arg("feasibility") = false)
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
         .def("setFixedVars", &NewtonOptimizer::setFixedVars, py::arg("fixedVars"))
+
         .def_readwrite("options", &NewtonOptimizer::options)
+        .def_property_readonly("solver", &NewtonOptimizer::getHessianSolverPtr)
         ;
 }
