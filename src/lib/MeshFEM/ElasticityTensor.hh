@@ -464,7 +464,9 @@ public:
     // Double contract with u⨂ u
     template<class Derived>
     SMatrix doubleContractRank1(const Eigen::MatrixBase<Derived> &u) const {
-        return doubleContract(SMatrix(u * u.transpose()));
+        if      constexpr (_Dim == 2) return SMatrix(applyD(FlattenedRank2Tensor(u[0] * u[0], u[1] * u[1], 2 * u[0] * u[1])));
+        else if constexpr (_Dim == 3) return SMatrix(applyD(FlattenedRank2Tensor(u[0] * u[0], u[1] * u[1], u[2] * u[2], 2 * u[1] * u[2], 2 * u[0] * u[2], 2 * u[0] * u[1])));
+        else return doubleContract(SMatrix(u * u.transpose()));
     }
 
     // The following operation that we call "double double contract" maintains

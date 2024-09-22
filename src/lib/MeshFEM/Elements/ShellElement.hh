@@ -1,7 +1,7 @@
 #ifndef SHELLELEMENT_HH
 #define SHELLELEMENT_HH
 
-#include "MembraneElement.hh"
+#include "HyperelasticLagrange.hh"
 #include "PlateBending.hh"
 
 // Implements both the `MembraneMaterial` and `PlateBendingMaterial` interfaces.

@@ -26,7 +26,8 @@
 #include <MeshFEM/Elements/ElementBase.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/TangentElasticityTensor.hh>
-#include "MembraneElement.hh"
+#include <MeshFEM/EmbeddedElement.hh>
+#include "HyperelasticLagrange.hh"
 
 // [Grinspun et al. 2006] effectively applies a small angle approximation to
 // replace sin(gamma) with gamma in the expression for the shape operator. No
@@ -36,7 +37,7 @@
 // This customization is done by passing different classes as the
 // `AngleFunction` template parameter of `elements::PlateBending`.
 struct AngleFunctionIdentity {
-    template<typename Real> static           Real   f(Real theta) { return theta; }
+    template<typename Real> static constexpr Real   f(Real theta) { return theta; }
     template<typename Real> static constexpr Real  df(Real theta) { return 1; }
     template<typename Real> static constexpr Real ddf(Real theta) { return 0; }
 };
@@ -179,25 +180,49 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
         // ddh f
         Real liSq = de.edgeVecDotProducts(i, i);
         Real s = 2 * scale * AF::f(gamma[i]) / (de.h[i] * liSq);
+        Real s_div_liSq = s / liSq;
 
+        V3d eihat_dot_e = de.unitEdgePerpendiculars.col(i).transpose() * de.edgeVecs;
+        M3d nnt = s_div_liSq * de.normal * de.normal.transpose();
+        M3d eihatp_outer_ei = s_div_liSq * de.unitEdgePerpendiculars.col(i) * de.edgeVecs.col(i).transpose();
+
+#if 1 // Note: the unrolled version below is somehow slower than this one :|
         {
             size_t a = (i + 1) % 3;
             size_t b = (i + 2) % 3;
             if (a > b) std::swap(a, b);
-            M3d contrib = -s * (de.h[i] * de.unitEdgePerpendiculars.col(i)) * (de.h[i] * de.unitEdgePerpendiculars.col(i)).transpose();
+            M3d contrib = (-s * de.h[i] * de.h[i]) * de.unitEdgePerpendiculars.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
             result.template block<3, 3>(3 * a, 3 * a) += contrib;
             result.template block<3, 3>(3 * b, 3 * b) += contrib;
             result.template block<3, 3>(3 * a, 3 * b) -= contrib;
         }
-        V3d eihat_dot_e = de.unitEdgePerpendiculars.col(i).transpose() * de.edgeVecs;
         for (size_t l = 0; l < NumCorners; ++l) {
             for (size_t k = 0; k <= l; ++k) {
-                M3d contrib = ( s * (de.edgeVecDotProducts(i, k) * de.edgeVecDotProducts(i, l)) / liSq) * de.normal * de.normal.transpose();
-                if (k != i) contrib += ( s * (eihat_dot_e[k] * de.edgeVecDotProducts(i, l)) / liSq) * de.unitEdgePerpendiculars.col(i) * de.edgeVecs.col(i).transpose();
-                if (l != i) contrib += ( s * (eihat_dot_e[l] * de.edgeVecDotProducts(i, k)) / liSq) * de.edgeVecs.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
+                M3d contrib = ((de.edgeVecDotProducts(i, k) * de.edgeVecDotProducts(i, l))) * nnt;
+                if (k != i) contrib += ((eihat_dot_e[k] * de.edgeVecDotProducts(i, l))) * eihatp_outer_ei;
+                if (l != i) contrib += ((eihat_dot_e[l] * de.edgeVecDotProducts(i, k))) * eihatp_outer_ei.transpose();
                 result.template block<3, 3>(3 * k, 3 * l) += contrib;
             }
         }
+#else
+        {
+            size_t a = (i + 1) % 3;
+            size_t b = (i + 2) % 3;
+            if (a > b) std::swap(a, b);
+            M3d common = (-s * de.h[i] * de.h[i]) * de.unitEdgePerpendiculars.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
+            result.template block<3, 3>(3 * a, 3 * a) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, a))) * (eihatp_outer_ei.transpose() + eihatp_outer_ei) + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, a))) * nnt + common;
+            result.template block<3, 3>(3 * b, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, b))) * (eihatp_outer_ei.transpose() + eihatp_outer_ei) + ((de.edgeVecDotProducts(i, b) * de.edgeVecDotProducts(i, b))) * nnt + common;
+            result.template block<3, 3>(3 * a, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, a))) * eihatp_outer_ei.transpose() + ((eihat_dot_e[a] * de.edgeVecDotProducts(i, b))) * eihatp_outer_ei + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, b))) * nnt - common;
+
+            if (a > i) result.template block<3, 3>(3 * i, 3 * a) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei.transpose() + ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, a))) * nnt;
+            else       result.template block<3, 3>(3 * a, 3 * i) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei             + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, i))) * nnt;
+
+            if (b > i) result.template block<3, 3>(3 * i, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei.transpose() + ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, b))) * nnt;
+            else       result.template block<3, 3>(3 * b, 3 * i) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei             + ((de.edgeVecDotProducts(i, b) * de.edgeVecDotProducts(i, i))) * nnt;
+
+            result.template block<3, 3>(3 * i, 3 * i) += ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, i))) * nnt;
+        }
+#endif
     }
 
     SM2d bendingStrain() const { return II - restII; }
@@ -239,21 +264,30 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
         SM2d stress = mat.stress(bendingStrain());
         weight *= mat.getWeight();
 
-        std::array<Gradient, NumEdges> grad_coeff;
+        Eigen::Matrix<Real, Gradient::RowsAtCompileTime, NumEdges> grad_coeff;
+        grad_coeff.template bottomRows<NumEdges>().setZero();
+
         for (size_t i = 0; i < NumEdges; ++i) {
-            grad_coeff[i].setZero();
-            accumulateGradCoeff(grad_coeff[i], 1.0, i, gamma, de);
+            CPosMap(grad_coeff.col(i).data()) = scaledGradHeight(2 * AF::f(gamma[i]), i, de); // ∂h_i/∂x term (Ɣ_i constant)
+            grad_coeff(GammaOffset + i, i) = 2 * de.h[i] * AF::df(gamma[i]); // ∂/∂Ɣ_i term (h_i constant)
         }
+
+        Eigen::Matrix<Real, NumEdges, NumEdges> W;
+
+        Real weighted_vol = weight * m_edata.volume();
 
         for (size_t i = 0; i < NumEdges; ++i) {
             // grad coeff outer product term
             SM2d stress_basis = mat.C.doubleContractRank1(m_edata.BtGradBarycentric().col(i));
+            stress_basis.flattened() *= weighted_vol;
             for (size_t j = 0; j < NumEdges; ++j)
-                result += ((weight * m_edata.volume()) * stress_basis.doubleContractRank1(m_edata.BtGradBarycentric().col(j)) * grad_coeff[i]) * grad_coeff[j].transpose();
+                W(i, j) = stress_basis.doubleContractRank1(m_edata.BtGradBarycentric().col(j));
 
             // hess coeff term
-            accumulateHessCoeff(result, (weight * m_edata.volume()) * stress.doubleContractRank1(m_edata.BtGradBarycentric().col(i)), i, gamma, de);
+            accumulateHessCoeff(result, weighted_vol * stress.doubleContractRank1(m_edata.BtGradBarycentric().col(i)), i, gamma, de);
         }
+
+        result += grad_coeff * W * grad_coeff.transpose();
 
         if constexpr (SetLowerTri)
             result.template triangularView<Eigen::Lower>() = result.transpose();
