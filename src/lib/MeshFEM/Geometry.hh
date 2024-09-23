@@ -756,10 +756,9 @@ std::vector<Real> signedCurvature(const Curve &c) {
 // Get an arbitrary vector in the plane perpendicular to "t"
 template<typename Real_>
 Vec3_T<Real_> getPerpendicularVector(const Vec3_T<Real_> &t) {
-    Vec3_T<Real_> candidate1 = Vec3_T<Real_>(1, 0, 0).cross(t),
-                  candidate2 = Vec3_T<Real_>(0, 1, 0).cross(t);
-    return (candidate1.norm() > candidate2.norm()) ?
-        candidate1.normalized() : candidate2.normalized();
+    if (std::abs(t[0]) < std::abs(t[1]))
+        return Vec3_T<Real_>(1, 0, 0).cross(t).normalized();
+    return Vec3_T<Real_>(0, 1, 0).cross(t).normalized();
 }
 
 // [t | t_perp]

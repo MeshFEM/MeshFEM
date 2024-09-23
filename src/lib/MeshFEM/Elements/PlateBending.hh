@@ -178,15 +178,37 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
         // result.row(GammaOffset + i).head(NumPosVarsPerElement) += Eigen::Map<const Eigen::Matrix<Real, NumPosVarsPerElement, 1>>(scaledGradHeight(2 * scale * AF::df(gamma[i]), i, de).eval().data());
 
         // ddh f
-        Real liSq = de.edgeVecDotProducts(i, i);
-        Real s = 2 * scale * AF::f(gamma[i]) / (de.h[i] * liSq);
-        Real s_div_liSq = s / liSq;
+        V3d ei_dot_edge = de.edgeVecDotProducts.row(i).transpose();
+        Real s = 2 * scale * AF::f(gamma[i]) / (de.h[i] * ei_dot_edge[i]);
+        Real s_div_liSq = s / ei_dot_edge[i];
 
         V3d eihat_dot_e = de.unitEdgePerpendiculars.col(i).transpose() * de.edgeVecs;
         M3d nnt = s_div_liSq * de.normal * de.normal.transpose();
         M3d eihatp_outer_ei = s_div_liSq * de.unitEdgePerpendiculars.col(i) * de.edgeVecs.col(i).transpose();
+        M3d eihatp_outer_ei_t =  eihatp_outer_ei.transpose();
 
-#if 1 // Note: the unrolled version below is somehow slower than this one :|
+#if 1
+        {
+            size_t a = (i + 1) % 3;
+            size_t b = (i + 2) % 3;
+            if (a > b) std::swap(a, b);
+            M3d common = (-s * de.h[i] * de.h[i]) * de.unitEdgePerpendiculars.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
+
+            M3d eihatp_outer_ei_sym2 = eihatp_outer_ei + eihatp_outer_ei_t;
+            M3d term_ab = ((eihat_dot_e[a] * ei_dot_edge[b])) * eihatp_outer_ei + ((eihat_dot_e[b] * ei_dot_edge[a])) * eihatp_outer_ei_t;
+            result.template block<3, 3>(3 * a, 3 * a) += ((eihat_dot_e[a] * ei_dot_edge[a])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[a] * ei_dot_edge[a])) * nnt + common;
+            result.template block<3, 3>(3 * b, 3 * b) += ((eihat_dot_e[b] * ei_dot_edge[b])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[b] * ei_dot_edge[b])) * nnt + common;
+            result.template block<3, 3>(3 * a, 3 * b) += term_ab + ((ei_dot_edge[a] * ei_dot_edge[b])) * nnt - common;
+
+            if (a > i) result.template block<3, 3>(3 * i, 3 * a) += ((eihat_dot_e[a] * ei_dot_edge[i])) * eihatp_outer_ei_t + ((ei_dot_edge[i] * ei_dot_edge[a])) * nnt;
+            else       result.template block<3, 3>(3 * a, 3 * i) += ((eihat_dot_e[a] * ei_dot_edge[i])) * eihatp_outer_ei   + ((ei_dot_edge[a] * ei_dot_edge[i])) * nnt;
+
+            if (b > i) result.template block<3, 3>(3 * i, 3 * b) += ((eihat_dot_e[b] * ei_dot_edge[i])) * eihatp_outer_ei_t + ((ei_dot_edge[i] * ei_dot_edge[b])) * nnt;
+            else       result.template block<3, 3>(3 * b, 3 * i) += ((eihat_dot_e[b] * ei_dot_edge[i])) * eihatp_outer_ei   + ((ei_dot_edge[b] * ei_dot_edge[i])) * nnt;
+
+            result.template block<3, 3>(3 * i, 3 * i) += ((ei_dot_edge[i] * ei_dot_edge[i])) * nnt;
+        }
+#else
         {
             size_t a = (i + 1) % 3;
             size_t b = (i + 2) % 3;
@@ -200,27 +222,9 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
             for (size_t k = 0; k <= l; ++k) {
                 M3d contrib = ((de.edgeVecDotProducts(i, k) * de.edgeVecDotProducts(i, l))) * nnt;
                 if (k != i) contrib += ((eihat_dot_e[k] * de.edgeVecDotProducts(i, l))) * eihatp_outer_ei;
-                if (l != i) contrib += ((eihat_dot_e[l] * de.edgeVecDotProducts(i, k))) * eihatp_outer_ei.transpose();
+                if (l != i) contrib += ((eihat_dot_e[l] * de.edgeVecDotProducts(i, k))) * eihatp_outer_ei_t;
                 result.template block<3, 3>(3 * k, 3 * l) += contrib;
             }
-        }
-#else
-        {
-            size_t a = (i + 1) % 3;
-            size_t b = (i + 2) % 3;
-            if (a > b) std::swap(a, b);
-            M3d common = (-s * de.h[i] * de.h[i]) * de.unitEdgePerpendiculars.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
-            result.template block<3, 3>(3 * a, 3 * a) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, a))) * (eihatp_outer_ei.transpose() + eihatp_outer_ei) + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, a))) * nnt + common;
-            result.template block<3, 3>(3 * b, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, b))) * (eihatp_outer_ei.transpose() + eihatp_outer_ei) + ((de.edgeVecDotProducts(i, b) * de.edgeVecDotProducts(i, b))) * nnt + common;
-            result.template block<3, 3>(3 * a, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, a))) * eihatp_outer_ei.transpose() + ((eihat_dot_e[a] * de.edgeVecDotProducts(i, b))) * eihatp_outer_ei + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, b))) * nnt - common;
-
-            if (a > i) result.template block<3, 3>(3 * i, 3 * a) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei.transpose() + ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, a))) * nnt;
-            else       result.template block<3, 3>(3 * a, 3 * i) += ((eihat_dot_e[a] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei             + ((de.edgeVecDotProducts(i, a) * de.edgeVecDotProducts(i, i))) * nnt;
-
-            if (b > i) result.template block<3, 3>(3 * i, 3 * b) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei.transpose() + ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, b))) * nnt;
-            else       result.template block<3, 3>(3 * b, 3 * i) += ((eihat_dot_e[b] * de.edgeVecDotProducts(i, i))) * eihatp_outer_ei             + ((de.edgeVecDotProducts(i, b) * de.edgeVecDotProducts(i, i))) * nnt;
-
-            result.template block<3, 3>(3 * i, 3 * i) += ((de.edgeVecDotProducts(i, i) * de.edgeVecDotProducts(i, i))) * nnt;
         }
 #endif
     }
@@ -287,7 +291,7 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
             accumulateHessCoeff(result, weighted_vol * stress.doubleContractRank1(m_edata.BtGradBarycentric().col(i)), i, gamma, de);
         }
 
-        result += grad_coeff * W * grad_coeff.transpose();
+        result += (grad_coeff * W).eval() * grad_coeff.transpose(); // eval() for performance...
 
         if constexpr (SetLowerTri)
             result.template triangularView<Eigen::Lower>() = result.transpose();

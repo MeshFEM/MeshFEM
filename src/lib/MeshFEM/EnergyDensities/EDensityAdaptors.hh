@@ -34,7 +34,6 @@
 #include <string>
 #include "Tensor.hh"
 #include "EnergyTraits.hh"
-#include "../Geometry.hh"
 
 // Implement an F-based interface from a C-based interface.
 // Manually specifying EmbeddingDimension = 3 when Psi_C is a 2D energy density
@@ -196,7 +195,8 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
         m_n = F.col(0).cross(F.col(1));
         m_detF = m_n.norm();
         m_n /= m_detF;
-        m_B.col(0) = getPerpendicularVector(m_n);
+        // m_B.col(0) = getPerpendicularVector(m_n);
+        m_B.col(0) = F.col(0).normalized();
         m_B.col(1) = m_n.cross(m_B.col(0));
         Base::setDeformationGradient(m_B.transpose() * F, elevel);
     }
@@ -244,8 +244,8 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
         auto d2psi = evaluate_d2energy_dF2(psi);
 
         Eigen::Matrix<Real, M * N, N * N> B_d2psi;
-        Eigen::Map<Eigen::Matrix<Real, M, N * N * N>>(B_d2psi.data()) // Reshape so each column holds a single column of a (M x N) "output tensor" slice of B_d2psi.
-            = m_B * Eigen::Map<const Eigen::Matrix<Real, N, N * N * N>>(d2psi.data()); // Similarly, reshape so each column holds a single column of an (N x N) output slice of d2psi.
+        Eigen::Map<Eigen::Matrix<Real, M, N * N * N>, Eigen::Aligned>(B_d2psi.data()) // Reshape so each column holds a single column of a (M x N) "output tensor" slice of B_d2psi.
+            = m_B * Eigen::Map<const Eigen::Matrix<Real, N, N * N * N>, Eigen::Aligned>(d2psi.data()); // Similarly, reshape so each column holds a single column of an (N x N) output slice of d2psi.
 
         Hessian H;
 #if 0   // This version is apparently slightly slower than computing the contribution to each column
@@ -270,7 +270,7 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
         for (size_t j = 0; j < N; ++j) {
             for (size_t i = 0; i < M; ++i) {
                 Matrix delta_de = m_n * neg_dn_dot_B_dpsi_div_detF.row(i + j * M); // Contribution from rotating tangent plane.
-                H.col(i + j * M) = Eigen::Map<const VecN_T<Real, M * N>>(delta_de.data()) + B_d2psi.template middleCols<N>(N * j) * m_B.row(i).transpose();
+                H.col(i + j * M) = Eigen::Map<const VecN_T<Real, M * N>, Eigen::Aligned>(delta_de.data()) + B_d2psi.template middleCols<N>(N * j) * m_B.row(i).transpose();
             }
         }
 
