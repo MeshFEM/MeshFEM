@@ -173,7 +173,9 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     static constexpr size_t M                  = EmbeddingDimension;
     using Real   = typename Base::Real;
     using Matrix = Eigen::Matrix<Real, M, N>;
+    using MNd    = Eigen::Matrix<Real, N, N>;
     using Vector = Eigen::Matrix<Real, M, 1>;
+    using Hessian  = Eigen::Matrix<Real, M * N, M * N>;
 
     // Note: all Base constructors except the copy constructor initialize to
     // the identity deformation; this is compatible with our default member
@@ -235,6 +237,44 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
 
     Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
         return doubleContract(delta_denergy(dF_lhs), dF_rhs);
+    }
+
+    Hessian d2energy() const {
+        const Base &psi = *this;
+        auto d2psi = evaluate_d2energy_dF2(psi);
+
+        Eigen::Matrix<Real, M * N, N * N> B_d2psi;
+        Eigen::Map<Eigen::Matrix<Real, M, N * N * N>>(B_d2psi.data()) // Reshape so each column holds a single column of a (M x N) "output tensor" slice of B_d2psi.
+            = m_B * Eigen::Map<const Eigen::Matrix<Real, N, N * N * N>>(d2psi.data()); // Similarly, reshape so each column holds a single column of an (N x N) output slice of d2psi.
+
+        Hessian H;
+#if 0   // This version is apparently slightly slower than computing the contribution to each column
+        // of H one at a time...
+
+        // Compute [B_d2psi_Bt]_{ijkl} = B_ip B_kq d2psi_pjql
+        // (contract the slots of d2psi corresponding to the deformation gradient output with B, rotating from 2D into 3D)
+        Eigen::Matrix<Real, N * N, M * N> d2_psi_Bt = B_d2psi.transpose();
+        Eigen::Map<Eigen::Matrix<Real, M, N * M * N>>(H.data()) = m_B * Eigen::Map<const Eigen::Matrix<Real, N, N * M * N>>(d2_psi_Bt.data());
+#endif
+
+        // Compute neg_dn_dot_B_dpsi_div_detF:
+        //    Row (i + j * M) of this matrix holds the derivative of `n` with respect to F_ij
+        //    contracted with -(B * psi') / det(F).
+        Eigen::Matrix<Real, 2 * M, N> tmp;
+        tmp <<  m_B.col(0).cross(m_F32.col(1)),
+                m_B.col(1).cross(m_F32.col(1)),
+               -m_B.col(0).cross(m_F32.col(0)),
+               -m_B.col(1).cross(m_F32.col(0));
+        auto neg_dn_dot_B_dpsi_div_detF = (tmp * Base::denergy() / m_detF).eval();
+
+        for (size_t j = 0; j < N; ++j) {
+            for (size_t i = 0; i < M; ++i) {
+                Matrix delta_de = m_n * neg_dn_dot_B_dpsi_div_detF.row(i + j * M); // Contribution from rotating tangent plane.
+                H.col(i + j * M) = Eigen::Map<const VecN_T<Real, M * N>>(delta_de.data()) + B_d2psi.template middleCols<N>(N * j) * m_B.row(i).transpose();
+            }
+        }
+
+        return H;
     }
 
     template<class Mat_, class Mat2_>
