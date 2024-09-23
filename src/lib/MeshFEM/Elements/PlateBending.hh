@@ -194,10 +194,11 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
             if (a > b) std::swap(a, b);
             M3d common = (-s * de.h[i] * de.h[i]) * de.unitEdgePerpendiculars.col(i) * de.unitEdgePerpendiculars.col(i).transpose();
 
-            M3d eihatp_outer_ei_sym2 = eihatp_outer_ei + eihatp_outer_ei_t;
+            M3d eihatp_outer_ei_sym2;
+            eihatp_outer_ei_sym2.template triangularView<Eigen::Upper>() = eihatp_outer_ei + eihatp_outer_ei_t;
             M3d term_ab = ((eihat_dot_e[a] * ei_dot_edge[b])) * eihatp_outer_ei + ((eihat_dot_e[b] * ei_dot_edge[a])) * eihatp_outer_ei_t;
-            result.template block<3, 3>(3 * a, 3 * a) += ((eihat_dot_e[a] * ei_dot_edge[a])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[a] * ei_dot_edge[a])) * nnt + common;
-            result.template block<3, 3>(3 * b, 3 * b) += ((eihat_dot_e[b] * ei_dot_edge[b])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[b] * ei_dot_edge[b])) * nnt + common;
+            result.template block<3, 3>(3 * a, 3 * a).template triangularView<Eigen::Upper>() += ((eihat_dot_e[a] * ei_dot_edge[a])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[a] * ei_dot_edge[a])) * nnt + common;
+            result.template block<3, 3>(3 * b, 3 * b).template triangularView<Eigen::Upper>() += ((eihat_dot_e[b] * ei_dot_edge[b])) * eihatp_outer_ei_sym2 + ((ei_dot_edge[b] * ei_dot_edge[b])) * nnt + common;
             result.template block<3, 3>(3 * a, 3 * b) += term_ab + ((ei_dot_edge[a] * ei_dot_edge[b])) * nnt - common;
 
             if (a > i) result.template block<3, 3>(3 * i, 3 * a) += ((eihat_dot_e[a] * ei_dot_edge[i])) * eihatp_outer_ei_t + ((ei_dot_edge[i] * ei_dot_edge[a])) * nnt;
@@ -206,7 +207,7 @@ struct PlateBending : public ElementBase<PlateBending<Real, AngleFunction, EData
             if (b > i) result.template block<3, 3>(3 * i, 3 * b) += ((eihat_dot_e[b] * ei_dot_edge[i])) * eihatp_outer_ei_t + ((ei_dot_edge[i] * ei_dot_edge[b])) * nnt;
             else       result.template block<3, 3>(3 * b, 3 * i) += ((eihat_dot_e[b] * ei_dot_edge[i])) * eihatp_outer_ei   + ((ei_dot_edge[b] * ei_dot_edge[i])) * nnt;
 
-            result.template block<3, 3>(3 * i, 3 * i) += ((ei_dot_edge[i] * ei_dot_edge[i])) * nnt;
+            result.template block<3, 3>(3 * i, 3 * i).template triangularView<Eigen::Upper>() += ((ei_dot_edge[i] * ei_dot_edge[i])) * nnt;
         }
 #else
         {
