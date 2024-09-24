@@ -14,7 +14,6 @@
 #include <vector>
 #include <array>
 #include <atomic>
-#include <utility>
 #include <limits>
 #include <tuple>
 #include <MeshFEM/Handles/FEMMeshHandles.hh>
@@ -635,16 +634,33 @@ struct SystemAssembler {
 private:
     template<class SPMat, class HeBlock, class ElemBlockVars>
     void m_assembleHessianContrib(SPMat &H, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
-        size_t lvar_j = 0;
+
+        // Precompute variable block information and local block offsets.
+        ElemBlockVars gvar, lvar, bs;
+        ResizeImpl<ElemBlockVars>::run(gvar, blockVars.size());
+        ResizeImpl<ElemBlockVars>::run(lvar, blockVars.size());
+        ResizeImpl<ElemBlockVars>::run(bs, blockVars.size());
+
+        for (decltype(blockVars.size()) lbj = 0, lvar_j = 0; lbj < blockVars.size(); ++lbj) {
+            auto [gvar_j, bsj] = m_vars.blockInfo(blockVars[lbj]);
+            gvar[lbj] = gvar_j;
+            bs[lbj]   = bsj;
+            lvar[lbj] = lvar_j;
+            lvar_j   += bsj;
+        }
 
         for (decltype(blockVars.size()) lbj = 0; lbj < blockVars.size(); ++lbj) {
-            auto bj = blockVars[lbj];
-            auto [gvar_j, bsj] = m_vars.blockInfo(bj);
-            size_t lvar_i = 0;
+            const auto bj = blockVars[lbj];
             m_lockVar(bj);
+            const auto gvar_j = gvar[lbj];
+            const auto bsj = bs[lbj];
+            const auto lvar_j = lvar[lbj];
             for (decltype(blockVars.size()) lbi = 0; lbi < blockVars.size(); ++lbi) {
-                auto bi = blockVars[lbi];
-                auto [gvar_i, bsi] = m_vars.blockInfo(bi);
+                const auto gvar_i = gvar[lbi];
+                const auto bsi = bs[lbi];
+                const auto lvar_i = lvar[lbi];
+
+                if (gvar_i > gvar_j) { continue; }
                 bool localUpperTri = lbi <= lbj;
 
                 decltype(He_block(lvar_i, lvar_j, bsi, bsj)) block;
@@ -665,16 +681,14 @@ private:
                 }
                 else if (gvar_i == gvar_j) {
                     index_type idx = H.findDiagEntry(gvar_i); // Top of strip to add
+                    if (bsj == 1) { H.Ax[idx] += block.data()[0]; continue; }
                     for (size_t c = 0; c < bsj; ++c) {
                         typename SPMat::DataMap(H.Ax.data() + idx, c + 1) += block.col(c).topRows(c + 1);
                         idx += H.col_nnz(gvar_j + c);
                     }
                 }
-
-                lvar_i += bsi;
             }
             m_unlockVar(bj);
-            lvar_j += bsj;
         }
     }
 

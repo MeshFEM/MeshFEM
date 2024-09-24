@@ -327,27 +327,45 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
     if (!m_disableBending && ((etype == EnergyType::Bending) || (etype == EnergyType::Full))) {
         Eigen::Matrix<Real, 3, 9, Eigen::RowMajor> dGamma_dx;
         dGamma_dx.setZero();
+#if 1
         for (size_t lhi = 0; lhi < 3; ++lhi)
             accumulateGradGamma(1.0, ei, lhi, /* updatedSource = */ true, dGamma_dx.row(lhi));
+#else
+        const auto &de = deformedTriGeometry(ei);
+        for (size_t lhi = 0; lhi < 3; ++lhi) {
+            // Gamma increases when normal rotates cw.
+            typename PBE::CPosMap(dGamma_dx.row(lhi).data())
+                          = (-1.0 / (de.edgeVecDotProducts(lhi, lhi) * de.h[lhi])) * de.edgeVecDotProducts.col(lhi) * de.normal.transpose();
+        }
+#endif
 
         // Chain rule accounting for gamma changes due to parallel transport and
         // normal rotation. Letting H denote the result of PBE::Hessian:
         // d2E/dxdɣ = H_xɣ + (dɣ/dx)^T H_ɣɣ
         // First, compute the (dɣ/dx)^T H_ɣɣ  term, but defer its addition until
         // after the d2E/dx2 block is updated (since that needs the original H_xɣ term).
-        auto xGammaBlockContrib = (dGamma_dx.transpose() * H_elem.template bottomRightCorner<3, 3>().template selfadjointView<Eigen::Upper>()).eval(); // This is reused below...
+        M3d H_gg = H_elem.template bottomRightCorner<3, 3>().template selfadjointView<Eigen::Upper>(); // Using the `selfadjointView` in the product below is slow...
+        Eigen::Matrix<Real, 9, 3> xGammaBlockContrib = dGamma_dx.transpose() * H_gg; // This is reused below...
 
         // d2E/dx2 = H_xx + 2 sym(H_xɣ dɣ/dx) + (dɣ/dx)^T H_ɣɣ (dɣ/dx) + g . d2ɣ/dx2
-        Eigen::Matrix<Real, 9, 9> xxBlockContrib = (H_elem.template topRightCorner<9, 3>() + 0.5 * xGammaBlockContrib) * dGamma_dx;
-        H_elem.template  topLeftCorner<9, 9>() += xxBlockContrib + xxBlockContrib.transpose();
+        Eigen::Matrix<Real, 9, 9> xxBlockContrib = (H_elem.template topRightCorner<9, 3>() + 0.5 * xGammaBlockContrib).eval() * dGamma_dx;
+        H_elem.template  topLeftCorner<9, 9>().template triangularView<Eigen::Upper>() += xxBlockContrib + xxBlockContrib.transpose();
         H_elem.template topRightCorner<9, 3>() += xGammaBlockContrib;
 
         // Gamma Hessian term
         auto g_gamma = m_shellElements[ei].plate.grad_gamma();
         const auto &de = deformedTriGeometry(ei);
+
+        // Precompute the n ⨂  ehatp_k terms used repeatedly below.
+        std::array<M3d, 3> n_otimes_ehatp;
+        n_otimes_ehatp[0] = de.normal * de.unitEdgePerpendiculars.col(0).transpose();
+        n_otimes_ehatp[1] = de.normal * de.unitEdgePerpendiculars.col(1).transpose();
+        n_otimes_ehatp[2] = de.normal * de.unitEdgePerpendiculars.col(2).transpose();
+
         for (size_t lhi = 0; lhi < 3; ++lhi) {
             // Accumulate dE_dɣ d2gamma_i_dx2 directly to the Hessian
             Real d2E_dgamma_i = g_gamma[lhi];
+            V3d ei_dot_edge = de.edgeVecDotProducts.row(lhi).transpose();
 
             // Note that the derivative of the parallel transport term is purely
             // skew symmetric and only acts to cancel the skew symmetric part of
@@ -355,9 +373,9 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             // the symmetric part of the normal rotation term.
 
             // Symmetrized n ⨂  ehatp_i term (the only asymmetric subterm)
-            Real liSq = de.edgeVecDotProducts(lhi, lhi);
+            Real liSq = ei_dot_edge[lhi];
             {
-                M3d contrib = (d2E_dgamma_i / liSq) * (de.normal * de.unitEdgePerpendiculars.col(lhi).transpose());
+                M3d contrib = (d2E_dgamma_i / liSq) * n_otimes_ehatp[lhi];
                 M3d symmetrized_contrib = 0.5 * (contrib + contrib.transpose());
 
                 const size_t tip  = (lhi + 2) % 3;
@@ -370,12 +388,16 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
             }
 
             Real coeff = d2E_dgamma_i / (liSq * de.h[lhi]);
-            for (size_t l = 0; l < 3; ++l) {
-                for (size_t k = 0; k <= l; ++k) {
-                    H_elem.template block<3, 3>(3 * k, 3 * l) += (coeff * de.edgeVecDotProducts(lhi, l) / de.h[k]) * de.normal * de.unitEdgePerpendiculars.col(k).transpose()
-                                                              +  (coeff * de.edgeVecDotProducts(lhi, k) / de.h[l]) * de.unitEdgePerpendiculars.col(l) * de.normal.transpose();
-                }
-            }
+            H_elem.template block<3, 3>(3 * 0, 3 * 1) += (coeff * ei_dot_edge[1] / de.h[0]) * n_otimes_ehatp[0]
+                                                      +  (coeff * ei_dot_edge[0] / de.h[1]) * n_otimes_ehatp[1].transpose();
+            H_elem.template block<3, 3>(3 * 0, 3 * 2) += (coeff * ei_dot_edge[2] / de.h[0]) * n_otimes_ehatp[0]
+                                                      +  (coeff * ei_dot_edge[0] / de.h[2]) * n_otimes_ehatp[2].transpose();
+            H_elem.template block<3, 3>(3 * 1, 3 * 2) += (coeff * ei_dot_edge[2] / de.h[1]) * n_otimes_ehatp[1]
+                                                      +  (coeff * ei_dot_edge[1] / de.h[2]) * n_otimes_ehatp[2].transpose();
+
+            H_elem.template block<3, 3>(3 * 0, 3 * 0).template triangularView<Eigen::Upper>() += (coeff * ei_dot_edge[0] / de.h[0]) * (n_otimes_ehatp[0] + n_otimes_ehatp[0].transpose());
+            H_elem.template block<3, 3>(3 * 1, 3 * 1).template triangularView<Eigen::Upper>() += (coeff * ei_dot_edge[1] / de.h[1]) * (n_otimes_ehatp[1] + n_otimes_ehatp[1].transpose());
+            H_elem.template block<3, 3>(3 * 2, 3 * 2).template triangularView<Eigen::Upper>() += (coeff * ei_dot_edge[2] / de.h[2]) * (n_otimes_ehatp[2] + n_otimes_ehatp[2].transpose());
         }
     }
 
@@ -407,18 +429,17 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
             evars.conservativeResize(6 + numCreases);
         }
 
-        MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t bsa, size_t bsb) const {
+        MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const {
             // x-x block
-            if (b < 9) {
-                assert(a <= b);
-                return H_e.block(a, b, bsa, bsb);
-            }
+            if (b < 9) return H_e.template block<3, 3>(a, b);
 
             // *-theta cols
             if (b < 12) {
                 Real coeff = halfedgeIsPrimary[b - 9] ? 1.0 : -1.0;
-                if (a >= 9) coeff *= halfedgeIsPrimary[a - 9] ? 1.0 : -1.0;
-                return coeff * H_e.block(a, b, bsa, bsb);
+                if (a < 9) return coeff * H_e.template block<3, 1>(a, b);
+                MatMaxN_T<Real, 3> result(1, 1);
+                result(0, 0) = (halfedgeIsPrimary[a - 9] ? coeff : -coeff) * H_e(a, b); 
+                return result;
             }
 
             // *-crease_angle cols
@@ -426,6 +447,7 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
             b = 9 + localHalfedgeForLocalCrease[localCrease_b];
             Real coeff = -0.5; // dgamma / d crease_angle = -0.5
 
+            if (a < 9) return coeff * H_e.template block<3, 1>(a, b);
             if (a >= 12) {
                 size_t localCrease_a = a - 12;
                 a = 9 + localHalfedgeForLocalCrease[localCrease_a];
@@ -435,14 +457,15 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
                     // The index rewriting above can reference the lower triangle of
                     // the (theta-theta) block--redirect to the upper triangle.
                     std::swap(a, b);
-                    assert(bsa == bsb);
                 }
             }
             else if (a >= 9) {
                 coeff *= halfedgeIsPrimary[a - 9] ? 1.0 : -1.0;
             }
 
-            return coeff * H_e.block(a, b, bsa, bsb);
+            MatMaxN_T<Real, 3> result(1, 1);
+            result(0, 0) = coeff * H_e(a, b); 
+            return result;
         }
 
         // Number of block variables in the typical case.
