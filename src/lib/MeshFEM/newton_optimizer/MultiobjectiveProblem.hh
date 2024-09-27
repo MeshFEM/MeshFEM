@@ -68,6 +68,10 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     // configuration to be reparametrized.
     virtual void updateParametrization() { }
 
+    // Support rolling back to a previous parametrization to perfectly restore
+    // a past configuration.
+    virtual void setParametrizationState(const VXd &/* state */) { }
+
     ////////////////////////////////////////////////////////////////////////////////
     // Variable update notification mechanism
     // (Allow objective terms to register for automatic updates when variables
@@ -226,59 +230,14 @@ private:
     NVStorageType m_nvars;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-// A generic multiobjective optimization composed of a "variable manager"
-// (responsible for the setVars/getVars/etc. part of the NewtonProblem
-// interface) and a number of NewtonObjectiveTermBase instances.
-////////////////////////////////////////////////////////////////////////////////
-struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
-    using CallbackFunction = std::function<bool(NewtonProblem &, size_t)>;
+template<class TermType>
+struct MultiObjective {
+    using TermPtr = std::shared_ptr<TermType>;
+    using VXd = typename TermType::VXd;
 
-    using TermPtr = std::shared_ptr<NewtonObjectiveTermBase>;
-    using NVMPtr  = std::shared_ptr<NewtonVarsBase>;
-
-    NewtonMultiobjectiveProblem(NVMPtr vars, std::vector<TermPtr> terms)
-        : m_vars(vars) {
-        setTerms(terms);
-    }
-
-    virtual Real objective() const override {
-        Real result = 0;
-
-        for (size_t ti = 0; ti < numTerms(); ++ti) {
-            const auto &t = term(ti);
-            Real w = weight(ti);
-            if (w == 0) continue;
-            Real o = t.objective();
-
-            // Bail early if any term exceeds its increase limit
-            if (t.increaseLimiter.valueExceedsLimit(o))
-                return ObjectiveIncreaseLimiter::INFTY;
-
-            result += w * o;
-        }
-        return result;
-    }
-
-    VXd gradient(bool freshIterate = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.gradient");
-        VXd g = VXd::Zero(numVars());
-        for (size_t ti = 0; ti < numTerms(); ++ti)
-            term(ti).accumulateGradient(weight(ti), g, freshIterate);
-
-        return g;
-    }
-
-    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+    MultiObjective(std::vector<TermPtr> terms) { setTerms(terms); }
 
     size_t numTerms() const { return m_terms.size(); }
-
-    size_t numVars() const override { return m_vars->numVars(); }
-    VXd    getVars() const override { return m_vars->getVars(); }
-    void   setVars(const VXd &vars) override {
-        if (size_t(vars.size()) != numVars()) throw std::runtime_error("Incorrect variable size");
-        m_vars->setVars(vars);
-    }
 
     void setTerms(std::vector<TermPtr> terms) {
         m_terms = terms;
@@ -335,6 +294,76 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
         return result;
     }
 
+    virtual ~MultiObjective() = default;
+
+protected:
+    std::vector<TermPtr> m_terms;
+    std::vector<Real> m_weights;
+    std::vector<std::string> m_names;
+
+    virtual void m_termsAddedOrRemoved() = 0;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// A generic multiobjective optimization composed of a "variable manager"
+// (responsible for the setVars/getVars/etc. part of the NewtonProblem
+// interface) and a number of NewtonObjectiveTermBase instances.
+////////////////////////////////////////////////////////////////////////////////
+struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public MultiObjective<NewtonObjectiveTermBase> {
+    using CallbackFunction = std::function<bool(NewtonProblem &, size_t)>;
+
+    using MO      = MultiObjective<NewtonObjectiveTermBase>;
+    using TermPtr = typename MO::TermPtr;
+    using NVMPtr  = std::shared_ptr<NewtonVarsBase>;
+
+    NewtonMultiobjectiveProblem(NVMPtr vars, std::vector<TermPtr> terms)
+        : MO(terms), m_vars(vars) {
+        setTerms(terms);
+    }
+
+    virtual Real objective() const override {
+        Real result = 0;
+
+        for (size_t ti = 0; ti < numTerms(); ++ti) {
+            const auto &t = term(ti);
+            Real w = weight(ti);
+            if (w == 0) continue;
+            Real o = t.objective();
+
+            // Bail early if any term exceeds its increase limit
+            if (t.increaseLimiter.valueExceedsLimit(o))
+                return ObjectiveIncreaseLimiter::INFTY;
+
+            result += w * o;
+        }
+        return result;
+    }
+
+    VXd gradient(bool freshIterate = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.gradient");
+        VXd g = VXd::Zero(numVars());
+        for (size_t ti = 0; ti < numTerms(); ++ti)
+            term(ti).accumulateGradient(weight(ti), g, freshIterate);
+
+        return g;
+    }
+
+    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+
+    size_t numVars() const override { return m_vars->numVars(); }
+    VXd    getVars() const override { return m_vars->getVars(); }
+    void   setVars(const VXd &vars) override {
+        if (size_t(vars.size()) != numVars()) throw std::runtime_error("Incorrect variable vector size");
+        m_vars->setVars(vars);
+    }
+
+    size_t numParameters() const { return m_vars->numParameters(); }
+    VXd    getParameters() const { return m_vars->getParameters(); }
+    void   setParameters(const VXd &p) {
+        if (size_t(p.size()) != numParameters()) throw std::runtime_error("Incorrect parameter vector size");
+        m_vars->setParameters(p);
+    }
+
     // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
     // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)
     Real characteristicDistance(const Eigen::VectorXd &d) const override {
@@ -347,14 +376,11 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem {
 
 private:
     NVMPtr m_vars;
-    std::vector<TermPtr> m_terms;
-    std::vector<Real> m_weights;
-    std::vector<std::string> m_names;
 
     SuiteSparseMatrix m_hessianSparsity, m_staticSparsityPattern;
     CallbackFunction m_customCallback;
 
-    void m_termsAddedOrRemoved() {
+    void m_termsAddedOrRemoved() override {
         if (numTerms() == 0) throw std::runtime_error("Must have at least one term");
 
         // Note: empty sparsity patterns simply get replaced by `addWithDistinctSparsityPattern`
