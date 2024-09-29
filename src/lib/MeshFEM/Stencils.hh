@@ -55,12 +55,12 @@ struct StaticStencil {
 namespace detail {
 
 template<size_t NumVars, size_t BlockDimension, size_t... Dimensions>
-struct UniformStencil {
-    using type = typename UniformStencil<NumVars - 1, BlockDimension, BlockDimension, Dimensions...>::type;
+struct UniformStencilImpl {
+    using type = typename UniformStencilImpl<NumVars - 1, BlockDimension, BlockDimension, Dimensions...>::type;
 };
 
 template<size_t BlockDimension, size_t... Dimensions>
-struct UniformStencil<0, BlockDimension, Dimensions...> {
+struct UniformStencilImpl<0, BlockDimension, Dimensions...> {
     using type = StaticStencil<Dimensions...>;
 };
 
@@ -68,7 +68,7 @@ struct UniformStencil<0, BlockDimension, Dimensions...> {
 
 // Simpler notation for static stencils with a single block dimension.
 template<size_t NumVars, size_t BlockDimension>
-using UniformStencil = typename detail::UniformStencil<NumVars, BlockDimension>::type;
+using UniformStencil = typename detail::UniformStencilImpl<NumVars, BlockDimension>::type;
 
 struct TriFlapStencil : public UniformStencil<4, 3> {
     using Base = UniformStencil<4, 3>;

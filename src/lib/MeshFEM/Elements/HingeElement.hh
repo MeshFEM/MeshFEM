@@ -10,12 +10,12 @@
 #ifndef HINGEELEMENT_HH
 #define HINGEELEMENT_HH
 
-#include <cmath>
 #include <Eigen/Dense>
-#include <array>
 #include <MeshFEM/Elements/DihedralAngle.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/MeshEnergy.hh>
+
+#include "ElementBase.hh"
 
 template<class HingeEnergy>
 struct HingeElement;

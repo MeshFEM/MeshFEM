@@ -24,9 +24,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <cassert>
-#include <memory>
 #include <cstdint>
-#include <cmath>
 #include "Parallelism.hh"
 #include "ParallelVectorOps.hh"
 #include "Utilities/binary_search.hh"
@@ -874,7 +872,11 @@ struct CSCMatrix {
     DataCMap data() const { return DataCMap(Ax.data(), Ax.size()); }
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
-    void fill(_Real val) { data().setConstant(val); }
+    void fill(_Real val) {
+        Ax.resize(nz);
+        data().setConstant(val);
+    }
+
     template<bool multithreaded = true> void setZero() {
         if (multithreaded) {
             parallel_for_range(Ax.size(), [&](size_t i) {
@@ -1471,12 +1473,14 @@ struct CSCMatrix {
     // Perform the operation:
     // a[offset:, offset:] + alpha * b[blockStart:blockEnd, blockStart:blockEnd]
     // Sparsity pattern of RHS can be arbitrary.
+    template<bool SparsityOnly = false>
     static CSCMatrix addWithDistinctSparsityPattern(const CSCMatrix &a, const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix.addWithDistinctSparsityPattern");
 
         _Index inputSize = std::min(b.m, blockEnd) - blockStart;
         if (b.m != b.n) throw std::runtime_error("Only square matrices are supported");
         if ((a.m != inputSize + offset) || (a.n != inputSize + offset)) throw std::runtime_error("Size mismatch");
+        if (a.symmetry_mode != b.symmetry_mode) throw std::runtime_error("Symmetry mode mismatch");
         if (b.nz == 0) return a;
         if (a.nz == 0) return b;
 
@@ -1490,10 +1494,11 @@ struct CSCMatrix {
         CSCMatrix result(a.m, a.n);
         result.symmetry_mode = a.symmetry_mode;
         auto &newAp = result.Ap, &newAi = result.Ai;
-        auto &newAx = result.Ax;
         newAp.reserve(a.Ap.size());
         newAi.reserve(a.Ai.size());
-        newAx.reserve(a.Ax.size());
+
+        auto &newAx = result.Ax;
+        if constexpr (!SparsityOnly) newAx.reserve(a.Ax.size());
 
         // Merge sorted triplets into the new result
         _Index currCol = 0;
@@ -1505,7 +1510,7 @@ struct CSCMatrix {
                 newAp.push_back(newAi.size());
             currCol = col;
             newAi.push_back(row);
-            newAx.push_back(val);
+            if constexpr (!SparsityOnly) newAx.push_back(val);
         };
 
         while ((it != ite) || (bit != bite)) {
@@ -1520,9 +1525,16 @@ struct CSCMatrix {
                 takeB = b_colrow <= a_colrow;
             }
 
-            if ( takeA && !takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val()         ); ++it;        }
-            if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val() + bval()); ++it; ++bit; }
-            if (!takeA &&  takeB) { insertEntry(      bi(),       bj(),                bval());       ++bit; }
+            if constexpr (!SparsityOnly) {
+                if ( takeA && !takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val()         ); ++it;        }
+                if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), it.get_val() + bval()); ++it; ++bit; }
+                if (!takeA &&  takeB) { insertEntry(      bi(),       bj(),                bval());       ++bit; }
+            }
+            else {
+                if ( takeA && !takeB) { insertEntry(it.get_i(), it.get_j(), 0); ++it;        }
+                if ( takeA &&  takeB) { insertEntry(it.get_i(), it.get_j(), 0); ++it; ++bit; }
+                if (!takeA &&  takeB) { insertEntry(      bi(),       bj(), 0);       ++bit; }
+            }
         }
         if (currCol >= a.n) throw std::runtime_error("Column index out of bounds");
 
@@ -1537,9 +1549,16 @@ struct CSCMatrix {
 
     // Perform the operation:
     //  (*this)[offset:, offset:] += alpha * b[blockStart:blockEnd, blockStart:blockEnd]
+    template<bool SparsityOnly = false>
     void addWithDistinctSparsityPattern(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
         if (b.nz == 0) return;
-        *this = addWithDistinctSparsityPattern(*this, b, alpha, offset, blockStart, blockEnd);
+        *this = addWithDistinctSparsityPattern<SparsityOnly>(*this, b, alpha, offset, blockStart, blockEnd);
+    }
+
+    // Produces a sparsity-only matrix (with `Ax` empty)!
+    void mergeSparsityPattern(const CSCMatrix &b, const _Index offset = 0, const _Index blockStart = 0, const _Index blockEnd = std::numeric_limits<_Index>::max()) {
+        if (b.nz == 0) return;
+        *this = addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, b, 1.0, offset, blockStart, blockEnd);
     }
 
     bool sparsityPatternsMatch(const CSCMatrix &b) const {

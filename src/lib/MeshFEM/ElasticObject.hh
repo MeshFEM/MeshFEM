@@ -11,8 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
-#include "Types.hh"
-#include <map>
 #include <cstdlib>
 #include <functional>
 
@@ -57,6 +55,10 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     using NewtonObjectiveTermBase::hessian; // Don't shadow the `hessian` convenience method
     virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask) const override {
         return accumulateHessian(weight, H, projectionMask, VariableMask::Defo);
+    }
+
+    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask) const override {
+        return accumulateHessian(weight, Ax, Hb, projectionMask, VariableMask::Defo);
     }
 
     virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override {
@@ -112,6 +114,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual Real  energy() const = 0;
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization, VariableMask vmask) const = 0;
     virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask, VariableMask vmask) const = 0;
+    virtual void accumulateHessian(Real weight, Real *, const BlockCSCHessianBase &Hb, bool projectionMask, VariableMask vmask) const { throw std::runtime_error("Block-accelerated Hessian assembly not implemented."); }
     virtual CSCMat hessianSparsityPattern(Real val, VariableMask vmask) const = 0;
 
     // Convenience method

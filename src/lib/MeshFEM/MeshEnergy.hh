@@ -19,7 +19,7 @@
 #include <MeshFEM/ParallelAssembly.hh>
 #include "Stencils.hh"
 #include <MeshFEM/Utilities/NameMangling.hh>
-#include "Elements/ElementBase.hh"
+#include "Elements/MaterialAssignment.hh"
 
 enum class MeshVarType { PER_NODE, PER_EDGE, PER_CELL };
 template<MeshVarType MVT, size_t N> struct MeshVarSpecification {
@@ -63,10 +63,9 @@ struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
     using Assembler = SystemAssembler<MVSpec::BlockDimension...>;
 
     template<class Mesh>
-    MeshEnergyVars(const Mesh &m)
-        : NewtonVars(0), m_assembler(MVSpec::numVars(m)...)
-    {
-        m_x.resize(m_assembler.numVars());
+    MeshEnergyVars(const Mesh &m) {
+        this->m_assembler = std::make_unique<Assembler>(MVSpec::numVars(m)...);
+        m_x.resize(this->m_assembler->numVars());
 
         // Initialize each block of the variable vector.
         const auto &v = varStructure();
@@ -74,13 +73,11 @@ struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
         ((MVSpec::initialize(m, m_x.segment(v.offsetForType(type), v.numVarsOfType(type))), ++type), ...);
     }
 
-    const auto &varStructure() const { return m_assembler.varStructure(); }
+    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
+    const auto &varStructure() const { return assembler().varStructure(); }
     const VXd &globalVars() const { return m_x; }
-    const Assembler &assembler() const { return m_assembler; }
 
     virtual ~MeshEnergyVars() { }
-private:
-    Assembler m_assembler;
 };
 
 template<typename... MVSpec>
@@ -125,7 +122,7 @@ struct MeshEnergy : public MeshEnergyBase {
     using MA        = MaterialAssignment<Material>;
 
     MeshEnergy(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars)
-        : MeshEnergyBase(vars), m_mesh(m), stencils(*m), m_vars_ptr(vars), m_vars(*vars), m_assembler(vars->assembler()), materials(stencils.size()) {
+        : MeshEnergyBase(vars), m_mesh(m), stencils(*m), m_vars_ptr(vars), m_vars(*vars), materials(stencils.size()) {
         const size_t ns = stencils.size();
         elements.reserve(ns);
 
@@ -158,14 +155,16 @@ struct MeshEnergy : public MeshEnergyBase {
             }, elements.size());
     }
 
+    const auto &assembler() const { return m_vars.assembler(); }
+
     void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
         if constexpr (Element::CachesDeformedQuantities) {
-            m_assembler.assembleGradient(g, elements.size(), [&](size_t ei) {
+            assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight);
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
-            m_assembler.assembleGradient(g, elements.size(), [&](size_t ei) {
+            assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight, extractLocalVars(ei));
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
@@ -174,24 +173,26 @@ struct MeshEnergy : public MeshEnergyBase {
     void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
         if constexpr (Element::CachesDeformedQuantities) {
-            m_assembler.assembleHessian(H, elements.size(), [&](size_t ei) {
+            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
                 return elements[ei].hessian(weight, projectionMask);
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
-            m_assembler.assembleHessian(H, elements.size(), [&](size_t ei) {
+            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
                 return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
     }
 
-    SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {
-        const size_t nv = m_vars.numVars();
-
-        auto Hsp_block = m_assembler.blockSparsityPattern(elements.size(), [&](size_t ei) {
+    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        auto Hsp_block = assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
-        return Hsp_block.toScalar(val);
+        return std::make_unique<decltype(Hsp_block)>(Hsp_block);
+    }
+
+    SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {
+        return blockSparsityPattern()->toScalar(val);
     }
 
     void varsUpdated() override {
@@ -216,7 +217,6 @@ private:
     Material &m_getMaterial(size_t ei) override { return materials[ei]; }
 
     const Vars &m_vars;
-    const Assembler &m_assembler;
     std::shared_ptr<Vars> m_vars_ptr; // Keep the variables structure alive.
     std::shared_ptr<Mesh> m_mesh;     // Keep the mesh alive in case the element energy class references it.
 };

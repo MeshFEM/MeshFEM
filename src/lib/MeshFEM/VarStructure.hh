@@ -87,7 +87,7 @@ struct OptimizationVarStructure {
     size_t blockOffsetForType(size_t type_id) const { return m_typeBlockOffsets[type_id]; }
     size_t    numBlocksOfType(size_t type_id) const { return m_typeBlockOffsets[type_id + 1] - m_typeBlockOffsets[type_id]; }
 
-    size_t numVars() const { return m_numScalarVars; }
+    size_t   numVars() const { return m_numScalarVars; }
     size_t numBlocks() const { return m_numBlocks; }
 
     template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }

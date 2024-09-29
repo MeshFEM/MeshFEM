@@ -10,20 +10,15 @@
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
 #include "GlobalBenchmark.hh"
-#include "MeshIO.hh"
 #include "ParallelAssembly.hh"
 #include "SparseMatrices.hh"
 #include "SystemAssembler.hh"
-#include "Flattening.hh"
-#include "Types.hh"
 #include "Functions.hh"
-#include "EnergyDensities/Tensor.hh"
 #include "EnergyDensities/EnergyTraits.hh"
 #include "FieldSamplerMatrix.hh"
 #include <Eigen/Sparse>
 #include "Utilities/MeshConversion.hh"
 
-#include <atomic>
 #include <optional>
 
 #include "RigidMotionPins.hh"
@@ -48,7 +43,6 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     static_assert(std::is_convertible<typename Energy::Real, Real>::value, "Incompatible real number types");
 
     using Base = ElasticObject<Real>;
-    using CSCMat = typename Base::CSCMat;
     using Base::numVars;
 
     static constexpr size_t K = _K;
@@ -56,6 +50,9 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     static constexpr size_t Deg = _Deg;
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
+
+    using CSCMat = typename Base::CSCMat;
+    using BCSC   = BlockCSCHessian<OptimizationVarStructure<N>>;
 
     using SE = elements::Solid<Energy, K, Deg>;
     using NodePositions = typename SE::NodePositions;
@@ -69,16 +66,15 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     using GradPhis = typename Mesh::ElementData::GradPhis;
 
     ElasticSolid(const Energy &energy, const std::shared_ptr<Mesh> &mesh)
-        : m_mesh(mesh), m_energyDensities{{energy}}, m_assembler(mesh->numNodes()) { setIdentityDeformation(); }
+        : m_mesh(mesh), m_energyDensities{{energy}} {
+        this->m_assembler = std::make_unique<SystemAssembler<N>>(mesh->numNodes());
+        setIdentityDeformation();
+    }
 
     // Copy and degree-changing constructor
+    ElasticSolid(const ElasticSolid &es) { m_copy(es); }
     template<size_t Deg2>
-    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es)
-        : m_assembler(es.mesh().numNodes()) { m_copy(es); }
-    // Note: the degree-changing constructor template is excluded from overload resolution,
-    // and the implicitly copy constructor is deleted due to the `m_assembler` member...
-    ElasticSolid(const ElasticSolid &es)
-        : m_assembler(es.mesh().numNodes()) { m_copy(es); }
+    ElasticSolid(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) { m_copy(es); }
 
     size_t numElements() const { return mesh().numElements(); }
     size_t numVertices() const { return mesh().numVertices(); }
@@ -124,6 +120,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return SE::gradient(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
+    const SystemAssembler<N> &assembler() const { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
+
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual void accumulateGradient(Real weight, VXd &g, bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
@@ -133,8 +131,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         if (weight != 1.0) throw std::runtime_error("weighted gradient unimplemented");
         m_assembler.assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
 #else
-        if (weight == 1.0) m_assembler.assembleGradient(g, mesh(), [this        ](size_t ei) { return elementGradient(ei); } );
-        else               m_assembler.assembleGradient(g, mesh(), [this, weight](size_t ei) { return (weight * elementGradient(ei)).eval(); } );
+        if (weight == 1.0) assembler().assembleGradient(g, mesh(), [this        ](size_t ei) { return elementGradient(ei); } );
+        else               assembler().assembleGradient(g, mesh(), [this, weight](size_t ei) { return (weight * elementGradient(ei)).eval(); } );
 #endif
     }
 
@@ -155,9 +153,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return result;
     }
 
-    const auto &getBlockHsp() const {
-        if (!m_blockHsp) m_blockHsp = m_assembler.blockSparsityPatternForMesh(mesh());
-        return m_blockHsp.value();
+    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        return std::make_unique<BCSC>(assembler().blockSparsityPatternForMesh(mesh()));
     }
 
     // Construct a scalar-valued Hessian.
@@ -165,24 +162,29 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
-#if 0
-        m_assembler.assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
+        assembler().assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });
-#else
-        m_assembler.assembleHessianBlockAccelerated(H, getBlockHsp(), mesh(), [this, projectionMask, weight](size_t ei) {
+    }
+
+    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        const BCSC &Hb = dynamic_cast<const BCSC &>(Hb_base);
+        assembler().assembleHessianBlockAccelerated(Ax, Hb, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });
-#endif
     }
 
     // Construct a block-valued Hessian.
     CSCMatrix<SuiteSparse_long, MNd> blockHessian(bool projectionMask = false) const {
         CSCMatrix<SuiteSparse_long, MNd> blockH;
-        blockH.copySparsityPattern(getBlockHsp());
+
+        auto Hb_base = blockSparsityPattern();
+        auto Hb = dynamic_cast<const BCSC &>(*Hb_base);
+
+        blockH.copySparsityPattern(Hb);
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("Assemble Block Hessian");
-        m_assembler.assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {
+        assembler().assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {
             return elementHessian(ei, !projectionMask);
         });
         return blockH;
@@ -191,14 +193,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        return getBlockHsp().toScalar(val);
-    }
-
-    const CSCMat hessianBlockSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        CSCMat result = getBlockHsp();
-        result.fill(val);
-        return result;
+        return blockSparsityPattern()->toScalar(val);
     }
 
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {
@@ -422,8 +417,6 @@ protected:
     // Deformed positions for each node
     MXNd m_x;
 
-    SystemAssembler<N> m_assembler;
-
     // Block Hessian sparsity pattern.
     mutable std::optional<BlockCSCHessian<OptimizationVarStructure<N>>> m_blockHsp;
 
@@ -433,9 +426,8 @@ protected:
 
     template<size_t Deg2>
     void m_copy(const ElasticSolid<K, Deg2, EmbeddingSpace, Energy> &es) {
-        // WARNING: this currently can only be called from a copy constructor
-        // which properly initializes `m_assembler`!!!
         m_mesh = std::make_shared<Mesh>(es.mesh());
+        this->m_assembler = std::make_unique<SystemAssembler<N>>(m_mesh->numNodes());
         m_energyDensities = es.m_energyDensities;
         auto oldDeformation = es.deformedPositions();
 

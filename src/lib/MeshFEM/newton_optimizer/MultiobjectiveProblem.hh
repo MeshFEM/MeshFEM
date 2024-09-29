@@ -12,6 +12,7 @@
 #define MULTIOBJECTIVEPROBLEM_HH
 
 #include "NewtonProblem.hh"
+#include "../SystemAssembler.hh"
 #include <memory>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +47,11 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     using NotificationCB = std::function<void()>;
 
     virtual size_t numVars() const = 0;
-    virtual VXd getVars() const = 0; // TODO: avoid copy here for managers that return by reference?
+    virtual    VXd getVars() const = 0; // TODO: avoid copy here for managers that return by reference?
+
+    bool   hasAssembler() const { return bool(m_assembler); }
+    size_t numBlockVars() const { return assembler().numBlockVars(); }
+
     void setVars(const VXd &vars) {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Variable size mismatch");
         m_setVarsImpl(vars);
@@ -98,6 +103,12 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     }
 
     virtual ~NewtonVarsBase();
+
+    const SystemAssemblerBase &assembler() const {
+        if (!m_assembler) throw std::runtime_error("System assembler was not set");
+        return *m_assembler;
+    }
+
 protected:
     void m_issueNotifications(VarType type) const {
         for (const auto &it : m_updateCBs) {
@@ -106,6 +117,8 @@ protected:
                 record.cb();
         }
     }
+
+    std::unique_ptr<SystemAssemblerBase> m_assembler;
 
 private:
     // State update notifications
@@ -124,7 +137,7 @@ private:
 struct MESHFEM_EXPORT NewtonVars : public NewtonVarsBase {
     using VXd = Eigen::VectorXd;
 
-    NewtonVars(size_t n, size_t numParams = 0) : m_x(n), m_p(numParams) { }
+    NewtonVars(size_t n = 0, size_t numParams = 0) : m_x(n), m_p(numParams) { }
     NewtonVars(const VXd &v) : m_x(v) { }
 
     virtual size_t numVars() const override { return m_x.size(); }
@@ -147,7 +160,7 @@ private:
 
 // The main objective term interface (but without any storage/access to the
 // optimizaton variables). Most objective terms will instead want to derive from
-// `NewtonObjectiveTerm`, which will allows access to variables and supports
+// `NewtonObjectiveTerm`, which allows access to variables and supports
 // notifications of variable changes.
 // This base class is appropriate for classes like `ElasticObject` that
 // implement both the `NewtonVarsBase` and `NewtonObjectiveTermBase` interfaces
@@ -165,9 +178,14 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     virtual Real objective() const = 0;
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const = 0;
     virtual void accumulateHessian(Real weight, SuiteSparseMatrix &result, bool projectionMask = false) const = 0;
+    // TODO: eventually accumulate directly to Hb.Ax rather than the external // values array `Ax`
+    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask = false) const { throw std::runtime_error("Block-accelerated Hessian assembly unimplemented"); }; // Block-accelerated version
 
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0) const = 0;
-    virtual SparsityUpdateFrequency sparsityUpdateFrequency() const { return SparsityUpdateFrequency::NEVER; }
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const { throw std::runtime_error("Block sparsity not implemented"); }
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0)      const { throw std::runtime_error("Block sparsity not implemented"); }
+    virtual SparsityUpdateFrequency sparsityUpdateFrequency()           const { return SparsityUpdateFrequency::NEVER; }
+
+    virtual bool supportsBlockAcceleratedHessianAssembly() const { return false; }
 
     virtual ~NewtonObjectiveTermBase();
 
@@ -195,6 +213,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // Option to ignore the sparsity pattern contributed by this term
     // (e.g., if we know it is a subset of the sparsity patterns of the other terms).
     bool suppressSparsity = false;
+
 };
 
 struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
@@ -234,8 +253,6 @@ template<class TermType>
 struct MultiObjective {
     using TermPtr = std::shared_ptr<TermType>;
     using VXd = typename TermType::VXd;
-
-    MultiObjective(std::vector<TermPtr> terms) { setTerms(terms); }
 
     size_t numTerms() const { return m_terms.size(); }
 
@@ -317,7 +334,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     using NVMPtr  = std::shared_ptr<NewtonVarsBase>;
 
     NewtonMultiobjectiveProblem(NVMPtr vars, std::vector<TermPtr> terms)
-        : MO(terms), m_vars(vars) {
+        : m_vars(vars) {
         setTerms(terms);
     }
 
@@ -377,29 +394,58 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 private:
     NVMPtr m_vars;
 
-    SuiteSparseMatrix m_hessianSparsity, m_staticSparsityPattern;
+    SuiteSparseMatrix m_hessianSparsity;
+    std::unique_ptr<BlockCSCHessianBase> m_blockSparsity;
     CallbackFunction m_customCallback;
+
+    // Only build the block sparsity pattern if we can (i.e., we have a SystemAssembler)
+    // and it's beneficial (not a scalar problem).
+    bool m_shouldBuildBlockSparsityPattern() const {
+        return m_vars->hasAssembler() && (m_vars->numBlockVars() < numVars());
+    }
 
     void m_termsAddedOrRemoved() override {
         if (numTerms() == 0) throw std::runtime_error("Must have at least one term");
 
-        // Note: empty sparsity patterns simply get replaced by `addWithDistinctSparsityPattern`
-        m_hessianSparsity.m = m_hessianSparsity.n = numVars();
-        m_hessianSparsity.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
-
-        for (size_t i = 0; i < numTerms(); ++i) {
-            const auto &t = term(i);
-            if (t.suppressSparsity) continue;
-            m_hessianSparsity.addWithDistinctSparsityPattern(t.hessianSparsityPattern());
+        // Note: empty sparsity patterns simply get replaced by `mergeSparsityPattern`
+        const bool blockSparsity = m_shouldBuildBlockSparsityPattern();
+        if (blockSparsity) {
+            m_blockSparsity = term(0).blockSparsityPattern();
+            for (size_t i = 1; i < numTerms(); ++i) {
+                if (term(i).suppressSparsity) continue;
+                m_blockSparsity->mergeSparsityPattern(*term(i).blockSparsityPattern());
+            }
+            m_blockSparsity->finalize();
+            m_hessianSparsity = m_blockSparsity->toScalar();
         }
+        else {
+            SuiteSparseMatrix &H_sp = m_hessianSparsity;;
+
+            H_sp.m = H_sp.n = m_vars->numBlockVars();
+            H_sp.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+
+            for (size_t i = 0; i < numTerms(); ++i) {
+                const auto &t = term(i);
+                if (t.suppressSparsity) continue;
+                H_sp.mergeSparsityPattern(t.hessianSparsityPattern());
+            }
+        }
+
         m_hessianSparsity.fill(1.0);
     }
 
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.hessian");
-        result.data().setZero();
-        for (size_t ti = 0; ti < numTerms(); ++ti)
-            term(ti).accumulateHessian(weight(ti), result, projectionMask);
+
+        if (result.Ax.size() != size_t(result.nz)) // In case `result` is sparsity-only
+            result.Ax.assign(result.nz, 0);
+        else setZeroParallel(result.data());
+
+        for (size_t ti = 0; ti < numTerms(); ++ti) {
+            bool block_accel = m_blockSparsity && term(ti).supportsBlockAcceleratedHessianAssembly();
+            if (block_accel) term(ti).accumulateHessian(weight(ti), result.Ax.data(), *m_blockSparsity, projectionMask);
+            else             term(ti).accumulateHessian(weight(ti), result, projectionMask);
+        }
     }
 
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override {

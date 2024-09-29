@@ -171,10 +171,10 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         : m_mesh(mptr),
           m_edgeVarStructure(mptr, creases),
           m_numVertices(mptr->numVertices()),
-          m_materials(mptr->numElements()),
-          m_assembler(m_numVertices, m_edgeVarStructure.numEdges, m_edgeVarStructure.numCreases)
+          m_materials(mptr->numElements())
     {
         const auto &m = mesh();
+        this->m_assembler = std::make_unique<Assembler>(m.numNodes(), m_edgeVarStructure.numEdges, m_edgeVarStructure.numCreases);
 
         m_materials[0].setPsi(psi);
         m_materials[0].setThickness(1.0);
@@ -215,7 +215,8 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     size_t numThetas()    const { return numEdges();   }
     size_t numCreases()   const { return m_edgeVarStructure.numCreases; }
 
-    const auto &varStructure() const { return m_assembler.varStructure(); }
+    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(*this->m_assembler); }
+    const auto &varStructure() const { return assembler().varStructure(); }
 
     size_t           xOffset() const { return varStructure().offsetForType(0); }
     size_t       thetaOffset() const { return varStructure().offsetForType(1); }
@@ -691,7 +692,7 @@ private:
     // Member variables
     ////////////////////////////////////////////////////////////////////////////
     std::shared_ptr<Mesh> m_mesh;
-    EdgeVariableStructure m_edgeVarStructure; // must appear before m_assembler for proper initialization!
+    EdgeVariableStructure m_edgeVarStructure;
 
     MX3d m_deformedPositions;
     VXd  m_thetas; // per-edge thetas
@@ -719,8 +720,6 @@ private:
     HessianProjectionType m_hessianProjectionType = HessianProjectionType::Off;
 
     std::unique_ptr<NewtonOptimizer> m_normalInferenceOptimizer;
-
-    Assembler m_assembler;
 };
 
 #include "ElasticSheet.inl"

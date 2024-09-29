@@ -20,7 +20,6 @@
 #ifndef BLOCKCSCHESSIAN_HH
 #define BLOCKCSCHESSIAN_HH
 
-#include "VarStructure.hh"
 #include "SparseMatrices.hh"
 #include <type_traits>
 
@@ -82,8 +81,7 @@ protected:
     void m_buildIndexTables() { }
 };
 
-// Various implementations of the block-to-scalar conversion ***in the
-// non-uniform block size case***.
+// Various implementations of the block-to-scalar conversion ***in the non-uniform block size case***.
 // These policies are used to quickly determine the offset into the Ax array at
 // which a block entry (bi, bj) begins.
 // Note that the `BlockToScalarUniformBlockSize` implementation will be
@@ -159,6 +157,9 @@ protected:
         auto &Ap = H.Ap;
         auto &Ai = H.Ai;
         const _Index n = H.n;
+
+        m_scalarOffsetForColumn.clear();
+        m_numBlockEntriesOfType.clear();
 
         m_scalarOffsetForColumn.reserve(n);
         m_numBlockEntriesOfType.resize(n); // actually zero-initializes! (default-inserts each std::array, which ultimately value-initializes each array entry)
@@ -332,33 +333,71 @@ template<class Derived> using BlockToScalarPolicyLocLookup            = detail::
 template<class Derived> using BlockToScalarPolicyTypeOffsetsPerColumn = detail::BlockToScalarWithConditionalFastPath<Derived, detail::BlockToScalarPolicyTypeOffsetsPerColumn>;
 template<class Derived> using BlockToScalarPolicyDefault              = BlockToScalarPolicyTypeOffsetsPerColumn<Derived>;
 
+struct BlockCSCHessianBase {
+    virtual void mergeSparsityPattern(const BlockCSCHessianBase &other) = 0;
+    virtual void finalize() = 0;
+
+    virtual SuiteSparseMatrix toScalar() const = 0;
+
+    SuiteSparseMatrix toScalar(Real fillVal) const {
+        SuiteSparseMatrix result = toScalar();
+        result.Ax.assign(result.nz, fillVal);
+        return result;
+    }
+
+    virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
+
+    virtual ~BlockCSCHessianBase() = default;
+};
+
 template<class VarStructure, template<class D> class BlockToScalarPolicy = BlockToScalarPolicyDefault, typename _Index, typename _Real, class IdxVector>
 struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure, BlockToScalarPolicy, _Index, _Real, IdxVector>>,
-                         public CSCMatrix<_Index, _Real, IdxVector> { // TODO: make this private inheritance after completing refactoring.
+                         public CSCMatrix<_Index, _Real, IdxVector>, // TODO: make this private inheritance after completing refactoring.
+                         public BlockCSCHessianBase
+{
     using CSCMat = CSCMatrix<_Index, _Real, IdxVector>;
-    using Base   = CSCMat;
 
-    using SymmetryMode = typename Base::SymmetryMode;
-    using Base::Ax; // Note: this may be empty for a sparsity-only matrix!
-    using Base::symmetry_mode;
+    using SymmetryMode = typename CSCMat::SymmetryMode;
+    using CSCMat::Ax; // Note: this may be empty for a sparsity-only matrix! Also, it holds scalar entries!
+    using CSCMat::symmetry_mode;
 
     // Note: the following hold the *block* sparsity structure.
-    using Base::Ai;
-    using Base::Ap;
-    using Base::m;
-    using Base::n;
-    using Base::nz;
+    using CSCMat::Ai;
+    using CSCMat::Ap;
+    using CSCMat::m;
+    using CSCMat::n;
+    using CSCMat::nz;
 
     BlockCSCHessian(const VarStructure &varStructure)
-        : Base(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
+        : CSCMat(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
 
-    CSCMat toScalar() const {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("blockHessianSparsityPatternToScalar");
+    // Finalize the construction of this block sparse matrix by
+    // building various acceleration structures needed in the non-uniform
+    // block dimension case. Warning: this must be called before any of the
+    // methods below are used on variable-block-size matrices!
+    void finalize() override { this->m_buildIndexTables(); }
+
+    void mergeSparsityPattern(const BlockCSCHessianBase &other) override {
+        try {
+            const auto &other_bcsc = dynamic_cast<const BlockCSCHessian &>(other);
+            const CSCMat &other_csc = other_bcsc;
+            auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
+            Ai = std::move(result.Ai);
+            Ap = std::move(result.Ap);
+        }
+        catch (const std::bad_cast &e) {
+            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible types");
+        }
+    }
+
+    using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
+    CSCMat toScalar() const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.toScalar");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
         CSCMat result(m_vars.numVars(), m_vars.numVars());
         result.symmetry_mode = SymmetryMode::UPPER_TRIANGLE;
 
-        const Base &blockHsp = *this;
+        const CSCMat &blockHsp = *this;
         typename CSCMat::InOrderBuilder builder(result, [&blockHsp, this](_Index *colSizes) {
                 // Count the number of nonzeros in each column of the scalar Hessian sparsity pattern.
                 for (_Index block_j = 0; block_j < blockHsp.n; ++block_j) {
@@ -404,21 +443,13 @@ struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure
         return result;
     }
 
-    CSCMat toScalar(Real fillVal) const {
-        CSCMat result = toScalar();
-        result.Ax.assign(result.nz, fillVal);
-        return result;
+    std::unique_ptr<BlockCSCHessianBase> clone() const override {
+        return std::make_unique<BlockCSCHessian>(*this);
     }
 
     detail::ColumnScanner<BlockCSCHessian> columnScanner(_Index bj) const {
         return detail::ColumnScanner<BlockCSCHessian>(*this, bj);
     }
-
-    // Finalize the construction of this block sparse matrix by
-    // building various acceleration structures needed in the non-uniform
-    // block dimension case. Warning: this must be called before any of the
-    // methods below are used on variable-block-size matrices!
-    void finalize() { this->m_buildIndexTables(); }
 
     const VarStructure &vars() const { return m_vars; }
 
