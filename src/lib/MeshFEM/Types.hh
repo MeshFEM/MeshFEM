@@ -146,7 +146,7 @@ auto reshape(T &&A) { return eigen_map<Rows, Cols>(A.data()); }
 // of std::array, no resizing is possible.
 ////////////////////////////////////////////////////////////////////////////////
 template<class T> struct ResizeImpl { static void run(T &v, size_t n) { v.resize(n); } };
-template<typename T, size_t N> struct ResizeImpl<std::array<T, N>> { static void run(std::array<T, N> &v, size_t n) { assert(N == n && "Cannot resize std::array"); } };
+template<typename T, size_t N> struct ResizeImpl<std::array<T, N>> { static void run(std::array<T, N> &v, size_t n) { UNUSED(v); UNUSED(n); assert(N == n && "Cannot resize std::array"); } };
 
 // Work around alignment issues for C++ versions before C++17:
 // http://eigen.tuxfamily.org/dox-devel/group__TopicStlContainers.html

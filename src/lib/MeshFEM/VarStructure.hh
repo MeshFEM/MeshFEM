@@ -102,7 +102,7 @@ private:
 
 // PerElementBlockOffsetCalculation: layout of per-element gradient/Hessian.
 // A helper class for computing offsets of each local block variable into a
-// per-element gradient or Hessian.
+// per-element gradient or Hessian--and into the global gradient/Hessian.
 template<class VarStructure, class ElementBlockVars, class Enable = void>
 struct PerElementBlockOffsetCalculation;
 
@@ -112,28 +112,34 @@ struct PerElementBlockOffsetCalculation<VarStructure, ElementBlockVars, std::ena
     PerElementBlockOffsetCalculation(const VarStructure &/* vars */, const ElementBlockVars &/* blockVars */) { }
     static constexpr size_t N = VarStructure::MaxBlockDim;
     static constexpr size_t offset(size_t localBlockIndex) { return N * localBlockIndex; }
+    static constexpr size_t blockSize(size_t /* localBlockIndex */) { return N; }
+    static constexpr size_t globalScalarVar(size_t /* localBlockIndex */, size_t globalBlockVar)  { return N * globalBlockVar; }
 };
 
 // For problems with nonuniform block size, we look up the block sizes
 template<class VarStructure, class ElementBlockVars>
 struct PerElementBlockOffsetCalculation<VarStructure, ElementBlockVars, std::enable_if_t<!VarStructure::SingleBlockDim>> {
     PerElementBlockOffsetCalculation(const VarStructure &vars, const ElementBlockVars &blockVars) {
-        blockOffsets.resize(blockVars.size());
-        // First, determine the size of each block
-        for (size_t i = 0; i < blockVars.size(); ++i)
-            blockOffsets[i] = vars.blockSize(blockVars[i]);
+        ResizeImpl<ElementBlockVars>::run(blockOffsets,  blockVars.size());
+        ResizeImpl<ElementBlockVars>::run(blockSizes,    blockVars.size());
+        ResizeImpl<ElementBlockVars>::run(globalOffset,  blockVars.size());
 
-        // Then compute the offsets as a cumulative sum.
-        size_t offset = 0;
-        for (size_t i = 0; i < blockOffsets.size(); ++i) {
-            blockOffsets[i] = offset;
-            offset += blockOffsets[i];
+        for (decltype(blockVars.size()) lbj = 0, lvar_j = 0; lbj < blockVars.size(); ++lbj) {
+            blockOffsets[lbj] = lvar_j;
+            auto [gvar_j, bsj] = vars.blockInfo(blockVars[lbj]);
+            blockSizes[lbj]   = bsj;
+            globalOffset[lbj] = gvar_j;
+            lvar_j += bsj;
         }
     }
 
-    size_t offset(size_t localBlockIndex) const { return blockOffsets[localBlockIndex]; }
+    size_t offset   (size_t localBlockIndex) const { return blockOffsets[localBlockIndex]; }
+    size_t blockSize(size_t localBlockIndex) const { return   blockSizes[localBlockIndex]; }
+    size_t globalScalarVar(size_t localBlockIndex, size_t /* globalBlockVar */) const { return globalOffset[localBlockIndex]; }
 
-    std::decay_t<ElementBlockVars> blockOffsets;
+    std::decay_t<ElementBlockVars> blockOffsets,
+                                   blockSizes,
+                                   globalOffset;
 };
 
 #endif /* end of include guard: VARSTRUCTURE_HH */

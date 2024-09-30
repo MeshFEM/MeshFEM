@@ -514,30 +514,18 @@ private:
 
     template<bool InParallel = true, class SPMat, class HeBlock, class ElemBlockVars>
     void m_assembleHessianContrib(SPMat &H, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
-        // Precompute variable block information and local block offsets.
-        ElemBlockVars gvar, lvar, bs;
-        ResizeImpl<ElemBlockVars>::run(gvar, blockVars.size());
-        ResizeImpl<ElemBlockVars>::run(lvar, blockVars.size());
-        ResizeImpl<ElemBlockVars>::run(bs, blockVars.size());
-
-        for (decltype(blockVars.size()) lbj = 0, lvar_j = 0; lbj < blockVars.size(); ++lbj) {
-            auto [gvar_j, bsj] = m_vars.blockInfo(blockVars[lbj]);
-            gvar[lbj] = gvar_j;
-            bs[lbj]   = bsj;
-            lvar[lbj] = lvar_j;
-            lvar_j   += bsj;
-        }
+        PerElementBlockOffsetCalculation<VarStructure, ElemBlockVars> blockInfo(m_vars, blockVars);
 
         for (decltype(blockVars.size()) lbj = 0; lbj < blockVars.size(); ++lbj) {
             const auto bj = blockVars[lbj];
             if constexpr (InParallel) m_lockVar(bj);
-            const auto gvar_j = gvar[lbj];
-            const auto bsj = bs[lbj];
-            const auto lvar_j = lvar[lbj];
+            const auto lvar_j = blockInfo.offset(lbj);
+            const auto gvar_j = blockInfo.globalScalarVar(lbj, blockVars[lbj]);
+            const auto bsj    = blockInfo.blockSize(lbj);
             for (decltype(blockVars.size()) lbi = 0; lbi < blockVars.size(); ++lbi) {
-                const auto gvar_i = gvar[lbi];
-                const auto bsi = bs[lbi];
-                const auto lvar_i = lvar[lbi];
+                const auto lvar_i = blockInfo.offset(lbi);
+                const auto gvar_i = blockInfo.globalScalarVar(lbi, blockVars[lbi]);
+                const auto bsi    = blockInfo.blockSize(lbi);
 
                 if (gvar_i > gvar_j) { continue; }
                 bool localUpperTri = lbi <= lbj;
@@ -581,12 +569,11 @@ private:
 
         auto order = argsort(blockVars);
 
-        using StripMap = Eigen::Map<Eigen::Matrix<Real_, N, 1>>;
-
         for (size_t lbj_i = 0; lbj_i < nbv; ++lbj_i) {
             size_t lbj = order[lbj_i];
             auto bj = blockVars[lbj];
             size_t lbo_j = blockOffsetCalc.offset(lbj);
+            const size_t bs_j = blockOffsetCalc.blockSize(lbj);
 
             // Compute the start and length of the scalar-valued column
             // corresponding to block column `bj` using block sparsity pattern.
@@ -602,8 +589,12 @@ private:
                     // Convert block matrix location into scalar matrix location.
                     // SuiteSparse_long loc = colScanner.advanceToBlock(bi); // Somehow this is slower??
                     SuiteSparse_long loc = colScanner.findBlock(bi);
-                    for (size_t c = 0; c < N; ++c) {
-                        StripMap(Ax + loc) += block.col(c);
+                    for (size_t c = 0; c < bs_j; ++c) {
+                        if constexpr (SingleBlockDim)
+                            Eigen::Map<Eigen::Matrix<Real_, N, 1>>(Ax + loc) += block.col(c);
+                        else
+                            Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, blockOffsetCalc.blockSize(lbi)) += block.col(c);
+
                         loc += colScanner.stride() + c; // each subsequent column has an extra entry...
                     }
                 };
@@ -616,8 +607,8 @@ private:
             // of first column.
             SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
             auto block = getBlock(H_e, lbo_j, lbo_j);
-            for (size_t c = 0; c < N; ++c) {
-                StripMap(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
+            for (size_t c = 0; c < bs_j; ++c) {
+                Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
                 loc += colScanner.stride() + c; // each subsequent column has an extra entry...
             }
 
