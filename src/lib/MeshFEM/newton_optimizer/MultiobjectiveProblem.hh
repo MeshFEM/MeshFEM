@@ -139,8 +139,6 @@ private:
 
 // Default implementation: store the variables in an Eigen array.
 struct MESHFEM_EXPORT NewtonVars : public NewtonVarsBase {
-    using VXd = Eigen::VectorXd;
-
     NewtonVars(size_t n = 0, size_t numParams = 0) : m_x(n), m_p(numParams) { }
     NewtonVars(const VXd &v) : m_x(v) { }
 
@@ -245,7 +243,6 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
 };
 
 struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
-    using VXd = Eigen::VectorXd;
     using NVStorageType = std::weak_ptr<const NewtonVarsBase>;
     using VT = NewtonVarsBase::VarType;
 
@@ -280,7 +277,6 @@ private:
 template<class TermType>
 struct MultiObjective {
     using TermPtr = std::shared_ptr<TermType>;
-    using VXd = typename TermType::VXd;
 
     size_t numTerms() const { return m_terms.size(); }
 
@@ -332,8 +328,8 @@ struct MultiObjective {
         return result;
     }
 
-    std::map<std::string, VXd> termGradients() const {
-        std::map<std::string, VXd> result;
+    std::map<std::string, Eigen::VectorXd> termGradients() const {
+        std::map<std::string, Eigen::VectorXd> result;
         for (size_t i = 0; i < numTerms(); ++i)
             result[m_names[i]] = term(i).gradient();
         return result;

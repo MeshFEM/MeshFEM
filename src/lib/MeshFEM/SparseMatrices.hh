@@ -28,6 +28,7 @@
 #include "Parallelism.hh"
 #include "ParallelVectorOps.hh"
 #include "Utilities/binary_search.hh"
+#include "unused.hh"
 
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
@@ -1490,6 +1491,7 @@ struct CSCMatrix {
         auto bi   = [&]() { return offset + bit.get_i();   };
         auto bj   = [&]() { return offset + bit.get_j();   };
         auto bval = [&]() { return  alpha * bit.get_val(); };
+        UNUSED(bval);
 
         CSCMatrix result(a.m, a.n);
         result.symmetry_mode = a.symmetry_mode;
@@ -1504,6 +1506,7 @@ struct CSCMatrix {
         _Index currCol = 0;
         newAp.push_back(0);
         auto insertEntry = [&](_Index row, _Index col, _Real val) {
+            UNUSED(val);
             assert(col >= currCol);
             // End all columns up to `col - 1`, begin column `col`
             for (_Index c = currCol + 1; c <= col; ++c)

@@ -100,7 +100,7 @@ public:
 	inline void operator() (Container &arr) const
 	{
 		PS<Container, LT, 1, NumElements, (NumElements <= 1)> ps(arr, LT());
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -110,7 +110,7 @@ public:
 	inline void operator() (T *arr) const
 	{
 		PS<T*, LT, 1, NumElements, (NumElements <= 1)> ps(arr, LT());
-	};
+	}
 
 	/**
 	 * Sorts the array/container arr.
@@ -122,7 +122,7 @@ public:
 	{
 		typedef Compare & C;
 		PS<Container, C, 1, NumElements, (NumElements <= 1)> ps(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -134,7 +134,7 @@ public:
 	{
 		typedef Compare & C;
 		PS<T*, C, 1, NumElements, (NumElements <= 1)> ps(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array/container arr.
@@ -146,7 +146,7 @@ public:
 	{
 		typedef const Compare & C;
 		PS<Container, C, 1, NumElements, (NumElements <= 1)> ps(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -158,7 +158,7 @@ public:
 	{
 		typedef const Compare & C;
 		PS<T*, C, 1, NumElements, (NumElements <= 1)> ps(arr, lt);
-	};
+	}
 };
 
 
@@ -240,7 +240,7 @@ public:
 	{
 		if (!Intro<Container, LT>::sorted(arr[0], arr, LT()))
 			StaticSort<NumElements>()(arr);
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -251,7 +251,7 @@ public:
 	{
 		if (!Intro<T*, LT>::sorted(arr[0], arr, LT()))
 			StaticSort<NumElements>()(arr);
-	};
+	}
 
 	/**
 	 * Sorts the array/container arr.
@@ -264,7 +264,7 @@ public:
 		typedef Compare & C;
 		if (!Intro<Container, C>::sorted(arr[0], arr, lt))
 			StaticSort<NumElements>()(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -277,7 +277,7 @@ public:
 		typedef Compare & C;
 		if (!Intro<T*, C>::sorted(arr[0], arr, lt))
 			StaticSort<NumElements>()(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array/container arr.
@@ -290,7 +290,7 @@ public:
 		typedef const Compare & C;
 		if (!Intro<Container, C>::sorted(arr[0], arr, lt))
 			StaticSort<NumElements>()(arr, lt);
-	};
+	}
 
 	/**
 	 * Sorts the array arr.
@@ -303,7 +303,7 @@ public:
 		typedef const Compare & C;
 		if (!Intro<T*, C>::sorted(arr[0], arr, lt))
 			StaticSort<NumElements>()(arr, lt);
-	};
+	}
 };
 
 #include <algorithm>
