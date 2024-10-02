@@ -248,7 +248,18 @@ struct BBox : Region<_Vector> {
         }
     }
 
-    //Vector minCorner, maxCorner;
+    // Construct bbox from an Eigen Matrix
+    template<class Derived>
+    static BBox fromEigen(const Eigen::MatrixBase<Derived> &V) {
+        BBox result;
+        result.minCorner.setZero(), result.maxCorner.setZero();
+        for (int i = 0; i < V.rows(); ++i) {
+            auto v = V.row(i).transpose().eval();
+            if (i++ == 0) result.minCorner = result.maxCorner = truncateFromND<Vector>(v);
+            else          result.unionPoint(truncateFromND<Vector>(v));
+        }
+        return result;
+    }
 
     void unionBox(const BBox &b) {
         this->minCorner = this->minCorner.cwiseMin(b.minCorner);
