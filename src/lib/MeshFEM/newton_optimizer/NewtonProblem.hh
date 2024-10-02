@@ -79,7 +79,14 @@ struct MESHFEM_EXPORT NewtonProblem {
     void setUseIdentityMetric(bool useIdentityMetric) { m_useIdentityMetric = useIdentityMetric; }
 
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
-    virtual SuiteSparseMatrix hessianSparsityPattern() const = 0;
+    SuiteSparseMatrix hessianSparsityPattern() const { updateSparsityPattern(); return m_getHessianSparsityPattern(); }
+
+    void updateSparsityPattern() const { if (m_updateSparsityPattern()) ++m_sparsityPatternID; }
+
+    // Identifier used to determine whether a symbolic factorization has been
+    // invalidated by a sparsity pattern change; this ID increments whenever the
+    // sparsity pattern updates.
+    size_t sparsityPatternID() const { return m_sparsityPatternID; }
 
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
     size_t numFixedVars() const { return fixedVars().size(); }
@@ -213,6 +220,12 @@ struct MESHFEM_EXPORT NewtonProblem {
     bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
     void invalidateCachedHessian() { m_cachedHessianUpToDate = false; }
 
+    // Allow the derived problem to update its Hessian sparsity pattern.
+    // This will be called between last point the problem state can change (the
+    // custom user callback) and the point where the Hessian is evaluated.
+    // If the sparsity pattern changes, `hesianSparsityPatternChanged` should be called.
+    virtual bool detectSparsityPatternUpdates() { return false; }
+
     // When nonzero, the matrix `H + hessianShift I` is factorized at each
     // Newton step rather than `H` itself. This is intended for problems
     // with a Hessian nullspace due to, e.g., rigid motion, that can be
@@ -229,8 +242,11 @@ protected:
     // Returns true to exit early.
     virtual bool m_iterationCallback(size_t /* i */) { return false; }
 
+    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const = 0;
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const = 0;
     virtual void m_evalMetric (SuiteSparseMatrix &result) const = 0;
+    // Ask subclass to update its sparsity pattern if needed; returns `true` if the pattern changed.
+    virtual bool m_updateSparsityPattern() const = 0;
 
     std::vector<BoundConstraint> m_boundConstraints;
     std::vector<size_t> m_fixedVars;
@@ -243,6 +259,8 @@ protected:
     mutable std::unique_ptr<SuiteSparseMatrix> m_cachedHessian, m_cachedMetric, m_identityMetric;
     mutable bool m_cachedHessianUpToDate = false;
     mutable Real m_metricL2Norm = -1;
+
+    mutable size_t m_sparsityPatternID = 0;
 };
 
 #endif /* end of include guard: NEWTONPROBLEM_HH */

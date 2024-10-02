@@ -80,9 +80,10 @@ struct NormalInferenceProblem : public NewtonProblem {
         return g;
     }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
-
 protected:
+    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+    virtual bool m_updateSparsityPattern() const override { return false; }
+
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool /* projectionMask */) const override {
         result.setZero();
         for (const auto e : m_sheet.mesh().elements()) {

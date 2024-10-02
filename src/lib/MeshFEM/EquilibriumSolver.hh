@@ -85,8 +85,6 @@ struct EquilibriumProblem : public NewtonProblem {
     // not add/remove loads since this would alter the Hessian sparsity pattern.
     const LC &loads() { return m_loads; }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
-
     // "Physical" distance of a step relative to some characteristic lengthscale of the problem.
     // (Useful for determining reasonable step lengths to take when the Newton step is not possible.)
     virtual Real characteristicDistance(const Eigen::VectorXd &d) const override {
@@ -100,6 +98,9 @@ struct EquilibriumProblem : public NewtonProblem {
     Real energyLimitingThreshold = 1e-6;
 
 protected:
+    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+    virtual bool m_updateSparsityPattern() const override { return false; } // loads with changing sparsity patterns aren't supported by this legacy class...
+
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         result.data().setZero();
         m_obj.accumulateHessian(1.0, result, projectionMask);

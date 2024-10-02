@@ -76,6 +76,8 @@ Real NewtonOptimizer::m_factorizationUpdate(const WorkingSet &ws, Real &beta, co
     auto &s = solver();
     s.setSuppressWarnings(!options.verboseNonPosDef);
 
+    m_updateSymbolicFactorization(); // Update the symbolic factorization if sparsity pattern has changed.
+
     auto &hUpdtCtr = options.getHessianUpdateController();
     auto &hProjCtr = options.getHessianProjectionController();
     OptionallyModifiedHessian H(prob->hessian(hProjCtr.shouldUseProjection())), M;

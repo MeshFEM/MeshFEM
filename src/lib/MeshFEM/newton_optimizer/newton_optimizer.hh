@@ -254,7 +254,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
 
     void setFixedVars(const std::vector<size_t> &fixedVars) {
         prob->setFixedVars(fixedVars);
-        solver().factorizeSymbolic(prob->hessianSparsityPattern(), fixedVars);
+        m_updateSymbolicFactorization(/* force = */ true);
     }
 
     ConvergenceReport optimize();
@@ -291,7 +291,7 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     CholeskyFactorizerBase &solver() { 
         if (!m_solver || (m_solver->provider() != options.factorizer)) {
             m_solver = make_cholesky_factorizer(options.factorizer);
-            m_solver->factorizeSymbolic(get_problem().hessianSparsityPattern(), prob->fixedVars());
+            m_updateSymbolicFactorization();
         }
         return *m_solver;
     }
@@ -311,7 +311,19 @@ private:
     std::shared_ptr<NewtonProblem> prob;
     std::shared_ptr<CholeskyFactorizerBase> m_solver;
 
+    void m_updateSymbolicFactorization(bool force = false) {
+        prob->updateSparsityPattern();
+        if (force || (prob->sparsityPatternID() != m_factorizedSparsityPatternID)) {
+            solver().factorizeSymbolic(prob->hessianSparsityPattern(), prob->fixedVars());
+            m_factorizedSparsityPatternID = prob->sparsityPatternID();
+        }
+    }
+
     Real m_factorizationUpdate(const WorkingSet &ws, Real &beta, const Real betaMin);
+
+    // Record the sparsity pattern for which the most recent symbolic
+    // factorization was computed by `m_solver`.
+    size_t m_factorizedSparsityPatternID = std::numeric_limits<size_t>::max(); // None
 };
 
 #endif /* end of include guard: NEWTON_OPTIMIZER_HH */

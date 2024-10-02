@@ -158,6 +158,22 @@ private:
     virtual void m_setParametersImpl(const VXd &params) override { m_p = params; }
 };
 
+
+struct NewtonMultiobjectiveProblem;
+
+// Sparsity pattern change detection: has a term's sparsity pattern changed
+// since the last rebuild of the full problem's sparsity pattern?
+// Terms will set this flag when they detect a change, and the flag will be
+// cleared only by NewtonMultiobjectiveProblem::m_rebuildSparsityPattern.
+struct SparsityPatternChangeFlag {
+    operator bool() const { return m_sparsityPatternChanged; }
+    void set() { m_sparsityPatternChanged =  true; }
+private:
+    friend struct NewtonMultiobjectiveProblem; // Only NewtonMultiobjectiveProblem can clear the flag!
+    void clear() { m_sparsityPatternChanged = false; }
+    bool m_sparsityPatternChanged = true; // Ensure that the first call to `m_updateSparsityPattern` triggers an initial build.
+};
+
 // The main objective term interface (but without any storage/access to the
 // optimizaton variables). Most objective terms will instead want to derive from
 // `NewtonObjectiveTerm`, which allows access to variables and supports
@@ -214,6 +230,11 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // (e.g., if we know it is a subset of the sparsity patterns of the other terms).
     bool suppressSparsity = false;
 
+    // Notify the term that it should check now for sparsity pattern changes
+    // (unless it does so automatically on each variable change).
+    virtual void detectSparsityPatternChange() { }
+
+    mutable SparsityPatternChangeFlag sparsityPatternChanged;
 };
 
 struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
@@ -318,7 +339,7 @@ protected:
     std::vector<Real> m_weights;
     std::vector<std::string> m_names;
 
-    virtual void m_termsAddedOrRemoved() = 0;
+    virtual void m_termsAddedOrRemoved() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -365,8 +386,6 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
         return g;
     }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
-
     size_t numVars() const override { return m_vars->numVars(); }
     VXd    getVars() const override { return m_vars->getVars(); }
     void   setVars(const VXd &vars) override {
@@ -394,8 +413,9 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 private:
     NVMPtr m_vars;
 
-    SuiteSparseMatrix m_hessianSparsity;
-    std::unique_ptr<BlockCSCHessianBase> m_blockSparsity;
+    mutable SuiteSparseMatrix m_hessianSparsity;
+    mutable std::unique_ptr<BlockCSCHessianBase> m_blockSparsity;
+
     CallbackFunction m_customCallback;
 
     // Only build the block sparsity pattern if we can (i.e., we have a SystemAssembler)
@@ -404,9 +424,18 @@ private:
         return m_vars->hasAssembler() && (m_vars->numBlockVars() < numVars());
     }
 
-    void m_termsAddedOrRemoved() override {
-        if (numTerms() == 0) throw std::runtime_error("Must have at least one term");
+    bool m_updateSparsityPattern() const override {
+        bool sparsityChanged = false;
+        for (const auto &t : m_terms) {
+            t->detectSparsityPatternChange();
+            sparsityChanged |= t->sparsityPatternChanged;
+        }
 
+        if (sparsityChanged) m_rebuildSparsityPattern();
+        return sparsityChanged;
+    }
+
+    void m_rebuildSparsityPattern() const {
         // Note: empty sparsity patterns simply get replaced by `mergeSparsityPattern`
         const bool blockSparsity = m_shouldBuildBlockSparsityPattern();
         if (blockSparsity) {
@@ -432,7 +461,13 @@ private:
         }
 
         m_hessianSparsity.fill(1.0);
+
+        // All terms' latest sparsity patterns are now incorporated.
+        for (size_t i = 0; i < numTerms(); ++i)
+            term(i).sparsityPatternChanged.clear();
     }
+
+    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const override { return m_hessianSparsity; }
 
     virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.hessian");
