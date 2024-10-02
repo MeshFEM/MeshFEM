@@ -58,6 +58,10 @@ struct MESHFEM_EXPORT NewtonVarsBase {
         m_issueNotifications(VarType::Variable);
     }
 
+    // Set x to a trivial starting point for solving the optimization problem.
+    // E.g., for an elasticity simulation, this should apply the identity deformation.
+    virtual void applyTrivialInitialGuess() { setVars(VXd::Zero(numVars())); }
+
     virtual size_t numParameters() const = 0;
     virtual VXd getParameters() const = 0;
     void setParameters(const VXd &params) {
@@ -73,8 +77,8 @@ struct MESHFEM_EXPORT NewtonVarsBase {
     // configuration to be reparametrized.
     virtual void updateParametrization() { }
 
-    // Support rolling back to a previous parametrization to perfectly restore
-    // a past configuration.
+    // Support rolling back to a previous parametrization to perfectly restore a past configuration.
+    virtual VXd  getParametrizationState() const { return VXd(); }
     virtual void setParametrizationState(const VXd &/* state */) { }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -158,8 +162,7 @@ private:
     virtual void m_setParametersImpl(const VXd &params) override { m_p = params; }
 };
 
-
-struct NewtonMultiobjectiveProblem;
+struct NewtonMultiobjectiveProblem; // Forward declaration for friend-ing below.
 
 // Sparsity pattern change detection: has a term's sparsity pattern changed
 // since the last rebuild of the full problem's sparsity pattern?
@@ -202,6 +205,10 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     virtual SparsityUpdateFrequency sparsityUpdateFrequency()           const { return SparsityUpdateFrequency::NEVER; }
 
     virtual bool supportsBlockAcceleratedHessianAssembly() const { return false; }
+
+    // Sensitivity analysis support
+    // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
+    virtual void contract_d2E_dpdx(Real weight, const VXd &adjoint_state, VXd &result_accum) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
 
     virtual ~NewtonObjectiveTermBase();
 
@@ -393,6 +400,11 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
         m_vars->setVars(vars);
     }
 
+    void applyTrivialInitialGuess() { m_vars->applyTrivialInitialGuess(); }
+
+    VXd  getParametrizationState() const           { return m_vars->getParametrizationState(); }
+    void setParametrizationState(const VXd &state) { m_vars->setParametrizationState(state); }
+
     size_t numParameters() const { return m_vars->numParameters(); }
     VXd    getParameters() const { return m_vars->getParameters(); }
     void   setParameters(const VXd &p) {
@@ -407,6 +419,22 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     }
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Sensitivity analysis support
+    ////////////////////////////////////////////////////////////////////////////
+    VXd contract_d2E_dpdx(const VXd &adjoint_state) const {
+        VXd result;
+        result.setZero(numParameters());
+
+        for (size_t ti = 0; ti < numTerms(); ++ti)
+            term(ti).contract_d2E_dpdx(weight(ti), adjoint_state, result);
+
+        return result;
+    }
+
+    VXd dirichletSensitivityTerm(const VXd &dJ_dx, const VXd &adjoint_state) const { throw std::runtime_error("Unimplemented"); }
+
 
     virtual ~NewtonMultiobjectiveProblem();
 

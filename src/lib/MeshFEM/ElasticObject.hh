@@ -138,6 +138,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> /* P */) const { throw std::runtime_error("Unimplemented"); }
 
     virtual void setIdentityDeformation() {  throw std::runtime_error("Unimplemented"); }
+    void applyTrivialInitialGuess() override { setIdentityDeformation(); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Update notification infrastructure.
