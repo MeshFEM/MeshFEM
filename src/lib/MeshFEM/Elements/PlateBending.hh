@@ -14,7 +14,6 @@
 //
 //  TODO: try an area-weighted average?
 //
-//  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
 //  Created:  08/22/2023 10:55:35
 *///////////////////////////////////////////////////////////////////////////////
