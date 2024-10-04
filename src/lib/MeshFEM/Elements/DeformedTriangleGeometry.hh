@@ -45,13 +45,15 @@ struct DeformedTriangleGeometry {
         normal /= dblArea;
         unitEdgePerpendiculars = edgeVecs.colwise().cross(-normal) * edgeLens.asDiagonal().inverse();
         A = 0.5 * dblArea;
+        gradBaryCentric = edgeVecs.colwise().cross(-normal) / (2.0 * A);
     }
 
     Real A;
     V3d normal, edgeLens, h;
     M3d edgeVecs,               // e_i in *column* i
         unitEdgePerpendiculars, // ehatperp_i in *column* i
-        edgeVecDotProducts;     // e_i . e_j in entry (i, j)
+        edgeVecDotProducts,     // e_i . e_j in entry (i, j)
+        gradBaryCentric;
 };
 
 }

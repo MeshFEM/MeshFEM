@@ -27,10 +27,14 @@ template<class Psi, size_t K, size_t N, size_t Deg>
 struct HyperelasticLagrange {
     static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
     static constexpr size_t NumVarsPerElement  = N * NumNodesPerElement;
+    static constexpr size_t NumRestNodesPerElement = Simplex::numNodes(K, 1);
+    static constexpr size_t NumRestVarsPerElement  = N * NumRestNodesPerElement;
+
     using QuadratureRule = Quadrature<K, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
     using EvalPtK        = EvalPt<K>;
     using Real           = typename Psi::Real;
     using Gradient       = Eigen::Matrix<Real, NumVarsPerElement, 1>;
+    using GradRest       = Eigen::Matrix<Real, NumRestVarsPerElement, 1>;
     using Hessian        = Eigen::Matrix<Real, NumVarsPerElement, NumVarsPerElement>;
     using MNKd           = Eigen::Matrix<Real, N, K>;
     using NodePositions  = Eigen::Matrix<Real, NumNodesPerElement, N, Eigen::RowMajor>;
@@ -127,6 +131,42 @@ struct HyperelasticLagrange {
     static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection, Real weight = 1.0) {
         return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection, weight);
     }
+
+    template<class EData, class FGetter, class GradYGetter>
+    static GradRest contract_d2E_dXdx(const Psi &psi_template, const FGetter &getF, const GradYGetter &getGradY, const EData &edata) {
+        Psi psi(psi_template, UninitializedDeformationTag());
+        GradRest result;
+
+        Eigen::Matrix<Real, K, K> G = Eigen::Matrix<Real, K, K>::Zero();
+
+        for (size_t i = 0; i < NQP; ++i){
+            double w = edata.volume() * QuadratureRule::weights[i];
+            auto gphis = edata.gradPhis(QuadratureRule::points[i]);
+            auto deform_grad = getF(gphis);
+            auto y_grad = getGradY(gphis);
+            psi.setDeformationGradient(deform_grad);
+            auto y_grad_T_dpsi = (y_grad.transpose() * psi.denergy()).eval();
+
+            G += w*(-deform_grad.transpose() * psi.delta_denergy(y_grad) - y_grad_T_dpsi + 
+                    (y_grad_T_dpsi).trace() * Eigen::Matrix<Real, K, K>::Identity());
+        }
+
+        if constexpr (K < N)  Eigen::Map<Eigen::Matrix<Real, N, NumRestNodesPerElement>>(result.data()) = edata.B()*G*edata.BtGradBarycentric();
+        else                  Eigen::Map<Eigen::Matrix<Real, N, NumRestNodesPerElement>>(result.data()) = G*edata.gradBarycentric();
+
+        return result;
+    }
+
+    template<class EData>
+    static GradRest contract_d2E_dXdx(const Psi &psi_template, const NodePositions &deformedPositions, const NodePositions &adjointPositions, const EData &edata) {
+        return contract_d2E_dXdx(psi_template, ElasticFGetter(deformedPositions), ElasticFGetter(adjointPositions), edata);
+    }
+
+    template<class FGetter, class EData>
+    static GradRest contract_d2E_dXdx(const Psi &psi_template, const FGetter &getF, const NodePositions &adjointPositions, const EData &edata) {
+        return contract_d2E_dXdx(psi_template, getF, ElasticFGetter(adjointPositions), edata);
+    }
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////

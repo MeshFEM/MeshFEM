@@ -116,6 +116,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask, VariableMask vmask) const = 0;
     virtual void accumulateHessian(Real weight, Real *, const BlockCSCHessianBase &Hb, bool projectionMask, VariableMask vmask) const { throw std::runtime_error("Block-accelerated Hessian assembly not implemented."); }
     virtual CSCMat hessianSparsityPattern(Real val, VariableMask vmask) const = 0;
+    virtual VXd contract_d2E_dXdx(const VXd &y) const { throw std::runtime_error("Unimplemented!"); }
 
     // Convenience method
     VXd gradient(bool updatedParametrization, VariableMask vmask = VariableMask::Defo) const {

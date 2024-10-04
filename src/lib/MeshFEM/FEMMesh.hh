@@ -102,6 +102,7 @@ public:
     static constexpr size_t Deg = _Deg;
     static constexpr size_t EmbeddingDimension = _EmbeddingSpace::RowsAtCompileTime;
     static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
+    static constexpr size_t NumVerticesPerElement = Simplex::numVertices(K);
     using EmbeddingSpace = _EmbeddingSpace;
     using Real = typename EmbeddingSpace::Scalar;
 
@@ -219,6 +220,14 @@ public:
     std::array<T, NumNodesPerElement> elementNodeIndices(size_t ei) const {
         std::array<T, NumNodesPerElement> result;
         elementNodeIndices(ei, result);
+        return result;
+    }
+
+    std::array<size_t, NumVerticesPerElement> elementVertexIndices(size_t ei) const {
+        std::array<size_t, NumVerticesPerElement> result;
+        constexpr size_t nsv = Simplex::numVertices(_K);
+        const size_t     nv  = BaseMesh::numVertices();
+        for (size_t i = 0; i < nsv; ++i) result[i] = BaseMesh::V[nsv * ei + i];
         return result;
     }
 

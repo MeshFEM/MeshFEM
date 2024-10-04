@@ -136,6 +136,22 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 #endif
     }
 
+    VXd contract_d2E_dXdx(const VXd &y) const override {
+
+        VXd g = VXd::Zero(numRestVars());
+        // reshape y into a M*N matrix
+        size_t nrows = m_x.rows();
+        MXNd y_mat = Eigen::Map<const MXNd>(y.data(), nrows, N);
+
+        using GradRest = typename SE::GradRest;
+        const auto &m = mesh();
+        assembler().assembleGradient(g, mesh().numElements(), [this, &m, &y_mat](size_t ei) {
+            return SE::contract_d2E_dXdx(getEnergyDensity(ei), extractNodePositions(ei, m_x), extractNodePositions(ei, y_mat), m.elementData(ei));
+        }, [this](size_t ei) { return mesh().elementVertexIndices(ei); }); 
+
+        return g;
+    }
+
     using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false, Real weight = 1.0) const {
