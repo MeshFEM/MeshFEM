@@ -137,17 +137,14 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     VXd contract_d2E_dXdx(const VXd &y) const override {
+        if (y.size() != numNodes() * N) throw std::runtime_error("Invalid size of y");
+        MXNd y_mat = Eigen::Map<const MXNd>(y.data(), numNodes(), size_t(N));
 
-        VXd g = VXd::Zero(numRestVars());
-        // reshape y into a M*N matrix
-        size_t nrows = m_x.rows();
-        MXNd y_mat = Eigen::Map<const MXNd>(y.data(), nrows, N);
-
-        using GradRest = typename SE::GradRest;
         const auto &m = mesh();
+        VXd g = VXd::Zero(numRestVars());
         assembler().assembleGradient(g, mesh().numElements(), [this, &m, &y_mat](size_t ei) {
             return SE::contract_d2E_dXdx(getEnergyDensity(ei), extractNodePositions(ei, m_x), extractNodePositions(ei, y_mat), m.elementData(ei));
-        }, [this](size_t ei) { return mesh().elementVertexIndices(ei); }); 
+        }, [&m](size_t ei) { return m.elementVertexIndices(ei); });
 
         return g;
     }

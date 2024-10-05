@@ -45,7 +45,7 @@ void bind(py::module &m) {
         .def("deformationSamplerMatrix",  &EO::deformationSamplerMatrix, py::arg("pts"))
 
          .def("setIdentityDeformation",   &EO::setIdentityDeformation)
-         
+
          .def("contract_d2E_dXdx",        &EO::contract_d2E_dXdx, py::arg("y"))
         ;
     addComputeEquilibriumBinding<EO>(pyEO);

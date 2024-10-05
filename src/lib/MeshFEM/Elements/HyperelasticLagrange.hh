@@ -139,7 +139,7 @@ struct HyperelasticLagrange {
 
         Eigen::Matrix<Real, K, K> G = Eigen::Matrix<Real, K, K>::Zero();
 
-        for (size_t i = 0; i < NQP; ++i){
+        for (size_t i = 0; i < NQP; ++i) {
             double w = edata.volume() * QuadratureRule::weights[i];
             auto gphis = edata.gradPhis(QuadratureRule::points[i]);
             auto deform_grad = getF(gphis);

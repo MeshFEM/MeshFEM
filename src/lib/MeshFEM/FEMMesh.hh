@@ -14,9 +14,7 @@
 #ifndef FEMMESH_HH
 #define FEMMESH_HH
 
-#include <map>
 #include <cassert>
-#include <type_traits>
 #include <memory>
 
 #include <MeshFEM/Geometry.hh>
@@ -226,7 +224,6 @@ public:
     std::array<size_t, NumVerticesPerElement> elementVertexIndices(size_t ei) const {
         std::array<size_t, NumVerticesPerElement> result;
         constexpr size_t nsv = Simplex::numVertices(_K);
-        const size_t     nv  = BaseMesh::numVertices();
         for (size_t i = 0; i < nsv; ++i) result[i] = BaseMesh::V[nsv * ei + i];
         return result;
     }
