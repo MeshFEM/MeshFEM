@@ -49,11 +49,6 @@ void bind(py::module &m) {
          .def("contract_d2E_dXdx",        &EO::contract_d2E_dXdx, py::arg("y"))
         ;
     addComputeEquilibriumBinding<EO>(pyEO);
-
-    using EQProb = EquilibriumProblem<Real_>;
-    py::class_<EQProb, NewtonProblem, std::shared_ptr<EQProb>>(m, ("EquilibriumProblem" + floatingPointTypeSuffix<Real_>()).c_str())
-        .def("loads", &EQProb::loads, py::return_value_policy::reference)
-        ;
 }
 
 PYBIND11_MODULE(elastic_object, m)

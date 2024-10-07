@@ -32,7 +32,7 @@ struct ObjectiveIncreaseLimiter {
     static constexpr Real INFTY    = safe_numeric_limits<Real>::infinity();
     Real factor = NO_LIMIT;
     Real threshold = 1e-6;
-    Real previousValue; // the value as of the last Newton step
+    Real previousValue = INFTY; // the value as of the last Newton step
 
     bool valueExceedsLimit(Real v) const {
         return ((factor != NO_LIMIT) && v > factor * std::max(previousValue, threshold));
@@ -198,8 +198,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // TODO: eventually accumulate directly to Hb.Ax rather than the external // values array `Ax`
     virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask = false) const { throw std::runtime_error("Block-accelerated Hessian assembly unimplemented"); }; // Block-accelerated version
 
-    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const { throw std::runtime_error("Block sparsity not implemented"); }
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0)      const { throw std::runtime_error("Block sparsity not implemented"); }
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const { throw std::runtime_error("blockSparsityPattern not implemented by " + std::string(typeid(*this).name())); }
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0)      const { throw std::runtime_error("hessianSparsityPattern not implemented by" + std::string(typeid(*this).name())); }
     virtual SparsityUpdateFrequency sparsityUpdateFrequency()           const { return SparsityUpdateFrequency::NEVER; }
 
     virtual bool supportsBlockAcceleratedHessianAssembly() const { return false; }
@@ -342,7 +342,16 @@ protected:
     std::vector<Real> m_weights;
     std::vector<std::string> m_names;
 
-    virtual void m_termsAddedOrRemoved() { }
+    virtual void m_termsAddedOrRemoved() {
+        // If terms have been used by another problem, their
+        // sparsityPatternChanged flag may have been reset even though
+        // they've not yet been incorporated into our sparsity pattern.
+        //
+        // Note that using a term *simultaneously* in two optimization problems
+        // is not supported since it will interfere with the
+        // `sparsityPatternChanged` flags.
+        for (auto &f : m_terms) f->sparsityPatternChanged.set();
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////

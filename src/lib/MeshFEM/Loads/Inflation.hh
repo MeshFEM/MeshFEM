@@ -27,7 +27,7 @@ struct NeumaierSum {
         sum = newSum;
     }
 
-    T result() {  return sum + c; }
+    T result() { return sum + c; }
 
     T c = 0; // roundoff error correction
     T sum = 0;
@@ -43,6 +43,7 @@ struct Inflation : public ObjectSpecificLoad<Object> {
     static constexpr size_t N   = 3;
     static constexpr size_t K   = Object::K;
     static constexpr size_t Deg = Object::Deg;
+
     using Base::getObj;
 
     static_assert(K == 2, "Inflation loads are only defined for surfaces immersed in 3D");

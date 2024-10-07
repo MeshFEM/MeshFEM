@@ -21,12 +21,13 @@
 #define PLATEBENDINGELEMENT_HH
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/ElasticityTensor.hh>
-#include <MeshFEM/Elements/DeformedTriangleGeometry.hh>
-#include <MeshFEM/Elements/ElementBase.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/TangentElasticityTensor.hh>
 #include <MeshFEM/EmbeddedElement.hh>
-#include "HyperelasticLagrange.hh"
+
+#include "DeformedTriangleGeometry.hh"
+#include "MembraneElement.hh"
+#include "ElementBase.hh"
 
 // [Grinspun et al. 2006] effectively applies a small angle approximation to
 // replace sin(gamma) with gamma in the expression for the shape operator. No

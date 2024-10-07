@@ -24,18 +24,18 @@
 #include "VarStructure.hh"
 #include "BlockCSCHessian.hh"
 
-struct SystemAssemblerBase {
+struct MESHFEM_EXPORT SystemAssemblerBase {
     using index_type = SuiteSparse_long;
     using CSCMat = CSCMatrix<index_type, double>;
 
+    virtual ~SystemAssemblerBase() = default;
+
     virtual size_t      numVars() const = 0;
     virtual size_t numBlockVars() const = 0;
-
-    virtual ~SystemAssemblerBase() = default;
 };
 
 template<size_t... BlockDimensions_>
-struct SystemAssembler : public SystemAssemblerBase {
+struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     using index_type = SuiteSparse_long;
     using CSCMat = CSCMatrix<index_type, double>;
     using VarStructure = OptimizationVarStructure<BlockDimensions_...>;
@@ -49,13 +49,22 @@ struct SystemAssembler : public SystemAssemblerBase {
         static_assert(sizeof...(Args) > 0, "Variables must be initialized!");
     }
 
+    virtual ~SystemAssembler() = default;
+
     const VarStructure &varStructure() const { return m_vars; }
     size_t      numVars() const override { return varStructure().numVars(); }
     size_t numBlockVars() const override { return varStructure().numBlocks(); }
 
-    template<template<class D> class BTSPolicy = BlockToScalarPolicyDefault, class FEMMesh_>
-    BlockCSCHessian<VarStructure, BTSPolicy>
-    blockSparsityPatternForMesh(const FEMMesh_ &m) const {
+    using BCSCMat = BlockCSCHessian<VarStructure>;
+
+    std::unique_ptr<BCSCMat> emptyBlockSparsityPattern() const {
+        auto result = std::make_unique<BCSCMat>(m_vars);
+        result->symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
+        return result;
+    }
+
+    template<class FEMMesh_>
+    std::unique_ptr<BCSCMat> blockSparsityPatternForMesh(const FEMMesh_ &m) const {
         return blockSparsityPattern(m.numElements(),
                 [&](size_t ei) {
                     std::array<size_t, FEMMesh_::NumNodesPerElement> blockVarsForElement;
@@ -65,9 +74,8 @@ struct SystemAssembler : public SystemAssemblerBase {
                 });
     }
 
-    template<template<class D> class BTSPolicy = BlockToScalarPolicyDefault, class ElemBlockVarsForElement>
-    BlockCSCHessian<VarStructure, BTSPolicy>
-    blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
+    template<class ElemBlockVarsForElement>
+    std::unique_ptr<BCSCMat> blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("blockSparsityPattern");
 
         const bool parallel = get_max_num_tbb_threads() > 1;
@@ -107,11 +115,10 @@ struct SystemAssembler : public SystemAssemblerBase {
         BENCHMARK_SCOPED_TIMER_SECTION timer2("ToCSC");
         sparsityPatternToCSC(numBlockVars, nz, result.Ap, result.Ai);
 #else
-        BlockCSCHessian<VarStructure, BTSPolicy> result(m_vars);
-        auto &Ap = result.Ap;
-        auto &Ai = result.Ai;
+        auto result = emptyBlockSparsityPattern();
+        auto &Ap = result->Ap;
+        auto &Ai = result->Ai;
         const size_t n = numBlockVars;
-        result.symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
 
         std::vector<size_t> bucketStart(n + 1);
         {
@@ -215,10 +222,10 @@ struct SystemAssembler : public SystemAssemblerBase {
         });
 #endif
 
-        result.nz = newNNZ;
-        // result.Ax.resize(newNNZ); // <--- Intentionally leave empty since we generally don't need to store data in the block pattern.
+        result->nz = newNNZ;
+        // result->Ax.resize(newNNZ); // <--- Intentionally leave empty since we generally don't need to store data in the block pattern.
 
-        result.finalize();
+        result->finalize();
         return result;
     }
 

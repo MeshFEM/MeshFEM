@@ -19,8 +19,6 @@
 #include <Eigen/Sparse>
 #include "Utilities/MeshConversion.hh"
 
-#include <optional>
-
 #include "RigidMotionPins.hh"
 #include "FieldPostProcessing.hh"
 #include "InterpolantRestriction.hh"
@@ -30,7 +28,7 @@
 #include "Laplacian.hh"
 #include "VonMises.hh"
 
-#include "Elements/HyperelasticLagrange.hh"
+#include "Elements/SolidElement.hh"
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
@@ -51,10 +49,10 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     static constexpr size_t numNodesPerElement  = Simplex::numNodes(N, Deg);
     static constexpr size_t numElementLocalVars = N * numNodesPerElement;
 
-    using CSCMat = typename Base::CSCMat;
-    using BCSC   = BlockCSCHessian<OptimizationVarStructure<N>>;
+    using  CSCMat = typename Base::CSCMat;
+    using BCSCMat = typename SystemAssembler<N>::BCSCMat;
 
-    using SE = elements::Solid<Energy, K, Deg>;
+    using SE = typename SolidElement<Deg, Energy>::HLE;
     using NodePositions = typename SE::NodePositions;
 
     using EvalPtK  = EvalPt<K>;
@@ -129,7 +127,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
 #if 0
         if (weight != 1.0) throw std::runtime_error("weighted gradient unimplemented");
-        m_assembler.assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
+        assembler().assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
 #else
         if (weight == 1.0) assembler().assembleGradient(g, mesh(), [this        ](size_t ei) { return elementGradient(ei); } );
         else               assembler().assembleGradient(g, mesh(), [this, weight](size_t ei) { return (weight * elementGradient(ei)).eval(); } );
@@ -167,7 +165,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return std::make_unique<BCSC>(assembler().blockSparsityPatternForMesh(mesh()));
+        return assembler().blockSparsityPatternForMesh(mesh());
     }
 
     // Construct a scalar-valued Hessian.
@@ -180,8 +178,11 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         });
     }
 
+    virtual bool supportsBlockAcceleratedHessianAssembly() const override { return true; }
+
     virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        const BCSC &Hb = dynamic_cast<const BCSC &>(Hb_base);
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian_block_accelerated");
+        const BCSCMat &Hb = dynamic_cast<const BCSCMat &>(Hb_base);
         assembler().assembleHessianBlockAccelerated(Ax, Hb, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });
@@ -192,7 +193,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         CSCMatrix<SuiteSparse_long, MNd> blockH;
 
         auto Hb_base = blockSparsityPattern();
-        auto Hb = dynamic_cast<const BCSC &>(*Hb_base);
+        auto Hb = dynamic_cast<const BCSCMat &>(*Hb_base);
 
         blockH.copySparsityPattern(Hb);
 
@@ -429,9 +430,6 @@ protected:
 
     // Deformed positions for each node
     MXNd m_x;
-
-    // Block Hessian sparsity pattern.
-    mutable std::optional<BlockCSCHessian<OptimizationVarStructure<N>>> m_blockHsp;
 
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>

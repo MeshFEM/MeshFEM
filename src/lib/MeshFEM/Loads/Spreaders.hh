@@ -11,7 +11,6 @@
 #define SPREADERS_HH
 
 #include "Load.hh"
-#include <memory>
 
 namespace Loads {
 
@@ -76,7 +75,8 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
               bool disableHessian = false)
         : Spreaders(obj, detail::pointPositionerFromVertexClusters(*obj.lock(), clusterVtxs), connectivity, magnitude, disableHessian) { }
 
-    size_t numPoints() const { return m_materialPointPositioner.m / N; }
+    size_t numPoints()    const { return m_materialPointPositioner.m / N; }
+    size_t numSpreaders() const { return m_connectivity.rows(); }
 
     void setMagnitude(Real mag) { m_magnitude = mag; m_updateCache(); }
     Real getMagnitude() const   { return m_magnitude; }
@@ -126,36 +126,26 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         }
     }
 
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        if (m_disableHessian) return this->emptyBlockSparsityPattern();
+
+        return getObj().assembler().blockSparsityPattern(numSpreaders(),
+                [&](size_t e) {
+                    int startPt = m_connectivity(e, 0);
+                    int   endPt = m_connectivity(e, 1);
+                    std::vector<size_t> elemBlockVars;
+                    elemBlockVars.reserve(m_materialPointPositionerTranspose.col_nnz(startPt) + m_materialPointPositionerTranspose.col_nnz(endPt));
+
+                    for (const auto t : m_materialPointPositionerTranspose.col(startPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
+                    for (const auto t : m_materialPointPositionerTranspose.col(  endPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
+
+                    return elemBlockVars;
+                });
+    }
+
     virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = getObj().numVars();
-        TripletMatrix<> Hsp(nv, nv);
-        Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-
-        if (!m_disableHessian) {
-            for (int e = 0; e < m_connectivity.rows(); ++e) { // loop over spreaders (edges)
-                // Loop over entries of H_e = da_de
-                for (size_t cb = 0; cb < N; ++cb) {
-                    for (size_t ca = 0; ca < N; ++ca) {
-                        // Loop over combinations of [startEndpoint, endEndpoint]
-                        for (int i = 0; i < 2; ++i) {
-                            for (int j = 0; j < 2; ++j) {
-                                // Accumulate contribution of H_e(ca, cb) to the global Hessian
-                                for (const auto tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
-                                    for (const auto ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
-                                        if (ta.i > tb.i) continue;
-                                        Hsp.addNZ(ta.i, tb.i, 1.0);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        SuiteSparseMatrix Hsp_csc(Hsp);
-        Hsp_csc.fill(val);
-        return Hsp_csc;
+        auto bHsp = blockSparsityPattern();
+        return bHsp->toScalar(val);
     }
 
     virtual ~Spreaders() { }

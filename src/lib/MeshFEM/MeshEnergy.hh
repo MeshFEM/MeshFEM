@@ -184,11 +184,27 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
+#if 0
+    // Block-accelerated Hessian assembly
+    void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian (block accelerated)");
+        if constexpr (Element::CachesDeformedQuantities) {
+            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
+                return elements[ei].hessian(weight, projectionMask);
+            }, [this](size_t ei) { return stencils[ei].blockVars; });
+        }
+        else {
+            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
+                return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+            }, [this](size_t ei) { return stencils[ei].blockVars; });
+        }
+    }
+#endif
+
     std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        auto Hsp_block = assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
+        return assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
-        return std::make_unique<decltype(Hsp_block)>(Hsp_block);
     }
 
     SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {

@@ -16,10 +16,6 @@
 
 namespace elements {
 
-// TODO: Make ElasticFGetter a standalone class that is passed
-// as a template argument to HyperelasticLagrange so that an instance
-// can be passed to `configure` and stored.
-
 // A simplicial Lagrange element for hyperelasticity. The simplex dimension `K`
 // selects between edges/triangles/tetrahedra, while the embedding dimension `N`
 // specifies the dimenion of the deformation degrees of freedom.
@@ -168,100 +164,6 @@ struct HyperelasticLagrange {
     }
 
 };
-
-////////////////////////////////////////////////////////////////////////////////
-// Specializations for various applications.
-////////////////////////////////////////////////////////////////////////////////
-template<class Psi, size_t K, size_t Deg>
-using Solid = HyperelasticLagrange<Psi, K, K, Deg>;
-
-template<class Psi, size_t K, size_t Deg>
-using Membrane = HyperelasticLagrange<Psi, K, K + 1, Deg>;
-
-template<class Psi, size_t K>
-using Parametrization = HyperelasticLagrange<Psi, K, K, 1>;
-
-// Data for a triangular membrane element whose *rest configuration* is embedded
-// in 3D. This is useful for simulating shells (deformed configuration also
-// embedded in 3D) and computing parametrizations (deformed configuration
-// embedded in 2D). This class enriches a triangular `LinearlyEmbeddedElement`
-// with an orthonormal basis for its tangent plane and cached shape function
-// gradients in this 2D coordinate system.
-template<class LEElement, class StorageType = const LEElement &>
-struct EmbeddedMembraneElementData {
-    static constexpr size_t K = LEElement::K;
-    static constexpr size_t N = LEElement::EmbeddingSpace::RowsAtCompileTime;
-    static constexpr size_t numNodes    = LEElement::numNodes;
-    static constexpr size_t numVertices = LEElement::numVertices;
-    static constexpr size_t Deg      = LEElement::Deg;
-
-    EmbeddedMembraneElementData(const LEElement &ee) : m_embeddedElement(ee) {
-        embeddingUpdated();
-    }
-
-    static_assert((K == 2) && (N == 3), "Only intended for triangles embedded in 3D");
-
-    using M32d = Eigen::Matrix<Real, 3, 2>;
-    using M23d = Eigen::Matrix<Real, 2, 3>;
-
-    // Evaluated shape function gradients
-    using GradPhis = Eigen::Matrix<Real, 2, numNodes>;
-
-    const M23d &BtGradBarycentric() const { return m_BtGradBarycentric; }
-    const M32d &B() const { return m_B; }
-
-    const M23d &gradPhis() const {
-        if constexpr (Deg == 1) return m_BtGradBarycentric;
-        throw std::runtime_error("This method is only meant for linear elements!");
-    }
-
-    GradPhis gradPhis(const EvalPt<K> &x) const {
-        if constexpr (Deg == 1) { return m_BtGradBarycentric; }
-        if constexpr (Deg == 2) {
-            GradPhis result;
-            EigenEvalPt<K> x4 = 4 * Eigen::Map<const EigenEvalPt<K>>(x.data());
-            result.leftCols(numVertices).noalias() = m_BtGradBarycentric * (x4.array() - 1.0).matrix().asDiagonal();
-            for (size_t j = 0; j < Simplex::numEdges(K); ++j) {
-                const size_t start = Simplex::edgeStartNode(j),
-                             end   = Simplex::  edgeEndNode(j);
-                result.col(numVertices + j) = x4[  end] * m_BtGradBarycentric.col(start)
-                                            + x4[start] * m_BtGradBarycentric.col(  end);
-            }
-            return result;
-        }
-        static_assert(Deg == 1 || Deg == 2, "Higher degrees not implemented");
-    }
-
-    Real volume() const { return m_embeddedElement.volume(); }
-
-    // Recompute the orthonormal basis and the projected shape function gradients.
-    void embeddingUpdated() {
-        const auto &gradLambda = m_embeddedElement.gradBarycentric();
-        const auto &n = m_embeddedElement.normal();
-
-        // First, check if the triangle is parallel to the z=0 plane; in this
-        // case we use the global 2D coordinate system's axis vectors as our
-        // orthonormal basis to ease specification of anisotropic materials.
-        if (n.template head<2>().squaredNorm() < 1e-32)
-            m_B.setIdentity();
-        else {
-            // We pick an orthonormal basis with b_0 parallel to e_0 and
-            // b_1 parallel to e_0^perp (also parallel to "grad lambda_0")
-            m_B.col(1) = gradLambda.col(0).normalized();
-            m_B.col(0) = -n.cross(m_B.col(1));
-        }
-        m_BtGradBarycentric = m_B.transpose() * gradLambda;
-    }
-
-private:
-    M32d m_B;
-    M23d m_BtGradBarycentric;
-    StorageType m_embeddedElement;
-};
-
-#include "../EmbeddedElement.hh"
-template<size_t K, size_t Deg, class VNd>
-using EmbeddedMembraneEData = EmbeddedMembraneElementData<LinearlyEmbeddedElement<K, Deg, VNd>>;
 
 } // namespace elements
 

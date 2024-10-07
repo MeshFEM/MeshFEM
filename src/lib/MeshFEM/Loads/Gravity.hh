@@ -87,6 +87,10 @@ namespace Loads {
             return SuiteSparseMatrix(Hsp);
         }
 
+        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+            return this->emptyBlockSparsityPattern();
+        }
+
     private:
         virtual void m_stateUpdated(typename Base::VM vmask) override {
             if (vmask == Base::VM::Rest) m_updateCache();

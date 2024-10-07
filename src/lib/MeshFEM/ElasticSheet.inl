@@ -481,12 +481,6 @@ void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const Ener
     assembler().assembleHessian(H, mesh().numElements(), [this, etype, projectionMask, weight](size_t ei) { return CustomHEAData(*this, weight, ei, etype, projectionMask); });
 }
 
-template <class Psi_2x2>
-typename ElasticSheet<Psi_2x2>::CSCMat ElasticSheet<Psi_2x2>::hessianSparsityPattern(Real val, VariableMask vmask) const {
-    auto blockHsp = assembler().blockSparsityPattern(mesh().numElements(), elementGetter());
-    return blockHsp.toScalar(val);
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // Geometric quantities
 ////////////////////////////////////////////////////////////////////////////////

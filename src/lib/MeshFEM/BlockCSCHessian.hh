@@ -23,7 +23,7 @@
 #include "SparseMatrices.hh"
 #include <type_traits>
 
-template<class VarStructure, template<class Derived> class BlockToScalarPolicy, typename _Index = SuiteSparse_long, typename _Real = double, class IdxVector = std::vector<_Index>>
+template<class VarStructure>
 struct BlockCSCHessian;
 
 namespace detail {
@@ -32,12 +32,12 @@ namespace detail {
 template<class BCSCH>
 struct BlockCSCHTraits;
 
-template<class _VarStructure, template<class Derived> class BlockToScalarPolicy, typename _Index, typename _Real, class _IdxVector>
-struct BlockCSCHTraits<BlockCSCHessian<_VarStructure, BlockToScalarPolicy, _Index, _Real, _IdxVector>> {
+template<class _VarStructure>
+struct BlockCSCHTraits<BlockCSCHessian<_VarStructure>> {
     using VarStructure = _VarStructure;
-    using Index        = _Index;
-    using Real         = _Real;
-    using IdxVector    = _IdxVector;
+    using Index        = SuiteSparse_long;
+    using Real         = double;
+    using IdxVector    = std::vector<Index>;
 };
 
 // Fast, constant-space/time conversions from block indices to scalar locations/strides in Ax.
@@ -163,7 +163,7 @@ protected:
 
         m_scalarOffsetForColumn.reserve(n);
         m_numBlockEntriesOfType.resize(n); // actually zero-initializes! (default-inserts each std::array, which ultimately value-initializes each array entry)
-    
+
         m_scalarOffsetForColumn.push_back(0);
         for (_Index bj = 0; bj < n; ++bj) {
             // Count all scalar entries within block column bj
@@ -172,7 +172,7 @@ protected:
             for (_Index ii = Ap[bj]; ii < Ap[bj + 1]; ++ii) {
                 _Index bi = Ai[ii];
                 size_t ti = vars.blockType(bi);
-                
+
                 _Index M = vars.BlockDimensions[ti];
                 if (bi <  bj) size += M * N;
                 if (bi == bj) size += (N * (N + 1)) / 2; // Note: M == N!
@@ -233,7 +233,7 @@ protected:
         const _Index n = H.n;
 
         m_scalarLocForBlockEntry.reserve(H.Ai.size());
-    
+
         _Index loc = 0;
         for (_Index bj = 0; bj < n; ++bj) {
             // Count all scalar entries within block column bj
@@ -333,8 +333,22 @@ template<class Derived> using BlockToScalarPolicyLocLookup            = detail::
 template<class Derived> using BlockToScalarPolicyTypeOffsetsPerColumn = detail::BlockToScalarWithConditionalFastPath<Derived, detail::BlockToScalarPolicyTypeOffsetsPerColumn>;
 template<class Derived> using BlockToScalarPolicyDefault              = BlockToScalarPolicyTypeOffsetsPerColumn<Derived>;
 
-struct BlockCSCHessianBase {
-    virtual void mergeSparsityPattern(const BlockCSCHessianBase &other) = 0;
+struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>> {
+    using CSCMat = CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>>;
+
+    using CSCMat::CSCMat;
+
+    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const = 0;
+
+    void mergeSparsityPattern(const BlockCSCHessianBase &other) {
+        if (this->blockVarCountsAndSizes() != other.blockVarCountsAndSizes())
+            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable sizes/counts");
+        const CSCMat &other_csc = other;
+        auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
+        this->Ai = std::move(result.Ai);
+        this->Ap = std::move(result.Ap);
+    }
+
     virtual void finalize() = 0;
 
     virtual SuiteSparseMatrix toScalar() const = 0;
@@ -346,16 +360,17 @@ struct BlockCSCHessianBase {
     }
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
-
     virtual ~BlockCSCHessianBase() = default;
 };
 
-template<class VarStructure, template<class D> class BlockToScalarPolicy = BlockToScalarPolicyDefault, typename _Index, typename _Real, class IdxVector>
-struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure, BlockToScalarPolicy, _Index, _Real, IdxVector>>,
-                         public CSCMatrix<_Index, _Real, IdxVector>, // TODO: make this private inheritance after completing refactoring.
-                         public BlockCSCHessianBase
+template<class VarStructure>
+struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockCSCHessian<VarStructure>>,
+                                        public BlockCSCHessianBase
 {
-    using CSCMat = CSCMatrix<_Index, _Real, IdxVector>;
+    using _Index = SuiteSparse_long;
+    using _Real = double;
+    using IdxVector = std::vector<_Index>;
+    using CSCMat = typename BlockCSCHessianBase::CSCMat;
 
     using SymmetryMode = typename CSCMat::SymmetryMode;
     using CSCMat::Ax; // Note: this may be empty for a sparsity-only matrix! Also, it holds scalar entries!
@@ -369,7 +384,7 @@ struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure
     using CSCMat::nz;
 
     BlockCSCHessian(const VarStructure &varStructure)
-        : CSCMat(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
+        : BlockCSCHessianBase(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
 
     // Finalize the construction of this block sparse matrix by
     // building various acceleration structures needed in the non-uniform
@@ -377,17 +392,12 @@ struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure
     // methods below are used on variable-block-size matrices!
     void finalize() override { this->m_buildIndexTables(); }
 
-    void mergeSparsityPattern(const BlockCSCHessianBase &other) override {
-        try {
-            const auto &other_bcsc = dynamic_cast<const BlockCSCHessian &>(other);
-            const CSCMat &other_csc = other_bcsc;
-            auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
-            Ai = std::move(result.Ai);
-            Ap = std::move(result.Ap);
-        }
-        catch (const std::bad_cast &e) {
-            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible types");
-        }
+    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const override {
+        std::vector<std::pair<size_t, size_t>> result;
+        for (size_t i = 0; i < VarStructure::NumBlockTypes; ++i)
+            result.emplace_back(VarStructure::BlockDimensions[i], m_vars.numBlocksOfType(i));
+
+        return result;
     }
 
     using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
@@ -452,6 +462,8 @@ struct BlockCSCHessian : public BlockToScalarPolicy<BlockCSCHessian<VarStructure
     }
 
     const VarStructure &vars() const { return m_vars; }
+
+    virtual ~BlockCSCHessian() = default;
 
 private:
     VarStructure m_vars;

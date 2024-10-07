@@ -34,23 +34,15 @@
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
 #include "GlobalBenchmark.hh"
-#include "MeshIO.hh"
-#include "ParallelAssembly.hh"
 #include "SparseMatrices.hh"
 #include "Types.hh"
-#include "EnergyDensities/Tensor.hh"
-#include "EnergyDensities/EnergyTraits.hh"
-#include "EnergyDensities/EDensityAdaptors.hh"
-#include "EnergyDensities/TangentElasticityTensor.hh"
 #include "newton_optimizer/newton_optimizer.hh"
-#include "Geometry.hh"
 #include "Utilities/MeshConversion.hh"
 
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
 #include "FieldPostProcessing.hh"
 #include "Elements/PlateBending.hh"
-#include "Elements/MembraneElement.hh"
 #include "Elements/ShellElement.hh"
 
 #include "SystemAssembler.hh"
@@ -89,8 +81,9 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using SE = ShellElement<Psi_2x2>;
     using SEMat  = typename  SE::Material;
 
-    using Base = ElasticObject<Real>;
-    using CSCMat  = typename Base::CSCMat;
+    using    Base = ElasticObject<Real>;
+    using  CSCMat = typename Base::CSCMat;
+    using BCSCMat = typename Assembler::BCSCMat;
     using Base::numVars;
 
     using V2d   = Eigen::Matrix<Real, 2, 1>;
@@ -307,7 +300,15 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     }
 
     void accumulateHessian(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override;
+
+    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        return assembler().blockSparsityPattern(mesh().numElements(), elementGetter());
+    }
+
+    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
+        if (vmask != VariableMask::Defo) throw std::runtime_error("hessianSparsityPattern: Only defo variables are supported");
+        return blockSparsityPattern()->toScalar(val);
+    }
 
     // Convenience methods
     VXd gradient(bool updatedSource, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
@@ -322,20 +323,12 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return H;
     }
 
-    void accumulateHessianNew(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
-    SuiteSparseMatrix hessianNew(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
-        SuiteSparseMatrix H(hessianSparsityPattern());
-        accumulateHessianNew(1.0, H, etype, projectionMask, vmask);
-        return H;
-    }
-
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
         return accumulateGradient(weight, g, updatedParametrization, vmask, EnergyType::Full);
     }
     virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        if (weight != 1.0) throw std::runtime_error("ElasticSheet::accumulateGradient does not support weight != 1.0");
         accumulateHessian(weight, Hout, EnergyType::Full, projectionMask, vmask);
     }
 
