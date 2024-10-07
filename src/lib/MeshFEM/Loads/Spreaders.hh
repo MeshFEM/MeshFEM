@@ -134,10 +134,10 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
                     int startPt = m_connectivity(e, 0);
                     int   endPt = m_connectivity(e, 1);
                     std::vector<size_t> elemBlockVars;
-                    elemBlockVars.reserve(m_materialPointPositionerTranspose.col_nnz(startPt) + m_materialPointPositionerTranspose.col_nnz(endPt));
+                    elemBlockVars.reserve(m_materialPointPositionerTranspose.col_nnz(N * startPt) + m_materialPointPositionerTranspose.col_nnz(N * endPt));
 
-                    for (const auto t : m_materialPointPositionerTranspose.col(startPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
-                    for (const auto t : m_materialPointPositionerTranspose.col(  endPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
+                    for (const auto t : m_materialPointPositionerTranspose.col(N * startPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
+                    for (const auto t : m_materialPointPositionerTranspose.col(N *   endPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
 
                     return elemBlockVars;
                 });
