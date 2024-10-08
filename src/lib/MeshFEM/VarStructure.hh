@@ -66,6 +66,16 @@ struct OptimizationVarStructure {
         }
     }
 
+    // Determine index of the block containing the scalar variable `var`.
+    size_t blockContainingVar(size_t var) const {
+        if constexpr (SingleBlockDim) { return var / FirstBlockDim; }
+        else {
+            for (size_t ti = 0; ti < NumBlockTypes; ++ti)
+                if (var < m_typeVarOffsets[ti + 1]) return m_typeBlockOffsets[ti] + (var - m_typeVarOffsets[ti]) / BlockDimensions[ti];
+            return NONE;
+        }
+    }
+
     template <typename... Args>
     OptimizationVarStructure(Args... args)
         : m_numBlocksPerType{{args...}}

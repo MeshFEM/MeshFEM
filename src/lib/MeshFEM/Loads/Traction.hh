@@ -64,6 +64,10 @@ struct Traction : public ObjectSpecificLoad<Object> {
         return SuiteSparseMatrix(Hsp);
     }
 
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        return this->emptyBlockSparsityPattern();
+    }
+
     void setBoundaryTractions(Eigen::Ref<const MXNd> val) { m_boundaryTractions = val; m_updateCache(); }
     const MXNd &getBoundaryTractions() const { return m_boundaryTractions; }
 

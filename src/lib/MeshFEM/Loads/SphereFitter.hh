@@ -130,6 +130,10 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
             return SuiteSparseMatrix(Hsp);
         }
 
+        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+            return this->emptyBlockSparsityPattern();
+        }
+
         Real r_tgt = 1.0;
         Real stiffness = 1.0;
     };

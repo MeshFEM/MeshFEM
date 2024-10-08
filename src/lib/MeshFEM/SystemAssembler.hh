@@ -14,8 +14,8 @@
 #include <vector>
 #include <array>
 #include <atomic>
-#include <limits>
 #include <tuple>
+#include <functional>
 #include <MeshFEM/Handles/FEMMeshHandles.hh>
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Flattening.hh>
@@ -32,6 +32,31 @@ struct MESHFEM_EXPORT SystemAssemblerBase {
 
     virtual size_t      numVars() const = 0;
     virtual size_t numBlockVars() const = 0;
+
+    // Construct a block sparsity pattern consistent this assembler's variable
+    // structure from dynamically-accessed element stencils (obtained by calling
+    // `elementGetter(ei)`) containing block-variable indices, where the element
+    // variable blocks vb_i are all of a uniform size `blockSize`.
+    //
+    // Each of these vb_i must fit entirely within a single block b_i of the
+    // variable structure, otherwise an exception will be thrown. The block
+    // will effectively be expanded to the size of b_i in the variable
+    // structure when entering into the sparsity pattern. For example,
+    // when `blockSize == 1`, the caller is asking insert a single scalar
+    // entry into the sparsity pattern, but the entire block containing
+    // that scalar will be marked nonzero.
+    //
+    // This method should be used only as a last resort (e.g., for an objective
+    // term that does not know the problem block structure), as it is less
+    // efficient and typesafe than the `blockSparsityPattern` method templates of
+    // the derived classes.
+    using DynamicElementGetter = std::function<std::vector<size_t>(size_t)>;
+    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const {
+        return m_blockSparsityPatternDynamicImpl(numElements, blockSize, elementGetter);
+    }
+
+private:
+    virtual std::unique_ptr<BlockCSCHessianBase> m_blockSparsityPatternDynamicImpl(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const = 0;
 };
 
 template<size_t... BlockDimensions_>
@@ -54,6 +79,8 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     const VarStructure &varStructure() const { return m_vars; }
     size_t      numVars() const override { return varStructure().numVars(); }
     size_t numBlockVars() const override { return varStructure().numBlocks(); }
+
+    size_t blockSizeOfType(size_t type) const { return VarStructure::BlockDimensions[type]; }
 
     using BCSCMat = BlockCSCHessian<VarStructure>;
 
@@ -623,6 +650,22 @@ private:
         }
     }
 
+    // Implementation of the dynamic SystemAssemblerBase::blockSparsityPattern method.
+    using DynamicElementGetter = SystemAssemblerBase::DynamicElementGetter;
+    virtual std::unique_ptr<BlockCSCHessianBase> m_blockSparsityPatternDynamicImpl(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const override {
+        return blockSparsityPattern(numElements,
+                [this, blockSize, &elementGetter](size_t ei) {
+                    std::vector<size_t> elem = elementGetter(ei);
+                    for (size_t i = 0; i < elem.size(); ++i) {
+                        size_t vb_i = elem[i];
+                        size_t v = m_vars.blockContainingVar(vb_i * blockSize);
+                        auto [gvar, bs] = m_vars.blockInfo(v);
+                        if (gvar > vb_i || vb_i + blockSize > gvar + bs) throw std::runtime_error("An element's block variable does not fit a single block of our VarStructure");
+                        elem[i] = v;
+                    }
+                    return elem;
+                });
+    }
 
     void   m_lockVar(size_t var) const { while ((*m_varLocks)[var].exchange(true, std::memory_order_acquire)); }
     void m_unlockVar(size_t var) const {        (*m_varLocks)[var].store  (false, std::memory_order_release);  }

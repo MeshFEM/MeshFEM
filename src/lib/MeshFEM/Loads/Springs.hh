@@ -254,6 +254,22 @@ struct GenericSprings : public Load<Real> {
         return Hsp_csc;
     }
 
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        return this->getNVars().assembler().blockSparsityPattern(numSprings(), BlockSize,
+                [&](size_t s) {
+                    std::vector<size_t> elemBlockVars;
+                    auto &c1 = m_coordsA[s];
+                    auto &c2 = m_coordsB[s];
+
+                    elemBlockVars.reserve(c1.varIndices.size() + c2.varIndices.size());
+
+                    for (int i = 0; i < c1.varIndices.size(); ++i) elemBlockVars.push_back(c1.varIndices[i]);
+                    for (int i = 0; i < c2.varIndices.size(); ++i) elemBlockVars.push_back(c2.varIndices[i]);
+
+                    return elemBlockVars;
+                });
+    }
+
     const APC_A &attachmentPointA(size_t s) const { return m_coordsA.at(s); }
     const APC_B &attachmentPointB(size_t s) const { return m_coordsB.at(s); }
 
@@ -302,8 +318,7 @@ private:
     // dc1_dx^T * dc2_dx
     template<bool SparsityOnly, class SpMat, class APC1, class APC2>
     void m_addJacobianOuterProducts(SpMat &H, const APC1 &c1, const APC2 &c2, Real stiffness) const {
-        static constexpr size_t BS = APC1::BlockSize;
-        static_assert(APC2::BlockSize == BS, "APC variable block sizes must match");
+        static constexpr size_t BS = BlockSize;
         for (int ii = 0; ii < c1.varIndices.size(); ++ii) {
             for (int jj = 0; jj < c2.varIndices.size(); ++jj) {
                 int i = c1.varIndices[ii],

@@ -402,6 +402,10 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
             return SuiteSparseMatrix(Hsp);
         }
 
+        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+            return this->emptyBlockSparsityPattern();
+        }
+
         Real bc_min = 0.1;
         RawBarrierLog barrier;           // enforce a constraint of the form `c <= 0`
     private:

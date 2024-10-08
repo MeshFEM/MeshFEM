@@ -143,6 +143,10 @@ struct Inflation : public ObjectSpecificLoad<Object> {
         return SuiteSparseMatrix(Hsp);
     }
 
+    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+        return this->emptyBlockSparsityPattern();
+    }
+
     virtual ~Inflation() { }
 
 private:
