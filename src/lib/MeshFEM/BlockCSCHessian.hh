@@ -338,6 +338,8 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     using CSCMat::CSCMat;
 
+    virtual ~BlockCSCHessianBase();
+
     virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const = 0;
 
     void mergeSparsityPattern(const BlockCSCHessianBase &other) {
@@ -360,7 +362,6 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     }
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
-    virtual ~BlockCSCHessianBase() = default;
 };
 
 template<class VarStructure>
@@ -383,8 +384,11 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
     using CSCMat::n;
     using CSCMat::nz;
 
-    BlockCSCHessian(const VarStructure &varStructure)
-        : BlockCSCHessianBase(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
+    virtual ~BlockCSCHessian();
+
+    static std::unique_ptr<BlockCSCHessian> construct(const VarStructure &vars);
+    static const BlockCSCHessian &cast(const BlockCSCHessianBase &base);
+    static       BlockCSCHessian &cast(      BlockCSCHessianBase &base);
 
     // Finalize the construction of this block sparse matrix by
     // building various acceleration structures needed in the non-uniform
@@ -453,9 +457,7 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
         return result;
     }
 
-    std::unique_ptr<BlockCSCHessianBase> clone() const override {
-        return std::make_unique<BlockCSCHessian>(*this);
-    }
+    std::unique_ptr<BlockCSCHessianBase> clone() const override;
 
     detail::ColumnScanner<BlockCSCHessian> columnScanner(_Index bj) const {
         return detail::ColumnScanner<BlockCSCHessian>(*this, bj);
@@ -463,10 +465,11 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
 
     const VarStructure &vars() const { return m_vars; }
 
-    virtual ~BlockCSCHessian() = default;
-
 private:
     VarStructure m_vars;
+
+    BlockCSCHessian(const VarStructure &varStructure)
+        : BlockCSCHessianBase(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }
 };
 
 #endif /* end of include guard: BLOCKCSCHESSIAN_HH */

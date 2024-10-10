@@ -84,11 +84,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
     using BCSCMat = BlockCSCHessian<VarStructure>;
 
-    std::unique_ptr<BCSCMat> emptyBlockSparsityPattern() const {
-        auto result = std::make_unique<BCSCMat>(m_vars);
-        result->symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
-        return result;
-    }
+    std::unique_ptr<BCSCMat> emptyBlockSparsityPattern() const { return BCSCMat::construct(m_vars); }
 
     template<class FEMMesh_>
     std::unique_ptr<BCSCMat> blockSparsityPatternForMesh(const FEMMesh_ &m) const {
@@ -402,7 +398,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     // (Construct the scalar Hessian but use a block sparsity pattern for
     // acceleration).
     ////////////////////////////////////////////////////////////////////////////
-    template<class Real_, class SPMatBlock, class Mesh, class PEHEval>
+    template<typename Real_, class SPMatBlock, class Mesh, class PEHEval>
     void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const Mesh &m, const PEHEval &eval_He) const {
         if (get_max_num_tbb_threads() == 1) {
             const size_t ne = m.numElements();
@@ -414,6 +410,23 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
             get_hessian_assembly_arena().execute([Ax, &blockH, &eval_He, &m, this]() {
                 parallel_for_range(m.numElements(), [Ax, &blockH, &eval_He, &m, this](size_t ei) {
                     m_assembleHessianContribBlockAccelerated(Ax, blockH, eval_He(ei), m.elementNodeIndices(ei));
+                }, 1, 32);
+            });
+        }
+    }
+
+    // TODO: add a more general version that supports `ElasticSheet`
+    template<typename Real_, class SPMatBlock, class PEHEval, class ElementGetter>
+    void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, size_t numElements, const PEHEval &eval_He, const ElementGetter &element) const {
+        if (get_max_num_tbb_threads() == 1) {
+            for (size_t ei = 0; ei < numElements; ++ei)
+                m_assembleHessianContribBlockAccelerated</* InParallel = */ false>(Ax, blockH, eval_He(ei), element(ei));
+        }
+        else {
+            m_initVarLocks();
+            get_hessian_assembly_arena().execute([Ax, &blockH, &eval_He, &element, numElements, this]() {
+                parallel_for_range(numElements, [Ax, &blockH, &eval_He, &element, numElements, this](size_t ei) {
+                    m_assembleHessianContribBlockAccelerated(Ax, blockH, eval_He(ei), element(ei));
                 }, 1, 32);
             });
         }

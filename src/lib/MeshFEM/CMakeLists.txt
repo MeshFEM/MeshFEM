@@ -137,6 +137,8 @@ add_library(MeshFEM SHARED
         ElasticSolid.hh
         ElasticSheet.hh
 
+        BlockCSCHessian.cc
+
         ClosestPointProjection.cc
 )
 

@@ -182,7 +182,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
     virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian_block_accelerated");
-        const BCSCMat &Hb = dynamic_cast<const BCSCMat &>(Hb_base);
+        const BCSCMat &Hb = BCSCMat::cast(Hb_base);
         assembler().assembleHessianBlockAccelerated(Ax, Hb, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });
@@ -192,10 +192,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     CSCMatrix<SuiteSparse_long, MNd> blockHessian(bool projectionMask = false) const {
         CSCMatrix<SuiteSparse_long, MNd> blockH;
 
-        auto Hb_base = blockSparsityPattern();
-        auto Hb = dynamic_cast<const BCSCMat &>(*Hb_base);
-
-        blockH.copySparsityPattern(Hb);
+        blockH.copySparsityPattern(*blockSparsityPattern());
 
         BENCHMARK_SCOPED_TIMER_SECTION timer("Assemble Block Hessian");
         assembler().assembleBlockHessian(blockH, mesh(), [this, projectionMask](size_t ei) {

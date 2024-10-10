@@ -184,9 +184,14 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-#if 0
+    // Allow block-accelerated Hessian assembly to be disabled for performance comparisons.
+    bool blockAccelerateHessian = true;
+    bool supportsBlockAcceleratedHessianAssembly() const override { return blockAccelerateHessian && Assembler::SingleBlockDim; }
+
+    using BCSCMat = typename Assembler::BCSCMat;
     // Block-accelerated Hessian assembly
-    void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask) const override {
+    void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask) const override {
+        const BCSCMat &Hb = BCSCMat::cast(Hb_base);
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian (block accelerated)");
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
@@ -199,7 +204,6 @@ struct MeshEnergy : public MeshEnergyBase {
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
     }
-#endif
 
     std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
         return assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
