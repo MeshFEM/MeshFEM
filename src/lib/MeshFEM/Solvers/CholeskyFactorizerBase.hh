@@ -237,6 +237,8 @@ struct CholeskyFactorizerBase {
         }
     }
 
+    bool varIsFixed(size_t i) const { return std::find(m_fixedVars.begin(), m_fixedVars.end(), i) != m_fixedVars.end(); }
+
     // Raw pointer versions (Use with care! Caller must allocate/own both pointers)
     // These calls are for the *reduced* system obtained after row/col reduction.
     // (b and x should be the reduced right-hand-side and x, respectively).
@@ -272,14 +274,14 @@ protected:
 
         // Deduplicate fixed vars and construct mask needed for efficient row/col removal.
         m_fixedVars.clear();
-        std::vector<bool> varIsFixed;
-        varIsFixed.assign(mat.n, false);
+        std::vector<bool> fixedVarMask;
+        fixedVarMask.assign(mat.n, false);
         for (size_t var : pinnedVars) {
-            if (!varIsFixed[var]) m_fixedVars.push_back(var);
-            varIsFixed[var] = true;
+            if (!fixedVarMask[var]) m_fixedVars.push_back(var);
+            fixedVarMask[var] = true;
         }
 
-        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
+        m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return fixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
         m_permutedReducedRowForRow.clear();
         return m_Areduced.get();
     }

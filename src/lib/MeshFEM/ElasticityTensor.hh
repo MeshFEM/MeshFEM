@@ -681,6 +681,8 @@ public:
         m_d = d;
     }
 
+    DType getD() const { return m_d; }
+
 private:
     DType m_d;
 
