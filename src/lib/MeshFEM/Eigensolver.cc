@@ -295,8 +295,8 @@ private:
 // This function assumes that we know a (potentially non-orthonormal) basis for A's
 // nullspace, which is passed as the columns of matrix Z.
 // We do this by transforming the problem into:
-//      B x = mu (A + sigma) x = mu (L L^T) x,
-// where sigma is a small shift used to make (A + sigma) positive definite so
+//      B x = mu (A + sigma I) x = mu (L L^T) x,
+// where sigma is a small shift used to make (A + sigma I) positive definite so
 // that we can construct its Cholesky factorization.
 // This problem is then equivalent to the following optimization:
 //      max_x  x^T B x

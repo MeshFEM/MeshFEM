@@ -144,11 +144,19 @@ TripletMatrix<> construct(const _FEMMesh &mesh, bool lumped = false,
 
 // Construct the mass matrix for vector-valued shape functions
 // (assumes interleaved ordering of the coefficient components (x0, y0, ...))
+// If `accumulateToSubblock` is true, then this function will write to the
+// upper-left corner of `M` even if `M` is larger than `mesh`'s mass matrix.
+// This is helpful for problems that include additional variables stacked after
+// the variables corresponding to node positions of `mesh`.
+// If `accumulateToSubblock` is `false`, then `M` must be precisely the
+// correct size and no larger.
 template<size_t Deg = std::numeric_limits<size_t>::max(), class _FEMMesh, class _SPMat>
-void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, bool lumped = false, const std::vector<bool> &skipElem = std::vector<bool>()) {
+void accumulate_vector_valued(const _FEMMesh &mesh, _SPMat &M, bool lumped = false, const std::vector<bool> &skipElem = std::vector<bool>(), bool accumulateToSubblock = false) {
     constexpr size_t N = _FEMMesh::EmbeddingDimension;
-    if ((size_t(M.m) != mesh.numNodes() * N) || (M.n != M.m))
-        throw std::runtime_error("Unexpected output size");
+    if ((M.n != M.m)
+            || ( accumulateToSubblock && (size_t(M.m)  < mesh.numNodes() * N))
+            || (!accumulateToSubblock && (size_t(M.m) != mesh.numNodes() * N)))
+        throw std::runtime_error("Output matrix `M` is incorrectly sized");
     if (M.symmetry_mode != _SPMat::SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Unexpected symmetry mode (should be UPPER_TRIANGLE)");
 
     bool skipping = (skipElem.size() == mesh.numElements());

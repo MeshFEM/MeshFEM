@@ -103,6 +103,8 @@ struct ElasticSheetBinder {
           // For debugging purposes, drop the bending energy term.
           .def_property("disableBending", &ES::getDisabledBending, &ES::setDisabledBending)
           .def_property("hessianProjectionType", &ES::getHessianProjectionType, &ES::setHessianProjectionType)
+
+          .def_readwrite("angleVarRelativeMomentOfInertia", &ES::angleVarRelativeMomentOfInertia)
           ;
 
         const std::string name = NameMangler<ES>::name();
