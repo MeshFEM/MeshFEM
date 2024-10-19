@@ -45,6 +45,8 @@
 #include "Elements/PlateBending.hh"
 #include "Elements/ShellElement.hh"
 
+#include "MassMatrix.hh"
+
 #include "SystemAssembler.hh"
 
 // Note: anisotropic materials are supported and, for plates (sheets with
@@ -641,6 +643,22 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
 
     virtual CSCMat deformationSamplerMatrix(Eigen::Ref<const Eigen::MatrixXd> P) const override {
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
+    }
+
+    Real angleVarRelativeMomentOfInertia = 1e-6; // Relative to average nodal mass.
+    virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
+        // We only assign mass to the vertices (associating zero inertia with the midedge normals).
+        // To ensure a positive-definite mass matrix, we do, however, put a
+        // small constant on the diagonal for theta/crease angle variables.
+
+        // TODO: rho?
+        M.setZero();
+        MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped, /* skipElem = */ std::vector<bool>(), /*accumulateToSubblock = */ true);
+
+        size_t numVtxVars = thetaOffset();
+        Real avg_mass = M.trace() / numVtxVars;
+        for (size_t i = numVtxVars; i < numVars(); ++i)
+            M.addDiagEntry(i, avg_mass * angleVarRelativeMomentOfInertia);
     }
 
     virtual ~ElasticSheet() { }
