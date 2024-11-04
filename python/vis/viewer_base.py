@@ -171,8 +171,8 @@ class ViewerBase:
             # Construct vector field from raw data array if necessary
             if (not isinstance(self.vectorField, VectorField)):
                 if isinstance(self.vectorField, dict): # interpreted as kwargs
-                    self.vectorField = VectorField(self.mesh, **self.scalarField)
-                self.vectorField = VectorField(self.mesh, self.vectorField)
+                    self.vectorField = VectorField(self.mesh, **self.vectorField)
+                else: self.vectorField = VectorField(self.mesh, self.vectorField)
 
             self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
 
