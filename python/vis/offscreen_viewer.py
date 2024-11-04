@@ -7,6 +7,9 @@ class OffscreenViewerBase(ViewerBase):
         if superView is not None:
             raise Exception('Superview not supported for OffscreenViewerBase')
 
+        self.vectorFieldMeshIdx = -1
+        self.arrowSize = 60 * 2 # Note: OffscreenRenderer defaults to a resolution 2x that of PythreejsViewer, so we double the default arrow pixel size so arrows look the same by default.
+
         self.solid_color = OffscreenRenderer.hexColorToFloat('#D3D3D3')
         self.renderer = OffscreenRenderer.MeshRenderer(width, height)
         super().__init__(obj, width=width, height=height, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent)
@@ -20,11 +23,31 @@ class OffscreenViewerBase(ViewerBase):
         F = attrRaw['index'] if 'index' in attrRaw else None
         if preserveExisting:
             self.renderer.addMesh(P, F, N, C)
-            if (len(self.renderer.meshes) > 1):
+            if len(self.renderer.meshes) > 1:
                 prevMesh = self.renderer.meshes[1]
                 self.renderer.meshes[0].matModel = prevMesh.matModel
                 prevMesh.color = [1.0, 0.0, 0.0, 0.5]
-        else: self.renderer.setMesh(P, F, N, C)
+            if self.vectorFieldMeshIdx >= 0:
+                self.renderer.meshes[self.vectorFieldMeshIdx].color[3] = 0.25
+        else:
+            self.renderer.setMesh(P, F, N, C)
+
+            # Remove existing vector field mesh...
+            if self.vectorFieldMeshIdx >= 0:
+                self.renderer.meshes.pop(self.vectorFieldMeshIdx)
+                self.vectorFieldMeshIdx = -1
+
+        if (self.vectorField is not None):
+            glyphGeometry, instancingData = self.vectorField.getArrowData(vertices, idxs)
+            cam_pos, cam_up, tgt = self.getCameraParams()
+            mr = self.renderer
+            mr.addVectorFieldMesh(glyphGeometry['position'], glyphGeometry['index'], glyphGeometry['normal'],
+                                  **instancingData,
+                                  arrowRelativeScreenSize= self.arrowSize / self.renderer.ctx.width,
+                                  arrowAlignment=self.vectorField.align.getRelativeOffset(),
+                                  targetDepth=np.linalg.norm(np.array(tgt) - np.array(cam_pos)))
+            mr.meshes[-1].matModel = self.renderer.meshes[0].matModel
+            self.vectorFieldMeshIdx = len(mr.meshes) - 1
 
     # Start recording to an image sequence/video
     def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, outWidth=None, outHeight=None, framerate=30):
@@ -40,11 +63,6 @@ class OffscreenViewerBase(ViewerBase):
         if self.isRecording():
             self.recorder.finish()
             del self.recorder
-
-    def update(self, preserveExisting=False, mesh=None, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
-        super().update(preserveExisting=preserveExisting, mesh=mesh, updateModelMatrix=updateModelMatrix, textureMap=textureMap, scalarField=scalarField, vectorField=vectorField, transparent=transparent, displacementField=displacementField)
-        if self.isRecording():
-            self.recorder.writeFrame()
 
     def setCamera(self, position, up, fovy, aspect, near, far):
         self.renderer.perspective(fovy, aspect, near, far)

@@ -366,12 +366,7 @@ class PythreejsViewerBase(ViewerBase):
         # Build/update the vector field mesh if requested (otherwise hide it).
         ########################################################################
         if (self.vectorField is not None):
-            # Construct vector field from raw data array if necessary
-            if (not isinstance(self.vectorField, VectorField)):
-                self.vectorField = VectorField(self.mesh, self.vectorField)
-
-            self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
-            self.vectorFieldMesh = self.vectorField.getArrows(vertices, idxs, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
+            self.vectorFieldMesh = self.vectorField.getPythreeJSMesh(vertices, idxs, material=self.arrowMaterial, existingMesh=self.vectorFieldMesh)
 
             self.arrowMaterial = self.vectorFieldMesh.material
             self.arrowMaterial.updateUniforms(**self._arrowMaterialUniforms())
@@ -488,22 +483,8 @@ class PythreejsViewerBase(ViewerBase):
         self.screenshotWriter.capture(path)
 
     def offscreenRenderer(self, width = None, height = None, scale = None):
-        import OffscreenRenderer
-        if scale is not None:
-            if width is not None or height is not None:
-                raise Exception('Specifying `scale` and `width` or `height` are mutually exclusive')
-            width  = self.renderer.width  * scale
-            height = self.renderer.height * scale
-        if width  is None: width  = self.renderer.width
-        if height is None: height = self.renderer.height
-        mr = OffscreenRenderer.MeshRenderer(width, height)
-        self.__addOffscreenRendererObjects(mr)
-
-        mr.setCameraParams(self.getCameraParams())
-        for m in mr.meshes: m.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
-        mr.perspective(50, width / height, 0.1, 2000)
-
-        mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
+        mr = self.__constructOffscreenRenderer(width, height, scale)
+        self.__updateOffscreenRenderer(mr)
         return mr
 
     def antialiasedImage(self, renderScale=2, outputScale=1, lineWidthScale=1, transparentBackground=True):
@@ -513,6 +494,67 @@ class PythreejsViewerBase(ViewerBase):
         orender.transparentBackground = transparentBackground
         orender.render()
         return orender.scaledImage(outputScale / renderScale)
+
+    # Start recording to an image sequence/video
+    class VideoRecorder:
+        def __init__(self, viewer, path, codec = None, streaming=False, writeFirstFrame=False, renderScale=2, outputScale=1, lineWidthScale=1, framerate=30, transparentBackground=False):
+            self.viewer = viewer
+            from OffscreenRenderer import video_writer as vw
+            if codec is None:
+                if path[-4:] == '.mp4': codec = vw.Codec.H264
+                else: codec = vw.Codec.ImgSeq
+
+            self.renderScale    = renderScale
+            self.outputScale    = outputScale
+            self.lineWidthScale = lineWidthScale
+            self.renderer = viewer._PythreejsViewerBase__constructOffscreenRenderer(scale=renderScale)
+            self.renderer.transparentBackground = transparentBackground
+
+            outWidth, outHeight = np.round(np.array([self.renderer.ctx.width, self.renderer.ctx.height]) * outputScale / renderScale).astype(int)
+            self.videoWriter = vw.VideoWriter(path, outWidth, outHeight, codec=codec, framerate=framerate, streaming=streaming, outWidth=outWidth, outHeight=outHeight)
+
+            if writeFirstFrame:
+                self.videoWriter.writeFrame(np.array(self.renderImage()))
+
+        def renderImage(self):
+            self.viewer._PythreejsViewerBase__updateOffscreenRenderer(self.renderer)
+            for m in self.renderer.meshes:
+                m.lineWidth *= self.lineWidthScale * self.renderScale
+            self.renderer.render()
+            return self.renderer.scaledImage(self.outputScale / self.renderScale)
+
+        def writeFrame(self):
+            self.videoWriter.writeFrame(np.array(self.renderImage()))
+
+    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, renderScale=2, outputScale=1, lineWidthScale=1, framerate=30):
+        self.recorder = self.VideoRecorder(self, path, codec=codec, streaming=streaming, writeFirstFrame=writeFirstFrame, renderScale=renderScale, outputScale=outputScale, lineWidthScale=lineWidthScale, framerate=framerate)
+
+    def isRecording(self): return hasattr(self, 'recorder')
+
+    def recordStop(self):
+        if self.isRecording():
+            del self.recorder
+
+    def __constructOffscreenRenderer(self, width=None, height=None, scale=None):
+        import OffscreenRenderer
+        if scale is not None:
+            if width is not None or height is not None:
+                raise Exception('Specifying `scale` and `width` or `height` are mutually exclusive')
+            width  = self.renderer.width  * scale
+            height = self.renderer.height * scale
+        if width  is None: width  = self.renderer.width
+        if height is None: height = self.renderer.height
+        return OffscreenRenderer.MeshRenderer(width, height)
+
+    def __updateOffscreenRenderer(self, mr):
+        mr.meshes.clear()
+        self.__addOffscreenRendererObjects(mr)
+
+        mr.setCameraParams(self.getCameraParams())
+        for m in mr.meshes: m.modelMatrix(self.objects.position, self.objects.scale, self.objects.quaternion)
+        mr.perspective(50, mr.ctx.width / mr.ctx.height, 0.1, 2000)
+
+        mr.specularIntensity[:] = 0.0 # Our viewer currently doesn't have any specular highlights
 
     def __addOffscreenRendererObjects(self, mr):
         """
