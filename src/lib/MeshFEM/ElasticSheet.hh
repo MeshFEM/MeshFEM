@@ -210,7 +210,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     size_t numThetas()    const { return numEdges();   }
     size_t numCreases()   const { return m_edgeVarStructure.numCreases; }
 
-    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(*this->m_assembler); }
+    const Assembler &assembler() const override { return dynamic_cast<const Assembler &>(*this->m_assembler); }
     const auto &varStructure() const { return assembler().varStructure(); }
 
     size_t           xOffset() const { return varStructure().offsetForType(0); }

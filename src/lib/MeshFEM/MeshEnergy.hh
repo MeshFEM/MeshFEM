@@ -73,7 +73,7 @@ struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
         ((MVSpec::initialize(m, m_x.segment(v.offsetForType(type), v.numVarsOfType(type))), ++type), ...);
     }
 
-    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
+    const Assembler &assembler() const override { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
     const auto &varStructure() const { return assembler().varStructure(); }
     const VXd &globalVars() const { return m_x; }
 

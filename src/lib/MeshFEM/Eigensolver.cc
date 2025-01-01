@@ -78,7 +78,7 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
 struct ShiftedGeneralizedOp {
     using Scalar = Real;
 
-    ShiftedGeneralizedOp(CholeskyFactorizerBase &Hshift_inv, const CholmodFactorizer *M_LLt)
+    ShiftedGeneralizedOp(const CholeskyFactorizerBase &Hshift_inv, const CholmodFactorizer *M_LLt)
         : m_Hshift_inv(Hshift_inv), m_M_LLt(M_LLt)
     {
         if (rows() != cols()) throw std::runtime_error("Operator must be square");
@@ -109,7 +109,7 @@ struct ShiftedGeneralizedOp {
 
 private:
     mutable std::vector<Real> m_workspace1, m_workspace2; // storage for intermediate results (for ping-ponging the matvecs)
-    CholeskyFactorizerBase &m_Hshift_inv;
+    const CholeskyFactorizerBase &m_Hshift_inv;
     const CholmodFactorizer *m_M_LLt;
     std::unique_ptr<CholmodSparseWrapper> m_L;
 };
@@ -118,7 +118,7 @@ private:
 //      H d = lambda M d
 // using an inverse iteration.
 // The special case `M = I` can be requested by passing `M = nullptr`
-Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol) {
+Eigen::VectorXd negativeCurvatureDirection(const CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("negativeCurvatureDirection");
 
     std::unique_ptr<CholmodFactorizer> M_LLt;

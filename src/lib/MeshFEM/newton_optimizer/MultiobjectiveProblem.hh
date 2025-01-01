@@ -108,7 +108,7 @@ struct MESHFEM_EXPORT NewtonVarsBase {
 
     virtual ~NewtonVarsBase();
 
-    const SystemAssemblerBase &assembler() const {
+    virtual const SystemAssemblerBase &assembler() const {
         if (!m_assembler) throw std::runtime_error("System assembler was not set");
         return *m_assembler;
     }
@@ -139,7 +139,7 @@ private:
 
 // Default implementation: store the variables in an Eigen array.
 struct MESHFEM_EXPORT NewtonVars : public NewtonVarsBase {
-    NewtonVars(size_t n = 0, size_t numParams = 0) : m_x(n), m_p(numParams) { }
+    NewtonVars(size_t nvars = 0, size_t numParams = 0) : m_x(nvars), m_p(numParams) { }
     NewtonVars(const VXd &v) : m_x(v) { }
 
     virtual size_t numVars() const override { return m_x.size(); }

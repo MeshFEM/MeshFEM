@@ -8,6 +8,20 @@
 // distinct dimensions (usually just 2). In the latter case, the variables of
 // each different dimension are collected together for efficiency.
 // The dimensions are specified by the `BlockDimensions_` template parameter(s).
+//
+// In addition to these ordinary block variables, we allow the user to define
+// a small number of additional "global" or "dense" variables that are added
+// either to the beginning or end of the full variable set.
+// This is intended for variables that are coupled to many/all other
+// optimization variables, otherwise requiring the insertion of highly
+// dense rows or columns into the sparse Hessian (e.g., entries of the
+// macroscopic deformation gradient of an elasticity homogenization problem).
+//
+// These "dense" variables are not assigned block indices, and the corresponding
+// blocks of the Hessian are *not* included in the "sparse" (BlockCSC)
+// Hessian that is factorized by the Newton solver. Instead a Schur complement
+// approach is used to solve the full Newton system using a factorization of
+// only the sparse block.
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
 //  Created:  01/15/2024 15:27:54
@@ -97,14 +111,27 @@ struct OptimizationVarStructure {
     size_t blockOffsetForType(size_t type_id) const { return m_typeBlockOffsets[type_id]; }
     size_t    numBlocksOfType(size_t type_id) const { return m_typeBlockOffsets[type_id + 1] - m_typeBlockOffsets[type_id]; }
 
-    size_t   numVars() const { return m_numScalarVars; }
+    size_t   numVars() const { return m_numScalarVars + m_numDenseVars; }
     size_t numBlocks() const { return m_numBlocks; }
+    size_t numDenseVars() const { return m_numDenseVars; }
+
+    // Dense/global variable logic
+    enum class DenseVarPositioning { Beginning, End };
+    void setNumDenseVars(size_t ndv) const { m_numDenseVars = ndv; }
+    DenseVarPositioning denseVarPositioning() const { return m_denseVarPositioning; }
+    size_t sparseVarOffset() const { return (denseVarPositioning() == DenseVarPositioning::Beginning) ? numDenseVars() : 0; }
+    size_t  denseVarOffset() const { return (denseVarPositioning() == DenseVarPositioning::End      ) ? 0 : m_numScalarVars; }
 
     template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
     template<class Derived> auto variablesOfType(const Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
 
 private:
+    // Number of "sparse" variables (and corresponding blocks)
     size_t m_numBlocks, m_numScalarVars;
+
+    size_t m_numDenseVars = 0;
+    DenseVarPositioning m_denseVarPositioning = DenseVarPositioning::End;
+
     std::array<size_t, NumBlockTypes> m_numBlocksPerType;
     std::array<size_t, NumBlockTypes + 1> m_typeBlockOffsets;
     std::array<size_t, NumBlockTypes + 1> m_typeVarOffsets;

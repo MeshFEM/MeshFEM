@@ -118,7 +118,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return SE::gradient(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
-    const SystemAssembler<N> &assembler() const { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
+    const SystemAssembler<N> &assembler() const override { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
 
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual void accumulateGradient(Real weight, VXd &g, bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {

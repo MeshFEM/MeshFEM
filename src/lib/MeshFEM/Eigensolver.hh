@@ -10,7 +10,7 @@ MESHFEM_EXPORT
 Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol);
 
 MESHFEM_EXPORT
-Eigen::VectorXd negativeCurvatureDirection(CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol);
+Eigen::VectorXd negativeCurvatureDirection(const CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol);
 
 using MatvecCallback = std::function<Eigen::VectorXd(Eigen::Ref<const Eigen::VectorXd>)>;
 MESHFEM_EXPORT
