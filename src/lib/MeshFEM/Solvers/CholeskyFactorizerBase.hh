@@ -52,19 +52,22 @@ struct CholeskyFactorizerBase {
     const std::vector<size_t> &getFixedVars() const { return m_fixedVars; }
 
     // Check if the currently set `m_fixedVars` are equivalent to `fv`.
-    bool fixesSameVarsAs(std::vector<size_t> &fv) const {
-        std::vector<bool> varIsFixed_a, varIsFixed_b;
-        varIsFixed_a.assign(n(), false);
-        varIsFixed_b.assign(n(), false);
-
-        for (size_t v : m_fixedVars) varIsFixed_a[v] = true;
-        for (size_t v : fv)          varIsFixed_b[v] = true;
-
-        // Verify masks agree on all variables fixed by `fv` or `m_fixedVars`.
-        for (size_t v : m_fixedVars) { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
-        for (size_t v : fv)          { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
+    bool fixesSameVarsAs(const std::vector<size_t> &fv) const {
+        std::vector<bool> mask(n(), false);
+        for (size_t v : m_fixedVars) mask[v] = true;
+        for (size_t v : fv) {
+            if (!mask[v]) return false; // `fv` fixes a variable not fixed by `m_fixedVars`
+            mask[v] = false;
+        }
+        for (size_t v : m_fixedVars)
+            if (mask[v]) return false; // `m_fixedVars` fixes a variable not fixed by `fv`
 
         return true;
+    }
+
+    // Same as above but with `fv` sorted and unique.
+    bool fixesSameVarsAsSortedUnique(const std::vector<size_t> &fv) const {
+        return m_fixedVars == fv;
     }
 
     // Perform only the symbolic factorization for the given matrix `mat` after removing the
@@ -255,7 +258,7 @@ protected:
     FactorizationType m_factorizationType = FactorizationType::None;
 
     // Functionality for efficient solves under variable pins
-    std::vector<size_t> m_fixedVars;
+    std::vector<size_t> m_fixedVars; // sorted, unique
     std::vector<SuiteSparse_long> m_entryForReducedEntry;
     std::vector<SuiteSparse_long> m_reducedRowForRow;
     mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
@@ -272,12 +275,13 @@ protected:
 
         // Deduplicate fixed vars and construct mask needed for efficient row/col removal.
         m_fixedVars.clear();
-        std::vector<bool> varIsFixed;
-        varIsFixed.assign(mat.n, false);
+        std::vector<bool> varIsFixed(mat.n, false);
         for (size_t var : pinnedVars) {
             if (!varIsFixed[var]) m_fixedVars.push_back(var);
             varIsFixed[var] = true;
         }
+        std::sort(m_fixedVars.begin(), m_fixedVars.end()); // Must be sorted to accelerate comparison in `updateSymbolicFactorization`
+                                                           // TODO: this can be avoided when the caller already sorts pinnedVars...
 
         m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return varIsFixed[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
         m_permutedReducedRowForRow.clear();

@@ -145,7 +145,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("readBinary", &SuiteSparseMatrix::readBinary)
         ;
     ////////////////////////////////////////////////////////////////////////////
-    /// Solvers
+    // Solvers
     ////////////////////////////////////////////////////////////////////////////
     py::enum_<CholeskyProvider>(m, "CholeskyProvider")
         .value("CHOLMOD",  CholeskyProvider::CHOLMOD)

@@ -874,8 +874,7 @@ struct CSCMatrix {
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) {
-        Ax.resize(nz);
-        data().setConstant(val);
+        Ax.assign(nz, val);
     }
 
     template<bool multithreaded = true> void setZero() {
@@ -1018,7 +1017,6 @@ struct CSCMatrix {
             Result result(m, n);
             result.Ap = Ap;
             result.Ai = Ai;
-            result.Ax.reserve(Ax.size());
             for (SuiteSparse_long ii = 0; ii < nz; ++ii)
                 result.Ax[ii] = value(ii);
             return result;
@@ -1750,6 +1748,7 @@ struct CSCMatrix {
 
     template<typename _Real2> // Templated to support, e.g., application of non-autodiff matrix to autodiff vector.
     void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix.applyRaw");
         const bool swapIndices = transpose && (symmetry_mode == SymmetryMode::NONE);
 
         size_t len = transpose ? n : m;

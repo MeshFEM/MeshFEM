@@ -88,6 +88,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     // sparsity pattern updates.
     size_t sparsityPatternID() const { return m_sparsityPatternID; }
 
+    // A **sorted, unique** list of indices of variables that are fixed in this problem.
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
     size_t numFixedVars() const { return fixedVars().size(); }
     size_t numReducedVars() const { return numVars() - fixedVars().size(); } // number of remaining variables after fixing fixedVars
@@ -95,8 +96,18 @@ struct MESHFEM_EXPORT NewtonProblem {
     // WARNING: updating the fixed variables *after* constructing a
     // NewtonOptimizer from this problem won't work; then you must call
     // NewtonOptimizer::setFixedVars.
-    void setFixedVars(const std::vector<size_t> &fv) { m_fixedVars = fv; }
-    void addFixedVariables(const std::vector<size_t> &fv) { m_fixedVars.insert(std::end(m_fixedVars), std::begin(fv), std::end(fv)); }
+    void setFixedVars(std::vector<size_t> fv) { // Pass-by-value is intentional due to copy assignment below
+        m_fixedVars = fv;
+        std::sort(std::begin(m_fixedVars), std::end(m_fixedVars));
+        m_fixedVars.erase(std::unique(std::begin(m_fixedVars), std::end(m_fixedVars)), std::end(m_fixedVars));
+    }
+    void addFixedVariables(const std::vector<size_t> &fv) {
+        std::vector<size_t> fvNew;
+        fvNew.reserve(fixedVars().size() + fv.size());
+        fvNew.insert(fvNew.end(), fixedVars().begin(), fixedVars().end());
+        fvNew.insert(fvNew.end(), fv.begin(), fv.end());
+        setFixedVars(fvNew);
+    }
 
     virtual bool         hasLEQConstraint()       const { return false; }
     virtual Eigen::VectorXd LEQConstraintMatrix() const { return Eigen::VectorXd(); }

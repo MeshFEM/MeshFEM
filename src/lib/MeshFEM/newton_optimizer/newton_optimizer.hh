@@ -12,7 +12,6 @@
 #ifndef NEWTON_OPTIMIZER_HH
 #define NEWTON_OPTIMIZER_HH
 
-#include <vector>
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
@@ -27,11 +26,6 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     NewtonOptimizer(std::shared_ptr<NewtonProblem> p)
         : prob(p), m_hessianFactorization(p, options) { }
 
-    void setFixedVars(const std::vector<size_t> &fixedVars) {
-        prob->setFixedVars(fixedVars);
-        m_hessianFactorization.updateSymbolicFactorization(/* force = */ true);
-    }
-
     ConvergenceReport optimize();
     ConvergenceReport optimize(WorkingSet &ws);
 
@@ -45,12 +39,11 @@ struct MESHFEM_EXPORT NewtonOptimizer {
         return newton_step(step, neg_g, ws, beta, betaMin);
     }
 
-    // Update the factorizations of the Hessian/KKT system with the current
-    // iterate's Hessian. This is necessary for sensitivity analysis after
-    // optimize() has been called: when optimization terminates either because
-    // the problem is solved or the iteration limit is reached, solver/kkt_solver
-    // hold values from the previous iteration (before the final linesearch
-    // step).
+    // Update the Hessian factorization using the current iterate's Hessian.
+    // This is necessary for sensitivity analysis after optimize() has been
+    // called: when optimization terminates either because the problem is solved
+    // or the iteration limit is reached, the factorization holds values from the
+    // previous iteration (before the final linesearch step).
     void update_factorizations(const WorkingSet &ws) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("update_factorizations");
         m_hessianFactorization.update(ws, options.beta, std::min(options.beta, 1e-6));

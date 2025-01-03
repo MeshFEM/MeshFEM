@@ -1,5 +1,7 @@
 #include "NewtonHessian.hh"
 
+
+
 Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const Real betaMin) {
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
@@ -86,4 +88,72 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     hUpdtCtr.newHessian(isIndefinite);
 
     return tau;
+}
+
+void NewtonHessian::validate() const {
+    if (!H_ss) throw std::runtime_error("H_ss is null");
+
+    const size_t nsv = varStructure().numSparseVars();
+    const size_t ndv = varStructure().numDenseVars();
+
+    if (nsv != H_ss->numScalarCols()) throw std::runtime_error("H_ss has the wrong number of columns");
+    if (nsv != H_ss->numScalarRows()) throw std::runtime_error("H_ss is not square");
+
+    if ((ndv > 0) && (nsv > 0)) {
+        if (nsv != size_t(H_sd.rows())) throw std::runtime_error("H_sd has the wrong number of rows");
+        if (ndv != size_t(H_sd.cols())) throw std::runtime_error("H_sd has the wrong number of columns");
+        if ((ndv != size_t(H_dd.rows())) || (ndv != size_t(H_dd.cols()))) throw std::runtime_error("H_dd is the wrong shape");
+    }
+
+    if ((V_s.size() != 0) || (V_d.size() != 0)) {
+        if (nsv != size_t(V_s.rows())) throw std::runtime_error("V_s has the wrong number of columns");
+        if (ndv != size_t(V_d.rows())) throw std::runtime_error("V_d has the wrong number of columns");
+    }
+
+    if ((C_s.size() != 0) || (C_d.size() != 0)) {
+        if (nsv != size_t(C_s.rows())) throw std::runtime_error("C_s has the wrong number of columns");
+        if (ndv != size_t(C_d.rows())) throw std::runtime_error("C_d has the wrong number of columns");
+    }
+}
+
+void NewtonHessian::addNZ(size_t i, size_t j, const Real val) {
+    assert(i <= j); // Only support `UPPER_TRIANGLE` symmetry mode...
+    const auto &vs = varStructure();
+    bool isSparse_i = vs.isSparseVar(i), // Note that sparse variables could
+         isSparse_j = vs.isSparseVar(j); // be collected at the beginning or
+                                         // end of the variable list!
+    if (isSparse_i && isSparse_j) H_ss->addNZScalar(i - vs.sparseVarOffset(), j - vs.sparseVarOffset(), val);
+    else if (isSparse_i) H_sd(i - vs.sparseVarOffset(), j - vs.denseVarOffset()) += val;
+    else if (isSparse_j) H_sd(j - vs.sparseVarOffset(), i - vs.denseVarOffset()) += val;
+    else H_dd(i - vs.denseVarOffset(), j - vs.denseVarOffset()) += val;
+}
+
+Eigen::VectorXd NewtonHessian::apply(const Eigen::VectorXd &x) const {
+    const auto &vs = varStructure();
+    if (size_t(x.size()) != vs.numVars()) throw std::runtime_error("Input size mismatch");
+    validate();
+
+    Eigen::VectorXd result(x.size());
+
+    H_ss->applyRaw(vs.sparseVars(x).data(), vs.sparseVars(result).data());
+
+    // Padding terms
+    if (vs.numDenseVars() > 0) {
+        if (vs.numSparseVars() > 0) {
+            vs.sparseVars(result) += H_sd * vs.denseVars(x);
+            vs. denseVars(result)  = H_sd.transpose() * vs.sparseVars(x) + H_dd * vs.denseVars(x); // initializes!
+        }
+        else {
+            vs. denseVars(result) = H_dd * vs.denseVars(x);
+        }
+    }
+
+    // Low-rank term V V^T x
+    if (low_rank_rank() > 0) {
+        const auto Vt_x = V_s.transpose() * vs.sparseVars(x) + V_d.transpose() * vs.denseVars(x);
+        vs.sparseVars(result) += V_s * Vt_x;
+        vs. denseVars(result) += V_d * Vt_x;
+    }
+
+    return result;
 }

@@ -30,6 +30,8 @@
 
 #include "Elements/SolidElement.hh"
 
+#include "newton_optimizer/NewtonHessian.hh"
+
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
@@ -205,6 +207,20 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
         return blockSparsityPattern()->toScalar(val);
+    }
+
+    NewtonHessian hessianSparsityPatternNH() const {
+        NewtonHessian result;
+        result.H_ss = blockSparsityPattern();
+        return result;
+    }
+
+    void accumulateHessianNH(Real weight, NewtonHessian &NH, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
+        BCSCMat &H = BCSCMat::cast(*NH.H_ss);
+        if (H.Ax.empty()) H.fill(0.0);
+        assembler().assembleHessianBlockAccelerated(H.Ax.data(), H, mesh(), [this, projectionMask, weight](size_t ei) {
+            return elementHessian(ei, !projectionMask, weight);
+        });
     }
 
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {

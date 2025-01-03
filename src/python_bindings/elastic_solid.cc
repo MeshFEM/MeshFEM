@@ -83,6 +83,10 @@ struct ElasticSolidBinder {
               }, "Useful for detecting collapsed elements...")
           .def("deformedElementVolumes", &ES::deformedElementVolumes, "Numerical approximation of each element's volume in the deformed config.")
           .def("blockHessian", [](const ES &es, bool projectionMask) { es.blockHessian(projectionMask); }, py::arg("projectionMask") = false)
+
+          .def("hessianSparsityPatternNH", &ES::hessianSparsityPatternNH)
+          .def("accumulateHessian", &ES::accumulateHessianNH, py::arg("weight"), py::arg("newtonHessian"), py::arg("projectionMask") = false, py::arg("vmask") = VM::Defo)
+
           .def_readwrite("useXBasedProjection", &ES::useXBasedProjection)
           .def("contract_d2E_dXdx", &ES::contract_d2E_dXdx, py::arg("y_adjoint"))
          ;

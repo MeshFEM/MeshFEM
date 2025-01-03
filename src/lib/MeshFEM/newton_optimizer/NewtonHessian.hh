@@ -86,7 +86,7 @@
 #include "NewtonOptions.hh"
 #include <MeshFEM/BlockCSCHessian.hh>
 
-struct NewtonHessian {
+struct MESHFEM_EXPORT NewtonHessian {
     std::unique_ptr<BlockCSCHessianBase> H_ss;
 
     // Storage of dense blocks induced by "global" variables.
@@ -98,6 +98,27 @@ struct NewtonHessian {
     // Storage of equality constraints
     //  [C_s; C_d] [x_s; x_d]
     Eigen::MatrixXd C_s, C_d;
+
+    const OptimizationVarStructureBase &varStructure() const {
+        if (!H_ss) throw std::runtime_error("Hessian not initialized");
+        return H_ss->vars();
+    }
+
+    // Throw exceptions if the block sizes are incompatible
+    void validate() const;
+
+    size_t low_rank_rank() const { return V_s.cols(); }
+
+    // Support objective terms that require legacy scalar-var behavior.
+    void addNZ(size_t i, size_t j, const Real val);
+
+    // Matrix-vector multiplication (ignoring the equality constraints)
+    //  ([H_ss H_sd] + [V_s][V_s]^T)[x_s]
+    //  ([H_ds H_dd]   [V_d][V_d]  )[x_d]
+    Eigen::VectorXd apply(const Eigen::VectorXd &x) const;
+
+private:
+    // TODO: move sparsity pattern ID here.
 };
 
 // Copy-on-write-style optimization for Hessian that only occasionally needs
@@ -157,7 +178,7 @@ private:
 struct NewtonOptimizer;
 
 // A factorization type for solving systems involving a `NewtonHessian`.
-struct NewtonHessianFactorization {
+struct MESHFEM_EXPORT NewtonHessianFactorization {
     NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p,
                                const NewtonOptimizerOptions &options)
         : m_options(options), m_problem(p) { }
@@ -170,14 +191,23 @@ struct NewtonHessianFactorization {
     void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
         if (!exists()) throw std::runtime_error("Factorization doesn't exist.");
         solver().solve(b, x);
+        // TODO: dense terms.
     }
 
-    void updateSymbolicFactorization(bool force = false) {
+    // The symbolic factorization must be updated if either the sparsity pattern
+    // changes or the fixed variables set changes.
+    // Since the fixed variables set cannot change during the optimization, we avoid the
+    // overhead of comparing the sets unless `m_fixedVarsCouldHaveChanged` is true.
+    void updateSymbolicFactorization() {
+        if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
+
         m_problem->updateSparsityPattern();
-        if (force || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
+        const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(m_problem->fixedVars());
+        if (fixedVarsChanged || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
             m_solver->factorizeSymbolic(m_problem->hessianSparsityPattern(), m_problem->fixedVars());
             m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
         }
+        m_fixedVarsCouldHaveChanged = false; // Suppress further checks until the next optimization run.
     }
 
     CholeskyFactorizerBase &solver() {
@@ -185,6 +215,7 @@ struct NewtonHessianFactorization {
             m_solver = make_cholesky_factorizer(m_options.factorizer);
             updateSymbolicFactorization();
         }
+
         return *m_solver;
     }
 
@@ -197,13 +228,18 @@ struct NewtonHessianFactorization {
 
 private:
     friend struct NewtonOptimizer;
-    void m_beginningOptimization() { m_cachedHessianL2Norm.reset(); }
+
+    void m_beginningOptimization() {
+        m_cachedHessianL2Norm.reset();
+        m_fixedVarsCouldHaveChanged = true;
+    }
 
     const NewtonOptimizerOptions &m_options; // Owned by our owner (`NewtonOptimizer`).
     std::shared_ptr<NewtonProblem> m_problem;
     std::shared_ptr<CholeskyFactorizerBase> m_solver;
 
     mutable CachedHessianL2Norm m_cachedHessianL2Norm;
+    bool m_fixedVarsCouldHaveChanged = true; // Fixed vars can change only between separate runs of the optimizer.
 
     // Record the sparsity pattern for which the most recent symbolic
     // factorization was computed by `m_solver`.

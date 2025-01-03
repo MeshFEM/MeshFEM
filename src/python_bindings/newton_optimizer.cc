@@ -232,7 +232,6 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 return step;
             }, py::arg("feasibility") = false)
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
-        .def("setFixedVars", &NewtonOptimizer::setFixedVars, py::arg("fixedVars"))
 
         .def_readwrite("options", &NewtonOptimizer::options)
         ;

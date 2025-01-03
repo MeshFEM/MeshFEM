@@ -81,6 +81,10 @@ struct ElasticSheetBinder {
           .def("energy",                   [](const ES &es, EType etype) { return es.energy(etype); }, py::arg("etype") = EType::Full)
           .def("gradient",                 [](const ES &es, bool us, VariableMask vmask, EType etype) { return es.gradient(us, vmask, etype); }, py::arg("updatedSource") = false, py::arg("vmask") = VariableMask::Defo, py::arg("etype") = EType::Full)
           .def("hessian",                  [](const ES &es, bool p, VariableMask vmask, EType etype) { return es.hessian(p, vmask, etype); }, py::arg("projectionMask") = false, py::arg("vmask") = VariableMask::Defo, py::arg("etype") = EType::Full)
+
+          .def("hessianSparsityPatternNH", &ES::hessianSparsityPatternNH)
+          .def("accumulateHessian", &ES::accumulateHessianNH, py::arg("weight"), py::arg("newtonHessian"), py::arg("projectionMask") = false, py::arg("vmask") = VariableMask::Defo)
+
           .def("midedgeNormals",         &ES::midedgeNormals)
           .def("midedgeReferenceFrames", &ES::midedgeReferenceFrames)
           .def("sourceReferenceFrames",  &ES::sourceReferenceFrames)

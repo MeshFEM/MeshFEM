@@ -306,6 +306,22 @@ public:
 	}
 };
 
+// JP: A sorting method that dispatches to a (statically-defined) range of static sorts based on the size of the array.
+#include <cstddef>
+template<size_t MinSize, size_t MaxSize, typename T, class Compare>
+inline void dispatchedStaticSort(T *data, size_t n, const Compare &lt) {
+    if constexpr (MinSize == MaxSize) StaticSort<MinSize>()(data, lt); // terminate template recursion
+    else {
+        if (n == MinSize) return StaticSort<MinSize>()(data, lt);
+        return dispatchedStaticSort<MinSize + 1, MaxSize>(data, n, lt);
+    }
+}
+
+template<size_t MinSize, size_t MaxSize, typename T>
+inline void dispatchedStaticSort(T *data, size_t n) {
+    dispatchedStaticSort<MinSize, MaxSize>(data, n, [](const T &a, const T &b) { return a < b; });
+}
+
 #include <algorithm>
 // JP: A sorting method tuned for sorting arrays of size `N` (via a static sort)
 // but that still can sort other-sized arrays via a fallback to `std::sort`.

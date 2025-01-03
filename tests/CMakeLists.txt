@@ -34,6 +34,9 @@ target_link_libraries(solve_system MeshFEM)
 add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
 target_link_libraries(benchmark_linear_systems MeshFEM)
 
+add_executable(benchmark_sorts benchmark_sorts.cc)
+target_link_libraries(benchmark_sorts MeshFEM)
+
 if (MSVC)
 else ()
 target_compile_options(unit_tests PRIVATE -Wno-unused-parameter)

@@ -35,7 +35,6 @@
 #include "GaussQuadrature.hh"
 #include "GlobalBenchmark.hh"
 #include "SparseMatrices.hh"
-#include "Types.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Utilities/MeshConversion.hh"
 
@@ -281,11 +280,11 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
-    using EBlockVars = VecMaxN_T<SuiteSparse_long, 9>; // Up to 9 (block) vars influence each element
+    using EBlockVars = ElementBlockVarsWithSizeRange<6, 9>;
     auto elementGetter() const {
         const auto &m = mesh();
         return [this, &m](size_t ei) {
-            EBlockVars blockVars(9);
+            EBlockVars blockVars;
             auto e = m.element(ei);
             for (auto v : e.vertices())
                 blockVars[v.localIndex()] = v.index();
@@ -296,7 +295,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
                 if (ci < 0) continue;
                 blockVars[crease_back++] = numVertices() + numEdges() + ci;
             }
-            blockVars.conservativeResize(crease_back);
+            blockVars.numVars = crease_back;
             return blockVars;
         };
     }
@@ -319,11 +318,21 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return g;
     }
 
+    struct CustomHEAData;;
+
     SuiteSparseMatrix hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
         SuiteSparseMatrix H(hessianSparsityPattern());
         accumulateHessian(1.0, H, etype, projectionMask, vmask);
         return H;
     }
+
+    NewtonHessian hessianSparsityPatternNH() const {
+        NewtonHessian result;
+        result.H_ss = blockSparsityPattern();
+        return result;
+    }
+
+    void accumulateHessianNH(Real weight, NewtonHessian &NH, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
 
     // Overloads implementing generic ElasticObject interface.
     virtual Real  energy() const override { return energy(EnergyType::Full); }
