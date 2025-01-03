@@ -295,6 +295,8 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     template <class PEH, class EVars>
     struct HessianElementAssemblyData {
         auto block(size_t a, size_t b, size_t bsa, size_t bsb) const { return getBlock(H_e, a, b, bsa, bsb); } // TODO: compare timing with and without eval()...
+        // Version where block size is known
+        auto block(size_t a, size_t b) const { return getBlock(H_e, a, b); }                                   // TODO: compare timing with and without eval()...
         PEH H_e;
         EVars evars;
     };
@@ -356,7 +358,6 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     static auto getBlock(const PEH &H_e, size_t a, size_t b, size_t bsa = VarStructure::MaxBlockDim, size_t bsb = VarStructure::MaxBlockDim) {
         static constexpr size_t N = VarStructure::MaxBlockDim;
         if constexpr (VarStructure::SingleBlockDim) {
-            UNUSED(bsa); UNUSED(bsb);
             return H_e.template block<N, N>(a, b);
         }
         else {
@@ -630,18 +631,15 @@ private:
 
         auto order = argsort(blockVars);
 
-        size_t nbv = blockVars.size();
-        for (size_t lbj_i = 0; lbj_i < nbv; ++lbj_i) {
+        for (size_t lbj_i = 0; lbj_i < blockVars.size(); ++lbj_i) {
             size_t lbj = order[lbj_i];
             auto bj = blockVars[lbj];
             const size_t lbo_j = blockOffsetCalc.offset(lbj);
             const size_t bs_j = blockOffsetCalc.blockSize(lbj);
 
-            // Compute the start and length of the scalar-valued column
-            // corresponding to block column `bj` using block sparsity pattern.
             auto colScanner = blockH.columnScanner(bj);
-
             if constexpr (InParallel) m_lockVar(bj);
+
             for (size_t lbi_i = 0; lbi_i < lbj_i; ++lbi_i) {
                 size_t lbi = order[lbi_i];
                 auto bi = blockVars[lbi];
@@ -649,9 +647,9 @@ private:
                 const size_t bs_i = blockOffsetCalc.blockSize(lbi);
 
                 auto addBlock = [&](auto block) {
-                    // Convert block matrix location into scalar matrix location.
+                    // Find offset in `Ax` of the block's upper-left corner.
 #if 1
-                    SuiteSparse_long loc = colScanner.advanceToBlock(bi); // Somehow this is slower?? TODO: Time this again.
+                    SuiteSparse_long loc = colScanner.advanceToBlock(bi);
 #else
                     SuiteSparse_long loc = colScanner.findBlock(bi);
 #endif
@@ -659,7 +657,7 @@ private:
                         if constexpr (SingleBlockDim)
                             Eigen::Map<Eigen::Matrix<Real_, VarStructure::MaxBlockDim, 1>>(Ax + loc) += block.col(c);
                         else
-                            Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, blockOffsetCalc.blockSize(lbi)) += block.col(c);
+                            Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, bs_i) += block.col(c);
 
                         loc += colScanner.stride() + c; // each subsequent column has an extra entry...
                     }

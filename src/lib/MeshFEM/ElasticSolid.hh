@@ -216,6 +216,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     void accumulateHessianNH(Real weight, NewtonHessian &NH, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("accumulateHessianNH");
         BCSCMat &H = BCSCMat::cast(*NH.H_ss);
         if (H.Ax.empty()) H.fill(0.0);
         assembler().assembleHessianBlockAccelerated(H.Ax.data(), H, mesh(), [this, projectionMask, weight](size_t ei) {

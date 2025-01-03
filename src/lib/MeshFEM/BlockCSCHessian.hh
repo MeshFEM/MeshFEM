@@ -278,9 +278,16 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
     }
 
     Index advanceToBlock(Index bi) {
-        Index m_old_bloc = m_bloc;
-        m_bloc = binary_search(bi, m_H.Ai.data(), m_old_bloc, m_end);
-        return (m_scalarLoc += N * (m_bloc - m_old_bloc));
+        // Linear scan seems faster than binary search...
+        // // m_bloc = binary_search(bi, m_H.Ai.data(), old_bloc, m_end);
+#if 0
+        Index old_bloc = m_bloc;
+        while (m_H.Ai[m_bloc] < bi) ++m_bloc;
+        return (m_scalarLoc += N * (m_bloc - old_bloc));
+#else
+        while (m_H.Ai[m_bloc] < bi) { ++m_bloc; m_scalarLoc += N; } // Does more cheap integer additions vs a multiplication at the end...
+        return m_scalarLoc;
+#endif
     }
 
     // Find the scalar offset of the block entry (bi, bj) without advancing the scanner.
@@ -324,7 +331,18 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
         m_scalarLoc = H.scalarOffsetForColumn(bj);
     }
 
-    Index advanceToBlock(Index bi)  { return m_H.locForBlock(bi, m_bj); } // see WARNING above!
+    Index advanceToBlock(Index bi) {
+        // Linear scan seems faster than binary search...
+        size_t curr = m_H.Ai[m_bloc];
+        while (curr < bi) {
+            ++m_bloc;
+            m_scalarLoc += blockSize();
+            while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+            curr = m_H.Ai[m_bloc];
+        }
+        return m_scalarLoc;
+    }
+
     Index findBlock(Index bi) const { return m_H.locForBlock(bi, m_bj); }
 
     ColumnScanner &operator++() {
@@ -333,6 +351,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
         while (bi >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
         return *this;
     }
+
     bool atEnd() const { return m_bloc == m_end; }
     Index blockSize()  const { return VarStructure::BlockDimensions[m_blockType]; }
     Index scalarLoc()  const { return m_scalarLoc; }
@@ -517,6 +536,11 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
         using  VecMap = Eigen::Map<      Eigen::Matrix<_Real, BlockSize, 1>>;
         using CVecMap = Eigen::Map<const Eigen::Matrix<_Real, BlockSize, 1>>;
         Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(result, m_vars.numVars()).setZero();
+
+        // TODO: speed up the nonuniform case by blocking by type (doing type 0-type 0 block, then
+        // type 0-type 1 block, etc.) so that variable dimensions are fixed within each block.
+        // This could be done using recursive templates to iterate over the type
+        // pairs.
 
         for (_Index bj = 0; bj < n; ++bj) {
             auto [gvar_j, bsj] = vars().blockInfo(bj);

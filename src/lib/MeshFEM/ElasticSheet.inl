@@ -426,7 +426,9 @@ struct ElasticSheet<Psi_2x2>::CustomHEAData {
         evars.numVars = 6 + numCreases;
     }
 
-    MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const {
+    MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const { return block(a, b); }
+
+    MatMaxN_T<Real, 3> block(size_t a, size_t b) const {
         // x-x block
         if (b < 9) return H_e.template block<3, 3>(a, b);
 
