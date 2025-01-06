@@ -33,7 +33,7 @@
 // which can be solved using block Gaussian elimination:
 //      [H_ss                    B][x] = [b                 ]
 //      [   0  D - B^T H_ss^{-1} B][y]   [c - B^T H_ss^{-1}b]
-// denoting the Schur complement of H_ss by S := (D - B^T H_ss^{-1} B)^{-1},
+// denoting the Schur complement of H_ss by S := D - B^T H_ss^{-1} B,
 // we find:
 //      y = S^{-1} (c - B^T H_ss^{-1} b)
 //      x = H_ss^{-1} (b - B y),
@@ -82,12 +82,22 @@
 #ifndef NEWTONHESSIAN_HH
 #define NEWTONHESSIAN_HH
 
-#include "WorkingSet.hh"
 #include "NewtonOptions.hh"
 #include <MeshFEM/BlockCSCHessian.hh>
 
+struct WorkingSet;
+
 struct MESHFEM_EXPORT NewtonHessian {
     std::unique_ptr<BlockCSCHessianBase> H_ss;
+
+    NewtonHessian() = default;
+    NewtonHessian(const NewtonHessian &other) {
+        if (other.H_ss) H_ss = other.H_ss->clone();
+        m_copyDensePart(other);
+    }
+    NewtonHessian(std::unique_ptr<BlockCSCHessianBase> &&H_ss) : H_ss(std::move(H_ss)) { }
+
+    NewtonHessian(NewtonHessian &&other) noexcept { swap(*this, other); }
 
     // Storage of dense blocks induced by "global" variables.
     Eigen::MatrixXd H_sd, H_dd;
@@ -104,8 +114,45 @@ struct MESHFEM_EXPORT NewtonHessian {
         return H_ss->vars();
     }
 
+    void mergeSparsityPattern(const NewtonHessian &other) {
+        if (other.H_ss) {
+            if (!H_ss)  H_ss = other.H_ss->clone();
+            else        H_ss->mergeSparsityPattern(*other.H_ss);
+        }
+    }
+
+    void finalize() {
+        // Rebuild index tables (e.g., after other sparsity patterns are merged into this one).
+        if (H_ss) H_ss->finalize();
+    }
+
     // Throw exceptions if the block sizes are incompatible
     void validate() const;
+
+    bool isSparsityOnly() const { return H_ss && H_ss->Ax.size() == 0; }
+
+    // Prepares this matrix for Hessian assembly
+    // (clearing out any old data, and upgrading to an ordinary, value-backed
+    // matrix in the case of `isSparsityOnly()`).
+    void setZero() {
+        if (H_ss) H_ss->setZero();
+        const auto &vs = varStructure();
+        size_t nsv = vs.numSparseVars(),
+               ndv = vs.numDenseVars();
+
+        H_sd.setZero(nsv, ndv);
+        H_dd.setZero(ndv, ndv);
+        V_s.resize(nsv, 0);
+        V_d.resize(ndv, 0);
+    }
+
+    // Trace of the matrix:
+    //   [H_ss H_sd] + [V_s][V_s]^T
+    //   [H_ds H_dd]   [V_d][V_d]
+    Real trace() const {
+        if (!H_ss) throw std::runtime_error("Hessian not initialized");
+        return H_ss->trace() + H_dd.trace() + V_d.squaredNorm();
+    }
 
     size_t low_rank_rank() const { return V_s.cols(); }
 
@@ -115,9 +162,44 @@ struct MESHFEM_EXPORT NewtonHessian {
     // Matrix-vector multiplication (ignoring the equality constraints)
     //  ([H_ss H_sd] + [V_s][V_s]^T)[x_s]
     //  ([H_ds H_dd]   [V_d][V_d]  )[x_d]
-    Eigen::VectorXd apply(const Eigen::VectorXd &x) const;
+    void applyRaw(const double *x, double *result) const;
+    Eigen::VectorXd apply(const Eigen::VectorXd &x) const {
+        Eigen::VectorXd result(x.size());
+        applyRaw(x.data(), result.data());
+        return result;
+    }
+
+    NewtonHessian &operator=(NewtonHessian other) { // (also effectively supports move assignment because of the move constructor.)
+        swap(*this, other);
+        return *this;
+    }
+
+    SuiteSparseMatrix toScalar() const {
+        if (!H_ss) throw std::runtime_error("Hessian not initialized");
+        if (H_ss->vars().numDenseVars() > 0) throw std::runtime_error("Cannot convert Hessian with dense variables to sparse scalar form");
+        if (low_rank_rank() > 0)             throw std::runtime_error("Cannot convert Hessian with low-rank term to sparse scalar form");
+        return H_ss->toScalar();
+    }
+
+    friend void swap(NewtonHessian &A, NewtonHessian &B) {
+        std::swap(A.H_ss, B.H_ss);
+        A.H_sd.swap(B.H_sd);
+        A.H_dd.swap(B.H_dd);
+        A.V_s.swap(B.V_s);
+        A.V_d.swap(B.V_d);
+        A.C_s.swap(B.C_s);
+        A.C_d.swap(B.C_d);
+    }
 
 private:
+    void m_copyDensePart(const NewtonHessian &other) {
+        H_sd = other.H_sd;
+        H_dd = other.H_dd;
+        V_s  = other.V_s;
+        V_d  = other.V_d;
+        C_s  = other.C_s;
+        C_d  = other.C_d;
+    }
     // TODO: move sparsity pattern ID here.
 };
 
@@ -152,6 +234,10 @@ private:
     std::unique_ptr<SuiteSparseMatrix> m_H_tmp;
 };
 
+// Forward declarations to break circular includes.
+struct NewtonOptimizer;
+struct NewtonProblem;
+
 // Cache to avoid repeated re-evaluation of our rough Hessian eigenvalue
 // estimate. Uses the trace to detect when the Hessian's spectrum has changed
 // substantially.
@@ -159,15 +245,7 @@ struct MESHFEM_EXPORT CachedHessianL2Norm {
     CachedHessianL2Norm() { reset(); }
 
     static constexpr double TRACE_TOL = 0.5;
-    Real get(const NewtonProblem &p) {
-        const auto &H = p.hessian();
-        Real tr = H.trace();
-        if (std::abs(tr - hessianTrace) > TRACE_TOL * std::abs(hessianTrace)) {
-            hessianTrace = tr;
-            hessianL2Norm = p.hessianL2Norm();
-        }
-        return hessianL2Norm;
-    }
+    Real get(const NewtonProblem &p);
 
     void reset() { hessianTrace  = std::numeric_limits<Real>::max();
                    hessianL2Norm = 1.0; }
@@ -175,18 +253,15 @@ private:
     Real hessianTrace, hessianL2Norm;
 };
 
-struct NewtonOptimizer;
 
 // A factorization type for solving systems involving a `NewtonHessian`.
 struct MESHFEM_EXPORT NewtonHessianFactorization {
-    NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p,
-                               const NewtonOptimizerOptions &options)
-        : m_options(options), m_problem(p) { }
+    NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p, const NewtonOptimizerOptions &options);
 
     // Compute/recompute the Hessian factorization.
     Real update(const WorkingSet &ws, Real &beta, const Real betaMin);
 
-    Real tauScale() const { return (m_options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*m_problem) : 1.0) / m_problem->metricL2Norm(); }
+    Real tauScale() const;
 
     void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
         if (!exists()) throw std::runtime_error("Factorization doesn't exist.");
@@ -198,31 +273,16 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
     // changes or the fixed variables set changes.
     // Since the fixed variables set cannot change during the optimization, we avoid the
     // overhead of comparing the sets unless `m_fixedVarsCouldHaveChanged` is true.
-    void updateSymbolicFactorization() {
-        if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
+    void updateSymbolicFactorization();
 
-        m_problem->updateSparsityPattern();
-        const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(m_problem->fixedVars());
-        if (fixedVarsChanged || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
-            m_solver->factorizeSymbolic(m_problem->hessianSparsityPattern(), m_problem->fixedVars());
-            m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
-        }
-        m_fixedVarsCouldHaveChanged = false; // Suppress further checks until the next optimization run.
-    }
-
-    CholeskyFactorizerBase &solver() {
-        if (!m_solver || (m_solver->provider() != m_options.factorizer)) {
-            m_solver = make_cholesky_factorizer(m_options.factorizer);
-            updateSymbolicFactorization();
-        }
-
-        return *m_solver;
-    }
+    CholeskyFactorizerBase &solver();
 
     const CholeskyFactorizerBase &solver() const {
         if (!m_solver) throw std::runtime_error("Solver doesn't exist.");
         return *m_solver;
     }
+
+    ~NewtonHessianFactorization();
 
     bool exists() const { return m_solver && m_solver->hasFactorization(); }
 
@@ -233,6 +293,8 @@ private:
         m_cachedHessianL2Norm.reset();
         m_fixedVarsCouldHaveChanged = true;
     }
+
+    mutable SuiteSparseMatrix m_scalarHessian; // TODO: remove when done!
 
     const NewtonOptimizerOptions &m_options; // Owned by our owner (`NewtonOptimizer`).
     std::shared_ptr<NewtonProblem> m_problem;

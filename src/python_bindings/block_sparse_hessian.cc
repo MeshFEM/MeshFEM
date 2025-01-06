@@ -51,6 +51,9 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("blockVarCountsAndSizes", &BlockCSCHessianBase::blockVarCountsAndSizes)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)
         .def("numScalarRows", &BlockCSCHessianBase::numScalarRows)
+
+        .def("trace", &BlockCSCHessianBase::trace)
+
         .def_property_readonly("scalarNNZ", &BlockCSCHessianBase::scalarNNZ)
 
         .def_readonly( "m", &BlockCSCHessianBase::m )
@@ -79,9 +82,12 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def_readwrite("C_s", &NH::C_s)
         .def_readwrite("C_d", &NH::C_d)
 
+        .def("trace", &NH::trace)
+
         .def_property_readonly("varStructure", &NH::varStructure, py::return_value_policy::reference_internal)
 
         .def("validate", &NH::validate)
+        .def("isSparsityOnly", &NH::isSparsityOnly)
         .def("toScalar", [&](const NH &H) { return toScalar(H); })
         .def("toSciPy", [&](const NH &H) {
                 auto A = toScalar(H);

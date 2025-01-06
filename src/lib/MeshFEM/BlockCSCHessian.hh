@@ -327,21 +327,29 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 
     ColumnScanner(const BCSCH &H, Index bj)
         : m_H(H), m_bj(bj), m_bloc(H.Ap[bj]), m_end(H.Ap[bj + 1]), m_blockType(0) {
+        // The first block in this column might not be of the first type...
+        size_t curr = H.Ai[m_bloc];
+        while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+
         m_colStride = H.scalarColStride(bj);
         m_scalarLoc = H.scalarOffsetForColumn(bj);
     }
 
+#if 0
+    Index advanceToBlock(Index bi) { return m_H.locForBlock(bi, m_bj); }
+#else
     Index advanceToBlock(Index bi) {
         // Linear scan seems faster than binary search...
         size_t curr = m_H.Ai[m_bloc];
         while (curr < bi) {
             ++m_bloc;
             m_scalarLoc += blockSize();
-            while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
             curr = m_H.Ai[m_bloc];
+            while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
         }
         return m_scalarLoc;
     }
+#endif
 
     Index findBlock(Index bi) const { return m_H.locForBlock(bi, m_bj); }
 
@@ -404,9 +412,14 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     size_t         numScalarRows() const { return numScalarCols(); }
 
     virtual size_t scalarNNZ() const = 0;
+    virtual Real trace()       const = 0;
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(double val) { Ax.assign(scalarNNZ(), val); }
+    void setZero() {
+        if (Ax.size() != scalarNNZ()) Ax.assign(scalarNNZ(), 0.0);
+        else setZeroParallel(data());
+    }
 
     virtual SuiteSparseMatrix toScalar() const = 0;
 
@@ -468,6 +481,20 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
 
     virtual size_t numScalarCols() const override { return m_vars.numSparseVars(); }
     virtual size_t scalarNNZ()     const override { return this->scalarOffsetForColumn(n); }
+    virtual Real trace()           const override {
+        Real result = 0;
+        for (_Index bj = 0; bj < n; ++bj) {
+            const _Index bsj = m_vars.blockSize(bj);
+            auto cs = columnScanner(bj);
+            _Index loc = cs.diagBlockScalarLoc();
+            for (_Index c_j = 0; c_j < bsj; ++c_j) {
+                result += Ax[loc];
+                loc += (cs.stride() + c_j) // Move to next scalar column...
+                       + 1;                // and down one to reach the diagonal
+            }
+        }
+        return result;
+    }
 
     using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
     CSCMat toScalar() const override {

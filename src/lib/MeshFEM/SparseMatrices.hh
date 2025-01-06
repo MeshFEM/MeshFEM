@@ -877,7 +877,14 @@ struct CSCMatrix {
         Ax.assign(nz, val);
     }
 
+    // Overwrite the numerical values to zero, preserving the sparsity pattern.
+    // If this is a sparsity-only matrix, upgrade it to an ordinary one.
     template<bool multithreaded = true> void setZero() {
+        if (Ax.size() == 0) {
+            Ax.resize(nz); // upgrade sparsity-only matrix
+            return;
+        }
+
         if (multithreaded) {
             parallel_for_range(Ax.size(), [&](size_t i) {
                 spmat_helper::setZero(Ax[i]);
@@ -1011,14 +1018,14 @@ struct CSCMatrix {
 
     template<typename T = _Real, class ValueGetter>
     CSCMatrix<_Index, T> toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
-        if (Ax.size() != size_t(nz)) throw std::runtime_error("Inconsistent nonzero count (is this a sparsity-only matrix with empty `Ax`?)");
         using Result = CSCMatrix<_Index, T>;
         if (newMode == symmetry_mode) {
             Result result(m, n);
             result.Ap = Ap;
             result.Ai = Ai;
+            result.Ax.reserve(Ax.size());
             for (SuiteSparse_long ii = 0; ii < nz; ++ii)
-                result.Ax[ii] = value(ii);
+                result.Ax.push_back(value(ii));
             return result;
         }
         if (m != n) throw std::runtime_error("Matrix is not symmetric");
@@ -1938,6 +1945,8 @@ struct CSCMatrix {
 
         if (toRemove == 0) return;
 
+        const bool sparsityOnly = Ax.empty();
+
         const _Index nconst = n;
         size_t entry_back = 0, colptr_back = 0;
         _Index idx_begin = 0; // Pointer to the beginning of the current column's entries (note Ap[j] will be overwritten by the updated end pointer for the column j - 1)
@@ -1951,7 +1960,7 @@ struct CSCMatrix {
                 const _Index i = Ai[idx];
                 if (shouldRemove(i)) continue;
                 Ai[entry_back] = replacementRowIdx[i];
-                Ax[entry_back] = Ax[idx];
+                if (!sparsityOnly) Ax[entry_back] = Ax[idx];
                 if (entryForReducedEntry) (*entryForReducedEntry)[entry_back] = idx;
                 ++entry_back;
             }
@@ -1965,7 +1974,7 @@ struct CSCMatrix {
         nz = entry_back;
         m = n = colptr_back;
 
-        Ax.resize(nz);
+        if (!sparsityOnly) Ax.resize(nz);
         Ai.resize(nz);
         Ap.resize(n + 1);
         if (entryForReducedEntry) (*entryForReducedEntry).resize(nz);

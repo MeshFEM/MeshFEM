@@ -34,7 +34,6 @@
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
 #include "GlobalBenchmark.hh"
-#include "SparseMatrices.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Utilities/MeshConversion.hh"
 
@@ -283,32 +282,26 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using EBlockVars = ElementBlockVarsWithSizeRange<6, 9>;
     auto elementGetter() const {
         const auto &m = mesh();
-        return [this, &m](size_t ei) {
+        size_t thetaBlockOffset = varStructure().blockOffsetForType(1);
+        size_t creaseAngleBlockOffset = varStructure().blockOffsetForType(2);
+        return [this, thetaBlockOffset, creaseAngleBlockOffset, &m](size_t ei) {
             EBlockVars blockVars;
-            auto e = m.element(ei);
-            for (auto v : e.vertices())
-                blockVars[v.localIndex()] = v.index();
+            m.getTriCorners(ei, blockVars.vars); // just fills the first three entries...
             size_t crease_back = 6;
-            for (auto he : e.halfEdges()) {
-                blockVars[3 + he.localIndex()] = m.numVertices() + edgeForHalfEdge(he.index());
-                int ci = creaseForHalfEdge(he.index());
+            for (size_t lhi = 0; lhi < 3; ++lhi) {
+                size_t hei = m.halfedgeIdxOfTri(ei, lhi);
+                blockVars[3 + lhi] = thetaBlockOffset + edgeForHalfEdge(hei);
+                int ci = creaseForHalfEdge(hei);
                 if (ci < 0) continue;
-                blockVars[crease_back++] = numVertices() + numEdges() + ci;
+                blockVars[crease_back++] = creaseAngleBlockOffset + ci;
             }
             blockVars.numVars = crease_back;
             return blockVars;
         };
     }
 
-    void accumulateHessian(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
-
-    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return assembler().blockSparsityPattern(mesh().numElements(), elementGetter());
-    }
-
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("hessianSparsityPattern: Only defo variables are supported");
-        return blockSparsityPattern()->toScalar(val);
+    virtual NewtonHessian hessianSparsityPattern(VariableMask vmask = VariableMask::Defo) const override {
+        return assembler().sparsityPattern(mesh().numElements(), elementGetter());;
     }
 
     // Convenience methods
@@ -318,29 +311,25 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return g;
     }
 
-    struct CustomHEAData;;
+    struct CustomHEAData;
 
-    SuiteSparseMatrix hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
-        SuiteSparseMatrix H(hessianSparsityPattern());
+    NewtonHessian hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
+        auto H = hessianSparsityPattern();
         accumulateHessian(1.0, H, etype, projectionMask, vmask);
         return H;
     }
 
-    NewtonHessian hessianSparsityPatternNH() const {
-        NewtonHessian result;
-        result.H_ss = blockSparsityPattern();
-        return result;
-    }
-
-    void accumulateHessianNH(Real weight, NewtonHessian &NH, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+    void accumulateHessian(Real weight, NewtonHessian &H, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
 
     // Overloads implementing generic ElasticObject interface.
-    virtual Real  energy() const override { return energy(EnergyType::Full); }
+    virtual Real energy() const override { return energy(EnergyType::Full); }
+
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
         return accumulateGradient(weight, g, updatedParametrization, vmask, EnergyType::Full);
     }
-    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        accumulateHessian(weight, Hout, EnergyType::Full, projectionMask, vmask);
+
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        accumulateHessian(weight, H, EnergyType::Full, projectionMask, vmask);
     }
 
     const std::vector<Frame> &midedgeReferenceFrames() const { return m_referenceFrame; }

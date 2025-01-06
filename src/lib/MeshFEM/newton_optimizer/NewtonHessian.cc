@@ -1,6 +1,46 @@
 #include "NewtonHessian.hh"
+#include "NewtonProblem.hh"
+#include "WorkingSet.hh"
 
+NewtonHessianFactorization::NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p,
+        const NewtonOptimizerOptions &options)
+    : m_options(options), m_problem(p) { }
 
+Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*m_problem) : 1.0) / m_problem->metricL2Norm(); }
+
+void NewtonHessianFactorization::updateSymbolicFactorization() {
+    if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
+
+    m_problem->updateSparsityPattern();
+    const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(m_problem->fixedVars());
+    if (fixedVarsChanged || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
+        m_scalarHessian = m_problem->hessianSparsityPattern().toScalar(); // TODO: update!
+        m_solver->factorizeSymbolic(m_scalarHessian, m_problem->fixedVars());
+        m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
+    }
+    m_fixedVarsCouldHaveChanged = false; // Suppress further checks until the next optimization run.
+}
+
+CholeskyFactorizerBase &NewtonHessianFactorization::solver() {
+    if (!m_solver || (m_solver->provider() != m_options.factorizer)) {
+        m_solver = make_cholesky_factorizer(m_options.factorizer);
+        updateSymbolicFactorization();
+    }
+
+    return *m_solver;
+}
+
+NewtonHessianFactorization::~NewtonHessianFactorization() { }
+
+Real CachedHessianL2Norm::get(const NewtonProblem &p) {
+    const auto &H = p.hessian();
+    Real tr = H.trace();
+    if (std::abs(tr - hessianTrace) > TRACE_TOL * std::abs(hessianTrace)) {
+        hessianTrace = tr;
+        hessianL2Norm = p.hessianL2Norm();
+    }
+    return hessianL2Norm;
+}
 
 Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const Real betaMin) {
     // The following Hessian modification strategy is an improved version of
@@ -21,8 +61,11 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
 
     auto &hUpdtCtr = m_options.getHessianUpdateController();
     auto &hProjCtr = m_options.getHessianProjectionController();
-    const auto &H = m_problem->hessian(hProjCtr.shouldUseProjection());
+    const auto &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
     const SuiteSparseMatrix *M = nullptr;
+
+    auto &H = m_scalarHessian;
+    m_scalarHessian.Ax = H_nh.H_ss->Ax; // TODO: remove!
 
     // OptionallyModifiedHessian H(m_problem->hessian(hProjCtr.shouldUseProjection())), M;
     // if (ws.size()) {
@@ -128,12 +171,12 @@ void NewtonHessian::addNZ(size_t i, size_t j, const Real val) {
     else H_dd(i - vs.denseVarOffset(), j - vs.denseVarOffset()) += val;
 }
 
-Eigen::VectorXd NewtonHessian::apply(const Eigen::VectorXd &x) const {
+void NewtonHessian::applyRaw(const double *x_ptr, double *result_ptr) const {
     const auto &vs = varStructure();
-    if (size_t(x.size()) != vs.numVars()) throw std::runtime_error("Input size mismatch");
-    validate();
+    Eigen::Map<const Eigen::VectorXd> x(x_ptr, vs.numVars());
+    Eigen::Map<Eigen::VectorXd> result(result_ptr, vs.numVars());
 
-    Eigen::VectorXd result(x.size());
+    validate();
 
     H_ss->applyRaw(vs.sparseVars(x).data(), vs.sparseVars(result).data());
 
@@ -154,6 +197,4 @@ Eigen::VectorXd NewtonHessian::apply(const Eigen::VectorXd &x) const {
         vs.sparseVars(result) += V_s * Vt_x;
         vs. denseVars(result) += V_d * Vt_x;
     }
-
-    return result;
 }

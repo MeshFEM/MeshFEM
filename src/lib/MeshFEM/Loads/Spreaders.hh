@@ -49,6 +49,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
     using VXi  = Eigen::VectorXi;
 
     using Base::getObj;
+    using Base::assembler;
 
     Spreaders(const ST &obj,
               const SuiteSparseMatrix &materialPointPositioner,
@@ -91,7 +92,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = false) const override {
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool /* projectionMask */ = false) const override {
         if (m_disableHessian) return;
 
         // H = sum_e P_e^T [ H_e -H_e] P_e
@@ -100,6 +101,9 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         //  where P_{e,i} contains the rows of materialPointPositioner corresponding to the material points at the ith end of the eth spreader,
         //  and sign(ij) is 1 if i == j, 0 otherwise.
         // Note, to efficiently access rows of P_e, we must actually access the columns of P_e^T.
+        struct CustomHEAD {
+            
+        };
         for (int e = 0; e < m_connectivity.rows(); ++e) { // loop over spreaders (edges)
             const VNd a = m_axis.row(e);
             MNd da_de = (MNd::Identity() - a * a.transpose()) * (-m_magnitude / m_dist[e]);
@@ -126,10 +130,10 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         }
     }
 
-    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        if (m_disableHessian) return this->emptyBlockSparsityPattern();
+    virtual NewtonHessian hessianSparsityPattern() const override {
+        if (m_disableHessian) return NewtonHessian();
 
-        return getObj().assembler().blockSparsityPattern(numSpreaders(),
+        return assembler().sparsityPattern(numSpreaders(),
                 [&](size_t e) {
                     int startPt = m_connectivity(e, 0);
                     int   endPt = m_connectivity(e, 1);
@@ -141,11 +145,6 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
 
                     return elemBlockVars;
                 });
-    }
-
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        auto bHsp = blockSparsityPattern();
-        return bHsp->toScalar(val);
     }
 
     virtual ~Spreaders() { }

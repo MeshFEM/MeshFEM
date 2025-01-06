@@ -194,15 +194,10 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
 
     virtual Real objective() const = 0;
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const = 0;
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &result, bool projectionMask = false) const = 0;
-    // TODO: eventually accumulate directly to Hb.Ax rather than the external // values array `Ax`
-    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask = false) const { throw std::runtime_error("Block-accelerated Hessian assembly unimplemented"); }; // Block-accelerated version
+    virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const = 0;
 
-    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const { throw std::runtime_error("blockSparsityPattern not implemented by " + std::string(typeid(*this).name())); }
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0)      const { throw std::runtime_error("hessianSparsityPattern not implemented by" + std::string(typeid(*this).name())); }
-    virtual SparsityUpdateFrequency sparsityUpdateFrequency()           const { return SparsityUpdateFrequency::NEVER; }
-
-    virtual bool supportsBlockAcceleratedHessianAssembly() const { return false; }
+    virtual NewtonHessian hessianSparsityPattern()            const { throw std::runtime_error("hessianSparsityPattern not implemented by" + std::string(typeid(*this).name())); }
+    virtual SparsityUpdateFrequency sparsityUpdateFrequency() const { return SparsityUpdateFrequency::NEVER; }
 
     // Sensitivity analysis support
     // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
@@ -216,8 +211,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     virtual size_t       numVars() const { throw std::runtime_error(      "numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
     virtual size_t numParameters() const { throw std::runtime_error("numParameters must be implemented by subclass of NewtonObjectiveTermBase"); }
 
-    SuiteSparseMatrix hessian(bool projectionMask = false) const {
-        SuiteSparseMatrix H(hessianSparsityPattern());
+    NewtonHessian hessian(bool projectionMask = false) const {
+        NewtonHessian H(hessianSparsityPattern());
         accumulateHessian(1.0, H, projectionMask);
         return H;
     }
@@ -440,22 +435,14 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 
     VXd dirichletSensitivityTerm(const VXd &dJ_dx, const VXd &adjoint_state) const { throw std::runtime_error("Unimplemented"); }
 
-
     virtual ~NewtonMultiobjectiveProblem();
 
 private:
     NVMPtr m_vars;
 
-    mutable SuiteSparseMatrix m_hessianSparsity;
-    mutable std::unique_ptr<BlockCSCHessianBase> m_blockSparsity;
+    mutable NewtonHessian m_hessianSparsity;
 
     CallbackFunction m_customCallback;
-
-    // Only build the block sparsity pattern if we can (i.e., we have a SystemAssembler)
-    // and it's beneficial (not a scalar problem).
-    bool m_shouldBuildBlockSparsityPattern() const {
-        return m_vars->hasAssembler() && (m_vars->numBlockVars() < numVars());
-    }
 
     bool m_updateSparsityPattern() const override {
         bool sparsityChanged = false;
@@ -469,51 +456,26 @@ private:
     }
 
     void m_rebuildSparsityPattern() const {
-        // Note: empty sparsity patterns simply get replaced by `mergeSparsityPattern`
-        const bool blockSparsity = m_shouldBuildBlockSparsityPattern();
-        if (blockSparsity) {
-            m_blockSparsity = term(0).blockSparsityPattern();
-            for (size_t i = 1; i < numTerms(); ++i) {
-                if (term(i).suppressSparsity) continue;
-                m_blockSparsity->mergeSparsityPattern(*term(i).blockSparsityPattern());
-            }
-            m_blockSparsity->finalize();
-            m_hessianSparsity = m_blockSparsity->toScalar();
+        m_hessianSparsity = term(0).hessianSparsityPattern();
+        for (size_t i = 1; i < numTerms(); ++i) {
+            if (term(i).suppressSparsity) continue;
+            m_hessianSparsity.mergeSparsityPattern(term(i).hessianSparsityPattern());
         }
-        else {
-            SuiteSparseMatrix &H_sp = m_hessianSparsity;;
-
-            H_sp.m = H_sp.n = m_vars->numBlockVars();
-            H_sp.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
-
-            for (size_t i = 0; i < numTerms(); ++i) {
-                const auto &t = term(i);
-                if (t.suppressSparsity) continue;
-                H_sp.mergeSparsityPattern(t.hessianSparsityPattern());
-            }
-        }
-
-        m_hessianSparsity.fill(1.0);
+        m_hessianSparsity.finalize();
 
         // All terms' latest sparsity patterns are now incorporated.
         for (size_t i = 0; i < numTerms(); ++i)
             term(i).sparsityPatternChanged.clear();
     }
 
-    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const override { return m_hessianSparsity; }
+    virtual NewtonHessian m_getHessianSparsityPattern() const override { return m_hessianSparsity; }
 
-    virtual void m_evalHessian(SuiteSparseMatrix &result, bool projectionMask) const override {
+    virtual void m_evalHessian(NewtonHessian &result, bool projectionMask) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.hessian");
 
-        if (result.Ax.size() != size_t(result.nz)) // In case `result` is sparsity-only
-            result.Ax.assign(result.nz, 0);
-        else setZeroParallel(result.data());
-
-        for (size_t ti = 0; ti < numTerms(); ++ti) {
-            bool block_accel = m_blockSparsity && term(ti).supportsBlockAcceleratedHessianAssembly();
-            if (block_accel) term(ti).accumulateHessian(weight(ti), result.Ax.data(), *m_blockSparsity, projectionMask);
-            else             term(ti).accumulateHessian(weight(ti), result, projectionMask);
-        }
+        result.setZero();
+        for (size_t ti = 0; ti < numTerms(); ++ti)
+            term(ti).accumulateHessian(weight(ti), result, projectionMask);
     }
 
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override {

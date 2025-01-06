@@ -181,7 +181,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("objective", &NOT::objective)
         .def("gradient",  &NOT::gradient, py::arg("weight") = 1.0, py::arg("freshIterate") = false)
         .def("hessian",   &NOT::hessian, py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern", &NOT::hessianSparsityPattern, py::arg("val") = 0.0)
+        .def("hessianSparsityPattern", &NOT::hessianSparsityPattern)
         .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)
         .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)

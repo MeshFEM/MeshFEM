@@ -170,7 +170,7 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-    void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask = false) const override {
+    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
@@ -184,35 +184,10 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-    // Allow block-accelerated Hessian assembly to be disabled for performance comparisons.
-    bool blockAccelerateHessian = true;
-    bool supportsBlockAcceleratedHessianAssembly() const override { return blockAccelerateHessian && Assembler::SingleBlockDim; }
-
-    using BCSCMat = typename Assembler::BCSCMat;
-    // Block-accelerated Hessian assembly
-    void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask) const override {
-        const BCSCMat &Hb = BCSCMat::cast(Hb_base);
-        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian (block accelerated)");
-        if constexpr (Element::CachesDeformedQuantities) {
-            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask);
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
-        }
-        else {
-            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
-        }
-    }
-
-    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
+    NewtonHessian hessianSparsityPattern() const override {
+        return assembler().sparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
-    }
-
-    SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {
-        return blockSparsityPattern()->toScalar(val);
     }
 
     void varsUpdated() override {

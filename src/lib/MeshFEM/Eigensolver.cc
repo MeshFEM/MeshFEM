@@ -1,6 +1,7 @@
 #include "Eigensolver.hh"
-#include "MeshFEM/Solvers/CholmodFactorizer.hh"
-#include "MeshFEM/SparseMatrices.hh"
+#include <MeshFEM/Solvers/CholmodFactorizer.hh>
+#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <Spectra/SymEigsSolver.h>
 #include <Spectra/SymGEigsSolver.h>
@@ -9,12 +10,13 @@
 #include <Spectra/Util/GEigsMode.h>
 #include <memory>
 
-struct SuiteSparseMatrixProd {
+template<class SpMat>
+struct SparseMatrixProd {
     using Scalar = Real;
-    SuiteSparseMatrixProd(const SuiteSparseMatrix &A) : m_A(A) { }
+    SparseMatrixProd(const SpMat &A) : m_A(A) { }
 
-    int rows() const { return m_A.m; }
-    int cols() const { return m_A.n; }
+    int rows() const { if constexpr (std::is_same_v<SpMat, NewtonHessian>) { return m_A.varStructure().numVars(); } else { return m_A.m; } }
+    int cols() const { if constexpr (std::is_same_v<SpMat, NewtonHessian>) { return m_A.varStructure().numVars(); } else { return m_A.n; } }
     void perform_op(const Real *x_in, Real *y_out) const {
         BENCHMARK_START_TIMER("Apply matrix");
         m_A.applyRaw(x_in, y_out);
@@ -22,8 +24,10 @@ struct SuiteSparseMatrixProd {
     }
 
 private:
-    const SuiteSparseMatrix &m_A;
+    const SpMat &m_A;
 };
+
+using SuiteSparseMatrixProd = SparseMatrixProd<SuiteSparseMatrix>;
 
 struct SuiteSparseMatrixProdParallel {
     using Scalar = Real;
@@ -62,6 +66,19 @@ Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol) {
         std::cout << "Spectra unsuccessful after " << eigs.num_iterations() << " iterations" << std::endl;
         std::cout << "Using " << ((A.symmetry_mode == SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE) ? "symmetric" : "asymmetric") << " matrix" << std::endl;
     }
+    return eigs.eigenvalues()[0];
+}
+
+Real largestMagnitudeEigenvalue(const NewtonHessian &A, Real tol) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("largestMagnitudeEigenvalue");
+
+    using ProdOp = SparseMatrixProd<NewtonHessian>;
+
+    ProdOp op(A);
+    Spectra::SymEigsSolver<ProdOp> eigs(op, 1, 5);
+    eigs.init();
+    const size_t maxIters = 1000;
+    eigs.compute(Spectra::SortRule::LargestMagn, maxIters, tol);
     return eigs.eigenvalues()[0];
 }
 

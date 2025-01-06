@@ -173,6 +173,18 @@ public:
     BoundaryMesh<      TriMesh> boundary()       { return BoundaryMesh<      TriMesh>(*this); }
     BoundaryMesh<const TriMesh> boundary() const { return BoundaryMesh<const TriMesh>(*this); }
 
+    // Fast, direct access to certain connectivity information (without going through handles)
+    template<class CornerIndexContainer>
+    void getTriCorners(size_t t, CornerIndexContainer &corners) const {
+        assert(t < numTris());
+        size_t offset = 3 * t;
+        corners[0] = V[offset];
+        corners[1] = V[offset + 1];
+        corners[2] = V[offset + 2];
+    }
+
+    static int halfedgeIdxOfTri(size_t t, size_t lhi) { return 3 * t + lhi; }
+
 protected:
     ////////////////////////////////////////////////////////////////////////////
     // DataStorage is empty for TMEmptyData. Otherwise, it's a std::vector.

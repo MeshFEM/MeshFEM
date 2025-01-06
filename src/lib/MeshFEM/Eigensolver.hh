@@ -6,8 +6,13 @@
 #include <MeshFEM_export.h>
 #include <functional>
 
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
+
 MESHFEM_EXPORT
 Real largestMagnitudeEigenvalue(const SuiteSparseMatrix &A, Real tol);
+
+MESHFEM_EXPORT
+Real largestMagnitudeEigenvalue(const NewtonHessian &A, Real tol);
 
 MESHFEM_EXPORT
 Eigen::VectorXd negativeCurvatureDirection(const CholeskyFactorizerBase &Hshift_inv, const SuiteSparseMatrix *M, Real tol);

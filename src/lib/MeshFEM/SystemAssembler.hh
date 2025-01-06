@@ -23,6 +23,7 @@
 
 #include "VarStructure.hh"
 #include "BlockCSCHessian.hh"
+#include "newton_optimizer/NewtonHessian.hh"
 
 struct MESHFEM_EXPORT SystemAssemblerBase {
     using index_type = SuiteSparse_long;
@@ -96,6 +97,13 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
                     return blockVarsForElement;
                 });
     }
+
+    // Convenience wrappers to work around the fact that `BCSCMat` cannot be
+    // converted to `NewtonHessian` implicitly.
+    template<class FEMMesh_>
+    std::unique_ptr<BCSCMat> sparsityPatternForMesh(const FEMMesh_ &m) const { return NewtonHessian(blockSparsityPatternForMesh(m)); }
+    template<class... Args>
+    NewtonHessian sparsityPattern(Args &&...args) const { return NewtonHessian(blockSparsityPattern(std::forward<Args>(args)...)); }
 
     template<class ElemBlockVarsForElement>
     std::unique_ptr<BCSCMat> blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
@@ -444,6 +452,15 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         assembleHessianBlockAccelerated(Ax, blockH, m.numElements(), eval_He, [&m](size_t ei) { return m.elementNodeIndices(ei); });
     }
 
+    // Assemble NewtonHessian using block acceleration.
+    template<typename... Args>
+    void assembleHessian(NewtonHessian &NH, Args&&... args) const {
+        if (NH.isSparsityOnly()) NH.setZero(); // Allocate Ax array if necessary
+                                             // (and accumulate to existing Ax array otherwise)
+        BCSCMat &H = BCSCMat::cast(*NH.H_ss);
+        assembleHessianBlockAccelerated(H.Ax.data(), H, std::forward<Args>(args)...);
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Gradient assembly.
     ////////////////////////////////////////////////////////////////////////////
@@ -704,6 +721,8 @@ private:
     mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
     VarStructure m_vars;
 };
+
+using ScalarSystemAssembler = SystemAssembler<1>;
 
 template<class VS>
 struct SystemAssemblerForVarStructure;

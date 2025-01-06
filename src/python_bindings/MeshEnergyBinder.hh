@@ -72,7 +72,6 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
     pyME.def("setHomogeneousMaterial",      [](ME &me, RawMaterial material) { me.setHomogeneousMaterial(convertMaterial<Material>(material)); }, py::arg("material"))
         .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<RawMaterial> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(convertMaterialList<Material>(mats), materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
-        .def_readwrite("blockAccelerateHessian", &ME::blockAccelerateHessian)
         ;
 
     m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<Vars> vars, RawMaterial material) {
