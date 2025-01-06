@@ -652,9 +652,9 @@ private:
             size_t lbj = order[lbj_i];
             auto bj = blockVars[lbj];
             const size_t lbo_j = blockOffsetCalc.offset(lbj);
-            const size_t bs_j = blockOffsetCalc.blockSize(lbj);
 
             auto colScanner = blockH.columnScanner(bj);
+            const size_t bs_j = colScanner.colBlockSize();
             if constexpr (InParallel) m_lockVar(bj);
 
             for (size_t lbi_i = 0; lbi_i < lbj_i; ++lbi_i) {
@@ -663,34 +663,16 @@ private:
                 const size_t lbo_i = blockOffsetCalc.offset(lbi);
                 const size_t bs_i = blockOffsetCalc.blockSize(lbi);
 
-                auto addBlock = [&](auto block) {
-                    // Find offset in `Ax` of the block's upper-left corner.
-#if 1
-                    SuiteSparse_long loc = colScanner.advanceToBlock(bi);
-#else
-                    SuiteSparse_long loc = colScanner.findBlock(bi);
-#endif
-                    for (size_t c = 0; c < bs_j; ++c) {
-                        if constexpr (SingleBlockDim)
-                            Eigen::Map<Eigen::Matrix<Real_, VarStructure::MaxBlockDim, 1>>(Ax + loc) += block.col(c);
-                        else
-                            Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, bs_i) += block.col(c);
-
-                        loc += colScanner.stride() + c; // each subsequent column has an extra entry...
-                    }
-                };
-
-                if (lbi < lbj) addBlock(He_block(lbo_i, lbo_j, bs_i, bs_j));
-                else           addBlock(He_block(lbo_j, lbo_i, bs_i, bs_j).transpose());
+                if (lbi < lbj) colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_i, lbo_j, bs_i, bs_j));
+                else           colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_j, lbo_i, bs_i, bs_j).transpose());
             }
 
-            // Add (upper triangle of) diagonal block, starting at final entry
-            // of first column.
+            // Add (upper triangle of) diagonal block
             SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
-                loc += colScanner.stride() + c; // each subsequent column has an extra entry...
+                loc += colScanner.diagBlockColStride(c);
             }
 
             if constexpr (InParallel) m_unlockVar(bj);
