@@ -2,7 +2,7 @@
 
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
-// #include <MeshFEM/Loads/Spreaders.hh>
+#include <MeshFEM/Loads/Spreaders.hh>
 // #include <MeshFEM/Loads/Springs.hh>
 // #include <MeshFEM/Loads/ProjectedAttachmentPoint.hh>
 #include <MeshFEM/Loads/SphereFitter.hh>
@@ -43,7 +43,6 @@ struct LoadBinder {
                 }, py::arg("obj"))
              ;
 
-#if 0
         ////////////////////////////////////////////////////////////////////////
         // Spreaders
         ////////////////////////////////////////////////////////////////////////
@@ -62,7 +61,6 @@ struct LoadBinder {
                     return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
              ;
-#endif
     }
 
     template<class Object>

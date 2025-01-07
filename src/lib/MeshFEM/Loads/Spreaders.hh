@@ -63,9 +63,29 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
           m_disableHessian(disableHessian)
     {
         if (m_materialPointPositioner.m % N != 0) throw std::runtime_error("Number of rows in materialPointPositioner should be divisible by " + std::to_string(N));
+
         m_materialPointPositionerTranspose = materialPointPositioner.transpose();
+
+        m_elements.resize(m_connectivity.rows());
+        m_elementVarWeights.resize(m_connectivity.rows());
+        for (int e = 0; e < m_connectivity.rows(); ++e) {
+            int startPt = m_connectivity(e, 0);
+            int   endPt = m_connectivity(e, 1);
+            std::vector<size_t> &elemBlockVars = m_elements[e];
+            std::vector<double> &elemBlockVarWeights = m_elementVarWeights[e];
+
+            size_t numVars = m_materialPointPositionerTranspose.col_nnz(N * startPt) + m_materialPointPositionerTranspose.col_nnz(N * endPt);
+
+            elemBlockVars      .reserve(numVars);
+            elemBlockVarWeights.reserve(numVars);
+
+            for (const auto t : m_materialPointPositionerTranspose.col(N * startPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); elemBlockVarWeights.push_back( t.v); }
+            for (const auto t : m_materialPointPositionerTranspose.col(N *   endPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); elemBlockVarWeights.push_back(-t.v); }
+        }
+
         if (long(N) * connectivity.maxCoeff() >= m_materialPointPositioner.m)
             throw std::runtime_error("Edge index out of bounds");
+
         m_updateCache();
     }
 
@@ -92,8 +112,8 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool /* projectionMask */ = false) const override {
-        if (m_disableHessian) return;
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
+        if (m_disableHessian || projectionMask) return; // Hessian is negative definite...
 
         // H = sum_e P_e^T [ H_e -H_e] P_e
         //                 [-H_e  H_e]
@@ -102,54 +122,34 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
         //  and sign(ij) is 1 if i == j, 0 otherwise.
         // Note, to efficiently access rows of P_e, we must actually access the columns of P_e^T.
         struct CustomHEAD {
-            
-        };
-        for (int e = 0; e < m_connectivity.rows(); ++e) { // loop over spreaders (edges)
-            const VNd a = m_axis.row(e);
-            MNd da_de = (MNd::Identity() - a * a.transpose()) * (-m_magnitude / m_dist[e]);
-
-            // Loop over entries of H_e = da_de
-            for (size_t cb = 0; cb < N; ++cb) {
-                for (size_t ca = 0; ca < N; ++ca) {
-                    // Loop over combinations of [startEndpoint, endEndpoint]
-                    for (int i = 0; i < 2; ++i) {
-                        for (int j = 0; j < 2; ++j) {
-                            double sign = (i == j) ? weight : -weight;
-                            // Accumulate contribution of H_e(ca, cb) to the global Hessian
-                            for (const auto tb     : m_materialPointPositionerTranspose.col(N * m_connectivity(e, i) + cb)) { // loop over row of P_e
-                                size_t hint = -1;
-                                for (const auto ta : m_materialPointPositionerTranspose.col(N * m_connectivity(e, j) + ca)) { // loop over column of P_e^T
-                                    if (ta.i > tb.i) continue;
-                                    hint = H.addNZ(ta.i, tb.i, sign * ta.v * tb.v * da_de(ca, cb), hint);
-                                }
-                            }
-                        }
-                    }
-                }
+            CustomHEAD(const Spreaders &s, Real weight, int e) : evars(s.m_elements[e]), var_weights(s.m_elementVarWeights[e]) {
+                VNd a = s.m_axis.row(e);
+                H_e = weight * (MNd::Identity() - a * a.transpose()) * (-s.getMagnitude() / s.m_dist[e]);
             }
-        }
+
+            MNd block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const { return block(a, b); }
+            MNd block(size_t a, size_t b) const { return (var_weights[a / N] * var_weights[b / N]) * H_e; }
+
+            MNd H_e;
+
+            const std::vector<Real> &var_weights;
+            const std::vector<size_t> &evars;
+        };
+
+        assembler().assembleHessian(H, numSpreaders(), [&](size_t e) { return CustomHEAD(*this, weight, e); });
     }
 
     virtual NewtonHessian hessianSparsityPattern() const override {
         if (m_disableHessian) return NewtonHessian();
-
-        return assembler().sparsityPattern(numSpreaders(),
-                [&](size_t e) {
-                    int startPt = m_connectivity(e, 0);
-                    int   endPt = m_connectivity(e, 1);
-                    std::vector<size_t> elemBlockVars;
-                    elemBlockVars.reserve(m_materialPointPositionerTranspose.col_nnz(N * startPt) + m_materialPointPositionerTranspose.col_nnz(N * endPt));
-
-                    for (const auto t : m_materialPointPositionerTranspose.col(N * startPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
-                    for (const auto t : m_materialPointPositionerTranspose.col(N *   endPt)) { assert(t.i % N == 0); elemBlockVars.push_back(t.i / N); }
-
-                    return elemBlockVars;
-                });
+        return assembler().sparsityPattern(numSpreaders(), [&](size_t e) { return m_elements[e]; });
     }
 
     virtual ~Spreaders() { }
 
 private:
+    std::vector<std::vector<size_t>> m_elements;
+    std::vector<std::vector<Real>> m_elementVarWeights;
+
     SuiteSparseMatrix m_materialPointPositioner, m_materialPointPositionerTranspose;
     MX2i m_connectivity;
     Real m_magnitude;

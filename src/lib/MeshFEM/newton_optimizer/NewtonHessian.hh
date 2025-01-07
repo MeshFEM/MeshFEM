@@ -121,6 +121,19 @@ struct MESHFEM_EXPORT NewtonHessian {
         }
     }
 
+    // Since block Hessian assembly requires the presence of diagonal blocks
+    // (at least in the single-dimension case), we offer a convenience method
+    // for inserting them; this should only be needed for assembling Hessians
+    // of individual objective terms since the full objective Hessian must
+    // already have diagonal blocks for positive definiteness.
+    void insertSparsityPatternDiagonalBlocksIfNeeded() {
+        if (!H_ss || !(H_ss->missingRequiredDiagonalBlocks())) return;
+        auto copy = H_ss->clone();
+        copy->setIdentity();
+        H_ss->mergeSparsityPattern(*copy);
+        H_ss->finalize();
+    }
+
     void finalize() {
         // Rebuild index tables (e.g., after other sparsity patterns are merged into this one).
         if (H_ss) H_ss->finalize();

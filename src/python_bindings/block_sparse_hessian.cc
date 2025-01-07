@@ -46,7 +46,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
     py::class_<BlockCSCHessianBase, std::shared_ptr<BlockCSCHessianBase>>(m, "BlockCSCHessianBase")
         .def_property_readonly("Ap", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, "Offsets into Ai/Ax of the entries for each column")
         .def_property_readonly("Ai", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, "Row indices of nonzero entries")
-        .def_property_readonly("Ax", [](BlockCSCHessianBase &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, "Values of nonzero entries")
+        .def_property_readonly("Ax", [](BlockCSCHessianBase &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(),             /* owner = */ py::cast(A)); }, "Values of nonzero entries")
 
         .def("blockVarCountsAndSizes", &BlockCSCHessianBase::blockVarCountsAndSizes)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)
@@ -73,7 +73,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
-        .def_property_readonly("H_ss", [](const NH &H) { return H.H_ss.get(); }, py::return_value_policy::reference_internal)
+        .def_property_readonly("H_ss", [](const NH &H) -> const BlockCSCHessianBase * { return H.H_ss.get(); }, py::return_value_policy::reference_internal)
 
         .def_readwrite("H_sd", &NH::H_sd)
         .def_readwrite("H_dd", &NH::H_dd)

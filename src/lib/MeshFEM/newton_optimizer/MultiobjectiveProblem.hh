@@ -213,6 +213,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
 
     NewtonHessian hessian(bool projectionMask = false) const {
         NewtonHessian H(hessianSparsityPattern());
+        H.insertSparsityPatternDiagonalBlocksIfNeeded();
+        H.setZero();
         accumulateHessian(1.0, H, projectionMask);
         return H;
     }

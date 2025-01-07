@@ -374,7 +374,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     }
 
     template<typename T, size_t Size>
-    static auto argsort(const std::array<T, Size> &blockVars) {
+    static auto argsort(const std::array<T, Size> &blockVars) { // For static element sizes
         std::array<size_t, Size> order;
         for (size_t i = 0; i < Size; ++i) { order[i] = i; }
         StaticTimSort<Size> timBoseNelsonSort;
@@ -383,7 +383,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     }
 
     template<size_t MinSize, size_t MaxSize>
-    static auto argsort(const ElementBlockVarsWithSizeRange<MinSize, MaxSize> &blockVars) {
+    static auto argsort(const ElementBlockVarsWithSizeRange<MinSize, MaxSize> &blockVars) { // For "partially dynamic" element sizes
         ElementBlockVarsWithSizeRange<MinSize, MaxSize> order;
         order.resize(blockVars.size());
         for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
@@ -391,8 +391,12 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         return order;
     }
 
-    // TODO: version for fully dynamic element sizes that uses std::sort
-    //      std::sort(order.begin(), order.end(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
+    static auto argsort(const std::vector<size_t> &blockVars) { // For fully dynamic element sizes
+        std::vector<size_t> order(blockVars.size());
+        for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
+        std::sort(order.begin(), order.end(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
+        return order;
+    }
 
     template<class SPMat, class Mesh, class PEHEval>
     void assembleBlockHessian(SPMat &H, const Mesh &m, const PEHEval &eval_He) const {
@@ -456,7 +460,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     template<typename... Args>
     void assembleHessian(NewtonHessian &NH, Args&&... args) const {
         if (NH.isSparsityOnly()) NH.setZero(); // Allocate Ax array if necessary
-                                             // (and accumulate to existing Ax array otherwise)
+                                               // (and accumulate to existing Ax array otherwise)
         BCSCMat &H = BCSCMat::cast(*NH.H_ss);
         assembleHessianBlockAccelerated(H.Ax.data(), H, std::forward<Args>(args)...);
     }

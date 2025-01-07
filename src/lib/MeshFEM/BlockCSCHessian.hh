@@ -67,6 +67,7 @@ struct BlockToScalarUniformBlockSize {
         return N * (nentries - 1) + 1;
     }
 
+    // WARNING: assumes all diagonal blocks are present!
     _Index scalarOffsetForColumn(_Index bj) const {
         constexpr _Index N = VarStructure::MaxBlockDim;
         return N * N * derived().Ap[bj] - bj * (N * (N - 1)) / 2;
@@ -472,9 +473,18 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(double val) { Ax.assign(scalarNNZ(), val); }
     void setZero() {
-        if (Ax.size() != scalarNNZ()) Ax.assign(scalarNNZ(), 0.0);
+        if (Ax.size() != scalarNNZ()) {
+            // Since we're allocating the storage for this matrix, it looks like
+            // the user is intending to run assembly on it.
+            // Verify that this will be supported...
+            assertSupportsAssembly();
+            Ax.assign(scalarNNZ(), 0.0);
+        }
         else setZeroParallel(data());
     }
+
+    virtual void assertSupportsAssembly() const = 0;
+    virtual bool missingRequiredDiagonalBlocks() const = 0;
 
     virtual SuiteSparseMatrix toScalar() const = 0;
 
@@ -536,8 +546,42 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
     }
 
     virtual size_t numScalarCols() const override { return m_vars.numSparseVars(); }
-    virtual size_t scalarNNZ()     const override { return this->scalarOffsetForColumn(n); }
-    virtual Real trace()           const override {
+
+    size_t numDiagonalBlocks() const {
+        size_t numBlocks = Ai.size();
+        size_t result = 0;
+        for (_Index j = 0; j < n; ++j) {
+            if (col_nnz(j) == 0) continue;
+            if (Ai[Ap[j + 1] - 1] == j) ++result;
+        }
+        return result;
+    }
+
+    virtual bool missingRequiredDiagonalBlocks() const override { return VarStructure::SingleBlockDim && (numDiagonalBlocks() < size_t(n)); }
+
+    virtual void assertSupportsAssembly() const override {
+        // In the uniform-block-size case, we must have all diagonal blocks
+        // present or the offsets computed will be incorrect.
+        if (missingRequiredDiagonalBlocks())
+            throw std::runtime_error("BlockCSCHessian: missing diagonal blocks in non-sparsity-only Hessian that is being prepared for assembly!");
+    }
+
+    virtual size_t scalarNNZ() const override {
+        if constexpr (VarStructure::SingleBlockDim) {
+            // Work around problem where `scalarOffsetForColumn` is broken when
+            // diagonal blocks are missing... (not that we claim to fully
+            // support this case)
+            static constexpr size_t N = VarStructure::MaxBlockDim;
+
+            size_t numBlocks = Ai.size();
+            size_t numDiagBlocks = numDiagonalBlocks();
+            if (numDiagBlocks < size_t(n)) std::cout << "WARNING: missing diagonal blocks!" << std::endl;
+            return numBlocks * N * N - numDiagBlocks * (N * (N - 1)) / 2;
+        }
+        return this->scalarOffsetForColumn(n);
+    }
+
+    virtual Real trace() const override {
         Real result = 0;
         for (_Index bj = 0; bj < n; ++bj) {
             const _Index bsj = m_vars.blockSize(bj);
