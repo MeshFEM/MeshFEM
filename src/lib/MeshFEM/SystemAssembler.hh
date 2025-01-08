@@ -56,6 +56,13 @@ struct MESHFEM_EXPORT SystemAssemblerBase {
         return m_blockSparsityPatternDynamicImpl(numElements, blockSize, elementGetter);
     }
 
+    // TODO: dynamic-sized version of Hessian assembly.
+    struct DynamicHessianElementAssemblyData {
+        virtual Eigen::Map<const Eigen::MatrixXd> block(size_t a, size_t b) const = 0;
+        std::vector<size_t> blockVars;
+        virtual ~DynamicHessianElementAssemblyData() = default;
+    };
+
 private:
     virtual std::unique_ptr<BlockCSCHessianBase> m_blockSparsityPatternDynamicImpl(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const = 0;
 };

@@ -3,8 +3,8 @@
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
-// #include <MeshFEM/Loads/Springs.hh>
-// #include <MeshFEM/Loads/ProjectedAttachmentPoint.hh>
+#include <MeshFEM/Loads/Springs.hh>
+#include <MeshFEM/Loads/ProjectedAttachmentPoint.hh>
 #include <MeshFEM/Loads/SphereFitter.hh>
 #include <MeshFEM/Loads/CircumcenterBarrier.hh>
 #include <MeshFEM/Loads/Traction.hh>
@@ -127,7 +127,6 @@ struct LoadBinder {
     }
 };
 
-#if 0
 using APC = Loads::AttachmentPointCoordinate<double>;
 template<class Springs>
 auto bindSprings(py::module &m, const std::string name) {
@@ -202,7 +201,6 @@ void bindProjectedSprings(py::module &m, py::module &detail_module) {
           }, py::arg("obj"), py::arg("blockVars"), py::arg("closestPointProjector"), py::arg("stiffness") = 1.0)
      ;
 }
-#endif
 
 PYBIND11_MODULE(loads, m)
 {
@@ -219,7 +217,6 @@ PYBIND11_MODULE(loads, m)
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());
 
-#if 0
     py::class_<APC>(m, "AttachmentPointCoordinate")
         .def(py::init<Eigen::Ref<const typename APC::VXi>, Eigen::Ref<const typename APC::VXd>>(), py::arg("varIndices"), py::arg("coefficients"), "Material attachment point coordinate")
         .def(py::init<typename APC::Real                                                      >(), py::arg("coordinate"),                          "Fixed anchor point coordinate")
@@ -265,6 +262,5 @@ PYBIND11_MODULE(loads, m)
 
     bindProjectedSprings<2>(m, detail_module);
     bindProjectedSprings<3>(m, detail_module);
-#endif
 }
 

@@ -29,23 +29,11 @@
 #include "VarStructure.hh"
 #include <type_traits>
 
-template<class VarStructure, bool ContiguousBlocks = false>
-struct BlockCSCHessian;
-
 namespace detail {
 
 // Traits class granting the policy classes access to VarStructure and _Index.
 template<class BCSCH>
 struct BlockCSCHTraits;
-
-template<class _VarStructure, bool _ContiguousBlocks>
-struct BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks>> {
-    using VarStructure = _VarStructure;
-    using Index        = SuiteSparse_long;
-    using Real         = double;
-    using IdxVector    = std::vector<Index>;
-    static constexpr bool ContiguousBlocks = _ContiguousBlocks;
-};
 
 // Fast, constant-space/time conversions from block indices to scalar locations/strides in Ax.
 template<class Derived>
@@ -372,7 +360,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 #if 0
     Index advanceToBlock(Index bi) { return m_H.locForBlock(bi, m_bj); }
 #else
-    Index advanceToBlock(Index bi) {
+    Index advanceToBlock(size_t bi) {
         // Linear scan seems faster than binary search...
         size_t curr = m_H.Ai[m_bloc];
         while (curr < bi) {
@@ -444,6 +432,18 @@ template<class Derived> using BlockToScalarPolicyLocLookup            = detail::
 template<class Derived> using BlockToScalarPolicyTypeOffsetsPerColumn = detail::BlockToScalarWithConditionalFastPath<Derived, detail::BlockToScalarPolicyTypeOffsetsPerColumn>;
 template<class Derived> using BlockToScalarPolicyDefault              = BlockToScalarPolicyTypeOffsetsPerColumn<Derived>;
 
+template<class VarStructure, bool ContiguousBlocks = false, template<class> class BlockToScalarPolicy = BlockToScalarPolicyDefault>
+struct BlockCSCHessian;
+
+template<class _VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
+struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks, BlockToScalarPolicy>> {
+    using VarStructure = _VarStructure;
+    using Index        = SuiteSparse_long;
+    using Real         = double;
+    using IdxVector    = std::vector<Index>;
+    static constexpr bool ContiguousBlocks = _ContiguousBlocks;
+};
+
 struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>> {
     using CSCMat = CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>>;
 
@@ -496,17 +496,18 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     virtual void applyRaw(const double *x, double *result) const = 0;
 
-    // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` implementation.
+    // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` and `addNZBlock` implementations.
     virtual void addNZScalar(size_t vi, size_t vj, double val) = 0;
+    virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) = 0;
 
     virtual const OptimizationVarStructureBase   &vars() const = 0;
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
 };
 
-template<class VarStructure, bool _ContiguousBlocks>
-struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockCSCHessian<VarStructure>>,
-                                        public BlockCSCHessianBase
+template<class VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
+struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<BlockCSCHessian<VarStructure, _ContiguousBlocks, BlockToScalarPolicy>>,
+                                              public BlockCSCHessianBase
 {
     using _Index = SuiteSparse_long;
     using _Real = double;
@@ -705,20 +706,57 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
         }
     }
 
-    void addNZScalar(size_t vi, size_t vj, _Real val) override {
+    _Index findScalarLoc(size_t vi, size_t vj) const {
         size_t bi = m_vars.blockContainingVar(vi),
                bj = m_vars.blockContainingVar(vj);
 
         size_t c_i = vi - m_vars.offsetForBlock(bi),
                c_j = vj - m_vars.offsetForBlock(bj);
 
-        // Set local entry (c_i, c_j) of the block at (bi, bj)
+        // Locate local entry (c_i, c_j) of the block at (bi, bj)
         // whose upper-left corner is at `locForBlock(bi, bj)`.
-        _Index stride = this->scalarColStride(bj);
-        _Index loc = this->locForBlock(bi, bj)
-                   + stride * c_j + (c_j * (c_j + 1)) / 2 // Advance to local column c_j
-                   + c_i;                                 // Move down to row c_i
-        Ax[loc] += val;
+        _Index loc = this->locForBlock(bi, bj); // upper-left corner
+        if constexpr (ContiguousBlocks) {
+            size_t bsi = m_vars.blockSize(bi);
+            loc += bsi * c_j + c_i;
+        }
+        else {
+           _Index stride = this->scalarColStride(bj);
+           loc += stride * c_j + ((c_j - 1) * c_j) / 2 // Advance to local column c_j
+               +  c_i;                                 // Move down to row c_i
+        }
+
+        return loc;
+    }
+
+    void addNZScalar(size_t vi, size_t vj, _Real val) override {
+        Ax[findScalarLoc(vi, vj)] += val;
+    }
+
+    virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) override {
+        _Index loc = findScalarLoc(vi, vj); // upper-left corner of destination for `block`
+        size_t bi = m_vars.blockContainingVar(vi),
+               bj = m_vars.blockContainingVar(vj);
+        if (vi == vj) {
+            // Diagonal case
+            for (int c_j = 0; c_j < block.cols(); ++c_j) {
+                Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + loc, c_j + 1) += block.col(c_j).topRows(c_j + 1);
+                if constexpr (ContiguousBlocks)
+                    loc += m_vars.blockSize(m_vars.blockContainingVar(vi));
+                else
+                    loc += this->scalarColStride(bj) + c_j;
+            }
+        }
+        else {
+            // Upper-triangle case
+            for (int c_j = 0; c_j < block.cols(); ++c_j) {
+                Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + loc, block.rows()) += block.col(c_j);
+                if constexpr (ContiguousBlocks)
+                    loc += m_vars.blockSize(m_vars.blockContainingVar(vi));
+                else
+                    loc += this->scalarColStride(bj) + c_j;
+            }
+        }
     }
 
     std::unique_ptr<BlockCSCHessianBase> clone() const override;

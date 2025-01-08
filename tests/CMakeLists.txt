@@ -20,6 +20,7 @@ add_executable(unit_tests
     test_edensity_adaptors.cc
     test_edensities.cc
     test_field_sampler.cc
+    test_block_csc_hessian.cc
     )
 
 target_link_libraries(unit_tests PUBLIC
