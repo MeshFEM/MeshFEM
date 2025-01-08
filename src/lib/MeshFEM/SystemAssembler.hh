@@ -697,10 +697,12 @@ private:
                 [this, blockSize, &elementGetter](size_t ei) {
                     std::vector<size_t> elem = elementGetter(ei);
                     for (size_t i = 0; i < elem.size(); ++i) {
-                        size_t vb_i = elem[i];
-                        size_t v = m_vars.blockContainingVar(vb_i * blockSize);
+                        size_t vs = blockSize * elem[i]; // Scalar location of the start of the caller's block
+                        size_t v = m_vars.blockContainingVar(vs);
                         auto [gvar, bs] = m_vars.blockInfo(v);
-                        if (gvar > vb_i || vb_i + blockSize > gvar + bs) throw std::runtime_error("An element's block variable does not fit a single block of our VarStructure");
+                        // Verify that the block the caller wants to insert
+                        // fits inside block `v` of our VarStructure.
+                        if (vs < gvar || vs + blockSize > gvar + bs) throw std::runtime_error("An element's block variable does not fit a single block of our VarStructure");
                         elem[i] = v;
                     }
                     return elem;
