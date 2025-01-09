@@ -151,7 +151,13 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override {
         const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
-        m_factorizeSymbolicImpl(cholmod_sparse_view(*A_reduced));
+        auto A_cholmod = cholmod_sparse_view(*A_reduced);
+        // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
+        // (even though the Nested dissection algorithm should not be
+        // looking at its entries...)
+        if (A_reduced->isSparsityOnly())
+            A_cholmod.x = const_cast<double *>((const double *) A_reduced->Ai.data());
+        m_factorizeSymbolicImpl(A_cholmod);
     }
 
     // (Re)compute the numeric factorization, reusing the symbolic factorization

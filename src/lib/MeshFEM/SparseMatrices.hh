@@ -877,6 +877,8 @@ struct CSCMatrix {
         Ax.assign(nz, val);
     }
 
+    bool isSparsityOnly() const { return Ax.size() == 0; }
+
     // Overwrite the numerical values to zero, preserving the sparsity pattern.
     // If this is a sparsity-only matrix, upgrade it to an ordinary one.
     template<bool multithreaded = true> void setZero() {

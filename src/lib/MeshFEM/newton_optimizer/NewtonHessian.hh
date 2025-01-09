@@ -142,7 +142,7 @@ struct MESHFEM_EXPORT NewtonHessian {
     // Throw exceptions if the block sizes are incompatible
     void validate() const;
 
-    bool isSparsityOnly() const { return H_ss && H_ss->Ax.size() == 0; }
+    bool isSparsityOnly() const { return H_ss && H_ss->isSparsityOnly(); }
 
     // Prepares this matrix for Hessian assembly
     // (clearing out any old data, and upgrading to an ordinary, value-backed
