@@ -33,6 +33,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     m.doc() = "Wrapper for Newton optimizer's types";
 
     py::module::import("sparse_matrices");
+    py::module::import("block_sparse_hessian");
 
     ////////////////////////////////////////////////////////////////////////////////
     // "Controllers" for customizing solver behavior

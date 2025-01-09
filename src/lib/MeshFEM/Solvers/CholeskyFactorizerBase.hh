@@ -4,9 +4,11 @@
 #include <stdexcept>
 #include <cassert>
 #include <memory>
+#include <functional>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/BlockCSCHessian.hh>
 #include <MeshFEM/unused.hh>
 
 enum class CholeskyProvider {
@@ -75,6 +77,7 @@ struct CholeskyFactorizerBase {
     virtual void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) = 0;
     void factorizeSymbolic(const SuiteSparseMatrix &mat) { factorizeSymbolic(mat, std::vector<size_t>()); }
 
+
     // (Re)compute the numeric factorization, reusing the symbolic factorization
     // if it exists; otherwise a symbolic factorization is computed.
     // For symbolic factorization reuse to work, `mat` must have the same
@@ -91,6 +94,66 @@ struct CholeskyFactorizerBase {
 
     // (Re)compute both symbolic and numeric factorizations
     virtual void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) = 0;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Factorization routines taking a `BlockCSCHessian` instead of
+    // `SuiteSparseMatrix`. The default implementation of thes is to
+    // convert to a `SuiteSparseMatrix` and call the routines above.
+    // However, if the subclass can exploit block structure (like
+    // BlockCatamari), then it overrides these methods.
+    ////////////////////////////////////////////////////////////////////////////
+    // For factorizers that do not expect a BlockCSCHessian, we convert/expand to a SuiteSparseMatrix.
+    virtual void factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+        if (mat.isScalar())
+            factorizeSymbolic((const SuiteSparseMatrix &)(mat), pinnedVars);
+        else {
+            m_scalarHessian = mat.toScalar();
+            factorizeSymbolic(m_scalarHessian, pinnedVars);
+        }
+    }
+
+    virtual void factorizeSymbolic(const BlockCSCHessianBase &mat) {
+        if (mat.isScalar())
+            factorizeSymbolic((const SuiteSparseMatrix &)(mat));
+        else {
+            m_scalarHessian = mat.toScalar();
+            factorizeSymbolic(m_scalarHessian);
+        }
+    }
+
+    // Hack to avoid copying BlockCSCHessianBase::Ax into m_scalarHessian::Ax.
+    // We swap the two arrays before the factorization and then swap them
+    // back afterwards (even if an exception is thrown).
+    struct DataSwapper {
+        DataSwapper(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B)
+            : m_A(const_cast<SuiteSparseMatrix &>(A)),
+              m_B(const_cast<SuiteSparseMatrix &>(B)) {
+            std::swap(m_A.Ax, m_B.Ax);
+        }
+        ~DataSwapper() { std::swap(m_A.Ax, m_B.Ax); }
+    private:
+        SuiteSparseMatrix &m_A, &m_B;
+    };
+
+    void guardedFactorizationCall(const BlockCSCHessianBase &mat, const std::function<void(const SuiteSparseMatrix &)> &f) const {
+        if (mat.isScalar())
+            f((const SuiteSparseMatrix &)(mat));
+        else {
+            DataSwapper swapper(m_scalarHessian, mat);
+            f(m_scalarHessian);
+        }
+    }
+
+    virtual void factorizeNumeric(const BlockCSCHessianBase &mat, bool isInTryCatch=false) {
+        guardedFactorizationCall(mat, [&](const SuiteSparseMatrix &A) { factorizeNumeric(A, isInTryCatch); });
+    }
+    virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) {
+        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, B, isInTryCatch); });
+    }
+    virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) {
+        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, isInTryCatch); });
+    }
+
     virtual void clearFactors() = 0;
 
     virtual void stashFactorization() = 0;
@@ -264,7 +327,9 @@ protected:
     mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
     std::unique_ptr<SuiteSparseMatrix> m_Areduced;
     using VXd = VecX_T<Real>;
+
     mutable VXd m_solveScratch;
+    mutable SuiteSparseMatrix m_scalarHessian;
 
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization
@@ -292,10 +357,13 @@ protected:
         // Inject values of `A` into row-col-removed matrix
         if (!hasFixedVars()) return &mat;
         if (!m_Areduced)  throw std::logic_error("Variables were not fixed");
+        if (m_Areduced->isSparsityOnly())
+            m_Areduced->setZero();
 
         auto &A_reduced = *m_Areduced;
-        for (SuiteSparse_long ii = 0; ii < A_reduced.nz; ++ii)
+        parallel_for_range(A_reduced.nz, [&](size_t ii) {
             A_reduced.Ax[ii] = mat.Ax[m_entryForReducedEntry[ii]];
+        });
         return m_Areduced.get();
     }
 

@@ -48,9 +48,15 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def_property_readonly("Ai", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, "Row indices of nonzero entries")
         .def_property_readonly("Ax", [](BlockCSCHessianBase &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(),             /* owner = */ py::cast(A)); }, "Values of nonzero entries")
 
-        .def("blockVarCountsAndSizes", &BlockCSCHessianBase::blockVarCountsAndSizes)
+        .def("blockVarSizesAndCounts", &BlockCSCHessianBase::blockVarSizesAndCounts)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)
         .def("numScalarRows", &BlockCSCHessianBase::numScalarRows)
+
+        .def("minBlockSize",     &BlockCSCHessianBase::minBlockSize)
+        .def("maxBlockSize",     &BlockCSCHessianBase::maxBlockSize)
+        .def("isScalar",         &BlockCSCHessianBase::isScalar)
+        .def("uniformBlockSize", &BlockCSCHessianBase::uniformBlockSize)
+        .def("blockSizeGCD",     &BlockCSCHessianBase::blockSizeGCD)
 
         .def("trace", &BlockCSCHessianBase::trace)
 

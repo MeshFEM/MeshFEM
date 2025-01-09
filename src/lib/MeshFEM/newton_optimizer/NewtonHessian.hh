@@ -266,7 +266,6 @@ private:
     Real hessianTrace, hessianL2Norm;
 };
 
-
 // A factorization type for solving systems involving a `NewtonHessian`.
 struct MESHFEM_EXPORT NewtonHessianFactorization {
     NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p, const NewtonOptimizerOptions &options);
@@ -306,8 +305,6 @@ private:
         m_cachedHessianL2Norm.reset();
         m_fixedVarsCouldHaveChanged = true;
     }
-
-    mutable SuiteSparseMatrix m_scalarHessian; // TODO: remove when done!
 
     const NewtonOptimizerOptions &m_options; // Owned by our owner (`NewtonOptimizer`).
     std::shared_ptr<NewtonProblem> m_problem;

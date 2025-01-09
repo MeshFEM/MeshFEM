@@ -10,6 +10,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(sparse_matrices, m) {
     m.doc() = "Sparse Representations and Solvers";
+
     py::module detail_module = m.def_submodule("detail");
     // Bind TripletMatrix (with getSparseCSC format, and SPSDSystem)
     // Enough to convert to scipy and solve.
@@ -175,7 +176,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("getFixedVars", &CFB::getFixedVars)
         .def("factorizeSymbolic", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
                 c.factorizeSymbolic(mat, pinnedVars); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>())
-        .def("factorizeNumeric", &CFB::factorizeNumeric, py::arg("mat"), py::arg("isInTryCatch") = false)
+        .def("factorizeNumeric", [](CFB &c, const SuiteSparseMatrix &mat, bool isInTryCatch) { c.factorizeNumeric(mat, isInTryCatch); }, py::arg("mat"), py::arg("isInTryCatch") = false)
         .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma                            , bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma   , isInTryCatch); }, py::arg("mat"), py::arg("sigma")              , py::arg("isInTryCatch") = false)
         .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma, const SuiteSparseMatrix &B, bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma, B, isInTryCatch); }, py::arg("mat"), py::arg("sigma"), py::arg("B"), py::arg("isInTryCatch") = false)
         .def("factorize", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool isInTryCatch) {

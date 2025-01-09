@@ -451,10 +451,22 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     virtual ~BlockCSCHessianBase();
 
-    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const = 0;
+    virtual std::vector<std::pair<size_t, size_t>> blockVarSizesAndCounts() const = 0;
+    std::vector<size_t> blockSizes() const {
+        std::vector<size_t> result;
+        for (const auto &p : blockVarSizesAndCounts())
+            result.push_back(p.first);
+        return result;
+    }
+
+    size_t   minBlockSize() const { auto bs = blockSizes(); return *std::min_element(bs.begin(), bs.end()); }
+    size_t   maxBlockSize() const { auto bs = blockSizes(); return *std::max_element(bs.begin(), bs.end()); }
+    bool         isScalar() const { return maxBlockSize() == 1; }
+    size_t   blockSizeGCD() const { auto bs = blockSizes(); return std::accumulate(bs.begin(), bs.end(), 0, std::gcd<size_t, size_t>); }
+    bool uniformBlockSize() const { return minBlockSize() == maxBlockSize(); }
 
     void mergeSparsityPattern(const BlockCSCHessianBase &other) {
-        if (this->blockVarCountsAndSizes() != other.blockVarCountsAndSizes())
+        if (this->blockVarSizesAndCounts() != other.blockVarSizesAndCounts())
             throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable sizes/counts");
         const CSCMat &other_csc = other;
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
@@ -538,7 +550,8 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     // methods below are used on variable-block-size matrices!
     void finalize() override { this->m_buildIndexTables(); }
 
-    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const override {
+    // Query block variable structure.
+    virtual std::vector<std::pair<size_t, size_t>> blockVarSizesAndCounts() const override {
         std::vector<std::pair<size_t, size_t>> result;
         for (size_t i = 0; i < VarStructure::NumBlockTypes; ++i)
             result.emplace_back(VarStructure::BlockDimensions[i], m_vars.numBlocksOfType(i));

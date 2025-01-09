@@ -14,8 +14,7 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     m_problem->updateSparsityPattern();
     const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(m_problem->fixedVars());
     if (fixedVarsChanged || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
-        m_scalarHessian = m_problem->hessianSparsityPattern().toScalar(); // TODO: update!
-        m_solver->factorizeSymbolic(m_scalarHessian, m_problem->fixedVars());
+        m_solver->factorizeSymbolic(*(m_problem->hessianSparsityPattern().H_ss), m_problem->fixedVars());
         m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
     }
     m_fixedVarsCouldHaveChanged = false; // Suppress further checks until the next optimization run.
@@ -64,8 +63,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     const auto &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
     const SuiteSparseMatrix *M = nullptr;
 
-    auto &H = m_scalarHessian;
-    m_scalarHessian.Ax = H_nh.H_ss->Ax; // TODO: remove!
+    auto &H = *(H_nh.H_ss);
 
     // OptionallyModifiedHessian H(m_problem->hessian(hProjCtr.shouldUseProjection())), M;
     // if (ws.size()) {
