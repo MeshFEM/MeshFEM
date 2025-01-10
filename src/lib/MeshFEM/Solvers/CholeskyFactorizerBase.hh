@@ -77,7 +77,6 @@ struct CholeskyFactorizerBase {
     virtual void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) = 0;
     void factorizeSymbolic(const SuiteSparseMatrix &mat) { factorizeSymbolic(mat, std::vector<size_t>()); }
 
-
     // (Re)compute the numeric factorization, reusing the symbolic factorization
     // if it exists; otherwise a symbolic factorization is computed.
     // For symbolic factorization reuse to work, `mat` must have the same

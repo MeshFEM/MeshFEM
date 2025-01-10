@@ -23,7 +23,7 @@ class EmbeddedMesh:
     mesh `m` specified by optimization variables `embeddingVars`
     """
     def __init__(self, m, embeddingVars, embeddingDimension = None):
-        self.dimension = m.embeddingDimension if embeddingDimension is None else embeddingDimension
+        self.dimension = embeddingVars.numVars() // m.numNodes() if embeddingDimension is None else embeddingDimension
         self.m_mesh = m
         self.evars = embeddingVars
         self.numVertices = m.numVertices()

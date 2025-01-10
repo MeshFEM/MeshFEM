@@ -100,14 +100,15 @@ struct MESHFEM_EXPORT NewtonHessian {
     NewtonHessian(NewtonHessian &&other) noexcept { swap(*this, other); }
 
     // Storage of dense blocks induced by "global" variables.
-    Eigen::MatrixXd H_sd, H_dd;
+    using MXd = Eigen::MatrixXd;
+    MXd H_sd, H_dd;
     // Storage of the low-rank term:
     //  [V_s; V_d] [V_s; V_d]^T
-    Eigen::MatrixXd V_s, V_d;
+    MXd V_s, V_d;
 
     // Storage of equality constraints
     //  [C_s; C_d] [x_s; x_d]
-    Eigen::MatrixXd C_s, C_d;
+    MXd C_s, C_d;
 
     const OptimizationVarStructureBase &varStructure() const {
         if (!H_ss) throw std::runtime_error("Hessian not initialized");
@@ -142,6 +143,7 @@ struct MESHFEM_EXPORT NewtonHessian {
     // Throw exceptions if the block sizes are incompatible
     void validate() const;
 
+    // Whether there are numerical values stored for this matrix, or just a sparsity pattern.
     bool isSparsityOnly() const { return H_ss && H_ss->isSparsityOnly(); }
 
     // Prepares this matrix for Hessian assembly
@@ -267,6 +269,13 @@ private:
 };
 
 // A factorization type for solving systems involving a `NewtonHessian`.
+// Factorizes the block matrix:
+//      [H_ss B]
+//      [B^T  D]
+//      where B = [H_sd V_s]
+//      and   D = [H_dd     V_d]
+//                [V_d^T   -I_r]
+// using block Gaussian elimination
 struct MESHFEM_EXPORT NewtonHessianFactorization {
     NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p, const NewtonOptimizerOptions &options);
 
@@ -275,11 +284,8 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
 
     Real tauScale() const;
 
-    void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
-        if (!exists()) throw std::runtime_error("Factorization doesn't exist.");
-        solver().solve(b, x);
-        // TODO: dense terms.
-    }
+    Eigen::MatrixXd schurComplement() const;
+    void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const;
 
     // The symbolic factorization must be updated if either the sparsity pattern
     // changes or the fixed variables set changes.
@@ -298,8 +304,17 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
 
     bool exists() const { return m_solver && m_solver->hasFactorization(); }
 
+    Eigen::MatrixXd B, H_ss_inv_B;
+    // The Schur complement of the sparse part `H_ss` (as of the last call to `update`)
+    Eigen::MatrixXd S;
+    Eigen::MatrixXd S_Q;      // Eigenvectors of the Schur complement
+    Eigen::VectorXd S_lambda; // Eigenvalues  of the Schur complement (projected to be positive)
+
 private:
     friend struct NewtonOptimizer;
+
+    Real m_updateSparseFactorization(const BlockCSCHessianBase &H, const WorkingSet &ws, Real &beta, const Real betaMin);
+    bool m_updateDenseFactorization(const NewtonHessian &H);
 
     void m_beginningOptimization() {
         m_cachedHessianL2Norm.reset();

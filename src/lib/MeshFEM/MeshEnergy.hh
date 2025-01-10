@@ -3,8 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //
-//  Generic infrastructure for defining elements whose local variables are
-//  attached to entities of a mesh.
+//  Generic infrastructure for defining energies constructed as a sum over
+//  elements whose local variables are attached to entities of a mesh.
 //
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis

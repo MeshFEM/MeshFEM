@@ -42,6 +42,38 @@ Real CachedHessianL2Norm::get(const NewtonProblem &p) {
 }
 
 Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const Real betaMin) {
+    updateSymbolicFactorization(); // Update the symbolic factorization if sparsity pattern has changed.
+
+    auto &hUpdtCtr = m_options.getHessianUpdateController();
+    auto &hProjCtr = m_options.getHessianProjectionController();
+    const auto &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
+
+    H_nh.validate(); // Make sure everything in H_nh is of the expected size.
+
+    if (H_nh.C_s.size() + H_nh.C_d.size() > 0) {
+        throw std::runtime_error("KKT unimplemented");
+    }
+
+    Real tau = 0;
+    if (H_nh.varStructure().numSparseVars() > 0) {
+        if (H_nh.H_ss == nullptr) throw std::runtime_error("No sparse block was passed.");
+        tau = m_updateSparseFactorization(*(H_nh.H_ss), ws, beta, betaMin);
+    }
+
+    // Notify controllers that we have factorized a new Hessian
+    // and whether or not it was indefinite.
+    bool isIndefinite = tau != 0.0;
+    hProjCtr.notifyDefiniteness(isIndefinite);
+    hUpdtCtr.newHessian(isIndefinite);
+
+    if ((H_nh.varStructure().numDenseVars()) > 0 || H_nh.low_rank_rank() > 0) {
+        m_updateDenseFactorization(H_nh);
+    }
+
+    return tau;
+}
+
+Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessianBase &H, const WorkingSet &ws, Real &beta, const Real betaMin) {
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
     // Nocedal and Wright 2006, pp 51.
@@ -56,14 +88,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     auto &s = solver();
     s.setSuppressWarnings(!m_options.verboseNonPosDef);
 
-    updateSymbolicFactorization(); // Update the symbolic factorization if sparsity pattern has changed.
-
-    auto &hUpdtCtr = m_options.getHessianUpdateController();
-    auto &hProjCtr = m_options.getHessianProjectionController();
-    const auto &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
     const SuiteSparseMatrix *M = nullptr;
-
-    auto &H = *(H_nh.H_ss);
 
     // OptionallyModifiedHessian H(m_problem->hessian(hProjCtr.shouldUseProjection())), M;
     // if (ws.size()) {
@@ -122,23 +147,56 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
         throw std::runtime_error("Unimplemented (LEQ constraints are disabled during refactoring)");
     }
 
-    // Notify controllers that we have factorized a new Hessian
-    // and whether or not it was indefinite.
-    bool isIndefinite = tau != 0.0;
-    hProjCtr.notifyDefiniteness(isIndefinite);
-    hUpdtCtr.newHessian(isIndefinite);
-
     return tau;
 }
 
-void NewtonHessian::validate() const {
-    if (!H_ss) throw std::runtime_error("H_ss is null");
 
+// Compute the "dense part" of the factorization of:
+//  [H_ss B]
+//  [B^T  D]
+// where B = [H_sd V_s]
+// and   D = [H_dd     V_d]
+//           [V_d^T   -I_r]
+// The Cholesky sparse factorization of (a potentially modified) `H_ss` has
+// already been computed in `solver`.
+bool NewtonHessianFactorization::m_updateDenseFactorization(const NewtonHessian &H) {
+    H.validate();
+
+    size_t nsv = H.varStructure().numSparseVars();
+    size_t ndv = H.varStructure().numDenseVars();
+    size_t r   = H.low_rank_rank();
+    size_t numDenseCols = nsv + r;
+    assert(numDenseCols > 0 && "m_updateDenseFactorization should not have been called!");
+
+    Eigen::MatrixXd D(numDenseCols, numDenseCols);
+    B.resize(nsv, ndv + r);
+
+    B << H.H_sd, H.V_s;
+    D << H.H_dd, H.V_d,
+         H.V_d.transpose(), -Eigen::MatrixXd::Identity(r, r);
+
+    solver().solveMultiRHS(B, H_ss_inv_B);
+
+    S = D - B.transpose() * H_ss_inv_B;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigs(S);
+    S_Q = eigs.eigenvectors();
+    // TODO: enable customization of the eigenvalue modification strategy!
+    S_lambda = eigs.eigenvalues().cwiseAbs().cwiseMax(1e-10);
+
+    return (eigs.eigenvalues().array() < 0).any();
+}
+
+void NewtonHessian::validate() const {
     const size_t nsv = varStructure().numSparseVars();
     const size_t ndv = varStructure().numDenseVars();
 
-    if (nsv != H_ss->numScalarCols()) throw std::runtime_error("H_ss has the wrong number of columns");
-    if (nsv != H_ss->numScalarRows()) throw std::runtime_error("H_ss is not square");
+    if (nsv > 0) {
+        if (!H_ss) throw std::runtime_error("H_ss is null");
+
+        if (nsv != H_ss->numScalarCols()) throw std::runtime_error("H_ss has the wrong number of columns");
+        if (nsv != H_ss->numScalarRows()) throw std::runtime_error("H_ss is not square");
+    }
 
     if ((ndv > 0) && (nsv > 0)) {
         if (nsv != size_t(H_sd.rows())) throw std::runtime_error("H_sd has the wrong number of rows");
@@ -195,4 +253,26 @@ void NewtonHessian::applyRaw(const double *x_ptr, double *result_ptr) const {
         vs.sparseVars(result) += V_s * Vt_x;
         vs. denseVars(result) += V_d * Vt_x;
     }
+}
+
+// Solve the system:
+//    [H_ss B][x] = [b_s]
+//    [B^T  D][y] = [b_d; 0]
+// Using the Schur complement formulas:
+//    S := D - B^T H_ss^{-1} B
+//    y = S^{-1} (c - B^T H_ss^{-1} b)
+//    x = H_ss^{-1} (b - B y),
+void NewtonHessianFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
+    if (!exists()) throw std::runtime_error("Factorization doesn't exist.");
+    size_t nsv = 1;
+    size_t ndv = 0; // TODO: get these...
+
+    if (ndv > 0) {
+        // TODO
+    }
+
+    if (nsv > 0) {
+        solver().solve(b, x);
+    }
+
 }

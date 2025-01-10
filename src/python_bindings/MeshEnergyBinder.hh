@@ -61,6 +61,24 @@ auto convertMaterialList(const std::vector<RawMaterial> &materials) {
     }
 }
 
+template<class Material>
+struct has_psi_type {
+    template<class T> static std::true_type  test(typename T::Psi *);
+    template<class T> static std::false_type test(...);
+    static constexpr bool value = decltype(test<Material>(nullptr))::value;
+};
+
+// Used to disambiguate/mangle names within families of MeshEnergies that are instantiated
+// with different energy density types (e.g., those based on SolidElement, or
+// ParametrizationElement).
+template<class Material>
+std::string getMaterialName() {
+    if constexpr (has_psi_type<Material>::value)
+        return std::string("_") + Material::Psi::name();
+    else
+        return "";
+}
+
 // Bind a single MeshEnergy instantiation.
 template<class ME, class RawMaterial = typename ME::Material>
 auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) {
@@ -68,7 +86,7 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
     using Vars = typename ME::Vars;
     using Material = typename ME::Material;
 
-    py::class_<ME, MeshEnergyBase, std::shared_ptr<ME>> pyME(detail, (name + getMeshName<Mesh>()).c_str());
+    py::class_<ME, MeshEnergyBase, std::shared_ptr<ME>> pyME(detail, (name + getMeshName<Mesh>() + getMaterialName<Material>()).c_str());
     pyME.def("setHomogeneousMaterial",      [](ME &me, RawMaterial material) { me.setHomogeneousMaterial(convertMaterial<Material>(material)); }, py::arg("material"))
         .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<RawMaterial> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(convertMaterialList<Material>(mats), materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
@@ -78,7 +96,7 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
         auto me = std::make_shared<ME>(mesh, vars);
         me->setHomogeneousMaterial(convertMaterial<Material>(material));
         return me;
-    }, py::arg("mesh"), py::arg("vars"), py::arg("material") = RawMaterial());
+    }, py::arg("mesh"), py::arg("vars"), py::arg("material"));
 
     ElementSpecificMEBindings<ME>::bind(pyME);
 
