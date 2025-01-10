@@ -8,6 +8,7 @@
 #define MESHENTITIES_HH
 
 #include <MeshFEM/Future.hh>
+#include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Handles/Handle.hh>
 
 // Get the indices of the vertices making up a volume or boundary element.

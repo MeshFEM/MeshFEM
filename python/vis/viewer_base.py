@@ -114,6 +114,13 @@ class ViewerBase:
                           transparent=transparent,
                           displacementField=displacementField)
 
+        if self.isRecording():
+            self.recorder.writeFrame()
+
+    def isRecording(self): return hasattr(self, 'recorder')
+
+    # recordStart and recordStop are implemented in the subclass
+
     def setGeometry(self, vertices, idxs, normals, preserveExisting=False, updateModelMatrix=False, textureMap=None, scalarField=None, vectorField=None, transparent=False, displacementField=None):
         self.scalarField = scalarField
         self.vectorField = vectorField
@@ -146,8 +153,8 @@ class ViewerBase:
                 if shape[0] == len(idxs): needsReplication = True
                 attrRaw['color'] = np.array(vis_field, dtype=np.float32)
             else:
-                # Handle input in the form of a ScalarField or a raw scalar data array.
-                # Construct scalar field from raw scalar data array if necessary.
+                # Handle input in the form of a ScalarField, raw scalar data
+                # array, or dictionary of kwargs to ScalarField.
                 if (not isinstance(self.scalarField, ScalarField)):
                     if isinstance(self.scalarField, dict): # interpreted as kwargs
                         self.scalarField = ScalarField(self.mesh, **self.scalarField)
@@ -159,6 +166,15 @@ class ViewerBase:
                     # Replication is needed according to https://stackoverflow.com/questions/41670308/three-buffergeometry-how-do-i-manually-set-face-colors
                     # since apparently indexed geometry doesn't support the 'FaceColors' option.
                     needsReplication = True
+
+        if (self.vectorField is not None):
+            # Construct vector field from raw data array if necessary
+            if (not isinstance(self.vectorField, VectorField)):
+                if isinstance(self.vectorField, dict): # interpreted as kwargs
+                    self.vectorField = VectorField(self.mesh, **self.vectorField)
+                else: self.vectorField = VectorField(self.mesh, self.vectorField)
+
+            self.vectorField.validateSize(vertices.shape[0], idxs.shape[0])
 
         # There are two cases that trigger conversion of all attributes to per-corner:
         #       per-corner normals and per-triangle colors.

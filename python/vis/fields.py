@@ -4,7 +4,6 @@ import numpy as np
 from enum import Enum
 from .primitives import arrow, cylinder
 import vis.shaders
-import pythreejs
 import itertools
 
 class DomainType(Enum):
@@ -119,9 +118,13 @@ class VectorField(VisualizationField):
     def arrowGeometry(self):
         return self.glyph.getGeometry()
 
-    # Get a pythreejs Mesh of the arrow geometry, either allocating a new mesh object or
-    # updating existingMesh.
-    def getArrows(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None, existingMesh=None):
+    def getArrowData(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0):
+        """
+        Get the glyph geometry and instancing data for visualizing this vector field over
+        a triangle mesh with vertices `visVertices` and triangles `visTris`.
+
+        returns: (glyphGeometry, instancingData)
+        """
         vectors, colors, mask = self.arrowData(vmin, vmax, alpha)
         V, N, F = self.arrowGeometry()
         pos = None
@@ -130,15 +133,19 @@ class VectorField(VisualizationField):
         pos = pos[mask]
 
         if (pos is None): raise Exception('Unhandled domainType')
+        glyphGeometry  = {'position': V, 'index': F.ravel(), 'normal': N}
+        instancingData = {'arrowColor': np.array(colors,  dtype=np.float32),
+                          'arrowVec':   np.array(vectors, dtype=np.float32),
+                          'arrowPos':   np.array(pos,     dtype=np.float32)}
+        return glyphGeometry, instancingData
 
+    # Get a pythreejs Mesh of the arrow geometry, either allocating a new mesh object or
+    # updating existingMesh.
+    def getPythreeJSMesh(self, visVertices, visTris, vmin = None, vmax = None, alpha = 1.0, material=None, existingMesh=None):
+        rawAttr, rawInstancedAttr = self.getArrowData(visVertices, visTris, vmin, vmax, alpha)
+
+        import pythreejs
         if (material is None): material = vis.shaders.loadShaderMaterial('vector_field')
-
-        rawInstancedAttr = {'arrowColor': np.array(colors,  dtype=np.float32),
-                            'arrowVec':   np.array(vectors, dtype=np.float32),
-                            'arrowPos':   np.array(pos,     dtype=np.float32)}
-        rawAttr = {'position': V,
-                   'index':    F.ravel(),
-                   'normal':   N}
 
         arrowMesh = None
         if (existingMesh is None):
@@ -150,6 +157,6 @@ class VectorField(VisualizationField):
             for k, v in rawInstancedAttr.items(): # position/index/normal should be constant...
                 existingMesh.geometry.attributes[k].array = v
             arrowMesh = existingMesh
-            existingMesh.geometry.maxInstancedCount = pos.shape[0] # threejs does not automatically update maxInstancedCount after it is initialized to the full count of the original arrays by the renderer
+            existingMesh.geometry.maxInstancedCount = rawInstancedAttr['arrowPos'].shape[0] # threejs does not automatically update maxInstancedCount after it is initialized to the full count of the original arrays by the renderer
 
         return arrowMesh
