@@ -30,6 +30,8 @@
 
 #include "Elements/SolidElement.hh"
 
+#include "newton_optimizer/NewtonHessian.hh"
+
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
 // EmbeddingSpace: ND point type; Note N may differ from K (for a triangle mesh embedded in 3D, e.g.)
@@ -118,7 +120,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return SE::gradient(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
-    const SystemAssembler<N> &assembler() const { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
+    const SystemAssembler<N> &assembler() const override { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
 
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual void accumulateGradient(Real weight, VXd &g, bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {
@@ -164,31 +166,24 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return result;
     }
 
-    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
+    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const {
         return assembler().blockSparsityPatternForMesh(mesh());
     }
 
-    // Construct a scalar-valued Hessian.
-    virtual void accumulateHessian(Real weight, CSCMat &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian");
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.accumulateHessian");
         assembler().assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });
     }
 
-    virtual bool supportsBlockAcceleratedHessianAssembly() const override { return true; }
-
-    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessian_block_accelerated");
-        const BCSCMat &Hb = BCSCMat::cast(Hb_base);
-        assembler().assembleHessianBlockAccelerated(Ax, Hb, mesh(), [this, projectionMask, weight](size_t ei) {
-            return elementHessian(ei, !projectionMask, weight);
-        });
+    virtual NewtonHessian hessianSparsityPattern(VariableMask vmask = VariableMask::Defo) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
+        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+        return NewtonHessian(blockSparsityPattern());
     }
 
-    // Construct a block-valued Hessian.
+    // Construct a block-valued Hessian (for comparison purposes)
     CSCMatrix<SuiteSparse_long, MNd> blockHessian(bool projectionMask = false) const {
         CSCMatrix<SuiteSparse_long, MNd> blockH;
 
@@ -199,12 +194,6 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
             return elementHessian(ei, !projectionMask);
         });
         return blockH;
-    }
-
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
-        if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        return blockSparsityPattern()->toScalar(val);
     }
 
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {

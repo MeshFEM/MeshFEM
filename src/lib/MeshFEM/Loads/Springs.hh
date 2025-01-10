@@ -223,39 +223,26 @@ struct GenericSprings : public Load<Real> {
     virtual VXd grad_X() const override { return VXd::Zero(m_grad.size()); }
 
     // Hessian with respect to deformed configuration (H_xx)
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+    virtual void accumulateHessian(Real weight, NewtonHessian &H_n, bool /* projectionMask */ = true) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("GenericSprings.accumulateHessian");
         const size_t ns = numSprings();
 
+        auto &H = *(H_n.H_ss);
+
         for (size_t s = 0; s < ns; ++s) {
-            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsA[s], m_coordsA[s],  weight * m_k[s]);
-            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsB[s], m_coordsB[s],  weight * m_k[s]);
-            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsA[s], m_coordsB[s], -weight * m_k[s]);
-            m_addJacobianOuterProducts</* SparsityOnly = */ false>(H, m_coordsB[s], m_coordsA[s], -weight * m_k[s]);
+            m_addJacobianOuterProducts(H, m_coordsA[s], m_coordsA[s],  weight * m_k[s]);
+            m_addJacobianOuterProducts(H, m_coordsB[s], m_coordsB[s],  weight * m_k[s]);
+            m_addJacobianOuterProducts(H, m_coordsA[s], m_coordsB[s], -weight * m_k[s]);
+            m_addJacobianOuterProducts(H, m_coordsB[s], m_coordsA[s], -weight * m_k[s]);
 
             m_coordsA[s].accumulate_contract_d2_dvar2( APC_A::extract(m_forces, s), H);
             m_coordsB[s].accumulate_contract_d2_dvar2(-APC_B::extract(m_forces, s), H);
         }
     }
 
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-        const size_t nv = this->numVars();
-        TripletMatrix<> Hsp(nv, nv);
-        Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-        const size_t ns = numSprings();
-
-        for (size_t s = 0; s < ns; ++s) {
-            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsA[s], m_coordsA[s], 1.0);
-            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsB[s], m_coordsB[s], 1.0);
-            m_addJacobianOuterProducts</* SparsityOnly = */ true>(Hsp, m_coordsA[s], m_coordsB[s], 1.0);
-        }
-
-        SuiteSparseMatrix Hsp_csc(Hsp);
-        Hsp_csc.fill(val);
-        return Hsp_csc;
-    }
-
-    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return this->getNVars().assembler().blockSparsityPattern(numSprings(), BlockSize,
+    virtual NewtonHessian hessianSparsityPattern() const override {
+        // Build a block sparsity pattern compatible with the variable structure of `this->getNVars()`.
+        return NewtonHessian(this->getNVars().assembler().blockSparsityPattern(numSprings(), BlockSize,
                 [&](size_t s) {
                     std::vector<size_t> elemBlockVars;
                     auto &c1 = m_coordsA[s];
@@ -267,7 +254,7 @@ struct GenericSprings : public Load<Real> {
                     for (int i = 0; i < c2.varIndices.size(); ++i) elemBlockVars.push_back(c2.varIndices[i]);
 
                     return elemBlockVars;
-                });
+                }));
     }
 
     const APC_A &attachmentPointA(size_t s) const { return m_coordsA.at(s); }
@@ -287,7 +274,7 @@ private:
     }
 
     void m_updateCache() {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("GenericSprings::m_updateCache");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("GenericSprings.m_updateCache");
 
         const auto &x = this->getNVars().getVars();
         const size_t ns = numSprings();
@@ -316,7 +303,7 @@ private:
     }
 
     // dc1_dx^T * dc2_dx
-    template<bool SparsityOnly, class SpMat, class APC1, class APC2>
+    template<class SpMat, class APC1, class APC2>
     void m_addJacobianOuterProducts(SpMat &H, const APC1 &c1, const APC2 &c2, Real stiffness) const {
         static constexpr size_t BS = BlockSize;
         for (int ii = 0; ii < c1.varIndices.size(); ++ii) {
@@ -326,8 +313,16 @@ private:
                 if (i > j) continue;
                 // TODO: do assembly using a SystemAssembler with the
                 // correct block variable structure...
-                if constexpr (SparsityOnly) H.addNZBlock(BS * i, BS * j, Eigen::Matrix<Real, BS, BS>::Ones());
-                else                        H.addNZBlock(BS * i, BS * j, stiffness * c1.d_dvar(ii).transpose() * c2.d_dvar(jj));
+                auto block = (stiffness * c1.d_dvar(ii).transpose() * c2.d_dvar(jj)).eval();
+                // H.addNZBlockAtScalarLocation(BS * i, BS * j, Eigen::Map<Eigen::MatrixXd>(block.data(), BS, BS));
+                // The code below is somehow faster...
+                for (int cj = 0; cj < BS; ++cj) {
+                    for (int ci = 0; ci <= cj; ++ci) {
+                        if (block(ci, cj) == 0) continue;
+                        H.addNZScalar(BS * i + ci, BS * j + cj, block(ci, cj));
+                    }
+                }
+
             }
         }
     };

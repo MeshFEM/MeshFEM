@@ -20,9 +20,11 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <MeshFEM/Elements/HingeElement.hh>
 #include <MeshFEM/Elements/MembraneElement.hh>
+#include <MeshFEM/Elements/ParametrizationElement.hh>
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/Elements/DiscreteShellHingeEnergy.hh>
 #include <MeshFEM/Stencils.hh>
+
 #include "MeshBindings.hh"
 #include "BindMembraneMaterial.hh"
 #include "MeshEnergyBinder.hh"
@@ -85,10 +87,15 @@ PYBIND11_MODULE(mesh_energy, m)
     bindMeshEnergy<MembraneMeshEnergy<NHE>>("NeoHookeanMembrane", m, detail);
     bindMeshEnergy<DiscreteShellHingeMeshEnergy<double>>("DiscreteShellBending", m, detail);
 
+    using NHE    =                       NeoHookeanEnergy<double, 2>;
+    using NHE_HP = AutoHessianProjection<NeoHookeanEnergy<double, 2>>;
+    bindMeshEnergy<ParametrizationMeshEnergy<NHE   >, NHE   >("Parametrization", m, detail);
+    bindMeshEnergy<ParametrizationMeshEnergy<NHE_HP>, NHE_HP>("Parametrization", m, detail);
+
     // Bind solid element mesh energies
     using NHE3D = NeoHookeanEnergy<double, 3>;
-    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
 }

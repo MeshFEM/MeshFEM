@@ -18,6 +18,10 @@ pybind11_add_module(sparse_matrices sparse_matrices.cc)
 set_target_properties(sparse_matrices PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(sparse_matrices PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(block_sparse_hessian block_sparse_hessian.cc)
+set_target_properties(block_sparse_hessian PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(block_sparse_hessian PUBLIC MeshFEM intel_pybind_14_hack)
+
 pybind11_add_module(_parallelism parallelism.cc)
 set_target_properties(_parallelism PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(_parallelism PUBLIC MeshFEM)

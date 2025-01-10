@@ -4,7 +4,9 @@
 /*! @file
 // A variant of CSCMatrix where only a compressed "block sparsity pattern" is
 // stored, but the `Ax` array is *identical* to the `Ax` array of a
-// corresponding plain (scalar-valued) CSCMatrix.
+// corresponding plain (scalar-valued) CSCMatrix--unless `ContiguousBlocks` is
+// set to true (in which case data is reordered so that the entries of
+// a block are stored contiguously).
 // This is intended to hold the Hessian of a function with vector-valued
 // variables; when components of each variable are stored contiguously, the
 // sparsity pattern of such a Hessian has a symmetric block structure.
@@ -12,6 +14,9 @@
 // triangle. Furthermore, the implementation *assumes nonzero blocks exist on
 // the diagonal*; these diagonal blocks must exist in the sparsity pattern for
 // the Hessian ever to be positive definite.
+//
+// Using `ContiguousBlocks` appears to yield only about a 5% speedup to Hessian
+// assembly in solid elasticity benchmarks.
 //
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
@@ -21,10 +26,8 @@
 #define BLOCKCSCHESSIAN_HH
 
 #include "SparseMatrices.hh"
+#include "VarStructure.hh"
 #include <type_traits>
-
-template<class VarStructure>
-struct BlockCSCHessian;
 
 namespace detail {
 
@@ -32,20 +35,13 @@ namespace detail {
 template<class BCSCH>
 struct BlockCSCHTraits;
 
-template<class _VarStructure>
-struct BlockCSCHTraits<BlockCSCHessian<_VarStructure>> {
-    using VarStructure = _VarStructure;
-    using Index        = SuiteSparse_long;
-    using Real         = double;
-    using IdxVector    = std::vector<Index>;
-};
-
 // Fast, constant-space/time conversions from block indices to scalar locations/strides in Ax.
 template<class Derived>
 struct BlockToScalarUniformBlockSize {
     using _Index       = typename BlockCSCHTraits<Derived>::Index;
     using VarStructure = typename BlockCSCHTraits<Derived>::VarStructure;
     static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    static_assert(SingleBlockDim, "This policy is only valid for uniform block size matrices.");
 
     const Derived &derived() const { return static_cast<const Derived &>(*this); }
           Derived &derived()       { return static_cast<      Derived &>(*this); }
@@ -59,11 +55,10 @@ struct BlockToScalarUniformBlockSize {
         return N * (nentries - 1) + 1;
     }
 
+    // WARNING: assumes all diagonal blocks are present!
     _Index scalarOffsetForColumn(_Index bj) const {
-        if constexpr (VarStructure::SingleBlockDim) {
-            constexpr _Index N = VarStructure::MaxBlockDim;
-            return N * N * derived().Ap[bj] - bj * (N * (N - 1)) / 2;
-        }
+        constexpr _Index N = VarStructure::MaxBlockDim;
+        return N * N * derived().Ap[bj] - bj * (N * (N - 1)) / 2;
     }
 
     _Index locForBlock(_Index bi, _Index bj) const {
@@ -161,7 +156,7 @@ protected:
         m_scalarOffsetForColumn.clear();
         m_numBlockEntriesOfType.clear();
 
-        m_scalarOffsetForColumn.reserve(n);
+        m_scalarOffsetForColumn.reserve(n + 1);
         m_numBlockEntriesOfType.resize(n); // actually zero-initializes! (default-inserts each std::array, which ultimately value-initializes each array entry)
 
         m_scalarOffsetForColumn.push_back(0);
@@ -181,8 +176,7 @@ protected:
                     ++m_numBlockEntriesOfType[bj][ti];
             }
 
-            if (bj + 1 < n)
-                m_scalarOffsetForColumn.push_back(m_scalarOffsetForColumn.back() + size);
+            m_scalarOffsetForColumn.push_back(m_scalarOffsetForColumn.back() + size);
         }
     }
 
@@ -265,29 +259,67 @@ struct ColumnScanner;
 // Uniform block size case.
 template <class BCSCH>
 struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructure::SingleBlockDim>> {
-    using VarStructure = typename BlockCSCHTraits<BCSCH>::VarStructure;
-    using Index = typename BlockCSCHTraits<BCSCH>::Index;
-    static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    using BT = BlockCSCHTraits<BCSCH>;
+    using VarStructure = typename BT::VarStructure;
+    using Index        = typename BT::Index;
+
+    static constexpr bool ContiguousBlocks = BT::ContiguousBlocks;
+    static constexpr Index N = VarStructure::MaxBlockDim;
 
     ColumnScanner(const BCSCH &H, Index bj) :
         m_H(H), m_bj(bj), m_bloc(H.Ap[bj]), m_end(H.Ap[bj + 1])
     {
         m_colStart  = H.scalarOffsetForColumn(bj);
-        m_colStride = H.scalarColStride(bj);
+        if constexpr (!ContiguousBlocks)
+            m_colStride = H.scalarColStride(bj);
         m_scalarLoc = m_colStart;
     }
 
     Index advanceToBlock(Index bi) {
-        constexpr Index N = VarStructure::MaxBlockDim;
-        Index m_old_bloc = m_bloc;
-        m_bloc = binary_search(bi, m_H.Ai.data(), m_old_bloc, m_end);
-        return (m_scalarLoc += N * (m_bloc - m_old_bloc));
+        // Linear scan seems faster than binary search...
+        // Index old_bloc = m_bloc;
+        // m_bloc = binary_search(bi, m_H.Ai.data(), old_bloc, m_end);
+        // return (m_scalarLoc += blockStride() * (m_bloc - old_bloc));
+#if 0
+        Index old_bloc = m_bloc;
+        while (m_H.Ai[m_bloc] < bi) ++m_bloc;
+        return (m_scalarLoc += blockStride() * (m_bloc - old_bloc));
+#else
+        while (m_H.Ai[m_bloc] < bi) { ++m_bloc; m_scalarLoc += blockStride(); } // Does more cheap integer additions vs a multiplication at the end...
+        return m_scalarLoc;
+#endif
     }
+
+    // Find the scalar offset of the block entry (bi, bj) without advancing the scanner.
     Index findBlock(Index bi) const { return m_colStart + VarStructure::MaxBlockDim * (m_H.findEntry(bi, m_bj) - m_H.Ap[m_bj]); }
 
-    Index diagBlockScalarLoc() const { return m_colStart + stride() - 1; }
-    Index stride() const { return m_colStride; }
-    Index colStart() const { return m_colStart; }
+    // Support for iterating through every block in the column.
+    ColumnScanner &operator++() { ++m_bloc; m_scalarLoc += blockStride(); return *this; }
+    bool       atEnd() const { return m_bloc == m_end; }
+    Index  scalarLoc() const { return m_scalarLoc; }
+    Index   blockLoc() const { return m_bloc; }
+    size_t blockType() const { return 0; }
+
+    static constexpr Index  colBlockSize() { return N; }
+    static constexpr Index  rowBlockSize() { return N; }
+    static constexpr Index     blockSize() { return N * N; }
+    static constexpr Index diagBlockSize() { return (N * (N + 1)) / 2; }
+
+    Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_colStart + m_colStride - 1; }
+
+    Index colStride(size_t c) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
+    Index blockStride()       const { if constexpr (ContiguousBlocks) return   blockSize();  else return rowBlockSize(); }  // Stride from upper-left corner of this block to the next.
+    Index diagBlockColStride(size_t c) const { if constexpr (ContiguousBlocks) return c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+
+    template<class Block>
+    void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
+        // Find offset in `Ax` of the block's upper-left corner.
+        SuiteSparse_long loc = advanceToBlock(bi);
+        for (size_t c = 0; c < N; ++c) {
+            Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, 1>>(Ax + loc) += block.col(c);
+            loc += colStride(c);
+        }
+    }
 
 private:
     const BCSCH &m_H;
@@ -297,28 +329,95 @@ private:
     Index m_colStart, m_colStride;
 };
 
-// Variable block size case (relies on acceleration lookup tables)
+// Variable block size case (relies on acceleration lookup tables for binary search)
+// WARNING:
+//  We do not support mixed usage of `advanceToBlock` and `operator++` with the
+//  same scanner object when using binary search. This is because the binary
+//  search variant of `advanceToBlock` does not update the block index and
+//  size/type information; doing this efficiently for both
+//  `BlockToScalarPolicyTypeOffsetsPerColumn` and `BlockToScalarPolicyLocLookup`
+//  requires additional thought.
 template <class BCSCH>
 struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructure::SingleBlockDim>> {
-    using VarStructure = typename BlockCSCHTraits<BCSCH>::VarStructure;
-    using Index = typename BlockCSCHTraits<BCSCH>::Index;
-    static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    using BT = BlockCSCHTraits<BCSCH>;
+    using VarStructure = typename BT::VarStructure;
+    using Index        = typename BT::Index;
 
-    ColumnScanner(const BCSCH &H, Index bj) : m_H(H), m_bj(bj) {
+    static constexpr bool ContiguousBlocks = BT::ContiguousBlocks;
+
+    ColumnScanner(const BCSCH &H, Index bj)
+        : m_H(H), m_bj(bj), m_bloc(H.Ap[bj]), m_end(H.Ap[bj + 1]), m_blockType(0) {
+        m_colBlockSize = H.vars().blockSize(bj);
+
+        // The first block in this column might not be of the first type...
+        size_t curr = H.Ai[m_bloc];
+        while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+
         m_colStride = H.scalarColStride(bj);
+        m_scalarLoc = H.scalarOffsetForColumn(bj);
     }
 
-    Index advanceToBlock(Index bi) {
-        return m_H.locForBlock(bi, m_bj);
+#if 0
+    Index advanceToBlock(Index bi) { return m_H.locForBlock(bi, m_bj); }
+#else
+    Index advanceToBlock(size_t bi) {
+        // Linear scan seems faster than binary search...
+        size_t curr = m_H.Ai[m_bloc];
+        while (curr < bi) {
+            ++m_bloc;
+            m_scalarLoc += blockStride();
+            curr = m_H.Ai[m_bloc];
+            while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+        }
+        return m_scalarLoc;
     }
+#endif
+
     Index findBlock(Index bi) const { return m_H.locForBlock(bi, m_bj); }
 
-    Index diagBlockScalarLoc() const { return m_H.scalarOffsetForColumn(m_bj) + stride() - 1; }
-    Index stride() const { return m_colStride; }
+    ColumnScanner &operator++() {
+        m_scalarLoc += blockStride();
+        size_t bi = m_H.Ai[++m_bloc];
+        while (bi >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+        return *this;
+    }
+
+    bool atEnd() const { return m_bloc == m_end; }
+
+    Index  colBlockSize() const { return m_colBlockSize; }
+    Index  rowBlockSize() const { return VarStructure::BlockDimensions[m_blockType]; }
+    Index     blockSize() const { return colBlockSize() * rowBlockSize(); }
+    Index diagBlockSize() const { return (colBlockSize() * (colBlockSize() + 1)) / 2; }
+
+    Index scalarLoc()  const { return m_scalarLoc; }
+    Index  blockLoc()  const { return m_bloc; }
+    size_t blockType() const { return m_blockType; }
+
+    Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_H.scalarOffsetForColumn(m_bj) + m_colStride - 1; }
+
+    Index colStride(size_t c) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
+    Index blockStride()       const { if constexpr (ContiguousBlocks) return   blockSize();  else return rowBlockSize(); }  // Stride from upper-left corner of this block to the next.
+    Index diagBlockColStride(size_t c) const { if constexpr (ContiguousBlocks) return c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+
+    template<class Block>
+    void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
+        // Find offset in `Ax` of the block's upper-left corner.
+#if 1
+        SuiteSparse_long loc = advanceToBlock(bi);
+#else
+        SuiteSparse_long loc = colScanner.findBlock(bi);
+#endif
+        for (size_t c = 0; c < block.cols(); ++c) {
+            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(Ax + loc, rowBlockSize()) += block.col(c);
+            loc += colStride(c);
+        }
+    }
 
 private:
     const BCSCH &m_H;
     Index m_bj;
+    Index m_bloc, m_end, m_scalarLoc; // support for sequential scanning
+    size_t m_blockType, m_colBlockSize;
     Index m_colStride;
 };
 
@@ -333,6 +432,18 @@ template<class Derived> using BlockToScalarPolicyLocLookup            = detail::
 template<class Derived> using BlockToScalarPolicyTypeOffsetsPerColumn = detail::BlockToScalarWithConditionalFastPath<Derived, detail::BlockToScalarPolicyTypeOffsetsPerColumn>;
 template<class Derived> using BlockToScalarPolicyDefault              = BlockToScalarPolicyTypeOffsetsPerColumn<Derived>;
 
+template<class VarStructure, bool ContiguousBlocks = false, template<class> class BlockToScalarPolicy = BlockToScalarPolicyDefault>
+struct BlockCSCHessian;
+
+template<class _VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
+struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks, BlockToScalarPolicy>> {
+    using VarStructure = _VarStructure;
+    using Index        = SuiteSparse_long;
+    using Real         = double;
+    using IdxVector    = std::vector<Index>;
+    static constexpr bool ContiguousBlocks = _ContiguousBlocks;
+};
+
 struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>> {
     using CSCMat = CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>>;
 
@@ -340,10 +451,22 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     virtual ~BlockCSCHessianBase();
 
-    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const = 0;
+    virtual std::vector<std::pair<size_t, size_t>> blockVarSizesAndCounts() const = 0;
+    std::vector<size_t> blockSizes() const {
+        std::vector<size_t> result;
+        for (const auto &p : blockVarSizesAndCounts())
+            result.push_back(p.first);
+        return result;
+    }
+
+    size_t   minBlockSize() const { auto bs = blockSizes(); return *std::min_element(bs.begin(), bs.end()); }
+    size_t   maxBlockSize() const { auto bs = blockSizes(); return *std::max_element(bs.begin(), bs.end()); }
+    bool         isScalar() const { return maxBlockSize() == 1; }
+    size_t   blockSizeGCD() const { auto bs = blockSizes(); return std::accumulate(bs.begin(), bs.end(), 0, std::gcd<size_t, size_t>); }
+    bool uniformBlockSize() const { return minBlockSize() == maxBlockSize(); }
 
     void mergeSparsityPattern(const BlockCSCHessianBase &other) {
-        if (this->blockVarCountsAndSizes() != other.blockVarCountsAndSizes())
+        if (this->blockVarSizesAndCounts() != other.blockVarSizesAndCounts())
             throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable sizes/counts");
         const CSCMat &other_csc = other;
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
@@ -353,6 +476,28 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     virtual void finalize() = 0;
 
+    virtual size_t numScalarCols() const = 0;
+    size_t         numScalarRows() const { return numScalarCols(); }
+
+    virtual size_t scalarNNZ() const = 0;
+    virtual Real trace()       const = 0;
+
+    // Set each nonzero entry to a particular value, preserving the sparsity pattern.
+    void fill(double val) { Ax.assign(scalarNNZ(), val); }
+    void setZero() {
+        if (Ax.size() != scalarNNZ()) {
+            // Since we're allocating the storage for this matrix, it looks like
+            // the user is intending to run assembly on it.
+            // Verify that this will be supported...
+            assertSupportsAssembly();
+            Ax.assign(scalarNNZ(), 0.0);
+        }
+        else setZeroParallel(data());
+    }
+
+    virtual void assertSupportsAssembly() const = 0;
+    virtual bool missingRequiredDiagonalBlocks() const = 0;
+
     virtual SuiteSparseMatrix toScalar() const = 0;
 
     SuiteSparseMatrix toScalar(Real fillVal) const {
@@ -361,17 +506,26 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
         return result;
     }
 
+    virtual void applyRaw(const double *x, double *result) const = 0;
+
+    // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` and `addNZBlock` implementations.
+    virtual void addNZScalar(size_t vi, size_t vj, double val) = 0;
+    virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) = 0;
+
+    virtual const OptimizationVarStructureBase   &vars() const = 0;
+
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
 };
 
-template<class VarStructure>
-struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockCSCHessian<VarStructure>>,
-                                        public BlockCSCHessianBase
+template<class VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
+struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<BlockCSCHessian<VarStructure, _ContiguousBlocks, BlockToScalarPolicy>>,
+                                              public BlockCSCHessianBase
 {
     using _Index = SuiteSparse_long;
     using _Real = double;
     using IdxVector = std::vector<_Index>;
     using CSCMat = typename BlockCSCHessianBase::CSCMat;
+    constexpr static bool ContiguousBlocks = _ContiguousBlocks;
 
     using SymmetryMode = typename CSCMat::SymmetryMode;
     using CSCMat::Ax; // Note: this may be empty for a sparsity-only matrix! Also, it holds scalar entries!
@@ -396,7 +550,8 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
     // methods below are used on variable-block-size matrices!
     void finalize() override { this->m_buildIndexTables(); }
 
-    virtual std::vector<std::pair<size_t, size_t>> blockVarCountsAndSizes() const override {
+    // Query block variable structure.
+    virtual std::vector<std::pair<size_t, size_t>> blockVarSizesAndCounts() const override {
         std::vector<std::pair<size_t, size_t>> result;
         for (size_t i = 0; i < VarStructure::NumBlockTypes; ++i)
             result.emplace_back(VarStructure::BlockDimensions[i], m_vars.numBlocksOfType(i));
@@ -404,11 +559,64 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
         return result;
     }
 
+    virtual size_t numScalarCols() const override { return m_vars.numSparseVars(); }
+
+    size_t numDiagonalBlocks() const {
+        size_t numBlocks = Ai.size();
+        size_t result = 0;
+        for (_Index j = 0; j < n; ++j) {
+            if (col_nnz(j) == 0) continue;
+            if (Ai[Ap[j + 1] - 1] == j) ++result;
+        }
+        return result;
+    }
+
+    virtual bool missingRequiredDiagonalBlocks() const override { return VarStructure::SingleBlockDim && (numDiagonalBlocks() < size_t(n)); }
+
+    virtual void assertSupportsAssembly() const override {
+        // In the uniform-block-size case, we must have all diagonal blocks
+        // present or the offsets computed will be incorrect.
+        if (missingRequiredDiagonalBlocks())
+            throw std::runtime_error("BlockCSCHessian: missing diagonal blocks in non-sparsity-only Hessian that is being prepared for assembly!");
+    }
+
+    virtual size_t scalarNNZ() const override {
+        if constexpr (VarStructure::SingleBlockDim) {
+            // Work around problem where `scalarOffsetForColumn` is broken when
+            // diagonal blocks are missing... (not that we claim to fully
+            // support this case)
+            static constexpr size_t N = VarStructure::MaxBlockDim;
+
+            size_t numBlocks = Ai.size();
+            size_t numDiagBlocks = numDiagonalBlocks();
+            if (numDiagBlocks < size_t(n)) std::cout << "WARNING: missing diagonal blocks!" << std::endl;
+            return numBlocks * N * N - numDiagBlocks * (N * (N - 1)) / 2;
+        }
+        return this->scalarOffsetForColumn(n);
+    }
+
+    virtual Real trace() const override {
+        Real result = 0;
+        for (_Index bj = 0; bj < n; ++bj) {
+            const _Index bsj = m_vars.blockSize(bj);
+            auto cs = columnScanner(bj);
+            _Index loc = cs.diagBlockScalarLoc();
+            for (_Index c_j = 0; c_j < bsj; ++c_j) {
+                result += Ax[loc];
+                loc += cs.colStride(c_j) // Move to next scalar column...
+                       + 1;              // and down one to reach the diagonal
+            }
+        }
+        return result;
+    }
+
     using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
     CSCMat toScalar() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.toScalar");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
-        CSCMat result(m_vars.numVars(), m_vars.numVars());
+
+        size_t n_scalar = numScalarCols();
+        CSCMat result(n_scalar, n_scalar);
         result.symmetry_mode = SymmetryMode::UPPER_TRIANGLE;
 
         const CSCMat &blockHsp = *this;
@@ -457,13 +665,121 @@ struct MESHFEM_EXPORT BlockCSCHessian : public BlockToScalarPolicyDefault<BlockC
         return result;
     }
 
-    std::unique_ptr<BlockCSCHessianBase> clone() const override;
+    virtual void applyRaw(const _Real *x, _Real *result) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.applyRaw");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
+        static constexpr int BlockSize = VarStructure::SingleBlockDim ? VarStructure::MaxBlockDim : Eigen::Dynamic;
+        Eigen::Matrix<_Real, BlockSize, BlockSize, Eigen::ColMajor,
+                      /* maxRows = */ VarStructure::MaxBlockDim,
+                      /* maxCols = */ VarStructure::MaxBlockDim> H_block;
+        Eigen::Matrix<_Real, BlockSize, 1, Eigen::ColMajor, /* maxCols = */ VarStructure::MaxBlockDim> x_j;
 
-    detail::ColumnScanner<BlockCSCHessian> columnScanner(_Index bj) const {
-        return detail::ColumnScanner<BlockCSCHessian>(*this, bj);
+        using  VecMap = Eigen::Map<      Eigen::Matrix<_Real, BlockSize, 1>>;
+        using CVecMap = Eigen::Map<const Eigen::Matrix<_Real, BlockSize, 1>>;
+        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(result, m_vars.numVars()).setZero();
+
+        // TODO: speed up the nonuniform case by blocking by type (doing type 0-type 0 block, then
+        // type 0-type 1 block, etc.) so that variable dimensions are fixed within each block.
+        // This could be done using recursive templates to iterate over the type
+        // pairs.
+
+        for (_Index bj = 0; bj < n; ++bj) {
+            auto [gvar_j, bsj] = vars().blockInfo(bj);
+            x_j = CVecMap(x + gvar_j, bsj);
+            // Iterate over all blocks in column bj
+            for (auto cs = columnScanner(bj); !cs.atEnd(); ++cs) {
+                _Index bi = Ai[cs.blockLoc()];
+                auto [gvar_i, bsi] = vars().blockInfoKnownType(bi, cs.blockType());
+
+                if constexpr (!VarStructure::SingleBlockDim)
+                    H_block.resize(bsi, bsj);
+
+                if (bi < bj) { // Upper triangle
+                    const _Real *ptr = Ax.data() + cs.scalarLoc();
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        H_block.col(c_j) = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(ptr, bsi);
+                        ptr += cs.colStride(c_j); // Advance to next scalar column
+                    }
+
+                    VecMap(result + gvar_i, bsi) += H_block * x_j;
+                    // Lower triangle contribution
+                    VecMap(result + gvar_j, bsj) += H_block.transpose() * CVecMap(x + gvar_i, bsi);
+                }
+                else { // Diagonal block
+                    const _Real *ptr = Ax.data() + cs.diagBlockScalarLoc();
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        H_block.col(c_j).topRows(c_j + 1) = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(ptr, c_j + 1);
+                        ptr += cs.diagBlockColStride(c_j); // Advance to next scalar column
+                    }
+
+                    // Multiply by symmetric view of H_block
+                    VecMap(result + gvar_i, bsi) += H_block.template selfadjointView<Eigen::Upper>() * x_j;
+                }
+            }
+        }
     }
 
-    const VarStructure &vars() const { return m_vars; }
+    _Index findScalarLoc(size_t vi, size_t vj) const {
+        size_t bi = m_vars.blockContainingVar(vi),
+               bj = m_vars.blockContainingVar(vj);
+
+        size_t c_i = vi - m_vars.offsetForBlock(bi),
+               c_j = vj - m_vars.offsetForBlock(bj);
+
+        // Locate local entry (c_i, c_j) of the block at (bi, bj)
+        // whose upper-left corner is at `locForBlock(bi, bj)`.
+        _Index loc = this->locForBlock(bi, bj); // upper-left corner
+        if constexpr (ContiguousBlocks) {
+            size_t bsi = m_vars.blockSize(bi);
+            loc += bsi * c_j + c_i;
+        }
+        else {
+           _Index stride = this->scalarColStride(bj);
+           loc += stride * c_j + ((c_j - 1) * c_j) / 2 // Advance to local column c_j
+               +  c_i;                                 // Move down to row c_i
+        }
+
+        return loc;
+    }
+
+    void addNZScalar(size_t vi, size_t vj, _Real val) override {
+        Ax[findScalarLoc(vi, vj)] += val;
+    }
+
+    virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) override {
+        _Index loc = findScalarLoc(vi, vj); // upper-left corner of destination for `block`
+        size_t bi = m_vars.blockContainingVar(vi),
+               bj = m_vars.blockContainingVar(vj);
+        if (vi == vj) {
+            // Diagonal case
+            for (int c_j = 0; c_j < block.cols(); ++c_j) {
+                Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + loc, c_j + 1) += block.col(c_j).topRows(c_j + 1);
+                if constexpr (ContiguousBlocks)
+                    loc += m_vars.blockSize(m_vars.blockContainingVar(vi));
+                else
+                    loc += this->scalarColStride(bj) + c_j;
+            }
+        }
+        else {
+            // Upper-triangle case
+            for (int c_j = 0; c_j < block.cols(); ++c_j) {
+                Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + loc, block.rows()) += block.col(c_j);
+                if constexpr (ContiguousBlocks)
+                    loc += m_vars.blockSize(m_vars.blockContainingVar(vi));
+                else
+                    loc += this->scalarColStride(bj) + c_j;
+            }
+        }
+    }
+
+    std::unique_ptr<BlockCSCHessianBase> clone() const override;
+
+    using ColumnScanner = detail::ColumnScanner<BlockCSCHessian>;
+    ColumnScanner columnScanner(_Index bj) const {
+        return ColumnScanner(*this, bj);
+    }
+
+    const VarStructure &vars() const override { return m_vars; }
 
 private:
     VarStructure m_vars;

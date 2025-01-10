@@ -78,18 +78,8 @@ namespace Loads {
         }
 
         // Gravity is linear ==> Hessian is zero.
-        virtual void accumulateHessian(Real /* weight */, SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
-
-        virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
-            const size_t nv = numVars();
-            TripletMatrix<> Hsp(nv, nv);
-            Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-            return SuiteSparseMatrix(Hsp);
-        }
-
-        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-            return this->emptyBlockSparsityPattern();
-        }
+        virtual void accumulateHessian(Real /* weight */, NewtonHessian &/* H */, bool /* projectionMask */ = true) const override { }
+        virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
     private:
         virtual void m_stateUpdated(typename Base::VM vmask) override {

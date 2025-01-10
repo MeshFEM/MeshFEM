@@ -86,12 +86,12 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
         }
 
         // Hessian with respect to the deformed state H_xx
-        virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+        virtual void accumulateHessian(Real weight, NewtonHessian &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
             const auto &m = o.mesh();
 
-            auto accumulate_per_element_contrib = [&](size_t bei, auto &Hout) {
-                PerBdryElementHessian contrib = o.template surfaceElementIntegral<QuadratureDegree>([&](auto be, const EvalPt<K - 1> &x) {
+            auto eval_He = [&](size_t bei) {
+                PerBdryElementHessian result = o.template surfaceElementIntegral<QuadratureDegree>([&](auto be, const EvalPt<K - 1> &x) {
                         PerBdryElementHessian integrand;
                         VNd p = o.deformedBoundaryPosition(be.index(), x);
                         Real deviation = (p.squaredNorm() - r_tgt * r_tgt);
@@ -105,34 +105,17 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
                         return integrand;
                     }, bei);
 
-                contrib *= weight * stiffness;
-
-                for (auto bn_b : m.boundaryElement(bei).nodes()) {
-                    const size_t ni_b = bn_b.volumeNode().index();
-                    for (auto bn_a : m.boundaryElement(bei).nodes()) {
-                        const size_t ni_a = bn_a.volumeNode().index();
-                        if (ni_a > ni_b) continue; // upper triangle only
-                        Hout.addNZBlock(N * ni_a, N * ni_b, contrib.template block<N, N>(N * bn_a.localIndex(),
-                                                                                         N * bn_b.localIndex()));
-                    }
-                }
+                result *= weight * stiffness;
+                return result;
             };
 
-            assemble_parallel(accumulate_per_element_contrib, H, m.numBoundaryElements());
+            this->assembler().assembleHessian(H, m.numBoundaryElements(), eval_He,
+                        [&](size_t bei) { return m.boundaryElementVolumeNodeIndices(bei); });
         }
 
         // *Additional* nonzeros contributed by this load to the potential energy Hessian.
         // (There are none).
-        virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
-            const size_t nv = numVars();
-            TripletMatrix<> Hsp(nv, nv);
-            Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-            return SuiteSparseMatrix(Hsp);
-        }
-
-        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-            return this->emptyBlockSparsityPattern();
-        }
+        virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
         Real r_tgt = 1.0;
         Real stiffness = 1.0;

@@ -2,12 +2,15 @@
 #define CATAMARIFACTORIZER_HH
 
 #include "CholeskyFactorizerBase.hh"
-#include <stdexcept>
 
 #if MESHFEM_WITH_CATAMARI
 
 #include <MeshFEM/Parallelism.hh>
-#include "CholmodFactorizer.hh"
+
+extern "C" {
+#include <cholmod.h>
+}
+
 #include <SuiteSparse_config.h>
 #include <MeshFEM_export.h>
 

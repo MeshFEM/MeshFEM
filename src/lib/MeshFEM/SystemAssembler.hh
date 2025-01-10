@@ -23,6 +23,7 @@
 
 #include "VarStructure.hh"
 #include "BlockCSCHessian.hh"
+#include "newton_optimizer/NewtonHessian.hh"
 
 struct MESHFEM_EXPORT SystemAssemblerBase {
     using index_type = SuiteSparse_long;
@@ -54,6 +55,13 @@ struct MESHFEM_EXPORT SystemAssemblerBase {
     std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const {
         return m_blockSparsityPatternDynamicImpl(numElements, blockSize, elementGetter);
     }
+
+    // TODO: dynamic-sized version of Hessian assembly.
+    struct DynamicHessianElementAssemblyData {
+        virtual Eigen::Map<const Eigen::MatrixXd> block(size_t a, size_t b) const = 0;
+        std::vector<size_t> blockVars;
+        virtual ~DynamicHessianElementAssemblyData() = default;
+    };
 
 private:
     virtual std::unique_ptr<BlockCSCHessianBase> m_blockSparsityPatternDynamicImpl(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const = 0;
@@ -96,6 +104,13 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
                     return blockVarsForElement;
                 });
     }
+
+    // Convenience wrappers to work around the fact that `BCSCMat` cannot be
+    // converted to `NewtonHessian` implicitly.
+    template<class FEMMesh_>
+    std::unique_ptr<BCSCMat> sparsityPatternForMesh(const FEMMesh_ &m) const { return NewtonHessian(blockSparsityPatternForMesh(m)); }
+    template<class... Args>
+    NewtonHessian sparsityPattern(Args &&...args) const { return NewtonHessian(blockSparsityPattern(std::forward<Args>(args)...)); }
 
     template<class ElemBlockVarsForElement>
     std::unique_ptr<BCSCMat> blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
@@ -294,7 +309,9 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     ////////////////////////////////////////////////////////////////////////////
     template <class PEH, class EVars>
     struct HessianElementAssemblyData {
-        auto block(size_t a, size_t b, size_t bsa, size_t bsb) const { return getBlock(H_e, a, b, bsa, bsb).eval(); }
+        auto block(size_t a, size_t b, size_t bsa, size_t bsb) const { return getBlock(H_e, a, b, bsa, bsb); } // TODO: compare timing with and without eval()...
+        // Version where block size is known
+        auto block(size_t a, size_t b) const { return getBlock(H_e, a, b); }                                   // TODO: compare timing with and without eval()...
         PEH H_e;
         EVars evars;
     };
@@ -356,7 +373,6 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     static auto getBlock(const PEH &H_e, size_t a, size_t b, size_t bsa = VarStructure::MaxBlockDim, size_t bsb = VarStructure::MaxBlockDim) {
         static constexpr size_t N = VarStructure::MaxBlockDim;
         if constexpr (VarStructure::SingleBlockDim) {
-            UNUSED(bsa); UNUSED(bsb);
             return H_e.template block<N, N>(a, b);
         }
         else {
@@ -364,13 +380,28 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         }
     }
 
-    template<class ElemBlockVars>
-    static auto argsort(const ElemBlockVars &blockVars) {
-        static constexpr size_t nbv = std::tuple_size_v<ElemBlockVars>;
-        std::array<size_t, nbv> order;
-        for (size_t i = 0; i < nbv; ++i) { order[i] = i; }
-        StaticTimSort<nbv> timBoseNelsonSort;
+    template<typename T, size_t Size>
+    static auto argsort(const std::array<T, Size> &blockVars) { // For static element sizes
+        std::array<size_t, Size> order;
+        for (size_t i = 0; i < Size; ++i) { order[i] = i; }
+        StaticTimSort<Size> timBoseNelsonSort;
         timBoseNelsonSort(order, [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
+        return order;
+    }
+
+    template<size_t MinSize, size_t MaxSize>
+    static auto argsort(const ElementBlockVarsWithSizeRange<MinSize, MaxSize> &blockVars) { // For "partially dynamic" element sizes
+        ElementBlockVarsWithSizeRange<MinSize, MaxSize> order;
+        order.resize(blockVars.size());
+        for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
+        dispatchedStaticSort<MinSize, MaxSize>(order.data(), order.size(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
+        return order;
+    }
+
+    static auto argsort(const std::vector<size_t> &blockVars) { // For fully dynamic element sizes
+        std::vector<size_t> order(blockVars.size());
+        for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
+        std::sort(order.begin(), order.end(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
         return order;
     }
 
@@ -398,40 +429,52 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     // (Construct the scalar Hessian but use a block sparsity pattern for
     // acceleration).
     ////////////////////////////////////////////////////////////////////////////
-    template<typename Real_, class SPMatBlock, class Mesh, class PEHEval>
-    void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const Mesh &m, const PEHEval &eval_He) const {
+    template<typename Real_, class SPMatBlock, class ElementAssemblyDataGetter>
+    void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, size_t numElements, const ElementAssemblyDataGetter &edataGetter) const {
         if (get_max_num_tbb_threads() == 1) {
-            const size_t ne = m.numElements();
-            for (size_t ei = 0; ei < ne; ++ei)
-                m_assembleHessianContribBlockAccelerated</* InParallel = */ false>(Ax, blockH, eval_He(ei), m.elementNodeIndices(ei));
+            for (size_t ei = 0; ei < numElements; ++ei) {
+                auto edata = edataGetter(ei);
+                auto He_block = [&edata](size_t a, size_t b, size_t bsa, size_t bsb) { return edata.block(a, b, bsa, bsb); };
+                m_assembleHessianContribBlockAccelerated</* InParallel = */ false>(Ax, blockH, He_block, edata.evars);
+            }
         }
         else {
             m_initVarLocks();
-            get_hessian_assembly_arena().execute([Ax, &blockH, &eval_He, &m, this]() {
-                parallel_for_range(m.numElements(), [Ax, &blockH, &eval_He, &m, this](size_t ei) {
-                    m_assembleHessianContribBlockAccelerated(Ax, blockH, eval_He(ei), m.elementNodeIndices(ei));
+            get_hessian_assembly_arena().execute([Ax, &blockH, &edataGetter, numElements, this]() {
+                parallel_for_range(numElements, [Ax, &blockH, &edataGetter, this](size_t ei) {
+                    auto edata = edataGetter(ei);
+                    auto He_block = [&edata](size_t a, size_t b, size_t bsa, size_t bsb) { return edata.block(a, b, bsa, bsb); };
+                    m_assembleHessianContribBlockAccelerated(Ax, blockH, He_block, edata.evars);
                 }, 1, 32);
             });
         }
     }
 
-    // TODO: add a more general version that supports `ElasticSheet`
     template<typename Real_, class SPMatBlock, class PEHEval, class ElementGetter>
     void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, size_t numElements, const PEHEval &eval_He, const ElementGetter &element) const {
-        if (get_max_num_tbb_threads() == 1) {
-            for (size_t ei = 0; ei < numElements; ++ei)
-                m_assembleHessianContribBlockAccelerated</* InParallel = */ false>(Ax, blockH, eval_He(ei), element(ei));
-        }
-        else {
-            m_initVarLocks();
-            get_hessian_assembly_arena().execute([Ax, &blockH, &eval_He, &element, numElements, this]() {
-                parallel_for_range(numElements, [Ax, &blockH, &eval_He, &element, numElements, this](size_t ei) {
-                    m_assembleHessianContribBlockAccelerated(Ax, blockH, eval_He(ei), element(ei));
-                }, 1, 32);
-            });
-        }
+        using PEH = decltype(eval_He(0));
+        using EVars = decltype(element(0));
+        using HEAD = HessianElementAssemblyData<PEH, EVars>;
+        assembleHessianBlockAccelerated(Ax, blockH, numElements, [&](size_t ei) { return HEAD{eval_He(ei), element(ei)}; });
     }
 
+    template<typename Real_, class SPMatBlock, class Mesh, class PEHEval>
+    void assembleHessianBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const Mesh &m, const PEHEval &eval_He) const {
+        assembleHessianBlockAccelerated(Ax, blockH, m.numElements(), eval_He, [&m](size_t ei) { return m.elementNodeIndices(ei); });
+    }
+
+    // Assemble NewtonHessian using block acceleration.
+    template<typename... Args>
+    void assembleHessian(NewtonHessian &NH, Args&&... args) const {
+        if (NH.isSparsityOnly()) NH.setZero(); // Allocate Ax array if necessary
+                                               // (and accumulate to existing Ax array otherwise)
+        BCSCMat &H = BCSCMat::cast(*NH.H_ss);
+        assembleHessianBlockAccelerated(H.Ax.data(), H, std::forward<Args>(args)...);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Gradient assembly.
+    ////////////////////////////////////////////////////////////////////////////
     // *Accumulate* to `g` the per-element gradient `eval_ge(ei)` for element ei in 0..ne.
     // The element's global block variable indices are obtained by calling `element(ei)`,
     // which should return an array of variable indices.
@@ -515,13 +558,13 @@ private:
             atomic_init(&(*m_varLocks)[i], false);
     }
 
+    // Assembly into a block-valued CSSC matrix using block sparsity pattern in `H`.
     template<bool InParallel = true, class SPMat, class PEH, class ElemBlockVars>
     void m_assembleHessianBlockContrib(SPMat &H, const PEH &H_e, const ElemBlockVars &blockVars) const {
         static_assert(SingleBlockDim, "Only implemented for SingleBlockDim case");
         static constexpr size_t N = VarStructure::FirstBlockDim;
         static constexpr size_t nbv = std::tuple_size_v<ElemBlockVars>;
 
-        // TODO: get this working for dynamically-sized element types.
         auto order = argsort(blockVars);
 
         SuiteSparse_long *Ap = H.Ap.data();
@@ -559,6 +602,7 @@ private:
         }
     }
 
+    // Assembly into a scalar-valued CSSC matrix using scalar sparsity pattern in `H`.
     template<bool InParallel = true, class SPMat, class HeBlock, class ElemBlockVars>
     void m_assembleHessianContrib(SPMat &H, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
         PerElementBlockOffsetCalculation<VarStructure, ElemBlockVars> blockInfo(m_vars, blockVars);
@@ -577,7 +621,7 @@ private:
                 if (gvar_i > gvar_j) { continue; }
                 bool localUpperTri = lbi <= lbj;
 
-                decltype(He_block(lvar_i, lvar_j, bsi, bsj)) block;
+                std::decay_t<decltype(He_block(lvar_i, lvar_j, bsi, bsj).eval())> block;
                 if (localUpperTri) block = He_block(lvar_i, lvar_j, bsi, bsj);
                 else               block = He_block(lvar_j, lvar_i, bsj, bsi).transpose();
 
@@ -606,57 +650,40 @@ private:
         }
     }
 
-    template<bool InParallel = true, class Real_, class SPMatBlock, class PEH, class ElemBlockVars>
-    void m_assembleHessianContribBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const PEH &H_e, const ElemBlockVars &blockVars) const {
-        static_assert(SingleBlockDim, "Only implemented for SingleBlockDim case");
-        static constexpr size_t N = VarStructure::MaxBlockDim;
-        static constexpr size_t nbv = std::tuple_size_v<ElemBlockVars>;
-
+    // Assemble into a scalar-valued `Ax` array but use the block sparsity
+    // pattern in `H` for acceleration. This is the correct assembly routine
+    // to use for the `BlockCSCHessian` format.
+    template<bool InParallel = true, class Real_, class SPMatBlock, class HeBlock, class ElemBlockVars>
+    void m_assembleHessianContribBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
         PerElementBlockOffsetCalculation<VarStructure, ElemBlockVars> blockOffsetCalc(m_vars, blockVars);
 
         auto order = argsort(blockVars);
 
-        for (size_t lbj_i = 0; lbj_i < nbv; ++lbj_i) {
+        for (size_t lbj_i = 0; lbj_i < blockVars.size(); ++lbj_i) {
             size_t lbj = order[lbj_i];
             auto bj = blockVars[lbj];
-            size_t lbo_j = blockOffsetCalc.offset(lbj);
-            const size_t bs_j = blockOffsetCalc.blockSize(lbj);
+            const size_t lbo_j = blockOffsetCalc.offset(lbj);
 
-            // Compute the start and length of the scalar-valued column
-            // corresponding to block column `bj` using block sparsity pattern.
             auto colScanner = blockH.columnScanner(bj);
-
+            const size_t bs_j = colScanner.colBlockSize();
             if constexpr (InParallel) m_lockVar(bj);
+
             for (size_t lbi_i = 0; lbi_i < lbj_i; ++lbi_i) {
                 size_t lbi = order[lbi_i];
                 auto bi = blockVars[lbi];
-                size_t lbo_i = blockOffsetCalc.offset(lbi);
+                const size_t lbo_i = blockOffsetCalc.offset(lbi);
+                const size_t bs_i = blockOffsetCalc.blockSize(lbi);
 
-                auto addBlock = [&](auto block) {
-                    // Convert block matrix location into scalar matrix location.
-                    // SuiteSparse_long loc = colScanner.advanceToBlock(bi); // Somehow this is slower??
-                    SuiteSparse_long loc = colScanner.findBlock(bi);
-                    for (size_t c = 0; c < bs_j; ++c) {
-                        if constexpr (SingleBlockDim)
-                            Eigen::Map<Eigen::Matrix<Real_, N, 1>>(Ax + loc) += block.col(c);
-                        else
-                            Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, blockOffsetCalc.blockSize(lbi)) += block.col(c);
-
-                        loc += colScanner.stride() + c; // each subsequent column has an extra entry...
-                    }
-                };
-
-                if (lbi < lbj) addBlock(getBlock(H_e, lbo_i, lbo_j));
-                else           addBlock(getBlock(H_e, lbo_j, lbo_i).transpose());
+                if (lbi < lbj) colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_i, lbo_j, bs_i, bs_j));
+                else           colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_j, lbo_i, bs_i, bs_j).transpose());
             }
 
-            // Add (upper triangle of) diagonal block, starting at final entry
-            // of first column.
+            // Add (upper triangle of) diagonal block
             SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
-            auto block = getBlock(H_e, lbo_j, lbo_j);
+            auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
-                loc += colScanner.stride() + c; // each subsequent column has an extra entry...
+                loc += colScanner.diagBlockColStride(c);
             }
 
             if constexpr (InParallel) m_unlockVar(bj);
@@ -670,10 +697,12 @@ private:
                 [this, blockSize, &elementGetter](size_t ei) {
                     std::vector<size_t> elem = elementGetter(ei);
                     for (size_t i = 0; i < elem.size(); ++i) {
-                        size_t vb_i = elem[i];
-                        size_t v = m_vars.blockContainingVar(vb_i * blockSize);
+                        size_t vs = blockSize * elem[i]; // Scalar location of the start of the caller's block
+                        size_t v = m_vars.blockContainingVar(vs);
                         auto [gvar, bs] = m_vars.blockInfo(v);
-                        if (gvar > vb_i || vb_i + blockSize > gvar + bs) throw std::runtime_error("An element's block variable does not fit a single block of our VarStructure");
+                        // Verify that the block the caller wants to insert
+                        // fits inside block `v` of our VarStructure.
+                        if (vs < gvar || vs + blockSize > gvar + bs) throw std::runtime_error("An element's block variable does not fit a single block of our VarStructure");
                         elem[i] = v;
                     }
                     return elem;
@@ -687,6 +716,8 @@ private:
     mutable std::unique_ptr<std::vector<std::atomic<bool>>> m_varLocks;
     VarStructure m_vars;
 };
+
+using ScalarSystemAssembler = SystemAssembler<1>;
 
 template<class VS>
 struct SystemAssemblerForVarStructure;

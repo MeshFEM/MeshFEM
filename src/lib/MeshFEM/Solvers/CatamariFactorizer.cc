@@ -2,16 +2,13 @@
 
 #if MESHFEM_WITH_CATAMARI
 
-extern "C" {
-#include <cholmod.h>
-}
+#include "CholmodFactorizer.hh"
 
 #include <catamari/apply_sparse.hpp>
 #include <catamari/blas_matrix.hpp>
 #include <catamari/norms.hpp>
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
-#include <atomic>
 
 #define DUMP_MATRICES 0
 
@@ -278,7 +275,7 @@ struct CatamariConverter {
                             const Int *iter;
                             if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
                             else {
-                                iter = std::lower_bound(index_beg, index_end, i_perm);
+                                iter = sb_lower_bound(index_beg, index_end, i_perm);
                                 if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index " + std::to_string(i_perm) + " in supernode " + std::to_string(supernode) + " containing rows in [" + std::to_string(*index_beg) + ", " +  std::to_string(*index_end) + ")");
                             }
                             guess = iter + 1;
@@ -347,6 +344,15 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
             ordering.inverse_permutation.Resize(A_reduced->m);
             catamari::Buffer<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
             auto cholmat = cholmod_sparse_view(*A_reduced);
+            // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
+            // (even though the Nested dissection algorithm should not be
+            // looking at its entries...)
+            // Presumably this is because the first step of cholmod_l_nested_dissection
+            // is to convert the matrix from upper-triangular to full format.
+            // In the future, we should bypass this step since we already do the
+            // conversion ourselves for Catamari.
+            cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
+
             if (orderingMethod == OrderingMethod::CholmodNesdis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,

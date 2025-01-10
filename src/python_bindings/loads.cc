@@ -18,8 +18,6 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "LoadBinding.hh"
 
-using APC = Loads::AttachmentPointCoordinate<double>;
-
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
@@ -63,7 +61,6 @@ struct LoadBinder {
                     return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
              ;
-
     }
 
     template<class Object>
@@ -85,20 +82,22 @@ struct LoadBinder {
                 }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
         ;
 
-        using CB = Loads::CircumcenterBarrier<Object>;
-        py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
-            .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
-            .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
-                                                 [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
-            .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
-                                              [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
-            .def("minCircumcenterBC", &CB::minCircumcenterBC, "Get the smallest barycentric coordinate of any of the elements (or any of the sub-elements if `m_subdivisionBarrier` is `true`).")
-            .def_readwrite("bc_min", &CB::bc_min)
+        if constexpr (Object::Deg == 1) {
+            using CB = Loads::CircumcenterBarrier<Object>;
+            py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
+                .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
+                .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
+                                                     [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
+                .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
+                                                  [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
+                .def("minCircumcenterBC", &CB::minCircumcenterBC, "Get the smallest barycentric coordinate of any of the elements (or any of the sub-elements if `m_subdivisionBarrier` is `true`).")
+                .def_readwrite("bc_min", &CB::bc_min)
+                ;
+            module.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
+                        return std::make_shared<CB>(obj, bc_min, subdivisionBarrier);
+                    }, py::arg("obj"), py::arg("bc_min") = 0.0, py::arg("subdivisionBarrier") = false)
             ;
-        module.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
-                    return std::make_shared<CB>(obj, bc_min, subdivisionBarrier);
-                }, py::arg("obj"), py::arg("bc_min") = 0.0, py::arg("subdivisionBarrier") = false)
-        ;
+        }
     }
 
     template<class Object>
@@ -128,6 +127,7 @@ struct LoadBinder {
     }
 };
 
+using APC = Loads::AttachmentPointCoordinate<double>;
 template<class Springs>
 auto bindSprings(py::module &m, const std::string name) {
     using Load = Loads::Load<double>;

@@ -33,6 +33,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     m.doc() = "Wrapper for Newton optimizer's types";
 
     py::module::import("sparse_matrices");
+    py::module::import("block_sparse_hessian");
 
     ////////////////////////////////////////////////////////////////////////////////
     // "Controllers" for customizing solver behavior
@@ -181,7 +182,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("objective", &NOT::objective)
         .def("gradient",  &NOT::gradient, py::arg("weight") = 1.0, py::arg("freshIterate") = false)
         .def("hessian",   &NOT::hessian, py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern", &NOT::hessianSparsityPattern, py::arg("val") = 0.0)
+        .def("hessianSparsityPattern", &NOT::hessianSparsityPattern)
         .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)
         .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)
@@ -232,9 +233,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 return step;
             }, py::arg("feasibility") = false)
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
-        .def("setFixedVars", &NewtonOptimizer::setFixedVars, py::arg("fixedVars"))
 
         .def_readwrite("options", &NewtonOptimizer::options)
-        .def_property_readonly("solver", [](NewtonOptimizer &n) -> CholeskyFactorizerBase & { return n.solver(); }, py::return_value_policy::reference_internal)
         ;
 }
