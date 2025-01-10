@@ -322,7 +322,7 @@ protected:
     FactorizationType m_factorizationType = FactorizationType::None;
 
     // Functionality for efficient solves under variable pins
-    std::vector<size_t> m_fixedVars; // sorted, unique
+    std::vector<size_t> m_fixedVars; // sorted, unique *scalar* variable indices
     std::vector<SuiteSparse_long> m_entryForReducedEntry;
     std::vector<SuiteSparse_long> m_reducedRowForRow;
     mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
@@ -334,7 +334,7 @@ protected:
 
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization
-    const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
+    const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool alreadySorted = false) {
         if (pinnedVars.empty()) return &mat;
 
         m_Areduced = std::make_unique<SuiteSparseMatrix>(mat);
@@ -346,8 +346,10 @@ protected:
             if (!fixedVarMask[var]) m_fixedVars.push_back(var);
             fixedVarMask[var] = true;
         }
-        std::sort(m_fixedVars.begin(), m_fixedVars.end()); // Must be sorted to accelerate comparison in `updateSymbolicFactorization`
-                                                           // TODO: this can be avoided when the caller already sorts pinnedVars...
+
+        // Fixed variable indices must be sorted to accelerate comparison in `updateSymbolicFactorization`
+        if (!alreadySorted)
+            std::sort(m_fixedVars.begin(), m_fixedVars.end());
 
         m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return fixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
         m_permutedReducedRowForRow.clear();

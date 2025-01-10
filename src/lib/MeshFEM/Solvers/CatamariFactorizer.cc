@@ -11,6 +11,8 @@
 #include <specify.hpp>
 
 #define DUMP_MATRICES 0
+// The largest block size for which we'll instantiate a BlockCatamari solver.
+#define MAX_INSTANTIATED_BLOCK_SIZE 3
 
 // Support for converting a SuiteSparseMatrix holding only the *upper triangle*
 // of a CSC-format symmetric matrix into a catamari::CoordinateMatrix of the
@@ -28,20 +30,26 @@ struct CatamariConverter {
     using CMat = catamari::CoordinateMatrix<double>;
     using ConversionPlan = catamari::ConversionPlan;
 
-    CatamariConverter(const SuiteSparseMatrix &Asp) {
+    CatamariConverter(const SuiteSparseMatrix &Asp, const size_t blockSize) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter");
         if (Asp.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
             throw std::runtime_error("Unexpected symmetry mode");
         if (Asp.m != Asp.n) throw std::runtime_error("Only square matrices are supported");
 
-        // Convert upper triangle sparsity pattern to a full symmetric sparsity
+        const SuiteSparseMatrix *Asp_ptr = &Asp;
+        SuiteSparseMatrix A_scalar;
+        if (blockSize == 2) { A_scalar = Asp.expandSparsityPattern<2, /*AssumeDiagonalExists = */ true>(); Asp_ptr = &A_scalar; }
+        if (blockSize == 3) { A_scalar = Asp.expandSparsityPattern<3, /*AssumeDiagonalExists = */ true>(); Asp_ptr = &A_scalar; }
+        if (blockSize  > 3) { throw std::runtime_error("Block size not supported"); }
+
+        // Convert upper-triangle sparsity pattern to a full symmetric sparsity
         // pattern in Catamari format.
-        m_result.Resize(Asp.m, Asp.n);
+        m_result.Resize(Asp_ptr->n, Asp_ptr->n);
 
         {
             // Get an integer-valued sparse matrix where each entry holds the
             // index of the source upper triangle entry that generated it.
-            CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full = Asp.toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
+            CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full = Asp_ptr->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
 
             catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
             for (SuiteSparse_long j = 0; j < A_full.n; ++j) {
@@ -316,8 +324,84 @@ CatamariFactorizer::CatamariFactorizer() {
 size_t CatamariFactorizer::m_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 size_t CatamariFactorizer::n_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 
+void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+    // We only support uniform block sizes, and only up to
+    // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
+    // TODO: convert to GCD block size instead? Do we have a use case for this?
+    // TODO: try block reordering of nonuniform block sizes (then expand to scalar)?
+    if (mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE)) {
+        m_blockSize = mat.maxBlockSize();
+        m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
+    }
+    else {
+        m_scalarHessian = mat.toScalar();
+        m_blockSize = 1;
+        m_factorizeSymbolic(m_scalarHessian, pinnedVars);
+    }
+}
+
 void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
-    const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
+    m_blockSize = 1;
+    m_factorizeSymbolic(mat, pinnedVars);
+}
+
+// When `m_blockSize > 1` then `mat` holds the block sparsity pattern with
+// uniform block size `m_blockSize`.
+// `pinnedVars` always holds scalar variables.
+void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
+    const SuiteSparseMatrix *A_reduced;
+    if (m_blockSize > 1 && pinnedVars.size() > 0) {
+        // Convert the scalar variable indices in `pinnedVars` to their
+        // corresponding block variable indices.
+        size_t numBlockVars = mat.n;
+        std::vector<bool> scalarFixedVarMask(numBlockVars * m_blockSize, false);
+        std::vector<size_t> pinnedBlockVars, scalarFixedVars;
+        std::vector<size_t> numComponentsPinned(numBlockVars); // how many scalar variables within each block have been pinned?
+        for (size_t i : pinnedVars) {
+            if (scalarFixedVarMask[i]) continue;
+            scalarFixedVarMask[i] = true;
+            scalarFixedVars.push_back(i);
+            size_t bi = i / m_blockSize;
+            if (++numComponentsPinned[bi] == 1) pinnedBlockVars.push_back(bi);
+        }
+        // Detect entries of `pinnedVars` that do not respect the block
+        // structure (i.e., that pin only part of a block); these will need to
+        // be handled specially.
+        for (size_t bi : pinnedBlockVars) {
+            if (numComponentsPinned[bi] != m_blockSize)
+                throw std::runtime_error("Partially-pinned block variables not yet implemented");
+            // TODO: keep the partially pinned block in the sparsity pattern and
+            // apply the scalar pin constraint during numeric factorization.
+        }
+        A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
+        // `m_initRowColRemoval` has now stored the pinned block variable
+        // indices, whereas `m_fixedVars` should store scalar variable indices.
+        m_fixedVars.swap(scalarFixedVars);
+
+        // Convert `m_reducedRowForRow` and `m_entryForReducedEntry` from block to scalar.
+        // TODO: keep block versions around to accelerate fixed var removal
+        // during solve? Also, once we implement the version where the entire
+        // symbolic factorization is constructed from scalar sparsity
+        // pattern, the block version of `m_entryForReducedEntry` will need to
+        // be passed to `constructConversionPlan` below!!!
+        auto upgrade_block_indices = [&](std::vector<SuiteSparse_long> &indices) {
+            std::vector<SuiteSparse_long> scalarIndices;
+            scalarIndices.reserve(indices.size() * m_blockSize);
+            for (size_t bi : indices) {
+                for (size_t j = 0; j < m_blockSize; ++j)
+                    scalarIndices.push_back(bi * m_blockSize + j);
+            }
+            indices.swap(scalarIndices);
+        };
+        upgrade_block_indices(m_reducedRowForRow);
+
+        // TODO: "Upgrade" m_entryForReducedEntry from block to scalar
+        // This is causing crashes in problems with pin constraints.
+    }
+    else {
+        A_reduced = m_initRowColRemoval(mat, pinnedVars);
+    }
+
 #if DUMP_MATRICES
     {
         static size_t i = 0;
@@ -328,7 +412,7 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
     }
 #endif
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced);
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize);
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
@@ -365,6 +449,20 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
             }
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
+
+            if (m_blockSize > 1) {
+                // "Upgrade" the block permutation to a scalar permutation.
+                auto upgrade_permutation = [&](auto &perm) {
+                    catamari::Buffer<SuiteSparse_long> scalarPermutation(m_blockSize * A_reduced->n);
+                    for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
+                        for (size_t j = 0; j < m_blockSize; ++j)
+                            scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
+                    }
+                    perm = std::move(scalarPermutation);
+                };
+                upgrade_permutation(ordering.permutation);
+                upgrade_permutation(ordering.inverse_permutation);
+            }
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
@@ -388,29 +486,22 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
     }
 #endif
 
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), mat.Ax.data());
-    if (size_t(result.num_successful_pivots) != n_reduced()) {
-        m_factorizationType = FactorizationType::Symbolic;
-        throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
-                                 std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
-    }
-    m_factorizationType = FactorizationType::Numeric;
+    m_numericFactorizationImpl(mat.Ax.data());
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
-    assertFactorization(FactorizationType::Symbolic);
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, B.Ax.data());
-    if (size_t(result.num_successful_pivots) != n_reduced()) {
-        m_factorizationType = FactorizationType::Symbolic;
-        throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
-                                 std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
-    }
-    m_factorizationType = FactorizationType::Numeric;
+    m_numericFactorizationImpl(A.Ax.data(), sigma, B.Ax.data());
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    m_numericFactorizationImpl(A.Ax.data(), sigma, nullptr);
+}
+
+template<typename... Args>
+void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&... args) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), sigma, nullptr);
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +

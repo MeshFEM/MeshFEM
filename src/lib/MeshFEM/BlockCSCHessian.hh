@@ -498,13 +498,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual void assertSupportsAssembly() const = 0;
     virtual bool missingRequiredDiagonalBlocks() const = 0;
 
-    virtual SuiteSparseMatrix toScalar() const = 0;
-
-    SuiteSparseMatrix toScalar(Real fillVal) const {
-        SuiteSparseMatrix result = toScalar();
-        result.Ax.assign(result.nz, fillVal);
-        return result;
-    }
+    virtual SuiteSparseMatrix toScalar(bool sparsityOnly = false) const = 0;
 
     virtual void applyRaw(const double *x, double *result) const = 0;
 
@@ -611,9 +605,17 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     }
 
     using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
-    CSCMat toScalar() const override {
+    CSCMat toScalar(bool sparsityOnly = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.toScalar");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
+
+        if (uniformBlockSize()) {
+            CSCMat result = this->template expandSparsityPattern<VarStructure::MaxBlockDim>();
+
+            // Copy scalar values over (if they exist)
+            if (!sparsityOnly) result.Ax = Ax;
+            return result;
+        }
 
         size_t n_scalar = numScalarCols();
         CSCMat result(n_scalar, n_scalar);
@@ -660,7 +662,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         }
 
         // Copy scalar values over (if they exist)
-        result.Ax = Ax;
+        if (!sparsityOnly) result.Ax = Ax;
 
         return result;
     }
