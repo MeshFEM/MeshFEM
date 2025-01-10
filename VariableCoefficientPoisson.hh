@@ -46,10 +46,10 @@ struct VariableCoefficientPoisson {
         if (  neumannFluxes.size() != neumannBoundaryElements.size()) throw std::runtime_error("Neumann data size mismatch");
         if (dirichletValues.size() !=          dirichletNodes.size()) throw std::runtime_error("Dirichlet data size mismatch");
 
-        SystemAssembler<1> m_assembler(m.numNodes());
+        ScalarSystemAssembler m_assembler(m.numNodes());
 
         // Build the stiffness matrix
-        A = m_assembler.blockSparsityPatternForMesh(m);
+        A = *(m_assembler.blockSparsityPatternForMesh(m));
         A.Ax.resize(A.nz);
         m_assembler.assembleHessian(A, m, [&](size_t ei) {
             const auto &e = m.element(ei);
