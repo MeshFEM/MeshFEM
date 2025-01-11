@@ -199,6 +199,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {
         M.setZero();
         MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped);
+        if (this->rho != 1.0) M *= this->rho;
     }
 
     virtual CSCMat sobolevInnerProductMatrix(Real Mscale = 1.0) const override {
@@ -214,6 +215,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     const MXNd &deformedPositions() const { return m_x; } // deformed positions for all nodes
     MXNd restNodePositions() const { return getNodes(mesh()); }
 
+    MXNd nodeDisplacements() const { return deformedPositions() - restNodePositions(); }
     const Mesh &mesh() const { return *m_mesh; }
 
     const Energy &getEnergyDensity(size_t ei) const {
@@ -407,6 +409,40 @@ private:
             throw std::invalid_argument("Invalid vertexPositions size");
         m_mesh->setNodePositions(Eigen::Map<const MXNd>(vars.data(), numVertices(), size_t(N)));
     }
+
+    //////////////////////////////////////////////////////
+    //// IPC Equilibrium used methods
+    //////////////////////////////////////////////////////
+    // Get the edges and faces of the boundary mesh
+    using CollisionMesh = typename Base::CollisionMesh;
+    CollisionMesh getCollisionMesh() const override {
+        CollisionMesh result;
+        auto &faces = result.faces;
+        const auto &m = mesh();
+        if (K == 3) {
+            // For tet meshes only: |#Boundary Elements| x 3
+            faces.resize(m.numBoundaryElements(), 3);
+            for (auto be : m.boundaryElements())
+                for (auto bv : be.vertices())
+                    faces(be.index(),bv.localIndex()) = bv.index();
+        }
+        // Edges |#edge| x 2
+        auto &edges = result.edges;
+        edges.resize(m.numBoundaryEdges(), 2);
+        m.visitBoundaryEdges([&edges](auto bhe, size_t i) {
+                                            edges(i,0) = bhe.tip() .index();
+                                            edges(i,1) = bhe.tail().index(); });
+        auto &nfcv = result.nodeForCollisionMeshVertex;
+        nfcv.resize(m.numBoundaryVertices());
+        for (int i = 0; i < nfcv.size(); ++i)
+            nfcv[i] = m.boundaryVertex(i).volumeVertex().node().index();
+        result.N = N;
+        result.bbox = m.boundingBox();
+        result.fullModelBlockVars = m.numNodes();
+        return result;
+    }
+
+    Real volume() const override { return mesh().volume(); }
 
 protected:
     std::shared_ptr<Mesh> m_mesh;

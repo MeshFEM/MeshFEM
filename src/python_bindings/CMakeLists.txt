@@ -62,6 +62,14 @@ pybind11_add_module(elastic_object elastic_object.cc)
 set_target_properties(elastic_object PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(elastic_object PUBLIC MeshFEM intel_pybind_14_hack)
 
+pybind11_add_module(dynamic_simulator dynamic_simulator.cc)
+set_target_properties(dynamic_simulator PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(dynamic_simulator PUBLIC MeshFEM intel_pybind_14_hack)
+
+pybind11_add_module(meshfem_ipc meshfem_ipc.cc)
+set_target_properties(meshfem_ipc PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(meshfem_ipc PUBLIC MeshFEM intel_pybind_14_hack)
+
 pybind11_add_module(elastic_solid elastic_solid.cc)
 set_target_properties(elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(elastic_solid PUBLIC MeshFEM intel_pybind_14_hack)

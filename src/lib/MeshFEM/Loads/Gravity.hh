@@ -22,7 +22,7 @@ namespace Loads {
         template<class Object>
         struct GravityLoadVector {
             using VXd  = typename Object::VXd;
-            static constexpr size_t N   = 3;
+            static constexpr size_t N   = Object::N;
             static constexpr size_t K   = Object::K;
             static constexpr size_t Deg = Object::Deg;
             static VXd compute(const Gravity<Object> &g) {
@@ -33,7 +33,7 @@ namespace Loads {
                 auto integratedPhis = integratedShapeFunctions<Deg, K>();
                 for (const auto e : m.elements()) {
                     for (const auto n : e.nodes()) {
-                        result.template segment<3>(3 * n.index()) +=
+                        result.template segment<N>(N * n.index()) +=
                             g.get_g() * (integratedPhis[n.localIndex()] * e->volume());
                     }
                 }
@@ -48,11 +48,18 @@ namespace Loads {
         using Real = typename Object::Real;
         using Base = ObjectSpecificLoad<Object>;
         using ST   = typename Base::EOStorageType;
+        static constexpr size_t N = Object::N;
         using VXd  = typename Object::VXd;
-        using V3d  = Eigen::Matrix<Real, 3, 1>;
-        using Base::numVars;
+        using VNd  = Eigen::Matrix<Real, N, 1>; // ElasticSolid has the information of N
+        using Base::getObj;
 
-        Gravity(const ST &obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
+        static constexpr VNd default_gravity() {
+            VNd result = VNd::Zero();
+            result[N - 1] = 9.80635;
+            return result;
+        }
+
+        Gravity(const ST &obj, Real rho, const VNd &g = default_gravity())
             : Base(obj), m_rho(rho), m_g(g) {
             m_updateCache();
         }
@@ -60,9 +67,10 @@ namespace Loads {
         void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
         Real get_rho()   const { return m_rho; }
 
-        void set_g(V3d g)      { m_g = g; m_updateCache(); }
-        V3d  get_g()     const { return m_g; }
+        void set_g(VNd g)      { m_g = g; m_updateCache(); }
+        VNd  get_g()     const { return m_g; }
 
+        size_t numVars() const { return Base::getObj().numVars(); }
         virtual Real energy() const override {
             return m_grad.dot(Base::getObj().getVars());
         }
@@ -87,7 +95,7 @@ namespace Loads {
         }
 
         Real m_rho;
-        V3d  m_g; // Gravitational acceleration vector
+        VNd  m_g; // Gravitational acceleration vector
 
         void m_updateCache() {
             m_grad = detail::GravityLoadVector<Object>::compute(*this);

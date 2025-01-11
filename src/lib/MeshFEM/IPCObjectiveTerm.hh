@@ -1,0 +1,201 @@
+#ifndef IPCObject_HH
+#define IPCObject_HH
+
+#include "GlobalBenchmark.hh"
+#include "newton_optimizer/MultiobjectiveProblem.hh"
+#include "Loads/Load.hh"
+#include "ElasticObject.hh"
+#include "ParallelVectorOps.hh"
+
+#include <Eigen/Sparse>
+#include <MeshFEM_export.h>
+#include "IPCWrapper.hh"
+#include <limits>
+
+struct MESHFEM_EXPORT TimestepLimiter {
+    TimestepLimiter(){};
+    virtual double getTimestepLength (double t, double dt) { return 1.0; }
+    virtual void initialBarrierStiffness(double w) = 0;
+    virtual ~TimestepLimiter(){};
+    void setAdaptiveTimestep(bool flag) {m_useAdaptiveTimestep = flag;}
+    bool useAdaptiveTimestep() {return m_useAdaptiveTimestep;}
+private:
+    bool m_useAdaptiveTimestep = true;
+};
+
+template<typename _Real>
+struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public TimestepLimiter {
+    enum class CCDMethod {TightInclusion, CFL};
+    using Real = _Real;
+    using EO   = ElasticObject<Real>;
+
+    using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
+    using MXi = Eigen::MatrixXi;
+
+    IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts);
+
+    virtual void varsUpdated() override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.varsUpdated");
+        // Update IPC collision constraints and contact hessian sparsity pattern
+        m_collisionVertexPositions = m_combinedCollisionMesh->mergeCombinedCollisionFields(getVars(), m_combinedCollisionMesh->getObstaclesVertices());
+        m_buildCollisionConstraints();
+    }
+
+    const VXd getVars() const { return object().getVars().template cast<double>(); }
+    size_t numVars()    const { return object().numVars(); }
+
+    virtual Real objective() const override { 
+        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.energy");
+        return m_k * contactPotentialEnergy(); }
+
+    virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateGradient");
+        // Add contact potential gradient computed by IPC
+        const VXd &dB_dCV = contactPotentialGradient();
+        // Only consider the ElasticObject Collision Mesh, not obstacles.
+        for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i) {
+            int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
+            if (bvar < 0) continue;
+            g.segment(m_N * bvar, m_N) += weight * m_k * dB_dCV.segment(m_N * i, m_N);
+        }
+        // Store the contact potential gradient related to obstacles points
+        m_combinedCollisionMesh->setObstaclesForce(dB_dCV.tail(m_N * m_combinedCollisionMesh->numObstaclesVertices()));
+    }
+
+    virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */) const override {
+        return m_hessianSparsity;
+    }
+
+    virtual SparsityUpdateFrequency sparsityUpdateFrequency() const override { return SparsityUpdateFrequency::SOMETIMES; }
+
+    void setBarrierStiffness(Real k) { m_k = k; }
+    Real getBarrierStiffness() const { return m_k; }
+
+    void set_dhat(Real dhat) { m_ipcWrapper->dhat = dhat; }
+    Real get_dhat() const { return m_ipcWrapper->dhat; }
+
+    // Get the last attempted Newton step (for debugging the line search)
+    const MXd &getCollisionVertexPositions() const { return m_collisionVertexPositions;     }
+    const MXi &getCollisionMeshFaces()       const { return m_combinedCollisionMesh->faces; }
+    const MXi &getCollisionMeshEdges()       const { return m_combinedCollisionMesh->edges; }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Definition of IPC methods
+    ////////////////////////////////////////////////////////////////////////////////
+    Real contactPotentialEnergy() const;
+    // Gradient with respect to collision mesh vertex positions
+    VXd  contactPotentialGradient() const;
+    // Hessian with respect to collision mesh vertex positions
+    void contactHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask)  const;
+    
+    VXd contactGradient() const {
+        VXd g;
+        g.setZero(numVars());
+        const VXd &dB_dCV = contactPotentialGradient();
+        // Only consider the ElasticObject Collision Mesh, not obstacles.
+        for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i){
+            int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
+            if (bvar < 0) continue;
+            g.segment(m_N * bvar, m_N) += dB_dCV.segment(m_N * i, m_N);
+
+        }        
+        return g;
+    }
+
+    // Determine the maximum collision-free step size.
+    Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override;
+
+    // Adaptive Barrier Stiffness
+    void initialBarrierStiffness(double weight) override;
+    void updateBarrierStiffness();
+
+    const SuiteSparseMatrix &getContactHessianSparsityPattern() const { return m_contactBlockSparsity; }
+
+    void setUseAdaptiveBarrierStiffness(bool flag) {
+        useAdaptiveBarrier = flag;
+        if (useAdaptiveBarrier) {
+            initialBarrierStiffness(1.0);
+            std::cout << "Warning: Barrier stiffness weight is set to one." << std::endl;}
+    }
+
+    bool getUseAdaptiveBarrierStiffness() {
+        return useAdaptiveBarrier;
+    }
+
+    size_t numCollisionConstraints() const;
+
+    // Adaptive time stepping, time will progress with alpha*dt due to the linear trajectory of obstacle movement
+    // in the scene to prevent collision of obstacle and Elastic Object.
+    virtual Real getTimestepLength(Real t, Real dt) override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.AddaptiveTimeStepLength");
+        Real alpha;
+        VXd vars = getVars();
+        // Move Obstacle with t time in linear trajectory
+        m_combinedCollisionMesh->updateObstaclePosition(t + dt);
+        // Fix ElasticObject and run CCD to detect collision of obstacle with ElasticObject  
+        alpha = customFeasibleStepLength(vars, VXd::Zero(numVars()));
+        // Move the obstacle to previous position and then move alpha*t in linear trajectory
+        m_combinedCollisionMesh->updateObstaclePosition(t + alpha*dt);
+        m_collisionVertexPositions = m_combinedCollisionMesh->mergeCombinedCollisionFields(vars, m_combinedCollisionMesh->getObstaclesVertices());
+        m_buildCollisionConstraints();
+        m_ipcWrapper->resetCandidateCache();
+        return alpha;
+    }
+
+    void updateObstaclePosition(Real t) {
+        m_combinedCollisionMesh->updateObstaclePosition(t);
+    }
+
+    // Begining of every iteration in newton iterations
+    virtual void startOfIteration() override { if (useAdaptiveBarrier) updateBarrierStiffness(); }
+
+     // Called at the end of a line search
+    virtual void endofLineSearch() const override {
+        m_ipcWrapper->resetCandidateCache();
+    }
+
+    Real CCDFeasibleStepLength(const MXd &x0, const MXd &x1) const;
+
+    Real CCDStepSize(const VXd &x0, const VXd &x1) const;
+
+    const EO &object() const { return *m_obj; }
+
+    ~IPCObjectiveTerm();
+    
+    CCDMethod CCD = CCDMethod::TightInclusion;
+
+protected:
+    template<typename SPMat> void m_contactHessianImpl(SPMat &H, bool projectionMask = false) const;
+
+    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &result, bool projectionMask = false) const override{
+        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");        
+        contactHessian(weight, result, projectionMask);
+    }
+
+    void m_buildCollisionConstraints();
+    void m_updateContactHessianSparsityPattern();
+
+    std::unique_ptr<CombinedCollisionMesh<Real>> m_combinedCollisionMesh;
+    std::unique_ptr<IPCWrapperBase> m_ipcWrapper;
+
+    std::shared_ptr<EO> m_obj;
+
+    // m_obj embeddingSpace dimension
+    size_t m_N;
+
+    // The block sparsity pattern `m_blockSparsity` is the union of the
+    // sparsity patterns of the elastic/load potentials
+    // (`m_primaryBlockSparsity`) and the IPC barriers (`m_contactBlockSparsity`).
+    // The full scalar sparsity pattern is stored in `m_hessianSparsity`.
+    SuiteSparseMatrix m_hessianSparsity, m_blockSparsity, m_primaryBlockSparsity, m_contactBlockSparsity;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // User configuration of IPC barrier
+    ////////////////////////////////////////////////////////////////////////////////
+    bool useAdaptiveBarrier = true;
+    Real m_k;                         // IPC Barrier Stiffness
+    MXd  m_collisionVertexPositions;  // Cached collision vertex positions
+
+    size_t m_sparsityPatternUpdateThreshold = 100; // Number of blocks that must disappear from the sparsity pattern before we re-factorize.
+};
+#endif
