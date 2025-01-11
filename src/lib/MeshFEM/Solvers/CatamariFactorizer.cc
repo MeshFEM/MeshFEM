@@ -14,6 +14,15 @@
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
 
+template<size_t MaxBlockSize = MAX_INSTANTIATED_BLOCK_SIZE>
+SuiteSparseMatrix expandSparsityPattern(const SuiteSparseMatrix &A, size_t blockSize) {
+    if (blockSize == MaxBlockSize) return A.expandSparsityPattern<MaxBlockSize, /*AssumeDiagonalExists = */ true>();
+    else {
+        if constexpr (MaxBlockSize > 1) return expandSparsityPattern<MaxBlockSize - 1>(A, blockSize);
+        else                            throw std::runtime_error("Unsupported block size");
+    }
+}
+
 // Support for converting a SuiteSparseMatrix holding only the *upper triangle*
 // of a CSC-format symmetric matrix into a catamari::CoordinateMatrix of the
 // full matrix. The output format is essentially CSR but with the row indices
@@ -38,9 +47,7 @@ struct CatamariConverter {
 
         const SuiteSparseMatrix *Asp_ptr = &Asp;
         SuiteSparseMatrix A_scalar;
-        if (blockSize == 2) { A_scalar = Asp.expandSparsityPattern<2, /*AssumeDiagonalExists = */ true>(); Asp_ptr = &A_scalar; }
-        if (blockSize == 3) { A_scalar = Asp.expandSparsityPattern<3, /*AssumeDiagonalExists = */ true>(); Asp_ptr = &A_scalar; }
-        if (blockSize  > 3) { throw std::runtime_error("Block size not supported"); }
+        if (blockSize > 1) { A_scalar = expandSparsityPattern<>(Asp, blockSize); Asp_ptr = &A_scalar; }
 
         // Convert upper-triangle sparsity pattern to a full symmetric sparsity
         // pattern in Catamari format.
@@ -240,7 +247,6 @@ struct CatamariConverter {
             m_conversionPlan.resize(back);
         }
 
-
         BENCHMARK_START_TIMER_SECTION("Build");
 
         // For each entry in the full (non-triangular) row-col-removed input matrix `m_result`,
@@ -384,19 +390,21 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         // symbolic factorization is constructed from scalar sparsity
         // pattern, the block version of `m_entryForReducedEntry` will need to
         // be passed to `constructConversionPlan` below!!!
-        auto upgrade_block_indices = [&](std::vector<SuiteSparse_long> &indices) {
-            std::vector<SuiteSparse_long> scalarIndices;
-            scalarIndices.reserve(indices.size() * m_blockSize);
-            for (size_t bi : indices) {
-                for (size_t j = 0; j < m_blockSize; ++j)
-                    scalarIndices.push_back(bi * m_blockSize + j);
-            }
-            indices.swap(scalarIndices);
-        };
-        upgrade_block_indices(m_reducedRowForRow);
+        // auto upgrade_block_indices = [&](std::vector<SuiteSparse_long> &indices) {
+        //     std::vector<SuiteSparse_long> scalarIndices;
+        //     scalarIndices.reserve(indices.size() * m_blockSize);
+        //     for (size_t bi : indices) {
+        //         for (size_t j = 0; j < m_blockSize; ++j)
+        //             scalarIndices.push_back(bi * m_blockSize + j);
+        //     }
+        //     indices.swap(scalarIndices);
+        // };
+        // upgrade_block_indices(m_reducedRowForRow);
 
-        // TODO: "Upgrade" m_entryForReducedEntry from block to scalar
-        // This is causing crashes in problems with pin constraints.
+        // TODO: remove
+        SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
+        m_reducedRowForRow.clear();
+        A_scalar.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
     }
     else {
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
