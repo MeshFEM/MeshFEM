@@ -2,6 +2,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/iostream.h>
 namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/ElasticObject.hh>
@@ -36,7 +37,7 @@ void bind(py::module &m, py::module &detail_module) {
         .def("CCDStepSize",                   &IPCO::CCDStepSize, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
         ;
 
-    m.def("IPCObjectiveTerm", [](std::shared_ptr<EO> eo, const ObstaclesCollection &obstacles) { return std::make_shared<IPCO>(eo, obstacles); }, py::arg("obstacles") = ObstaclesCollection(), py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
+    m.def("IPCObjectiveTerm", [](std::shared_ptr<EO> eo, const ObstaclesCollection &obstacles) { return std::make_shared<IPCO>(eo, obstacles); }, py::arg("eo"), py::arg("obstacles") = ObstaclesCollection(), py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
 
     using MXd = Eigen::MatrixXd;
     using MXi = Eigen::MatrixXi;

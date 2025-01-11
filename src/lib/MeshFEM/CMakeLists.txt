@@ -27,7 +27,6 @@ add_library(MeshFEM SHARED
         function_traits.hh
         Functions.hh
         Future.hh
-        FieldSampler.cc
         FieldSampler.hh
         GaussQuadrature.hh
         Geometry.hh
@@ -131,6 +130,8 @@ add_library(MeshFEM SHARED
         newton_optimizer/newton_optimizer.cc
         newton_optimizer/newton_optimizer.hh
         newton_optimizer/ConvergenceReport.hh
+        newton_optimizer/MultiobjectiveProblem.cc
+        newton_optimizer/NewtonHessian.cc
 
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
@@ -138,13 +139,13 @@ add_library(MeshFEM SHARED
         ElasticSolid.hh
         ElasticSheet.hh
 
-        IPCEquilibriumSolver.hh
-        IPCEquilibriumSolver.cc
+        # IPCObjectiveTerm.hh
+        # IPCObjectiveTerm.cc
+        # IPCWrapper.cc
 
-        IPCObjectiveTerm.hh
-        IPCObjectiveTerm.cc
+        BlockCSCHessian.cc
 
-        IPCWrapper.cc
+        ClosestPointProjection.cc
 )
 
 # Include directories

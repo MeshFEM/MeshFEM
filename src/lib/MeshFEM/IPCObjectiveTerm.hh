@@ -3,29 +3,26 @@
 
 #include "GlobalBenchmark.hh"
 #include "newton_optimizer/MultiobjectiveProblem.hh"
-#include "Loads/Load.hh"
 #include "ElasticObject.hh"
-#include "ParallelVectorOps.hh"
 
 #include <Eigen/Sparse>
 #include <MeshFEM_export.h>
 #include "IPCWrapper.hh"
-#include <limits>
 
 struct MESHFEM_EXPORT TimestepLimiter {
-    TimestepLimiter(){};
+    TimestepLimiter() { };
     virtual double getTimestepLength (double t, double dt) { return 1.0; }
     virtual void initialBarrierStiffness(double w) = 0;
-    virtual ~TimestepLimiter(){};
-    void setAdaptiveTimestep(bool flag) {m_useAdaptiveTimestep = flag;}
-    bool useAdaptiveTimestep() {return m_useAdaptiveTimestep;}
+    virtual ~TimestepLimiter() { };
+    void setAdaptiveTimestep(bool flag) { m_useAdaptiveTimestep = flag; }
+    bool useAdaptiveTimestep() { return m_useAdaptiveTimestep; }
 private:
     bool m_useAdaptiveTimestep = true;
 };
 
 template<typename _Real>
 struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public TimestepLimiter {
-    enum class CCDMethod {TightInclusion, CFL};
+    enum class CCDMethod { TightInclusion, CFL };
     using Real = _Real;
     using EO   = ElasticObject<Real>;
 
@@ -42,9 +39,8 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     }
 
     const VXd getVars() const { return object().getVars().template cast<double>(); }
-    size_t numVars()    const { return object().numVars(); }
 
-    virtual Real objective() const override { 
+    virtual Real objective() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.energy");
         return m_k * contactPotentialEnergy(); }
 
@@ -60,10 +56,6 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         }
         // Store the contact potential gradient related to obstacles points
         m_combinedCollisionMesh->setObstaclesForce(dB_dCV.tail(m_N * m_combinedCollisionMesh->numObstaclesVertices()));
-    }
-
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */) const override {
-        return m_hessianSparsity;
     }
 
     virtual SparsityUpdateFrequency sparsityUpdateFrequency() const override { return SparsityUpdateFrequency::SOMETIMES; }
@@ -87,18 +79,18 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     VXd  contactPotentialGradient() const;
     // Hessian with respect to collision mesh vertex positions
     void contactHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask)  const;
-    
+
     VXd contactGradient() const {
         VXd g;
         g.setZero(numVars());
         const VXd &dB_dCV = contactPotentialGradient();
         // Only consider the ElasticObject Collision Mesh, not obstacles.
-        for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i){
+        for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i) {
             int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
             if (bvar < 0) continue;
             g.segment(m_N * bvar, m_N) += dB_dCV.segment(m_N * i, m_N);
 
-        }        
+        }
         return g;
     }
 
@@ -108,8 +100,6 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // Adaptive Barrier Stiffness
     void initialBarrierStiffness(double weight) override;
     void updateBarrierStiffness();
-
-    const SuiteSparseMatrix &getContactHessianSparsityPattern() const { return m_contactBlockSparsity; }
 
     void setUseAdaptiveBarrierStiffness(bool flag) {
         useAdaptiveBarrier = flag;
@@ -146,11 +136,11 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         m_combinedCollisionMesh->updateObstaclePosition(t);
     }
 
-    // Begining of every iteration in newton iterations
-    virtual void startOfIteration() override { if (useAdaptiveBarrier) updateBarrierStiffness(); }
+    // Called at the beginning of each Newton iteration
+    virtual void newtonIterationBegan() override { if (useAdaptiveBarrier) updateBarrierStiffness(); }
 
      // Called at the end of a line search
-    virtual void endofLineSearch() const override {
+    virtual void lineSearchTerminated() override {
         m_ipcWrapper->resetCandidateCache();
     }
 
@@ -167,9 +157,10 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
 protected:
     template<typename SPMat> void m_contactHessianImpl(SPMat &H, bool projectionMask = false) const;
 
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &result, bool projectionMask = false) const override{
+    virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const override{
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");        
-        contactHessian(weight, result, projectionMask);
+        // TODO
+        // contactHessian(weight, result, projectionMask);
     }
 
     void m_buildCollisionConstraints();
@@ -182,12 +173,6 @@ protected:
 
     // m_obj embeddingSpace dimension
     size_t m_N;
-
-    // The block sparsity pattern `m_blockSparsity` is the union of the
-    // sparsity patterns of the elastic/load potentials
-    // (`m_primaryBlockSparsity`) and the IPC barriers (`m_contactBlockSparsity`).
-    // The full scalar sparsity pattern is stored in `m_hessianSparsity`.
-    SuiteSparseMatrix m_hessianSparsity, m_blockSparsity, m_primaryBlockSparsity, m_contactBlockSparsity;
 
     ////////////////////////////////////////////////////////////////////////////////
     // User configuration of IPC barrier

@@ -200,7 +200,6 @@ public:
             if (bhe.primary() == bhe) { f(bhe, i); ++i; }
     }
 
-
 protected:
     ////////////////////////////////////////////////////////////////////////////
     // DataStorage is empty for TMEmptyData. Otherwise, it's a std::vector.

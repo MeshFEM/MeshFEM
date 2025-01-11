@@ -70,7 +70,6 @@ namespace Loads {
         void set_g(VNd g)      { m_g = g; m_updateCache(); }
         VNd  get_g()     const { return m_g; }
 
-        size_t numVars() const { return Base::getObj().numVars(); }
         virtual Real energy() const override {
             return m_grad.dot(Base::getObj().getVars());
         }

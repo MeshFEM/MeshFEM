@@ -2,8 +2,7 @@
 // DynamicSimulator.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//
-//  Dynamic simulation for Muti-Objective Newton Problems.
+//  Dynamic elasticity simulation implemented as a NewtonMultiobjectiveProblem.
 //
 //  Author:  Haleh Mohammadian (halehOssadat), haleh.mohammadian@gmail.com
 //  Created:  07/10/2023 15:43:10
@@ -15,7 +14,6 @@
 #include "Loads/Inertia.hh"
 #include "ElasticObject.hh"
 #include "IPCObjectiveTerm.hh"
-#include <type_traits>
 
 #include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
 
@@ -35,7 +33,7 @@ struct DynamicSimulator {
     using LC = LoadCollection<Real>;
     using VXd = typename EO::VXd;
     using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
-    using NewtonTermPtr = std::shared_ptr<NewtonObjectiveTerm>;
+    using NewtonTermPtr = std::shared_ptr<NewtonObjectiveTermBase>;
 
     DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt)
         : dt(dt), m_obj(eo), m_terms(terms)
@@ -48,11 +46,6 @@ struct DynamicSimulator {
         m_terms.push_back(eo);
 
         m_inertiaLoad = std::make_shared<Loads::Inertia<EO>>(eo, useLumpedMass);
-
-        // The sparsity pattern of the inertia term Hessian (i.e., the mass matrix)
-        // is known to be a subset of the elastic solid's Hessian sparsity pattern,
-        // enabling a slight optimization of the full sparsity pattern construction.
-        m_inertiaLoad->suppressSparsity = true;
 
         m_terms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
 
@@ -75,13 +68,8 @@ struct DynamicSimulator {
         v = v0; 
     }
 
-    void setXhat(const VXd &x){ 
-        m_inertiaLoad->setXhat(x);
-    }
-
-    VXd getXhat(){
-        return m_inertiaLoad->xhat;
-    }
+    void setXhat(const VXd &x){ m_inertiaLoad->setXhat(x); }
+    VXd  getXhat(){ return m_inertiaLoad->xhat; }
 
     NewtonOptimizer &getOptimizer() const { return *m_opt; }
 
@@ -97,9 +85,7 @@ struct DynamicSimulator {
         return f;
     }
 
-    const Loads::Inertia<EO> &inertiaLoad() const {
-        return *m_inertiaLoad;
-    }
+    const Loads::Inertia<EO> &inertiaLoad() const { return *m_inertiaLoad; }
 
     CholeskyFactorizerBase &massMatrixFactorization() { 
         if (m_massCholesky.second && (m_massCholesky.first == m_inertiaLoad->getMassMatrixID()))
@@ -166,8 +152,7 @@ struct DynamicSimulator {
         m_potentialEnergy.push_back(potentialEnergy());
     }
 
-    Real kineticEnergy() const { 
-        return 0.5 * m_inertiaLoad->evalQuadraticForm(v); }
+    Real kineticEnergy() const { return 0.5 * m_inertiaLoad->evalQuadraticForm(v); }
     Real potentialEnergy() const {
         Real result = 0.0;//m_obj->energy();
         for (const auto &term : m_terms)
@@ -180,7 +165,7 @@ struct DynamicSimulator {
 
     std::vector<ConvergenceReport> run(const std::vector<size_t> &fixedVars, const TimestepCallback &post_tcb, const TimestepCallback &pre_tcb, const NewtonCallback &cb_newton, const double finalTime) {
         if (fixedVars != m_prob->fixedVars()) {
-            m_opt->setFixedVars(fixedVars);
+            m_prob->setFixedVars(fixedVars);
             m_massCholesky.second.reset();
         }
         m_prob->setCustomIterationCallback(cb_newton);
@@ -252,8 +237,6 @@ private:
     // Per-timestep statistics
     std::vector<ConvergenceReport> m_crs; // Newton solver convergence report
     std::vector<Real> m_kineticEnergy, m_potentialEnergy;
-
- 
 };
 
 #endif

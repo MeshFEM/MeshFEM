@@ -201,10 +201,11 @@ struct BBox : Region<_Vector> {
     using Real_  = typename Vector::Scalar;
 
     BBox() {
-        this->minCorner = Vector::Zero();
-        this->maxCorner = Vector::Zero();
+        if (Vector::MaxRowsAtCompileTime == Eigen::Dynamic)
+            throw std::runtime_error("Dynamic dimensions not supported by default consructor");
+        this->minCorner = Vector::Zero(Vector::MaxRowsAtCompileTime);
+        this->maxCorner = Vector::Zero(Vector::MaxRowsAtCompileTime);
     }
-
 
     // Converting constructor from another number type.
     template<typename V2_>
@@ -225,7 +226,8 @@ struct BBox : Region<_Vector> {
     }
 
     // Construct bbox of a collection of points
-    template<class _PointCollection>
+    // (but not Eigen matrices, which are handled by the next constructor)
+    template<class _PointCollection, class enable = std::enable_if_t<!std::is_base_of_v<Eigen::MatrixBase<_PointCollection>, _PointCollection>>>
     BBox(const _PointCollection &vectors) {
         this->minCorner.setZero(), this->maxCorner.setZero();
         size_t i = 0;
@@ -248,17 +250,10 @@ struct BBox : Region<_Vector> {
         }
     }
 
-    // Construct bbox from an Eigen Matrix
     template<class Derived>
-    static BBox fromEigen(const Eigen::MatrixBase<Derived> &V) {
-        BBox result;
-        result.minCorner.setZero(), result.maxCorner.setZero();
-        for (int i = 0; i < V.rows(); ++i) {
-            auto v = V.row(i).transpose().eval();
-            if (i++ == 0) result.minCorner = result.maxCorner = truncateFromND<Vector>(v);
-            else          result.unionPoint(truncateFromND<Vector>(v));
-        }
-        return result;
+    BBox(const Eigen::MatrixBase<Derived> &V) {
+        this->minCorner = V.colwise().minCoeff();
+        this->maxCorner = V.colwise().maxCoeff();
     }
 
     void unionBox(const BBox &b) {

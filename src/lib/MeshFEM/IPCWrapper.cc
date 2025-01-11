@@ -1,7 +1,7 @@
+#ifdef MESHFEM_WITH_IPC_TOOLKIT
 #include "IPCWrapper.hh"
-#include "GlobalBenchmark.hh"
-#include "Obstacle.hh"
 
+#include "GlobalBenchmark.hh"
 #include <ipc/ipc.hpp>
 #include <ipc/collisions/collisions.hpp>
 #include <ipc/barrier/adaptive_stiffness.hpp>
@@ -11,6 +11,7 @@
 #include <MeshFEM/ParallelAssembly.hh>
 
 #include <MeshFEM_export.h>
+#include "Obstacle.hh"
 
 // The dimension-specific parts of IPCWrapper.
 template<size_t N>
@@ -144,14 +145,6 @@ struct IPCWrapper : public IPCWrapperBase {
             }, [this, &blockVarForCollisionMeshVertex](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });
     }
 
-    virtual SuiteSparseMatrix block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {
-        return m_assembler.blockSparsityPattern(collisionConstraints.size(), [this, &blockVarForCollisionMeshVertex](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });
-    }
-
-    virtual SuiteSparseMatrix block_hessian_sparsity_pattern_to_scalar(const SuiteSparseMatrix &block_Hsp) const override {
-        return m_assembler.blockHessianSparsityPatternToScalar(block_Hsp);
-    }
-
     // Returns `NEW_ENTRIES` (size_t max) if even a single new entry becomes nonzero in the contact block sparsity pattern;
     // otherwise returns the number of blocks that have disappeared (if any).
     virtual size_t detect_contact_set_change(const SuiteSparseMatrix &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {
@@ -177,3 +170,5 @@ std::unique_ptr<IPCWrapperBase> make_ipc_wrapper(const CombinedCollisionMesh<Rea
     if (N == 3) return std::make_unique<IPCWrapper<3>>(collisionVertexPositions, cm);
     throw std::runtime_error("Unexpected N");
 }
+
+#endif // MESHFEM_WITH_IPC_TOOLKIT

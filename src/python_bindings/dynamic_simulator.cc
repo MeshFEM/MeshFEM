@@ -45,9 +45,9 @@ void bind(py::module &m, py::module &detail_module) {
         ;
 
     m.def("DynamicSimulator",
-            [](const std::shared_ptr<EO> &obj, std::vector<std::shared_ptr<NewtonObjectiveTerm>> &terms, const NewtonOptimizerOptions &opts, bool useLumpedMass, const double dt) {
+            [](const std::shared_ptr<EO> &obj, std::vector<std::shared_ptr<NewtonObjectiveTermBase>> &terms, const NewtonOptimizerOptions &opts, bool useLumpedMass, const double dt) {
                 return std::make_shared<DS>(obj, terms, opts, useLumpedMass, dt); },
-            py::arg("terms") = nullptr, py::arg("opts") = NewtonOptimizerOptions(), py::arg("useLumpedMass") = false, py::arg("dt") = 1.0);
+            py::arg("obj"), py::arg("terms") = nullptr, py::arg("opts") = NewtonOptimizerOptions(), py::arg("useLumpedMass") = false, py::arg("dt") = 1.0);
 }
 
 PYBIND11_MODULE(dynamic_simulator, m)

@@ -2,8 +2,8 @@
 // InertiaLoad.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Implements a inertia load that can be applied to a
-//  dynamic simulation using both Backward Euler, and implicit newmark integrators
+//  Implements a inertia load that can be applied to a dynamic simulation using
+//  both Backward Euler, and implicit newmark integrators.
 */
 //  Author:  Haleh Mohammadian (halehm), haleh.mohammadian@gmail.com
 //  Created:  07/11/2023 13:23:12
@@ -13,20 +13,13 @@
 
 #include "Load.hh"
 #include <MeshFEM/GlobalBenchmark.hh>
-#include <memory>
 
-
-// TO DO
-// Needs to check for newtonObjectiveTerm update in Load inheritance
 namespace Loads {
-    template<class Object, template<typename T> class EOStoragePolicy = EOStoragePolicyWeakPtr>
-    struct Inertia;
-
-    template<class Object, template<typename T> class EOStoragePolicy>
-    struct Inertia : public ObjectSpecificLoad<Object, EOStoragePolicy> {
+    template<class Object>
+    struct Inertia : public ObjectSpecificLoad<Object> {
         using Real = typename Object::Real;
-        using Base = ObjectSpecificLoad<Object, EOStoragePolicy>;
-        using ST   = typename Base::SP::StorageType;
+        using Base = ObjectSpecificLoad<Object>;
+        using ST   = std::weak_ptr<const Object>;
         using VXd  = typename Object::VXd;
         using Base::getObj;
 
@@ -35,9 +28,12 @@ namespace Loads {
         {
             m_updateCache();
             xhat = getObj().getVars(); // Needed for evaluating the initial barrier stiffness...
-        }
 
-        size_t numVars() const { return getObj().numVars(); }
+            // The sparsity pattern of the inertia term Hessian (i.e., the mass matrix)
+            // is known to be a subset of the elastic object's Hessian sparsity pattern,
+            // enabling an optimization of the full sparsity pattern construction.
+            this->suppressSparsity = true;
+        }
 
         VXd disp_x() const { return getObj().getVars() - xhat; }
 
@@ -57,15 +53,22 @@ namespace Loads {
         // Gradient with respect to the rest state
         virtual VXd grad_X() const override { throw std::runtime_error("TODO"); }
 
-        virtual void accumulateHessian(Real w, SuiteSparseMatrix & H , bool /* projectionMask */ = true) const override {
-            if (m_useLumpedMass) H.addDiag(w * weight * M.data());
-            else H.addWithSubSparsityFast(M, w * weight);
+        virtual void accumulateHessian(Real w, NewtonHessian &H , bool /* projectionMask */ = true) const override {
+            if (m_useLumpedMass) H.H_ss->addDiag((w * weight * M.data()).eval());
+            else {
+                throw std::runtime_error("Accumulating full mass matrix is not yet implemented");
+                // H.addWithSubSparsityFast(M, w * weight);
+            }
         }
 
-        virtual SuiteSparseMatrix hessianSparsityPattern(Real val = 0.0) const override {
-            SuiteSparseMatrix Hsp = M;
-            Hsp.fill(val);
-            return Hsp;
+        // Simply use the sparsity pattern of the underlying elastic object.
+        // This is inefficient, since our sparsity pattern will be a subset,
+        // but this term's sparsity pattern will be skipped/suppressed
+        // when building the full NewtonMultiobjectiveProblem sparsity pattern
+        // anyway; we return something here so that `this->hessian()` can be
+        // called by user code for debugging.
+        virtual NewtonHessian hessianSparsityPattern() const override {
+            return getObj().hessianSparsityPattern();
         }
 
         size_t getMassMatrixID() const { return m_massMatrixID; }
@@ -90,7 +93,7 @@ namespace Loads {
 
         void m_updateCache() {
             if (m_useLumpedMass) {
-                M.m = M.n = numVars();
+                M.m = M.n = this->numVars();
                 M.setIdentity(/* preserveSparsity = */ false);
                 M.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
                 getObj().massMatrix(M, /* updatedParametrization = */ false, m_useLumpedMass);

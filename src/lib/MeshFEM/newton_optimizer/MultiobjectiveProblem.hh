@@ -203,13 +203,21 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
     virtual void contract_d2E_dpdx(Real weight, const VXd &adjoint_state, VXd &result_accum) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
 
-    virtual ~NewtonObjectiveTermBase();
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
     virtual size_t       numVars() const { throw std::runtime_error(      "numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
     virtual size_t numParameters() const { throw std::runtime_error("numParameters must be implemented by subclass of NewtonObjectiveTermBase"); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Notifications
+    ////////////////////////////////////////////////////////////////////////////
+    virtual void newtonIterationBegan() { }
+    virtual void lineSearchTerminated() { }
 
     NewtonHessian hessian(bool projectionMask = false) const {
         NewtonHessian H(hessianSparsityPattern());
@@ -225,6 +233,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
         accumulateGradient(weight, g, freshIterate);
         return g;
     }
+
+    virtual ~NewtonObjectiveTermBase();
 
     ObjectiveIncreaseLimiter increaseLimiter;
 
@@ -266,6 +276,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
     ////////////////////////////////////////////////////////////////////////////
     virtual void   varsUpdated() { }
     virtual void paramsUpdated() { }
+
 private:
     int m_variablesUpdateCallbackID, m_parameterUpdateCallbackID;
     NVStorageType m_nvars;
@@ -422,6 +433,20 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
 
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override {
+        Real stepLength = std::numeric_limits<Real>::max();
+        for (const auto &term : m_terms)
+            stepLength = std::min(term->customFeasibleStepLength(vars, step), stepLength);
+        return stepLength;
+    }
+
+    virtual void lineSearchTerminated() const override {
+        for (auto &term: m_terms)
+            term->lineSearchTerminated();
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Sensitivity analysis support
     ////////////////////////////////////////////////////////////////////////////
@@ -491,6 +516,7 @@ private:
             if (limit.factor == ObjectiveIncreaseLimiter::NO_LIMIT)
                 limit.previousValue = safe_numeric_limits<Real>::max();
             else limit.previousValue = t.objective();
+            term(ti).newtonIterationBegan();
         }
 
         m_vars->updateParametrization();

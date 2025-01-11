@@ -239,6 +239,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // If the sparsity pattern changes, `hesianSparsityPatternChanged` should be called.
     virtual bool detectSparsityPatternUpdates() { return false; }
 
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
+
+    // End of line search notification
+    virtual void lineSearchTerminated() const { }
+
     // When nonzero, the matrix `H + hessianShift I` is factorized at each
     // Newton step rather than `H` itself. This is intended for problems
     // with a Hessian nullspace due to, e.g., rigid motion, that can be

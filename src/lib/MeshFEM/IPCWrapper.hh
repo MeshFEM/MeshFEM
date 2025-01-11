@@ -106,11 +106,11 @@ struct CombinedCollisionMesh {
     }
 
     // Change the position of obstacle in its linear trajectory or move obstacle with time t
-    void updateObstaclePosition(double dt) {
+    void updateObstaclePosition(double t) {
         m_obstaclesVertices.setZero();
         size_t cnt = 0;
         for (auto obst: m_obsts){
-            obst->moveForward(dt);
+            obst->updatePositionForTime(t);
             m_obstaclesVertices.middleRows(cnt, obst->numVertices()) = obst->getVertices();
             cnt += obst->numVertices();
         }

@@ -3,7 +3,6 @@
 #include <MeshFEM/SystemAssembler.hh>
 
 #if MESHFEM_WITH_IPC_TOOLKIT
-#include <chrono>
 
 template<typename _Real>
 IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts)
@@ -134,4 +133,5 @@ template struct IPCObjectiveTerm<double>;
 #if MESHFEM_BIND_LONG_DOUBLE
     template struct IPCObjectiveTerm<long double>;
 #endif
-#endif
+
+#endif // MESHFEM_WITH_IPC_TOOLKIT
