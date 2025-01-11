@@ -20,6 +20,7 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/StressToBiotStrain.hh>
 #include <MeshFEM/EnergyDensities/MetricFitting.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
+#include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 
 template<class Energy>
 py::class_<Energy>
@@ -146,6 +147,15 @@ void bindIsoCRLEFixed(py::module &detail_module)
 }
 
 template<size_t _Dimension>
+void bindSymmetricDirichlet(py::module &detail_module)
+{
+    using SD = SymmetricDirichlet<double, _Dimension>;
+    auto ebind = bindEnergyFBased<SD>(detail_module);
+    ebind.def(py::init<>())
+         ;
+}
+
+template<size_t _Dimension>
 void bindNeoHookeanEnergy(py::module& detail_module)
 {
     auto ebind = bindEnergyFBased<NeoHookeanEnergy<double, _Dimension>>(detail_module);
@@ -217,6 +227,12 @@ py::object constructIsotropicStVK(size_t dimension, double young, double poisson
     throw std::runtime_error("Argument 'dimension' must be 2 or 3");
 }
 
+py::object constructSymmetricDirichlet(size_t dimension) {
+    if (dimension == 2) return py::cast(new SymmetricDirichlet<double, 2>(), py::return_value_policy::take_ownership);
+    if (dimension == 3) return py::cast(new SymmetricDirichlet<double, 3>(), py::return_value_policy::take_ownership);
+    throw std::runtime_error("Argument 'dimension' must be 2 or 3");
+}
+
 PYBIND11_MODULE(energy, m)
 {
     py::module detail_module = m.def_submodule("detail");
@@ -238,6 +254,8 @@ PYBIND11_MODULE(energy, m)
     bindIsoCRLEFixed<3>         (detail_module);
     bindStVKEnergyHP<2>         (detail_module);
     bindStVKEnergyHP<3>         (detail_module);
+    bindSymmetricDirichlet<2>   (detail_module);
+    bindSymmetricDirichlet<3>   (detail_module);
 
     using ETensor2D = ElasticityTensor<double, 2>;
     using ETensor3D = ElasticityTensor<double, 3>;
@@ -386,6 +404,9 @@ PYBIND11_MODULE(energy, m)
     m.def("IsoCRLEFixed",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEfixed(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor3D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 3>>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("StVenantKirchhoffAutoProjected", [ ](const ETensor2D &etensor) { return std::make_unique<AutoHessianProjection<StVenantKirchhoffEnergy<double, 2>>>(etensor); }, py::arg("elasticity_tensor"));
+
+    m.def("SymmetricDirichlet",   [&](size_t dimension) {                                                                     return constructSymmetricDirichlet(dimension); }, py::arg("dimension"));
+    m.def("SymmetricDirichlet",   [&](py::object mesh) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructSymmetricDirichlet(dimension); }, py::arg("mesh"));
 
     m.def("OptionalTensionFieldEnergy", [](double Y) { auto psi = std::make_unique<OTFE>(); psi->setStiffness(Y / 6.0); return psi; }, py::arg("youngModulus"));
 }
