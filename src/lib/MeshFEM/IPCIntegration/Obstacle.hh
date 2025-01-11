@@ -14,8 +14,8 @@
 #include <Eigen/Dense>
 #include <functional>
 
-#include "Types.hh"
-#include "Geometry.hh"
+#include <MeshFEM/Types.hh>
+#include <MeshFEM/Geometry.hh>
 
 struct Obstacle {
     using MXd = Eigen::MatrixXd;
@@ -35,6 +35,8 @@ struct Obstacle {
 
     size_t numVertices() const { return m_x.rows(); }
     size_t numFaces() const { return m_f.rows(); }
+    size_t numEdges() const { return m_e.rows(); }
+    size_t dimension() const { return m_x.cols(); }
 
     const MXd &getVertices() const { return m_x; }
     const MXi &getFaces()    const { return m_f; }

@@ -115,6 +115,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual NewtonHessian hessianSparsityPattern(VariableMask vmask) const = 0;
     virtual VXd contract_d2E_dXdx(const VXd &y) const { throw std::runtime_error("Unimplemented!"); }
 
+    using NewtonObjectiveTermBase::gradient; // prevent hiding
     // Convenience method
     VXd gradient(bool updatedParametrization, VariableMask vmask = VariableMask::Defo) const {
         VXd g = VXd::Zero(numVars());
@@ -179,8 +180,10 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
         size_t fullModelBlockVars = 0; // number of block variables (nodes) in the volumetric simulation mesh
         size_t N = 0;
         size_t numCollisionVertices() const { return nodeForCollisionMeshVertex.size(); }
-        // Get a vector field on the collision mesh (one vector per vertex)
-        Eigen::MatrixXd getCollisionFields(const VXd &vars) const {
+
+        // Extract a per-vertex vector field over this collision mesh from the
+        // full simulation DoF vector `vars.`
+        Eigen::MatrixXd extractVectorField(const VXd &vars) const {
             const size_t ncv = numCollisionVertices();
             Eigen::MatrixXd result(ncv, N);
             for (size_t i = 0 ; i < ncv; ++i)

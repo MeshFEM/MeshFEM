@@ -6,14 +6,13 @@
 //
 //  Author:  Haleh Mohammadian (halehOssadat), haleh.mohammadian@gmail.com
 //  Created:  07/10/2023 15:43:10
-//  Modified: 01/15/2024 11:35:40 
+//  Modified: 01/15/2024 11:35:40
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef DYNAMICSIMULATOR_HH
 #define DYNAMICSIMULATOR_HH
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Loads/Inertia.hh"
 #include "ElasticObject.hh"
-#include "IPCObjectiveTerm.hh"
 
 #include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
 
@@ -25,6 +24,18 @@ enum class TimesteppingMethod { BackwardEuler, ImplicitNewmark };
 
 template<typename _Real>
 using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
+
+// Base class for terms that can limit the timestep (e.g., `IPCObjectiveTerm`).
+struct MESHFEM_EXPORT TimestepLimiter {
+    TimestepLimiter() { };
+    virtual double getTimestepLength (double t, double dt) { return 1.0; }
+    virtual void initialBarrierStiffness(double w) = 0;
+    virtual ~TimestepLimiter() { };
+    void setAdaptiveTimestep(bool flag) { if (flag) throw std::runtime_error("Adaptive timestep is disabled until further testing"); m_useAdaptiveTimestep = flag; }
+    bool useAdaptiveTimestep() { return m_useAdaptiveTimestep; }
+private:
+    bool m_useAdaptiveTimestep = false; // disabled for now
+};
 
 template<class _Real>
 struct DynamicSimulator {
@@ -42,7 +53,7 @@ struct DynamicSimulator {
         gamma = 0.5;
 
         v.setZero(m_obj->numVars());
-    
+
         m_terms.push_back(eo);
 
         m_inertiaLoad = std::make_shared<Loads::Inertia<EO>>(eo, useLumpedMass);
@@ -50,7 +61,7 @@ struct DynamicSimulator {
         m_terms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
 
         m_prob = std::make_shared<NewtonMultiobjectiveProblem>(m_obj, m_terms);
-        
+
         // Drop the inertia load from our copy of the loads.
         m_terms.pop_back();
 
@@ -63,9 +74,9 @@ struct DynamicSimulator {
 
     void setBeta(const double b) { beta = b; }
     void setGamma(const double g) { gamma = g; }
-    void setInitVelocity (const VXd &v0) { 
+    void setInitVelocity (const VXd &v0) {
         if (v.size() != v0.size())  std::runtime_error("Size Mismatch.");
-        v = v0; 
+        v = v0;
     }
 
     void setXhat(const VXd &x){ m_inertiaLoad->setXhat(x); }
@@ -81,13 +92,13 @@ struct DynamicSimulator {
         //m_obj->accumulateGradient(-1.0, f);
         for (const auto &term : m_terms)
             term->accumulateGradient(-1.0, f);
-            
+
         return f;
     }
 
     const Loads::Inertia<EO> &inertiaLoad() const { return *m_inertiaLoad; }
 
-    CholeskyFactorizerBase &massMatrixFactorization() { 
+    CholeskyFactorizerBase &massMatrixFactorization() {
         if (m_massCholesky.second && (m_massCholesky.first == m_inertiaLoad->getMassMatrixID()))
             return *(m_massCholesky.second);
 
@@ -107,7 +118,7 @@ struct DynamicSimulator {
 
     VXd configureInertiaForTimeStep(Real alpha = 1){
         VXd xt = getVars();
-        VXd f_xt; 
+        VXd f_xt;
         Real alpha_dt = alpha * dt;
         // Set weights and update xhat based on the method
         if (method == TimesteppingMethod::BackwardEuler) {
@@ -125,11 +136,11 @@ struct DynamicSimulator {
         return f_xt;
     }
 
-    void timeStep(Real alpha = 1.0) { 
+    void timeStep(Real alpha = 1.0) {
         VXd xt = getVars();
-        
+
         Real alpha_dt = alpha * dt;
-        
+
         VXd f_xt = configureInertiaForTimeStep(alpha);
 
         // std::cout << "Inertia term: " << m_inertiaLoad->energy() << std::endl;
@@ -172,7 +183,7 @@ struct DynamicSimulator {
         m_postTimestepCallback = post_tcb;
         m_preTimestepCallback = pre_tcb;
         double time = 0.0;
-        
+
         m_kineticEnergy  .assign(1,   kineticEnergy());
         m_potentialEnergy.assign(1, potentialEnergy());
         m_crs.clear();
@@ -185,16 +196,14 @@ struct DynamicSimulator {
                 auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
                 if (derivedObj != nullptr){
                     derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/); // Surprisingly weight = dt^2 works much faster
-                    
-                    if (derivedObj->useAdaptiveTimestep())
-                    {
+                    if (derivedObj->useAdaptiveTimestep()) {
                         alpha = derivedObj->getTimestepLength(time, dt);
                     }
                 }
             }
-            
+
             bool preEarlyExit = m_iterationCallback(tIter, m_preTimestepCallback);
-            
+
             timeStep(alpha);
             bool earlyExit = m_iterationCallback(tIter, m_postTimestepCallback);
             time += alpha * dt;
@@ -206,7 +215,7 @@ struct DynamicSimulator {
 
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
-    const double dt;  // time step 
+    const double dt;  // time step
     Real beta; // beta used for implicit newmark time integration
     TimesteppingMethod method = TimesteppingMethod::BackwardEuler;
     Real gamma;
@@ -233,7 +242,7 @@ private:
 
     // (Mass Matrix ID, Cholesky Factorization)
     std::pair<size_t, std::shared_ptr<CholeskyFactorizerBase>> m_massCholesky;
-    
+
     // Per-timestep statistics
     std::vector<ConvergenceReport> m_crs; // Newton solver convergence report
     std::vector<Real> m_kineticEnergy, m_potentialEnergy;

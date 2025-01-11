@@ -1,13 +1,13 @@
 #ifndef IPCWRAPPER_HH
 #define IPCWRAPPER_HH
 
-#include "ElasticObject.hh"
+#include <MeshFEM/ElasticObject.hh>
 #include "Obstacle.hh"
 
 using ObstaclesCollection = std::vector<std::shared_ptr<Obstacle>>;
 
-// This Combined Collision Mesh structure merge ElasticObject CollisionMesh with
-// Obstacle. Therefore it is: CombinedCollisionMesh = [EOCollisionMesh, Obstacles]
+// This CombinedCollisionMesh appends the obstacles to the ElasticObject's
+// CollisionMesh.
 template<typename _Real>
 struct CombinedCollisionMesh {
     using Real = _Real;
@@ -15,6 +15,7 @@ struct CombinedCollisionMesh {
     using EO   = ElasticObject<Real>;
     using MXi  = Eigen::MatrixXi;
     using MXd  = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
+    using MXdRowMajor = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using VXd  = Eigen::VectorXd;
 
     using VMaxd = VecMaxN_T<Real, 3>;
@@ -29,102 +30,103 @@ struct CombinedCollisionMesh {
         if (N == 3) faces = m_eocm.faces;
         m_obstaclesVertices = MXd();
 
-        size_t numObstVertices = 0;
-        // Merge obstacles elements vertices, edges, and faces
-        for (auto &obst : m_obsts ){
-            m_numObstsVertices.push_back(obst->numVertices());
+        // Counting pass
+        size_t nov = 0, noe = 0, nof = 0;
+        for (auto &o : m_obsts) {
+            if (o->dimension() != N) throw std::runtime_error("Obstacle vertex dimension mismatch");
+            m_numObstsVertices.push_back(o->numVertices());
+            nov += o->numVertices();
+            noe += o->numEdges();
+            if (N == 3) nof += o->numFaces();
+        }
 
-            m_obstaclesVertices.conservativeResize(numObstVertices + obst->numVertices(), N);
-            if (size_t(obst->getVertices().cols()) != N) throw std::runtime_error("Obstacle vertex dimension mismatch");
-            m_obstaclesVertices.bottomRows(obst->numVertices()) = obst->getVertices();
+        m_obstaclesVertices.resize(nov, N);
+        edges  .conservativeResize(edges.rows() + noe, 2);
+        faces  .conservativeResize(faces.rows() + nof, 3);
 
-            MXi obstEdge = obst->getEdges();
-            edges.conservativeResize(edges.rows() + obstEdge.rows(), edges.cols());
-            edges.bottomRows(obstEdge.rows()) = obstEdge.array() + numEOCollisionVertices() + numObstVertices;
+        // Appending pass
+        size_t vtxOffset = numEOCollisionVertices(); // Index of the first vertex of the obstacle after appending.
+        size_t ovBack = 0, eBack = m_eocm.edges.rows(), fBack = m_eocm.faces.rows();
+        for (auto &o : m_obsts) { m_obstaclesVertices.middleRows(ovBack, o->numVertices()) = o->getVertices();
+            ovBack += o->numVertices();
+
+            edges.middleRows(eBack, o->numEdges()) = o->getEdges().array() + vtxOffset;
+            eBack += o->numEdges();
 
             if (N == 3) {
-                MXi obstFaces = obst->getFaces();
-                faces.conservativeResize(faces.rows() + obstFaces.rows(), faces.cols());
-                faces.bottomRows(obstFaces.rows()) = obstFaces.array() + numEOCollisionVertices() + numObstVertices;
+                faces.middleRows(fBack, o->numFaces()) = o->getFaces().array() + vtxOffset;
+                fBack += o->numFaces();
             }
 
-            bbox.unionBox(obst->getBBox());
-            numObstVertices += obst->numVertices();
+            bbox.unionBox(o->getBBox());
+            vtxOffset += o->numVertices();
         }
-        nodeForCollisionMeshVertex = getNodeForCombinedCollisionMesh();
-
+        nodeForCollisionMeshVertex = getNodeForCombinedCollisionMeshVertex();
     }
+
+    const typename EO::CollisionMesh &getElasticObjectCollisionMesh() const { return m_eocm; }
 
     // Number of ElasticObject vertices which will be used for finite element computations
     size_t numEOCollisionVertices() const { return m_eocm.numCollisionVertices(); }
     // Number of obstacle vertices
     size_t numObstaclesVertices() const { return m_obstaclesVertices.rows(); }
 
+    bool isObstacleVertex(size_t vi) const { return vi >= numEOCollisionVertices(); }
+
     size_t numCombinedCollisionVertices() const { return numEOCollisionVertices() + numObstaclesVertices(); }
-    size_t numCombinedVertices() const {return numEONodes + numObstaclesVertices(); }
+    size_t numCombinedNodes() const { return numEONodes + numObstaclesVertices(); }
     // Concatenate nodeForCollisionMeshVertex with vector of -1 with the number of
     // obstacle vertices
-    VXi getNodeForCombinedCollisionMesh() const {
-        VXi result;
-        result.setConstant(numCombinedCollisionVertices(), -1);
-        result.head(numEOCollisionVertices()) = m_eocm.nodeForCollisionMeshVertex;
+    VXi getNodeForCombinedCollisionMeshVertex() const {
+        VXi result(numCombinedCollisionVertices());
+        result << m_eocm.nodeForCollisionMeshVertex,
+                  VXi::Constant(numObstaclesVertices(), -1);
         return result;
     }
 
-    // This method extract fields from ElasticObject collision mesh and
-    // merge them with the corresponding field for obstacle vertices
-    MXd mergeCombinedCollisionFields(const VXd &vars, const MXd &obstVars) {
+    // Get the position of the collision mesh vertices from the simulation
+    // `vars` and the passed obstacle vertex positions `obstVars`.
+    MXd extractPositions(const Eigen::Ref<const VXd> &vars, const MXd &obstPositions) {
+        if (size_t(vars.size()) != N * numEONodes)                  throw std::runtime_error("Unexpected vars size.");
+        if (size_t(obstPositions.rows()) != numObstaclesVertices()) throw std::runtime_error("Unexpected obstacle vertex positions size.");
         const size_t nccv = numCombinedCollisionVertices();
-        const size_t ncv  = numEOCollisionVertices();
         MXd result(nccv, N);
-        // Extract field from ElasticObject collision mesh
-        result.topRows(ncv) = m_eocm.getCollisionFields(vars);
-        // If Obstacle exists, merge them with obstacle field
-        if (obstVars.rows()) result.bottomRows(numObstaclesVertices()) = obstVars;
+        result << m_eocm.extractVectorField(vars),
+                  obstPositions;
         return result;
     }
 
-    MXd getCombinedCollisionFields(const VXd &vars) {
-        const size_t nccv = numCombinedCollisionVertices();
-        const size_t ncv  = numEOCollisionVertices();
-        MXd result(nccv, N);
-        // Extract field from ElasticObject collision mesh
-        result.topRows(ncv) = m_eocm.getCollisionFields(vars.head(numEONodes * N));
-        // If Obstacle exists, merge them with obstacle field
-        // VXd obstVars = vars.tail(numObstaclesVertices() * N);
-        if (size_t(vars.size()) > (numEONodes * N)) result.bottomRows(numObstaclesVertices()) = getObstaclesVertices(); //obstVars.reshaped(numObstaclesVertices(),N);
-        return result;
-    }
+    MXd vertexPositionsForVars(const VXd &vars) { return extractPositions(vars, m_obstaclesVertices); }
 
-    MXd vertexPositionsForVars(const VXd &vars) {
-        return mergeCombinedCollisionFields(vars, m_obstaclesVertices);
+    // PolyFEM includes the obstacle vertex positions at the end of the vars vector.
+    MXd vertexPositionsForPolyfemVars(const VXd &vars) {
+        if (size_t(vars.size()) != N * numCombinedNodes()) throw std::runtime_error("Unexpected PolyFEM vars size.");
+        return extractPositions(vars.head(N * numEONodes),
+                                Eigen::Map<const MXdRowMajor>(vars.data() + N * numEONodes, numObstaclesVertices(), N));
     }
 
     // Compute the new bounding box for combined collision mesh
-    Real getBboxDiagonal() {
-        return bbox.diagonal();
-    }
+    Real getBboxDiagonal() const { return bbox.diagonal(); }
 
     // Change the position of obstacle in its linear trajectory or move obstacle with time t
     void updateObstaclePosition(double t) {
         m_obstaclesVertices.setZero();
         size_t cnt = 0;
-        for (auto obst: m_obsts){
+        for (const auto &obst : m_obsts) {
             obst->updatePositionForTime(t);
             m_obstaclesVertices.middleRows(cnt, obst->numVertices()) = obst->getVertices();
             cnt += obst->numVertices();
         }
-
     }
 
-    // Obstacle vertices positions
+    // Obstacle vertex positions
     const MXd &getObstaclesVertices() const { return m_obstaclesVertices; }
 
-    // Set the net force generated by contact for each obstacles
-    void setObstaclesForce(const Eigen::Ref<const VXd> &vars) {
+    // Set the net force generated by contact for each obstacle
+    void setObstaclesForce(const Eigen::Ref<const VXd> &grad_vars) {
         size_t cnt = 0;
         for (size_t i = 0; i < m_numObstsVertices.size(); i++){
-            m_obsts[i]->setForce(vars.segment(cnt * N, m_numObstsVertices[i]*N));
+            m_obsts[i]->setForce(grad_vars.segment(cnt * N, m_numObstsVertices[i]*N));
             cnt += m_numObstsVertices[i];
         }
     }
@@ -150,7 +152,7 @@ struct IPCWrapperBase {
     using VXd = Eigen::VectorXd;
 
     virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double bboxDiagonal, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) = 0;
-    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k, double bboxDiagonal) = 0;
+    virtual double  update_barrier_stiffness(const MXd &collisionVertexPositions, double k, double bboxDiagonal) = 0;
 
     virtual void build_collision_constraints(const MXd &collisionVertexPositions) = 0;
     virtual double compute_collision_tightInclusion_stepsize(const MXd &collisionVertexPositions, const MXd &steppedCollisionVertexPositions) const = 0;
@@ -158,11 +160,10 @@ struct IPCWrapperBase {
 
     virtual double compute_potential(const MXd &collisionVertexPositions) const = 0;
     virtual VXd compute_potential_gradient(const MXd &cvPositions) const = 0;
-    virtual void              hessian(SuiteSparseMatrix &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const = 0;
+    virtual void              hessian(BlockCSCHessianBase &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const = 0;
 
-    virtual SuiteSparseMatrix block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;
-    virtual SuiteSparseMatrix block_hessian_sparsity_pattern_to_scalar(const SuiteSparseMatrix &block_Hsp) const = 0;
-    virtual size_t            detect_contact_set_change(const SuiteSparseMatrix &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;
+    virtual std::unique_ptr<BlockCSCHessianBase> block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;
+    virtual size_t detect_contact_set_change(const BlockCSCHessianBase &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;
 
     virtual size_t numCollisionConstraints() const = 0;
     virtual void resetCandidateCache() = 0;

@@ -1,17 +1,16 @@
 #ifdef MESHFEM_WITH_IPC_TOOLKIT
 #include "IPCWrapper.hh"
 
-#include "GlobalBenchmark.hh"
 #include <ipc/ipc.hpp>
 #include <ipc/collisions/collisions.hpp>
 #include <ipc/barrier/adaptive_stiffness.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/ParallelAssembly.hh>
 
 #include <MeshFEM_export.h>
-#include "Obstacle.hh"
 
 // The dimension-specific parts of IPCWrapper.
 template<size_t N>
@@ -20,8 +19,8 @@ struct IPCWrapper : public IPCWrapperBase {
         : m_assembler(cm.fullModelBlockVars) {
         collisionMesh = ipc::CollisionMesh(collisionVertexPositions, cm.edges, cm.faces);
         collisionMesh.can_collide = [&cm](size_t vi, size_t vj) {
-            // Obstacles can not collide
-            return (vi < cm.numEOCollisionVertices()) || (vj < cm.numEOCollisionVertices());
+            // Obstacles cannot collide
+            return !(cm.isObstacleVertex(vi) && cm.isObstacleVertex(vj));
         };
     }
 
@@ -138,16 +137,20 @@ struct IPCWrapper : public IPCWrapperBase {
         return result;
     }
 
-    virtual void hessian(SuiteSparseMatrix &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const override {
+    virtual void hessian(BlockCSCHessianBase &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const override {
         m_assembler.assembleHessian(H, collisionConstraints.size(), [&](size_t ci) {
                 ipc::BarrierPotential barrierPotential(dhat);
                 return (k * barrierPotential.hessian(collisionConstraints[ci], collisionConstraints[ci].dof(cvPositions, collisionMesh.edges(), collisionMesh.faces()), projectionMask)).eval();
             }, [this, &blockVarForCollisionMeshVertex](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });
     }
 
+    virtual std::unique_ptr<BlockCSCHessianBase> block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {
+        return m_assembler.blockSparsityPattern(collisionConstraints.size(), [this, &blockVarForCollisionMeshVertex](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });
+    }
+
     // Returns `NEW_ENTRIES` (size_t max) if even a single new entry becomes nonzero in the contact block sparsity pattern;
     // otherwise returns the number of blocks that have disappeared (if any).
-    virtual size_t detect_contact_set_change(const SuiteSparseMatrix &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {
+    virtual size_t detect_contact_set_change(const BlockCSCHessianBase &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {
         return m_assembler.detectChangedEntries(block_Hsp,
                 collisionConstraints.size(),
                 [&](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });

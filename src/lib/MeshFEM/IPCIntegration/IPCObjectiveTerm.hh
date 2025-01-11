@@ -1,24 +1,14 @@
 #ifndef IPCObject_HH
 #define IPCObject_HH
 
-#include "GlobalBenchmark.hh"
-#include "newton_optimizer/MultiobjectiveProblem.hh"
-#include "ElasticObject.hh"
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
+#include <MeshFEM/ElasticObject.hh>
+#include <MeshFEM/DynamicSimulator.hh>
 
 #include <Eigen/Sparse>
 #include <MeshFEM_export.h>
 #include "IPCWrapper.hh"
-
-struct MESHFEM_EXPORT TimestepLimiter {
-    TimestepLimiter() { };
-    virtual double getTimestepLength (double t, double dt) { return 1.0; }
-    virtual void initialBarrierStiffness(double w) = 0;
-    virtual ~TimestepLimiter() { };
-    void setAdaptiveTimestep(bool flag) { m_useAdaptiveTimestep = flag; }
-    bool useAdaptiveTimestep() { return m_useAdaptiveTimestep; }
-private:
-    bool m_useAdaptiveTimestep = true;
-};
 
 template<typename _Real>
 struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public TimestepLimiter {
@@ -27,6 +17,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     using EO   = ElasticObject<Real>;
 
     using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
+    using MXdRowMajor = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using MXi = Eigen::MatrixXi;
 
     IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts);
@@ -34,7 +25,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     virtual void varsUpdated() override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.varsUpdated");
         // Update IPC collision constraints and contact hessian sparsity pattern
-        m_collisionVertexPositions = m_combinedCollisionMesh->mergeCombinedCollisionFields(getVars(), m_combinedCollisionMesh->getObstaclesVertices());
+        m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(getVars());
         m_buildCollisionConstraints();
     }
 
@@ -42,7 +33,8 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
 
     virtual Real objective() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.energy");
-        return m_k * contactPotentialEnergy(); }
+        return m_k * contactPotentialEnergy();
+    }
 
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateGradient");
@@ -75,10 +67,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // Definition of IPC methods
     ////////////////////////////////////////////////////////////////////////////////
     Real contactPotentialEnergy() const;
-    // Gradient with respect to collision mesh vertex positions
-    VXd  contactPotentialGradient() const;
-    // Hessian with respect to collision mesh vertex positions
-    void contactHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask)  const;
+    VXd contactPotentialGradient() const; // Gradient with respect to just the collision mesh vertex positions
 
     VXd contactGradient() const {
         VXd g;
@@ -93,6 +82,11 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         }
         return g;
     }
+
+    virtual bool detectSparsityPatternChange(const NewtonHessian &oldHsp) const override;
+
+    virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const override;
+    NewtonHessian hessianSparsityPattern() const override;
 
     // Determine the maximum collision-free step size.
     Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override;
@@ -124,9 +118,8 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         m_combinedCollisionMesh->updateObstaclePosition(t + dt);
         // Fix ElasticObject and run CCD to detect collision of obstacle with ElasticObject  
         alpha = customFeasibleStepLength(vars, VXd::Zero(numVars()));
-        // Move the obstacle to previous position and then move alpha*t in linear trajectory
-        m_combinedCollisionMesh->updateObstaclePosition(t + alpha*dt);
-        m_collisionVertexPositions = m_combinedCollisionMesh->mergeCombinedCollisionFields(vars, m_combinedCollisionMesh->getObstaclesVertices());
+        if (alpha != 1.0) m_combinedCollisionMesh->updateObstaclePosition(t + alpha*dt);
+        m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(vars);
         m_buildCollisionConstraints();
         m_ipcWrapper->resetCandidateCache();
         return alpha;
@@ -155,16 +148,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     CCDMethod CCD = CCDMethod::TightInclusion;
 
 protected:
-    template<typename SPMat> void m_contactHessianImpl(SPMat &H, bool projectionMask = false) const;
-
-    virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const override{
-        BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");        
-        // TODO
-        // contactHessian(weight, result, projectionMask);
-    }
-
     void m_buildCollisionConstraints();
-    void m_updateContactHessianSparsityPattern();
 
     std::unique_ptr<CombinedCollisionMesh<Real>> m_combinedCollisionMesh;
     std::unique_ptr<IPCWrapperBase> m_ipcWrapper;

@@ -36,7 +36,7 @@ struct Region {
         return maxCorner - minCorner;
     }
 
-    Real diameter() const { return dimensions().norm(); }
+    Real diagonal() const { return dimensions().norm(); }
 
     Vector minCorner, maxCorner;
 };

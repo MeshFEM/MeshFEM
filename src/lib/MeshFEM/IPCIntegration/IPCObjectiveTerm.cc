@@ -6,10 +6,10 @@
 
 template<typename _Real>
 IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts)
-    : m_obj(eo), m_k(1.0e6)
+    : NewtonObjectiveTerm(eo), m_obj(eo), m_k(1.0e6)
 {
     m_combinedCollisionMesh = std::make_unique<CombinedCollisionMesh<Real>>(*eo, obsts);
-    m_collisionVertexPositions = m_combinedCollisionMesh->mergeCombinedCollisionFields(getVars(), m_combinedCollisionMesh->getObstaclesVertices());
+    m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(getVars());
     
     m_N = m_combinedCollisionMesh->N;
     m_ipcWrapper = make_ipc_wrapper(*m_combinedCollisionMesh, m_collisionVertexPositions);
@@ -17,9 +17,6 @@ IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<EO> eo, const Obstacle
     if (!m_ipcWrapper) throw std::runtime_error("Unsupported dimension " + std::to_string(m_N));
     m_ipcWrapper->dhat = m_combinedCollisionMesh->getBboxDiagonal() * 1e-3;//std::pow(m_combinedCollisionMesh.bboxDiagonal,2)*1e-4 / 2.0 ;
     
-    m_primaryBlockSparsity = eo->hessianBlockSparsityPattern();
-    // m_hessianSparsity = m_ipcWrapper->block_hessian_sparsity_pattern_to_scalar(m_primaryBlockSparsity);
-    // m_hessianSparsity = m_ipcWrapper->block_hessian_sparsity_pattern_to_scalar(m_contactBlockSparsity.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE));
     m_buildCollisionConstraints();
 
     if (!obsts.size()) setAdaptiveTimestep(false);
@@ -35,7 +32,6 @@ size_t IPCObjectiveTerm<_Real>::numCollisionConstraints() const { return m_ipcWr
 template<typename _Real>
 void IPCObjectiveTerm<_Real>::m_buildCollisionConstraints() {
     m_ipcWrapper->build_collision_constraints(m_collisionVertexPositions);
-    m_updateContactHessianSparsityPattern();
 }
 
 template<typename _Real>
@@ -49,39 +45,22 @@ typename IPCObjectiveTerm<_Real>::VXd IPCObjectiveTerm<_Real>::contactPotentialG
 }
 
 template<typename _Real>
-void IPCObjectiveTerm<_Real>::m_updateContactHessianSparsityPattern() {
+bool IPCObjectiveTerm<_Real>::detectSparsityPatternChange(const NewtonHessian &oldHsp) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.m_updateContactHessianSparsityPattern");
-    size_t changed = m_ipcWrapper->detect_contact_set_change(m_contactBlockSparsity, m_combinedCollisionMesh->nodeForCollisionMeshVertex);
-    if (changed < m_sparsityPatternUpdateThreshold) { sparsityPatternChanged = false; return; }
-
-    m_contactBlockSparsity = m_ipcWrapper->block_hessian_sparsity_pattern(m_combinedCollisionMesh->nodeForCollisionMeshVertex);
-    // {
-    //     static size_t counter = 0;
-    //     m_contactBlockSparsity.Ax.resize(m_contactBlockSparsity.nz); // Block sparsity patterns are not filled in by default.
-    //     m_contactBlockSparsity.dumpBinary("contact_block_sparsity_" + std::to_string(counter++) + ".bin");
-    // }
-
-    m_blockSparsity = m_primaryBlockSparsity;
-    m_blockSparsity.addWithDistinctSparsityPattern</* IgnoreValues = */ true>(m_contactBlockSparsity);
-
-    // The elastic object needs the new block sparsity pattern to accelerate Hessian assembly.
-    m_obj->setBlockHsp(m_blockSparsity); // TODO: remove this hack once we've
-                                         // implemented block Hessian assembly at
-                                         // the NewtonMultiobjectiveProblem level.
-
-    m_hessianSparsity = m_ipcWrapper->block_hessian_sparsity_pattern_to_scalar(m_contactBlockSparsity);
-    // {
-    //     static size_t counter = 0;
-    //     m_hessianSparsity.dumpBinary("hessian_sparsity_pattern_IPCOT_" + std::to_string(counter++) + ".bin");
-    // }
-
-    sparsityPatternChanged = true;
+    if (!oldHsp.H_ss) throw std::logic_error("IPCObjectiveTerm::detectSparsityPatternChange called with uninitialized sparsity pattern");
+    size_t changed = m_ipcWrapper->detect_contact_set_change(*(oldHsp.H_ss), m_combinedCollisionMesh->nodeForCollisionMeshVertex);
+    return (changed > m_sparsityPatternUpdateThreshold);
 }
 
 template<typename _Real>
-void IPCObjectiveTerm<_Real>::contactHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask) const {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("contactHessian");
-    m_ipcWrapper->hessian(H, m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
+NewtonHessian IPCObjectiveTerm<_Real>::hessianSparsityPattern() const {
+    return NewtonHessian(m_ipcWrapper->block_hessian_sparsity_pattern(m_combinedCollisionMesh->nodeForCollisionMeshVertex));
+}
+
+template<typename _Real>
+void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask) const {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");
+    m_ipcWrapper->hessian(*(H.H_ss), m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
 }
 
 template<typename _Real>
@@ -100,12 +79,23 @@ void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double weight) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.initialBarrierStiffness");
     if (useAdaptiveBarrier){
         VXd dB_dCV = contactPotentialGradient();
-        VXd dE_dCV(dB_dCV.size());
         const EO &o = object();
-        double avgMass = o.rho * o.volume() / (m_combinedCollisionMesh->numCombinedVertices());
-        Eigen::Map<MXd>(dE_dCV.data(), m_combinedCollisionMesh->numCombinedCollisionVertices(), m_N) = m_combinedCollisionMesh->mergeCombinedCollisionFields(o.gradient(true), MXd::Zero(m_combinedCollisionMesh->numObstaclesVertices(), m_N));
-        m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, m_combinedCollisionMesh->getBboxDiagonal(), avgMass,
-                                                    dE_dCV, dB_dCV, weight);
+        double avgMass = o.rho * o.volume() / (m_combinedCollisionMesh->numCombinedNodes());
+
+        // Compute the gradient of the "primary potential" with respect to the combined collision mesh vertices.
+        // Note that the obstacle vertices do not influence the primary potential,
+        // so this vector will be padded with zeros at the end.
+        size_t numObstacleVars = m_combinedCollisionMesh->numObstaclesVertices()   * m_N;
+        size_t numEOVars       = m_combinedCollisionMesh->numEOCollisionVertices() * m_N;
+        size_t numCMVars       = numEOVars + numObstacleVars;
+        if (size_t(dB_dCV.size()) != numCMVars) throw std::runtime_error("Unexpected dB_dCV size");
+        VXd dE_dCV(numCMVars);
+        MXd dE_dEOCM = m_combinedCollisionMesh->getElasticObjectCollisionMesh().extractVectorField(o.gradient(true)); // Vector field for 
+        Eigen::Map<MXdRowMajor>(dE_dCV.data(), dE_dEOCM.rows(), m_N) = dE_dEOCM; // Row major to ensure proper component ordering!
+        // The obstacle vertices do not influence the primary potential
+        dE_dCV.tail(numObstacleVars).setZero();
+
+        m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, m_combinedCollisionMesh->getBboxDiagonal(), avgMass, dE_dCV, dB_dCV, weight);
     }
 }
 
@@ -123,7 +113,9 @@ _Real IPCObjectiveTerm<_Real>::CCDFeasibleStepLength(const MXd &x0, const MXd &x
 template <typename _Real>
 _Real IPCObjectiveTerm<_Real>::CCDStepSize(const VXd &x0, const VXd &x1) const
 {
-    return m_ipcWrapper->compute_collision_tightInclusion_stepsize(m_combinedCollisionMesh->getCombinedCollisionFields(x0), m_combinedCollisionMesh->getCombinedCollisionFields(x1));
+    return m_ipcWrapper->compute_collision_tightInclusion_stepsize(
+                                m_combinedCollisionMesh->vertexPositionsForPolyfemVars(x0),
+                                m_combinedCollisionMesh->vertexPositionsForPolyfemVars(x1));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

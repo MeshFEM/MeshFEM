@@ -139,9 +139,9 @@ add_library(MeshFEM SHARED
         ElasticSolid.hh
         ElasticSheet.hh
 
-        # IPCObjectiveTerm.hh
-        # IPCObjectiveTerm.cc
-        # IPCWrapper.cc
+        IPCIntegration/IPCObjectiveTerm.hh
+        IPCIntegration/IPCObjectiveTerm.cc
+        IPCIntegration/IPCWrapper.cc
 
         BlockCSCHessian.cc
 

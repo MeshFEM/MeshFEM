@@ -10,8 +10,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/EquilibriumSolver.hh>
 #include <MeshFEM/DynamicSimulator.hh>
-#include <MeshFEM/IPCObjectiveTerm.hh>
-#include <MeshFEM/Obstacle.hh>
+#include <MeshFEM/IPCIntegration/IPCObjectiveTerm.hh>
+#include <MeshFEM/IPCIntegration/Obstacle.hh>
 
 template<typename Real_>
 void bind(py::module &m, py::module &detail_module) {
@@ -22,7 +22,6 @@ void bind(py::module &m, py::module &detail_module) {
     using IPCO = IPCObjectiveTerm<Real_>;
     py::class_<IPCO, NewtonObjectiveTerm, std::shared_ptr<IPCO>>(detail_module, ("IPCObjectiveTerm" + floatingPointTypeSuffix<Real_>()).c_str())
         .def_property("useAdaptiveBarrier",   &IPCO::getUseAdaptiveBarrierStiffness, &IPCO::setUseAdaptiveBarrierStiffness)
-        .def("contactHessianSparsityPattern", &IPCO::getContactHessianSparsityPattern)
         .def_property_readonly("object",      &IPCO::object)
         .def("getCollisionVertexPositions",   &IPCO::getCollisionVertexPositions)
         .def("getCollisionMeshFaces",         &IPCO::getCollisionMeshFaces)

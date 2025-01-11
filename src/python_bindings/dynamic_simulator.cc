@@ -9,7 +9,6 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/EquilibriumSolver.hh>
 #include <MeshFEM/DynamicSimulator.hh>
-#include <MeshFEM/IPCObjectiveTerm.hh>
 #include "EquilibriumBinding.hh"
 
 template<typename Real_>
