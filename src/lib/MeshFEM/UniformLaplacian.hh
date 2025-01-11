@@ -8,6 +8,7 @@
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  12/12/2015 12:14:03
+//  Modified: 01/11/2025 11:58:50 by Xinzhuo Hu: seperate construct and assemble
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef UNIFORMLAPLACIAN_HH
 #define UNIFORMLAPLACIAN_HH
@@ -19,15 +20,13 @@
 #include <iostream>
 
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 
 namespace UniformLaplacian {
 
-// Assemble the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
-// If varForVertex is passed, vertices can share variables (e.g. to implement
-// periodic constraints).
+// obatin Uniform Matrix L
 template<class _Mesh>
-void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
-              const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+TripletMatrix<> construct(_Mesh &mesh, const std::vector<size_t> &varForVertex = std::vector<size_t>()){
     size_t numVertices = mesh.numVertices();
     bool hasVarForVertex = (varForVertex.size() != 0);
     if (hasVarForVertex && (varForVertex.size() != numVertices))
@@ -74,7 +73,17 @@ void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
         for (size_t vj : adj_i)
             L.addNZ(vi, vj, -1.0);
     }
+    return L;
+}
 
+// Assemble the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
+// If varForVertex is passed, vertices can share variables (e.g. to implement
+// periodic constraints).
+template<class _Mesh>
+void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
+              const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+
+    TripletMatrix<> L = construct(mesh, varForVertex);
     system.set(L);
 }
 

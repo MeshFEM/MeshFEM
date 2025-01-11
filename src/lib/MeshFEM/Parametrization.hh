@@ -36,7 +36,7 @@ UVMap lscm(const Mesh &mesh, const UVMap &initParam = UVMap());
 
 // Compute a harmonic map with prescribed boundary positions (in 2D or 3D)
 MESHFEM_EXPORT
-NDMap harmonic(const Mesh &mesh, NDMap &boundaryData);
+NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte = false);
 
 // Inner product used to express the unit norm constraint in the eigenvalue
 // problem formulation.

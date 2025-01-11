@@ -1,5 +1,6 @@
 #include "Parametrization.hh"
 #include "Laplacian.hh"
+#include "UniformLaplacian.hh"
 #include "MassMatrix.hh"
 #include "Eigensolver.hh"
 #include <MeshFEM/Solvers/SPSDSystem.hh>
@@ -91,7 +92,7 @@ UVMap lscm(const Mesh &mesh, const UVMap &initParam) {
     return rescale(mesh, uv);
 }
 
-NDMap harmonic(const Mesh &mesh, NDMap &boundaryData) {
+NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
     const size_t nbn = mesh.numBoundaryNodes(),
                  nn  = mesh.numNodes();
     if (size_t(boundaryData.rows()) != nbn) throw std::runtime_error("Invalid boundary data size");
@@ -99,7 +100,9 @@ NDMap harmonic(const Mesh &mesh, NDMap &boundaryData) {
 
     NDMap result(nn, numComponents);
 
-    auto L = Laplacian::construct(mesh);
+    TripletMatrix<> L;
+    if(tutte)    L = UniformLaplacian::construct(mesh);
+    else         L = Laplacian::construct(mesh);
     L.sumRepeated();
     L.needs_sum_repeated = false;
     SPSDSystemSolver Lsys(L);
