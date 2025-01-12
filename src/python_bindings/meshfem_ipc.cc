@@ -34,7 +34,8 @@ void bind(py::module &m, py::module &detail_module) {
         .def("contactGradient",               &IPCO::contactGradient)
         .def("numCollisionConstraints",       &IPCO::numCollisionConstraints)
         .def("CCDFeasibleStepLength",         &IPCO::CCDFeasibleStepLength, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
-        .def("CCDStepSize",                   &IPCO::CCDStepSize, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
+        .def("CCDStepSize",                   &IPCO::CCDStepSize,           py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
+        .def_readwrite("sparsityPatternUpdateThreshold", &IPCO::sparsityPatternUpdateThreshold)
         ;
 
     m.def("IPCObjectiveTerm", [](std::shared_ptr<EO> eo, const ObstaclesCollection &obstacles) { return std::make_shared<IPCO>(eo, obstacles); }, py::arg("eo"), py::arg("obstacles") = ObstaclesCollection(), py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());

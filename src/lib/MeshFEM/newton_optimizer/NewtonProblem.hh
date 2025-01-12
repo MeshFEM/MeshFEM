@@ -82,7 +82,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
     NewtonHessian hessianSparsityPattern() const { updateSparsityPattern(); return m_getHessianSparsityPattern(); }
 
-    void updateSparsityPattern() const { if (m_updateSparsityPattern()) ++m_sparsityPatternID; }
+    void updateSparsityPattern() const {
+        if (!m_updateSparsityPattern()) return; // No change
+
+        m_cachedHessianUpToDate = false;
+        m_cachedHessian.reset(); m_cachedMetric.reset(); // Cached matrices must be thrown out so they're reconstructed from scratch with the correct sparsity pattern!
+        ++m_sparsityPatternID;
+    }
 
     // Identifier used to determine whether a symbolic factorization has been
     // invalidated by a sparsity pattern change; this ID increments whenever the

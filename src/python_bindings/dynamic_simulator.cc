@@ -9,7 +9,6 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/EquilibriumSolver.hh>
 #include <MeshFEM/DynamicSimulator.hh>
-#include "EquilibriumBinding.hh"
 
 template<typename Real_>
 void bind(py::module &m, py::module &detail_module) {
@@ -28,7 +27,7 @@ void bind(py::module &m, py::module &detail_module) {
         ;
 
     py::class_<DS, std::shared_ptr<DS>>(detail_module, ("DynamicProblem" + floatingPointTypeSuffix<Real>()).c_str())
-        .def("run", &DS::run, py::arg("time") = 1.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
+        .def("run", &DS::run, py::arg("time") = 1.0)
         .def_property_readonly("problem",     &DS::getProblem)
         .def_property_readonly("inertiaLoad", [](const DS &ds) -> const Loads::Load<Real_> & { return ds.inertiaLoad(); })
         .def_readwrite("method", &DS::method)

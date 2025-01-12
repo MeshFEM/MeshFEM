@@ -160,7 +160,7 @@ struct IPCWrapper : public IPCWrapperBase {
     }
 
     virtual size_t numCollisionConstraints() const override { return collisionConstraints.size(); }
-    virtual void resetCandidateCache() override { candidateCache->clear(); }
+    virtual void resetCandidateCache() override { candidateCache.reset(); }
 
     ipc::CollisionMesh collisionMesh;
     ipc::Collisions collisionConstraints;

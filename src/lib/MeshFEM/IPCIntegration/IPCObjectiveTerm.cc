@@ -49,7 +49,7 @@ bool IPCObjectiveTerm<_Real>::detectSparsityPatternChange(const NewtonHessian &o
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.m_updateContactHessianSparsityPattern");
     if (!oldHsp.H_ss) throw std::logic_error("IPCObjectiveTerm::detectSparsityPatternChange called with uninitialized sparsity pattern");
     size_t changed = m_ipcWrapper->detect_contact_set_change(*(oldHsp.H_ss), m_combinedCollisionMesh->nodeForCollisionMeshVertex);
-    return (changed > m_sparsityPatternUpdateThreshold);
+    return (changed > sparsityPatternUpdateThreshold);
 }
 
 template<typename _Real>
@@ -66,12 +66,13 @@ void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, b
 template<typename _Real>
 _Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const VXd &step) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.feasibleStepLength");
-    if (CCD == CCDMethod::CFL)
-        return m_ipcWrapper->compute_collision_cfl_stepsize(m_collisionVertexPositions, m_combinedCollisionMesh->vertexPositionsForVars(vars + step));
-    if (CCD == CCDMethod::TightInclusion){
-        return m_ipcWrapper->compute_collision_tightInclusion_stepsize(m_collisionVertexPositions, m_combinedCollisionMesh->vertexPositionsForVars(vars + step));
-    }
-    throw std::runtime_error("Unimplemented");
+
+    const MXd &cvp0 = getCollisionVertexPositions();
+    const MXd &cvp1 = m_combinedCollisionMesh->vertexPositionsForVars(vars + step);
+
+    if (CCD == CCDMethod::CFL)            return m_ipcWrapper->compute_collision_cfl_stepsize(cvp0, cvp1);
+    if (CCD == CCDMethod::TightInclusion) return m_ipcWrapper->compute_collision_tightInclusion_stepsize(cvp0, cvp1);
+    throw std::runtime_error("Unknown CCDMethod");
 }
 
 template<typename _Real>

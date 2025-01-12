@@ -147,6 +147,8 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     
     CCDMethod CCD = CCDMethod::TightInclusion;
 
+    size_t sparsityPatternUpdateThreshold = 100; // Number of blocks that must disappear from the sparsity pattern before we re-factorize.
+
 protected:
     void m_buildCollisionConstraints();
 
@@ -164,7 +166,5 @@ protected:
     bool useAdaptiveBarrier = true;
     Real m_k;                         // IPC Barrier Stiffness
     MXd  m_collisionVertexPositions;  // Cached collision vertex positions
-
-    size_t m_sparsityPatternUpdateThreshold = 100; // Number of blocks that must disappear from the sparsity pattern before we re-factorize.
 };
 #endif
