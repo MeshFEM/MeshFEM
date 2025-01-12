@@ -80,7 +80,7 @@ void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double weight) {
     if (useAdaptiveBarrier){
         VXd dB_dCV = contactPotentialGradient();
         const EO &o = object();
-        double avgMass = o.rho * o.volume() / (m_combinedCollisionMesh->numCombinedNodes());
+        double avgMass = o.getMassDensity() * o.volume() / (m_combinedCollisionMesh->numCombinedNodes());
 
         // Compute the gradient of the "primary potential" with respect to the combined collision mesh vertices.
         // Note that the obstacle vertices do not influence the primary potential,

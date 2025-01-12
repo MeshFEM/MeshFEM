@@ -196,10 +196,11 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return blockH;
     }
 
+    using Base::massMatrix;
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {
         M.setZero();
         MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped);
-        if (this->rho != 1.0) M *= this->rho;
+        if (this->getMassDensity() != 1.0) M *= this->getMassDensity();
     }
 
     virtual CSCMat sobolevInnerProductMatrix(Real Mscale = 1.0) const override {

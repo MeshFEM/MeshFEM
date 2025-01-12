@@ -18,14 +18,17 @@ void bind(py::module &m, py::module &detail_module) {
 
     py::module::import("elastic_object");
 
-    // Bind DynamicSimulator
     using DS = DynamicSimulator<Real>;
+
+    using TSM = TimesteppingMethod;
+    py::enum_<TSM>(detail_module, "TimesteppingMethod")
+        .value("ImplicitNewmark", TSM::ImplicitNewmark)
+        .value("BackwardEuler",   TSM::BackwardEuler)
+        .export_values()
+        ;
+
     py::class_<DS, std::shared_ptr<DS>>(detail_module, ("DynamicProblem" + floatingPointTypeSuffix<Real>()).c_str())
-    .def("run", [](DS &self, const std::vector<size_t> &fixedVars, const TimestepCallback &cb, const TimestepCallback &pre_cb, const PyCallbackFunction &cb_newton, const double finalTime) {
-            return self.run(fixedVars, cb, pre_cb, callbackWrapper(cb_newton), finalTime);
-        },
-        py::arg("fixedVars") = std::vector<size_t>(), py::arg("tcb") = nullptr, py::arg("pre_tcb") = nullptr, py::arg("ncb") = nullptr, py::arg("finalTime") = 1.0,
-                                py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
+        .def("run", &DS::run, py::arg("time") = 1.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>())
         .def_property_readonly("problem",     &DS::getProblem)
         .def_property_readonly("inertiaLoad", [](const DS &ds) -> const Loads::Load<Real_> & { return ds.inertiaLoad(); })
         .def_readwrite("method", &DS::method)
@@ -34,11 +37,22 @@ void bind(py::module &m, py::module &detail_module) {
         .def_property_readonly("kineticEnergies",   &DS::kineticEnergies)
         .def_property_readonly("potentialEnergies", &DS::potentialEnergies)
         .def("getVars", &DS::getVars)
-        .def("setBata", &DS::setBeta)
-        .def("setGamma", &DS::setGamma)
+
+        .def_readwrite("beta",  &DS::beta,  "beta parameter for Newmark time stepping")
+        .def_readwrite("gamma", &DS::gamma, "gamma parameter for Newmark time stepping")
+
         .def("setInitVelocity", &DS::setInitVelocity)
         .def("setXhat", &DS::setXhat)
         .def("getXhat", &DS::getXhat)
+
+        .def("setPostTimestepCallback", &DS::setPostTimestepCallback, py::arg("cb"))
+        .def("setPreTimestepCallback",  &DS::setPreTimestepCallback, py::arg("cb"))
+        .def("setNewtonCallback",       &DS::setNewtonCallback, py::arg("cb"))
+
+        .def_property("fixedVars", &DS::fixedVars, &DS::setFixedVars)
+
+        .def_readwrite("dt", &DS::dt)
+
         .def_property_readonly("optimizer", [](const DS &ds) -> NewtonOptimizer & { return ds.getOptimizer(); }, py::return_value_policy::reference_internal)
         .def("configureInertiaTerm", &DS::configureInertiaForTimeStep)
         ;

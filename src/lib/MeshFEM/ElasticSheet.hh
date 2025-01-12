@@ -643,6 +643,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
 
+    using Base::massMatrix;
     Real angleVarRelativeMomentOfInertia = 1e-6; // Relative to average nodal mass.
     virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
         // We only assign mass to the vertices (associating zero inertia with the midedge normals).

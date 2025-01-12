@@ -2,7 +2,7 @@
 // InertiaLoad.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Implements a inertia load that can be applied to a dynamic simulation using
+//  Implements an inertia load that can be applied to a dynamic simulation using
 //  both Backward Euler, and implicit newmark integrators.
 */
 //  Author:  Haleh Mohammadian (halehm), haleh.mohammadian@gmail.com

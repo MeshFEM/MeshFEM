@@ -14,11 +14,11 @@
 #include "Loads/Inertia.hh"
 #include "ElasticObject.hh"
 
-#include "MeshFEM/Solvers/CholeskyFactorizerBase.hh"
+#include <MeshFEM/Solvers/CholeskyFactorizerBase.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 using TimestepCallback = std::function<bool(std::shared_ptr<NewtonMultiobjectiveProblem>, size_t)>;
-
-using NewtonCallback = std::function<bool(NewtonProblem &, size_t)>;
+using NewtonCallback   = std::function<bool(NewtonProblem &, size_t)>;
 
 enum class TimesteppingMethod { BackwardEuler, ImplicitNewmark };
 
@@ -49,15 +49,12 @@ struct DynamicSimulator {
     DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt)
         : dt(dt), m_obj(eo), m_terms(terms)
     {
-        beta = 0.25;
-        gamma = 0.5;
 
         v.setZero(m_obj->numVars());
 
         m_terms.push_back(eo);
 
         m_inertiaLoad = std::make_shared<Loads::Inertia<EO>>(eo, useLumpedMass);
-
         m_terms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
 
         m_prob = std::make_shared<NewtonMultiobjectiveProblem>(m_obj, m_terms);
@@ -72,8 +69,6 @@ struct DynamicSimulator {
     VXd getVars() const { return m_obj->getVars(); }
     void setVars(const VXd &vars) { m_obj->setVars(vars); }
 
-    void setBeta(const double b) { beta = b; }
-    void setGamma(const double g) { gamma = g; }
     void setInitVelocity (const VXd &v0) {
         if (v.size() != v0.size())  std::runtime_error("Size Mismatch.");
         v = v0;
@@ -137,6 +132,7 @@ struct DynamicSimulator {
     }
 
     void timeStep(Real alpha = 1.0) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("DynamicSimulator.timeStep");
         VXd xt = getVars();
 
         Real alpha_dt = alpha * dt;
@@ -174,14 +170,14 @@ struct DynamicSimulator {
     const std::vector<Real> &  kineticEnergies() const { return   m_kineticEnergy; }
     const std::vector<Real> &potentialEnergies() const { return m_potentialEnergy; }
 
-    std::vector<ConvergenceReport> run(const std::vector<size_t> &fixedVars, const TimestepCallback &post_tcb, const TimestepCallback &pre_tcb, const NewtonCallback &cb_newton, const double finalTime) {
-        if (fixedVars != m_prob->fixedVars()) {
-            m_prob->setFixedVars(fixedVars);
-            m_massCholesky.second.reset();
-        }
-        m_prob->setCustomIterationCallback(cb_newton);
-        m_postTimestepCallback = post_tcb;
-        m_preTimestepCallback = pre_tcb;
+    void setPostTimestepCallback(const TimestepCallback &cb) { m_postTimestepCallback = cb; }
+    void  setPreTimestepCallback(const TimestepCallback &cb) { m_preTimestepCallback = cb; }
+    void       setNewtonCallback(const   NewtonCallback &cb) { m_prob->setCustomIterationCallback(cb); }
+
+    void setFixedVars(const std::vector<size_t> &fixedVars) { m_prob->setFixedVars(fixedVars); m_massCholesky.second.reset(); }
+    const std::vector<size_t> &fixedVars() const { return m_prob->fixedVars(); }
+
+    std::vector<ConvergenceReport> run(const double finalTime) {
         double time = 0.0;
 
         m_kineticEnergy  .assign(1,   kineticEnergy());
@@ -190,6 +186,9 @@ struct DynamicSimulator {
         m_crs.reserve(std::ceil(finalTime / dt));
         while (time < finalTime) {
             Real alpha = 1.0;
+
+            if (m_iterationCallback(tIter, m_preTimestepCallback)) break;
+
             // Adaptive time stepping for preventing collision of obstacle and elastic object
             for (size_t i = 0; i < m_terms.size(); i++){
                 const auto &term = m_terms[i];
@@ -202,23 +201,28 @@ struct DynamicSimulator {
                 }
             }
 
-            bool preEarlyExit = m_iterationCallback(tIter, m_preTimestepCallback);
-
             timeStep(alpha);
-            bool earlyExit = m_iterationCallback(tIter, m_postTimestepCallback);
             time += alpha * dt;
-            tIter++;
-            if (earlyExit || preEarlyExit) break;
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION timer("DynamicSimulator.postTimestepCallback");
+                if (m_iterationCallback(tIter, m_postTimestepCallback)) {
+                    ++tIter;
+                    break;
+                }
+            }
+            ++tIter;
+
         }
         return m_crs;
     }
 
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
-    const double dt;  // time step
-    Real beta; // beta used for implicit newmark time integration
+    double dt = 0.1;  // time step size
     TimesteppingMethod method = TimesteppingMethod::BackwardEuler;
-    Real gamma;
+
+    // Parameters of implicit Newmark integration
+    Real beta = 0.25, gamma = 0.5;
 
     VXd v;
 
@@ -231,7 +235,6 @@ private:
     }
 
     std::shared_ptr<EO> m_obj;
-    //LC m_loads; // All external loads in the problem (omitting the fictitious InertiaLoad)
     std::vector<NewtonTermPtr> m_terms;
     std::shared_ptr<Loads::Inertia<EO>> m_inertiaLoad;
     std::shared_ptr<NewtonMultiobjectiveProblem> m_prob;

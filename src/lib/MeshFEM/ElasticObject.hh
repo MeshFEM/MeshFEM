@@ -12,7 +12,6 @@
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
 #include "Types.hh"
-#include <map>
 #include <cstdlib>
 #include <functional>
 
@@ -195,12 +194,17 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual CollisionMesh getCollisionMesh() const { throw std::runtime_error("Unimplemented"); }
     virtual Real volume()            const { throw std::runtime_error("Unimplemented"); }
 
+    // Note: changing the mass density invalidates certain rest-state-cache
+    // quantities (like the gravity load vector), so we issue a rest-state
+    // update notification below.
+    Real getMassDensity() const { return m_rho; }
+    void setMassDensity(Real rho) { m_rho = rho; m_restConfigUpdated(); }
+
     virtual ~ElasticObject() { }
-
-    // Global material density (used for scaling the mass matrix and for gravity loads)
-    Real rho = 1.0;
-
 private:
+    // Global material density (used for scaling the mass matrix and for gravity loads)
+    Real m_rho = 1.0;
+
     // The following two methods must be implemented by the derived class to
     // update the deformed/rest states.
     virtual void m_setDefoVars(const Eigen::Ref<const VXd> &vars) = 0;

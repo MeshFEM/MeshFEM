@@ -10,13 +10,14 @@
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
+#include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "LoadBinding.hh"
+#include "BindingInstantiations.hh"
 
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
