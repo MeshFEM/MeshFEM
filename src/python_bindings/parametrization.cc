@@ -31,6 +31,9 @@ PYBIND11_MODULE(parametrization, m)
     m.def("conformalDistortion", &Parametrization::conformalDistortion, py::arg("mesh"), py::arg("uv"),
           "Get the (quasi-)conformal distortion strain measure (sigma_0 - sigma_1) / sigma_1 >= 0");
 
+    m.def("getFlips", &Parametrization::getFlips, py::arg("mesh"), py::arg("uv"),
+          "Get indices of triangle flips given a mesh and a uv mapping");
+
     // Misc utilities
     m.def("rescale", &Parametrization::rescale, py::arg("mesh"), py::arg("uv"),
           "Globally scale the parametrization to minimise the total squared difference in triangle areas caused by flattening");
