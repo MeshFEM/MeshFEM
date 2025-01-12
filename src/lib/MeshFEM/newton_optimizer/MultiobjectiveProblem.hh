@@ -300,6 +300,8 @@ struct MultiObjective {
             m_names[i] = "Term " + std::to_string(i);
     }
 
+    const std::vector<TermPtr> &getTerms() const { return m_terms; }
+
     void setTermNames(std::vector<std::string> names) {
         if (names.size() != m_terms.size()) throw std::runtime_error("Term count mismatch");
         m_names = names;
