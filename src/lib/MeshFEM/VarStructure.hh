@@ -196,6 +196,9 @@ struct ElementBlockVarsWithSizeRange {
     static constexpr size_t MinNumVars = _MinNumVars;
     static constexpr size_t MaxNumVars = _MaxNumVars;
 
+    ElementBlockVarsWithSizeRange() { } // Leaves fully uninitialized...
+    ElementBlockVarsWithSizeRange(size_t n) : numVars(n) { }
+
     std::array<size_t, MaxNumVars> vars;
 
     size_t  operator[](size_t i) const { return vars[i]; }

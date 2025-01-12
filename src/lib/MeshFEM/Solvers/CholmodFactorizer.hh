@@ -170,6 +170,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     //       further ensure it is spd.
     void factorizeNumeric(const SuiteSparseMatrix &fullMat, bool isInTryCatch=false) override {
         assertFactorization(FactorizationType::Symbolic);
+
         const SuiteSparseMatrix &mat = *m_rowColRemoval(fullMat);
         cholmod_sparse A = cholmod_sparse_view(mat);
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);

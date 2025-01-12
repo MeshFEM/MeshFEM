@@ -87,6 +87,15 @@ void runTest() {
         blockH->addNZScalar(t.i, t.j, t.value());
 
     REQUIRE((scalarH.data() - blockH->data()).norm() == 0.0);
+
+    REQUIRE(scalarH.trace() == blockH->trace());
+
+    {
+        Eigen::VectorXd d = Eigen::VectorXd::Random(scalarH.n);
+        scalarH.addDiag(d);
+        blockH->addDiag(d);
+        REQUIRE(scalarH.trace() == blockH->trace());
+    }
 }
 
 template<template<class Derived> class Policy>

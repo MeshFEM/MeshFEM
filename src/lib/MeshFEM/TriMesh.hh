@@ -173,6 +173,14 @@ public:
     BoundaryMesh<      TriMesh> boundary()       { return BoundaryMesh<      TriMesh>(*this); }
     BoundaryMesh<const TriMesh> boundary() const { return BoundaryMesh<const TriMesh>(*this); }
 
+    // Call f(be, edge_index) for the each boundary edge.
+    // (For uniformity with `TetMesh.hh`)
+    template<class F>
+    void visitBoundaryEdges(F &&f) const {
+        for (const auto be : boundaryEdges())
+           f(be, be.index());
+    }
+
     // Fast, direct access to certain connectivity information (without going through handles)
     template<class CornerIndexContainer>
     void getTriCorners(size_t t, CornerIndexContainer &corners) const {

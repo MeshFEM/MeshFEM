@@ -343,6 +343,7 @@ protected:
         m_fixedVars.clear();
         std::vector<bool> fixedVarMask(mat.n, false);
         for (size_t var : pinnedVars) {
+            if (var >= size_t(mat.n)) throw std::runtime_error("Fixed variable index out of range");
             if (!fixedVarMask[var]) m_fixedVars.push_back(var);
             fixedVarMask[var] = true;
         }

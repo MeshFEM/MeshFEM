@@ -122,6 +122,13 @@ struct MESHFEM_EXPORT NewtonHessian {
         }
     }
 
+    void mergeSparsityPattern(NewtonHessian &&other) { // Allow move instead of clone when `other` is a temporary....
+        if (other.H_ss) {
+            if (!H_ss)  H_ss = std::move(other.H_ss);
+            else        H_ss->mergeSparsityPattern(*other.H_ss);
+        }
+    }
+
     // Since block Hessian assembly requires the presence of diagonal blocks
     // (at least in the single-dimension case), we offer a convenience method
     // for inserting them; this should only be needed for assembling Hessians

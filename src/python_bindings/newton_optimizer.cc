@@ -203,6 +203,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("weight",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) { return prob.weight(name); })
         .def("term",       [](NewtonMultiobjectiveProblem &prob,                size_t i) -> NOT & { return prob.term(i);    }, py::return_value_policy::reference_internal)
         .def("term",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) -> NOT & { return prob.term(name); }, py::return_value_policy::reference_internal)
+        .def_property_readonly("terms", &NewtonMultiobjectiveProblem::getTerms)
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)

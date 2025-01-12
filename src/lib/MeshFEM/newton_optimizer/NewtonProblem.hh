@@ -82,7 +82,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
     NewtonHessian hessianSparsityPattern() const { updateSparsityPattern(); return m_getHessianSparsityPattern(); }
 
-    void updateSparsityPattern() const { if (m_updateSparsityPattern()) ++m_sparsityPatternID; }
+    void updateSparsityPattern() const {
+        if (!m_updateSparsityPattern()) return; // No change
+
+        m_cachedHessianUpToDate = false;
+        m_cachedHessian.reset(); m_cachedMetric.reset(); // Cached matrices must be thrown out so they're reconstructed from scratch with the correct sparsity pattern!
+        ++m_sparsityPatternID;
+    }
 
     // Identifier used to determine whether a symbolic factorization has been
     // invalidated by a sparsity pattern change; this ID increments whenever the
@@ -238,6 +244,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // custom user callback) and the point where the Hessian is evaluated.
     // If the sparsity pattern changes, `hesianSparsityPatternChanged` should be called.
     virtual bool detectSparsityPatternUpdates() { return false; }
+
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
+
+    // End of line search notification
+    virtual void lineSearchTerminated() const { }
 
     // When nonzero, the matrix `H + hessianShift I` is factorized at each
     // Newton step rather than `H` itself. This is intended for problems

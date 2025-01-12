@@ -1,29 +1,41 @@
 #ifndef LOADBINDING_HH
 #define LOADBINDING_HH
 
-#include "BindingInstantiations.hh"
-
+#include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/Gravity.hh>
+#include <MeshFEM/Loads/Inertia.hh>
 
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 template<class Object>
-static std::enable_if_t<Object::N == 3> bindGravity(py::module &module, py::module &detail_module, const char* name) {
+static void bindGravity(py::module &m, py::module &detail_module) {
     using Load = Loads::Load<double>;
-
-    ////////////////////////////////////////////////////////////////////////
-    // Gravity
-    ////////////////////////////////////////////////////////////////////////
     using GLoad = Loads::Gravity<Object>;
-    py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, name)
-       .def_property("rho", &GLoad::get_rho, &GLoad::set_rho)
+    py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, ("Gravity" + NameMangler<Object>::name()).c_str())
+        .def_property("g", &GLoad::get_g, &GLoad::set_g, "Gravitational acceleration vector")
        ;
 
-    using V3d = Eigen::Vector3d;
-    module.def("Gravity", [&](const std::shared_ptr<Object> &obj, double rho, const V3d &g) {
-                return std::make_shared<GLoad>(obj, rho, g);
-            }, py::arg("obj"), py::arg("rho"), py::arg("g") = V3d(0.0, 0.0, 9.80635 * 1e3))
-         ;
+    m.def("Gravity", [&](const std::shared_ptr<Object> &obj, const typename GLoad::VNd &g) {
+            return std::make_shared<GLoad>(obj, g);
+        }, py::arg("obj"), py::arg("g") = GLoad::default_gravity());
+}
+
+template<class Object>
+static void bindInertia(py::module &m, py::module &detail_module) {
+    using Load = Loads::Load<double>;
+    using ILoad = Loads::Inertia<Object>;
+    py::class_<ILoad, Load, std::shared_ptr<ILoad>>(detail_module, ("Inertia" + NameMangler<Object>::name()).c_str())
+        .def_readonly("xhat", &ILoad::xhat)
+        .def_readonly("weight", &ILoad::xhat)
+        .def_readonly("M",      &ILoad::M, py::return_value_policy::reference_internal)
+       ;
+
+    m.def("Inertia", [&](const std::shared_ptr<Object> &obj, bool lumpedMass) {
+                return std::make_shared<ILoad>(obj, lumpedMass);
+            }, py::arg("obj"), py::arg("lumpedMass") = true);
 }
 
 #endif /* end of include guard: LOADBINDING_HH */

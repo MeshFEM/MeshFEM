@@ -391,8 +391,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
     template<size_t MinSize, size_t MaxSize>
     static auto argsort(const ElementBlockVarsWithSizeRange<MinSize, MaxSize> &blockVars) { // For "partially dynamic" element sizes
-        ElementBlockVarsWithSizeRange<MinSize, MaxSize> order;
-        order.resize(blockVars.size());
+        ElementBlockVarsWithSizeRange<MinSize, MaxSize> order(blockVars.size());
         for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
         dispatchedStaticSort<MinSize, MaxSize>(order.data(), order.size(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
         return order;

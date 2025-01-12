@@ -244,6 +244,9 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // sufficient decrease are added to the working set.
         alpha = std::min(1.0, feasible_alpha * 2);
 
+        // Also clamp the step to a feasible size permitted by the problem
+        alpha = alpha * std::min(1.0, prob->customFeasibleStepLength(vars, alpha * step));
+
         const Real c_1 = 1e-2;
         size_t bit;
 
@@ -287,6 +290,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             }
         }
         BENCHMARK_STOP_TIMER_SECTION("Backtracking");
+        prob->lineSearchTerminated();
 
         reportIterate(it - 1, currEnergy, g_free_norm, false); // Record iterate statistics, now that we know alpha, isIndefinite
         prob->customIterateReport(report);

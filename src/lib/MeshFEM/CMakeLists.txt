@@ -11,6 +11,7 @@ add_library(MeshFEM SHARED
         ComponentMask.hh
         Concepts.hh
         DenseCollisionGrid.hh
+        DynamicSimulator.hh
         EdgeFields.cc
         EdgeFields.hh
         ElasticityTensor.hh
@@ -138,6 +139,10 @@ add_library(MeshFEM SHARED
         ElasticSolid.hh
         ElasticSheet.hh
 
+        IPCIntegration/IPCObjectiveTerm.hh
+        IPCIntegration/IPCObjectiveTerm.cc
+        IPCIntegration/IPCWrapper.cc
+
         BlockCSCHessian.cc
 
         ClosestPointProjection.cc
@@ -154,13 +159,13 @@ target_link_libraries(${PROJECT_NAME}
         tbb::tbb
         Threads::Threads
         Eigen3::Eigen
-        json::json
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
         meshfem::boost
         meshfem::spectra
         rotation_optimization
+        nlohmann_json::nlohmann_json
 #		CGAL::CGAL
     PRIVATE
         warnings::all
@@ -224,4 +229,9 @@ if (MESHFEM_WITH_PARDISO)
         /home/jpanetta/software/pardiso/libpardiso600-GNU800-X86-64.so
          -L${MKLROOT}/lib/intel64 -lmkl_rt -Wl,--no-as-needed -lpthread -lm -ldl -lgomp
         -lgfortran)
+endif()
+
+if(MESHFEM_WITH_IPC_TOOLKIT)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_IPC_TOOLKIT)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ipc::toolkit)
 endif()
