@@ -19,10 +19,9 @@ static void bindGravity(py::module &module, py::module &detail_module, const cha
     py::class_<GLoad, Load, std::shared_ptr<GLoad>> pyG(detail_module, name)
        ;
 
-    using V3d = Eigen::Vector3d;
-    module.def("Gravity", [&](const std::shared_ptr<Object> &obj, const V3d &g) {
+    module.def("Gravity", [&](const std::shared_ptr<Object> &obj, const typename GLoad::VNd &g) {
                 return std::make_shared<GLoad>(obj, g);
-            }, py::arg("obj"), py::arg("g") = V3d(0.0, 0.0, 9.80635 * 1e3))
+            }, py::arg("obj"), py::arg("g") = GLoad::default_gravity())
          ;
 }
 

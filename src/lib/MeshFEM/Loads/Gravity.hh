@@ -47,7 +47,7 @@ namespace Loads {
         static constexpr VNd default_gravity() {
             VNd result = VNd::Zero();
             static_assert(N == 2 || N == 3, "Gravity load only implemented in 2D and 3D");
-            result[2] = -9.80635; // Negative y direction.
+            result[1] = -9.80635; // Negative y direction.
             return result;
         }
 

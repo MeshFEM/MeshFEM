@@ -16,7 +16,8 @@ def getBBoxFaceRegion(obj, face, eps = 0.001):
     r.maxCorner[axis] = coordinate + eps
     return r
 
-def getBBoxVars(obj, face, displacementComponents = [0, 1, 2], displacementsOnly = False, tol = 1e-8, restPos=True):
+def getBBoxVars(obj, face, displacementComponents = None, displacementsOnly = False, tol = 1e-8, restPos=True):
+    if displacementComponents is None: displacementComponents = range(obj.dimension)
     if (not isinstance(face, BBoxFace)): raise Exception('face must be an instance of BBoxFace')
     axis = np.abs(face.value) - 1
     X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()

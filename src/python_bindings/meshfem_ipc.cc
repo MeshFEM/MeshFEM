@@ -17,10 +17,11 @@ template<typename Real_>
 void bind(py::module &m, py::module &detail_module) {
     using EO = ElasticObject<Real_>;
     py::module::import("elastic_object");
-#if MESHFEM_WITH_IPC_TOOLKIT
+    py::module::import("py_newton_optimizer");
+
     // Bind IPCObjective
     using IPCO = IPCObjectiveTerm<Real_>;
-    py::class_<IPCO, NewtonObjectiveTerm, std::shared_ptr<IPCO>>(detail_module, ("IPCObjectiveTerm" + floatingPointTypeSuffix<Real_>()).c_str())
+    py::class_<IPCO, NewtonObjectiveTermBase, std::shared_ptr<IPCO>>(detail_module, ("IPCObjectiveTerm" + floatingPointTypeSuffix<Real_>()).c_str())
         .def_property("useAdaptiveBarrier",   &IPCO::getUseAdaptiveBarrierStiffness, &IPCO::setUseAdaptiveBarrierStiffness)
         .def_property_readonly("object",      &IPCO::object)
         .def("getCollisionVertexPositions",   &IPCO::getCollisionVertexPositions)
@@ -47,7 +48,6 @@ void bind(py::module &m, py::module &detail_module) {
           .def("getPositions",      &Obstacle::getVertices)
           .def("getForce",          &Obstacle::getForce)
           .def("getEdges",          &Obstacle::getEdges);
-#endif
 }
 
 PYBIND11_MODULE(meshfem_ipc, m)

@@ -123,8 +123,11 @@ struct LoadBinder {
     }
 
     template<class Object>
-    static std::enable_if_t<Object::N == 2> bind(py::module &/* module */, py::module &/* detail_module */) {
-        // No loads are defined for 2D yet
+    static std::enable_if_t<Object::N == 2> bind(py::module &m, py::module &detail_module) {
+        ////////////////////////////////////////////////////////////////////////
+        // Gravity
+        ////////////////////////////////////////////////////////////////////////
+        bindGravity<Object>(m, detail_module, ("Gravity" + NameMangler<Object>::name()).c_str());
     }
 };
 
