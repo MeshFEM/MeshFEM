@@ -60,7 +60,7 @@ NewtonHessian IPCObjectiveTerm<_Real>::hessianSparsityPattern() const {
 template<typename _Real>
 void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");
-    m_ipcWrapper->hessian(*(H.H_ss), m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
+    m_ipcWrapper->hessian(H, m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
 }
 
 template<typename _Real>

@@ -111,12 +111,15 @@ struct IPCWrapper : public IPCWrapperBase {
 #endif
     }
 
-    using StencilMembers = Eigen::Matrix<long, Eigen::Dynamic, 1, Eigen::ColMajor, /* MaxRows */ 4, /* MaxCols */ 1>;
+    using StencilMembers = ElementBlockVarsWithSizeRange<1, 4>;
+
     // Get the vertices *within the collision mesh* participating in the constraint.
     StencilMembers constraintStencil(size_t ci) const {
         const auto &c = collisionConstraints[ci];
         std::array<long, 4> vertex_ids = c.vertex_ids(collisionMesh.edges(), collisionMesh.faces());
-        return StencilMembers(Eigen::Map<StencilMembers>(vertex_ids.data(), c.num_vertices()));
+        StencilMembers result(c.num_vertices());
+        for (size_t i = 0; i < result.numVars; ++i) result[i] = vertex_ids[i];
+        return result;
     }
 
     // Get the block variables *for the full problem* participating in the constraint.
@@ -133,11 +136,11 @@ struct IPCWrapper : public IPCWrapperBase {
             int bvar = blockVarForCollisionMeshVertex[vi];
             if (bvar != -1) result[back++] = bvar;
         }
-        result.conservativeResize(back);
+        result.resize(back);
         return result;
     }
 
-    virtual void hessian(BlockCSCHessianBase &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const override {
+    virtual void hessian(NewtonHessian &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const override {
         m_assembler.assembleHessian(H, collisionConstraints.size(), [&](size_t ci) {
                 ipc::BarrierPotential barrierPotential(dhat);
                 return (k * barrierPotential.hessian(collisionConstraints[ci], collisionConstraints[ci].dof(cvPositions, collisionMesh.edges(), collisionMesh.faces()), projectionMask)).eval();

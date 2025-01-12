@@ -160,7 +160,7 @@ struct IPCWrapperBase {
 
     virtual double compute_potential(const MXd &collisionVertexPositions) const = 0;
     virtual VXd compute_potential_gradient(const MXd &cvPositions) const = 0;
-    virtual void              hessian(BlockCSCHessianBase &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const = 0;
+    virtual void              hessian(NewtonHessian &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const = 0;
 
     virtual std::unique_ptr<BlockCSCHessianBase> block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;
     virtual size_t detect_contact_set_change(const BlockCSCHessianBase &block_Hsp, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const = 0;

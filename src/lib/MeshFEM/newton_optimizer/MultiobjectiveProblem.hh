@@ -493,7 +493,7 @@ private:
             if (t.suppressSparsity) continue;
             if (t.sparsityUpdateFrequency() == SUF::NEVER) {
                 // Only rebuild the "static" part when the terms might have been invalidated.
-                if (force) m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern());
+                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); std::cout << "Building static term sparsity pattern" << std::endl; }
                 else if (t.sparsityPatternChanged) throw std::logic_error("Term with a sparsity pattern update frequency of NEVER reported a change.");
             }
             else if (t.sparsityUpdateFrequency() == SUF::SOMETIMES) {
@@ -502,6 +502,7 @@ private:
                 // change. Otherwise, we ask the term to detect a change
                 // wrt. the currently incorporated version of its sparsity pattern.
                 if (force || t.sparsityPatternChanged || t.detectSparsityPatternChange(m_hessianSparsityForSemistaticTerms[i])) {
+                    std::cout << "Building semistatic term sparsity pattern" << std::endl;
                     m_hessianSparsityForSemistaticTerms[i] = t.hessianSparsityPattern();
                     changed = true;
                     staticOnly = false;
