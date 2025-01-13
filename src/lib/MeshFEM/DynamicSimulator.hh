@@ -204,7 +204,7 @@ struct DynamicSimulator {
             timeStep(alpha);
             time += alpha * dt;
             {
-                BENCHMARK_SCOPED_TIMER_SECTION timer("DynamicSimulator.postTimestepCallback");
+                // BENCHMARK_SCOPED_TIMER_SECTION timer("DynamicSimulator.postTimestepCallback"); // When collecting per-timestep benchmarks, we use a callback that resets the timer stack. This will cause problems if it's nested in a scoped timer...
                 if (m_iterationCallback(tIter, m_postTimestepCallback)) {
                     ++tIter;
                     break;
