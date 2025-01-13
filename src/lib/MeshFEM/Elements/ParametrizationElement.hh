@@ -48,7 +48,8 @@ struct ParametrizationElement : public ElementBase<ParametrizationElement<Deg, P
     template<bool SetLowerTri = false>
     Hessian hessian(Real weight, bool projectionMask, const LocalVars &x) const { const auto &m = Base::material(); return HLE::template hessian<SetLowerTri>(m.psi, FBGetter(x), elementData, /* projectionDisabled  = */ !projectionMask, weight); }
 
-    elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, 3>> elementData;
+    using EData = elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, 3>>;
+    EData elementData;
 };
 
 #include "../MeshEnergy.hh"

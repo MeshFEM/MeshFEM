@@ -36,6 +36,7 @@ struct EmbeddedMembraneElementData {
 
     const M23d &BtGradBarycentric() const { return m_BtGradBarycentric; }
     const M32d &B() const { return m_B; }
+    void setB(const M32d &B) { m_B = B; }
 
     const M23d &gradPhis() const {
         if constexpr (Deg == 1) return m_BtGradBarycentric;
