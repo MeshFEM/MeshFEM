@@ -36,6 +36,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     using CholeskyFactorizerBase::factorizeSymbolic; // don't shadow
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
+    void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
 
     void factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
@@ -82,12 +83,18 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
 
 private:
+    template<typename... Args>
+    void m_numericFactorizationImpl(const Real *Ax_data, Args&&... args);
+
+    void m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars);
+
     std::unique_ptr<catamari::SparseLDL<double>> m_ldl, m_ldlStash;
     std::unique_ptr<catamari::SparseLDLControl<double>> m_ldlControl;
 
     std::unique_ptr<CatamariConverter> m_catamariConverter;
 
     std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
+    size_t m_blockSize = 1;
 
     // Support fused pre-permutation functionality (where row-col-removal is fused with permutation)
     void m_populatePermutedReducedRowForRow() const override;

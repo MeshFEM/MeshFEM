@@ -28,6 +28,7 @@ static evalAt(const VectorND<K + 1> &samplePt, const F&f, Args&&... args) {
 // Also, ensure that the integrate() methods obtain the same result as Gauss quadrature.
 template<size_t K, size_t Deg, typename F>
 static void interpolant_test(const vector<vector<F>> &funcs) {
+    cout.precision(19);
     for (size_t d = 0; d <= Deg; ++d) {
         for (const auto &f : funcs.at(d)) {
             auto interp = Interpolation<K, Deg>::interpolant(f);
@@ -52,13 +53,15 @@ static void interpolant_test(const vector<vector<F>> &funcs) {
                 }
                 REQUIRE(std::abs(diff) <= 1e-13);
             }
-            double diff = interp.integrate(1.0) - Quadrature<K, Deg>::integrate(f, 1.0);
-            if (std::abs(diff) > 1e-16) {
-                std::cout << "Quadrature error of " + std::to_string(diff) + " in <"
+            double i1 = interp.integrate(1.1);
+            double i2 = Quadrature<K, Deg>::integrate(f, 1.1);
+            double diff = std::abs(i1 - i2) / std::abs(i2);
+            if (diff > 1e-15) {
+                std::cout << "Relative quadrature error of " << diff << " in <"
                         + std::to_string(K) + ", " + std::to_string(Deg) + "> interpolant of deg "
                         + std::to_string(d) + " function." << std::endl;
             }
-            REQUIRE(std::abs(diff) <= 1e-16);
+            REQUIRE(std::abs(diff) <= 1e-15);
         }
     }
 }
@@ -70,7 +73,7 @@ static void interpolant_test(const vector<vector<F>> &funcs) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-TEST_CASE("interpolant functions", "[quadrature]" ) {
+TEST_CASE("interpolant functions", "[interpolation]" ) {
 
     cout << std::setprecision(16);
     // Interpolant<Real, 2, 1> f(vector<Real>({1.0, 2.0, 3.0}));

@@ -85,6 +85,13 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("trace",          &SuiteSparseMatrix::trace)
         .def("transpose",      &SuiteSparseMatrix::transpose)
         .def("toSymmetryMode", &SuiteSparseMatrix::toSymmetryMode)
+        .def("expandSparsityPattern", [](SuiteSparseMatrix &Asp,
+                                         size_t block_size) {
+                if      (block_size == 1) return Asp;
+                else if (block_size == 2) return Asp.template expandSparsityPattern<2>();
+                else if (block_size == 3) return Asp.template expandSparsityPattern<3>();
+                else throw std::runtime_error("Unsupported block size");
+            })
         .def("addNZ", (size_t (SuiteSparseMatrix::*)(SuiteSparse_long, SuiteSparse_long, const double &))(&SuiteSparseMatrix::addNZ<double>), "Add a triplet to the matrix; entry must already exist in sparsity pattern") // py::overload_cast fails
         .def("setFromTMatrix", [&](SuiteSparseMatrix &smat, TMatrix &tmat) { smat.setFromTMatrix(tmat); } /* work around pybind11 error */ )
         .def("getTripletMatrix", &SuiteSparseMatrix::getTripletMatrix)

@@ -9,16 +9,7 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 #include "BindingUtils.hh"
 
-// Hack around a limitation of pybind11 where we cannot specify argument passing policies and
-// pybind11 tries to make a copy if the passed instance is not already registered:
-//      https://github.com/pybind/pybind11/issues/1200
-// We therefore make our Python callback interface use a raw pointer to forbid this copy (which
-// causes an error since NewtonProblem is not copyable).
-using PyCallbackFunction = std::function<bool(NewtonProblem *, size_t)>;
-
-NewtonMultiobjectiveProblem::CallbackFunction callbackWrapper(const PyCallbackFunction &pcb) {
-    return [pcb](NewtonProblem &p, size_t i) -> bool { if (pcb) return pcb(&p, i); return false; };
-}
+#include "CallbackWrapper.hh"
 
 template<class DerivedController, class BaseController>
 auto bindController(py::module &m, const char *name) {
@@ -137,6 +128,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
+        .def_property_readonly("hessianWasProjected", &NewtonProblem::hessianWasProjected, "Whether a projected Hessian was requested in the last call to `hessian()`")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 
@@ -203,13 +195,14 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("weight",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) { return prob.weight(name); })
         .def("term",       [](NewtonMultiobjectiveProblem &prob,                size_t i) -> NOT & { return prob.term(i);    }, py::return_value_policy::reference_internal)
         .def("term",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) -> NOT & { return prob.term(name); }, py::return_value_policy::reference_internal)
+        .def_property_readonly("terms", &NewtonMultiobjectiveProblem::getTerms)
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
 
         .def("setCustomIterationCallback",
-                [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction &cb) {
-                    prob.setCustomIterationCallback(callbackWrapper(cb));
+                [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction<NewtonProblem> &pcb) {
+                    prob.setCustomIterationCallback(callbackWrapper<NewtonProblem>(pcb));
                 }, py::arg("cb"))
         ;
 

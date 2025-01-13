@@ -47,6 +47,73 @@ ConvergenceReport NewtonOptimizer::optimize() {
     return optimize(workingSet);
 }
 
+// Return `true` on success, `false` on failure.
+// Record the value at which the line search terminated in `alpha`.
+using VXd = Eigen::VectorXd;
+bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &options, const VXd &vars, const VXd &step, const Real currEnergy, const Real directionalDerivative, Real &alpha, Real initialAlpha = 1.0) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Backtracking");
+    // Simple backtracking line search to ensure a sufficient decrease
+
+    Real feasible_alpha;
+    size_t blocking_idx;
+    std::tie(feasible_alpha, blocking_idx) = prob.feasibleStepLength(vars, step);
+
+    // To add multiple nearby bounds to the working set at once, we allow the
+    // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
+    // evaluating the objective). Then all bounds violated by the step length obtaining
+    // sufficient decrease are added to the working set.
+    alpha = std::min(initialAlpha, feasible_alpha * 2);
+
+    // Also clamp the step to a feasible size permitted by the problem
+    alpha = alpha * std::min(1.0, prob.customFeasibleStepLength(vars, alpha * step));
+
+    const Real c_1 = 1e-2;
+    size_t bit;
+
+    Eigen::VectorXd steppedVars;
+    for (bit = 0; bit < options.nbacktrack_iter; ++bit) {
+        steppedVars = vars + alpha * step;
+        prob.applyBoundConstraintsInPlace(steppedVars);
+        prob.setVars(steppedVars);
+        const Real steppedEnergy = prob.objective();
+        const Real sufficientDecrease = -c_1 * alpha * directionalDerivative;
+        Real decrease = currEnergy - steppedEnergy;
+        if (std::isfinite(steppedEnergy) && !std::isfinite(currEnergy))
+            decrease = safe_numeric_limits<Real>::max(); // always accept steps from invalid to valid states.
+        // Terminate line search successfully if a sufficient decrease is achieved
+        // (or if we cannot expect to evaluate the energy decrease accurately
+        // enough to measure a sufficient decrease--and the energy does not
+        // increase significantly)
+        if  ((decrease >= sufficientDecrease)
+                || (std::abs(sufficientDecrease) < 1e-8 * std::abs(currEnergy)
+                        && (decrease > -1e-10 * std::abs(currEnergy)))) {
+            break;
+        }
+
+        if (alpha > feasible_alpha) {
+            // It's possible that our slight overshooting and clamping to the bounds did not achieve a sufficient
+            // decrease whereas a step to the first violated bound would; make sure we try this exact step too
+            // before continuing the backtracking search.
+            alpha = feasible_alpha;
+        }
+        else {
+            alpha *= 0.5;
+        }
+
+        if (bit == options.nbacktrack_iter - 1) {
+            std::cout << "Backtracking failure with:" << std::endl
+                      << "Curr energy: " << currEnergy << std::endl
+                      << "Stepped energy: " << steppedEnergy << std::endl
+                      << "sufficientDecrease: " << sufficientDecrease << std::endl
+                      << "decrease: " << decrease << std::endl
+                      << std::endl;
+        }
+    }
+
+    const bool failed = bit == options.nbacktrack_iter;
+    return !failed;
+}
+
 ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     size_t ngd_fallback_steps = options.ngd_fallback_steps; // maximum number of gradient descent steps to take as a fallback when backtracking for the newton step fails.
 
@@ -107,7 +174,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         }
     };
 
-    BENCHMARK_START_TIMER_SECTION("Newton iterations");
+    BENCHMARK_SCOPED_TIMER_SECTION nitTimer("Newton iterations"); // Stopped at the end of this function.
     size_t it;
     Eigen::VectorXd za, neg_g, neg_g_ws_free_storage;
     Eigen::VectorXd *neg_g_ws_free_ptr = &neg_g;
@@ -231,62 +298,8 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // if (options.verbose)
         //     std::cout << "Found step with directional derivative: " << directionalDerivative << std::endl;
 
-        BENCHMARK_START_TIMER_SECTION("Backtracking");
-        // Simple backtracking line search to ensure a sufficient decrease
-
-        Real feasible_alpha;
-        size_t blocking_idx;
-        std::tie(feasible_alpha, blocking_idx) = prob->feasibleStepLength(vars, step);
-
-        // To add multiple nearby bounds to the working set at once, we allow the
-        // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
-        // evaluating the objective). Then all bounds violated by the step length obtaining
-        // sufficient decrease are added to the working set.
-        alpha = std::min(1.0, feasible_alpha * 2);
-
-        const Real c_1 = 1e-2;
-        size_t bit;
-
-        Eigen::VectorXd steppedVars;
-        for (bit = 0; bit < options.nbacktrack_iter; ++bit) {
-            steppedVars = vars + alpha * step;
-            prob->applyBoundConstraintsInPlace(steppedVars);
-            prob->setVars(steppedVars);
-            const Real steppedEnergy = prob->objective();
-            const Real sufficientDecrease = -c_1 * alpha * directionalDerivative;
-            Real decrease = currEnergy - steppedEnergy;
-            if (std::isfinite(steppedEnergy) && !std::isfinite(currEnergy))
-                decrease = safe_numeric_limits<Real>::max(); // always accept steps from invalid to valid states.
-            // Terminate line search successfully if a sufficient decrease is achieved
-            // (or if we cannot expect to evaluate the energy decrease accurately
-            // enough to measure a sufficient decrease--and the energy does not
-            // increase significantly)
-            if  ((decrease >= sufficientDecrease)
-                    || (std::abs(sufficientDecrease) < 1e-8 * std::abs(currEnergy)
-                            && (decrease > -1e-10 * std::abs(currEnergy)))) {
-                break;
-            }
-
-            if (alpha > feasible_alpha) {
-                // It's possible that our slight overshooting and clamping to the bounds did not achieve a sufficient
-                // decrease whereas a step to the first violated bound would; make sure we try this exact step too
-                // before continuing the backtracking search.
-                alpha = feasible_alpha;
-            }
-            else {
-                alpha *= 0.5;
-            }
-
-            if (bit == options.nbacktrack_iter - 1) {
-                std::cout << "Backtracking failure with:" << std::endl
-                          << "Curr energy: " << currEnergy << std::endl
-                          << "Stepped energy: " << steppedEnergy << std::endl
-                          << "sufficientDecrease: " << sufficientDecrease << std::endl
-                          << "decrease: " << decrease << std::endl
-                          << std::endl;
-            }
-        }
-        BENCHMARK_STOP_TIMER_SECTION("Backtracking");
+        bool line_search_succeeded = backtrackingLineSearch(*prob, options, vars, step, currEnergy, directionalDerivative, alpha);
+        prob->lineSearchTerminated();
 
         reportIterate(it - 1, currEnergy, g_free_norm, false); // Record iterate statistics, now that we know alpha, isIndefinite
         prob->customIterateReport(report);
@@ -308,7 +321,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
             }
         }
 
-        if (bit == options.nbacktrack_iter) {
+        if (!line_search_succeeded) {
             if (options.verbose) std::cout << "Initial backtracking failed; attempting gradient descent.\n";
 
             if (ngd_fallback_steps-- == 0) {
@@ -317,19 +330,14 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                 break;
             }
 
-            size_t gd_bit;
             directionalDerivative = -g_free_norm * g_free_norm;
-            alpha *= step.norm() / g_free_norm; // Start with the same step magnitude where the Newton step backtracking failed....
-            // step = -neg_g_ws_free
-            for (gd_bit = 0; gd_bit < options.nbacktrack_iter; ++gd_bit) {
-                steppedVars = vars + alpha * (*neg_g_ws_free_ptr);
-                prob->applyBoundConstraintsInPlace(steppedVars);
-                prob->setVars(steppedVars);
-                Real steppedEnergy = prob->objective();
-
-                if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
-                    break;
-                alpha *= 0.5;
+            Real initialAlpha = step.norm() / g_free_norm; // Start with the same step length as Newton's method
+            bool success = backtrackingLineSearch(*prob, options, vars, *neg_g_ws_free_ptr, currEnergy, directionalDerivative, alpha,
+                                                  /* initialAlpha =  */ step.norm() / g_free_norm);
+            if (!success) {
+                if (options.verbose) std::cout << "Gradient descent backtracking failed.\n";
+                prob->setVars(vars);
+                break;
             }
         }
     }
@@ -355,8 +363,6 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     // prob->setVars(prob->applyBoundConstraints(prob->getVars()));
     // std::cout << "After  apply bound constraints: " << prob->objective() << std::endl;
     // std::cout << "Terminating with report.backtracking_failure = " << report.backtracking_failure << std::endl;
-
-    BENCHMARK_STOP_TIMER_SECTION("Newton iterations");
 
     return report;
 }

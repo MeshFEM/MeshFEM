@@ -498,13 +498,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual void assertSupportsAssembly() const = 0;
     virtual bool missingRequiredDiagonalBlocks() const = 0;
 
-    virtual SuiteSparseMatrix toScalar() const = 0;
-
-    SuiteSparseMatrix toScalar(Real fillVal) const {
-        SuiteSparseMatrix result = toScalar();
-        result.Ax.assign(result.nz, fillVal);
-        return result;
-    }
+    virtual SuiteSparseMatrix toScalar(bool sparsityOnly = false) const = 0;
 
     virtual void applyRaw(const double *x, double *result) const = 0;
 
@@ -512,9 +506,18 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual void addNZScalar(size_t vi, size_t vj, double val) = 0;
     virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) = 0;
 
+    template<class _InVector>
+    void addDiag(const _InVector &d) {
+        assert(size_t(d.size()) == numScalarCols());
+        m_addDiag(d.data());
+    }
+
     virtual const OptimizationVarStructureBase   &vars() const = 0;
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
+
+private:
+    virtual void m_addDiag(const double *d) = 0;
 };
 
 template<class VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
@@ -595,25 +598,40 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         return this->scalarOffsetForColumn(n);
     }
 
-    virtual Real trace() const override {
-        Real result = 0;
+    // Call f(j, loc), passing the location in `Ax` of the diagonal entry
+    // in scalar column j, for each j in 0..numScalarVars() - 1
+    template<class F>
+    void visitDiagonalScalarEntries(F &&f) const {
+        _Index j = 0;
         for (_Index bj = 0; bj < n; ++bj) {
-            const _Index bsj = m_vars.blockSize(bj);
             auto cs = columnScanner(bj);
             _Index loc = cs.diagBlockScalarLoc();
-            for (_Index c_j = 0; c_j < bsj; ++c_j) {
-                result += Ax[loc];
+            for (_Index c_j = 0; c_j < cs.colBlockSize(); ++c_j) {
+                f(j++, loc);
                 loc += cs.colStride(c_j) // Move to next scalar column...
                        + 1;              // and down one to reach the diagonal
             }
         }
+    }
+
+    virtual Real trace() const override {
+        Real result = 0;
+        visitDiagonalScalarEntries([&result, this](size_t /* j */, _Index loc) { result += Ax[loc]; });
         return result;
     }
 
     using BlockCSCHessianBase::toScalar; // Don't hide overloads in base class
-    CSCMat toScalar() const override {
+    CSCMat toScalar(bool sparsityOnly = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.toScalar");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
+
+        if (uniformBlockSize()) {
+            CSCMat result = this->template expandSparsityPattern<VarStructure::MaxBlockDim>();
+
+            // Copy scalar values over (if they exist)
+            if (!sparsityOnly) result.Ax = Ax;
+            return result;
+        }
 
         size_t n_scalar = numScalarCols();
         CSCMat result(n_scalar, n_scalar);
@@ -660,7 +678,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         }
 
         // Copy scalar values over (if they exist)
-        result.Ax = Ax;
+        if (!sparsityOnly) result.Ax = Ax;
 
         return result;
     }
@@ -783,6 +801,10 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 
 private:
     VarStructure m_vars;
+
+    virtual void m_addDiag(const _Real *d) override {
+        visitDiagonalScalarEntries([d, this](size_t j, _Index loc) { Ax[loc] += d[j]; });
+    }
 
     BlockCSCHessian(const VarStructure &varStructure)
         : BlockCSCHessianBase(varStructure.numBlocks(), varStructure.numBlocks()), m_vars(varStructure) { }

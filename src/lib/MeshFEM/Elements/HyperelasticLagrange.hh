@@ -19,6 +19,17 @@ namespace elements {
 // A simplicial Lagrange element for hyperelasticity. The simplex dimension `K`
 // selects between edges/triangles/tetrahedra, while the embedding dimension `N`
 // specifies the dimenion of the deformation degrees of freedom.
+template<class Psi>
+constexpr size_t selectQuadratureDegree(size_t basisDegree) {
+    if (basisDegree == 1)       return 0; // Exact!
+    if (isLinearElastic<Psi>()) return 2 * (basisDegree - 1); // Exact!
+    // TODO: allow energy densities to request a different value!
+
+    return 2 * (basisDegree - 1) + 1; // Same default as PolyFEM for nonlinear densities.
+    // Note that even higher-degree rules may be needed to ensure injectivity of
+    // deformations with energies like neo-Hookean!
+}
+
 template<class Psi, size_t K, size_t N, size_t Deg>
 struct HyperelasticLagrange {
     static constexpr size_t NumNodesPerElement = Simplex::numNodes(K, Deg);
@@ -26,7 +37,7 @@ struct HyperelasticLagrange {
     static constexpr size_t NumRestNodesPerElement = Simplex::numNodes(K, 1);
     static constexpr size_t NumRestVarsPerElement  = N * NumRestNodesPerElement;
 
-    using QuadratureRule = Quadrature<K, 2 * (Deg - 1)>; // Exact for linear elasticity or linear FEM...
+    using QuadratureRule = Quadrature<K, selectQuadratureDegree<Psi>(Deg)>;
     using EvalPtK        = EvalPt<K>;
     using Real           = typename Psi::Real;
     using Gradient       = Eigen::Matrix<Real, NumVarsPerElement, 1>;

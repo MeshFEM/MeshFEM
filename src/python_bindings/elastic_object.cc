@@ -48,6 +48,8 @@ void bind(py::module &m) {
          .def("setIdentityDeformation",   &EO::setIdentityDeformation)
 
          .def("contract_d2E_dXdx",        &EO::contract_d2E_dXdx, py::arg("y"))
+
+         .def_property("rho", &EO::getMassDensity, &EO::setMassDensity)
         ;
     addComputeEquilibriumBinding<EO>(pyEO);
 }

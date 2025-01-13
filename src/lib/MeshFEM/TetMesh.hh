@@ -112,9 +112,10 @@ public:
 
     size_t numEdges() const { throw std::runtime_error("Not implemented"); }
 
-    size_t numBoundaryVertices()  const { return              bV.size(); }
-    size_t numBoundaryHalfEdges() const { return 3 * numBoundaryFaces(); }
-    size_t numBoundaryFaces()     const { return              bO.size(); }
+    size_t numBoundaryVertices()  const { return                  bV.size(); }
+    size_t numBoundaryEdges()     const { return numBoundaryHalfEdges() / 2; }
+    size_t numBoundaryHalfEdges() const { return     3 * numBoundaryFaces(); }
+    size_t numBoundaryFaces()     const { return                  bO.size(); }
 
     // Handles can be instantiated for const or non-const meshes.
     // Defined in TetMeshHandles.hh
@@ -190,6 +191,14 @@ public:
     // Boundary mesh access
     BoundaryMesh<      TetMesh> boundary()       { return BoundaryMesh<      TetMesh>(*this); }
     BoundaryMesh<const TetMesh> boundary() const { return BoundaryMesh<const TetMesh>(*this); }
+
+    // Call f(bhe, edge_index) for the primary boundary half-edge of each edge.
+    template<class F>
+    void visitBoundaryEdges(F &&f) const {
+        size_t i = 0;
+        for (const auto bhe : boundaryHalfEdges())
+            if (bhe.primary() == bhe) { f(bhe, i); ++i; }
+    }
 
 protected:
     ////////////////////////////////////////////////////////////////////////////

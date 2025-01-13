@@ -203,13 +203,21 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
     virtual void contract_d2E_dpdx(Real weight, const VXd &adjoint_state, VXd &result_accum) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
 
-    virtual ~NewtonObjectiveTermBase();
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
     virtual size_t       numVars() const { throw std::runtime_error(      "numVars must be implemented by subclass of NewtonObjectiveTermBase"); }
     virtual size_t numParameters() const { throw std::runtime_error("numParameters must be implemented by subclass of NewtonObjectiveTermBase"); }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Notifications
+    ////////////////////////////////////////////////////////////////////////////
+    virtual void newtonIterationBegan() { }
+    virtual void lineSearchTerminated() { }
 
     NewtonHessian hessian(bool projectionMask = false) const {
         NewtonHessian H(hessianSparsityPattern());
@@ -226,6 +234,8 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
         return g;
     }
 
+    virtual ~NewtonObjectiveTermBase();
+
     ObjectiveIncreaseLimiter increaseLimiter;
 
     // Option to ignore the sparsity pattern contributed by this term
@@ -234,7 +244,9 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
 
     // Notify the term that it should check now for sparsity pattern changes
     // (unless it does so automatically on each variable change).
-    virtual void detectSparsityPatternChange() { }
+    // To help the term detect changes, it is passed the current sparsity
+    // pattern that the multiobjective problem has on file.
+    virtual bool detectSparsityPatternChange(const NewtonHessian &oldHsp) const { return sparsityPatternChanged; }
 
     mutable SparsityPatternChangeFlag sparsityPatternChanged;
 };
@@ -266,6 +278,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTerm : public NewtonObjectiveTermBase {
     ////////////////////////////////////////////////////////////////////////////
     virtual void   varsUpdated() { }
     virtual void paramsUpdated() { }
+
 private:
     int m_variablesUpdateCallbackID, m_parameterUpdateCallbackID;
     NVStorageType m_nvars;
@@ -286,6 +299,8 @@ struct MultiObjective {
         for (size_t i = 0; i < numTerms(); ++i)
             m_names[i] = "Term " + std::to_string(i);
     }
+
+    const std::vector<TermPtr> &getTerms() const { return m_terms; }
 
     void setTermNames(std::vector<std::string> names) {
         if (names.size() != m_terms.size()) throw std::runtime_error("Term count mismatch");
@@ -339,16 +354,7 @@ protected:
     std::vector<Real> m_weights;
     std::vector<std::string> m_names;
 
-    virtual void m_termsAddedOrRemoved() {
-        // If terms have been used by another problem, their
-        // sparsityPatternChanged flag may have been reset even though
-        // they've not yet been incorporated into our sparsity pattern.
-        //
-        // Note that using a term *simultaneously* in two optimization problems
-        // is not supported since it will interfere with the
-        // `sparsityPatternChanged` flags.
-        for (auto &f : m_terms) f->sparsityPatternChanged.set();
-    }
+    virtual void m_termsAddedOrRemoved() { }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -422,6 +428,20 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
 
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override {
+        Real stepLength = std::numeric_limits<Real>::max();
+        for (const auto &term : m_terms)
+            stepLength = std::min(term->customFeasibleStepLength(vars, step), stepLength);
+        return stepLength;
+    }
+
+    virtual void lineSearchTerminated() const override {
+        for (auto &term: m_terms)
+            term->lineSearchTerminated();
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Sensitivity analysis support
     ////////////////////////////////////////////////////////////////////////////
@@ -442,32 +462,84 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 private:
     NVMPtr m_vars;
 
-    mutable NewtonHessian m_hessianSparsity;
+    mutable bool m_fullSparsityRebuildNeeded = true; // Whether all cached sparsity information has been invalidated (e.g., if the list of terms has changed)
+
+    // The full Hessian sparsity pattern is composed of three parts:
+    // a "static part", a "dynamic part", and a "semistatic part";
+    // these are contributed to by terms with an update frequency of NEVER,
+    // ALWAYS, and SOMETIMES, respectively.
+    // We cache the full static part as well as the per-term sparsity pattern
+    // for each semi-static term; the lattern is helpful for detecting
+    // sparsity pattern changes (e.g., for IPCObjectiveTerm).
+    // The dynamic part is rebuilt with every call to m_updateSparsityPattern().
+    mutable NewtonHessian m_hessianSparsity, m_hessianSparsityStaticPart;
+    mutable std::vector<NewtonHessian> m_hessianSparsityForSemistaticTerms;
 
     CallbackFunction m_customCallback;
 
+    using SUF = NewtonObjectiveTermBase::SparsityUpdateFrequency;
     bool m_updateSparsityPattern() const override {
-        bool sparsityChanged = false;
-        for (const auto &t : m_terms) {
-            t->detectSparsityPatternChange();
-            sparsityChanged |= t->sparsityPatternChanged;
+        NewtonHessian dynamicSparsity;
+        const bool force = m_fullSparsityRebuildNeeded;
+        if (force) {
+            m_hessianSparsity = NewtonHessian();
+            m_hessianSparsityStaticPart = NewtonHessian();
+            m_hessianSparsityForSemistaticTerms.assign(numTerms(), NewtonHessian());
         }
 
-        if (sparsityChanged) m_rebuildSparsityPattern();
-        return sparsityChanged;
-    }
+        bool changed = force;
+        bool staticOnly = true;
 
-    void m_rebuildSparsityPattern() const {
-        m_hessianSparsity = term(0).hessianSparsityPattern();
-        for (size_t i = 1; i < numTerms(); ++i) {
-            if (term(i).suppressSparsity) continue;
-            m_hessianSparsity.mergeSparsityPattern(term(i).hessianSparsityPattern());
+        for (size_t i = 0; i < numTerms(); ++i) {
+            const auto &t = term(i);
+            if (t.suppressSparsity) continue;
+            if (t.sparsityUpdateFrequency() == SUF::NEVER) {
+                // Only rebuild the "static" part when the terms might have been invalidated.
+                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); std::cout << "Building static term sparsity pattern" << std::endl; }
+                else if (t.sparsityPatternChanged) throw std::logic_error("Term with a sparsity pattern update frequency of NEVER reported a change.");
+            }
+            else if (t.sparsityUpdateFrequency() == SUF::SOMETIMES) {
+                // Automatically rebuild the sparsity pattern for this term if
+                // we're forcing a rebuild or if the term has already flagged a
+                // change. Otherwise, we ask the term to detect a change
+                // wrt. the currently incorporated version of its sparsity pattern.
+                if (force || t.sparsityPatternChanged || t.detectSparsityPatternChange(m_hessianSparsityForSemistaticTerms[i])) {
+                    std::cout << "Building semistatic term sparsity pattern" << std::endl;
+                    m_hessianSparsityForSemistaticTerms[i] = t.hessianSparsityPattern();
+                    changed = true;
+                    staticOnly = false;
+                }
+            }
+            else {
+                dynamicSparsity.mergeSparsityPattern(t.hessianSparsityPattern());
+                changed = true;
+                staticOnly = false;
+            }
         }
-        m_hessianSparsity.finalize();
+
+        if (changed) {
+            if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
+            else {
+                m_hessianSparsity = m_hessianSparsityStaticPart;
+                m_hessianSparsity.mergeSparsityPattern(dynamicSparsity);
+                for (const auto &t : m_hessianSparsityForSemistaticTerms)
+                    m_hessianSparsity.mergeSparsityPattern(t);
+            }
+
+            m_hessianSparsity.finalize();
+        }
+
+        m_fullSparsityRebuildNeeded = false;
 
         // All terms' latest sparsity patterns are now incorporated.
         for (size_t i = 0; i < numTerms(); ++i)
             term(i).sparsityPatternChanged.clear();
+
+        return changed;
+    }
+
+    virtual void m_termsAddedOrRemoved() override {
+        m_fullSparsityRebuildNeeded = true;
     }
 
     virtual NewtonHessian m_getHessianSparsityPattern() const override { return m_hessianSparsity; }
@@ -491,6 +563,7 @@ private:
             if (limit.factor == ObjectiveIncreaseLimiter::NO_LIMIT)
                 limit.previousValue = safe_numeric_limits<Real>::max();
             else limit.previousValue = t.objective();
+            term(ti).newtonIterationBegan();
         }
 
         m_vars->updateParametrization();

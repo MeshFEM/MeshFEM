@@ -1131,6 +1131,58 @@ struct CSCMatrix {
         return toSymmetryModeImpl(newMode, [val](_Index /* ii */) { return val; });
     }
 
+    // Treating this matrix's sparsity pattern as a block sparsity pattern with
+    // block size `UniformBlockSize`, expand it into the corresponding scalar sparsity pattern.
+    template<size_t UniformBlockSize, bool AssumeDiagonalExists = false>
+    CSCMatrix expandSparsityPattern() const {
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
+
+        static constexpr size_t N = UniformBlockSize;
+        size_t n_scalar = n * UniformBlockSize;
+        CSCMatrix result(n_scalar, n_scalar);
+        result.symmetry_mode = SymmetryMode::UPPER_TRIANGLE;
+
+        const CSCMatrix &blockHsp = *this;
+        typename CSCMatrix::InOrderBuilder builder(result, [&blockHsp](_Index *colSizes) {
+                // Count the number of nonzeros in each column of the scalar Hessian sparsity pattern.
+                for (_Index block_j = 0; block_j < blockHsp.n; ++block_j) {
+                    size_t gvar_j = block_j * N;
+                    size_t numBlocks = blockHsp.Ap[block_j + 1] - blockHsp.Ap[block_j];
+                    bool hasDiagonal = AssumeDiagonalExists || (blockHsp.Ai[blockHsp.Ap[block_j + 1] - 1] == block_j);
+                    if (hasDiagonal) {
+                        size_t colSize = (numBlocks - 1) * N + 1;
+                        for (size_t c_j = 0; c_j < N; ++c_j)
+                            colSizes[gvar_j + c_j] = colSize++;
+                    }
+                    else {
+                        for (size_t c_j = 0; c_j < N; ++c_j)
+                            colSizes[gvar_j + c_j] = N * numBlocks;
+                    }
+                }
+            }, /* sparsityOnly = */ true);
+
+        // BENCHMARK_SCOPED_TIMER_SECTION timer2("builderFiller");
+        // Filling out the index arrays (can be done in parallel)
+        for (_Index block_j = 0; block_j < blockHsp.n; ++block_j) {
+            size_t gvar_j = block_j * N;
+            for (_Index ii = blockHsp.Ap[block_j]; ii < blockHsp.Ap[block_j + 1]; ++ii) {
+                _Index block_i = blockHsp.Ai[ii];
+                if (block_i < block_j) {
+                    size_t gvar_i = block_i * N;
+                    for (size_t c_j = 0; c_j < N; ++c_j)
+                        for (size_t c_i = 0; c_i < N; ++c_i)
+                            builder.insert(gvar_i + c_i, gvar_j + c_j);
+                }
+                else {
+                    for (size_t c_j = 0; c_j < N; ++c_j)
+                        for (size_t c_i = 0; c_i <= c_j; ++c_i)
+                            builder.insert(gvar_j + c_i, gvar_j + c_j);
+                }
+            }
+        }
+        return result;
+    }
+
     void reflectUpperTriangle() {
         if (symmetry_mode == SymmetryMode::NONE) throw std::runtime_error("Matrix is not in symmetric lower/upper triangle respresentation");
         *this = toSymmetryMode(SymmetryMode::NONE);

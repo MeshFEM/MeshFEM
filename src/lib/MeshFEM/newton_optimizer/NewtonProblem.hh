@@ -41,9 +41,13 @@ struct MESHFEM_EXPORT NewtonProblem {
         if (disableCaching || !m_cachedHessianUpToDate) {
             m_evalHessian(*m_cachedHessian, projectionMask);
             m_cachedHessianUpToDate = true;
+            m_hessianWasProjected = projectionMask;
         }
         return *m_cachedHessian;
     }
+
+    // Whether the last Hessian evaluation requested a Hessian projection.
+    bool hessianWasProjected() const { return m_hessianWasProjected; }
 
     virtual bool providesMetric() const { return false; }
 
@@ -82,7 +86,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
     NewtonHessian hessianSparsityPattern() const { updateSparsityPattern(); return m_getHessianSparsityPattern(); }
 
-    void updateSparsityPattern() const { if (m_updateSparsityPattern()) ++m_sparsityPatternID; }
+    void updateSparsityPattern() const {
+        if (!m_updateSparsityPattern()) return; // No change
+
+        m_cachedHessianUpToDate = false;
+        m_cachedHessian.reset(); m_cachedMetric.reset(); // Cached matrices must be thrown out so they're reconstructed from scratch with the correct sparsity pattern!
+        ++m_sparsityPatternID;
+    }
 
     // Identifier used to determine whether a symbolic factorization has been
     // invalidated by a sparsity pattern change; this ID increments whenever the
@@ -239,6 +249,13 @@ struct MESHFEM_EXPORT NewtonProblem {
     // If the sparsity pattern changes, `hesianSparsityPatternChanged` should be called.
     virtual bool detectSparsityPatternUpdates() { return false; }
 
+    // Allow subclasses to impose an upper bound on the step size (e.g., to
+    // enforce interpenetration-free steps).
+    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
+
+    // End of line search notification
+    virtual void lineSearchTerminated() const { }
+
     // When nonzero, the matrix `H + hessianShift I` is factorized at each
     // Newton step rather than `H` itself. This is intended for problems
     // with a Hessian nullspace due to, e.g., rigid motion, that can be
@@ -273,6 +290,8 @@ protected:
     mutable std::unique_ptr<NewtonHessian> m_cachedHessian;
     mutable bool m_cachedHessianUpToDate = false;
     mutable Real m_metricL2Norm = -1;
+
+    mutable bool m_hessianWasProjected = false;
 
     mutable size_t m_sparsityPatternID = 0;
 };

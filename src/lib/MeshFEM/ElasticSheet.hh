@@ -285,17 +285,15 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         size_t thetaBlockOffset = varStructure().blockOffsetForType(1);
         size_t creaseAngleBlockOffset = varStructure().blockOffsetForType(2);
         return [this, thetaBlockOffset, creaseAngleBlockOffset, &m](size_t ei) {
-            EBlockVars blockVars;
+            EBlockVars blockVars(6);
             m.getTriCorners(ei, blockVars.vars); // just fills the first three entries...
-            size_t crease_back = 6;
             for (size_t lhi = 0; lhi < 3; ++lhi) {
                 size_t hei = m.halfedgeIdxOfTri(ei, lhi);
                 blockVars[3 + lhi] = thetaBlockOffset + edgeForHalfEdge(hei);
                 int ci = creaseForHalfEdge(hei);
                 if (ci < 0) continue;
-                blockVars[crease_back++] = creaseAngleBlockOffset + ci;
+                blockVars[blockVars.numVars++] = creaseAngleBlockOffset + ci;
             }
-            blockVars.numVars = crease_back;
             return blockVars;
         };
     }
@@ -643,6 +641,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
 
+    using Base::massMatrix;
     Real angleVarRelativeMomentOfInertia = 1e-6; // Relative to average nodal mass.
     virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
         // We only assign mass to the vertices (associating zero inertia with the midedge normals).
