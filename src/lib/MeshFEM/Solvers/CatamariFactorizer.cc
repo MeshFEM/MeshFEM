@@ -461,7 +461,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             if (m_blockSize > 1) {
                 // "Upgrade" the block permutation to a scalar permutation.
                 auto upgrade_permutation = [&](auto &perm) {
-                    catamari::Buffer<SuiteSparse_long> scalarPermutation(m_blockSize * A_reduced->n);
+                    std::decay_t<decltype(perm)> scalarPermutation(m_blockSize * A_reduced->n);
                     for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
                         for (size_t j = 0; j < m_blockSize; ++j)
                             scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
