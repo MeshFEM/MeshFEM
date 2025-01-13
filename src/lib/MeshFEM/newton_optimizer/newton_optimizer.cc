@@ -50,7 +50,7 @@ ConvergenceReport NewtonOptimizer::optimize() {
 // Return `true` on success, `false` on failure.
 // Record the value at which the line search terminated in `alpha`.
 using VXd = Eigen::VectorXd;
-bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &options, const VXd &vars, const VXd &step, const Real currEnergy, const Real directionalDerivative, Real &alpha) {
+bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &options, const VXd &vars, const VXd &step, const Real currEnergy, const Real directionalDerivative, Real &alpha, Real initialAlpha = 1.0) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Backtracking");
     // Simple backtracking line search to ensure a sufficient decrease
 
@@ -62,7 +62,7 @@ bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &o
     // step to overshoot the bounds (note: variables will be clamped to the bounds anyway before
     // evaluating the objective). Then all bounds violated by the step length obtaining
     // sufficient decrease are added to the working set.
-    alpha = std::min(1.0, feasible_alpha * 2);
+    alpha = std::min(initialAlpha, feasible_alpha * 2);
 
     // Also clamp the step to a feasible size permitted by the problem
     alpha = alpha * std::min(1.0, prob.customFeasibleStepLength(vars, alpha * step));
@@ -298,9 +298,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // if (options.verbose)
         //     std::cout << "Found step with directional derivative: " << directionalDerivative << std::endl;
 
-        BENCHMARK_START_TIMER_SECTION("Backtracking");
         bool line_search_succeeded = backtrackingLineSearch(*prob, options, vars, step, currEnergy, directionalDerivative, alpha);
-        BENCHMARK_STOP_TIMER_SECTION("Backtracking");
         prob->lineSearchTerminated();
 
         reportIterate(it - 1, currEnergy, g_free_norm, false); // Record iterate statistics, now that we know alpha, isIndefinite
@@ -332,21 +330,14 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
                 break;
             }
 
-            Eigen::VectorXd steppedVars;
-            const Real c_1 = 1e-2;
-            size_t gd_bit;
             directionalDerivative = -g_free_norm * g_free_norm;
-            alpha *= step.norm() / g_free_norm; // Start with the same step magnitude where the Newton step backtracking failed....
-            // step = -neg_g_ws_free
-            for (gd_bit = 0; gd_bit < options.nbacktrack_iter; ++gd_bit) {
-                steppedVars = vars + alpha * (*neg_g_ws_free_ptr);
-                prob->applyBoundConstraintsInPlace(steppedVars);
-                prob->setVars(steppedVars);
-                Real steppedEnergy = prob->objective();
-
-                if  (steppedEnergy - currEnergy <= c_1 * alpha * directionalDerivative)
-                    break;
-                alpha *= 0.5;
+            Real initialAlpha = step.norm() / g_free_norm; // Start with the same step length as Newton's method
+            bool success = backtrackingLineSearch(*prob, options, vars, *neg_g_ws_free_ptr, currEnergy, directionalDerivative, alpha,
+                                                  /* initialAlpha =  */ step.norm() / g_free_norm);
+            if (!success) {
+                if (options.verbose) std::cout << "Gradient descent backtracking failed.\n";
+                prob->setVars(vars);
+                break;
             }
         }
     }
