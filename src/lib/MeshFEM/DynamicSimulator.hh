@@ -17,9 +17,6 @@
 #include <MeshFEM/Solvers/CholeskyFactorizerBase.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 
-using TimestepCallback = std::function<bool(std::shared_ptr<NewtonMultiobjectiveProblem>, size_t)>;
-using NewtonCallback   = std::function<bool(NewtonProblem &, size_t)>;
-
 enum class TimesteppingMethod { BackwardEuler, ImplicitNewmark };
 
 template<typename _Real>
@@ -45,6 +42,9 @@ struct DynamicSimulator {
     using VXd = typename EO::VXd;
     using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
     using NewtonTermPtr = std::shared_ptr<NewtonObjectiveTermBase>;
+
+    using TimestepCallback = std::function<bool(DynamicSimulator &, size_t)>;
+    using NewtonCallback = typename NewtonMultiobjectiveProblem::CallbackFunction;
 
     DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt)
         : dt(dt), m_obj(eo), m_terms(terms)
@@ -229,8 +229,8 @@ struct DynamicSimulator {
     size_t tIter = 0;
 
 private:
-    bool m_iterationCallback(size_t i, TimestepCallback &customCallback){
-        if (customCallback) return customCallback(m_prob, i);
+    bool m_iterationCallback(size_t i, TimestepCallback &customCallback) {
+        if (customCallback) return customCallback(*this, i);
         return false; // don't exit early
     }
 

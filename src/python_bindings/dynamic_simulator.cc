@@ -10,6 +10,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 #include <MeshFEM/EquilibriumSolver.hh>
 #include <MeshFEM/DynamicSimulator.hh>
 
+#include "CallbackWrapper.hh"
+
 template<typename Real_>
 void bind(py::module &m, py::module &detail_module) {
     using EO = ElasticObject<Real_>;
@@ -44,9 +46,9 @@ void bind(py::module &m, py::module &detail_module) {
         .def("setXhat", &DS::setXhat)
         .def("getXhat", &DS::getXhat)
 
-        .def("setPostTimestepCallback", &DS::setPostTimestepCallback, py::arg("cb"))
-        .def("setPreTimestepCallback",  &DS::setPreTimestepCallback, py::arg("cb"))
-        .def("setNewtonCallback",       &DS::setNewtonCallback, py::arg("cb"))
+        .def("setPostTimestepCallback", [](DS &ds, const PyCallbackFunction<           DS> &pcb) { ds.setPostTimestepCallback(callbackWrapper<           DS>(pcb)); }, py::arg("cb"))
+        .def("setPreTimestepCallback",  [](DS &ds, const PyCallbackFunction<           DS> &pcb) { ds. setPreTimestepCallback(callbackWrapper<           DS>(pcb)); }, py::arg("cb"))
+        .def("setNewtonCallback",       [](DS &ds, const PyCallbackFunction<NewtonProblem> &pcb) { ds.      setNewtonCallback(callbackWrapper<NewtonProblem>(pcb)); }, py::arg("cb"))
 
         .def_property("fixedVars", &DS::fixedVars, &DS::setFixedVars)
 
