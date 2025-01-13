@@ -107,11 +107,11 @@ std::vector<size_t> getFlips(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
     std::vector<size_t> flip_idx;
     flip_idx.resize(0);
     const size_t nt = mesh.numElements();
-    
+
     // construct m_B vector for the mesh
     std::vector<M32d> B;
     B.resize(nt);
-    for (const auto e : mesh.elements()){
+    for (const auto e : mesh.elements()) {
         V3d b0 = (e.node(1)->p - e.node(0)->p).normalized();
         V3d b1 = e->normal().cross(b0);
         B[e.index()].col(0) = b0;
