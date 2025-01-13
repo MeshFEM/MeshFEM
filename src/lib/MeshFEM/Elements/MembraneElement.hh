@@ -36,6 +36,7 @@ struct EmbeddedMembraneElementData {
 
     const M23d &BtGradBarycentric() const { return m_BtGradBarycentric; }
     const M32d &B() const { return m_B; }
+    void setB(const M32d &B) { m_B = B; }
 
     const M23d &gradPhis() const {
         if constexpr (Deg == 1) return m_BtGradBarycentric;
@@ -69,9 +70,10 @@ struct EmbeddedMembraneElementData {
         // First, check if the triangle is parallel to the z=0 plane; in this
         // case we use the global 2D coordinate system's axis vectors as our
         // orthonormal basis to ease specification of anisotropic materials.
-        if (n.template head<2>().squaredNorm() < 1e-32)
+        if (n.template head<2>().squaredNorm() < 1e-32) {
             m_B.setIdentity();
-        else {
+            if (n[2] < 0) m_B.col(0).swap(m_B.col(1)); // Triangle is upside down...
+        } else {
             // We pick an orthonormal basis with b_0 parallel to e_0 and
             // b_1 parallel to e_0^perp (also parallel to "grad lambda_0")
             m_B.col(1) = gradLambda.col(0).normalized();

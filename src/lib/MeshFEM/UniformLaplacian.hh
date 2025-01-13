@@ -23,11 +23,11 @@
 
 namespace UniformLaplacian {
 
-// Assemble the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
+// Construct the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
 // If varForVertex is passed, vertices can share variables (e.g. to implement
 // periodic constraints).
 template<class _Mesh>
-TripletMatrix<> assemble(_Mesh &mesh, const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+TripletMatrix<> construct(_Mesh &mesh, const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
     size_t numVertices = mesh.numVertices();
     bool hasVarForVertex = (varForVertex.size() != 0);
     if (hasVarForVertex && (varForVertex.size() != numVertices))

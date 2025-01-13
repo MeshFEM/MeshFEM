@@ -101,8 +101,8 @@ NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
     NDMap result(nn, numComponents);
 
     TripletMatrix<> L;
-    if(tutte)    L = UniformLaplacian::construct(mesh);
-    else         L = Laplacian::construct(mesh);
+    if (tutte) L = UniformLaplacian::construct(mesh);
+    else       L = Laplacian::construct(mesh);
     L.sumRepeated();
     L.needs_sum_repeated = false;
     SPSDSystemSolver Lsys(L);

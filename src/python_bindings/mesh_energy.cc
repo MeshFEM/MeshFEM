@@ -53,6 +53,21 @@ void bind_nvars(py::module &detail) {
     py::class_<NVars, NewtonVarsBase, std::shared_ptr<NVars>>(detail, NameMangler<NVars>::name().c_str());
 }
 
+template<class E>
+auto bindParametrizationMeshEnergy(py::module &m, py::module &detail) {
+    using PME = ParametrizationMeshEnergy<E>;
+    using Element     = std::decay_t<decltype(std::declval<PME>().elements.front())>;
+    using ElementData = typename Element::EData;
+    using M32d        = typename ElementData::M32d;
+
+    auto pyPME = bindMeshEnergy<PME, E>("Parametrization", m, detail);
+    pyPME.def("getB", [](const PME &pme, size_t ei) { return pme.elements.at(ei).elementData.B(); });
+    pyPME.def("setB", [](      PME &pme, size_t ei, const M32d &B) { pme.elements.at(ei).elementData.setB(B); });
+    pyPME.def("elementJacobian", [](const PME &pme, size_t ei) { return pme.elements.at(ei).getFB(pme.extractLocalVars(ei)); });
+
+    return pyPME;
+}
+
 PYBIND11_MODULE(mesh_energy, m)
 {
     m.doc() = "Bindings for the generic mesh energy infrastructure";
@@ -88,12 +103,9 @@ PYBIND11_MODULE(mesh_energy, m)
     bindMeshEnergy<MembraneMeshEnergy<NHE>>("NeoHookeanMembrane", m, detail);
     bindMeshEnergy<DiscreteShellHingeMeshEnergy<double>>("DiscreteShellBending", m, detail);
 
-    using NHE    =                       NeoHookeanEnergy<double, 2>;
-    using NHE_HP = AutoHessianProjection<NeoHookeanEnergy<double, 2>>;
-    using SD     = SymmetricDirichlet<double, 2>;
-    bindMeshEnergy<ParametrizationMeshEnergy<NHE   >, NHE   >("Parametrization", m, detail);
-    bindMeshEnergy<ParametrizationMeshEnergy<NHE_HP>, NHE_HP>("Parametrization", m, detail);
-    bindMeshEnergy<ParametrizationMeshEnergy<SD    >, SD    >("Parametrization", m, detail);
+    bindParametrizationMeshEnergy<                      NeoHookeanEnergy  <double, 2> >(m, detail);
+    bindParametrizationMeshEnergy<AutoHessianProjection<NeoHookeanEnergy  <double, 2>>>(m, detail);
+    bindParametrizationMeshEnergy<                      SymmetricDirichlet<double, 2> >(m, detail);
 
     // Bind solid element mesh energies
     using NHE3D = NeoHookeanEnergy<double, 3>;
