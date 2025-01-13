@@ -90,11 +90,10 @@ PYBIND11_MODULE(mesh_energy, m)
 
     using NHE    =                       NeoHookeanEnergy<double, 2>;
     using NHE_HP = AutoHessianProjection<NeoHookeanEnergy<double, 2>>;
+    using SD     = SymmetricDirichlet<double, 2>;
     bindMeshEnergy<ParametrizationMeshEnergy<NHE   >, NHE   >("Parametrization", m, detail);
     bindMeshEnergy<ParametrizationMeshEnergy<NHE_HP>, NHE_HP>("Parametrization", m, detail);
-    
-    using SYMMDiri = SymmetricDirichlet<double, 2>;
-    bindMeshEnergy<ParametrizationMeshEnergy<SYMMDiri>, SYMMDiri>("SymmDriParametrization", m, detail);
+    bindMeshEnergy<ParametrizationMeshEnergy<SD    >, SD    >("Parametrization", m, detail);
 
     // Bind solid element mesh energies
     using NHE3D = NeoHookeanEnergy<double, 3>;
