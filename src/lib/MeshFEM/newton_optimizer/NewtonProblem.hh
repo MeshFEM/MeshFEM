@@ -41,9 +41,13 @@ struct MESHFEM_EXPORT NewtonProblem {
         if (disableCaching || !m_cachedHessianUpToDate) {
             m_evalHessian(*m_cachedHessian, projectionMask);
             m_cachedHessianUpToDate = true;
+            m_hessianWasProjected = projectionMask;
         }
         return *m_cachedHessian;
     }
+
+    // Whether the last Hessian evaluation requested a Hessian projection.
+    bool hessianWasProjected() const { return m_hessianWasProjected; }
 
     virtual bool providesMetric() const { return false; }
 
@@ -286,6 +290,8 @@ protected:
     mutable std::unique_ptr<NewtonHessian> m_cachedHessian;
     mutable bool m_cachedHessianUpToDate = false;
     mutable Real m_metricL2Norm = -1;
+
+    mutable bool m_hessianWasProjected = false;
 
     mutable size_t m_sparsityPatternID = 0;
 };

@@ -128,6 +128,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
+        .def_property_readonly("hessianWasProjected", &NewtonProblem::hessianWasProjected, "Whether a projected Hessian was requested in the last call to `hessian()`")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 
