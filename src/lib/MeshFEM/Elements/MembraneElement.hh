@@ -72,7 +72,7 @@ struct EmbeddedMembraneElementData {
         // orthonormal basis to ease specification of anisotropic materials.
         if (n.template head<2>().squaredNorm() < 1e-32) {
             m_B.setIdentity();
-            if (n[2] < 0) m_B.col(0).swap(m_B.col(1)); // Triangle is upside down...
+            if (n[2] < 0) m_B.col(1) << 0, -1, 0; // Triangle is upside down...
         } else {
             // We pick an orthonormal basis with b_0 parallel to e_0 and
             // b_1 parallel to e_0^perp (also parallel to "grad lambda_0")
