@@ -82,7 +82,7 @@ template<class _Mesh>
 void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
               const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
 
-    TripletMatrix<> L = assemble(mesh, varForVertex);
+    TripletMatrix<> L = construct(mesh, varForVertex);
     system.set(L);
 }
 
