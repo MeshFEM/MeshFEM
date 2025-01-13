@@ -21,7 +21,7 @@ def getBDdataOnUnitCircle(m):
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
-def runSYDParam(m, max_iter=500, hessian_shift=1e-8):
+def runSYDParam(m, max_iter=500, hessian_shift=1e-8, hessian_proj_option='Adaptive', grad_tol=None):
     obj_history = []
     time_history = []
 
@@ -49,6 +49,14 @@ def runSYDParam(m, max_iter=500, hessian_shift=1e-8):
     prob.hessianShift = hessian_shift
     opt = prob.optimizer()
     opt.options.niter = max_iter
+    if hessian_proj_option == 'Adaptive':  
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
+    elif hessian_proj_option == 'Always':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
+    elif hessian_proj_option == 'Never':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
+    else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never")
+    if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
 
     benchmark.reset()
     start_time = time.time()
