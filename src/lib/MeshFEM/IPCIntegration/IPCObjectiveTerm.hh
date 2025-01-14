@@ -101,10 +101,6 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     void initialBarrierStiffness(double weight) { initialBarrierStiffness(weight, object().gradient()); }
     void updateBarrierStiffness();
 
-    bool getUseAdaptiveBarrierStiffness() {
-        return useAdaptiveBarrier;
-    }
-
     size_t numCollisionConstraints() const;
 
     // Adaptive time stepping, time will progress with alpha*dt due to the linear trajectory of obstacle movement
