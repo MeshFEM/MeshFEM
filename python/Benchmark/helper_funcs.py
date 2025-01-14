@@ -21,7 +21,11 @@ def getBDdataOnUnitCircle(m):
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
-def runSYDParam(m, max_iter=500, hessian_shift=1e-8, hessian_proj_option='Adaptive', grad_tol=None):
+def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', thread_num=0, grad_tol=None):
+    if thread_num > 0:
+        import parallelism
+        parallelism.set_max_num_tbb_threads = int(thread_num)
+
     obj_history = []
     time_history = []
 
@@ -41,7 +45,7 @@ def runSYDParam(m, max_iter=500, hessian_shift=1e-8, hessian_proj_option='Adapti
 
     symmdiri_energy = energy.SymmetricDirichlet(2)
     # Construct `SymmetricDirichlet` parametrization energy and problem
-    param = mesh_energy.SymmDriParametrization(m, uv, symmdiri_energy)
+    param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
     prob.setCustomIterationCallback(customCallback)
 

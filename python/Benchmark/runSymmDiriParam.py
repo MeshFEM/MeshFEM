@@ -7,7 +7,7 @@ Created: 01/11/2025  11:03:50
 
 import os, sys
 sys.path.append('../')
-import MeshFEM, mesh
+import MeshFEM, mesh, benchmark
 import numpy as np
 import pickle
 import helper_funcs
@@ -28,7 +28,7 @@ def saveStats(save_dir, obj_arr, time_arr, benchmark_dict):
 def main():
     # Ensure at least 4 arguments (excluding script name) are provided
     if len(sys.argv) < 5:
-        print("Usage: python runSymmDiriParam.py <base_path> <model_name> <model_path> <hessian_proj_option> [<repeat_num>]")
+        print("Usage: python runSymmDiriParam.py <base_path> <model_name> <model_path> <hessian_proj_option> [<thread_num>] [<repeat_num>]")
         sys.exit(1)
 
     # Parse input arguments
@@ -41,8 +41,9 @@ def main():
         print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never")
         sys.exit(1)
 
-    # Set default value for iter_num if not provided
-    repeat_num = int(sys.argv[5]) if len(sys.argv) > 5 else 1
+    # Set default value for thread_num iter_num if not provided
+    thread_num = int(sys.argv[5]) if len(sys.argv) > 5 else 0  # thread_num is 0 means using default thread number
+    repeat_num = int(sys.argv[6]) if len(sys.argv) > 6 else 1
 
     # Check if base_path exists
     if not os.path.exists(base_path):
@@ -55,16 +56,24 @@ def main():
     print(f"  Model Name: {model_name}")
     print(f"  Model Path: {model_path}")
     print(f"  Hessian Projection Option: {hessian_proj_option}")
+    if thread_num == 0:  print(f"  Thread Number: Default")
+    else:                print(f"  Thread Number: {thread_num}")
     print(f"  Iterations: {repeat_num}")
 
+    # Statistics list
     total_time_list = []  # Used for searching the quickest experiment
     final_obj_list = []  
     newton_steps_list = []
+    symbolic_factorize_time_list = []
+    numeric_factroize_time_list = []
+    linsys_solve_time_list = []
+    hessian_eval_time_list = []
 
     for i in range(repeat_num):
         print(f"Running parametrization experiment {i + 1}/{repeat_num}...")
+        thread_folder_name = 'thread' + '_' + str(thread_num)
         folder_name = 'repeat' + '_' + str(i+1)
-        folder_dir = os.path.join(base_path, model_name, hessian_proj_option, folder_name)
+        folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name, folder_name)
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
         m = mesh.Mesh(model_path)
@@ -73,20 +82,36 @@ def main():
         newton_steps = obj_arr.shape[0]
         total_time = time_arr[-1]
         final_obj = obj_arr[-1]
+        symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
+        numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
+        linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
+        hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
+
         total_time_list.append(total_time)
         final_obj_list.append(final_obj)
         newton_steps_list.append(newton_steps)
+        symbolic_factorize_time_list.append(symbolic_factorize_time)
+        numeric_factroize_time_list.append(numeric_factorize_time)
+        linsys_solve_time_list.append(linsys_solve_time)
+        hessian_eval_time_list.append(hessian_eval_time)
 
         print(f"[Opt] Symmetric Dirichlet Parametrization of {model_name} Ended in {newton_steps} Newton Steps. Total Elapsed Time: {total_time: .4f} seconds.")
         saveStats(folder_dir, obj_arr, time_arr, benchmark_dict)
 
         print(f"Ended parametrization experiment {i + 1}/{repeat_num}.")
     
-    outer_folder_dir = os.path.join(base_path, model_name, hessian_proj_option)
-    summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list))
+    outer_folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name)
+    summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, symbolic_factorize_time_list,
+                                   numeric_factroize_time_list, linsys_solve_time_list, hessian_eval_time_list))
     # save to txt file
     txt_fn = 'summary.txt'
-    np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy", comments='')
+    np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tsymbol\t\tnumeric\t\tlinsolve\thessian_eval", comments='')
+    # Find the fastest one and add it to 'summary.txt'
+    total_time_min = min(total_time_list)
+    index_min = total_time_list.index(total_time_min)
+    with open(os.path.join(outer_folder_dir, txt_fn), "a") as f:
+        f.write(f"Fastest: {index_min + 1}\n")
+
     print(f"[File] Successfully Write {txt_fn} in {outer_folder_dir}!")
 
 
