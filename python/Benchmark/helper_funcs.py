@@ -28,11 +28,13 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
 
     obj_history = []
     time_history = []
+    grad_norm_history = []
 
     def customCallback(prob, i):
         it_time = time.time()
         obj_history.append(prob.energy())
         time_history.append(it_time)
+        grad_norm_history.append(np.linalg.norm(prob.gradient()))
     
     uv = mesh_energy.NodalVars(m, 2)
     bdry_uv = getBDdataOnUnitCircle(m)
@@ -69,4 +71,4 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
 
     bk_dict = benchmark.to_dict()
     time_arr = np.array(time_history) - start_time
-    return np.array(obj_history), time_arr, bk_dict
+    return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict

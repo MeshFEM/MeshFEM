@@ -13,12 +13,14 @@ import pickle
 import helper_funcs
 import warnings
 
-def saveStats(save_dir, obj_arr, time_arr, benchmark_dict):
+def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict):
     if (obj_arr.shape[0] != time_arr.shape[0]):
         raise RuntimeWarning("[File] Array size mismatch of objective array and time array")
-    arr_fn = 'obj_and_time.npz'
+    if (obj_arr.shape[0] != grad_norm_arr.shape[0]):
+        raise RuntimeWarning("[File] Array size mismatch of objective array and gradient norm array")
+    arr_fn = 'obj_time_gradnorm.npz'
     dict_fn = 'benchmark_dict.pkl'
-    np.savez_compressed(os.path.join(save_dir, arr_fn), obj_arr = obj_arr, time_arr = time_arr)
+    np.savez_compressed(os.path.join(save_dir, arr_fn), obj_arr = obj_arr, time_arr = time_arr, grad_norm_arr=grad_norm_arr)
     # save benchmark dictionary
     with open(os.path.join(save_dir, dict_fn), "wb") as f:
         pickle.dump(benchmark_dict, f)
@@ -77,7 +79,7 @@ def main():
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
         m = mesh.Mesh(model_path)
-        obj_arr, time_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
+        obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
         
         newton_steps = obj_arr.shape[0]
         total_time = time_arr[-1]
@@ -96,7 +98,7 @@ def main():
         hessian_eval_time_list.append(hessian_eval_time)
 
         print(f"[Opt] Symmetric Dirichlet Parametrization of {model_name} Ended in {newton_steps} Newton Steps. Total Elapsed Time: {total_time: .4f} seconds.")
-        saveStats(folder_dir, obj_arr, time_arr, benchmark_dict)
+        saveStats(folder_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict)
 
         print(f"Ended parametrization experiment {i + 1}/{repeat_num}.")
     
