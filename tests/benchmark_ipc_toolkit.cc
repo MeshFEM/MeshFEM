@@ -7,7 +7,10 @@
 #include <ipc/barrier/adaptive_stiffness.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 
+#include <MeshFEM/Parallelism.hh>
+
 double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, double dhat) {
+    std::cout << "dhat: " << dhat << std::endl;
     BENCHMARK_START_TIMER_SECTION("candidates.build");
     auto candidateCache = std::make_unique<ipc::Candidates>();
     ipc::Candidates &candidates = *candidateCache;
@@ -18,11 +21,14 @@ double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, c
         /* inflation_radius = */ dhat / 2, ipc::BroadPhaseMethod::HASH_GRID);
     BENCHMARK_STOP_TIMER_SECTION("candidates.build");
 
+    BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
     double dmin = 0.0;
     double ccd_tolerance = 2e-8;
     size_t max_iteration = 1e6;
+    std::cout << "candidates.compute_collision_free_stepsize with candidate size " << candidates.size() << " and step length " << (V0 - V1).norm() << std::endl;
     double alpha = candidates.compute_collision_free_stepsize(
         cm, V0, V1, /* dmin = */ dmin, /* tolerance = */ ccd_tolerance, /* max_iterations = */ max_iteration);
+    BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
     return alpha;
 }
 
@@ -31,6 +37,8 @@ int main(int argc, const char *argv[]) {
         std::cerr << "Usage: " << argv[0] << " 2D_debug_ccd_directory" << std::endl;
         return 1;
     }
+
+    set_max_num_tbb_threads(1);
 
     std::string inputPath = argv[1];
     Eigen::MatrixXi E, F;
@@ -56,6 +64,7 @@ int main(int argc, const char *argv[]) {
                 return 1;
             }
 
+            vertices.clear(); elements.clear();
             MeshIO::load(x1Path, vertices, elements);
             x1_inputs.push_back(getV(vertices));
             if (E != getF(elements)) {
@@ -68,6 +77,11 @@ int main(int argc, const char *argv[]) {
     }
 
     auto cm = ipc::CollisionMesh(x0_inputs[0], E, F);
+    size_t numObstacleVertices = 4;
+    size_t obstacleVertexOffset = x0_inputs[0].rows() - numObstacleVertices;
+    cm.can_collide = [&](size_t vi, size_t vj) {
+        return (vi < obstacleVertexOffset) || (vj < obstacleVertexOffset);
+    };
 
     auto bbox_diag = [](const Eigen::MatrixXd &V) {
         Eigen::RowVector3d min = V.colwise().minCoeff();
@@ -75,13 +89,16 @@ int main(int argc, const char *argv[]) {
         return (max - min).norm();
     };
 
-    double dhat = bbox_diag(x0_inputs[0]) * 1e-3;
+    // double dhat = bbox_diag(x0_inputs[0]) * 1e-3;
+    double dhat = 6.92820323e-05;
 
     std::cout.precision(19);
     for (size_t i = 0; i < x0_inputs.size(); ++i) {
         double stepSize = compute_collision_tightInclusion_stepsize(cm, x0_inputs[i], x1_inputs[i], dhat);
         std::cout << "Step size for collision " << i << ": " << stepSize << std::endl;
     }
+
+    BENCHMARK_REPORT();
 
     return 0;
 }
