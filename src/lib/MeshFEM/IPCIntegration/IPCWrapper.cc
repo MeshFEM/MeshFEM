@@ -63,7 +63,7 @@ struct IPCWrapper : public IPCWrapperBase {
         size_t max_iteration = 1e6;
         std::cout << "candidates.compute_collision_free_stepsize with candidate size " << candidates.size() << " and step length " << (steppedCollisionVertexPositions - collisionVertexPositions).norm() << std::endl;
         double alpha = candidates.compute_collision_free_stepsize(
-            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration); 
+            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration);
         BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
 #endif
 
@@ -167,7 +167,6 @@ struct IPCWrapper : public IPCWrapperBase {
     ipc::CollisionMesh collisionMesh;
     ipc::Collisions collisionConstraints;
     mutable std::unique_ptr<ipc::Candidates> candidateCache;
-       
 private:
     SystemAssembler<N> m_assembler;
 };

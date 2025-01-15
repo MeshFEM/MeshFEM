@@ -14,11 +14,7 @@ double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, c
     BENCHMARK_START_TIMER_SECTION("candidates.build");
     auto candidateCache = std::make_unique<ipc::Candidates>();
     ipc::Candidates &candidates = *candidateCache;
-    candidates.build(
-        cm,
-        V0,
-        V1,
-        /* inflation_radius = */ dhat / 2, ipc::BroadPhaseMethod::HASH_GRID);
+    candidates.build(cm, V0, V1, /* inflation_radius = */ dhat / 2, ipc::BroadPhaseMethod::HASH_GRID);
     BENCHMARK_STOP_TIMER_SECTION("candidates.build");
 
     BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
