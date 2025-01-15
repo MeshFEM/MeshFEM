@@ -58,7 +58,7 @@ def main():
     print(f"  Hessian Projection Option: {hessian_proj_option}")
     if thread_num == 0:  print(f"  Thread Number: Default")
     else:                print(f"  Thread Number: {thread_num}")
-    print(f"  Iterations: {repeat_num}")
+    print(f"  Repeat: {repeat_num}")
 
     # Statistics list
     total_time_list = []  # Used for searching the quickest experiment

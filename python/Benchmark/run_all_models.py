@@ -100,6 +100,7 @@ if __name__ == "__main__":
         print("[Error] <repeat_num> must be an positive integer >= 1.")
         sys.exit(1)
     
-    thread_num_list = [0]
+    # thread_num_list = [0]
+    thread_num_list = [1, 2, 4, 8, 16]
     # Run the function to perform experiments
     run_all_models(result_path, modelbase_path, repeat_num, thread_num_list)
