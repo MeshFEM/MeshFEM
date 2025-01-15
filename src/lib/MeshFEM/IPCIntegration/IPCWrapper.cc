@@ -59,10 +59,9 @@ struct IPCWrapper : public IPCWrapperBase {
             collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ 1e-6, /* tolerance = */ 1e-6, /* max_iterations = */ 1e6);
 #else
         double dmin = 0.0;
-        double ccd_tolerance = 2e-8;
         size_t max_iteration = 1e6;
         double alpha = candidates.compute_collision_free_stepsize(
-            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccd_tolerance, /* max_iterations = */ max_iteration); 
+            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration); 
 #endif
 
         // const auto ccd_end = std::chrono::steady_clock::now();
@@ -165,7 +164,7 @@ struct IPCWrapper : public IPCWrapperBase {
     ipc::CollisionMesh collisionMesh;
     ipc::Collisions collisionConstraints;
     mutable std::unique_ptr<ipc::Candidates> candidateCache;
-
+       
 private:
     SystemAssembler<N> m_assembler;
 };
