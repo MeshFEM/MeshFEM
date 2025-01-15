@@ -81,3 +81,20 @@ def numInvocations(pattern, d=None, default=None):
     invocations = [b.invocations for b in d.values()]
     if (min(invocations) != max(invocations)): raise Exception("Inconsistent invocation count")
     return invocations[0]
+
+def format(d, print_string = True):
+    """
+    Print or return a string representation of a benchmarking dictionary `d`.
+    (for example, format(to_dict) should do the same thing as report()).
+    """
+    s = ''
+    fullTime = 0
+    for k in sorted(d.keys()):
+        t = d[k]
+        if k == '':
+            fullTime = t.time
+            continue
+        s += ((k.count(':') * 4) * ' ') + k.rpartition(':')[-1] + f'\t{t.time}\t{t.invocations}\n'
+    s += f'Full time:\t{fullTime}'
+    if (print_string): print(s)
+    else: return s

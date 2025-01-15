@@ -19,8 +19,10 @@ namespace Parametrization {
 using Mesh = FEMMesh<2, 1, Vector3D>; // Piecewise linear triangle mesh embedded in R^3
 using UVMap = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::ColMajor>;
 using NDMap = Eigen::MatrixXd;
+using V3d   = Eigen::Vector3d;
 using VXd   = Eigen::VectorXd;
 using M23d  = Eigen::Matrix<Real, 2, 3>;
+using M32d  = Eigen::Matrix<Real, 3, 2>;
 
 struct SPSDSystemSolver; // Forward declaration; defined in parametrization.cc
 
@@ -36,7 +38,7 @@ UVMap lscm(const Mesh &mesh, const UVMap &initParam = UVMap());
 
 // Compute a harmonic map with prescribed boundary positions (in 2D or 3D)
 MESHFEM_EXPORT
-NDMap harmonic(const Mesh &mesh, NDMap &boundaryData);
+NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte = false);
 
 // Inner product used to express the unit norm constraint in the eigenvalue
 // problem formulation.
@@ -97,6 +99,38 @@ VXd conformalDistortion(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
         result[i] = (sigma[0] - sigma[1]) / sigma[1];
     }
     return result;
+}
+
+// Number of triangle flips given a mesh and a uv mapping
+MESHFEM_EXPORT
+std::vector<size_t> getFlips(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
+    std::vector<size_t> flip_idx;
+    flip_idx.resize(0);
+    const size_t nt = mesh.numElements();
+
+    // construct m_B vector for the mesh
+    std::vector<M32d> B;
+    B.resize(nt);
+    for (const auto e : mesh.elements()) {
+        V3d b0 = (e.node(1)->p - e.node(0)->p).normalized();
+        V3d b1 = e->normal().cross(b0);
+        B[e.index()].col(0) = b0;
+        B[e.index()].col(1) = b1;
+    }
+
+    std::vector<M23d> F = jacobians(mesh, uv);
+    M23d f_restrict_T;
+    for (const auto e : mesh.elements()){
+        size_t e_ind = e.index();
+        f_restrict_T.col(0) = uv.row(e.vertex(0).index());
+        f_restrict_T.col(1) = uv.row(e.vertex(1).index());
+        f_restrict_T.col(2) = uv.row(e.vertex(2).index());
+        auto &J = F[e_ind];
+        J = f_restrict_T * e->gradBarycentric().transpose();
+        if ((J * B[e_ind]).determinant() < 0)  flip_idx.push_back(e_ind);
+    }
+
+    return flip_idx;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
