@@ -43,6 +43,17 @@ struct IPCWrapper : public IPCWrapperBase {
         std::cout << "CCD duration: " << std::chrono::duration<double>(ccd_end - ccd_begin).count() << " seconds." << std::endl;
         // const auto ccd_begin = std::chrono::steady_clock::now();
 #else
+        // {
+        //     static size_t counter = 0;
+        //     if (counter == 0) {
+        //         std::ofstream("cm_edges.txt") << collisionMesh.edges();
+        //         std::ofstream("cm_faces.txt") << collisionMesh.faces();
+        //     }
+        //     std::string name = "debug_ccd_" + std::to_string(counter++);
+        //     std::ofstream(name + "_x0.txt") << std::setprecision(19) << collisionVertexPositions;
+        //     std::ofstream(name + "_x1.txt") << std::setprecision(19) << steppedCollisionVertexPositions;
+        //     ++counter;
+        // }
         BENCHMARK_START_TIMER_SECTION("candidates.build");
         candidateCache = std::make_unique<ipc::Candidates>();
         ipc::Candidates &candidates = *candidateCache;

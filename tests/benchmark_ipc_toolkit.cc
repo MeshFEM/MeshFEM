@@ -9,6 +9,44 @@
 
 #include <MeshFEM/Parallelism.hh>
 
+template<typename T>
+Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> readMatrix(const char *filename) {
+    int cols = 0, rows = 0;
+    std::vector<T> buff;
+
+    // Read numbers from file into buffer.
+    std::ifstream infile;
+    infile.open(filename);
+    while (! infile.eof()) {
+        std::string line;
+        getline(infile, line);
+
+        int temp_cols = 0;
+        std::stringstream stream(line);
+		T val;
+        while((stream >> val)) {
+			buff.push_back(val);
+			++temp_cols;
+		}
+
+        if (temp_cols == 0)
+            continue;
+
+        if (cols == 0)
+            cols = temp_cols;
+
+        rows++;
+    }
+
+    infile.close();
+
+    if (rows * cols != buff.size()) {
+        std::cout << "rows: " << rows << ", cols: " << cols << ", buff.size(): " << buff.size() << std::endl;
+        throw std::runtime_error("Read error from " + std::string(filename));
+    }
+	return Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(buff.data(), rows, cols);
+};
+
 double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, double dhat) {
     std::cout << "dhat: " << dhat << std::endl;
     BENCHMARK_START_TIMER_SECTION("candidates.build");
@@ -33,43 +71,31 @@ int main(int argc, const char *argv[]) {
         std::cerr << "Usage: " << argv[0] << " 2D_debug_ccd_directory" << std::endl;
         return 1;
     }
+    std::string inputPath = argv[1];
 
     set_max_num_tbb_threads(1);
 
-    std::string inputPath = argv[1];
-    Eigen::MatrixXi E, F;
+    // Load the CCD input data from the files:
+    //      `{inputPath}/cm_edges.txt`
+    //      `{inputPath}/cm_faces.txt`
+    //      `{inputPath}/debug_ccd_{counter}_x[01].txt`
+    Eigen::MatrixXi E = readMatrix<int>((inputPath + "/cm_edges.txt").c_str());
+    Eigen::MatrixXi F = readMatrix<int>((inputPath + "/cm_faces.txt").c_str());
     std::vector<Eigen::MatrixXd> x0_inputs, x1_inputs;
-
-    // Load the CCD input meshes from `{inputPath}/debug_ccd_{counter}_0.obj`
-    // and `{inputPath}/debug_ccd_{counter}_1.obj`.
-    // Currently we only support the CCD output for 2D simulations, since 3D
-    // would require loading both edges and faces.
     size_t counter = 0;
     while (true) {
-        std::string x0Path = inputPath + "/debug_ccd_" + std::to_string(counter) + "_0.obj";
-        std::string x1Path = inputPath + "/debug_ccd_" + std::to_string(counter) + "_1.obj";
-        std::vector<MeshIO::IOVertex> vertices;
-        std::vector<MeshIO::IOElement> elements;
+        std::string x0Path = inputPath + "/debug_ccd_" + std::to_string(counter) + "_x0.txt";
+        std::string x1Path = inputPath + "/debug_ccd_" + std::to_string(counter) + "_x1.txt";
 
-        try {
-            MeshIO::load(x0Path, vertices, elements);
-            x0_inputs.push_back(getV(vertices));
-            if (E.size() == 0) E = getF(elements);
-            if (E != getF(elements)) {
-                std::cerr << "Mesh connectivity mismatch" << std::endl;
-                return 1;
-            }
+        if (!std::ifstream(x0Path).good()) break;
 
-            vertices.clear(); elements.clear();
-            MeshIO::load(x1Path, vertices, elements);
-            x1_inputs.push_back(getV(vertices));
-            if (E != getF(elements)) {
-                std::cerr << "Mesh connectivity mismatch" << std::endl;
-                return 1;
-            }
-            counter++;
-        }
-        catch (...) { break; }
+        x0_inputs.push_back(readMatrix<double>(x0Path.c_str()));
+        x1_inputs.push_back(readMatrix<double>(x1Path.c_str()));
+        counter++;
+    }
+    if (counter == 0) {
+        std::cerr << "No input files found in " << inputPath << std::endl;
+        return 1;
     }
 
     auto cm = ipc::CollisionMesh(x0_inputs[0], E, F);
