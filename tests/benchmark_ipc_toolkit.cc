@@ -47,22 +47,24 @@ int main(int argc, const char *argv[]) {
         std::vector<MeshIO::IOVertex> vertices;
         std::vector<MeshIO::IOElement> elements;
 
-        MeshIO::load(x0Path, vertices, elements);
-        x0_inputs.push_back(getV(vertices));
-        if (E.size() == 0) E = getF(elements);
-        if (E != getF(elements)) {
-            std::cerr << "Mesh connectivity mismatch" << std::endl;
-            return 1;
-        }
+        try {
+            MeshIO::load(x0Path, vertices, elements);
+            x0_inputs.push_back(getV(vertices));
+            if (E.size() == 0) E = getF(elements);
+            if (E != getF(elements)) {
+                std::cerr << "Mesh connectivity mismatch" << std::endl;
+                return 1;
+            }
 
-        MeshIO::load(x1Path, vertices, elements);
-        x1_inputs.push_back(getV(vertices));
-        if (E != getF(elements)) {
-            std::cerr << "Mesh connectivity mismatch" << std::endl;
-            return 1;
+            MeshIO::load(x1Path, vertices, elements);
+            x1_inputs.push_back(getV(vertices));
+            if (E != getF(elements)) {
+                std::cerr << "Mesh connectivity mismatch" << std::endl;
+                return 1;
+            }
+            counter++;
         }
-
-        counter++;
+        catch (...) { break; }
     }
 
     auto cm = ipc::CollisionMesh(x0_inputs[0], E, F);
@@ -75,6 +77,7 @@ int main(int argc, const char *argv[]) {
 
     double dhat = bbox_diag(x0_inputs[0]) * 1e-3;
 
+    std::cout.precision(19);
     for (size_t i = 0; i < x0_inputs.size(); ++i) {
         double stepSize = compute_collision_tightInclusion_stepsize(cm, x0_inputs[i], x1_inputs[i], dhat);
         std::cout << "Step size for collision " << i << ": " << stepSize << std::endl;
