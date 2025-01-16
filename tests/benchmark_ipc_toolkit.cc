@@ -55,14 +55,17 @@ double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, c
     candidates.build(cm, V0, V1, /* inflation_radius = */ dhat / 2, ipc::BroadPhaseMethod::HASH_GRID);
     BENCHMARK_STOP_TIMER_SECTION("candidates.build");
 
+    const auto start = std::chrono::steady_clock::now();
     BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
     double dmin = 0.0;
     double ccd_tolerance = 2e-8;
     size_t max_iteration = 1e6;
+
     std::cout << "candidates.compute_collision_free_stepsize with candidate size " << candidates.size() << " and step length " << (V0 - V1).norm() << std::endl;
     double alpha = candidates.compute_collision_free_stepsize(
         cm, V0, V1, /* dmin = */ dmin, /* tolerance = */ ccd_tolerance, /* max_iterations = */ max_iteration);
     BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
+    std::cout << "Duration: " << std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() << std::endl;
     return alpha;
 }
 

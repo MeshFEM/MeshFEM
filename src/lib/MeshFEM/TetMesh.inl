@@ -72,6 +72,7 @@ TetMesh(const Tets &tets, const size_t nVertices, bool /* suppressNonmanifoldWar
     Vb.assign(nVertices, -1);
     bV.clear();
     VH.assign(nVertices, -1);
+#if 0 // Old boundary vertex ordering
     for (auto it = halfFaceForFace.begin(); it != halfFaceForFace.end(); ++it) {
         int bhf = it->second;
         assert(O[bhf] == -1);
@@ -89,6 +90,37 @@ TetMesh(const Tets &tets, const size_t nVertices, bool /* suppressNonmanifoldWar
             }
         }
     }
+#else // Boundary vertices sorted by corresponding volume vertex index
+    // First, generate all the boundary vertices
+    // **in the same order as their originating volume vertices.**
+    // We do this by marking all the volume vertices apearing on the boundary
+    // and then traversing the volume vertices.
+    for (auto it = halfFaceForFace.begin(); it != halfFaceForFace.end(); ++it) {
+        int bhf = it->second;
+        assert(O[bhf] == -1);
+        bO.push_back(bhf);
+        O[bhf] = m_bdryFaceIdxToFaceIdx(bO.size() - 1);
+        assert(O[bhf] < 0);
+
+        for (int c = 0; c < 3; ++c) {
+            int v = m_vertexOfHalfFace(c, bhf);
+            if (Vb[v] == -1) {
+                Vb[v] = 0; // Flag vertex
+                // Vertex is on the boundary; store an incident boundary face
+                VH[v] = bhf;
+            }
+        }
+    }
+
+    // Generate the vertices in a second pass...
+    for (size_t v = 0; v < nVertices; ++v) {
+        if (Vb[v] == 0) {
+            Vb[v] = bV.size();
+            bV.push_back(v);
+        }
+    }
+#endif
+
     const size_t nBoundaryFaces    = bO.size();
     const size_t nBoundaryVertices = bV.size();
     halfFaceForFace.clear();

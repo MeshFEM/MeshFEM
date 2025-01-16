@@ -52,7 +52,6 @@ struct IPCWrapper : public IPCWrapperBase {
         //     std::string name = "debug_ccd_" + std::to_string(counter++);
         //     std::ofstream(name + "_x0.txt") << std::setprecision(19) << collisionVertexPositions;
         //     std::ofstream(name + "_x1.txt") << std::setprecision(19) << steppedCollisionVertexPositions;
-        //     ++counter;
         // }
         BENCHMARK_START_TIMER_SECTION("candidates.build");
         candidateCache = std::make_unique<ipc::Candidates>();

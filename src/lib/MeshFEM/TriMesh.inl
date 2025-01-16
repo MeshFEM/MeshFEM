@@ -96,6 +96,7 @@ TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
     // needed to create bV and link boundary edges to vertices.
     std::vector<int> Vb(nVertices, -1);
 
+#if 0 // Old boundary vertex ordering
     for (auto it = halfEdgeForEdge.begin(); it != halfEdgeForEdge.end(); ++it) {
         int vhe = it->second;
         assert(O[vhe] == -1);
@@ -117,6 +118,43 @@ TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
         bTipTail.push_back(Vb[ tipVV]);
         bTipTail.push_back(Vb[tailVV]);
     }
+#else // Boundary vertices sorted by corresponding volume vertex index
+    // First, generate all the boundary vertices
+    // **in the same order as their originating volume vertices.**
+    // We do this by marking all the volume vertices apearing on the boundary
+    // and then traversing the volume vertices.
+    for (auto it = halfEdgeForEdge.begin(); it != halfEdgeForEdge.end(); ++it) {
+        // Boundary edge tip is volume half edge's tail and vice versa.
+        int vhe = it->second;
+        Vb[m_vertexOfHE<HEVertex::TAIL>(vhe)] = 0; // Flag vertex
+        Vb[m_vertexOfHE<HEVertex::TIP >(vhe)] = 0; // Flag vertex
+    }
+
+    for (size_t v = 0; v < nVertices; ++v) {
+        if (Vb[v] == 0) {
+            Vb[v] = bV.size();
+            bV.push_back(v);
+        }
+    }
+
+    for (auto it = halfEdgeForEdge.begin(); it != halfEdgeForEdge.end(); ++it) {
+        int vhe = it->second;
+        assert(O[vhe] == -1);
+        O[vhe] = m_bdryEIdxConvUnguarded(numBoundaryEdges());
+        assert(O[vhe] < 0);
+
+        // Boundary edge tip is volume half edge's tail and vice versa.
+        int  tipVV = m_vertexOfHE<HEVertex::TAIL>(vhe);
+        int tailVV = m_vertexOfHE<HEVertex::TIP >(vhe);
+
+        // Note: vhe's tip (the vertex it's incident on) is actually tailVV
+        VH[tailVV] = vhe;
+
+        // Appending tip and til to bTipTail actually creates the boundary edge.
+        bTipTail.push_back(Vb[ tipVV]);
+        bTipTail.push_back(Vb[tailVV]);
+    }
+#endif
 
     if ((bV.size() != nBoundaryEdges) && !suppressNonmanifoldWarning) {
         std::cerr << "Boundary edge count: "   << nBoundaryEdges << std::endl;
