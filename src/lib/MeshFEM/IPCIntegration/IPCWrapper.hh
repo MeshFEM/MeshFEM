@@ -173,8 +173,7 @@ struct IPCWrapperBase {
     double dhat = 0; // Barrier distance
     double maxBarrierStiffness = 0;
     double prevMinDistanceSq = 0; // Previous minimum squared distance between non-adjacent collision mesh primitives
-
-    double ccdTol = 1.0e-6; // CCD tolerance required in IPCWrapper and can set by user
+    double ccdTol = 1.0e-6; // Tolerance to be used in `compute_collision_free_stepsize`
 };
 
 std::unique_ptr<IPCWrapperBase> make_ipc_wrapper(const CombinedCollisionMesh<Real> &cm, const Eigen::MatrixXd &collisionVertexPositions);
