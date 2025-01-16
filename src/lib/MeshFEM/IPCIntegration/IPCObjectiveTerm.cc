@@ -96,7 +96,7 @@ void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double weight, const Eigen
     // The obstacle vertices do not influence the primary potential
     dE_dCV.tail(numObstacleVars).setZero();
 
-    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, avgMass, dE_dCV, dB_dCV, weight);
+    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, avgMass, weight * dE_dCV, dB_dCV, weight);
 }
 
 template<typename _Real>

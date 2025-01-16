@@ -139,6 +139,15 @@ struct DynamicSimulator {
 
         VXd f_xt = configureInertiaForTimeStep(alpha);
 
+        // Initialize Barrier Stiffness in every time step
+        for (size_t i = 0; i < m_terms.size(); i++) {
+            const auto &term = m_terms[i];
+            auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
+            if (derivedObj != nullptr){
+                derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient()); // Need weight = dt^2 to match IPC formulation
+            }
+        }
+   
         // std::cout << "Inertia term: " << m_inertiaLoad->energy() << std::endl;
         m_crs.push_back(m_opt->optimize());
 
@@ -205,7 +214,6 @@ struct DynamicSimulator {
                 const auto &term = m_terms[i];
                 auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
                 if (derivedObj != nullptr){
-                    derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient()); // Surprisingly weight = dt^2 works much faster
                     if (derivedObj->useAdaptiveTimestep()) {
                         alpha = derivedObj->getTimestepLength(time, dt);
                     }
