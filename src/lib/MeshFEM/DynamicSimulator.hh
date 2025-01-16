@@ -47,20 +47,20 @@ struct DynamicSimulator {
     using NewtonCallback = typename NewtonMultiobjectiveProblem::CallbackFunction;
 
     DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt)
-        : dt(dt), m_obj(eo), m_terms(terms)
+        : dt(dt), m_obj(eo), m_noninertiaTerms(terms)
     {
 
         v.setZero(m_obj->numVars());
 
-        m_terms.push_back(eo);
+        m_noninertiaTerms.push_back(eo);
 
         m_inertiaLoad = std::make_shared<Loads::Inertia<EO>>(eo, useLumpedMass);
-        m_terms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
+        m_noninertiaTerms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
 
-        m_prob = std::make_shared<NewtonMultiobjectiveProblem>(m_obj, m_terms);
+        m_prob = std::make_shared<NewtonMultiobjectiveProblem>(m_obj, m_noninertiaTerms);
 
         // Drop the inertia load from our copy of the loads.
-        m_terms.pop_back();
+        m_noninertiaTerms.pop_back();
 
         m_opt = std::make_shared<NewtonOptimizer>(m_prob);
         m_opt->options = opts;
@@ -79,13 +79,13 @@ struct DynamicSimulator {
 
     NewtonOptimizer &getOptimizer() const { return *m_opt; }
 
-    VXd computeForces() const {
+    VXd computeNoninertiaForces() const {
         // Computing total forces, external and potential forces
         // excluding inertia forces
         VXd f;
         f.setZero(m_obj->numVars());
         //m_obj->accumulateGradient(-1.0, f);
-        for (const auto &term : m_terms)
+        for (const auto &term : m_noninertiaTerms)
             term->accumulateGradient(-1.0, f);
 
         return f;
@@ -122,7 +122,7 @@ struct DynamicSimulator {
         }
         else if (method == TimesteppingMethod::ImplicitNewmark) {
             m_inertiaLoad->weight = 1.0 / (beta * alpha_dt * alpha_dt);
-            f_xt = computeForces();
+            f_xt = computeNoninertiaForces();
             VXd x = massMatrixFactorization().solve(f_xt);
             m_inertiaLoad->xhat = xt + alpha_dt * v + (alpha_dt * alpha_dt * (1.0 - 2.0 * beta) / 2.0) * x;
         }
@@ -140,8 +140,8 @@ struct DynamicSimulator {
         VXd f_xt = configureInertiaForTimeStep(alpha);
 
         // Initialize Barrier Stiffness in every time step
-        for (size_t i = 0; i < m_terms.size(); i++) {
-            const auto &term = m_terms[i];
+        for (size_t i = 0; i < m_noninertiaTerms.size(); i++) {
+            const auto &term = m_noninertiaTerms[i];
             auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
             if (derivedObj != nullptr){
                 derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient()); // Need weight = dt^2 to match IPC formulation
@@ -160,7 +160,7 @@ struct DynamicSimulator {
             // std::cout << "v_manual relative error: " << (v_recompute_from_accel - v).norm() / v.norm() << std::endl;
         }
         else if (method == TimesteppingMethod::ImplicitNewmark) {
-            VXd b = alpha_dt * ((1.0 - gamma) * f_xt + gamma * computeForces());
+            VXd b = alpha_dt * ((1.0 - gamma) * f_xt + gamma * computeNoninertiaForces());
             v += massMatrixFactorization().solve(b);
         }
 
@@ -171,7 +171,7 @@ struct DynamicSimulator {
     Real kineticEnergy() const { return 0.5 * m_inertiaLoad->evalQuadraticForm(v); }
     Real potentialEnergy() const {
         Real result = 0.0;//m_obj->energy();
-        for (const auto &term : m_terms)
+        for (const auto &term : m_noninertiaTerms)
             result += term->objective();
         return result;
     }
@@ -189,11 +189,15 @@ struct DynamicSimulator {
     Eigen::VectorXd primaryPotentialGradient() const {
         Eigen::VectorXd grad;
         grad.setZero(m_obj->numVars());
-        for (size_t i = 0; i < m_terms.size(); i++) {
-            const auto &term = m_terms[i];
+        
+        for (size_t i = 0; i < m_noninertiaTerms.size(); i++) {
+            const auto &term = m_noninertiaTerms[i];
             if (std::dynamic_pointer_cast<TimestepLimiter>(term)) continue; // Skip contact term
             term->accumulateGradient(m_prob->weight(i), grad);
         }
+        // grad miss inertia term
+        grad += m_inertiaLoad->grad_x();
+
         return grad;
     }
 
@@ -210,8 +214,8 @@ struct DynamicSimulator {
             if (m_iterationCallback(tIter, m_preTimestepCallback)) break;
 
             // Adaptive time stepping for preventing collision of obstacle and elastic object
-            for (size_t i = 0; i < m_terms.size(); i++) {
-                const auto &term = m_terms[i];
+            for (size_t i = 0; i < m_noninertiaTerms.size(); i++) {
+                const auto &term = m_noninertiaTerms[i];
                 auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
                 if (derivedObj != nullptr){
                     if (derivedObj->useAdaptiveTimestep()) {
@@ -254,7 +258,7 @@ private:
     }
 
     std::shared_ptr<EO> m_obj;
-    std::vector<NewtonTermPtr> m_terms;
+    std::vector<NewtonTermPtr> m_noninertiaTerms;
     std::shared_ptr<Loads::Inertia<EO>> m_inertiaLoad;
     std::shared_ptr<NewtonMultiobjectiveProblem> m_prob;
     std::shared_ptr<NewtonOptimizer> m_opt;
