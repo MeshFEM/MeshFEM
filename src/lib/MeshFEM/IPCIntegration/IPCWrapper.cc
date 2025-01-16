@@ -61,7 +61,7 @@ struct IPCWrapper : public IPCWrapperBase {
         BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
         double dmin = 0.0;
         size_t max_iteration = 1e6;
-        std::cout << "candidates.compute_collision_free_stepsize with candidate size " << candidates.size() << " and step length " << (steppedCollisionVertexPositions - collisionVertexPositions).norm() << std::endl;
+        std::cout << "ccd tolerance: " << ccdTol << std::endl;
         double alpha = candidates.compute_collision_free_stepsize(
             collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration); 
         BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
@@ -83,21 +83,39 @@ struct IPCWrapper : public IPCWrapperBase {
         return candidates.compute_cfl_stepsize(collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, dhat);
     }
 
-    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double bboxDiagonal, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) override {
+    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) override {
         prevMinDistanceSq = collisionConstraints.compute_minimum_distance(collisionMesh, collisionVertexPositions);
         ipc::BarrierPotential barrierPotential(dhat);
+        double bboxDiagonal = computeBboxDiagonal(collisionVertexPositions);
+        std::cout.precision(20);
+        std::cout << "bbox diagonal: " << bboxDiagonal << std::endl;
+        std::cout << "avgmass: " << mass << std::endl;
+        std::cout << "grad_energy: " << primaryGradient.norm() << std::endl;
+        std::cout << "grad_barrier: " << contactPotentialGradient.norm() << std::endl;
+        
         double barrierStiffness = ipc::initial_barrier_stiffness(bboxDiagonal, barrierPotential.barrier(), dhat, mass, primaryGradient, contactPotentialGradient, maxBarrierStiffness);
+        std::cout << "barrierStiffness: " << barrierStiffness << std::endl;
         barrierStiffness /= weight;
         maxBarrierStiffness /= weight;
+        std::cout << "barrierStiffness wo weight: " << barrierStiffness << std::endl;
         return barrierStiffness;
     }
 
-    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k, double bboxDiagonal) override {
+    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k) override {
         double minDistanceSq = collisionConstraints.compute_minimum_distance(collisionMesh, collisionVertexPositions);
+        double bboxDiagonal = computeBboxDiagonal(collisionVertexPositions);
+        std::cout.precision(20);
+        std::cout << "bbox diagonal: " << bboxDiagonal << std::endl;
         double k_new = ipc::update_barrier_stiffness(prevMinDistanceSq, minDistanceSq, maxBarrierStiffness, k, bboxDiagonal);
         prevMinDistanceSq = minDistanceSq;
         return k_new;
     }
+
+    // compute bounding box diagonal 
+    double computeBboxDiagonal(const MXd &collisionVertexPositions) {
+        return (collisionVertexPositions.colwise().maxCoeff() - collisionVertexPositions.colwise().minCoeff()).norm();
+    }
+
 
     virtual VXd compute_potential_gradient(const MXd &cvPositions) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.compute_potential_gradient");

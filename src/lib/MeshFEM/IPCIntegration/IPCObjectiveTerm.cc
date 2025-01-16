@@ -96,13 +96,13 @@ void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double weight, const Eigen
     // The obstacle vertices do not influence the primary potential
     dE_dCV.tail(numObstacleVars).setZero();
 
-    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, m_combinedCollisionMesh->getBboxDiagonal(), avgMass, dE_dCV, dB_dCV, weight);
+    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, avgMass, dE_dCV, dB_dCV, weight);
 }
 
 template<typename _Real>
 void IPCObjectiveTerm<_Real>::updateBarrierStiffness() {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.updateBarrierStiffness");
-    m_k = m_ipcWrapper->update_barrier_stiffness(m_collisionVertexPositions, m_k, m_combinedCollisionMesh->getBboxDiagonal());
+    m_k = m_ipcWrapper->update_barrier_stiffness(m_collisionVertexPositions, m_k);
 }
 
 template<typename _Real>

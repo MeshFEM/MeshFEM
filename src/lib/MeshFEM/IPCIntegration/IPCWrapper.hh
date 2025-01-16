@@ -105,8 +105,8 @@ struct CombinedCollisionMesh {
                                 Eigen::Map<const MXdRowMajor>(vars.data() + N * numEONodes, numObstaclesVertices(), N));
     }
 
-    // Compute the new bounding box for combined collision mesh
-    Real getBboxDiagonal() const { return bbox.diagonal(); }
+    // Need to remove, it seems unnecessary
+    Real getBboxDiagonal()  { return bbox.diagonal(); }
 
     // Change the position of obstacle in its linear trajectory or move obstacle with time t
     void updateObstaclePosition(double t) {
@@ -151,8 +151,8 @@ struct IPCWrapperBase {
     using MXd = Eigen::MatrixXd;
     using VXd = Eigen::VectorXd;
 
-    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double bboxDiagonal, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) = 0;
-    virtual double  update_barrier_stiffness(const MXd &collisionVertexPositions, double k, double bboxDiagonal) = 0;
+    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) = 0;
+    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k) = 0;
 
     virtual void build_collision_constraints(const MXd &collisionVertexPositions) = 0;
     virtual double compute_collision_tightInclusion_stepsize(const MXd &collisionVertexPositions, const MXd &steppedCollisionVertexPositions) const = 0;
