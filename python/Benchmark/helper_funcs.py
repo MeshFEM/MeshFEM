@@ -6,6 +6,7 @@ Created: 01/11/2025  2:07:55
 '''
 
 import os, sys
+os.environ['OMP_NUM_THREADS'] = '1'
 sys.path.append('../')
 import MeshFEM
 import mesh, mesh_energy, energy
@@ -21,7 +22,11 @@ def getBDdataOnUnitCircle(m):
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
-def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', thread_num=0, grad_tol=None):
+
+def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', thread_num=0, grad_tol=None, 
+                uvsave_path=None):
+    
+    os.environ['OMP_NUM_THREADS'] = '1'
     if thread_num > 0:
         import parallelism
         parallelism.set_max_num_tbb_threads = int(thread_num)
@@ -29,6 +34,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     obj_history = []
     time_history = []
     grad_norm_history = []
+    hessian_projected_history = []
 
     def customCallback(prob, i):
         it_time = time.time()
@@ -36,6 +42,12 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
     
+    def customSaveUVCallback(prob, i):
+        hessian_projected_history.append(int(prob.hessianWasProjected))
+        uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
+        uv_arr = uv.getVars()
+        np.savez_compressed(os.path.join(uvsave_path, uv_fn), arr=uv_arr)
+
     uv = mesh_energy.NodalVars(m, 2)
     bdry_uv = getBDdataOnUnitCircle(m)
 
@@ -49,7 +61,11 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     # Construct `SymmetricDirichlet` parametrization energy and problem
     param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
-    prob.setCustomIterationCallback(customCallback)
+    if uvsave_path is None:  prob.setCustomIterationCallback(customCallback)
+    else:
+        if not os.path.exists(uvsave_path):
+            raise RuntimeError(f"[Error] The uv_save path: {uvsave_path} does not exist!")
+        prob.setCustomIterationCallback(customSaveUVCallback)
 
     # Work around energy nullspace by adding a small shift
     prob.hessianShift = hessian_shift
@@ -68,7 +84,13 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     start_time = time.time()
     opt.optimize()
     # benchmark.report()
-
-    bk_dict = benchmark.to_dict()
-    time_arr = np.array(time_history) - start_time
-    return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
+    if uvsave_path is not None:  
+        # we saved uv coordinates per-iteration and hessian_projected_history
+        hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
+        hp_filename = 'hessian_projected_history.npy'
+        np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
+        print(f"[File] Saved UV '.npz' files and {hp_filename} in {uvsave_path}.")
+    else:
+        bk_dict = benchmark.to_dict()
+        time_arr = np.array(time_history) - start_time
+        return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict

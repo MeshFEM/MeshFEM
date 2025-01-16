@@ -4,7 +4,7 @@ import subprocess
 import numpy as np
 import time
 
-def run_all_models(result_path, modelbase_path, repeat_num, thread_num_list):
+def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list):
     # Check if the result path exists
     if not os.path.exists(result_path):
         print(f"Error: The specified result path '{result_path}' does not exist.")
@@ -50,6 +50,7 @@ def run_all_models(result_path, modelbase_path, repeat_num, thread_num_list):
                     model_name,
                     model_path,
                     solver_option,
+                    save_uv_option,
                     str(thread_num),
                     str(repeat_num) 
                 ]
@@ -70,17 +71,18 @@ def run_all_models(result_path, modelbase_path, repeat_num, thread_num_list):
         elapsed_model_time = time.time() - model_timer
         option_time_list.append(elapsed_model_time)
 
-        # save option_time_list
-        thread_time_all = np.vstack((option_time_list[0], option_time_list[1], option_time_list[2]))
-        model_result_path = os.path.join(result_path, model_name)
-        option_thread_time_fn = "option_thread_times.txt"
-        with open(os.path.join(model_result_path, option_thread_time_fn), "w") as f:
-            for i, label in enumerate(hessian_projection_labels):
-                f.write(f"{label}\t" + "\t".join(f"{x: .4f}" for x in thread_time_all[i]) + "\n")
-            f.write(f"\nTotal time:\t{option_time_list[3]: .4f}\n")
-        
+        if (save_uv_option == 'No') or (save_uv_option == 'no') or (save_uv_option == 'NO'):
+            # save option_time_list only make sense when save_uv_option is no
+            thread_time_all = np.vstack((option_time_list[0], option_time_list[1], option_time_list[2]))
+            model_result_path = os.path.join(result_path, model_name)
+            option_thread_time_fn = "option_thread_times.txt"
+            with open(os.path.join(model_result_path, option_thread_time_fn), "w") as f:
+                for i, label in enumerate(hessian_projection_labels):
+                    f.write(f"{label}\t" + "\t".join(f"{x: .4f}" for x in thread_time_all[i]) + "\n")
+                f.write(f"\nTotal time:\t{option_time_list[3]: .4f}\n")
+            print(f"[File] Successfully Write '{option_thread_time_fn}' in {model_result_path}.")
+
         print(f"Completed All Parametrization Experiments for model '{model_name}'. Time: {elapsed_model_time : .4f} seconds.")
-        print(f"[File] Successfully Write '{option_thread_time_fn}' in {model_result_path}.")
         print("-------------------------------------------------------------------------------------------------------------")
     
     elapsed_total_time = time.time() - total_timer
@@ -88,14 +90,15 @@ def run_all_models(result_path, modelbase_path, repeat_num, thread_num_list):
 
 if __name__ == "__main__":
     # Check if the script is provided with the required arguments
-    if len(sys.argv) != 4:
-        print("Usage: python run_all_models.py <result_path> <modelbase_path> <repeat_num>")
+    if len(sys.argv) < 4:
+        print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> [<repeat_num>]")
         sys.exit(1)
 
     # Parse command-line arguments
     result_path = sys.argv[1]
     modelbase_path = sys.argv[2]
-    repeat_num = int(sys.argv[3])
+    save_uv_option = sys.argv[3]
+    repeat_num = int(sys.argv[4]) if len(sys.argv) > 4 else 1
     if repeat_num <= 0:
         print("[Error] <repeat_num> must be an positive integer >= 1.")
         sys.exit(1)
@@ -103,4 +106,4 @@ if __name__ == "__main__":
     thread_num_list = [0]
     # thread_num_list = [1, 2, 4, 8, 16]
     # Run the function to perform experiments
-    run_all_models(result_path, modelbase_path, repeat_num, thread_num_list)
+    run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list)

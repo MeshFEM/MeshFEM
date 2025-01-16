@@ -25,34 +25,11 @@ def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict):
     with open(os.path.join(save_dir, dict_fn), "wb") as f:
         pickle.dump(benchmark_dict, f)
     
-    print(f"[File] Successfully Write {arr_fn}('obj_arr' and 'time_arr') and {dict_fn} in {save_dir}!")
+    print(f"[File] Successfully Write {arr_fn} and {dict_fn} in {save_dir}!")
 
-def main():
-    # Ensure at least 4 arguments (excluding script name) are provided
-    if len(sys.argv) < 5:
-        print("Usage: python runSymmDiriParam.py <base_path> <model_name> <model_path> <hessian_proj_option> [<thread_num>] [<repeat_num>]")
-        sys.exit(1)
-
-    # Parse input arguments
-    base_path = sys.argv[1]
-    model_name = sys.argv[2]
-    model_path = sys.argv[3]
-    hessian_proj_option = sys.argv[4]
-
-    if (hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never'):
-        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never")
-        sys.exit(1)
-
-    # Set default value for thread_num iter_num if not provided
-    thread_num = int(sys.argv[5]) if len(sys.argv) > 5 else 0  # thread_num is 0 means using default thread number
-    repeat_num = int(sys.argv[6]) if len(sys.argv) > 6 else 1
-
-    # Check if base_path exists
-    if not os.path.exists(base_path):
-        warnings.warn(f"Warning: The base_path '{base_path}' does not exist. Please check the path.")
-        sys.exit(1)  # Exit if the path does not exist
-
-    # Print the parameters for confirmation
+def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num):
+     # Print the parameters for confirmation
+    print("-------------------------------------------------------------------------------------------------------------------")
     print(f"Running Symmetric Dirichelt Parametrization with the following parameters:")
     print(f"  Base Path: {base_path}")
     print(f"  Model Name: {model_name}")
@@ -78,7 +55,7 @@ def main():
         folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name, folder_name)
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
-        m = mesh.Mesh(model_path)
+        m = mesh.Mesh(model_path) # read mesh from model_path
         obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
         
         newton_steps = obj_arr.shape[0]
@@ -116,6 +93,64 @@ def main():
 
     print(f"[File] Successfully Write {txt_fn} in {outer_folder_dir}!")
 
+def recordUV(base_path, model_name, model_path, hessian_proj_option):
+    # Print the parameters for confirmation
+    print("-------------------------------------------------------------------------------------------------------------------")
+    print(f"Running Symmetric Dirichelt Parametrization Saving UV per-iteration with the following parameters:")
+    print(f"  Base Path: {base_path}")
+    print(f"  Model Name: {model_name}")
+    print(f"  Model Path: {model_path}")
+    print(f"  Hessian Projection Option: {hessian_proj_option}")
+
+    save_uv_folder_name = 'UVs' # create a folder name 'UVs'
+    folder_dir = os.path.join(base_path, model_name, hessian_proj_option, save_uv_folder_name)
+    if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
+
+    m = mesh.Mesh(model_path)
+    helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
+    print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
+
+def main():
+    # Ensure at least 5 arguments (excluding script name) are provided
+    if len(sys.argv) < 6:
+        print("Usage: python runSymmDiriParam.py <base_path> <model_name> <model_path> <hessian_proj_option> <save_uv_option> [<thread_num>] [<repeat_num>]")
+        sys.exit(1)
+
+    # Parse input arguments
+    base_path = sys.argv[1]
+    model_name = sys.argv[2]
+    model_path = sys.argv[3]
+    hessian_proj_option = sys.argv[4]
+    save_uv_option = sys.argv[5]
+
+    if (hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never'):
+        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never")
+        sys.exit(1)
+    
+    if ((save_uv_option != 'Yes') and (save_uv_option != 'yes') and (save_uv_option != 'YES') and
+        (save_uv_option != 'No') and (save_uv_option != 'no') and (save_uv_option != 'NO') and 
+        (save_uv_option != 'Both') and (save_uv_option != 'both') and (save_uv_option != 'BOTH')):
+        print("[Error] Usage of <save_uv_option>:  yes or no or both")
+        sys.exit(1)
+
+    # Set default value for thread_num iter_num if not provided
+    thread_num = int(sys.argv[6]) if len(sys.argv) > 6 else 0  # thread_num is 0 means using default thread number
+    repeat_num = int(sys.argv[7]) if len(sys.argv) > 7 else 1
+
+    # Check if base_path exists
+    if not os.path.exists(base_path):
+        warnings.warn(f"Warning: The base_path '{base_path}' does not exist. Please check the path.")
+        sys.exit(1)  # Exit if the path does not exist
+
+    if (save_uv_option == 'No') or (save_uv_option == 'no') or (save_uv_option == 'NO'):
+        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
+    
+    if (save_uv_option == 'Yes') or (save_uv_option == 'yes') or (save_uv_option == 'YES'):
+        recordUV(base_path, model_name, model_path, hessian_proj_option)
+    
+    if (save_uv_option == 'Both') or (save_uv_option == 'both') or (save_uv_option == 'BOTH'):
+        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
+        recordUV(base_path, model_name, model_path, hessian_proj_option)
 
 if __name__ == "__main__":
     main()
