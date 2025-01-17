@@ -44,6 +44,8 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
     
     def customSaveUVCallback(prob, i):
+        obj_history.append(prob.energy())
+        grad_norm_history.append(np.linalg.norm(prob.gradient()))
         hessian_projected_history.append(int(prob.hessianWasProjected))
         hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
@@ -87,14 +89,22 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     opt.optimize()
     # benchmark.report()
     if uvsave_path is not None:  
+        obj_arr = np.array(obj_history)
+        grad_norm_arr = np.array(grad_norm_history)
         # we saved uv coordinates per-iteration and hessian_projected_history
         hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
         hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
+
+        obj_filename = 'obj_history.npy'
+        grad_norm_filename = 'grad_norm_history.npy'
         hp_filename = 'hessian_projected_history.npy'
         hs_filename = 'hessian_shifted_amount_history.npy'
+
+        np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
         np.save(os.path.join(uvsave_path, hs_filename), hessian_shifted_arr)
-        print(f"[File] Saved UV '.npz' files, {hp_filename}, and {hs_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, and {hs_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
