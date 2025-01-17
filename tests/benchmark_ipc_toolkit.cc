@@ -1,6 +1,7 @@
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/Utilities/load_dense_matrix.hh>
 
 #include <ipc/ipc.hpp>
 #include <ipc/collisions/collisions.hpp>
@@ -8,44 +9,6 @@
 #include <ipc/potentials/barrier_potential.hpp>
 
 #include <MeshFEM/Parallelism.hh>
-
-template<typename T>
-Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> readMatrix(const char *filename) {
-    int cols = 0, rows = 0;
-    std::vector<T> buff;
-
-    // Read numbers from file into buffer.
-    std::ifstream infile;
-    infile.open(filename);
-    while (! infile.eof()) {
-        std::string line;
-        getline(infile, line);
-
-        int temp_cols = 0;
-        std::stringstream stream(line);
-		T val;
-        while((stream >> val)) {
-			buff.push_back(val);
-			++temp_cols;
-		}
-
-        if (temp_cols == 0)
-            continue;
-
-        if (cols == 0)
-            cols = temp_cols;
-
-        rows++;
-    }
-
-    infile.close();
-
-    if (rows * cols != buff.size()) {
-        std::cout << "rows: " << rows << ", cols: " << cols << ", buff.size(): " << buff.size() << std::endl;
-        throw std::runtime_error("Read error from " + std::string(filename));
-    }
-	return Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(buff.data(), rows, cols);
-};
 
 double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, double dhat) {
     std::cout << "dhat: " << dhat << std::endl;
@@ -82,8 +45,8 @@ int main(int argc, const char *argv[]) {
     //      `{inputPath}/cm_edges.txt`
     //      `{inputPath}/cm_faces.txt`
     //      `{inputPath}/debug_ccd_{counter}_x[01].txt`
-    Eigen::MatrixXi E = readMatrix<int>((inputPath + "/cm_edges.txt").c_str());
-    Eigen::MatrixXi F = readMatrix<int>((inputPath + "/cm_faces.txt").c_str());
+    Eigen::MatrixXi E = load_dense_matrix<int>((inputPath + "/cm_edges.txt").c_str());
+    Eigen::MatrixXi F = load_dense_matrix<int>((inputPath + "/cm_faces.txt").c_str());
     std::vector<Eigen::MatrixXd> x0_inputs, x1_inputs;
     size_t counter = 0;
     while (true) {
@@ -92,8 +55,8 @@ int main(int argc, const char *argv[]) {
 
         if (!std::ifstream(x0Path).good()) break;
 
-        x0_inputs.push_back(readMatrix<double>(x0Path.c_str()));
-        x1_inputs.push_back(readMatrix<double>(x1Path.c_str()));
+        x0_inputs.push_back(load_dense_matrix<double>(x0Path.c_str()));
+        x1_inputs.push_back(load_dense_matrix<double>(x1Path.c_str()));
         counter++;
     }
     if (counter == 0) {

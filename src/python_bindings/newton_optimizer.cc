@@ -77,6 +77,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("nbacktrack_iter",               &NewtonOptimizerOptions::nbacktrack_iter)
         .def_readwrite("ngd_fallback_steps",            &NewtonOptimizerOptions::ngd_fallback_steps)
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
+        .def_readwrite("matrixRecordDir",               &NewtonOptimizerOptions::matrixRecordDir)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference_internal)
@@ -128,7 +129,9 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
-        .def_property_readonly("hessianWasProjected", &NewtonProblem::hessianWasProjected, "Whether a projected Hessian was requested in the last call to `hessian()`")
+
+        .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,                           "Whether a projected Hessian was requested in the last call to `hessian()`")
+        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonMultiobjectiveProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 

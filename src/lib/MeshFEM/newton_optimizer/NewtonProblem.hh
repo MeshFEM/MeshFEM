@@ -265,6 +265,9 @@ struct MESHFEM_EXPORT NewtonProblem {
     // adding to it.
     Real hessianShift = 0.0;
 
+    Real lastFactorizationShiftMagnitude() const { return m_lastFactorizationShiftMagnitude; }
+    void setLastFactorizationShiftMagnitude(Real val) { m_lastFactorizationShiftMagnitude = val; }
+
 protected:
     // Clear the cached per-iterate quantities
     void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
@@ -292,6 +295,7 @@ protected:
     mutable Real m_metricL2Norm = -1;
 
     mutable bool m_hessianWasProjected = false;
+    Real m_lastFactorizationShiftMagnitude = 0;
 
     mutable size_t m_sparsityPatternID = 0;
 };

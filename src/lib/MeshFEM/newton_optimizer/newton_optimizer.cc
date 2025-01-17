@@ -249,6 +249,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         Real tau;
         try {
             tau = newton_step(step, *neg_g_ws_free_ptr, workingSet, beta, betaMin);
+            prob->setLastFactorizationShiftMagnitude(tau);
         }
         catch (std::exception &e) {
             // Tau ran away
