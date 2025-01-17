@@ -30,7 +30,7 @@ Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> load_dense_matrix(const char *p
     }
 
 	return Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(entries.data(), rows, cols);
-};
+}
 
 // Read a `rows x cols` matrix with entry type `T` from the input stream `is`.
 // Doesn't do any shape checking: simply reads `rows * cols` entries and

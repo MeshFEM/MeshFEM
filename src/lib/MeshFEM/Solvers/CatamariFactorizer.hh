@@ -34,7 +34,10 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     size_t m_reduced() const override;
     size_t n_reduced() const override;
 
-    using CholeskyFactorizerBase::factorizeSymbolic; // don't shadow
+    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
+    using CholeskyFactorizerBase::factorizeNumeric;
+    using CholeskyFactorizerBase::factorizeNumericWithShift;
+
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
 

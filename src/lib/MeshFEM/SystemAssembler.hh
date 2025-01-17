@@ -370,7 +370,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     // Block Hessian assembly.
     ////////////////////////////////////////////////////////////////////////////
     template<class PEH>
-    static auto getBlock(const PEH &H_e, size_t a, size_t b, size_t bsa = VarStructure::MaxBlockDim, size_t bsb = VarStructure::MaxBlockDim) {
+    static auto getBlock(const PEH &H_e, size_t a, size_t b, size_t bsa [[maybe_unused]] = VarStructure::MaxBlockDim, size_t bsb [[maybe_unused]] = VarStructure::MaxBlockDim) {
         static constexpr size_t N = VarStructure::MaxBlockDim;
         if constexpr (VarStructure::SingleBlockDim) {
             return H_e.template block<N, N>(a, b);

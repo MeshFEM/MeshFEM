@@ -151,10 +151,10 @@ struct CholeskyFactorizerBase {
         guardedFactorizationCall(mat, [&](const SuiteSparseMatrix &A) { factorizeNumeric(A, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) {
-        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, B, isInTryCatch); });
+        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, B, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) {
-        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, isInTryCatch); });
+        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, isInTryCatch); });
     }
 
     virtual void clearFactors() = 0;

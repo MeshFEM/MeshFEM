@@ -12,6 +12,10 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
     size_t m_reduced() const override { return m_reducedSize; }
     size_t n_reduced() const override { return m_reducedSize; }
 
+    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
+    using CholeskyFactorizerBase::factorizeNumeric;
+    using CholeskyFactorizerBase::factorizeNumericWithShift;
+
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeNumeric(const SuiteSparseMatrix &fullMat, bool isInTryCatch=false) override;
 
