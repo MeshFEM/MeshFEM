@@ -148,6 +148,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     CholmodFactorizer(const CholmodFactorizer  &b) = delete;
     CholmodFactorizer &operator=(const CholmodFactorizer  &b) = delete;
 
+    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
+    using CholeskyFactorizerBase::factorizeNumeric;
+    using CholeskyFactorizerBase::factorizeNumericWithShift;
+
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override {
         const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
@@ -398,6 +402,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     CholmodFactorizer(bool = false, bool = false, bool = false) {
         throw std::runtime_error("CHOLMOD support not compiled");
     }
+
+    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
+    using CholeskyFactorizerBase::factorizeNumeric;
+    using CholeskyFactorizerBase::factorizeNumericWithShift;
 
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &, const std::vector<size_t> &) override {

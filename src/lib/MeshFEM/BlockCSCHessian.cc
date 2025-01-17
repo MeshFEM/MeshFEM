@@ -61,20 +61,6 @@ void BlockCSCHessianBase::readBinaryFromStream(std::istream &is) {
     if (!isSparsityOnly() && (scalarNNZ() != size_t(snz)))  throw std::runtime_error("constructFromBinaryStream: scalarNNZ mismatch");
 }
 
-std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::constructFromBinaryStream(std::istream &is) {
-    size_t blockSize, numBlocks;
-    is.read(reinterpret_cast<char *>(&blockSize), sizeof(blockSize));
-    is.read(reinterpret_cast<char *>(&numBlocks), sizeof(numBlocks));
-
-    std::unique_ptr<BlockCSCHessianBase> result;
-    if (blockSize == 1) result = BlockCSCHessian<OptimizationVarStructure<1>>::construct(OptimizationVarStructure<1>(numBlocks));
-    if (blockSize == 2) result = BlockCSCHessian<OptimizationVarStructure<2>>::construct(OptimizationVarStructure<2>(numBlocks));
-    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>>::construct(OptimizationVarStructure<3>(numBlocks));
-    if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");
-    result->readBinaryFromStream(is);
-    return result;
-}
-
 // Explicit template instantiations of BlockCSCHessian used by MeshFEM;
 // instantiations for user code should be added in a separate source file in the
 // user's project.
@@ -89,3 +75,23 @@ template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<1>, true
 template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<2>, true>;
 template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3>, true>;
 template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>, true>;
+
+// On GCC, this function must come after the explicit instantiations above
+// because the implicit instantiations that are otherwise triggered inside have
+// the wrong symbol visibility.
+//      https://gcc.gnu.org/legacy-ml/gcc-help/2011-08/msg00109.html
+//      warning: type attributes ignored after type is already defined [-Wattributes]
+std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::constructFromBinaryStream(std::istream &is) {
+    size_t blockSize, numBlocks;
+    is.read(reinterpret_cast<char *>(&blockSize), sizeof(blockSize));
+    is.read(reinterpret_cast<char *>(&numBlocks), sizeof(numBlocks));
+
+    std::unique_ptr<BlockCSCHessianBase> result;
+    if (blockSize == 1) result = BlockCSCHessian<OptimizationVarStructure<1>, false>::construct(OptimizationVarStructure<1>(numBlocks));
+    if (blockSize == 2) result = BlockCSCHessian<OptimizationVarStructure<2>, false>::construct(OptimizationVarStructure<2>(numBlocks));
+    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, false>::construct(OptimizationVarStructure<3>(numBlocks));
+    if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");
+    result->readBinaryFromStream(is);
+    return result;
+}
+

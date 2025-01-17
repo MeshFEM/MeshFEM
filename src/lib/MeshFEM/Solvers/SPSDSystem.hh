@@ -306,7 +306,7 @@ public:
             }
 
             if (m_needsNumericFactorization) {
-                m_LLT->factorizeNumeric(m_AUpper);
+                m_LLT->factorizeNumeric(SuiteSparseMatrix(m_AUpper));
                 m_needsNumericFactorization = false;
             }
 

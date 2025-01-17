@@ -46,8 +46,8 @@ struct DynamicSimulator {
     using TimestepCallback = std::function<bool(DynamicSimulator &, size_t)>;
     using NewtonCallback = typename NewtonMultiobjectiveProblem::CallbackFunction;
 
-    DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt)
-        : dt(dt), m_obj(eo), m_terms(terms)
+    DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt_)
+        : dt(dt_), m_obj(eo), m_terms(terms)
     {
 
         v.setZero(m_obj->numVars());

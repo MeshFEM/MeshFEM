@@ -92,7 +92,7 @@ struct OptimizationVarStructure final : public OptimizationVarStructureBase {
     static constexpr std::array<size_t, NumBlockTypes> BlockDimensions{{BlockDimensions_...}};
     static constexpr size_t NONE = std::numeric_limits<size_t>::max();
 
-    size_t blockType(size_t blockIndex) const override {
+    size_t blockType(size_t blockIndex [[maybe_unused]]) const override {
         if constexpr (SingleBlockDim) { return 0; }
         else {
             for (size_t ti = 0; ti < NumBlockTypes; ++ti)
@@ -118,7 +118,7 @@ struct OptimizationVarStructure final : public OptimizationVarStructureBase {
     }
 
     // Query the block size of a given variable.
-    size_t blockSize(size_t block) const override {
+    size_t blockSize(size_t block [[maybe_unused]]) const override {
         if constexpr (SingleBlockDim) { return FirstBlockDim; }
         else {
             size_t ti = blockType(block);
