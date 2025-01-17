@@ -140,7 +140,6 @@ def readHessianData(directory):
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-
 def readUVdist(directory):
     uv_dist_list = []
     hessian_option_list = ['Adaptive', 'Always', 'Never']
@@ -151,6 +150,35 @@ def readUVdist(directory):
         uv_dist_arr = np.array(compute_uv_distance(uv_dir))
         uv_dist_list.append(uv_dist_arr)
     return uv_dist_list
+
+# align timing
+def alignTiming(obj_grad_time_list, grad_norm_list, thread_num=0):
+    aligned_timing_list = []
+    for i in range(3):
+        timing_list = obj_grad_time_list[i][thread_num][-1].copy()
+        num_time_steps = timing_list.shape[0]
+        num_grad_steps = grad_norm_list[i].shape[0]
+        if num_time_steps == num_grad_steps:
+            aligned_timing_list.append(timing_list)
+        elif num_time_steps > num_grad_steps:
+            sliced_timing_list = timing_list[:num_grad_steps]
+            aligned_timing_list.append(sliced_timing_list)
+        else:
+            diff_steps = num_grad_steps - num_time_steps
+            iter_time_list = []
+            for i in range(diff_steps):
+                ind = -1 - i
+                iter_time = (timing_list[ind] - timing_list[ind-1])
+                iter_time_list.append(iter_time)
+            reverse_iter_time_list = iter_time_list[::-1]
+            append_time_list = []
+            append_time_counter = timing_list[-1]
+            for iter_time in reverse_iter_time_list:
+                append_time_counter += iter_time
+                append_time_list.append(append_time_counter)
+            aligned_timing_list.append(np.array(timing_list.tolist() + append_time_list))
+        
+    return aligned_timing_list
 
 
 # Plot different hessian projection options under one thread configuration
