@@ -182,7 +182,12 @@ if(MESHFEM_VECTORIZE)
     if(COMPILER_SUPPORTS_MARCH_NATIVE)
         target_compile_options(${PROJECT_NAME} PUBLIC -march=native -ffast-math)
     else()
-        target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math)
+        CHECK_CXX_COMPILER_FLAG(-mcpu=native COMPILER_SUPPORTS_MCPU_NATIVE)
+        if(COMPILER_SUPPORTS_MCPU_NATIVE)
+            target_compile_options(${PROJECT_NAME} PUBLIC -mcpu=native -ffast-math)
+        else()
+            target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math) # Last resort
+        endif()
     endif()
 endif()
 
