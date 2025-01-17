@@ -193,6 +193,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("hasFactorization", [](const CFB &c, CFB::FactorizationType type) { return c.hasFactorization(type); }, py::arg("type"))
         .def("solve", [](const CFB &c, Eigen::VectorXd &rhs) { return c.solve(rhs); }, py::arg("rhs"))
         .def("provider", &CFB::provider)
+        .def("recordMatrices", &CFB::recordMatrices, py::arg("directory"))
+        .def("stopRecordingMatrices", &CFB::stopRecordingMatrices)
         ;
 
     m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());

@@ -58,6 +58,9 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     void set_dhat(Real dhat) { m_ipcWrapper->dhat = dhat; }
     Real get_dhat() const { return m_ipcWrapper->dhat; }
 
+    void set_ccdTol(Real ccdTol) { m_ipcWrapper->ccdTol = ccdTol; }
+    Real get_ccdTol() const { return m_ipcWrapper->ccdTol; }
+
     // Get the last attempted Newton step (for debugging the line search)
     const MXd &getCollisionVertexPositions() const { return m_collisionVertexPositions;     }
     const MXi &getCollisionMeshFaces()       const { return m_combinedCollisionMesh->faces; }
@@ -91,20 +94,15 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // Determine the maximum collision-free step size.
     Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override;
 
-    // Adaptive Barrier Stiffness
-    void initialBarrierStiffness(double weight) override;
+    // Adaptive barrier stiffness support
+    // Note that `initialBarrierStiffness` needs access to the current primary
+    // potential gradient; for a dynamic simulation this must incorporate the
+    // inertia term gradient!
+    void initialBarrierStiffness(double weight, const Eigen::VectorXd &primaryPotentialGradient) override;
+    // Convenience method for the case where the primary potential consists only
+    // of the elastic object (e.g., static simulation, parametrization)
+    void initialBarrierStiffness(double weight) { initialBarrierStiffness(weight, object().gradient()); }
     void updateBarrierStiffness();
-
-    void setUseAdaptiveBarrierStiffness(bool flag) {
-        useAdaptiveBarrier = flag;
-        if (useAdaptiveBarrier) {
-            initialBarrierStiffness(1.0);
-            std::cout << "Warning: Barrier stiffness weight is set to one." << std::endl;}
-    }
-
-    bool getUseAdaptiveBarrierStiffness() {
-        return useAdaptiveBarrier;
-    }
 
     size_t numCollisionConstraints() const;
 
@@ -146,6 +144,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     ~IPCObjectiveTerm();
     
     CCDMethod CCD = CCDMethod::TightInclusion;
+    bool useAdaptiveBarrier = true;
 
     size_t sparsityPatternUpdateThreshold = 100; // Number of blocks that must disappear from the sparsity pattern before we re-factorize.
 
@@ -163,8 +162,7 @@ protected:
     ////////////////////////////////////////////////////////////////////////////////
     // User configuration of IPC barrier
     ////////////////////////////////////////////////////////////////////////////////
-    bool useAdaptiveBarrier = true;
-    Real m_k;                         // IPC Barrier Stiffness
+    Real m_k = 1.0;                   // IPC Barrier Stiffness
     MXd  m_collisionVertexPositions;  // Cached collision vertex positions
 };
 #endif

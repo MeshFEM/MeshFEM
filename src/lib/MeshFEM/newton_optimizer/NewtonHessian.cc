@@ -23,6 +23,7 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
 CholeskyFactorizerBase &NewtonHessianFactorization::solver() {
     if (!m_solver || (m_solver->provider() != m_options.factorizer)) {
         m_solver = make_cholesky_factorizer(m_options.factorizer);
+        m_solver->recordMatrices(m_options.matrixRecordDir); // enable recording if the user specified a directory
         updateSymbolicFactorization();
     }
 

@@ -472,6 +472,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
         this->Ai = std::move(result.Ai);
         this->Ap = std::move(result.Ap);
+        this->nz = result.nz;
     }
 
     virtual void finalize() = 0;
@@ -515,6 +516,25 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual const OptimizationVarStructureBase   &vars() const = 0;
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
+
+    // Construct a uniform block size matrix by reading a serialized block
+    // sparsity pattern from input stream `is` (using CSCMatrix::readBinaryFromStream)
+    static std::unique_ptr<BlockCSCHessianBase> constructFromBinaryStream(std::istream &is);
+    static std::unique_ptr<BlockCSCHessianBase> constructFromBinaryFile(const std::string &filename) {
+        std::ifstream is(filename, std::ios::binary);
+        if (!is) throw std::runtime_error("Failed to open output file " + filename);
+        return constructFromBinaryStream(is);
+    }
+
+    void dumpBinaryToStream(std::ostream &os) const;
+    void dumpBinaryToFile(const std::string &filename) const {
+        std::ofstream os(filename, std::ios::binary);
+        if (!os) throw std::runtime_error("Failed to open output file " + filename);
+        dumpBinaryToStream(os);
+    }
+    void dumpBinary(const std::string &filename) const { dumpBinaryToFile(filename); }
+
+    void readBinaryFromStream(std::istream &is);
 
 private:
     virtual void m_addDiag(const double *d) = 0;

@@ -26,7 +26,7 @@ using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
 struct MESHFEM_EXPORT TimestepLimiter {
     TimestepLimiter() { };
     virtual double getTimestepLength (double t, double dt) { return 1.0; }
-    virtual void initialBarrierStiffness(double w) = 0;
+    virtual void initialBarrierStiffness(double w, const Eigen::VectorXd &primaryPotentialGradient) = 0;
     virtual ~TimestepLimiter() { };
     void setAdaptiveTimestep(bool flag) { if (flag) throw std::runtime_error("Adaptive timestep is disabled until further testing"); m_useAdaptiveTimestep = flag; }
     bool useAdaptiveTimestep() { return m_useAdaptiveTimestep; }
@@ -177,6 +177,17 @@ struct DynamicSimulator {
     void setFixedVars(const std::vector<size_t> &fixedVars) { m_prob->setFixedVars(fixedVars); m_massCholesky.second.reset(); }
     const std::vector<size_t> &fixedVars() const { return m_prob->fixedVars(); }
 
+    Eigen::VectorXd primaryPotentialGradient() const {
+        Eigen::VectorXd grad;
+        grad.setZero(m_obj->numVars());
+        for (size_t i = 0; i < m_terms.size(); i++) {
+            const auto &term = m_terms[i];
+            if (std::dynamic_pointer_cast<TimestepLimiter>(term)) continue; // Skip contact term
+            term->accumulateGradient(m_prob->weight(i), grad);
+        }
+        return grad;
+    }
+
     std::vector<ConvergenceReport> run(const double finalTime) {
         double time = 0.0;
 
@@ -190,11 +201,11 @@ struct DynamicSimulator {
             if (m_iterationCallback(tIter, m_preTimestepCallback)) break;
 
             // Adaptive time stepping for preventing collision of obstacle and elastic object
-            for (size_t i = 0; i < m_terms.size(); i++){
+            for (size_t i = 0; i < m_terms.size(); i++) {
                 const auto &term = m_terms[i];
                 auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
                 if (derivedObj != nullptr){
-                    derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/); // Surprisingly weight = dt^2 works much faster
+                    derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient()); // Surprisingly weight = dt^2 works much faster
                     if (derivedObj->useAdaptiveTimestep()) {
                         alpha = derivedObj->getTimestepLength(time, dt);
                     }

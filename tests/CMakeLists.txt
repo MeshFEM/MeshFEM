@@ -35,6 +35,11 @@ target_link_libraries(solve_system MeshFEM)
 add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
 target_link_libraries(benchmark_linear_systems MeshFEM)
 
+if (MESHFEM_WITH_IPC_TOOLKIT)
+add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
+target_link_libraries(benchmark_ipc_toolkit MeshFEM)
+endif()
+
 add_executable(benchmark_sorts benchmark_sorts.cc)
 target_link_libraries(benchmark_sorts MeshFEM)
 

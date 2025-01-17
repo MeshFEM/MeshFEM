@@ -44,6 +44,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         ;
 
     py::class_<BlockCSCHessianBase, std::shared_ptr<BlockCSCHessianBase>>(m, "BlockCSCHessianBase")
+        .def(py::init([](const std::string &path) { return BlockCSCHessianBase::constructFromBinaryFile(path); }), py::arg("path"))
         .def_property_readonly("Ap", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, "Offsets into Ai/Ax of the entries for each column")
         .def_property_readonly("Ai", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, "Row indices of nonzero entries")
         .def_property_readonly("Ax", [](BlockCSCHessianBase &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(),             /* owner = */ py::cast(A)); }, "Values of nonzero entries")
@@ -66,6 +67,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def_readonly( "n", &BlockCSCHessianBase::n )
         .def_readonly("nz", &BlockCSCHessianBase::nz)
 
+        .def("dumpBinaryToFile", &BlockCSCHessianBase::dumpBinaryToFile, py::arg("path"))
+
         .def("toScalar",      [](const BlockCSCHessianBase &H) { return H.toScalar(); })
         .def("vars",          &BlockCSCHessianBase::vars, py::return_value_policy::reference_internal)
         ;
@@ -79,6 +82,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
+        .def(py::init([](const std::string &path) { return NH::load(path); }), py::arg("path"))
         .def_property_readonly("H_ss", [](const NH &H) -> const BlockCSCHessianBase * { return H.H_ss.get(); }, py::return_value_policy::reference_internal)
 
         .def_readwrite("H_sd", &NH::H_sd)
@@ -107,6 +111,9 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
                     std::make_pair(A.m, A.n));
             })
         .def("apply", &NH::apply)
+
+        .def_property_readonly("lowRankRank", &NH::low_rank_rank)
+        .def("dump", &NH::dump, py::arg("path"))
         ;
 
     using NHF = NewtonHessianFactorization;

@@ -43,6 +43,16 @@ struct IPCWrapper : public IPCWrapperBase {
         std::cout << "CCD duration: " << std::chrono::duration<double>(ccd_end - ccd_begin).count() << " seconds." << std::endl;
         // const auto ccd_begin = std::chrono::steady_clock::now();
 #else
+        // {
+        //     static size_t counter = 0;
+        //     if (counter == 0) {
+        //         std::ofstream("cm_edges.txt") << collisionMesh.edges();
+        //         std::ofstream("cm_faces.txt") << collisionMesh.faces();
+        //     }
+        //     std::string name = "debug_ccd_" + std::to_string(counter++);
+        //     std::ofstream(name + "_x0.txt") << std::setprecision(19) << collisionVertexPositions;
+        //     std::ofstream(name + "_x1.txt") << std::setprecision(19) << steppedCollisionVertexPositions;
+        // }
         BENCHMARK_START_TIMER_SECTION("candidates.build");
         candidateCache = std::make_unique<ipc::Candidates>();
         ipc::Candidates &candidates = *candidateCache;
@@ -58,11 +68,13 @@ struct IPCWrapper : public IPCWrapperBase {
         double alpha = candidates.compute_collision_free_stepsize(
             collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ 1e-6, /* tolerance = */ 1e-6, /* max_iterations = */ 1e6);
 #else
+        BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
         double dmin = 0.0;
-        double ccd_tolerance = 2e-8;
         size_t max_iteration = 1e6;
+        std::cout << "ccd tolerance: " << ccdTol << std::endl;
         double alpha = candidates.compute_collision_free_stepsize(
-            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccd_tolerance, /* max_iterations = */ max_iteration); 
+            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration);
+        BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
 #endif
 
         // const auto ccd_end = std::chrono::steady_clock::now();
@@ -81,21 +93,39 @@ struct IPCWrapper : public IPCWrapperBase {
         return candidates.compute_cfl_stepsize(collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, dhat);
     }
 
-    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double bboxDiagonal, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) override {
+    virtual double initial_barrier_stiffness(const MXd &collisionVertexPositions, double mass, const VXd &primaryGradient, const VXd &contactPotentialGradient, double weight) override {
         prevMinDistanceSq = collisionConstraints.compute_minimum_distance(collisionMesh, collisionVertexPositions);
         ipc::BarrierPotential barrierPotential(dhat);
+        double bboxDiagonal = computeBboxDiagonal(collisionVertexPositions);
+        std::cout.precision(20);
+        std::cout << "bbox diagonal: " << bboxDiagonal << std::endl;
+        std::cout << "avgmass: " << mass << std::endl;
+        std::cout << "grad_energy: " << primaryGradient.norm() << std::endl;
+        std::cout << "grad_barrier: " << contactPotentialGradient.norm() << std::endl;
+        
         double barrierStiffness = ipc::initial_barrier_stiffness(bboxDiagonal, barrierPotential.barrier(), dhat, mass, primaryGradient, contactPotentialGradient, maxBarrierStiffness);
+        std::cout << "barrierStiffness: " << barrierStiffness << std::endl;
         barrierStiffness /= weight;
         maxBarrierStiffness /= weight;
+        std::cout << "barrierStiffness wo weight: " << barrierStiffness << std::endl;
         return barrierStiffness;
     }
 
-    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k, double bboxDiagonal) override {
+    virtual double update_barrier_stiffness(const MXd &collisionVertexPositions, double k) override {
         double minDistanceSq = collisionConstraints.compute_minimum_distance(collisionMesh, collisionVertexPositions);
+        double bboxDiagonal = computeBboxDiagonal(collisionVertexPositions);
+        std::cout.precision(20);
+        std::cout << "bbox diagonal: " << bboxDiagonal << std::endl;
         double k_new = ipc::update_barrier_stiffness(prevMinDistanceSq, minDistanceSq, maxBarrierStiffness, k, bboxDiagonal);
         prevMinDistanceSq = minDistanceSq;
         return k_new;
     }
+
+    // compute bounding box diagonal 
+    double computeBboxDiagonal(const MXd &collisionVertexPositions) {
+        return (collisionVertexPositions.colwise().maxCoeff() - collisionVertexPositions.colwise().minCoeff()).norm();
+    }
+
 
     virtual VXd compute_potential_gradient(const MXd &cvPositions) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.compute_potential_gradient");
@@ -165,7 +195,6 @@ struct IPCWrapper : public IPCWrapperBase {
     ipc::CollisionMesh collisionMesh;
     ipc::Collisions collisionConstraints;
     mutable std::unique_ptr<ipc::Candidates> candidateCache;
-
 private:
     SystemAssembler<N> m_assembler;
 };

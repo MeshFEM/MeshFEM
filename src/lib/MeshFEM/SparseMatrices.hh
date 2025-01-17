@@ -633,6 +633,10 @@ struct TripletMatrix {
     void dumpBinary(const std::string &path) const {
         std::ofstream os(path);
         if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        dumpBinaryToStream(os);
+    }
+
+    void dumpBinaryToStream(std::ostream &os) const {
         uint64_t N = nnz();
         os.write((char *) &N, sizeof(uint64_t));
 
@@ -651,6 +655,10 @@ struct TripletMatrix {
     void readBinary(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        readBinaryFromStream(is);
+    }
+
+    void readBinaryFromStream(std::istream &is) {
         uint64_t N;
         is.read((char *) &N, sizeof(uint64_t));
         nz.resize(N);
@@ -1689,7 +1697,10 @@ struct CSCMatrix {
     void dumpBinary(const std::string &path) const {
         std::ofstream os(path);
         if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        dumpBinaryToStream(os);
+    }
 
+    void dumpBinaryToStream(std::ostream &os) const {
         if ((Ap.size() != size_t(n + 1)) || (Ai.size() != size_t(nz)) || (Ax.size() != size_t(nz)))
                 throw std::runtime_error("Inconsistent matrix size metadata");
 
@@ -1705,7 +1716,10 @@ struct CSCMatrix {
     void readBinary(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        readBinaryFromStream(is);
+    }
 
+    void readBinaryFromStream(std::istream &is) {
         is.read((char *) & m, sizeof(_Index));
         is.read((char *) & n, sizeof(_Index));
         is.read((char *) &nz, sizeof(_Index));
