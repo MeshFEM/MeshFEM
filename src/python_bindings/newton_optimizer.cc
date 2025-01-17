@@ -130,8 +130,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
 
-        .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,                           "Whether a projected Hessian was requested in the last call to `hessian()`")
-        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonMultiobjectiveProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
+        .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,             "Whether a projected Hessian was requested in the last call to `hessian()`")
+        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 
