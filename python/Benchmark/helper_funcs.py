@@ -46,7 +46,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     def customSaveUVCallback(prob, i):
         obj_history.append(prob.energy())
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
-        hessian_projected_history.append(int(prob.hessianWasProjected))
+        if i > 1:  hessian_projected_history.append(int(prob.hessianWasProjected))
         hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
         uv_arr = uv.getVars()
@@ -88,7 +88,10 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     start_time = time.time()
     opt.optimize()
     # benchmark.report()
-    if uvsave_path is not None:  
+    if uvsave_path is not None:      
+        hessian_projected_history.append(int(prob.hessianWasProjected)) # The projection status of the Hessian used in are i-1
+        hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+
         obj_arr = np.array(obj_history)
         grad_norm_arr = np.array(grad_norm_history)
         # we saved uv coordinates per-iteration and hessian_projected_history
