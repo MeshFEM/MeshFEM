@@ -97,12 +97,13 @@ function(meshfem_download_spectra)
     )
 endfunction()
 
-## Catamari
-function(meshfem_download_catamari)
-    meshfem_download_project(catamari
-        GIT_REPOSITORY https://github.com/jpanetta/catamari.git
-        GIT_TAG        23b858e18f639261bae4a2fe15d00a286cda963d)
-endfunction()
+# ## Catamari
+# DISABLED until BlockCatamari is released.
+# function(meshfem_download_catamari)
+#     meshfem_download_project(catamari
+#         GIT_REPOSITORY https://github.com/jpanetta/catamari.git
+#         GIT_TAG        23b858e18f639261bae4a2fe15d00a286cda963d)
+# endfunction()
 
 ## IPC-Toolkit
 function(meshfem_download_ipc_toolkit)

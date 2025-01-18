@@ -476,6 +476,17 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
     assertFactorization(FactorizationType::Symbolic);
 
     m_numericFactorizationImpl(mat.Ax.data());
+
+#if CATAMARI_FINEGRAINED_TIMERS
+    {
+        static size_t counter = 0;
+        std::filesystem::create_directory("catamari_timers");
+        std::string dirname = "catamari_timers/" + std::to_string(counter++);
+        std::filesystem::create_directory(dirname);
+        m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
+        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+    }
+#endif
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {

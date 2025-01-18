@@ -355,7 +355,7 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
 private:
     friend struct NewtonOptimizer;
 
-    Real m_updateSparseFactorization(const BlockCSCHessianBase &H, const WorkingSet &ws, Real &beta, const Real betaMin);
+    Real m_updateSparseFactorization(const NewtonHessian &H, const WorkingSet &ws, Real &beta, const Real betaMin);
     bool m_updateDenseFactorization(const NewtonHessian &H);
 
     void m_beginningOptimization() {

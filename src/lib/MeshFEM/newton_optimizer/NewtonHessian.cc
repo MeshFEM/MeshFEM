@@ -47,7 +47,12 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
 
     auto &hUpdtCtr = m_options.getHessianUpdateController();
     auto &hProjCtr = m_options.getHessianProjectionController();
-    const auto &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
+
+    // Note this `H_hn` reference is bound to the cached Hessian stored in `m_problem`.
+    // If `m_updateSparseFactorization` forces a Hessian reevaluation, then
+    // `H_hn` will be updated in-place!
+    // (This is what we want for the subsequent dense factorization steps.)
+    const NewtonHessian &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
 
     H_nh.validate(); // Make sure everything in H_nh is of the expected size.
 
@@ -57,14 +62,12 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
 
     Real tau = 0;
     if (H_nh.varStructure().numSparseVars() > 0) {
-        if (H_nh.H_ss == nullptr) throw std::runtime_error("No sparse block was passed.");
-        tau = m_updateSparseFactorization(*(H_nh.H_ss), ws, beta, betaMin);
+        tau = m_updateSparseFactorization(H_nh, ws, beta, betaMin);
     }
 
-    // Notify controllers that we have factorized a new Hessian
-    // and whether or not it was indefinite.
+    // Notify the update controller that we have factorized a new Hessian.
+    // (Projection controller has already been notified of the indefiniteness state.)
     bool isIndefinite = tau != 0.0;
-    hProjCtr.notifyDefiniteness(isIndefinite);
     hUpdtCtr.newHessian(isIndefinite);
 
     if ((H_nh.varStructure().numDenseVars()) > 0 || H_nh.low_rank_rank() > 0) {
@@ -74,7 +77,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     return tau;
 }
 
-Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessianBase &H, const WorkingSet &ws, Real &beta, const Real betaMin) {
+Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian &H, const WorkingSet &ws, Real &beta, const Real betaMin) {
     // The following Hessian modification strategy is an improved version of
     // "Cholesky with added multiple of the identity" from
     // Nocedal and Wright 2006, pp 51.
@@ -89,6 +92,14 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessi
     auto &s = solver();
     s.setSuppressWarnings(!m_options.verboseNonPosDef);
 
+    // Accessor for the sparse block of the Hessian;
+    // we dereference each time we access in case the block pointer has been updated
+    // by Hessian reevaluation (unlikely since re-evaluations should happen in-place).
+    auto getH = [&H]() -> BlockCSCHessianBase & {
+        if (H.H_ss) return *H.H_ss;
+        throw std::runtime_error("No sparse block present.");
+    };
+
     const SuiteSparseMatrix *M = nullptr;
 
     // OptionallyModifiedHessian H(m_problem->hessian(hProjCtr.shouldUseProjection())), M;
@@ -99,11 +110,12 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessi
     if (ws.size()) throw std::runtime_error("TODO: WorkingSet support has been disabled for refactoring and must be reimplemented.");
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
+    size_t numIndefiniteFactorizations = 0;
     while (true) {
         try {
             if (tau != 0) {
                 if (m_options.useIdentityMetric || !(m_problem->providesMetric())) {
-                    s.factorizeNumericWithShift(H, tau * currentTauScale);
+                    s.factorizeNumericWithShift(getH(), tau * currentTauScale);
                 }
                 else {
                     if (!M) {
@@ -113,19 +125,32 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessi
                         // if (ws.size()) fixVariablesInWorkingSet(*m_problem, *M.getMutable(), ws);
                     }
 
-                    s.factorizeNumericWithShift(H, tau * currentTauScale, *M);
+                    s.factorizeNumericWithShift(getH(), tau * currentTauScale, *M);
                 }
             }
             else {
                 if (m_problem->hessianShift == 0)
-                    s.factorizeNumeric(H);
-                else s.factorizeNumericWithShift(H, m_problem->hessianShift);
+                    s.factorizeNumeric(getH());
+                else s.factorizeNumericWithShift(getH(), m_problem->hessianShift);
             }
 
             if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite"); // Needed in case CHOLMOD decides on an LDL factorization...
             break;
         }
         catch (std::exception &e) {
+            ++numIndefiniteFactorizations;
+            if (numIndefiniteFactorizations == 1) { // First time we've encountered indefiniteness
+                // We immediately notify the projection controller of
+                // indefiniteness of the unshifted Hessian; if the controller
+                // returns `true`, then we need to recompute the Hessian with
+                // projection before trying shifts.
+                if (m_options.getHessianProjectionController().notifyDefiniteness(true)) {
+                    m_problem->invalidateCachedHessian();
+                    m_problem->hessian(true).validate(); // Updates the Hessian obtained by `getH` in-place.
+                    continue; // No shifts at this time; we've just enabled projection
+                }
+            }
+
             // std::cout << "Caught exception: " << e.what() << std::endl;
             tau  = std::max(4.0 * tau, beta);
             beta = std::max(0.5 * tau, betaMin);
@@ -146,6 +171,11 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const BlockCSCHessi
         // Eigen::VectorXd a = ws.getFreeComponent(m_problem->LEQConstraintMatrix());
         // kkt_solver.update(s, a);
         throw std::runtime_error("Unimplemented (LEQ constraints are disabled during refactoring)");
+    }
+
+    if (numIndefiniteFactorizations == 0) {
+        // The controller wasn't yet notified in this case, so we do it now.
+        m_options.getHessianProjectionController().notifyDefiniteness(false);
     }
 
     return tau;
