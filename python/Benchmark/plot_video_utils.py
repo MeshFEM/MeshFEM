@@ -8,10 +8,15 @@ Created: 01/16/2025  19:42:55
 
 import os, sys
 sys.path.append('../')
-import MeshFEM, mesh, benchmark
+import MeshFEM, mesh, mesh_energy,viewer, benchmark
+import mesh_operations
 import numpy as np
+import math, bisect, time
 import pickle
-import matplotlib.pyplot as plt
+import video_writer
+import matplotlib
+matplotlib.use('agg')
+from matplotlib import pyplot as plt
 
 # Under Hessian_Option/UVs
 # The directory should contain 'uv_ravel_iter_i.npz' data
@@ -98,7 +103,7 @@ def read_benchmark_data(directory):
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-def readConvergenceTimingData(directory, thread_num_list):
+def readConvergenceTimingData(directory, thread_num_list=[0]):
     obj_grad_time_list = [[], [], []]
     hessian_option_list = ['Adaptive', 'Always', 'Never']
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
@@ -152,10 +157,10 @@ def readUVdist(directory):
     return uv_dist_list
 
 # align timing
-def alignTiming(obj_grad_time_list, grad_norm_list, thread_num=0):
+def alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=0):
     aligned_timing_list = []
     for i in range(3):
-        timing_list = obj_grad_time_list[i][thread_num][-1].copy()
+        timing_list = obj_grad_time_list[i][thread_ind][-1].copy()
         num_time_steps = timing_list.shape[0]
         num_grad_steps = grad_norm_list[i].shape[0]
         if num_time_steps == num_grad_steps:
@@ -182,8 +187,8 @@ def alignTiming(obj_grad_time_list, grad_norm_list, thread_num=0):
 
 
 # Plot different hessian projection options under one thread configuration
-def save_obj_grad_time_figure(obj_grad_time_list, thread_num, user_model_name, save_directory):
-    tn = thread_num
+def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, thread_num_list=[0]):
+    tn = thread_ind
     hessian_option_list = ['Adaptive', 'Always', 'Never']
     iterations_list = []  # iteration numbers for each hessian projection option
     for i in range(3):
@@ -230,7 +235,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, thread_num, user_model_name, s
     plt.legend()
     plt.tight_layout()
     
-    full_fn = user_model_name + '_objgradvsT' + '_thread' + str(thread_num) + '.png'
+    full_fn = user_model_name + '_objgradvsT' + '_thread' + str(thread_num_list[thread_ind]) + '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
@@ -296,3 +301,179 @@ def save_uv_dist_figure(uv_dist_list, hessian_projected_list, user_model_name, s
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
+
+# generate plot videos showing the grad norm vs iterations plots under 3 different Hessian options
+# grad_norm_list, hessian_projected_list: readHessianData(...)
+# obj_grad_time_list: readConvergenceTimingData(...)
+# fps and figsize
+def gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, user_model_name, 
+                        save_directory, thread_ind = 0, thread_num_list=[0], fps=30, default_fig_size=(8, 8)):
+    
+    hessian_option_list = ['Adaptive', 'Always', 'Never']
+
+    max_num_steps = max(grad_norm_list[0].shape[0], grad_norm_list[1].shape[0], grad_norm_list[2].shape[0])
+    max_grad_norm = max(np.max(grad_norm_list[0]), np.max(grad_norm_list[1]), np.max(grad_norm_list[2]))
+    min_grad_norm = min(np.min(grad_norm_list[0]), np.min(grad_norm_list[1]), np.min(grad_norm_list[2]))
+
+    max_N_grad_norm = math.ceil(math.log10(max_grad_norm)) + 1
+    min_N_grad_norm = math.floor(math.log10(min_grad_norm)) - 1
+
+    grad_iter_vdname = user_model_name + '_GradVSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+    fig = plt.figure(figsize=default_fig_size)
+
+    plt.xlim(0, max_num_steps)
+    plt.ylim(10**(min_N_grad_norm), 10**(max_N_grad_norm))
+    plt.title(f"Model: {user_model_name}", fontsize=16)
+    plt.yscale('log')
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel(" Grad Norm ", fontsize=14)
+    plt.legend()
+    pw = video_writer.PlotVideoWriter(os.path.join(save_directory, grad_iter_vdname), plt.gcf(), dpi=300, )
+
+    iterations_list = []
+    for i in range(3):
+        iterations = np.arange(0, grad_norm_list[i].shape[0])
+        iterations_list.append(iterations)
+    color_list = ['dodgerblue', 'magenta', 'tomato']
+    line_style_list = ['-', '--', '-.']
+    
+    spf = 1 / fps
+    aligned_timing_list = alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=thread_ind)
+    totalTime = max(aligned_timing_list[0][-1], aligned_timing_list[1][-1], aligned_timing_list[2][-1])
+    numFrames = int(math.ceil(totalTime / spf))
+
+    adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
+    grad_norm_projtrue_list = grad_norm_list[0][hessian_projected_list[0]==1]
+    start_record_timer = time.time()
+    for f in range(numFrames):
+        frameTime = f * spf
+        fig = plt.figure(figsize=default_fig_size)
+        index_for_dots = 0
+        for i in range(3):
+            iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
+            plt.plot(iterations_list[i][:iterationForFrame+1], grad_norm_list[i][:iterationForFrame+1], 
+                    ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+            if i == 0: index_for_dots = max(0, bisect.bisect_left(adaptive_projtrue_iter, iterationForFrame))
+            plt.scatter(adaptive_projtrue_iter[:index_for_dots], grad_norm_projtrue_list[:index_for_dots], color='blue', marker='o', s=60)
+        
+        plt.xlim(0, max_num_steps)
+        plt.ylim(10**(min_N_grad_norm), 10**(max_N_grad_norm))
+
+        plt.title(f"Model: {user_model_name}", fontsize=16)
+        plt.yscale('log')
+        plt.xlabel("Iteration", fontsize=12)
+        plt.ylabel(" Grad Norm ", fontsize=14)
+        plt.legend(loc="upper right")
+        pw.writeFrame(plt.gcf())
+        plt.close()
+    pw.finish()
+    elapsed_record_time = time.time() - start_record_timer
+    print(f"[Viedo] {grad_iter_vdname} recorded in {save_directory}. Time: {elapsed_record_time:.4f} seconds.")
+
+# generate plot videos showing the objective(energy) vs iterations plots under 3 different Hessian options
+# grad_norm_list, hessian_projected_list: readHessianData(...)
+# obj_grad_time_list: readConvergenceTimingData(...)
+# fps and figsize
+def gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, user_model_name, 
+                        save_directory, thread_ind = 0, thread_num_list=[0], fps=30, default_fig_size=(8, 8)):
+    
+    hessian_option_list = ['Adaptive', 'Always', 'Never']
+    max_num_steps = max(obj_list[0].shape[0], obj_list[1].shape[0], obj_list[2].shape[0])
+    max_obj = max(np.max(obj_list[0]), np.max(obj_list[1]), np.max(obj_list[2]))
+    min_obj = min(np.min(obj_list[0]), np.min(obj_list[1]), np.min(obj_list[2]))
+    max_N_obj = math.ceil(math.log10(max_obj))
+    min_N_obj = math.floor(math.log10(min_obj))
+
+    obj_iter_vdname = user_model_name + '_ObjVSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+    fig = plt.figure(figsize=default_fig_size)
+    plt.xlim(0, max_num_steps)
+    plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+    plt.title(f"Model: {user_model_name}", fontsize=16)
+    plt.yscale('log')
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel(" Energy ", fontsize=14)
+    plt.legend()
+    pw = video_writer.PlotVideoWriter(os.path.join(save_directory, obj_iter_vdname), plt.gcf(), dpi=300, )
+
+    iterations_list = []
+    for i in range(3):
+        iterations = np.arange(0, obj_list[i].shape[0])
+        iterations_list.append(iterations)
+    color_list = ['dodgerblue', 'magenta', 'tomato']
+    line_style_list = ['-', '--', '-.']
+
+    spf = 1 / fps
+    aligned_timing_list = alignTiming(obj_grad_time_list, obj_list, thread_ind=thread_ind)
+    totalTime = max(aligned_timing_list[0][-1], aligned_timing_list[1][-1], aligned_timing_list[2][-1])
+    numFrames = int(math.ceil(totalTime / spf))
+
+    adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
+    obj_projtrue_list = obj_list[0][hessian_projected_list[0]==1]
+
+    start_record_timer = time.time()
+    for f in range(numFrames):
+        frameTime = f * spf
+        fig = plt.figure(figsize=default_fig_size)
+        for i in range(3):
+            iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
+            plt.plot(iterations_list[i][:iterationForFrame+1], obj_list[i][:iterationForFrame+1], 
+                    ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+            if i == 0: index_for_dots = max(0, bisect.bisect_left(adaptive_projtrue_iter, iterationForFrame))
+            plt.scatter(adaptive_projtrue_iter[:index_for_dots], obj_projtrue_list[:index_for_dots], color='blue', marker='o', s=60)
+        
+        plt.xlim(0, max_num_steps)
+        plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+
+        plt.title(f"Model: {user_model_name}", fontsize=16)
+        plt.yscale('log')
+        plt.xlabel("Iteration", fontsize=12)
+        plt.ylabel(" Energy ", fontsize=14)
+        plt.legend(loc="upper right")
+        pw.writeFrame(plt.gcf()) 
+        plt.close()
+    pw.finish()
+    elapsed_record_time = time.time() - start_record_timer
+    print(f"[Viedo] {obj_iter_vdname} recorded in {save_directory}. Time: {elapsed_record_time:.4f} seconds.")
+
+# Generate videos recording parametrization process of models under 3 different Hessian Options and one thread
+# metric_list: any list return from readHessianData(...)
+# obj_grad_time_list: acquire timing list for specific thread
+def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name, model_base_path, save_directory, 
+                     thread_ind=0, thread_num_list=[0], fps=30):
+    
+    hessian_option_list = ['Adaptive', 'Always', 'Never']
+    model_name_fex = user_model_name + '.off'
+    model_path = os.path.join(model_base_path, model_name_fex)
+    m = mesh.Mesh(model_path)
+
+    aligned_timing_list = alignTiming(obj_grad_time_list, metric_list, thread_ind=thread_ind)
+    for hessian_ind, hessian_option in enumerate(hessian_option_list):
+        uv = mesh_energy.NodalVars(m, 2)
+        uv_path = os.path.join(base_path, user_model_name, hessian_option, 'UVs')
+        numUVs = getNumUVs(uv_path)
+        uv_data_0 = read_uv_data(uv_path, 0)
+        uv.setVars(uv_data_0)
+        uv_data_final = read_uv_data(uv_path, numUVs - 1)
+        m_union = mesh_operations.concatenateMeshes([(uv_data_0.reshape(-1, 2), m.elements()), (uv_data_final.reshape(-1, 2), m.elements())])
+        
+        # create viewer
+        v = viewer.Viewer(m_union, wireframe=True)
+        em = MeshFEM.EmbeddedMesh(m, uv)
+        v.update(mesh=em, preserveExisting=False)
+        v.makeOpaque(color='#48B3FF')
+        
+        spf = 1 / fps
+        total_time = aligned_timing_list[hessian_ind][-1]
+        numFrames = int(math.ceil(total_time / spf))
+        video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+        
+        start_record_timer = time.time()
+        v.recordStart(os.path.join(save_directory, video_fn), renderScale=8, outputScale=2, framerate=fps, lineWidthScale=0.25)
+        for f in range(numFrames):
+            frameTime = f * spf
+            iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[hessian_ind], frameTime) - 1)
+            uv.setVars(read_uv_data(uv_path, iterationForFrame))
+            v.update()
+        v.recordStop()
+        elapsed_record_time = time.time() - start_record_timer
+        print(f"[Viedo] {video_fn} recorded in {save_directory}. Recording Time: {elapsed_record_time:.4f} seconds.")
