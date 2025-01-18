@@ -5,6 +5,9 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.13")
     cmake_policy(SET CMP0076 NEW)
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -14,6 +17,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 if (NOT TARGET MeshFEM)
     option(MESHFEM_ENABLE_BENCHMARKING "" ON)
     add_subdirectory(${THIRD_PARTY_DIR}/MeshFEM)
+endif()
+
+if (NOT TARGET TinyAD)
+    add_subdirectory(${THIRD_PARTY_DIR}/TinyAD)
 endif()
 
 # Color errors/warnings.

@@ -1,3 +1,6 @@
 [submodule "3rdparty/MeshFEM_dev"]
 	path = 3rdparty/MeshFEM
 	url = git@github.com:MeshFEM/MeshFEM_dev
+[submodule "3rdparty/TinyAD"]
+	path = 3rdparty/TinyAD
+	url = https://github.com/patr-schm/TinyAD.git
