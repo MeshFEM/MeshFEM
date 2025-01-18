@@ -201,17 +201,20 @@ struct DynamicSimulator {
         return grad;
     }
 
-    std::vector<ConvergenceReport> run(const double finalTime) {
-        double time = 0.0;
+    std::vector<ConvergenceReport> run(const double initTime, const double finalTime) {
+        
+        if (initTime >= finalTime) std::runtime_error("Time mismatch: initTime >= finalTime.");
 
+        double time = 0.0;
         m_kineticEnergy  .assign(1,   kineticEnergy());
         m_potentialEnergy.assign(1, potentialEnergy());
         m_crs.clear();
-        m_crs.reserve(std::ceil(finalTime / dt));
-        while (time < finalTime) {
+        const double numTimeSteps = std::ceil((finalTime - initTime) / dt);
+        m_crs.reserve(numTimeSteps);
+        for (size_t t = 0; t < numTimeSteps; t++) {
             Real alpha = 1.0;
 
-            if (m_iterationCallback(tIter, m_preTimestepCallback)) break;
+            if (m_iterationCallback(t, m_preTimestepCallback)) break;
 
             // Adaptive time stepping for preventing collision of obstacle and elastic object
             for (size_t i = 0; i < m_noninertiaTerms.size(); i++) {
@@ -228,13 +231,10 @@ struct DynamicSimulator {
             time += alpha * dt;
             {
                 // BENCHMARK_SCOPED_TIMER_SECTION timer("DynamicSimulator.postTimestepCallback"); // When collecting per-timestep benchmarks, we use a callback that resets the timer stack. This will cause problems if it's nested in a scoped timer...
-                if (m_iterationCallback(tIter, m_postTimestepCallback)) {
-                    ++tIter;
+                if (m_iterationCallback(t, m_postTimestepCallback)) {
                     break;
                 }
             }
-            ++tIter;
-
         }
         return m_crs;
     }
@@ -242,14 +242,13 @@ struct DynamicSimulator {
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
     double dt = 0.1;  // time step size
+    
     TimesteppingMethod method = TimesteppingMethod::BackwardEuler;
 
     // Parameters of implicit Newmark integration
     Real beta = 0.25, gamma = 0.5;
 
     VXd v;
-
-    size_t tIter = 0;
 
 private:
     bool m_iterationCallback(size_t i, TimestepCallback &customCallback) {

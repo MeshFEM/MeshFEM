@@ -29,12 +29,11 @@ void bind(py::module &m, py::module &detail_module) {
         ;
 
     py::class_<DS, std::shared_ptr<DS>>(detail_module, ("DynamicProblem" + floatingPointTypeSuffix<Real>()).c_str())
-        .def("run", &DS::run, py::arg("time") = 1.0)
+        .def("run", &DS::run, py::arg("t0") = 0.0, py::arg("time") = 1.0)
         .def_property_readonly("problem",     &DS::getProblem)
         .def_property_readonly("inertiaLoad", [](const DS &ds) -> const Loads::Load<Real_> & { return ds.inertiaLoad(); })
         .def_readwrite("method", &DS::method)
         .def_readwrite("v",      &DS::v)
-        .def_readonly("tIter", &DS::tIter)
         .def_property_readonly("kineticEnergies",   &DS::kineticEnergies)
         .def_property_readonly("potentialEnergies", &DS::potentialEnergies)
         .def("getVars", &DS::getVars)
