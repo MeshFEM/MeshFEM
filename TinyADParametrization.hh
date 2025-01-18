@@ -77,7 +77,7 @@ NDMap symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init) {
 
         // Computer symmetric Dirichlet energy
         Eigen::Matrix2<T> J = M * Mr.inverse();
-        return A * (J.squaredNorm() + J.inverse().squaredNorm());
+        return 0.5 * A * (J.squaredNorm() + J.inverse().squaredNorm());
     });
 
     // Assemble inital x vector from P matrix.
@@ -94,13 +94,20 @@ NDMap symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init) {
     for (int i = 0; i < max_iters; ++i)
     {
         auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
+        double g_norm = g.norm();
         TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
+        TINYAD_DEBUG_OUT("Gradient Norm in iteration " << i << ": " << g_norm);
         VXd d = TinyAD::newton_direction(g, H_proj, solver);
         if (TinyAD::newton_decrement(d, g) < convergence_eps)
             break;
         x = TinyAD::line_search(x, d, f, g, func);
     }
-    TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
+    //TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
+    auto final_obj_grad = func.eval_with_gradient(x);
+    double final_obj = std::get<0>(final_obj_grad);
+    double final_grad_norm = (std::get<1>(final_obj_grad)).norm();
+    TINYAD_DEBUG_OUT("Final energy: " << final_obj);
+    TINYAD_DEBUG_OUT("Final gradient norm: " << final_grad_norm);
 
     // Write final x vector to P matrix.
     // x_to_data(...) takes a lambda function that writes the final value
