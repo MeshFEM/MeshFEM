@@ -20,6 +20,7 @@
 
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
+#include <MeshFEM/EnergyDensities/CommonNeoHookean.hh>
 #include <MeshFEM/EnergyDensities/CorotatedLinearElasticity.hh>
 #include <MeshFEM/EnergyDensities/IsoCRLEWithHessianProjection.hh>
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
@@ -57,6 +58,9 @@ using StVenantKirchhoffEnergyHP = AutoHessianProjection<StVenantKirchhoffEnergy<
 template<typename _Real, size_t _N>
 using NeoHookeanEnergyHP = AutoHessianProjection<NeoHookeanEnergy<_Real, _N>>;
 
+template<typename _Real, size_t _N>
+using CommonNeoHookeanEnergyHP = AutoHessianProjection<CommonNeoHookeanEnergy<_Real, _N>>;
+
 template<class ESBinder>
 void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
     // For each energy, generate an elastic solid binding
@@ -71,6 +75,7 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,           NeoHookeanEnergyHP>(b));
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,     CommonNeoHookeanEnergyHP>(b));
 #endif
 }
 
