@@ -53,6 +53,7 @@ using VXd = Eigen::VectorXd;
 bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &options, const VXd &vars, const VXd &step, const Real currEnergy, const Real directionalDerivative, Real &alpha, Real initialAlpha = 1.0) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Backtracking");
     // Simple backtracking line search to ensure a sufficient decrease
+    prob.lineSearchBegan(step, directionalDerivative);
 
     Real feasible_alpha;
     size_t blocking_idx;
@@ -299,6 +300,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         // if (options.verbose)
         //     std::cout << "Found step with directional derivative: " << directionalDerivative << std::endl;
 
+        options.getHessianProjectionController().notifyDirectionalDerivative(directionalDerivative);
         bool line_search_succeeded = backtrackingLineSearch(*prob, options, vars, step, currEnergy, directionalDerivative, alpha);
         prob->lineSearchTerminated();
 

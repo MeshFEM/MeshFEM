@@ -241,7 +241,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual ~NewtonProblem() { }
 
     bool disableCaching = false; // To be used when, e.g., this problem is wrapped by another problem which does its own Hessian caching...
-    void invalidateCachedHessian() { m_cachedHessianUpToDate = false; }
+    void invalidateCachedHessian() { m_cachedHessianUpToDate = false; } // Does not reset the cache, just marks it as invalid; this is for both efficiency and correctness (newton_optimizer maintains a reference to the cached Hessian during its numeric factorization loop).
 
     // Allow the derived problem to update its Hessian sparsity pattern.
     // This will be called between last point the problem state can change (the
@@ -254,7 +254,14 @@ struct MESHFEM_EXPORT NewtonProblem {
     virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
 
     // End of line search notification
+    virtual void lineSearchBegan(const VXd &step, double directionalDerivative) {
+        if (m_lineSearchBeganCustomCallback) m_lineSearchBeganCustomCallback(*this, step, directionalDerivative);
+        m_lineSearchBegan(step, directionalDerivative);
+    }
     virtual void lineSearchTerminated() const { }
+
+    using CustomLineSearchBeganCallback = std::function<void(NewtonProblem &, const Eigen::VectorXd &, double)>;
+    void setCustomLineSearchBeganCallback(const CustomLineSearchBeganCallback &cb) { m_lineSearchBeganCustomCallback = cb; }
 
     // When nonzero, the matrix `H + hessianShift I` is factorized at each
     // Newton step rather than `H` itself. This is intended for problems
@@ -274,6 +281,10 @@ protected:
     // Called at the start of each new iteration (after line search has been performed)
     // Returns true to exit early.
     virtual bool m_iterationCallback(size_t /* i */) { return false; }
+
+    // Called just before the line search.
+    virtual void m_lineSearchBegan(const VXd &/* step */, double /* directionalDerivative */) { }
+    CustomLineSearchBeganCallback m_lineSearchBeganCustomCallback;
 
     virtual NewtonHessian m_getHessianSparsityPattern() const = 0;
     virtual void m_evalHessian(NewtonHessian &result, bool projectionMask) const = 0;
