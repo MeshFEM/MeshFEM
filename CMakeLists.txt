@@ -125,6 +125,12 @@ if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
 endif()
 
+# TODO: change back from a Git submodule to a CMake project download when
+# BlockCatamari is released.
+if (MESHFEM_WITH_CATAMARI)
+    add_subdirectory(3rdparty/Catamari)
+endif()
+
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
 # we compile for (without making them pass `-DPYTHON_EXECUTABLE=...` to `cmake`
 if (DEFINED ENV{PYTHON_EXECUTABLE})
