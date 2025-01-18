@@ -10,7 +10,6 @@
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
 
-#define DUMP_MATRICES 0
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
 
@@ -331,6 +330,7 @@ size_t CatamariFactorizer::m_reduced() const { assertFactorization(Factorization
 size_t CatamariFactorizer::n_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 
 void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+    m_recordSymbolic(mat, pinnedVars);
     // We only support uniform block sizes, and only up to
     // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
     // TODO: convert to GCD block size instead? Do we have a use case for this?
@@ -410,15 +410,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
     }
 
-#if DUMP_MATRICES
-    {
-        static size_t i = 0;
-        size_t n_zero = 4;
-        std::string padded_num = std::to_string(i++);
-        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
-        A_reduced->dumpBinary("symbolic_mat_" + padded_num + ".bin");
-    }
-#endif
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize);
 
@@ -483,18 +474,19 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
-#if DUMP_MATRICES
-    {
-        const SuiteSparseMatrix *A = m_rowColRemoval(mat);
-        static size_t i = 0;
-        size_t n_zero = 4;
-        std::string padded_num = std::to_string(i++);
-        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
-        A->dumpBinary("numeric_mat_" + padded_num + ".bin");
-    }
-#endif
 
     m_numericFactorizationImpl(mat.Ax.data());
+
+#if CATAMARI_FINEGRAINED_TIMERS
+    {
+        static size_t counter = 0;
+        std::filesystem::create_directory("catamari_timers");
+        std::string dirname = "catamari_timers/" + std::to_string(counter++);
+        std::filesystem::create_directory(dirname);
+        m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
+        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+    }
+#endif
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {

@@ -84,6 +84,7 @@
 
 #include "NewtonOptions.hh"
 #include <MeshFEM/BlockCSCHessian.hh>
+#include <MeshFEM/Utilities/load_dense_matrix.hh>
 
 struct WorkingSet;
 
@@ -95,7 +96,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         if (other.H_ss) H_ss = other.H_ss->clone();
         m_copyDensePart(other);
     }
-    NewtonHessian(std::unique_ptr<BlockCSCHessianBase> &&H_ss) : H_ss(std::move(H_ss)) { }
+    NewtonHessian(std::unique_ptr<BlockCSCHessianBase> &&H_ss_) : H_ss(std::move(H_ss_)) { }
 
     NewtonHessian(NewtonHessian &&other) noexcept { swap(*this, other); }
 
@@ -213,6 +214,40 @@ struct MESHFEM_EXPORT NewtonHessian {
         A.C_d.swap(B.C_d);
     }
 
+    void dump(const std::string &path) const {
+        std::ofstream os(path);
+        if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        size_t nsv = 0, ndv = 0, lrr = low_rank_rank();
+        if (H_ss) {
+            nsv = varStructure().numSparseVars();
+            if (!H_ss->uniformBlockSize()) throw std::runtime_error("Dumping non-uniform block sizes not supported");
+        }
+
+        os << "\t" << nsv << "\t" << ndv << "\t" << lrr << std::endl;
+
+        if (H_ss) H_ss->dumpBinaryToStream(os);
+
+        if (ndv > 0) os << H_sd << std::endl << H_dd << std::endl;
+        if (lrr > 0) os << V_s  << std::endl << V_d  << std::endl;
+    }
+
+    static NewtonHessian load(const std::string &path) {
+        std::ifstream is(path);
+        if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        size_t nsv, ndv, lrr;
+        is >> nsv >> ndv >> lrr;
+        // consume whitespace
+        is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        NewtonHessian result;
+
+        if (nsv > 0) result.H_ss = BlockCSCHessianBase::constructFromBinaryStream(is);
+        if (ndv > 0) { result.H_sd = load_matrix_from_stream<Real>(is, nsv, ndv); result.H_dd = load_matrix_from_stream<Real>(is, ndv, ndv); }
+        if (lrr > 0) { result.V_s  = load_matrix_from_stream<Real>(is, nsv, lrr); result.V_d  = load_matrix_from_stream<Real>(is, ndv, lrr); }
+
+        return result;
+    }
+
 private:
     void m_copyDensePart(const NewtonHessian &other) {
         H_sd = other.H_sd;
@@ -320,7 +355,7 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
 private:
     friend struct NewtonOptimizer;
 
-    Real m_updateSparseFactorization(const BlockCSCHessianBase &H, const WorkingSet &ws, Real &beta, const Real betaMin);
+    Real m_updateSparseFactorization(const NewtonHessian &H, const WorkingSet &ws, Real &beta, const Real betaMin);
     bool m_updateDenseFactorization(const NewtonHessian &H);
 
     void m_beginningOptimization() {

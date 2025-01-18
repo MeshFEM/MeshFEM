@@ -103,6 +103,8 @@ struct CholeskyFactorizerBase {
     ////////////////////////////////////////////////////////////////////////////
     // For factorizers that do not expect a BlockCSCHessian, we convert/expand to a SuiteSparseMatrix.
     virtual void factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+        m_recordSymbolic(mat, pinnedVars);
+
         if (mat.isScalar())
             factorizeSymbolic((const SuiteSparseMatrix &)(mat), pinnedVars);
         else {
@@ -135,6 +137,8 @@ struct CholeskyFactorizerBase {
     };
 
     void guardedFactorizationCall(const BlockCSCHessianBase &mat, const std::function<void(const SuiteSparseMatrix &)> &f) const {
+        if (recordingMatrices()) mat.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+
         if (mat.isScalar())
             f((const SuiteSparseMatrix &)(mat));
         else {
@@ -147,10 +151,10 @@ struct CholeskyFactorizerBase {
         guardedFactorizationCall(mat, [&](const SuiteSparseMatrix &A) { factorizeNumeric(A, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) {
-        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, B, isInTryCatch); });
+        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, B, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) {
-        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A) { factorizeNumericWithShift(A, sigma, isInTryCatch); });
+        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, isInTryCatch); });
     }
 
     virtual void clearFactors() = 0;
@@ -318,7 +322,39 @@ struct CholeskyFactorizerBase {
     virtual CholeskyProvider provider() const = 0;
 
     virtual ~CholeskyFactorizerBase() { }
+
+    // If `path` is nonempty, record the matrices passed to symbolic and numeric factorization routines.
+    void recordMatrices(const std::string &directory_path) { m_matrix_dump_path = directory_path; }
+    void stopRecordingMatrices() { m_matrix_dump_path.clear(); }
+    bool recordingMatrices() const { return !m_matrix_dump_path.empty(); }
+    static std::string symbolicMatrixFileName(size_t i) { return "/symbolic_mat_" + m_matrixIdString(i) + ".bin"; }
+    static std::string  numericMatrixFileName(size_t i) { return "/numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
+    static std::string     pinnedVarsFileName(size_t i) { return "/pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
+
 protected:
+    // An increasing identifier used to sequence each matrix written
+    // to disk during recording (symbolic and numeric).
+    // We use the same ordering for both types since to that we easily
+    // know which numeric matrices correspond to which sparsity patterns.
+    static std::string m_matrixIdString(size_t id) {
+        size_t n_zero = 4;
+        std::string padded_num = std::to_string(id);
+        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
+        return padded_num;
+    }
+
+    size_t m_generateMatrixId() const { return const_cast<size_t &>(m_matrixId)++; }
+
+    void m_recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+        if (recordingMatrices()) {
+            size_t id = m_generateMatrixId();
+            mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id));
+
+            std::ofstream varsFile(m_matrix_dump_path + "/" + pinnedVarsFileName(id));
+            for (size_t v : pinnedVars) varsFile << v << std::endl;
+        }
+    }
+
     FactorizationType m_factorizationType = FactorizationType::None;
 
     // Functionality for efficient solves under variable pins
@@ -331,6 +367,9 @@ protected:
 
     mutable VXd m_solveScratch;
     mutable SuiteSparseMatrix m_scalarHessian;
+
+    std::string m_matrix_dump_path;
+    size_t m_matrixId = 0;
 
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization

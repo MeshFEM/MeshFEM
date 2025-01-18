@@ -39,15 +39,15 @@ struct SymmetricDirichlet
 
     SymmetricDirichlet(const SymmetricDirichlet &other, UninitializedDeformationTag &&){ }
 
-    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full){
+    void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
         m_Finv = F.inverse();
         m_J = F.determinant();
 
-        if(elevel < EvalLevel::Hessian) return;
+        if (elevel < EvalLevel::Hessian) return;
         m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
 
-
+        m_projectionMask = true;
         m_Finv_FinvT = m_Finv*m_Finv.transpose();
         m_FinvT_Finv = m_Finv.transpose()*m_Finv;
         if (!m_projectionMask) {
@@ -62,10 +62,9 @@ struct SymmetricDirichlet
             return;
         }
 
-        // throw error when N == 3
-        if(N == 3) throw std::runtime_error("Analytical Hessian Projection in N=3 UnImplemented!");
+        if (N == 3) throw std::runtime_error("Analytical Hessian Projection in N=3 Unimplemented!");
 
-        // Analytical Hessian Projection in 2D: SVD
+        // Analytical Hessian Projection in 2D
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
         const Matrix &U = svd.matrixU();
@@ -76,10 +75,13 @@ struct SymmetricDirichlet
         Real I2 = m_F.squaredNorm();
         Real I3 = m_J;
 
+        Real I3Sq = I3*I3;
+        Real I3Cu = I3Sq*I3;
+
         Real lambda_1 = 1.0 + (3.0/pow(sigma[0],4));
         Real lambda_2 = 1.0 + (3.0/pow(sigma[1],4));
-        Real lambda_3 = 1.0 + (1.0/pow(I3,2)) + (I2/pow(I3,3));
-        Real lambda_4 = 1.0 + (1.0/pow(I3,2)) - (I2/pow(I3,3));
+        Real lambda_3 = 1.0 + (1.0/I3Sq) + (I2/I3Cu);
+        Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
 
         VN2_T T;
         Eigen::Map<Matrix>(T.data()) = U.col(1)*V.col(0).transpose() - U.col(0)*V.col(1).transpose();
@@ -93,17 +95,15 @@ struct SymmetricDirichlet
         VN2_T D2;
         Eigen::Map<Matrix>(D2.data()) = U.col(1)*V.col(1).transpose();
 
-        // Here I store d2psi as a member variable...
-        lambda_4 = std::max(lambda_4, 0.0);
+        lambda_4 = std::max(lambda_4, 0.0); // clamp potentially negative eigenvalue.
         m_d2psi = lambda_1*D1*D1.transpose() + lambda_2*D2*D2.transpose() + 0.5*lambda_3*L*L.transpose() + 0.5*lambda_4*T*T.transpose();
-
     }
 
     const Matrix &getDeformationGradient() const {return m_F; }
 
     _Real energy() const{
-        if(m_J < 0)             return std::numeric_limits<_Real>::infinity();
-        else                    return 0.5*(m_F.squaredNorm() + m_Finv.squaredNorm());
+        if (m_J < 0) return std::numeric_limits<_Real>::infinity();
+        else         return 0.5*(m_F.squaredNorm() + m_Finv.squaredNorm());
     }
 
     _Real denergy(const Matrix& dF) const { return doubleContract(denergy(), dF); }
@@ -118,13 +118,9 @@ struct SymmetricDirichlet
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const{
         Matrix dF_mat = dF.matrix();
-        Matrix result = dF_mat;
-
-        result += (m_Finv.transpose()*dF_mat.transpose()*m_Finv.transpose())*m_Finv_FinvT;
-        result += m_FinvT_Finv*dF_mat*m_Finv_FinvT;
-        result += m_FinvT_Finv*(m_Finv.transpose()*dF_mat.transpose()*m_Finv.transpose());
-
-        return result;
+        Matrix tmp = (m_Finv.transpose() * dF_mat.transpose() * m_Finv.transpose());
+        return dF_mat + (tmp + m_FinvT_Finv * dF_mat) * m_Finv_FinvT 
+                      +  m_FinvT_Finv * tmp;
     }
 
     _Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
@@ -136,7 +132,8 @@ struct SymmetricDirichlet
         throw std::runtime_error("Unimplemented.");
     }
 
-    const MN2_T &d2energy() const { return m_d2psi; }
+    using Hessian = Eigen::Matrix<Real, N * N, N * N>;
+    const Hessian &d2energy() const { return m_d2psi; }
 
 private:
     bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
@@ -144,8 +141,7 @@ private:
     Matrix m_F, m_Finv, m_Finv_FinvT, m_FinvT_Finv;
     Real m_J;
 
-    MN2_T m_d2psi;
-
+    Hessian m_d2psi;
 };
 
 

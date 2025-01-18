@@ -11,8 +11,7 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
-void benchmark_method(const std::string &method, const char *sparsityPatternPath, size_t numNumericMatrices,
-                      const char **numericMatrices, size_t tbb_threads) {
+void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads) {
     set_max_num_tbb_threads(tbb_threads);
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
 
@@ -38,23 +37,43 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
     }
     else throw std::runtime_error("Unknown method");
 
-    SuiteSparseMatrix Asp(sparsityPatternPath);
-    factorizer->factorizeSymbolic(Asp);
+    Eigen::VectorXd b;
+    size_t m = 0;
 
-    Eigen::VectorXd b = Eigen::VectorXd::Random(Asp.m);
-
-    for (size_t i = 0; i < numNumericMatrices; ++i) {
-        SuiteSparseMatrix A(numericMatrices[i]);
-        try {
-            factorizer->factorizeNumeric(A, true);
-        }
-        catch (std::exception &e) {
-            std::cout << e.what() << std::endl;
+    for (int counter = 0; ; counter++) {
+        std::string symPath = directory + "/" + CholeskyFactorizerBase::symbolicMatrixFileName(counter);
+        std::ifstream symFile(symPath);
+        if (symFile.good()) {
+            // std::cout << symPath << std::endl;
+            std::vector<size_t> pinnedVars;
+            std::ifstream pinnedVarFile(directory + "/" + CholeskyFactorizerBase::pinnedVarsFileName(counter));
+            if (pinnedVarFile.good()) {
+                size_t pinnedVar;
+                while (pinnedVarFile >> pinnedVar) {
+                    pinnedVars.push_back(pinnedVar);
+                }
+            }
+            else { throw std::runtime_error("Failed to open pinned vars file corresponding to symbolic matrix " + std::to_string(counter)); }
+            auto Hsp = BlockCSCHessianBase::constructFromBinaryStream(symFile);
+            factorizer->factorizeSymbolic(*Hsp, pinnedVars);
+            m = Hsp->m;
+            // b = Eigen::VectorXd::Random(m);
             continue;
         }
 
-        // auto x = factorizer->solve(b);
-        // std::cout << "Relative error: " << (A.apply(x) - b).norm() / b.norm() << std::endl;
+        std::string numPath = directory + "/" + CholeskyFactorizerBase::numericMatrixFileName(counter);
+        std::ifstream numFile(numPath);
+        if (numFile.good()) {
+            // std::cout << numPath << std::endl;
+            if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
+                throw std::runtime_error("Numeric matrix encountered before symbolic matrix");
+            auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
+            factorizer->factorizeNumeric(*H, true);
+            // auto x = factorizer->solve(b);
+            continue;
+        }
+
+        break; // Ran out of matrices...
     }
 
     BENCHMARK_REPORT();
@@ -62,16 +81,13 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 5) {
-        std::cout << "Usage: " << argv[0] << " method tbb_threads sparsityPattern.bin numeric_0.bin [numeric_1.bin ...]" << std::endl;
-        std::cout << "where method is in {cholmod, catamari, catamari_nesdis}" << std::endl;
+    if (argc != 4) {
+        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory" << std::endl;
+        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, pardiso}" << std::endl;
         exit(-1);
     }
 
-    const char **numericMatrices = argv + 4;
-    size_t numNumericMatrices = argc - 4;
-
-    benchmark_method(argv[1], argv[3], numNumericMatrices, numericMatrices, std::stod(argv[2]));
+    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]));
 
     return 0;
 }

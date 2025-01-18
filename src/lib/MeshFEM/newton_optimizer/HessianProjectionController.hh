@@ -12,10 +12,20 @@
 #define HESSIANPROJECTIONCONTROLLER_HH
 
 #include <memory>
+#include <Eigen/Dense>
 
 struct HessianProjectionController {
+    // Whether projection is currently enabled
     virtual bool shouldUseProjection() const = 0;
-    virtual void notifyDefiniteness(bool /* isIndefinite */) { }
+
+    // Inform the controller that the current Hessian is indefinite.
+    // Returns `recompute`: whether the controller wants the Hessian to be
+    //                      reevaluated with projection for the current iteration
+    virtual bool notifyDefiniteness(bool /* isIndefinite */) { return false; }
+    virtual void notifyStep(const Eigen::VectorXd & /* step */) { }  // For heuristics that can depend on step length.
+    virtual void notifyGradient(const Eigen::VectorXd & /* g */) { } // For heuristics that can depend on gradient
+    virtual void notifyDirectionalDerivative(double /* directionalDerivative */) { } // For heuristics that can depend on directional derivative
+
     virtual void reset() { }
 
     virtual ~HessianProjectionController() { }
@@ -50,45 +60,74 @@ struct HessianProjectionNever : public HessianProjectionController {
 // Use a simple hysteresis strategy to select between using a
 // projection or the full, unprojected Hessian.
 // If indefiniteness is repeatedly encountered
-// (more than `numConsecutiveIndefiniteStepsBeforeSwitch` times in a row),
-// we switch to using the Hessian projection for `numProjectionStepsBeforeSwitch`
+// (more than `numConsecutiveIndefiniteStepsBeforeEnable` times in a row),
+// we switch to using the Hessian projection for `numProjectionStepsBeforeDisable`
 // iterations before switching back to the full Hessian.
 // By default we start with the projection active
-// (since the problem is generally indefinite at the start).
+// (since Hessians are generally indefinite at the start).
+//
+// If `numConsecutiveIndefiniteStepsBeforeEnable` is set to 0, we will
+// enable projection immediately upon detecting indefiniteness, and
+// recompute the Hessian for the current Newton step (rather than
+// using Hessian shifts for the current iteration).
 struct HessianProjectionAdaptive : public HessianProjectionController {
-    size_t numProjectionStepsBeforeSwitch = 10;
-    size_t numConsecutiveIndefiniteStepsBeforeSwitch = 5;
+    size_t numProjectionStepsBeforeDisable = 10;
+    size_t numConsecutiveIndefiniteStepsBeforeEnable = 5;
+
+    // When steps stagnate/fail to make progress, disable projection
+    double stepLengthThresholdForDisable = 0;
+    double directionalDerivativeThresholdForDisable = 0; // if directional derivative exceeds (becomes less negative than) this value, disable projection
 
     HessianProjectionAdaptive() { reset(); }
     HessianProjectionAdaptive(const HessianProjectionAdaptive &b) = default;
 
     virtual void reset() override {
         projectionActive = true;
-        switchCounter = numProjectionStepsBeforeSwitch;
+        switchCounter = numProjectionStepsBeforeDisable;
     }
 
     virtual bool shouldUseProjection() const override { return projectionActive; }
 
-    virtual void notifyDefiniteness(bool isIndefinite) override {
+    virtual bool notifyDefiniteness(bool isIndefinite) override {
         if (projectionActive) {
             if (!isIndefinite) {
                 if (--switchCounter == 0) {
                     projectionActive = false;
-                    switchCounter = numConsecutiveIndefiniteStepsBeforeSwitch;
+                    switchCounter = numConsecutiveIndefiniteStepsBeforeEnable;
                 }
             }
-            else { switchCounter = numProjectionStepsBeforeSwitch; } // Full Hessian must be crazy indefinite if projection didn't even help!
+            else { switchCounter = numProjectionStepsBeforeDisable; } // Full Hessian must be crazy indefinite if projection didn't even help!
         }
         else {
             if (isIndefinite) {
+                if (numConsecutiveIndefiniteStepsBeforeEnable == 0) {
+                    projectionActive = true;
+                    return true;
+                }
                 if (--switchCounter == 0) {
                     projectionActive = true;
-                    switchCounter = numProjectionStepsBeforeSwitch;
+                    switchCounter = numProjectionStepsBeforeDisable;
                 }
             }
             else {
-                switchCounter = numConsecutiveIndefiniteStepsBeforeSwitch;
+                switchCounter = numConsecutiveIndefiniteStepsBeforeEnable;
             }
+        }
+        return false; // Only re-evaluate Hessian in the special `numConsecutiveIndefiniteStepsBeforeEnable == 0` case!
+    }
+
+    virtual void notifyStep(const Eigen::VectorXd &step) override {
+        if (stepLengthThresholdForDisable <= 0) return; // shortcut unnecessary norm computation
+        if (step.norm() < stepLengthThresholdForDisable) {
+            projectionActive = false;
+            switchCounter = numConsecutiveIndefiniteStepsBeforeEnable;
+        }
+    }
+
+    virtual void notifyDirectionalDerivative(double directionalDerivative) override {
+        if (directionalDerivative > directionalDerivativeThresholdForDisable) {
+            projectionActive = false;
+            switchCounter = numConsecutiveIndefiniteStepsBeforeEnable;
         }
     }
 
@@ -101,11 +140,11 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
     size_t switchCounter;
 
     using State = std::tuple<size_t, size_t>; // Only store external state (internal state will be reset before next Newton solve anyway...)
-    static State serialize(const HessianProjectionAdaptive &hpa) { return std::make_tuple(hpa.numProjectionStepsBeforeSwitch, hpa.numConsecutiveIndefiniteStepsBeforeSwitch); }
+    static State serialize(const HessianProjectionAdaptive &hpa) { return std::make_tuple(hpa.numProjectionStepsBeforeDisable, hpa.numConsecutiveIndefiniteStepsBeforeEnable); }
     static std::unique_ptr<HessianProjectionAdaptive> deserialize(const State &s) {
         auto hpa = std::make_unique<HessianProjectionAdaptive>();
-        hpa->numProjectionStepsBeforeSwitch            = std::get<0>(s);
-        hpa->numConsecutiveIndefiniteStepsBeforeSwitch = std::get<1>(s);
+        hpa->numProjectionStepsBeforeDisable           = std::get<0>(s);
+        hpa->numConsecutiveIndefiniteStepsBeforeEnable = std::get<1>(s);
         return hpa;
     }
 };

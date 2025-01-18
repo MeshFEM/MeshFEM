@@ -307,9 +307,9 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
 
     Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_colStart + m_colStride - 1; }
 
-    Index colStride(size_t c) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
-    Index blockStride()       const { if constexpr (ContiguousBlocks) return   blockSize();  else return rowBlockSize(); }  // Stride from upper-left corner of this block to the next.
-    Index diagBlockColStride(size_t c) const { if constexpr (ContiguousBlocks) return c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+    Index colStride(size_t c [[maybe_unused]]) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
+    Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return rowBlockSize();  } // Stride from upper-left corner of this block to the next.
+    Index diagBlockColStride(size_t c)         const { if constexpr (ContiguousBlocks) return          c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
 
     template<class Block>
     void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
@@ -395,9 +395,9 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 
     Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_H.scalarOffsetForColumn(m_bj) + m_colStride - 1; }
 
-    Index colStride(size_t c) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
-    Index blockStride()       const { if constexpr (ContiguousBlocks) return   blockSize();  else return rowBlockSize(); }  // Stride from upper-left corner of this block to the next.
-    Index diagBlockColStride(size_t c) const { if constexpr (ContiguousBlocks) return c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+    Index colStride(size_t c [[maybe_unused]]) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
+    Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return  rowBlockSize(); } // Stride from upper-left corner of this block to the next.
+    Index diagBlockColStride(size_t c)         const { if constexpr (ContiguousBlocks) return          c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
 
     template<class Block>
     void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
@@ -472,6 +472,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
         this->Ai = std::move(result.Ai);
         this->Ap = std::move(result.Ap);
+        this->nz = result.nz;
     }
 
     virtual void finalize() = 0;
@@ -515,6 +516,25 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual const OptimizationVarStructureBase   &vars() const = 0;
 
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
+
+    // Construct a uniform block size matrix by reading a serialized block
+    // sparsity pattern from input stream `is` (using CSCMatrix::readBinaryFromStream)
+    static std::unique_ptr<BlockCSCHessianBase> constructFromBinaryStream(std::istream &is);
+    static std::unique_ptr<BlockCSCHessianBase> constructFromBinaryFile(const std::string &filename) {
+        std::ifstream is(filename, std::ios::binary);
+        if (!is) throw std::runtime_error("Failed to open output file " + filename);
+        return constructFromBinaryStream(is);
+    }
+
+    void dumpBinaryToStream(std::ostream &os) const;
+    void dumpBinaryToFile(const std::string &filename) const {
+        std::ofstream os(filename, std::ios::binary);
+        if (!os) throw std::runtime_error("Failed to open output file " + filename);
+        dumpBinaryToStream(os);
+    }
+    void dumpBinary(const std::string &filename) const { dumpBinaryToFile(filename); }
+
+    void readBinaryFromStream(std::istream &is);
 
 private:
     virtual void m_addDiag(const double *d) = 0;
@@ -686,7 +706,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     virtual void applyRaw(const _Real *x, _Real *result) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.applyRaw");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
-        static constexpr int BlockSize = VarStructure::SingleBlockDim ? VarStructure::MaxBlockDim : Eigen::Dynamic;
+        static constexpr int BlockSize = VarStructure::SingleBlockDim ? int(VarStructure::MaxBlockDim) : Eigen::Dynamic;
         Eigen::Matrix<_Real, BlockSize, BlockSize, Eigen::ColMajor,
                       /* maxRows = */ VarStructure::MaxBlockDim,
                       /* maxCols = */ VarStructure::MaxBlockDim> H_block;
@@ -766,8 +786,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 
     virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) override {
         _Index loc = findScalarLoc(vi, vj); // upper-left corner of destination for `block`
-        size_t bi = m_vars.blockContainingVar(vi),
-               bj = m_vars.blockContainingVar(vj);
+        size_t bj [[maybe_unused]] = m_vars.blockContainingVar(vj);
         if (vi == vj) {
             // Diagonal case
             for (int c_j = 0; c_j < block.cols(); ++c_j) {

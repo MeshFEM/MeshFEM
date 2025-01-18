@@ -33,13 +33,17 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     py::class_<HessianProjectionController, std::shared_ptr<HessianProjectionController>> pyHPC(m, "HessianProjectionController");
     pyHPC.def("shouldUseProjection", &HessianProjectionController::shouldUseProjection)
          .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
+         .def("notifyStep",          &HessianProjectionController::notifyStep,          py::arg("step"))
+         .def("notifyDirectionalDerivative", &HessianProjectionController::notifyDirectionalDerivative, py::arg("directionalDerivative"))
         ;
 
     bindController<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   );
     bindController<HessianProjectionAlways,   HessianProjectionController>(m, "HessianProjectionAlways"  );
     bindController<HessianProjectionAdaptive, HessianProjectionController>(m, "HessianProjectionAdaptive")
-        .def_readwrite("numProjectionStepsBeforeSwitch",            &HessianProjectionAdaptive::numProjectionStepsBeforeSwitch,            "Number of Hessian-projected steps to take before trying un-projected Hessian")
-        .def_readwrite("numConsecutiveIndefiniteStepsBeforeSwitch", &HessianProjectionAdaptive::numConsecutiveIndefiniteStepsBeforeSwitch, "Number of indefinite Hessians to allow before switching to applying the Hessian projection")
+        .def_readwrite("numProjectionStepsBeforeDisable",           &HessianProjectionAdaptive::numProjectionStepsBeforeDisable,           "Number of Hessian-projected steps to take before trying un-projected Hessian")
+        .def_readwrite("numConsecutiveIndefiniteStepsBeforeEnable", &HessianProjectionAdaptive::numConsecutiveIndefiniteStepsBeforeEnable, "Number of indefinite Hessians to allow before switching to applying the Hessian projection")
+        .def_readwrite("stepLengthThresholdForDisable",             &HessianProjectionAdaptive::stepLengthThresholdForDisable,             "Disable projection if step length falls below this threshold")
+        .def_readwrite("directionalDerivativeThresholdForDisable",  &HessianProjectionAdaptive::directionalDerivativeThresholdForDisable,  "Disable projection if directional derivative exceeds (becomes less negative than) this threshold")
         .def_readwrite("projectionActive",                          &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
         .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
         ;
@@ -77,6 +81,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("nbacktrack_iter",               &NewtonOptimizerOptions::nbacktrack_iter)
         .def_readwrite("ngd_fallback_steps",            &NewtonOptimizerOptions::ngd_fallback_steps)
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
+        .def_readwrite("matrixRecordDir",               &NewtonOptimizerOptions::matrixRecordDir)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference_internal)
@@ -128,12 +133,19 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
 
         .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
-        .def_property_readonly("hessianWasProjected", &NewtonProblem::hessianWasProjected, "Whether a projected Hessian was requested in the last call to `hessian()`")
+
+        .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,             "Whether a projected Hessian was requested in the last call to `hessian()`")
+        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 
         .def_readwrite("disableCaching", &NewtonProblem::disableCaching)
         .def("invalidateCachedHessian",  &NewtonProblem::invalidateCachedHessian)
+
+        .def("setCustomLineSearchBeganCallback",
+                [](NewtonProblem &prob, const GenericPyCallbackFunction<NewtonProblem, void, const Eigen::VectorXd &, double> &pcb) {
+                    prob.setCustomLineSearchBeganCallback(callbackWrapper<NewtonProblem, void, const Eigen::VectorXd &, double>(pcb));
+                }, py::arg("cb"))
         ;
 
     py::class_<WorkingSet>(m, "WorkingSet")

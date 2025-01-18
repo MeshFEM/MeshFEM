@@ -31,6 +31,12 @@ struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
         setDeformationGradient(Matrix::Identity());
     }
 
+    // Isotropic constructor: E is Young's modulus, nu is Poisson's ratio
+    LinearElasticEnergy(Real E, Real nu)
+        : m_elasticity_tensor(E, nu) {
+        setDeformationGradient(Matrix::Identity());
+    }
+
     LinearElasticEnergy(const LinearElasticEnergy&) = default;
     LinearElasticEnergy &operator=(const LinearElasticEnergy&) = default;
 
