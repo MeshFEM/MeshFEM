@@ -128,7 +128,7 @@ endif()
 # TODO: change back from a Git submodule to a CMake project download when
 # BlockCatamari is released.
 if (MESHFEM_WITH_CATAMARI)
-    add_subdirectory(3rdparty/Catamari)
+    add_subdirectory(3rdparty/catamari)
 endif()
 
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
