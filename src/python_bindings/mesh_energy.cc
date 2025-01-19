@@ -89,6 +89,7 @@ PYBIND11_MODULE(mesh_energy, m)
     py::class_<MeshEnergyBase, NewtonObjectiveTermBase, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
         .def("materialForElement", &MeshEnergyBase::materialForElement, py::arg("ei"), py::return_value_policy::reference_internal)
         .def("numElements", &MeshEnergyBase::numElements)
+        .def_readwrite("useXBasedProjection", &MeshEnergyBase::useXBasedProjection)
         ;
 
     using DSHEMat = DiscreteShellHingeEnergy<double>::MaterialProperties;

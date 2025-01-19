@@ -480,8 +480,14 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
 #if CATAMARI_FINEGRAINED_TIMERS
     {
         static size_t counter = 0;
-        std::filesystem::create_directory("catamari_timers");
-        std::string dirname = "catamari_timers/" + std::to_string(counter++);
+        static std::string directory = "catamari_timers";
+        if (counter == 0) {
+            // Get a unique directory name.
+            size_t id = 0;
+            while (std::filesystem::exists(directory)) directory = "catamari_timers_" + std::to_string(id++);
+            std::filesystem::create_directory(directory);
+        }
+        std::string dirname = directory + "/" + std::to_string(counter++);
         std::filesystem::create_directory(dirname);
         m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
         m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);

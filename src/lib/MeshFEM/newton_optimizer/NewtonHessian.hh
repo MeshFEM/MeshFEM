@@ -159,6 +159,7 @@ struct MESHFEM_EXPORT NewtonHessian {
     // matrix in the case of `isSparsityOnly()`).
     void setZero() {
         if (H_ss) H_ss->setZero();
+        // TODO FIXME: when H_ss isn't present, we don't have a varStructure to know the dense size!
         const auto &vs = varStructure();
         size_t nsv = vs.numSparseVars(),
                ndv = vs.numDenseVars();
