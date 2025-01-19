@@ -70,6 +70,10 @@ struct HessianProjectionNever : public HessianProjectionController {
 // enable projection immediately upon detecting indefiniteness, and
 // recompute the Hessian for the current Newton step (rather than
 // using Hessian shifts for the current iteration).
+// This should only be done if the problem actually implements a
+// Hessian projection because otherwise it introduces an unnecessary extra
+// evaluation and factorization of the same unprojected Hessian
+// already known to be indefinite.
 struct HessianProjectionAdaptive : public HessianProjectionController {
     size_t numProjectionStepsBeforeDisable = 10;
     size_t numConsecutiveIndefiniteStepsBeforeEnable = 5;
@@ -77,13 +81,20 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
     // When steps stagnate/fail to make progress, disable projection
     double stepLengthThresholdForDisable = 0;
     double directionalDerivativeThresholdForDisable = 0; // if directional derivative exceeds (becomes less negative than) this value, disable projection
+    bool startWithProjectionActive = true;
 
     HessianProjectionAdaptive() { reset(); }
     HessianProjectionAdaptive(const HessianProjectionAdaptive &b) = default;
 
     virtual void reset() override {
-        projectionActive = true;
-        switchCounter = numProjectionStepsBeforeDisable;
+        if (startWithProjectionActive) {
+            projectionActive = true;
+            switchCounter = numProjectionStepsBeforeDisable;
+        }
+        else {
+            projectionActive = false;
+            switchCounter = numConsecutiveIndefiniteStepsBeforeEnable;
+        }
     }
 
     virtual bool shouldUseProjection() const override { return projectionActive; }

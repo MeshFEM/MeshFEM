@@ -46,6 +46,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("directionalDerivativeThresholdForDisable",  &HessianProjectionAdaptive::directionalDerivativeThresholdForDisable,  "Disable projection if directional derivative exceeds (becomes less negative than) this threshold")
         .def_readwrite("projectionActive",                          &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
         .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
+        .def_readwrite("startWithProjectionActive",                 &HessianProjectionAdaptive::startWithProjectionActive,                 "Whether to start the optimization with projection active")
         ;
 
     py::class_<HessianUpdateController, std::shared_ptr<HessianUpdateController>>(m, "HessianUpdateController")
