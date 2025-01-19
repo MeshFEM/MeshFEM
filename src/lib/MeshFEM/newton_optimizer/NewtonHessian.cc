@@ -183,8 +183,9 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
         m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true);
     }
 
-    // Notify the projection controller of the definiteness of the Hessian used to compute this step.
-    m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ (tau > 0.0));
+    // The projection controller has only been notified so far if the Hessian was indefinite;
+    // send the positive-definite notification now.
+    if (tau == 0.0) m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ false);
 
     return tau;
 }
