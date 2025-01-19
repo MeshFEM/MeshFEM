@@ -46,7 +46,7 @@ struct DynamicSimulator {
     using TimestepCallback = std::function<bool(DynamicSimulator &, size_t)>;
     using NewtonCallback = typename NewtonMultiobjectiveProblem::CallbackFunction;
 
-    DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms , const NewtonOptimizerOptions &opts, bool useLumpedMass, double dt_)
+    DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms, bool useLumpedMass, double dt_)
         : dt(dt_), m_obj(eo), m_noninertiaTerms(terms)
     {
 
@@ -63,7 +63,13 @@ struct DynamicSimulator {
         m_noninertiaTerms.pop_back();
 
         m_opt = std::make_shared<NewtonOptimizer>(m_prob);
-        m_opt->options = opts;
+
+        // Set good defaults for dynamic simulation
+        HessianProjectionAdaptive hpc;
+        hpc.startWithProjectionActive = false;             // Dynamics problems are highly regularized by the inertia term and therefore usually do not need projection
+        hpc.numConsecutiveIndefiniteStepsBeforeEnable = 0; // Enable projection immediately if the Hessian is indefinite
+        hpc.numProjectionStepsBeforeDisable = 1;           // Disable projection for the following step
+        m_opt->options.setHessianProjectionController(hpc);
     }
 
     VXd getVars() const { return m_obj->getVars(); }

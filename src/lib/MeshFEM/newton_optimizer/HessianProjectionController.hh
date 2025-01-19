@@ -150,6 +150,7 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
     bool projectionActive;
     size_t switchCounter;
 
+    // TODO: update serialization to include all members
     using State = std::tuple<size_t, size_t>; // Only store external state (internal state will be reset before next Newton solve anyway...)
     static State serialize(const HessianProjectionAdaptive &hpa) { return std::make_tuple(hpa.numProjectionStepsBeforeDisable, hpa.numConsecutiveIndefiniteStepsBeforeEnable); }
     static std::unique_ptr<HessianProjectionAdaptive> deserialize(const State &s) {
