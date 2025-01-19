@@ -176,14 +176,12 @@ struct MeshEnergy : public MeshEnergyBase {
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
         if (!useXBasedProjection || !projectionMask) {
             // Use projection implemented by the element itself (e.g., F-based projection)
-            if constexpr (Element::CachesDeformedQuantities) {
-                assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                    if constexpr (Element::CachesDeformedQuantities)
-                        return elements[ei].hessian(weight, projectionMask);
-                    else
-                        return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-                }, [this](size_t ei) { return stencils[ei].blockVars; });
-            }
+            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
+                if constexpr (Element::CachesDeformedQuantities)
+                    return elements[ei].hessian(weight, projectionMask);
+                else
+                    return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+            }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
             // Use a brute-force x-based projection
@@ -194,7 +192,7 @@ struct MeshEnergy : public MeshEnergyBase {
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
                 else
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
-                Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e);
+                Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
                 if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
                 return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
             };
