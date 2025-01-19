@@ -103,6 +103,8 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
     virtual size_t numElements() const = 0;
 
     virtual ~MeshEnergyBase() { }
+
+    bool useXBasedProjection = false;
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
 };
@@ -172,15 +174,32 @@ struct MeshEnergy : public MeshEnergyBase {
 
     void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
-        if constexpr (Element::CachesDeformedQuantities) {
-            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask);
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+        if (!useXBasedProjection || !projectionMask) {
+            // Use projection implemented by the element itself (e.g., F-based projection)
+            if constexpr (Element::CachesDeformedQuantities) {
+                assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
+                    if constexpr (Element::CachesDeformedQuantities)
+                        return elements[ei].hessian(weight, projectionMask);
+                    else
+                        return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+                }, [this](size_t ei) { return stencils[ei].blockVars; });
+            }
         }
         else {
-            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            // Use a brute-force x-based projection
+            using ElementHessian = typename Element::Hessian;
+            auto getProjectedHessian = [&](size_t ei) -> ElementHessian {
+                ElementHessian H_e;
+                if constexpr (Element::CachesDeformedQuantities)
+                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
+                else
+                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
+                Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e);
+                if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
+                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            };
+
+            assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });
         }
     }
 
