@@ -30,7 +30,7 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
         model_timer = time.time()
 
         option_time_list = []
-        hessian_projection_labels = ['Adaptive', 'Always', 'Never']
+        hessian_projection_labels = ['Adaptive', 'Always', 'Never', 'TinyAD']
         # Run the experiment for each Hessian Projection option
         for solver_option in hessian_projection_labels:
             print(f"\nStarting Parametrization for model '{model_name}' with Hessian Projection option '{solver_option}'...\n")

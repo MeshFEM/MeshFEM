@@ -47,6 +47,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
     numeric_factroize_time_list = []
     linsys_solve_time_list = []
     hessian_eval_time_list = []
+    line_search_time_list = []
 
     for i in range(repeat_num):
         print(f"Running parametrization experiment {i + 1}/{repeat_num}...")
@@ -56,21 +57,31 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
         m = mesh.Mesh(model_path) # read mesh from model_path
-        obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
+
+
+        if hessian_proj_option == 'TinyAD':
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m, thread_num=thread_num)
+            line_search_time = benchmark.totalTime('Line Search$', d=benchmark_dict)
+            linsys_solve_time = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
+            hessian_eval_time = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
+            line_search_time_list.append(line_search_time)
+
+        else:
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, thread_num=thread_num, hessian_proj_option=hessian_proj_option)
+            symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
+            numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
+            linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
+            hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
+            symbolic_factorize_time_list.append(symbolic_factorize_time)
+            numeric_factroize_time_list.append(numeric_factorize_time)
         
         newton_steps = obj_arr.shape[0]
         total_time = time_arr[-1]
         final_obj = obj_arr[-1]
-        symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
-        numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
-        linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
-        hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
 
         total_time_list.append(total_time)
         final_obj_list.append(final_obj)
         newton_steps_list.append(newton_steps)
-        symbolic_factorize_time_list.append(symbolic_factorize_time)
-        numeric_factroize_time_list.append(numeric_factorize_time)
         linsys_solve_time_list.append(linsys_solve_time)
         hessian_eval_time_list.append(hessian_eval_time)
 
@@ -80,11 +91,17 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         print(f"Ended parametrization experiment {i + 1}/{repeat_num}.")
     
     outer_folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name)
-    summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, symbolic_factorize_time_list,
-                                   numeric_factroize_time_list, linsys_solve_time_list, hessian_eval_time_list))
     # save to txt file
     txt_fn = 'summary.txt'
-    np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tsymbol\t\tnumeric\t\tlinsolve\thessian_eval", comments='')
+    if hessian_proj_option == 'TinyAD':
+        summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, linsys_solve_time_list, hessian_eval_time_list, line_search_time_list))
+        np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tlinsolve\thessian_eval\tline_search", comments='')
+
+    else:
+        summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, symbolic_factorize_time_list,
+                                    numeric_factroize_time_list, linsys_solve_time_list, hessian_eval_time_list))
+        np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tsymbol\t\tnumeric\t\tlinsolve\thessian_eval", comments='')
+    
     # Find the fastest one and add it to 'summary.txt'
     total_time_min = min(total_time_list)
     index_min = total_time_list.index(total_time_min)
@@ -107,7 +124,8 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
     if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
     m = mesh.Mesh(model_path)
-    helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
+    if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
+    else:                                helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
 
 def main():
@@ -123,8 +141,8 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if (hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never'):
-        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never")
+    if (hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never') and (hessian_proj_option != 'TinyAD'):
+        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or TinyAD")
         sys.exit(1)
     
     if ((save_uv_option != 'Yes') and (save_uv_option != 'yes') and (save_uv_option != 'YES') and

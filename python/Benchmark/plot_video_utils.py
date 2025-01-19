@@ -18,6 +18,26 @@ import matplotlib
 matplotlib.use('agg')
 from matplotlib import pyplot as plt
 
+def getColorLineList(options):
+    color_list = ['dodgerblue', 'magenta', 'tomato']
+    line_style_list = ['-', '--', '-.']
+    if options == 4:
+        color_list.append('forestgreen')
+        line_style_list.append('-')
+    return color_list, line_style_list
+
+def create_list_of_lists(num_inner_lists):
+    """
+    Create a list containing a specified number of empty inner lists.
+
+    Args:
+        num_inner_lists (int): The number of inner lists to create.
+
+    Returns:
+        list: A list containing `num_inner_lists` empty inner lists.
+    """
+    return [[] for _ in range(num_inner_lists)]
+
 # Under Hessian_Option/UVs
 # The directory should contain 'uv_ravel_iter_i.npz' data
 def getNumUVs(directory):  return sum(1 for f in os.listdir(directory) if f.endswith(".npz"))
@@ -50,16 +70,25 @@ def compute_uv_distance(directory):
     
     return dist_list
 
+def readOptionData(directory, filename):
+    filepath = os.path.join(directory, filename)
+    option_data = np.array([])
+    if os.path.exists(filepath):  option_data = np.load(filepath)
+    if option_data.size == 0:
+        print(f"File '{filename}' not found in {directory}. Initialized as an empty NumPy array.")
+    return option_data
+
+
 def read_HessianProjected_data(directory):
     obj_filename = 'obj_history.npy'
     grad_norm_filename = 'grad_norm_history.npy'
-    hp_file_name = 'hessian_projected_history.npy'
-    hs_file_name = 'hessian_shifted_amount_history.npy'
-
     obj_data = np.load(os.path.join(directory, obj_filename))
     grad_norm_data = np.load(os.path.join(directory, grad_norm_filename))
-    hessian_projected_data = np.load(os.path.join(directory, hp_file_name))
-    hessian_shifted_amount_data = np.load(os.path.join(directory, hs_file_name))
+
+    hp_file_name = 'hessian_projected_history.npy'
+    hs_file_name = 'hessian_shifted_amount_history.npy'
+    hessian_projected_data = readOptionData(directory, hp_file_name)
+    hessian_shifted_amount_data = readOptionData(directory, hs_file_name)
 
     return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data
 
@@ -103,9 +132,8 @@ def read_benchmark_data(directory):
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-def readConvergenceTimingData(directory, thread_num_list=[0]):
-    obj_grad_time_list = [[], [], []]
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
+def readConvergenceTimingData(directory, thread_num_list=[0], hessian_option_list = ['Adaptive', 'Always', 'Never']):
+    obj_grad_time_list = create_list_of_lists(len(hessian_option_list))
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
         # read obj, grad_norm, timing data
         for thread_num in thread_num_list:
@@ -122,12 +150,11 @@ def readConvergenceTimingData(directory, thread_num_list=[0]):
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-def readHessianData(directory):
+def readHessianData(directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
     obj_list = []
     grad_norm_list = []
     hessian_projected_list = []
     hessian_shifted_amount_list = []
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
 
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
         
@@ -145,9 +172,8 @@ def readHessianData(directory):
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-def readUVdist(directory):
+def readUVdist(directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
     uv_dist_list = []
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
         # compute uv distance
         uv_folder_name = 'UVs'
@@ -159,7 +185,7 @@ def readUVdist(directory):
 # align timing
 def alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=0):
     aligned_timing_list = []
-    for i in range(3):
+    for i in range(len(grad_norm_list)):
         timing_list = obj_grad_time_list[i][thread_ind][-1].copy()
         num_time_steps = timing_list.shape[0]
         num_grad_steps = grad_norm_list[i].shape[0]
@@ -185,22 +211,34 @@ def alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=0):
         
     return aligned_timing_list
 
+def getStepsMaxMin_FromMetricList(metric_list):
+    num_options = len(metric_list)
+    max_steps = 0
+    max_metric = 0
+    min_metric = float('inf')
+    for i in range(num_options):
+        if metric_list[i].shape[0] > max_steps:  max_steps = metric_list[i].shape[0]
+        if np.max(metric_list[i]) > max_metric: max_metric = np.max(metric_list[i])
+        if np.min(metric_list[i] < min_metric): min_metric = np.min(metric_list[i])
+    return max_steps, max_metric, min_metric
+
 
 # Plot different hessian projection options under one thread configuration
-def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, thread_num_list=[0]):
+def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 
+                              thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never']):
     tn = thread_ind
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
+    num_options = len(hessian_option_list)
     iterations_list = []  # iteration numbers for each hessian projection option
-    for i in range(3):
+    for i in range(num_options):
         iterations = np.arange(0, obj_grad_time_list[i][tn].shape[1])
         iterations_list.append(iterations)
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
+    
+    color_list, line_style_list = getColorLineList(num_options)
     
     # Generate plt
     plt.figure(figsize=(12, 12))
     plt.subplot(2,2,1)
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
@@ -209,7 +247,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.legend()
     
     plt.subplot(2,2,2)
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
@@ -218,7 +256,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.legend()
 
     plt.subplot(2,2,3)
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
 
     plt.yscale('log')
@@ -227,7 +265,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.legend()
 
     plt.subplot(2,2,4)
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
@@ -241,20 +279,20 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.close()
 
 # Plot GradNorm vs iter 
-def save_grad_iter_figure(grad_norm_list, hessian_projected_list, user_model_name, save_directory):
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
+def save_grad_iter_figure(grad_norm_list, hessian_projected_list, user_model_name, save_directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
     iterations_list = []
-    for i in range(3):
+    num_options = len(hessian_option_list)
+    for i in range(num_options):
         iterations = np.arange(0, grad_norm_list[i].shape[0])
         iterations_list.append(iterations)
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
+    
+    color_list, line_style_list = getColorLineList(num_options)
 
     adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
     grad_norm_projtrue_list = grad_norm_list[0][hessian_projected_list[0]==1]
 
     plt.figure(figsize=(8, 8))
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(iterations_list[i], grad_norm_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.scatter(adaptive_projtrue_iter, grad_norm_projtrue_list, color='blue', marker='o', s=80)
     plt.title(f"Model: {user_model_name}", fontsize=16)
@@ -269,24 +307,52 @@ def save_grad_iter_figure(grad_norm_list, hessian_projected_list, user_model_nam
     print(f"[Plot] '{plot_name}' saved in {save_directory}!")
     plt.close()
 
+# Plot Obj vs iter 
+def save_obj_iter_figure(obj_list, hessian_projected_list, user_model_name, save_directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
+    iterations_list = []
+    num_options = len(hessian_option_list)
+    for i in range(num_options):
+        iterations = np.arange(0, obj_list[i].shape[0])
+        iterations_list.append(iterations)
+    
+    color_list, line_style_list = getColorLineList(num_options)
+
+    adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
+    grad_norm_projtrue_list = obj_list[0][hessian_projected_list[0]==1]
+
+    plt.figure(figsize=(8, 8))
+    for i in range(num_options):
+        plt.plot(iterations_list[i], obj_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+    plt.scatter(adaptive_projtrue_iter, grad_norm_projtrue_list, color='blue', marker='o', s=80)
+    plt.title(f"Model: {user_model_name}", fontsize=16)
+    plt.yscale('log')
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel(" Energy ", fontsize=14)
+    plt.legend()
+    plt.tight_layout()
+
+    plot_name = user_model_name + '_ObjIterScatter.png'
+    plt.savefig(os.path.join(save_directory, plot_name), dpi=300)
+    print(f"[Plot] '{plot_name}' saved in {save_directory}!")
+    plt.close()
+
 # Plot distance to final converged UV configuration
 # Under different hessian projection options under one thread configuration
-def save_uv_dist_figure(uv_dist_list, hessian_projected_list, user_model_name, save_directory):
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
+def save_uv_dist_figure(uv_dist_list, hessian_projected_list, user_model_name, save_directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
+    num_options = len(hessian_option_list)
     iterations_list = []
-    for i in range(3):
+    for i in range(num_options):
         iterations = np.arange(0, len(uv_dist_list[i]))
         iterations_list.append(iterations)
 
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
+    color_list, line_style_list = getColorLineList(num_options)
 
     modified_hessian_proj_list = hessian_projected_list[0][:-1] # because in uv distance plot we ignore the last step
     adaptive_projtrue_iter = iterations_list[0][modified_hessian_proj_list==1]
     uv_dist_projtrue_list = uv_dist_list[0][modified_hessian_proj_list==1]
     
     plt.figure(figsize=(8, 8))
-    for i in range(3):
+    for i in range(num_options):
         plt.plot(iterations_list[i], uv_dist_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     
     plt.scatter(adaptive_projtrue_iter, uv_dist_projtrue_list, color='blue', marker='o', s=30)
@@ -307,13 +373,11 @@ def save_uv_dist_figure(uv_dist_list, hessian_projected_list, user_model_name, s
 # obj_grad_time_list: readConvergenceTimingData(...)
 # fps and figsize
 def gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, user_model_name, 
-                        save_directory, thread_ind = 0, thread_num_list=[0], fps=30, default_fig_size=(8, 8)):
+                        save_directory, thread_ind = 0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'],
+                        fps=30, default_fig_size=(8, 8)):
     
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
-
-    max_num_steps = max(grad_norm_list[0].shape[0], grad_norm_list[1].shape[0], grad_norm_list[2].shape[0])
-    max_grad_norm = max(np.max(grad_norm_list[0]), np.max(grad_norm_list[1]), np.max(grad_norm_list[2]))
-    min_grad_norm = min(np.min(grad_norm_list[0]), np.min(grad_norm_list[1]), np.min(grad_norm_list[2]))
+    num_options = len(hessian_option_list)
+    max_num_steps, max_grad_norm, min_grad_norm = getStepsMaxMin_FromMetricList(grad_norm_list)
 
     max_N_grad_norm = math.ceil(math.log10(max_grad_norm)) + 1
     min_N_grad_norm = math.floor(math.log10(min_grad_norm)) - 1
@@ -331,15 +395,14 @@ def gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_li
     pw = video_writer.PlotVideoWriter(os.path.join(save_directory, grad_iter_vdname), plt.gcf(), dpi=300, )
 
     iterations_list = []
-    for i in range(3):
+    for i in range(num_options):
         iterations = np.arange(0, grad_norm_list[i].shape[0])
         iterations_list.append(iterations)
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
+    color_list, line_style_list = getColorLineList(num_options)
     
     spf = 1 / fps
     aligned_timing_list = alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=thread_ind)
-    totalTime = max(aligned_timing_list[0][-1], aligned_timing_list[1][-1], aligned_timing_list[2][-1])
+    _, totalTime, _ = getStepsMaxMin_FromMetricList(aligned_timing_list)
     numFrames = int(math.ceil(totalTime / spf))
 
     adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
@@ -349,7 +412,7 @@ def gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_li
         frameTime = f * spf
         fig = plt.figure(figsize=default_fig_size)
         index_for_dots = 0
-        for i in range(3):
+        for i in range(num_options):
             iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
             plt.plot(iterations_list[i][:iterationForFrame+1], grad_norm_list[i][:iterationForFrame+1], 
                     ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
@@ -375,14 +438,13 @@ def gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_li
 # obj_grad_time_list: readConvergenceTimingData(...)
 # fps and figsize
 def gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, user_model_name, 
-                        save_directory, thread_ind = 0, thread_num_list=[0], fps=30, default_fig_size=(8, 8)):
+                        save_directory, thread_ind = 0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'],
+                        fps=30, default_fig_size=(8, 8)):
     
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
-    max_num_steps = max(obj_list[0].shape[0], obj_list[1].shape[0], obj_list[2].shape[0])
-    max_obj = max(np.max(obj_list[0]), np.max(obj_list[1]), np.max(obj_list[2]))
-    min_obj = min(np.min(obj_list[0]), np.min(obj_list[1]), np.min(obj_list[2]))
-    max_N_obj = math.ceil(math.log10(max_obj))
-    min_N_obj = math.floor(math.log10(min_obj))
+    num_options = len(hessian_option_list)
+    max_num_steps, max_obj, min_obj = getStepsMaxMin_FromMetricList(obj_list)
+    max_N_obj = math.ceil(math.log10(max_obj)) + 1
+    min_N_obj = math.floor(math.log10(min_obj)) - 1
 
     obj_iter_vdname = user_model_name + '_ObjVSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
     fig = plt.figure(figsize=default_fig_size)
@@ -396,15 +458,14 @@ def gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, use
     pw = video_writer.PlotVideoWriter(os.path.join(save_directory, obj_iter_vdname), plt.gcf(), dpi=300, )
 
     iterations_list = []
-    for i in range(3):
+    for i in range(num_options):
         iterations = np.arange(0, obj_list[i].shape[0])
         iterations_list.append(iterations)
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
+    color_list, line_style_list = getColorLineList(num_options)
 
     spf = 1 / fps
     aligned_timing_list = alignTiming(obj_grad_time_list, obj_list, thread_ind=thread_ind)
-    totalTime = max(aligned_timing_list[0][-1], aligned_timing_list[1][-1], aligned_timing_list[2][-1])
+    _, totalTime, _ = getStepsMaxMin_FromMetricList(aligned_timing_list)
     numFrames = int(math.ceil(totalTime / spf))
 
     adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
@@ -414,7 +475,7 @@ def gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, use
     for f in range(numFrames):
         frameTime = f * spf
         fig = plt.figure(figsize=default_fig_size)
-        for i in range(3):
+        for i in range(num_options):
             iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
             plt.plot(iterations_list[i][:iterationForFrame+1], obj_list[i][:iterationForFrame+1], 
                     ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
@@ -439,9 +500,9 @@ def gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, use
 # metric_list: any list return from readHessianData(...)
 # obj_grad_time_list: acquire timing list for specific thread
 def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name, model_base_path, save_directory, 
-                     thread_ind=0, thread_num_list=[0], fps=30):
+                     thread_ind=0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], fps=30):
     
-    hessian_option_list = ['Adaptive', 'Always', 'Never']
+    num_options = len(hessian_option_list)
     model_name_fex = user_model_name + '.off'
     model_path = os.path.join(model_base_path, model_name_fex)
     m = mesh.Mesh(model_path)

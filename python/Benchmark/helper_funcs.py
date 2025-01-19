@@ -11,6 +11,7 @@ sys.path.append('../')
 import MeshFEM
 import mesh, mesh_energy, energy
 import parametrization, py_newton_optimizer, benchmark
+import tinyad_parametrization
 import numpy as np
 import copy, time
 import igl
@@ -22,6 +23,68 @@ def getBDdataOnUnitCircle(m):
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
+def tutteInitialization(m, bdry_uv):
+    # Tutte Initialization
+    uv_init = parametrization.harmonic(m, bdry_uv, False)
+    flip_list = parametrization.getFlips(m, uv_init)
+    if len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
+    return uv_init
+
+def processEigenUVTXTs(folder_path):
+    """
+    Processes txt files in a given folder, converting them to raveled NumPy arrays
+    and saving them as compressed .npz files. Deletes the original txt files after
+    ensuring the same number of .npz files are created.
+
+    Args:
+        folder_path (str): Path to the folder containing the txt files.
+
+    Returns:
+        bool: True if the number of .npz files matches the original txt files, False otherwise.
+    """
+    # Get all files in the folder
+    txt_files = [f for f in os.listdir(folder_path) if f.startswith("uv_Eigen_Iter_") and f.endswith(".txt")]
+    npz_files_created = 0
+
+    for txt_file in txt_files:
+        try:
+            # Build full path for the txt file
+            txt_path = os.path.join(folder_path, txt_file)
+            
+            # Read the txt file into a NumPy array
+            data = np.loadtxt(txt_path)
+            
+            # Ensure the data has two columns
+            if data.ndim == 1 or data.shape[1] != 2:
+                raise ValueError(f"File {txt_file} does not have two columns.")
+            
+            # Get the raveled version of the array
+            raveled_data = data.ravel()
+            
+            # Construct the .npz file name
+            file_index = txt_file.split('_')[-1].split('.')[0]  # Extract i from "uv_Eigen_Iter_i.txt"
+            npz_file_name = f"uv_ravel_iter_{file_index}.npz"
+            npz_path = os.path.join(folder_path, npz_file_name)
+            
+            # Save the raveled array to a compressed .npz file
+            np.savez_compressed(npz_path, arr=raveled_data)
+            npz_files_created += 1
+        except Exception as e:
+            print(f"Error processing file {txt_file}: {e}")
+
+    # Check if the number of .npz files matches the number of txt files
+    npz_files = [f for f in os.listdir(folder_path) if f.startswith("uv_ravel_iter_") and f.endswith(".npz")]
+    if len(npz_files) == len(txt_files):
+        # If numbers match, delete the txt files
+        for txt_file in txt_files:
+            try:
+                os.remove(os.path.join(folder_path, txt_file))
+            except Exception as e:
+                print(f"Error deleting file {txt_file}: {e}")
+        return True
+    else:
+        print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
+        return False
 
 def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', thread_num=0, grad_tol=None, 
                 uvsave_path=None):
@@ -54,11 +117,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
 
     uv = mesh_energy.NodalVars(m, 2)
     bdry_uv = getBDdataOnUnitCircle(m)
-
-    # Tutte Initialization
-    uv_init = parametrization.harmonic(m, bdry_uv, False)
-    flip_list = parametrization.getFlips(m, uv_init)
-    if len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
+    uv_init = tutteInitialization(m, bdry_uv)
     uv.setVars(uv_init.ravel())
 
     symmdiri_energy = energy.SymmetricDirichlet(2)
@@ -112,3 +171,32 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
+    
+def runSymmds_TinyAD(m, max_iter=100, thread_num=0, grad_tol=2e-8, uvsave_path=None):
+
+    os.environ['OMP_NUM_THREADS'] = '1'
+    if thread_num > 0:
+        import parallelism
+        parallelism.set_max_num_tbb_threads = int(thread_num)
+
+    bdry_uv = getBDdataOnUnitCircle(m)
+    uv_init = tutteInitialization(m, bdry_uv)
+
+    benchmark.reset()
+    if uvsave_path is not None:
+        uv_opt, obj_history, grad_history, time_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, True, uvsave_path)
+        # process all saved txt files into compressed npz files
+        if not processEigenUVTXTs(uvsave_path):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
+        obj_arr = np.array(obj_history)
+        grad_norm_arr = np.array(grad_history)
+        obj_filename = 'obj_history.npy'
+        grad_norm_filename = 'grad_norm_history.npy'
+        np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
+    else:
+        uv_opt, obj_history, grad_history, time_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, False)
+        bk_dict = benchmark.to_dict()
+        return np.array(obj_history), np.array(time_history), np.array(grad_history), bk_dict
+
+

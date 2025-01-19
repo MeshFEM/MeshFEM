@@ -3,11 +3,18 @@
 
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Parametrization.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 
 #include <TinyAD/ScalarFunction.hh>
 #include <TinyAD/Utils/NewtonDirection.hh>
 #include <TinyAD/Utils/NewtonDecrement.hh>
 #include <TinyAD/Utils/LineSearch.hh>
+
+#include <string>
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <filesystem>
 
 namespace TinyADParametrization{
 
@@ -20,8 +27,27 @@ using VXd   = Eigen::VectorXd;
 using M2d   = Eigen::Matrix<Real, 2, 2>;
 
 
+void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepath, const std::string& filename) {
+    // Combine the directory path and the filename
+    std::filesystem::path fullPath = std::filesystem::path(filepath) / filename;
+
+    // Open the file
+    std::ofstream file(fullPath.string());
+    if (file.is_open()) {
+        file << matrix.format(Eigen::IOFormat(Eigen::StreamPrecision, Eigen::DontAlignCols, " ", "\n"));
+        file.close();
+        // std::cout << "Matrix written to file: " << fullPath << "\n";
+    } else {
+        std::cerr << "Error: Could not open file " << fullPath << " for writing.\n";
+    }
+}
+
+
 MESHFEM_EXPORT
-NDMap symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init) {
+std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>>
+symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2, 
+                    bool saveUV = false, const std::string& filepath = "") 
+{
     const size_t nn = mesh.numNodes();
     const size_t num_ele = mesh.numElements();
     if (size_t(uv_init.rows()) != nn) throw std::runtime_error("Invalid uv initialization size");
@@ -87,27 +113,79 @@ NDMap symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init) {
         return uv_init.row(v_idx);
     });
 
+    // vector to store energy and grad_norm for each iteration
+    std::vector<double> energy_history;
+    std::vector<double> grad_norm_history;
+    std::vector<double> iter_time_history;
+    auto start_timer = std::chrono::high_resolution_clock::now();
+
     // Projected Newton
     TinyAD::LinearSolver solver;
-    int max_iters = 1000;
-    double convergence_eps = 1e-2;
+    NDMap uv_temp(nn, numCompoents);
     for (int i = 0; i < max_iters; ++i)
     {
+        BENCHMARK_START_TIMER_SECTION("Newton Iterations");
+        auto now_timer = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = now_timer - start_timer;
+        iter_time_history.push_back(elapsed.count());
+
+        // save UV file if the flag is set to be true
+        if (saveUV){
+            if (filepath.empty())  throw std::runtime_error("Empty filepath.");
+            std::string uv_file_name = "uv_Eigen_Iter_" + std::to_string(i) + ".txt";
+            func.x_to_data(x, [&] (int v_idx, const V2d& p) {
+                uv_temp.row(v_idx) = p;
+            });
+            writeMatrixToFile(uv_temp, filepath, uv_file_name);
+        }
+
+        BENCHMARK_START_TIMER_SECTION("Hessian Evaluation");
         auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
+        BENCHMARK_STOP_TIMER_SECTION("Hessian Evaluation");
+        
         double g_norm = g.norm();
         TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
         TINYAD_DEBUG_OUT("Gradient Norm in iteration " << i << ": " << g_norm);
+        
+        energy_history.push_back(f);
+        grad_norm_history.push_back(g_norm);
+
+        BENCHMARK_START_TIMER_SECTION("Linear Solve");
         VXd d = TinyAD::newton_direction(g, H_proj, solver);
+        BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
+
         if (TinyAD::newton_decrement(d, g) < convergence_eps)
             break;
+        
+        BENCHMARK_START_TIMER_SECTION("Line Search");
         x = TinyAD::line_search(x, d, f, g, func);
+        BENCHMARK_STOP_TIMER_SECTION("Line Search");
+
+        BENCHMARK_STOP_TIMER_SECTION("Newton Iterations");
     }
+    auto final_timer = std::chrono::high_resolution_clock::now();
+
     //TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
     auto final_obj_grad = func.eval_with_gradient(x);
     double final_obj = std::get<0>(final_obj_grad);
     double final_grad_norm = (std::get<1>(final_obj_grad)).norm();
     TINYAD_DEBUG_OUT("Final energy: " << final_obj);
     TINYAD_DEBUG_OUT("Final gradient norm: " << final_grad_norm);
+    
+    energy_history.push_back(final_obj);
+    grad_norm_history.push_back(final_grad_norm);
+    std::chrono::duration<double> elapsed_final = final_timer - start_timer;
+    iter_time_history.push_back(elapsed_final.count());
+
+    // save the last UV file
+    if (saveUV){
+        if (filepath.empty())  throw std::runtime_error("Empty filepath.");
+        std::string uv_file_name = "uv_Eigen_Iter_" + std::to_string(energy_history.size()-1) + ".txt";
+        func.x_to_data(x, [&] (int v_idx, const V2d& p) {
+            uv_temp.row(v_idx) = p;
+        });
+        writeMatrixToFile(uv_temp, filepath, uv_file_name);
+    }
 
     // Write final x vector to P matrix.
     // x_to_data(...) takes a lambda function that writes the final value
@@ -116,7 +194,7 @@ NDMap symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init) {
         result.row(v_idx) = p;
     });
 
-    return result;
+    return std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>>(result, energy_history, grad_norm_history, iter_time_history);
 }
 
 

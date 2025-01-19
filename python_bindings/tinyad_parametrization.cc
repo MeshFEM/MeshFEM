@@ -12,5 +12,9 @@ PYBIND11_MODULE(tinyad_parametrization, m)
     py::module::import("mesh");
 
     m.def("symmdsParamTinyAD", &TinyADParametrization::symmdsParamTinyAD, py::arg("mesh"), py::arg("uv"),
+            py::arg("max_iters") = 1000,
+            py::arg("convergence_eps") = 1e-2,
+            py::arg("saveUV") = false,
+            py::arg("filepath") = "",
           "Symmetric Dirichlet Parametrization using TinyAD");
 }
