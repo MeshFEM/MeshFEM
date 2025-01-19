@@ -47,7 +47,6 @@ struct SymmetricDirichlet
         if (elevel < EvalLevel::Hessian) return;
         m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
 
-        m_projectionMask = true;
         m_Finv_FinvT = m_Finv*m_Finv.transpose();
         m_FinvT_Finv = m_Finv.transpose()*m_Finv;
         if (!m_projectionMask) {

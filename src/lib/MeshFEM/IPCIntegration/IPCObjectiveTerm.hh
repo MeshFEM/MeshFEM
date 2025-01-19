@@ -72,17 +72,22 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     Real contactPotentialEnergy() const;
     VXd contactPotentialGradient() const; // Gradient with respect to just the collision mesh vertex positions
 
-    VXd contactGradient() const {
+    VXd contactGradient(bool includeObstacleVertices = false) const {
         VXd g;
-        g.setZero(numVars());
+        
+        size_t gSize = numVars();
+        size_t numObstacleVars = m_combinedCollisionMesh->numObstaclesVertices() * m_N;
+        if (includeObstacleVertices) gSize += numObstacleVars;
+
+        g.setZero(gSize);
         const VXd &dB_dCV = contactPotentialGradient();
         // Only consider the ElasticObject Collision Mesh, not obstacles.
         for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i) {
             int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
             if (bvar < 0) continue;
             g.segment(m_N * bvar, m_N) += dB_dCV.segment(m_N * i, m_N);
-
         }
+        if (includeObstacleVertices) g.tail(numObstacleVars) = dB_dCV.tail(numObstacleVars);
         return g;
     }
 
@@ -98,10 +103,10 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // Note that `initialBarrierStiffness` needs access to the current primary
     // potential gradient; for a dynamic simulation this must incorporate the
     // inertia term gradient!
-    void initialBarrierStiffness(double weight, const Eigen::VectorXd &primaryPotentialGradient) override;
+    void initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient) override;
     // Convenience method for the case where the primary potential consists only
     // of the elastic object (e.g., static simulation, parametrization)
-    void initialBarrierStiffness(double weight) { initialBarrierStiffness(weight, object().gradient()); }
+    void initialBarrierStiffness(double dtSq) { initialBarrierStiffness(dtSq, object().gradient()); }
     void updateBarrierStiffness();
 
     size_t numCollisionConstraints() const;

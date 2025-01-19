@@ -111,6 +111,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
     size_t numIndefiniteFactorizations = 0;
+    bool hessianReevaluated = false; // whether the projection controller forced a reevaluation of the Hessian with projection within this step
     while (true) {
         try {
             if (tau != 0) {
@@ -144,7 +145,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
                 // indefiniteness of the unshifted Hessian; if the controller
                 // returns `true`, then we need to recompute the Hessian with
                 // projection before trying shifts.
-                if (m_options.getHessianProjectionController().notifyDefiniteness(true)) {
+                if (m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true)) {
                     m_problem->invalidateCachedHessian();
                     m_problem->hessian(true).validate(); // Updates the Hessian obtained by `getH` in-place.
                     continue; // No shifts at this time; we've just enabled projection
@@ -173,10 +174,17 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
         throw std::runtime_error("Unimplemented (LEQ constraints are disabled during refactoring)");
     }
 
-    if (numIndefiniteFactorizations == 0) {
-        // The controller wasn't yet notified in this case, so we do it now.
-        m_options.getHessianProjectionController().notifyDefiniteness(false);
+    // If the Hessian was reevaluated with projection and was found to *still*
+    // be indefinite, we notify the controller of this fact.
+    // However we don't want to send a second notification for the original
+    // Hessian if it was not reevaluated.
+    if (hessianReevaluated && (tau > 0.0)) {
+        // Notify the projection controller of the definiteness of the Hessian used to compute this step.
+        m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true);
     }
+
+    // Notify the projection controller of the definiteness of the Hessian used to compute this step.
+    m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ (tau > 0.0));
 
     return tau;
 }

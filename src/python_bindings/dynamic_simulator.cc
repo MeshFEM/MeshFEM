@@ -29,12 +29,11 @@ void bind(py::module &m, py::module &detail_module) {
         ;
 
     py::class_<DS, std::shared_ptr<DS>>(detail_module, ("DynamicProblem" + floatingPointTypeSuffix<Real>()).c_str())
-        .def("run", &DS::run, py::arg("time") = 1.0)
+        .def("run", &DS::run, py::arg("t0") = 0.0, py::arg("time") = 1.0)
         .def_property_readonly("problem",     &DS::getProblem)
         .def_property_readonly("inertiaLoad", [](const DS &ds) -> const Loads::Load<Real_> & { return ds.inertiaLoad(); })
         .def_readwrite("method", &DS::method)
         .def_readwrite("v",      &DS::v)
-        .def_readonly("tIter", &DS::tIter)
         .def_property_readonly("kineticEnergies",   &DS::kineticEnergies)
         .def_property_readonly("potentialEnergies", &DS::potentialEnergies)
         .def("getVars", &DS::getVars)
@@ -59,9 +58,9 @@ void bind(py::module &m, py::module &detail_module) {
         ;
 
     m.def("DynamicSimulator",
-            [](const std::shared_ptr<EO> &obj, std::vector<std::shared_ptr<NewtonObjectiveTermBase>> &terms, const NewtonOptimizerOptions &opts, bool useLumpedMass, const double dt) {
-                return std::make_shared<DS>(obj, terms, opts, useLumpedMass, dt); },
-            py::arg("obj"), py::arg("terms") = nullptr, py::arg("opts") = NewtonOptimizerOptions(), py::arg("useLumpedMass") = false, py::arg("dt") = 1.0);
+            [](const std::shared_ptr<EO> &obj, std::vector<std::shared_ptr<NewtonObjectiveTermBase>> &terms, bool useLumpedMass, const double dt) {
+                return std::make_shared<DS>(obj, terms, useLumpedMass, dt); },
+            py::arg("obj"), py::arg("terms") = nullptr, py::arg("useLumpedMass") = false, py::arg("dt") = 1.0);
 }
 
 PYBIND11_MODULE(dynamic_simulator, m)

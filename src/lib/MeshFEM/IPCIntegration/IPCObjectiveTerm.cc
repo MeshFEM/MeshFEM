@@ -75,28 +75,23 @@ _Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const V
 }
 
 template<typename _Real>
-void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double weight, const Eigen::VectorXd &primaryPotentialGradient) {
+void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.initialBarrierStiffness");
     if (!useAdaptiveBarrier) return;
 
-    VXd dB_dCV = contactPotentialGradient();
+    VXd dB_dVO = contactGradient(true);
     const EO &o = object();
     double avgMass = o.getMassDensity() * o.volume() / (m_combinedCollisionMesh->numCombinedNodes());
 
-    // Compute the gradient of the "primary potential" with respect to the combined collision mesh vertices.
-    // Note that the obstacle vertices do not influence the primary potential,
-    // so this vector will be padded with zeros at the end.
-    size_t numObstacleVars = m_combinedCollisionMesh->numObstaclesVertices()   * m_N;
-    size_t numEOVars       = m_combinedCollisionMesh->numEOCollisionVertices() * m_N;
-    size_t numCMVars       = numEOVars + numObstacleVars;
-    if (size_t(dB_dCV.size()) != numCMVars) throw std::runtime_error("Unexpected dB_dCV size");
-    VXd dE_dCV(numCMVars);
-    MXd dE_dEOCM = m_combinedCollisionMesh->getElasticObjectCollisionMesh().extractVectorField(primaryPotentialGradient); // Primary potential gradient wrt. each collision mesh vertex
-    Eigen::Map<MXdRowMajor>(dE_dCV.data(), dE_dEOCM.rows(), m_N) = dE_dEOCM; // Row major to ensure proper component ordering!
-    // The obstacle vertices do not influence the primary potential
-    dE_dCV.tail(numObstacleVars).setZero();
+    size_t numObstacleVars = m_combinedCollisionMesh->numObstaclesVertices() * m_N;
+    size_t numVarsPlusObstacles = numVars() + numObstacleVars;
+    if (size_t(dB_dVO.size()) != numVarsPlusObstacles) throw std::runtime_error("Unexpected dB_dVO size");
+    
+    VXd dE_dVO(numVarsPlusObstacles);
+    dE_dVO.head(numVars()) = primaryPotentialGradient;
+    dE_dVO.tail(numObstacleVars).setZero();
 
-    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, avgMass, dE_dCV, dB_dCV, weight);
+    m_k = m_ipcWrapper->initial_barrier_stiffness(m_collisionVertexPositions, avgMass, dE_dVO, dB_dVO, dtSq);
 }
 
 template<typename _Real>
