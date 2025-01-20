@@ -474,8 +474,22 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
-
     m_numericFactorizationImpl(mat.Ax.data());
+}
+
+void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
+    m_numericFactorizationImpl(A.Ax.data(), sigma, B.Ax.data());
+}
+
+void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
+    m_numericFactorizationImpl(A.Ax.data(), sigma, nullptr);
+}
+
+template<typename... Args>
+void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&... args) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
+    assertFactorization(FactorizationType::Symbolic);
+    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
 
 #if CATAMARI_FINEGRAINED_TIMERS
     {
@@ -493,21 +507,7 @@ void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* 
         m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
     }
 #endif
-}
 
-void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
-    m_numericFactorizationImpl(A.Ax.data(), sigma, B.Ax.data());
-}
-
-void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
-    m_numericFactorizationImpl(A.Ax.data(), sigma, nullptr);
-}
-
-template<typename... Args>
-void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&... args) {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
-    assertFactorization(FactorizationType::Symbolic);
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
