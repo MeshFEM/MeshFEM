@@ -113,6 +113,7 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
             if (isIndefinite) {
                 if (numConsecutiveIndefiniteStepsBeforeEnable == 0) {
                     projectionActive = true;
+                    switchCounter = numProjectionStepsBeforeDisable;
                     return true;
                 }
                 if (--switchCounter == 0) {
