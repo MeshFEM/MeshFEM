@@ -68,7 +68,7 @@ bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &o
     // Also clamp the step to a feasible size permitted by the problem
     alpha = alpha * std::min(1.0, prob.customFeasibleStepLength(vars, alpha * step));
 
-    const Real c_1 = 1e-2;
+    const Real c_1 = options.armijo_c1;
     size_t bit;
 
     Eigen::VectorXd steppedVars;
@@ -98,7 +98,7 @@ bool backtrackingLineSearch(NewtonProblem &prob, const NewtonOptimizerOptions &o
             alpha = feasible_alpha;
         }
         else {
-            alpha *= 0.5;
+            alpha *= options.backtrack_shrink_factor;
         }
 
         if (bit == options.nbacktrack_iter - 1) {

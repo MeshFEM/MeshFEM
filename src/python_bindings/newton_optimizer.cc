@@ -81,6 +81,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("stdoutFlushInterval",           &NewtonOptimizerOptions::stdoutFlushInterval)
         .def_readwrite("nbacktrack_iter",               &NewtonOptimizerOptions::nbacktrack_iter)
         .def_readwrite("ngd_fallback_steps",            &NewtonOptimizerOptions::ngd_fallback_steps)
+        .def_readwrite("armijo_c1",                     &NewtonOptimizerOptions::armijo_c1)
+        .def_readwrite("backtrack_shrink_factor",       &NewtonOptimizerOptions::backtrack_shrink_factor)
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
         .def_readwrite("matrixRecordDir",               &NewtonOptimizerOptions::matrixRecordDir)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },

@@ -28,6 +28,8 @@ struct NewtonOptimizerOptionsBase {
     bool writeIterateFiles = false;
     // Warning: the following fields are NOT serialized for reasons of backwards compatibility
     size_t nbacktrack_iter = 25;               // Number of backtracking iterations to run before giving up on the linesearch
+    double armijo_c1 = 1e-4;                   // Armijo condition slope damping parameter
+    double backtrack_shrink_factor = 0.5;      // Factor by which to shrink the step length in backtracking
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
     int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
     CholeskyProvider factorizer = get_default_cholesky_provider();
