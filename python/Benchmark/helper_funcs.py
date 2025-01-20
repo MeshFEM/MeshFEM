@@ -99,6 +99,8 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     grad_norm_history = []
     hessian_projected_history = []
     hessian_shifted_amount_history = []
+    step_norm_history = []
+    directional_derivative_history = []
 
     def customCallback(prob, i):
         it_time = time.time()
@@ -114,6 +116,10 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
         uv_arr = uv.getVars()
         np.savez_compressed(os.path.join(uvsave_path, uv_fn), arr=uv_arr)
+    
+    def customSaveStepDCallback(prob, step, directional_derivative):
+        step_norm_history.append(np.linalg.norm(step))
+        directional_derivative_history.append(-directional_derivative)
 
     uv = mesh_energy.NodalVars(m, 2)
     bdry_uv = getBDdataOnUnitCircle(m)
@@ -129,6 +135,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         if not os.path.exists(uvsave_path):
             raise RuntimeError(f"[Error] The uv_save path: {uvsave_path} does not exist!")
         prob.setCustomIterationCallback(customSaveUVCallback)
+    prob.setCustomLineSearchBeganCallback(customSaveStepDCallback)
 
     # Work around energy nullspace by adding a small shift
     prob.hessianShift = hessian_shift
@@ -140,7 +147,11 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
     elif hessian_proj_option == 'Never':
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
-    else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never")
+    elif hessian_proj_option == 'xbasedAlways':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
+        param.useXBasedProjection = True
+        prob.hessianShift = 0.0
+    else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never, xbasedAlways")
     if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
 
     benchmark.reset()
@@ -156,17 +167,23 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         # we saved uv coordinates per-iteration and hessian_projected_history
         hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
         hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
+        step_size_arr = np.array(step_norm_history)
+        dd_arr = np.array(directional_derivative_history)
 
         obj_filename = 'obj_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
         hp_filename = 'hessian_projected_history.npy'
         hs_filename = 'hessian_shifted_amount_history.npy'
+        step_filename = 'step_size_history.npy'
+        dd_filename = 'directional_derivative_history.npy'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
         np.save(os.path.join(uvsave_path, hs_filename), hessian_shifted_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, and {hs_filename} in {uvsave_path}.")
+        np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
+        np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -184,18 +201,26 @@ def runSymmds_TinyAD(m, max_iter=100, thread_num=0, grad_tol=2e-8, uvsave_path=N
 
     benchmark.reset()
     if uvsave_path is not None:
-        uv_opt, obj_history, grad_history, time_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, True, uvsave_path)
+        uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, True, uvsave_path)
         # process all saved txt files into compressed npz files
         if not processEigenUVTXTs(uvsave_path):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
         obj_arr = np.array(obj_history)
         grad_norm_arr = np.array(grad_history)
+        step_size_arr = np.array(step_size_history)
+        dd_arr = np.array(dd_history)
+
         obj_filename = 'obj_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
+        step_filename = 'step_size_history.npy'
+        dd_filename = 'directional_derivative_history.npy'
+
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
+        np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
+        np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
-        uv_opt, obj_history, grad_history, time_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, False)
+        uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history  = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, False)
         bk_dict = benchmark.to_dict()
         return np.array(obj_history), np.array(time_history), np.array(grad_history), bk_dict
 

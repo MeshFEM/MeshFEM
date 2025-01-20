@@ -85,12 +85,17 @@ def read_HessianProjected_data(directory):
     obj_data = np.load(os.path.join(directory, obj_filename))
     grad_norm_data = np.load(os.path.join(directory, grad_norm_filename))
 
+    step_filename = 'step_size_history.npy'
+    dd_filename = 'directional_derivative_history.npy'
+    step_size_data = np.load(os.path.join(directory, step_filename))
+    dd_data = np.load(os.path.join(directory, dd_filename))
+
     hp_file_name = 'hessian_projected_history.npy'
     hs_file_name = 'hessian_shifted_amount_history.npy'
     hessian_projected_data = readOptionData(directory, hp_file_name)
     hessian_shifted_amount_data = readOptionData(directory, hs_file_name)
 
-    return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data
+    return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, step_size_data, dd_data
 
 # Under Hessian_Option/thread_i/
 def getFastestRepeatIndex(directory):
@@ -155,20 +160,22 @@ def readHessianData(directory, hessian_option_list = ['Adaptive', 'Always', 'Nev
     grad_norm_list = []
     hessian_projected_list = []
     hessian_shifted_amount_list = []
-
+    step_size_list = []
+    dd_list = []
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
-        
         # read UV_related Hessian data
         uv_folder_name = 'UVs'
         uv_dir = os.path.join(directory, hessian_option, uv_folder_name)
-        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data = read_HessianProjected_data(uv_dir)
+        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
 
         obj_list.append(obj_data)
         grad_norm_list.append(grad_norm_data)
         hessian_projected_list.append(hessian_projected_data)
         hessian_shifted_amount_list.append(hessian_shifted_amount_data)
+        step_size_list.append(step_data)
+        dd_list.append(dd_data)
     
-    return obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list
+    return obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, step_size_list, dd_list
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
@@ -179,6 +186,7 @@ def readUVdist(directory, hessian_option_list = ['Adaptive', 'Always', 'Never'])
         uv_folder_name = 'UVs'
         uv_dir = os.path.join(directory, hessian_option, uv_folder_name)
         uv_dist_arr = np.array(compute_uv_distance(uv_dir))
+        if hessian_option == 'TinyAD':  uv_dist_arr = uv_dist_arr[:-1]
         uv_dist_list.append(uv_dist_arr)
     return uv_dist_list
 
@@ -538,3 +546,51 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
         v.recordStop()
         elapsed_record_time = time.time() - start_record_timer
         print(f"[Viedo] {video_fn} recorded in {save_directory}. Recording Time: {elapsed_record_time:.4f} seconds.")
+
+
+# Plot metric with numIter - 1 size
+# Under different hessian projection options under one thread configuration
+def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, offset=0, hessian_option_list = ['Adaptive', 'Always', 'Never']):
+    
+    num_options = len(hessian_option_list)
+    if len(metric_list) != num_options:
+        raise RuntimeWarning("[Error] in saveMetricFigure() List size mismatches with Hessian_options!")
+    
+    yAxisTitle = "Y-Axis"
+    if metric_title == 'UVdist': yAxisTitle = "Distance to Converged UV"
+    elif metric_title == 'Obj': yAxisTitle = "Energy"
+    elif metric_title == 'Grad': yAxisTitle = "Grad Norm"
+    elif metric_title == 'Step': yAxisTitle = "Step Size"
+    elif metric_title == 'DD': yAxisTitle = "Directional Derivative"
+
+    iterations_list = []
+    for i in range(num_options):
+        iterations = np.arange(0, len(metric_list[i]))
+        iterations_list.append(iterations)
+
+    color_list, line_style_list = getColorLineList(num_options)
+
+    if offset > 0:
+        modified_hessian_proj_list = hessian_projected_list[0][:(0-offset)] # because in uv distance plot we ignore the last step
+        adaptive_projtrue_iter = iterations_list[0][modified_hessian_proj_list==1]
+        metric_projtrue_list = metric_list[0][modified_hessian_proj_list==1]
+    else: 
+        adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
+        metric_projtrue_list = metric_list[0][hessian_projected_list[0]==1]
+    
+    plt.figure(figsize=(8, 8))
+    for i in range(num_options):
+        plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+    
+    plt.scatter(adaptive_projtrue_iter, metric_projtrue_list, color='blue', marker='o', s=30)
+    plt.title(f"Model: {user_model_name}", fontsize=16)
+    plt.yscale('log')
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel(yAxisTitle, fontsize=14)
+    plt.legend()
+    plt.tight_layout()
+    
+    full_fn = user_model_name + '_' + metric_title + 'IterScatter.png'
+    plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    print(f"[Plot] '{full_fn}' saved in {save_directory}!")
+    plt.close()

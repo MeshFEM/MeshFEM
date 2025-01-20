@@ -44,7 +44,7 @@ void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepat
 
 
 MESHFEM_EXPORT
-std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>>
+std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
 symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2, 
                     bool saveUV = false, const std::string& filepath = "") 
 {
@@ -117,6 +117,8 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     std::vector<double> energy_history;
     std::vector<double> grad_norm_history;
     std::vector<double> iter_time_history;
+    std::vector<double> step_norm_history;
+    std::vector<double> dir_der_history;
     auto start_timer = std::chrono::high_resolution_clock::now();
 
     // Projected Newton
@@ -140,7 +142,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         }
 
         BENCHMARK_START_TIMER_SECTION("Hessian Evaluation");
-        auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
+        auto [f, g, H_proj] = func.eval_with_hessian_proj(x, 0.0);
         BENCHMARK_STOP_TIMER_SECTION("Hessian Evaluation");
         
         double g_norm = g.norm();
@@ -154,11 +156,15 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         VXd d = TinyAD::newton_direction(g, H_proj, solver);
         BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
 
+        double directional_derivative = 2 * TinyAD::newton_decrement(d, g);
+        step_norm_history.push_back(d.norm());
+        dir_der_history.push_back(directional_derivative);
+
         if (TinyAD::newton_decrement(d, g) < convergence_eps)
             break;
         
         BENCHMARK_START_TIMER_SECTION("Line Search");
-        x = TinyAD::line_search(x, d, f, g, func);
+        x = TinyAD::line_search(x, d, f, g, func, 1.0, 0.5, 64, 1e-4);
         BENCHMARK_STOP_TIMER_SECTION("Line Search");
 
         BENCHMARK_STOP_TIMER_SECTION("Newton Iterations");
@@ -194,7 +200,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         result.row(v_idx) = p;
     });
 
-    return std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>>(result, energy_history, grad_norm_history, iter_time_history);
+    return std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>(result, energy_history, grad_norm_history, iter_time_history, step_norm_history, dir_der_history);
 }
 
 

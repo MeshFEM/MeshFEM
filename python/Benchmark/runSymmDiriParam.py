@@ -141,8 +141,9 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if (hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never') and (hessian_proj_option != 'TinyAD'):
-        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or TinyAD")
+    if ((hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never') 
+        and (hessian_proj_option != 'xbasedAlways') and (hessian_proj_option != 'TinyAD')):
+        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or xbasedAlways or TinyAD")
         sys.exit(1)
     
     if ((save_uv_option != 'Yes') and (save_uv_option != 'yes') and (save_uv_option != 'YES') and

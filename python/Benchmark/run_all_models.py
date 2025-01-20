@@ -3,8 +3,31 @@ import sys
 import subprocess
 import numpy as np
 import time
+from datetime import datetime
 
-def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list):
+def writelog(result_path, hessian_option_list, thread_num_list):
+    # Log file name
+    log_file_name = 'experiment_log.txt'
+    log_file_path = os.path.join(result_path, log_file_name)
+    
+    # Check if the log file exists, create it if not
+    if not os.path.exists(log_file_path):
+        with open(log_file_path, 'w') as f:
+            pass  # Create an empty file
+    
+    # Get the current timestamp
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Write to the log file
+    with open(log_file_path, 'a') as log_file:
+        # Write the timestamp
+        log_file.write(f"Parametrization Benchmarking Experiment: {timestamp}\n")
+        # Write the Hessian option list
+        log_file.write(f"Hessian Option List: {hessian_option_list}\n")
+        # Write the thread number list
+        log_file.write(f"Thread Number List: {thread_num_list}\n")
+
+def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_projection_labels):
     # Check if the result path exists
     if not os.path.exists(result_path):
         print(f"Error: The specified result path '{result_path}' does not exist.")
@@ -30,7 +53,6 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
         model_timer = time.time()
 
         option_time_list = []
-        hessian_projection_labels = ['Adaptive', 'Always', 'Never', 'TinyAD']
         # Run the experiment for each Hessian Projection option
         for solver_option in hessian_projection_labels:
             print(f"\nStarting Parametrization for model '{model_name}' with Hessian Projection option '{solver_option}'...\n")
@@ -90,20 +112,44 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
 
 if __name__ == "__main__":
     # Check if the script is provided with the required arguments
-    if len(sys.argv) < 4:
-        print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> [<repeat_num>]")
+    if len(sys.argv) < 6:
+        print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_list_option> <thread_list_option> [<repeat_num>]")
+        print("--------------------------------------------------------------------------------------------------------------------")
+        print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
+        print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
+        print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
+        print("Usage: Hessian Option List: [3] -- [TinyAD]")
+        print("Usage: Hessian Option List: [4] -- [Never]")
+        print("------------------------------------------------------------")
+        print("Usage: Thread Option List: [0] -- [0](default thread)")
+        print("Usage: Thread Option List: [1] -- [20]")
         sys.exit(1)
 
     # Parse command-line arguments
     result_path = sys.argv[1]
     modelbase_path = sys.argv[2]
     save_uv_option = sys.argv[3]
-    repeat_num = int(sys.argv[4]) if len(sys.argv) > 4 else 1
+    hessian_list_option = int(sys.argv[4])
+    thread_list_option = int(sys.argv[5])
+    repeat_num = int(sys.argv[6]) if len(sys.argv) > 6 else 1
     if repeat_num <= 0:
         print("[Error] <repeat_num> must be an positive integer >= 1.")
         sys.exit(1)
     
     thread_num_list = [0]
-    # thread_num_list = [1, 2, 4, 8, 16]
-    # Run the function to perform experiments
-    run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list)
+    hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways']
+
+    if hessian_list_option == 1:
+        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD']
+    elif hessian_list_option == 2:
+        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD']
+    elif hessian_list_option == 3:
+        hessian_option_list = ['TinyAD']
+    elif hessian_list_option == 4:
+        hessian_option_list = ['Never']
+    
+    if thread_list_option == 1:  thread_num_list = [20]
+    
+    run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_option_list)
+    writelog(result_path, hessian_option_list, thread_num_list)
+    
