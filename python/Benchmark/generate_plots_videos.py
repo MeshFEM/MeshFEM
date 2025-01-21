@@ -60,9 +60,12 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
                 # confirm video flag
                 video_dir = os.path.join(base_path, videos_folder_name, model_name)
                 if not os.path.exists(video_dir):  os.makedirs(video_dir)
-                plot_video_utils.gen_GradIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, model_name, video_dir, i, thread_num_list, hessian_option_list)
-                plot_video_utils.gen_ObjIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, model_name, video_dir, i, thread_num_list, hessian_option_list)
-                plot_video_utils.gen_Param_videos(base_path, obj_list, obj_grad_time_list, model_name, modelbase_path, video_dir, i, thread_num_list, hessian_option_list)
+                plot_video_utils.gen_MetricIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, 
+                                                       model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+                plot_video_utils.gen_MetricIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, 
+                                                       model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+                plot_video_utils.gen_Param_videos(base_path, obj_list, obj_grad_time_list, 
+                                                  model_name, modelbase_path, video_dir, i, thread_num_list, hessian_option_list, speedup=1)
         
         in_model_elapsed_time = time.time() - in_model_timer
         print(f"{model_ind+1}/{numModels} Model: {model_name} -- All plots and videos generation completed! Time: {in_model_elapsed_time:.4f} seconds.")
