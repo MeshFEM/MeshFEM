@@ -6,7 +6,6 @@ Created: 01/11/2025  2:07:55
 '''
 
 import os, sys
-os.environ['OMP_NUM_THREADS'] = '1'
 sys.path.append('../')
 import MeshFEM
 import mesh, mesh_energy, energy
@@ -86,14 +85,8 @@ def processEigenUVTXTs(folder_path):
         print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
         return False
 
-def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', thread_num=0, grad_tol=None, 
-                uvsave_path=None):
+def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', grad_tol=None, uvsave_path=None):
     
-    os.environ['OMP_NUM_THREADS'] = '1'
-    if thread_num > 0:
-        import parallelism
-        parallelism.set_max_num_tbb_threads = int(thread_num)
-
     obj_history = []
     time_history = []
     grad_norm_history = []
@@ -189,12 +182,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         time_arr = np.array(time_history) - start_time
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
     
-def runSymmds_TinyAD(m, max_iter=100, thread_num=0, grad_tol=2e-8, uvsave_path=None):
-
-    os.environ['OMP_NUM_THREADS'] = '1'
-    if thread_num > 0:
-        import parallelism
-        parallelism.set_max_num_tbb_threads = int(thread_num)
+def runSymmds_TinyAD(m, max_iter=100, grad_tol=2e-8, uvsave_path=None):
 
     bdry_uv = getBDdataOnUnitCircle(m)
     uv_init = tutteInitialization(m, bdry_uv)

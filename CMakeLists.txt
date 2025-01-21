@@ -14,6 +14,15 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Export compile flags (used for autocompletion of the C++ code)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
+# Explicitly define OpenMP flags if libomp is installed
+find_package(OpenMP)
+
+if (OpenMP_FOUND)
+    message(STATUS "OpenMP found, enabling support.")
+else()
+    message(WARNING "OpenMP not found. Building without OpenMP support!")
+endif()
+
 if (NOT TARGET MeshFEM)
     option(MESHFEM_ENABLE_BENCHMARKING "" ON)
     add_subdirectory(${THIRD_PARTY_DIR}/MeshFEM)

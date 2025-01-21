@@ -93,15 +93,14 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
         elapsed_model_time = time.time() - model_timer
         option_time_list.append(elapsed_model_time)
 
-        if (save_uv_option == 'No') or (save_uv_option == 'no') or (save_uv_option == 'NO'):
+        if save_uv_option.lower() == 'no':
             # save option_time_list only make sense when save_uv_option is no
-            thread_time_all = np.vstack((option_time_list[0], option_time_list[1], option_time_list[2]))
             model_result_path = os.path.join(result_path, model_name)
             option_thread_time_fn = "option_thread_times.txt"
             with open(os.path.join(model_result_path, option_thread_time_fn), "w") as f:
                 for i, label in enumerate(hessian_projection_labels):
-                    f.write(f"{label}\t" + "\t".join(f"{x: .4f}" for x in thread_time_all[i]) + "\n")
-                f.write(f"\nTotal time:\t{option_time_list[3]: .4f}\n")
+                    f.write(f"{label}\t" + "\t".join(f"{x: .4f}" for x in option_time_list[i]) + "\n")
+                f.write(f"\nTotal time:\t{option_time_list[-1]: .4f}\n")
             print(f"[File] Successfully Write '{option_thread_time_fn}' in {model_result_path}.")
 
         print(f"Completed All Parametrization Experiments for model '{model_name}'. Time: {elapsed_model_time : .4f} seconds.")

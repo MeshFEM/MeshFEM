@@ -8,6 +8,7 @@ Created: 01/11/2025  11:03:50
 import os, sys
 sys.path.append('../')
 import MeshFEM, mesh, benchmark
+import parallelism
 import numpy as np
 import pickle
 import helper_funcs
@@ -57,17 +58,15 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
         m = mesh.Mesh(model_path) # read mesh from model_path
-
-
         if hessian_proj_option == 'TinyAD':
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m, thread_num=thread_num)
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m)
             line_search_time = benchmark.totalTime('Line Search$', d=benchmark_dict)
             linsys_solve_time = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
             hessian_eval_time = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
             line_search_time_list.append(line_search_time)
 
         else:
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, thread_num=thread_num, hessian_proj_option=hessian_proj_option)
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
             symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
             numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
             linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
@@ -141,14 +140,11 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if ((hessian_proj_option != 'Adaptive') and (hessian_proj_option != 'Always') and (hessian_proj_option != 'Never') 
-        and (hessian_proj_option != 'xbasedAlways') and (hessian_proj_option != 'TinyAD')):
+    if (hessian_proj_option not in ['Adaptive', 'Always', 'Never', 'xbasedAlways', 'TinyAD']):
         print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or xbasedAlways or TinyAD")
         sys.exit(1)
     
-    if ((save_uv_option != 'Yes') and (save_uv_option != 'yes') and (save_uv_option != 'YES') and
-        (save_uv_option != 'No') and (save_uv_option != 'no') and (save_uv_option != 'NO') and 
-        (save_uv_option != 'Both') and (save_uv_option != 'both') and (save_uv_option != 'BOTH')):
+    if (save_uv_option.lower() not in ['yes', 'no', 'both']):
         print("[Error] Usage of <save_uv_option>:  yes or no or both")
         sys.exit(1)
 
@@ -160,14 +156,21 @@ def main():
     if not os.path.exists(base_path):
         warnings.warn(f"Warning: The base_path '{base_path}' does not exist. Please check the path.")
         sys.exit(1)  # Exit if the path does not exist
-
-    if (save_uv_option == 'No') or (save_uv_option == 'no') or (save_uv_option == 'NO'):
+    
+    if hessian_proj_option == 'TinyAD':
+        if thread_num != 0: # not in default case
+            os.environ['OMP_NUM_THREADS'] = str(thread_num)
+    else:  
+        os.environ['OMP_NUM_THREADS'] = '1'
+        parallelism.set_max_num_tbb_threads(int(thread_num))
+    
+    if save_uv_option.lower() == 'no':
         recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
     
-    if (save_uv_option == 'Yes') or (save_uv_option == 'yes') or (save_uv_option == 'YES'):
+    if save_uv_option.lower() == 'yes':
         recordUV(base_path, model_name, model_path, hessian_proj_option)
     
-    if (save_uv_option == 'Both') or (save_uv_option == 'both') or (save_uv_option == 'BOTH'):
+    if save_uv_option.lower() == 'both':
         recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
         recordUV(base_path, model_name, model_path, hessian_proj_option)
 
