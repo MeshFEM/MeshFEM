@@ -323,7 +323,7 @@ CatamariFactorizer::CatamariFactorizer() {
     m_ldlControl->SetFactorizationType(catamari::kCholeskyFactorization);
     m_ldlControl->supernodal_strategy = catamari::kSupernodalFactorization;
     m_ldlControl->supernodal_control.algorithm = catamari::kRightLookingLDL;
-    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = false; // Setting this to true seems faster on 5950X, slower on Apple Silicon
+    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true; // Setting this to true seems faster on 5950X, slower on Apple Silicon
 }
 
 size_t CatamariFactorizer::m_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
@@ -492,7 +492,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&.
     auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
 
 #if CATAMARI_FINEGRAINED_TIMERS
-    {
+    if (m_ldlControl->supernodal_control.algorithm == catamari::kRightLookingLDL) {
         static size_t counter = 0;
         static std::string directory = "catamari_timers";
         if (counter == 0) {
