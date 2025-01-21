@@ -43,7 +43,6 @@ void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepat
     }
 }
 
-
 MESHFEM_EXPORT
 std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
 symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2, 
@@ -124,8 +123,9 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
 
     // Projected Newton
     // TinyAD::LinearSolver solver;
-    TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;  //switch to use cholmod
+    TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;
     NDMap uv_temp(nn, numCompoents);
+    bool lineSearchFail = false;
     for (int i = 0; i < max_iters; ++i)
     {
         BENCHMARK_START_TIMER_SECTION("Newton Iterations");
@@ -187,9 +187,17 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         if (g_norm < convergence_eps)
             break;
         
+        VXd x_old = x;
         BENCHMARK_START_TIMER_SECTION("Line Search");
         x = TinyAD::line_search(x, d, f, g, func, 1.0, 0.5, 64, 1e-4);
         BENCHMARK_STOP_TIMER_SECTION("Line Search");
+
+        // Get the machine epsilon for double
+        double epsilon = std::numeric_limits<double>::epsilon();
+        if (x.isApprox(x_old, epsilon)) {
+            TINYAD_WARNING("Line Search Fails. Optimization Ends.");
+            break;
+        }
 
         BENCHMARK_STOP_TIMER_SECTION("Newton Iterations");
     }
