@@ -143,7 +143,6 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     elif hessian_proj_option == 'xbasedAlways':
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
         param.useXBasedProjection = True
-        prob.hessianShift = 0.0
     else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never, xbasedAlways")
     if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
 
@@ -182,7 +181,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         time_arr = np.array(time_history) - start_time
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
     
-def runSymmds_TinyAD(m, max_iter=100, grad_tol=2e-8, uvsave_path=None):
+def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
 
     bdry_uv = getBDdataOnUnitCircle(m)
     uv_init = tutteInitialization(m, bdry_uv)

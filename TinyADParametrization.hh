@@ -4,6 +4,7 @@
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Parametrization.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <Eigen/CholmodSupport>
 
 #include <TinyAD/ScalarFunction.hh>
 #include <TinyAD/Utils/NewtonDirection.hh>
@@ -122,7 +123,8 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     auto start_timer = std::chrono::high_resolution_clock::now();
 
     // Projected Newton
-    TinyAD::LinearSolver solver;
+    // TinyAD::LinearSolver solver;
+    TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;  //switch to use cholmod
     NDMap uv_temp(nn, numCompoents);
     for (int i = 0; i < max_iters; ++i)
     {
@@ -152,15 +154,37 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         energy_history.push_back(f);
         grad_norm_history.push_back(g_norm);
 
+        double hessian_shift = 1e-08;
+        int max_try = 10;
+        VXd d;
+        d.setZero(g.size());
         BENCHMARK_START_TIMER_SECTION("Linear Solve");
-        VXd d = TinyAD::newton_direction(g, H_proj, solver);
+        for (int attempt = 1; attempt <= max_try; ++attempt)
+        {
+            try
+            {
+                d = TinyAD::newton_direction(g, H_proj, solver, hessian_shift);
+                break;
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Attempt " << attempt << " failed: " << e.what() << std::endl;
+                if (attempt < max_try) {
+                    std::cerr << "Scaling hessian_shift to " << (10 * hessian_shift) << std::endl;
+                    hessian_shift *= 10.0;
+                } else {
+                    // If max_try is reached, throw the exception
+                    throw std::runtime_error("Max number of attempts reached without success.");
+                }
+            }
+        }
         BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
 
         double directional_derivative = 2 * TinyAD::newton_decrement(d, g);
         step_norm_history.push_back(d.norm());
         dir_der_history.push_back(directional_derivative);
 
-        if (TinyAD::newton_decrement(d, g) < convergence_eps)
+        if (g_norm < convergence_eps)
             break;
         
         BENCHMARK_START_TIMER_SECTION("Line Search");

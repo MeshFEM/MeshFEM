@@ -82,7 +82,8 @@ if __name__ == "__main__":
         print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
         print("------------------------------------------------------------")
         print("Usage: Thread Option List: [0] -- [0](default thread)")
-        print("Usage: Thread Option List: [1] -- [20]")        
+        print("Usage: Thread Option List: [1] -- [20]")     
+        print("Usage: Thread Option List: [2] -- [2, 4, 8] ")   
         sys.exit(1)
 
     # Parse command-line arguments
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     
     if thread_list_option == 1:  thread_num_list = [20]
     elif thread_list_option == 0: thread_num_list = [0]
+    elif thread_list_option == 2: thread_num_list = [2, 4, 8]
 
 
     gen_plots_videos(result_path, modelbase_path, plots_folder_name, videos_folder_name, hessian_option_list, gen_video_flag, thread_num_list)
