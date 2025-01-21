@@ -9,6 +9,7 @@
 #include <catamari/norms.hpp>
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
+#include <filesystem>
 
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
