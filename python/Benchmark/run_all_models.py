@@ -27,7 +27,7 @@ def writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, 
         # Write the thread number list
         log_file.write(f"Thread Number List: {thread_num_list}\n")
         log_file.write(f"Save UV Option: {save_uv_option}\n")
-        log_file.write(f"Repeat Number: {repeat_num}\n")
+        log_file.write(f"Repeat Number: {repeat_number}\n")
 
 def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_projection_labels):
     # Check if the result path exists
