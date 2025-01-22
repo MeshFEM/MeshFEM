@@ -123,9 +123,12 @@ if __name__ == "__main__":
         print("Usage: Hessian Option List: [4] -- [Never]")
         print("------------------------------------------------------------")
         print("Usage: Thread Option List: [0] -- [0](default thread)")
-        print("Usage: Thread Option List: [1] -- [20]")
-        print("Usage: Thread Option List: [2] -- [2, 4, 8] ")
-        print("Usage: Thread Option List: [5] -- [2, 4, 8, 20] ")
+        print("Usage: Thread Option List: [1] -- [16]")
+        print("Usage: Thread Option List: [2] -- [1] ")
+        print("Usage: Thread Option List: [3] -- [4, 8, 16] ")
+        print("Usage: Thread Option List: [4] -- [2] ")
+        print("Usage: Thread Option List: [5] -- [2, 4, 8, 16] ")
+        print("Usage: Thread Option List: [6] -- [1, 2, 4, 8, 16] ")
         sys.exit(1)
 
     # Parse command-line arguments
@@ -151,9 +154,12 @@ if __name__ == "__main__":
     elif hessian_list_option == 4:
         hessian_option_list = ['Never']
     
-    if thread_list_option == 1:  thread_num_list = [20]
-    elif thread_list_option == 2:  thread_num_list = [2, 4, 8]
-    elif thread_list_option == 5:  thread_num_list = [2, 4, 8, 20]
+    if thread_list_option == 1:  thread_num_list = [16]
+    elif thread_list_option == 2:  thread_num_list = [1]
+    elif thread_list_option == 5:  thread_num_list = [2, 4, 8, 16]
+    elif thread_list_option == 3:  thread_num_list = [4, 8, 16]
+    elif thread_list_option == 4:  thread_num_list = [2]
+    elif thread_list_option == 6:  thread_num_list = [1, 2, 4, 8, 16]
     
     run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_option_list)
     writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_num)
