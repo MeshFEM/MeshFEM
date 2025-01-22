@@ -5,7 +5,7 @@ import numpy as np
 import time
 from datetime import datetime
 
-def writelog(result_path, hessian_option_list, thread_num_list):
+def writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_number):
     # Log file name
     log_file_name = 'experiment_log.txt'
     log_file_path = os.path.join(result_path, log_file_name)
@@ -26,6 +26,8 @@ def writelog(result_path, hessian_option_list, thread_num_list):
         log_file.write(f"Hessian Option List: {hessian_option_list}\n")
         # Write the thread number list
         log_file.write(f"Thread Number List: {thread_num_list}\n")
+        log_file.write(f"Save UV Option: {save_uv_option}\n")
+        log_file.write(f"Repeat Number: {repeat_num}\n")
 
 def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_projection_labels):
     # Check if the result path exists
@@ -154,5 +156,5 @@ if __name__ == "__main__":
     elif thread_list_option == 5:  thread_num_list = [2, 4, 8, 20]
     
     run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_option_list)
-    writelog(result_path, hessian_option_list, thread_num_list)
+    writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_num)
     

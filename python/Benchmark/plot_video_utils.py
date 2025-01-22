@@ -393,10 +393,10 @@ def getYAxisTitle(metric_title):
 
 def getBarPlotsYAxisTitle(metric_key):
     yAxisTitle = "Y-Axis"
-    if metric_key == 'time':  yAxisTitle = "Total Time [sec]"
+    if metric_key == 'time':  yAxisTitle = "Total Time"
     elif metric_key == 'iter': yAxisTitle = "Iteration"
-    elif metric_key == 'linsolve':  yAxisTitle = "Linear Solve Time [sec]"
-    elif metric_key == 'hessian_eval':  yAxisTitle = "Hessian Evaluation Time [sec]"
+    elif metric_key == 'linsolve':  yAxisTitle = "Linear Solve Time"
+    elif metric_key == 'hessian_eval':  yAxisTitle = "Hessian Evaluation Time"
     return yAxisTitle
 
 # Plot metric with numIter - offset size
@@ -441,14 +441,17 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
 
-def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(15, 8)):
+def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(15, 8), divideIter=False):
     yAxisTitle = getBarPlotsYAxisTitle(metric_key)
+    if not divideIter:  yAxisTitle += "[sec]"
+    else:               yAxisTitle += " per Iteration"
     a = np.arange(len(thread_num_list))
     num_options = len(hessian_option_list)
 
     fig, ax = plt.subplots(figsize=default_fig_size)
     for hessian_ind, hessian_option in enumerate(hessian_option_list):
-        metric_list = [model_dict[hessian_option][thread_num][metric_key] for thread_num in thread_num_list]
+        if not divideIter:  metric_list = [model_dict[hessian_option][thread_num][metric_key] for thread_num in thread_num_list]
+        else:               metric_list = [(model_dict[hessian_option][thread_num][metric_key] / model_dict[hessian_option][thread_num]['iter']) for thread_num in thread_num_list]
         position = a + (hessian_ind - num_options/2) * width + width / 2
         ax.bar(position, metric_list, width=width, label=hessian_option)
     
@@ -458,7 +461,8 @@ def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, 
     ax.set_ylabel(yAxisTitle)
     ax.legend(loc='upper right')
     
-    full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.png'
+    if not divideIter:  full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.png'
+    else:               full_fn = user_model_name + '_' + metric_key + '_perIter' + '_thread' + list_to_string(thread_num_list) + '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()

@@ -54,16 +54,17 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
 
         # generate bar plots
-        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'time', plot_dir, thread_num_list, hessian_option_list)
-        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'hessian_eval', plot_dir, thread_num_list, hessian_option_list)
-        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'linsolve', plot_dir, thread_num_list, hessian_option_list)
+        metric_key_list = ['time', 'hessian_eval', 'linsolve']
+        for metric_keyword in metric_key_list:
+            plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list)
+            plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list, divideIter=True)
         # generate [2,4,8] bar plots
         threads_to_check = [2, 4, 8]
         threads_check_in = all(num in thread_num_list for num in threads_to_check)
         if threads_check_in and (len(thread_num_list)>3) :
-            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'time', plot_dir, threads_to_check, hessian_option_list)
-            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'hessian_eval', plot_dir, threads_to_check, hessian_option_list)
-            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'linsolve', plot_dir, threads_to_check, hessian_option_list)
+            for metric_keyword in metric_key_list:
+                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, threads_to_check, hessian_option_list)
+                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, threads_to_check, hessian_option_list, divideIter=True)
 
         # generate timing related figures and videos
         numThreads = len(thread_num_list)
