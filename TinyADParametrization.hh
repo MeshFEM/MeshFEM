@@ -43,6 +43,32 @@ void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepat
     }
 }
 
+template <typename PassiveT, typename SolverT>
+Eigen::VectorX<PassiveT> newton_direction(
+        const Eigen::VectorX<PassiveT>& _g,
+        const Eigen::SparseMatrix<PassiveT>& _H_proj,
+        TinyAD::LinearSolver<PassiveT, SolverT>& _solver,
+        const PassiveT& _w_identity = 0.0)
+{
+    const Eigen::SparseMatrix<PassiveT> H_reg = _w_identity * TinyAD::identity<PassiveT>(_g.size()) + _H_proj;
+
+    if (_solver.sparsity_pattern_dirty)
+    {
+        _solver.solver.analyzePattern(H_reg);
+        _solver.sparsity_pattern_dirty = false;
+    }
+
+    _solver.solver.factorize(H_reg);
+    const Eigen::VectorX<PassiveT> d = _solver.solver.solve((-_g).eval());
+
+    if (_solver.solver.info() != Eigen::Success)
+        TINYAD_ERROR_throw("Linear solve failed.");
+
+    TINYAD_ASSERT_FINITE_MAT(d);
+    return d;
+}
+
+
 MESHFEM_EXPORT
 std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
 symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2, 
@@ -163,7 +189,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         {
             try
             {
-                d = TinyAD::newton_direction(g, H_proj, solver, hessian_shift);
+                d = TinyADParametrization::newton_direction(g, H_proj, solver, hessian_shift);
                 break;
             }
             catch(const std::exception& e)
