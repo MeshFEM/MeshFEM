@@ -38,6 +38,18 @@ def create_list_of_lists(num_inner_lists):
     """
     return [[] for _ in range(num_inner_lists)]
 
+def list_to_string(int_list):
+    """
+    Convert a list of integers into a concatenated string.
+    
+    Args:
+    int_list (list): A list containing integers.
+
+    Returns:
+    str: A string with all integers concatenated in sequence.
+    """
+    return ''.join(map(str, int_list))
+
 # Under Hessian_Option/UVs
 # The directory should contain 'uv_ravel_iter_i.npz' data
 def getNumUVs(directory):  return sum(1 for f in os.listdir(directory) if f.endswith(".npz"))
@@ -192,6 +204,38 @@ def readUVdist(directory, hessian_option_list = ['Adaptive', 'Always', 'Never'])
         uv_dist_list.append(uv_dist_arr)
     return uv_dist_list
 
+# For one model's all Hessian options
+# Input parameter: directory = base_path/user_model_name
+def readDictData(directory, thread_num_list, hessian_option_list):
+    # Build nested-dictonary
+    model_dict = {}
+    for hessian_option in hessian_option_list:
+        hessian_dict = {}
+        for thread_num in thread_num_list:
+            thread_dir_name = 'thread' + '_' + str(thread_num)
+            cur_dir = os.path.join(directory, hessian_option, thread_dir_name)
+            fast_ind = getFastestRepeatIndex(cur_dir) # read file 'summary.txt'
+            repeat_dir_name = 'repeat' + '_' + fast_ind
+            data_dir = os.path.join(cur_dir, repeat_dir_name)
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = read_benchmark_data(data_dir)
+            # build dictionary different for TinyAD
+            thread_dict = {}
+            thread_dict['iter'] = obj_arr.shape[0]
+            thread_dict['time'] = time_arr[-1]
+            if hessian_option == 'TinyAD':
+                thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
+                thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
+                thread_dict['line_search'] = benchmark.totalTime('Line Search$', d=benchmark_dict)
+            else:
+                thread_dict['linsolve'] = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
+                thread_dict['hessian_eval'] = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
+                thread_dict['symbol'] = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
+                thread_dict['numeric'] = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
+            hessian_dict[thread_num] = thread_dict
+        model_dict[hessian_option] = hessian_dict
+    
+    return model_dict
+
 # align timing
 def alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=0):
     aligned_timing_list = []
@@ -338,7 +382,6 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
         elapsed_record_time = time.time() - start_record_timer
         print(f"[Viedo] {video_fn} recorded in {save_directory}. Recording Time: {elapsed_record_time:.4f} seconds.")
 
-
 def getYAxisTitle(metric_title):
     yAxisTitle = "Y-Axis"
     if metric_title == 'UVdist': yAxisTitle = "Distance to Converged UV"
@@ -348,7 +391,15 @@ def getYAxisTitle(metric_title):
     elif metric_title == 'DD': yAxisTitle = "Directional Derivative"
     return yAxisTitle
 
-# Plot metric with numIter - 1 size
+def getBarPlotsYAxisTitle(metric_key):
+    yAxisTitle = "Y-Axis"
+    if metric_key == 'time':  yAxisTitle = "Total Time [sec]"
+    elif metric_key == 'iter': yAxisTitle = "Iteration"
+    elif metric_key == 'linsolve':  yAxisTitle = "Linear Solve Time [sec]"
+    elif metric_key == 'hessian_eval':  yAxisTitle = "Hessian Evaluation Time [sec]"
+    return yAxisTitle
+
+# Plot metric with numIter - offset size
 # Under different hessian projection options under one thread configuration
 def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, offset=0, hessian_option_list = ['Adaptive', 'Always', 'Never']):
     
@@ -386,6 +437,28 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     plt.tight_layout()
     
     full_fn = user_model_name + '_' + metric_title + 'VSIter_Scatter.png'
+    plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    print(f"[Plot] '{full_fn}' saved in {save_directory}!")
+    plt.close()
+
+def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(15, 8)):
+    yAxisTitle = getBarPlotsYAxisTitle(metric_key)
+    a = np.arange(len(thread_num_list))
+    num_options = len(hessian_option_list)
+
+    fig, ax = plt.subplots(figsize=default_fig_size)
+    for hessian_ind, hessian_option in enumerate(hessian_option_list):
+        metric_list = [model_dict[hessian_option][thread_num][metric_key] for thread_num in thread_num_list]
+        position = a + (hessian_ind - num_options/2) * width + width / 2
+        ax.bar(position, metric_list, width=width, label=hessian_option)
+    
+    ax.set_xticks(a)
+    ax.set_xticklabels(thread_num_list)
+    ax.set_xlabel("Number of Threads")
+    ax.set_ylabel(yAxisTitle)
+    ax.legend(loc='upper right')
+    
+    full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()

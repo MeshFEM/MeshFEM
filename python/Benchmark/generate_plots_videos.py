@@ -41,6 +41,7 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         obj_grad_time_list = plot_video_utils.readConvergenceTimingData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
         obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, step_list, dd_list = plot_video_utils.readHessianData(os.path.join(base_path, model_name), hessian_option_list)
         uv_dist_list = plot_video_utils.readUVdist(os.path.join(base_path, model_name), hessian_option_list)
+        model_dict = plot_video_utils.readDictData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
 
         plot_dir = os.path.join(base_path, plots_folder_name, model_name)
         if not os.path.exists(plot_dir):  os.makedirs(plot_dir)
@@ -51,6 +52,18 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+
+        # generate bar plots
+        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'time', plot_dir, thread_num_list, hessian_option_list)
+        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'hessian_eval', plot_dir, thread_num_list, hessian_option_list)
+        plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'linsolve', plot_dir, thread_num_list, hessian_option_list)
+        # generate [2,4,8] bar plots
+        threads_to_check = [2, 4, 8]
+        threads_check_in = all(num in thread_num_list for num in threads_to_check)
+        if threads_check_in and (len(thread_num_list)>3) :
+            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'time', plot_dir, threads_to_check, hessian_option_list)
+            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'hessian_eval', plot_dir, threads_to_check, hessian_option_list)
+            plot_video_utils.saveMetricBarPlots(model_dict, model_name, 'linsolve', plot_dir, threads_to_check, hessian_option_list)
 
         # generate timing related figures and videos
         numThreads = len(thread_num_list)
@@ -87,6 +100,7 @@ if __name__ == "__main__":
         print("Usage: Thread Option List: [0] -- [0](default thread)")
         print("Usage: Thread Option List: [1] -- [20]")     
         print("Usage: Thread Option List: [2] -- [2, 4, 8] ")   
+        print("Usage: Thread Option List: [5] -- [2, 4, 8, 20] ")  
         sys.exit(1)
 
     # Parse command-line arguments
@@ -115,6 +129,6 @@ if __name__ == "__main__":
     if thread_list_option == 1:  thread_num_list = [20]
     elif thread_list_option == 0: thread_num_list = [0]
     elif thread_list_option == 2: thread_num_list = [2, 4, 8]
-
+    elif thread_list_option == 5: thread_num_list = [2, 4, 8, 20]
 
     gen_plots_videos(result_path, modelbase_path, plots_folder_name, videos_folder_name, hessian_option_list, gen_video_flag, thread_num_list)
