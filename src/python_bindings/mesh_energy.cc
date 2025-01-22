@@ -34,6 +34,7 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
+#include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
 // Bind the "NodalVars" factory method on each mesh type.
 struct NodalVarsBinder {
@@ -107,6 +108,7 @@ PYBIND11_MODULE(mesh_energy, m)
     bindParametrizationMeshEnergy<                      NeoHookeanEnergy  <double, 2> >(m, detail);
     bindParametrizationMeshEnergy<AutoHessianProjection<NeoHookeanEnergy  <double, 2>>>(m, detail);
     bindParametrizationMeshEnergy<                      SymmetricDirichlet<double, 2> >(m, detail);
+    bindParametrizationMeshEnergy<        SymmetricDirichletDerivativeFree<double, 2> >(m, detail);
 
     // Bind solid element mesh energies
     using NHE3D = NeoHookeanEnergy<double, 3>;
