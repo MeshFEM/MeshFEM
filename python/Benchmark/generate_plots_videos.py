@@ -61,10 +61,6 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         # generate [2,4,8] bar plots
         threads_to_check = [2, 4, 8]
         threads_check_in = all(num in thread_num_list for num in threads_to_check)
-        if threads_check_in and (len(thread_num_list)>3) :
-            for metric_keyword in metric_key_list:
-                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, threads_to_check, hessian_option_list)
-                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, threads_to_check, hessian_option_list, divideIter=True)
 
         # generate timing related figures and videos
         numThreads = len(thread_num_list)
