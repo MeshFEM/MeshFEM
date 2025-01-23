@@ -140,8 +140,8 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if (hessian_proj_option not in ['Adaptive', 'Always', 'Never', 'xbasedAlways', 'TinyAD']):
-        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or xbasedAlways or TinyAD")
+    if (hessian_proj_option not in ['Adaptive', 'Always', 'Never', 'xbasedAlways', 'AutoDiff' , 'TinyAD']):
+        print("[Error] Usage of <hessian_proj_option>:  Adaptive or Always or Never or xbasedAlways or AutoDiff or TinyAD")
         sys.exit(1)
     
     if (save_uv_option.lower() not in ['yes', 'no', 'both']):

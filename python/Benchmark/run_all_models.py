@@ -121,6 +121,9 @@ if __name__ == "__main__":
         print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
         print("Usage: Hessian Option List: [3] -- [TinyAD]")
         print("Usage: Hessian Option List: [4] -- [Never]")
+        print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff]")
+        print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
+        print("Usage: Hessian Option List: [7] -- [AutoDiff]")
         print("------------------------------------------------------------")
         print("Usage: Thread Option List: [0] -- [0](default thread)")
         print("Usage: Thread Option List: [1] -- [16]")
@@ -153,6 +156,12 @@ if __name__ == "__main__":
         hessian_option_list = ['TinyAD']
     elif hessian_list_option == 4:
         hessian_option_list = ['Never']
+    elif hessian_list_option == 5:
+        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff']
+    elif hessian_list_option == 6:
+        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD']
+    elif hessian_list_option == 7:
+        hessian_option_list = ['AutoDiff']
     
     if thread_list_option == 1:  thread_num_list = [16]
     elif thread_list_option == 2:  thread_num_list = [1]

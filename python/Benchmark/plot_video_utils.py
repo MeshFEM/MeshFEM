@@ -24,6 +24,9 @@ def getColorLineList(options):
     if options == 4:
         color_list.append('forestgreen')
         line_style_list.append('-')
+    elif options == 5:
+        color_list.extend(['forestgreen', 'gold'])
+        line_style_list.extend(['-', '-'])
     return color_list, line_style_list
 
 def create_list_of_lists(num_inner_lists):
@@ -441,24 +444,29 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
 
-def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(15, 8), divideIter=False):
+def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(16, 8), divideIter=False):
     yAxisTitle = getBarPlotsYAxisTitle(metric_key)
     if not divideIter:  yAxisTitle += "[sec]"
     else:               yAxisTitle += " per Iteration"
-    a = np.arange(len(thread_num_list))
+    # Base positions for groups of bars (one per thread number)
+    a = np.arange(len(thread_num_list)) * (len(hessian_option_list) + 1) * width  # Add space between groups
+
     num_options = len(hessian_option_list)
 
     fig, ax = plt.subplots(figsize=default_fig_size)
     for hessian_ind, hessian_option in enumerate(hessian_option_list):
         if not divideIter:  metric_list = [model_dict[hessian_option][thread_num][metric_key] for thread_num in thread_num_list]
         else:               metric_list = [(model_dict[hessian_option][thread_num][metric_key] / model_dict[hessian_option][thread_num]['iter']) for thread_num in thread_num_list]
-        position = a + (hessian_ind - num_options/2) * width + width / 2
+        # Adjust positions for bars in each group
+        position = a + hessian_ind * width  # Spread bars within each group
         ax.bar(position, metric_list, width=width, label=hessian_option)
     
-    ax.set_xticks(a)
+    # Adjust x-axis ticks to be centered
+    ax.set_xticks(a + (num_options - 1) * width / 2)  # Center ticks within the group
     ax.set_xticklabels(thread_num_list)
     ax.set_xlabel("Number of Threads")
     ax.set_ylabel(yAxisTitle)
+    ax.grid(True, linestyle='--', alpha=0.7)  # Add a grid
     ax.legend(loc='upper right')
     
     if not divideIter:  full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.png'
