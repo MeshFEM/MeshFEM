@@ -68,7 +68,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
                 throw std::runtime_error("Numeric matrix encountered before symbolic matrix");
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
-            factorizer->factorizeNumeric(*H, true);
+            try {
+                factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+            }
+            catch (const std::runtime_error &e) {
+                std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+            }
             // auto x = factorizer->solve(b);
             continue;
         }

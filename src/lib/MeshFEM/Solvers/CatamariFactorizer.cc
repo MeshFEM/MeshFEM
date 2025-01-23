@@ -9,6 +9,7 @@
 #include <catamari/norms.hpp>
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
+#include <filesystem>
 
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
@@ -323,7 +324,7 @@ CatamariFactorizer::CatamariFactorizer() {
     m_ldlControl->SetFactorizationType(catamari::kCholeskyFactorization);
     m_ldlControl->supernodal_strategy = catamari::kSupernodalFactorization;
     m_ldlControl->supernodal_control.algorithm = catamari::kRightLookingLDL;
-    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = false; // Setting this to true seems faster on 5950X, slower on Apple Silicon
+    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true; // Setting this to true seems faster on 5950X, slower on Apple Silicon
 }
 
 size_t CatamariFactorizer::m_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
@@ -474,25 +475,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
-
     m_numericFactorizationImpl(mat.Ax.data());
-
-#if CATAMARI_FINEGRAINED_TIMERS
-    {
-        static size_t counter = 0;
-        static std::string directory = "catamari_timers";
-        if (counter == 0) {
-            // Get a unique directory name.
-            size_t id = 0;
-            while (std::filesystem::exists(directory)) directory = "catamari_timers_" + std::to_string(id++);
-            std::filesystem::create_directory(directory);
-        }
-        std::string dirname = directory + "/" + std::to_string(counter++);
-        std::filesystem::create_directory(dirname);
-        m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
-        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
-    }
-#endif
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
@@ -508,6 +491,24 @@ void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&.
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
     auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
+
+#if CATAMARI_FINEGRAINED_TIMERS
+    if (m_ldlControl->supernodal_control.algorithm == catamari::kRightLookingLDL) {
+        static size_t counter = 0;
+        static std::string directory = "catamari_timers";
+        if (counter == 0) {
+            // Get a unique directory name.
+            size_t id = 0;
+            while (std::filesystem::exists(directory)) directory = "catamari_timers_" + std::to_string(id++);
+            std::filesystem::create_directory(directory);
+        }
+        std::string dirname = directory + "/" + std::to_string(counter++);
+        std::filesystem::create_directory(dirname);
+        m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
+        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+    }
+#endif
+
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
