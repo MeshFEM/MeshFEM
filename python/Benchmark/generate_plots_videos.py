@@ -8,6 +8,7 @@ Created: 01/17/2025  10:30:52pm
 import os, sys
 sys.path.append('../')
 import MeshFEM, mesh, benchmark
+import argparse
 import numpy as np
 import time
 import plot_video_utils
@@ -85,55 +86,93 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
     print(f"All Plots and Videos Generation for {base_path} Completed! Total Time: {total_elapsed_time:.4f} seconds.")
     print("**********************************************************************************************************************************")
 
+def validate_videos_flag(value):
+    """Validate that the videos_flag is 'yes', 'no', or 'both' (case-insensitive)."""
+    valid_options = {"yes", "no"}
+    if value.lower() not in valid_options:
+        raise argparse.ArgumentTypeError(f"Invalid value for videos_flag: '{value}'. Must be one of {valid_options}.")
+    return value.lower()  # Return the lowercase version for consistency
+
+def main():
+    # Define Hessian options mapping
+    hessian_options_map = {
+        0: ['Adaptive', 'Always', 'xbasedAlways'],
+        1: ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD'],
+        2: ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD'],
+        3: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
+    }
+
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(
+        description="Generate plots and videos for a given experiment setup."
+    )
+    parser.add_argument("result_path", type=str, help="Path to save the experiment results.")
+    parser.add_argument("modelbase_path", type=str, help="Base path to the models.")
+    parser.add_argument(
+        "hessian_list_option",
+        type=int,
+        choices=hessian_options_map.keys(),
+        help="Choose a Hessian option list by index.",
+    )
+    parser.add_argument(
+        "-threads",
+        type=int,
+        nargs="+",  # Accepts one or more integers
+        required=True,
+        help="List of thread numbers to use (e.g., -threads 1 2 4 8).",
+    )
+    parser.add_argument(
+        "-videos_flag",
+        type=validate_videos_flag,
+        default="no",
+        help="Option to generate videos: 'yes' or 'no' (default: 'no').",
+    )
+    parser.add_argument(
+        "-plots_folder_name",
+        type=str,
+        default="Figures",
+        help="Folder name to save plots (default: 'Figures').",
+    )
+    parser.add_argument(
+        "-videos_folder_name",
+        type=str,
+        default="Videos",
+        help="Folder name to save videos (default: 'Videos').",
+    )
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Process parsed arguments
+    hessian_option_list = hessian_options_map.get(args.hessian_list_option, [])
+    thread_num_list = args.threads  # Parsed as a list of integers
+    gen_video_flag = args.videos_flag == "yes"  # Convert flag to boolean
+
+    # Debugging information (optional)
+    print(f"Using Hessian Options: {hessian_option_list}")
+    print(f"Using Thread Numbers: {thread_num_list}")
+    print(f"Generate Videos: {gen_video_flag}")
+    print(f"Plots Folder: {args.plots_folder_name}")
+    print(f"Videos Folder: {args.videos_folder_name}")
+
+    # Call your main function
+    gen_plots_videos(
+        args.result_path,
+        args.modelbase_path,
+        args.plots_folder_name,
+        args.videos_folder_name,
+        hessian_option_list,
+        gen_video_flag,
+        thread_num_list,
+    )
+
+
 if __name__ == "__main__":
-    # Check if the script is provided with the required arguments
-    if len(sys.argv) < 3:
-        print("Usage: python generate_plots_videos.py <result_path> <modelbase_path> <hessian_list_option> <thread_list_option> [<videos_flag>] [<plots_folder_name>] [<videos_folder_name>]")
-        print("--------------------------------------------------------------------------------------------------------------------")
-        print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
-        print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
-        print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
-        print("Usage: Hessian Option List: [3] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
-        print("------------------------------------------------------------")
-        print("Usage: Thread Option List: [0] -- [0](default thread)")
-        print("Usage: Thread Option List: [1] -- [16]")
-        print("Usage: Thread Option List: [2] -- [1] ")
-        print("Usage: Thread Option List: [3] -- [4, 8, 16] ")
-        print("Usage: Thread Option List: [4] -- [2] ")
-        print("Usage: Thread Option List: [5] -- [2, 4, 8, 16] ")
-        print("Usage: Thread Option List: [6] -- [1, 2, 4, 8, 16] ")
-        sys.exit(1)
-
-    # Parse command-line arguments
-    result_path = sys.argv[1]
-    modelbase_path = sys.argv[2]
-    hessian_list_option = int(sys.argv[3])
-    thread_list_option = int(sys.argv[4])
-    videos_flag = sys.argv[5] if len(sys.argv) > 5 else 'no'
-    plots_folder_name = sys.argv[6] if len(sys.argv) > 6 else 'Figures'
-    videos_folder_name = sys.argv[7] if len(sys.argv) > 7 else 'Videos'
-
-    gen_video_flag = False
-    if videos_flag == 'yes' or videos_flag == 'Yes' or videos_flag == 'YES':
-        gen_video_flag = True
+    print("Usage: python generate_plots_videos.py <result_path> <modelbase_path> <hessian_list_option> <thread_list_option> [<videos_flag>] [<plots_folder_name>] [<videos_folder_name>]")
+    print("--------------------------------------------------------------------------------------------------------------------")
+    print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
+    print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
+    print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
+    print("Usage: Hessian Option List: [3] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
     
-    hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD']
-    thread_num_list = [0]
-
-    if hessian_list_option == 1:
-        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD']
-    elif hessian_list_option == 2:
-        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD']
-    elif hessian_list_option == 0:
-        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways']
-    elif hessian_list_option == 3:
-        hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD']
-    
-    if thread_list_option == 1:  thread_num_list = [16]
-    elif thread_list_option == 2:  thread_num_list = [1]
-    elif thread_list_option == 5:  thread_num_list = [2, 4, 8, 16]
-    elif thread_list_option == 3:  thread_num_list = [4, 8, 16]
-    elif thread_list_option == 4:  thread_num_list = [2]
-    elif thread_list_option == 6:  thread_num_list = [1, 2, 4, 8, 16]
-
-    gen_plots_videos(result_path, modelbase_path, plots_folder_name, videos_folder_name, hessian_option_list, gen_video_flag, thread_num_list)
+    main()
