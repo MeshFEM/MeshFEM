@@ -18,12 +18,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     if (method == "cholmod") {
         factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
     }
-    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis") {
+    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis" || method == "catamari_legacy") {
 #if MESHFEM_WITH_CATAMARI
-        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>();
+        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_nesdis")
+        if (method == "catamari_nesdis" || method == "legacy")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
         if (method == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;

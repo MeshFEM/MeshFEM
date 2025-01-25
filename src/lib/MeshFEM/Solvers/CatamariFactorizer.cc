@@ -9,7 +9,10 @@
 #include <catamari/norms.hpp>
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
+
+#if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
+#endif
 
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
@@ -39,15 +42,19 @@ struct CatamariConverter {
     using CMat = catamari::CoordinateMatrix<double>;
     using ConversionPlan = catamari::ConversionPlan;
 
-    CatamariConverter(const SuiteSparseMatrix &Asp, const size_t blockSize) {
+    // Note `Asp_in` is the rowcol-reduced *block* sparsity pattern.
+    CatamariConverter(const SuiteSparseMatrix &Asp_in, const size_t blockSize, bool legacy, const std::vector<SuiteSparse_long> &entryForReducedEntry)
+        : m_legacy(legacy)
+    {
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter");
-        if (Asp.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
+        if (Asp_in.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
             throw std::runtime_error("Unexpected symmetry mode");
-        if (Asp.m != Asp.n) throw std::runtime_error("Only square matrices are supported");
+        if (Asp_in.m != Asp_in.n) throw std::runtime_error("Only square matrices are supported");
 
-        const SuiteSparseMatrix *Asp_ptr = &Asp;
+        const SuiteSparseMatrix *Asp_ptr = &Asp_in;
         SuiteSparseMatrix A_scalar;
-        if (blockSize > 1) { A_scalar = expandSparsityPattern<>(Asp, blockSize); Asp_ptr = &A_scalar; }
+        if (blockSize > 1) { A_scalar = expandSparsityPattern<>(Asp_in, blockSize); Asp_ptr = &A_scalar; }
+        const SuiteSparseMatrix &Asp = *Asp_ptr;
 
         // Convert upper-triangle sparsity pattern to a full symmetric sparsity
         // pattern in Catamari format.
@@ -71,8 +78,64 @@ struct CatamariConverter {
             m_result.SetSortedEntries(std::move(new_entries));
             m_sourceReducedEntryForFullMatrixEntry = std::move(A_full.Ax);
         }
+
+        if (legacy) {
+            // Determine where to find each entry of the Catamari matrix `m_result`
+            // within the scalar values array of the original input matrix (pre row-col removal).
+            m_sourceLocForCatamariInputEntry.assign(m_result.NumEntries(), -1);
+            for (catamari::Int j = 0; j < Asp.n; ++j) {
+                for (auto ii = Asp.Ap[j]; ii < Asp.Ap[j + 1]; ++ii) {
+                    catamari::Int i = Asp.Ai[ii];
+                    SuiteSparse_long loc = entryForReducedEntry.empty() ? ii : entryForReducedEntry[ii];
+                    m_sourceLocForCatamariInputEntry[m_result.EntryOffset(i, j)] = loc;
+                    if (i != j)
+                        m_sourceLocForCatamariInputEntry[m_result.EntryOffset(j, i)] = loc;
+                }
+            }
+            for (SuiteSparse_long loc : m_sourceLocForCatamariInputEntry)
+                if (loc == -1) throw std::runtime_error("Missing source entry for full matrix entry");
+        }
     }
     std::vector<SuiteSparse_long> m_sourceReducedEntryForFullMatrixEntry;
+
+    // Note Ax_data is the scalar data before rowcol removal.
+    // Legacy: convert and cache the numerical values of matrix `A` (assuming `A` has
+    // an identical sparsity pattern to `m_Asp`).
+    const CMat &convert(const double *Ax_data) {
+        if (!m_legacy) throw std::runtime_error("convert() is for legacy mode only!");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
+        catamari::Int nc = m_result.NumColumns();
+        for (size_t i = 0; i < m_result.Entries().Size(); ++i)
+            m_result.Entries()[i].value = Ax_data[m_sourceLocForCatamariInputEntry[i]];
+        return m_result;
+    }
+
+    // Legacy: convert and cache the numerical values of matrix `A + sigma B` (assuming
+    // `A` and `B` have identical sparsity patterns to `m_Asp`).
+    // If `B_data == nullptr`, convert the values `A + sigma * I`.
+    const CMat &convert(const double *Ax_data, double sigma, const double *B_data) {
+        if (!m_legacy) throw std::runtime_error("convertWithShift() is for legacy mode only!");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
+        catamari::Int nc = m_result.NumColumns();
+
+        if (B_data != nullptr) {
+            for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
+                SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+                m_result.Entries()[i].value = Ax_data[loc] + sigma * B_data[loc];
+            }
+        }
+        else {
+            for (size_t i = 0; i < m_result.Entries().Size(); ++i)
+                m_result.Entries()[i].value = Ax_data[m_sourceLocForCatamariInputEntry[i]];
+            if (sigma != 0) { // Add the shift to the diagonal entries
+                // This is slow!!!
+                for (catamari::Int j = 0; j < m_result.NumColumns(); ++j)
+                    m_result.Entries()[m_result.EntryOffset(j, j)].value += sigma;
+            }
+        }
+
+        return m_result;
+    }
 
     // Achieve the same result as
     // `catamari::supernodal_ldl::InitializeBlockColumn` for sparse matrix `A`
@@ -316,15 +379,21 @@ struct CatamariConverter {
 private:
     CMat m_result;
     ConversionPlan m_conversionPlan;
+
+    const bool m_legacy = false;
+    SuiteSparseMatrix m_Asp; // For legacy mode only
+    std::vector<SuiteSparse_long> m_sourceLocForCatamariInputEntry; // For legacy mode only
 };
 
-CatamariFactorizer::CatamariFactorizer() {
+CatamariFactorizer::CatamariFactorizer(bool legacy) {
     m_ldl        = std::make_unique<catamari::SparseLDL<double>>();
     m_ldlControl = std::make_unique<catamari::SparseLDLControl<double>>();
     m_ldlControl->SetFactorizationType(catamari::kCholeskyFactorization);
     m_ldlControl->supernodal_strategy = catamari::kSupernodalFactorization;
-    m_ldlControl->supernodal_control.algorithm = catamari::kRightLookingLDL;
-    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true; // Setting this to true seems faster on 5950X, slower on Apple Silicon
+    m_ldlControl->supernodal_control.algorithm = catamari::kRightLookingLDL; // catamari::kRightLookingLDL;
+    m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true;
+    m_ldlControl->supernodal_control.parallel_ratio_threshold = 0.02;
+    m_ldlControl->supernodal_control.legacy = m_legacy = legacy;
 }
 
 size_t CatamariFactorizer::m_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
@@ -412,7 +481,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     }
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize);
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize, m_legacy, m_entryForReducedEntry);
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
@@ -468,39 +537,62 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     }
     else throw std::runtime_error("Unknown orderingMethod");
 
-    m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
-    m_catamariConverter->freeCatamariMatrix();
+    if (!m_legacy) {
+        // Build a conversion plan to support direct injection of entries.
+        m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
+        m_catamariConverter->freeCatamariMatrix();
+    }
     m_factorizationType = FactorizationType::Symbolic;
 }
 
-void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */) {
+void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
-    m_numericFactorizationImpl(mat.Ax.data());
+    m_numericFactorizationImpl(A);
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
-    m_numericFactorizationImpl(A.Ax.data(), sigma, B.Ax.data());
+    m_numericFactorizationImpl(A, sigma, B.Ax.data());
 }
 
 void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
-    m_numericFactorizationImpl(A.Ax.data(), sigma, nullptr);
+    m_numericFactorizationImpl(A, sigma, nullptr);
 }
 
 template<typename... Args>
-void CatamariFactorizer::m_numericFactorizationImpl(const Real *Ax_data, Args&&... args) {
+void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
-    auto result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), Ax_data, std::forward<Args>(args)...);
+    catamari::SparseLDLResult<double> result;
+    if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
+    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), std::forward<Args>(args)...);
+
+    {
+        static bool first = true;
+        if (first) {
+            using catamari::Int;
+            auto &lf = m_ldl->supernodal_factorization->lower_factor_;
+            const Int num_supernodes = m_ldl->supernodal_factorization->ordering_.supernode_sizes.Size();
+            std::cout << "Lower factor structure size (total degree): " << lf->StructureEnd(num_supernodes - 1) - lf->StructureBeg(0) << std::endl;
+            std::cout << "Factor data size: " << m_ldl->supernodal_factorization->factor_values_.Height() << std::endl;
+
+            if (!m_legacy)
+                std::cout << "Catamari converter size: " << m_ldl->supernodal_factorization->m_inputData.cplan->size() << std::endl;
+            first = false;
+        }
+    }
 
 #if CATAMARI_FINEGRAINED_TIMERS
     if (m_ldlControl->supernodal_control.algorithm == catamari::kRightLookingLDL) {
-        static size_t counter = 0;
         static std::string directory = "catamari_timers";
+        static size_t counter = 0;
         if (counter == 0) {
             // Get a unique directory name.
             size_t id = 0;
             while (std::filesystem::exists(directory)) directory = "catamari_timers_" + std::to_string(id++);
             std::filesystem::create_directory(directory);
+
+            std::cout << "Writing Catamari timers to " << directory << std::endl;
+            std::cout << "To disable, set CATAMARI_FINEGRAINED_TIMERS to 0" << std::endl;
         }
         std::string dirname = directory + "/" + std::to_string(counter++);
         std::filesystem::create_directory(dirname);
