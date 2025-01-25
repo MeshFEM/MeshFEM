@@ -104,7 +104,9 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     }
 
     // set up function with 2D vertex positions as variables.
-    auto func = TinyAD::scalar_function<2>(TinyAD::range(nn));
+    TinyAD::EvalSettings eval_settings;
+    eval_settings.n_threads = omp_get_max_threads();
+    auto func = TinyAD::scalar_function<2>(TinyAD::range(nn), eval_settings); // hack around of TinyAD's thread of modification
 
     // Add objective term per face. Each connecting 3 vertiecs.
     func.add_elements<3>(TinyAD::range(num_ele), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)

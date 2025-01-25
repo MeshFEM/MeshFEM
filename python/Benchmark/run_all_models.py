@@ -132,6 +132,7 @@ if __name__ == "__main__":
         print("Usage: Thread Option List: [4] -- [2] ")
         print("Usage: Thread Option List: [5] -- [2, 4, 8, 16] ")
         print("Usage: Thread Option List: [6] -- [1, 2, 4, 8, 16] ")
+        print("Usage: Thread Option List: [7] -- [4] ")
         sys.exit(1)
 
     # Parse command-line arguments
@@ -169,6 +170,7 @@ if __name__ == "__main__":
     elif thread_list_option == 3:  thread_num_list = [4, 8, 16]
     elif thread_list_option == 4:  thread_num_list = [2]
     elif thread_list_option == 6:  thread_num_list = [1, 2, 4, 8, 16]
+    elif thread_list_option == 7: thread_num_list = [4]
     
     run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_option_list)
     writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_num)

@@ -69,8 +69,8 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
             symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
             numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
-            linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
-            hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
+            linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict) + symbolic_factorize_time + numeric_factorize_time
+            hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=benchmark_dict)
             symbolic_factorize_time_list.append(symbolic_factorize_time)
             numeric_factroize_time_list.append(numeric_factorize_time)
         

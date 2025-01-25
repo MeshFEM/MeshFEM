@@ -404,11 +404,15 @@ def getBarPlotsYAxisTitle(metric_key):
 
 # Plot metric with numIter - offset size
 # Under different hessian projection options under one thread configuration
-def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, offset=0, hessian_option_list = ['Adaptive', 'Always', 'Never']):
+def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, offset=0, hessian_option_list = ['Adaptive', 'Always', 'Never'], addScatter=True):
     
     num_options = len(hessian_option_list)
     if len(metric_list) != num_options:
         raise RuntimeWarning("[Error] in saveMetricFigure() List size mismatches with Hessian_options!")
+    
+    scatter_list = []
+    if 'Adaptive' in hessian_option_list:  scatter_list.append(hessian_option_list.index('Adaptive'))
+    if 'AutoDiff' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AutoDiff'))
     
     yAxisTitle = getYAxisTitle(metric_title)
 
@@ -419,27 +423,40 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
 
     color_list, line_style_list = getColorLineList(num_options)
 
+    iter_projTrue_list = create_list_of_lists(num_options)
+    metric_projTrue_list = create_list_of_lists(num_options)
+
     if offset > 0:
-        modified_hessian_proj_list = hessian_projected_list[0][:(0-offset)] # because in uv distance plot we ignore the last step
-        adaptive_projtrue_iter = iterations_list[0][modified_hessian_proj_list==1]
-        metric_projtrue_list = metric_list[0][modified_hessian_proj_list==1]
+        for ind in scatter_list:
+            modified_hessian_proj_list = hessian_projected_list[ind][:(0-offset)] # because in uv distance plot we ignore the last step
+            adaptive_projtrue_iter = iterations_list[ind][modified_hessian_proj_list==1]
+            metric_projtrue_list = metric_list[ind][modified_hessian_proj_list==1]
+            iter_projTrue_list[ind] = adaptive_projtrue_iter
+            metric_projTrue_list[ind] = metric_projtrue_list
     else: 
-        adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
-        metric_projtrue_list = metric_list[0][hessian_projected_list[0]==1]
+        for ind in scatter_list:
+            adaptive_projtrue_iter = iterations_list[ind][hessian_projected_list[ind]==1]
+            metric_projtrue_list = metric_list[ind][hessian_projected_list[ind]==1]
+            iter_projTrue_list[ind] = adaptive_projtrue_iter
+            metric_projTrue_list[ind] = metric_projtrue_list
     
     plt.figure(figsize=(8, 8))
     for i in range(num_options):
         plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     
-    plt.scatter(adaptive_projtrue_iter, metric_projtrue_list, color='blue', marker='o', s=30)
+    if addScatter:
+        for ind in scatter_list:
+            plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
     plt.ylabel(yAxisTitle, fontsize=14)
     plt.legend()
     plt.tight_layout()
-    
-    full_fn = user_model_name + '_' + metric_title + 'VSIter_Scatter.png'
+
+    full_fn = user_model_name + '_' + metric_title + 'VSIter'
+    if addScatter:  full_fn += '_Scatter.png'
+    else:           full_fn += '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
@@ -476,7 +493,7 @@ def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, 
     plt.close()
 
 # generate plot videos showing the objective(energy) vs iterations plots under 3 different Hessian options
-# grad_norm_list, hessian_projected_list: readHessianData(...)
+# grad_norm_list/obj_list, hessian_projected_list: readHessianData(...)
 # obj_grad_time_list: readConvergenceTimingData(...)
 # fps and figsize
 def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_list, user_model_name, metric_title,
@@ -484,10 +501,17 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
                         fps=30, default_fig_size=(8, 8), speedup=1):
     
     num_options = len(hessian_option_list)
+    scatter_list = []
+    if 'Adaptive' in hessian_option_list:  scatter_list.append(hessian_option_list.index('Adaptive'))
+    if 'AutoDiff' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AutoDiff'))
+
     max_num_steps, max_obj, min_obj = getStepsMaxMin_FromMetricList(metric_list)
     max_N_obj = math.ceil(math.log10(max_obj)) + 1
     min_N_obj = math.floor(math.log10(min_obj)) - 1
     yAxisTitle = getYAxisTitle(metric_title)
+
+    iter_projTrue_list = create_list_of_lists(num_options)
+    metric_projTrue_list = create_list_of_lists(num_options)
 
     obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
     fig = plt.figure(figsize=default_fig_size)
@@ -516,8 +540,11 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
     _, totalTime, _ = getStepsMaxMin_FromMetricList(aligned_timing_list)
     numFrames = int(math.ceil(totalTime / spf))
 
-    adaptive_projtrue_iter = iterations_list[0][hessian_projected_list[0]==1]
-    obj_projtrue_list = metric_list[0][hessian_projected_list[0]==1]
+    for ind in scatter_list:
+        adaptive_projtrue_iter = iterations_list[ind][hessian_projected_list[ind]==1]
+        obj_projtrue_list = metric_list[ind][hessian_projected_list[ind]==1]
+        iter_projTrue_list[ind] = adaptive_projtrue_iter
+        metric_projTrue_list[ind] = obj_projtrue_list
 
     start_record_timer = time.time()
     for f in range(numFrames):
@@ -527,8 +554,9 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
             iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
             plt.plot(iterations_list[i][:iterationForFrame+1], metric_list[i][:iterationForFrame+1], 
                     ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
-            if i == 0: index_for_dots = max(0, bisect.bisect_left(adaptive_projtrue_iter, iterationForFrame))
-            plt.scatter(adaptive_projtrue_iter[:index_for_dots], obj_projtrue_list[:index_for_dots], color='blue', marker='o', s=60)
+            if i in scatter_list:  index_for_dots = max(0, bisect.bisect_left(iter_projTrue_list[i], iterationForFrame))
+            plt.scatter(iter_projTrue_list[i][:index_for_dots], metric_projTrue_list[i][:index_for_dots], 
+                        edgecolors=color_list[i], marker='o', facecolors='none',  s=30)
         
         plt.xlim(0, max_num_steps)
         plt.ylim(10**(min_N_obj), 10**(max_N_obj))
