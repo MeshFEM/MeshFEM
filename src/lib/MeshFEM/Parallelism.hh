@@ -8,6 +8,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
+#include <cstdint> // Must be brought in before `info.h` to work around OneAPI 2021.4.0 TBB issue.
 #include <tbb/info.h>
 #include <tbb/global_control.h>
 #include <tbb/parallel_for.h>
