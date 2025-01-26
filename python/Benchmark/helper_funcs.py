@@ -188,7 +188,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         directional_derivative_history.append(-directional_derivative)
 
     uv = mesh_energy.NodalVars(m, 2)
-    bdry_uv = getBDdataOnUnitCircle(m)
+    bdry_uv = getBDdataOnNormalizedCircle(m)
     uv_init = tutteInitialization(m, bdry_uv)
     uv.setVars(uv_init.ravel())
 
@@ -257,7 +257,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     
 def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
 
-    bdry_uv = getBDdataOnUnitCircle(m)
+    bdry_uv = getBDdataOnNormalizedCircle(m)
     uv_init = tutteInitialization(m, bdry_uv)
 
     benchmark.reset()

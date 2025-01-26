@@ -57,7 +57,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name, folder_name)
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
-        m = mesh.Mesh(model_path) # read mesh from model_path
+        m = helper_funcs.read_mesh(model_path) # read mesh from model_path
         if hessian_proj_option == 'TinyAD':
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m)
             line_search_time = benchmark.totalTime('Line Search$', d=benchmark_dict)
@@ -122,7 +122,7 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
     folder_dir = os.path.join(base_path, model_name, hessian_proj_option, save_uv_folder_name)
     if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
-    m = mesh.Mesh(model_path)
+    m = helper_funcs.read_mesh(model_path)
     if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
     else:                                helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
