@@ -18,12 +18,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     if (method == "cholmod") {
         factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
     }
-    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis") {
+    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis" || method == "catamari_legacy") {
 #if MESHFEM_WITH_CATAMARI
-        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>();
+        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_nesdis")
+        if (method == "catamari_nesdis" || method == "legacy")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
         if (method == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
@@ -37,8 +37,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     }
     else throw std::runtime_error("Unknown method");
 
-    Eigen::VectorXd b;
-    size_t m = 0;
+    Eigen::VectorXd x_gt, b;
 
     for (int counter = 0; ; counter++) {
         std::string symPath = directory + "/" + CholeskyFactorizerBase::symbolicMatrixFileName(counter);
@@ -56,8 +55,11 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             else { throw std::runtime_error("Failed to open pinned vars file corresponding to symbolic matrix " + std::to_string(counter)); }
             auto Hsp = BlockCSCHessianBase::constructFromBinaryStream(symFile);
             factorizer->factorizeSymbolic(*Hsp, pinnedVars);
-            m = Hsp->m;
-            // b = Eigen::VectorXd::Random(m);
+
+            x_gt = Eigen::VectorXd::Random(Hsp->numScalarRows());
+            for (size_t i : factorizer->getFixedVars())
+                x_gt[i] = 0;
+
             continue;
         }
 
@@ -70,11 +72,22 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
             try {
                 factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+
+                // Verify
+                b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
+                auto x = factorizer->solve(b);
+                auto b_recompute = H->apply(x);
+                double relerror_backward = (b - b_recompute).norm() / b.norm();
+                // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
+                // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
+                if (relerror_backward > 1e-5)
+                    std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
             }
             catch (const std::runtime_error &e) {
                 std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
             }
-            // auto x = factorizer->solve(b);
+
+
             continue;
         }
 

@@ -15,7 +15,6 @@
 
 #include <Eigen/Dense>
 #include "Tensor.hh"
-#include "limits.h"
 
 template<typename _Real, size_t _Dim>
 struct SymmetricDirichlet

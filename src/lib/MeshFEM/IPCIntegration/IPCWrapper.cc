@@ -124,7 +124,6 @@ struct IPCWrapper : public IPCWrapperBase {
         return (collisionVertexPositions.colwise().maxCoeff() - collisionVertexPositions.colwise().minCoeff()).norm();
     }
 
-
     virtual VXd compute_potential_gradient(const MXd &cvPositions) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.compute_potential_gradient");
         ipc::BarrierPotential barrierPotential(dhat);
@@ -154,7 +153,6 @@ struct IPCWrapper : public IPCWrapperBase {
     StencilMembers constraintStencil(size_t ci, const Eigen::VectorXi &blockVarForCollisionMeshVertex) const {
         const auto &c = collisionConstraints[ci];
         const size_t nv = c.num_vertices();
-        // Get the collision mesh vertices participating in constraint `c`.
         std::array<long, 4> vertex_ids = c.vertex_ids(collisionMesh.edges(), collisionMesh.faces());
         // Convert to block variables of the global system.
         StencilMembers result(nv);
@@ -169,10 +167,38 @@ struct IPCWrapper : public IPCWrapperBase {
     }
 
     virtual void hessian(NewtonHessian &H, const MXd &cvPositions, const Eigen::VectorXi &blockVarForCollisionMeshVertex, double k, bool projectionMask) const override {
-        m_assembler.assembleHessian(H, collisionConstraints.size(), [&](size_t ci) {
-                ipc::BarrierPotential barrierPotential(dhat);
-                return (k * barrierPotential.hessian(collisionConstraints[ci], collisionConstraints[ci].dof(cvPositions, collisionMesh.edges(), collisionMesh.faces()), projectionMask)).eval();
-            }, [this, &blockVarForCollisionMeshVertex](size_t ci) { return constraintStencil(ci, blockVarForCollisionMeshVertex); });
+        struct CustomHEAD {
+            CustomHEAD(const IPCWrapper &ipc, bool pmask, const MXd &cvp, Real stiffness, int ci, const Eigen::VectorXi &bvfcmv) : evars(ipc.constraintStencil(ci)) {
+                ipc::BarrierPotential barrierPotential(ipc.dhat);
+                H_e = stiffness * barrierPotential.hessian(ipc.collisionConstraints[ci],
+                                                    ipc.collisionConstraints[ci].dof(cvp, ipc.collisionMesh.edges(), ipc.collisionMesh.faces()), pmask);
+
+                // We need to remove from the stencil variables corresponding to the obstacles.
+                // These are variables for which `blockVarForCollisionMeshVertex` is -1.
+                // We also need to skip over those blocks of the per-element Hessian,
+                // which we do with the `local_block_for_evar` index remapping array.
+                size_t back = 0;
+                local_block_for_evar.resize(evars.numVars);
+                for (size_t v = 0; v < evars.numVars; ++v) {
+                    int bvar = bvfcmv[evars[v]];
+                    if (bvar == -1) continue;
+                    local_block_for_evar[back] = v;
+                    evars[back++] = bvar;
+                }
+                local_block_for_evar.resize(back);
+                evars.resize(back);
+            }
+
+            using MNd = Eigen::Matrix<Real, N, N>;
+            MNd block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const { return block(a, b); }
+            MNd block(size_t a, size_t b) const { return H_e.template block<N, N>(N * local_block_for_evar[a / N], N * local_block_for_evar[b / N]); } // (a, b) are scalar offsets...
+
+            ipc::MatrixMax12d H_e;
+
+            StencilMembers local_block_for_evar;
+            StencilMembers evars;
+        };
+        m_assembler.assembleHessian(H, collisionConstraints.size(), [&](size_t ci) { return CustomHEAD(*this, projectionMask, cvPositions, k, ci, blockVarForCollisionMeshVertex); });
     }
 
     virtual std::unique_ptr<BlockCSCHessianBase> block_hessian_sparsity_pattern(const Eigen::VectorXi &blockVarForCollisionMeshVertex) const override {

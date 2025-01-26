@@ -501,6 +501,14 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     virtual SuiteSparseMatrix toScalar(bool sparsityOnly = false) const = 0;
 
+    Eigen::VectorXd apply(const Eigen::VectorXd &x) const {
+        if (size_t(x.size()) != numScalarCols())
+            throw std::runtime_error("BlockCSCHessian::apply: input vector has incorrect size");
+        Eigen::VectorXd result(numScalarCols());
+        applyRaw(x.data(), result.data());
+        return result;
+    }
+
     virtual void applyRaw(const double *x, double *result) const = 0;
 
     // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` and `addNZBlock` implementations.
@@ -537,6 +545,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     void readBinaryFromStream(std::istream &is);
 
 private:
+    using CSCMat::apply; // hide
     virtual void m_addDiag(const double *d) = 0;
 };
 
@@ -705,6 +714,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 
     virtual void applyRaw(const _Real *x, _Real *result) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.applyRaw");
+        if (isSparsityOnly()) throw std::runtime_error("BlockCSCHessian::applyRaw: cannot apply a sparsity-only matrix");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
         static constexpr int BlockSize = VarStructure::SingleBlockDim ? int(VarStructure::MaxBlockDim) : Eigen::Dynamic;
         Eigen::Matrix<_Real, BlockSize, BlockSize, Eigen::ColMajor,

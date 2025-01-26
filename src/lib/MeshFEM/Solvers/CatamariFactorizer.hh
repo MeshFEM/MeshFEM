@@ -29,7 +29,8 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         Catamari, CholmodNesdis, Metis
     };
 
-    CatamariFactorizer();
+    // legacy: whether to use Jack Poulson's original implementation for comparison
+    CatamariFactorizer(bool legacy = false);
 
     size_t m_reduced() const override;
     size_t n_reduced() const override;
@@ -41,7 +42,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
 
-    void factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */ = false) override;
+    void factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma,                             bool isInTryCatch=false) override;
 
@@ -79,7 +80,10 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void clearStashedFactorization()       override;
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
-    CholeskyProvider provider() const override { return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari; }
+    CholeskyProvider provider() const override {
+        if (m_legacy) return CholeskyProvider::CatamariLegacy;
+        return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari;
+    }
 
     virtual ~CatamariFactorizer();
 
@@ -87,7 +91,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
 private:
     template<typename... Args>
-    void m_numericFactorizationImpl(const Real *Ax_data, Args&&... args);
+    void m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args);
 
     void m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars);
 
@@ -101,6 +105,9 @@ private:
 
     // Support fused pre-permutation functionality (where row-col-removal is fused with permutation)
     void m_populatePermutedReducedRowForRow() const override;
+
+    // Whether to use Jack Poulson's original code for comparison
+    bool m_legacy = false;
 };
 #endif
 
