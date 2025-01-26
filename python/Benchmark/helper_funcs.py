@@ -15,12 +15,85 @@ import numpy as np
 import copy, time
 import igl
 
+import numpy as np
+
+def map_vertices_to_circle_area_normalized(V, F, bnd):
+    """
+    Python equivalent of the C++ function:
+
+        void map_vertices_to_circle_area_normalized(
+            const Eigen::MatrixXd& V,
+            const Eigen::MatrixXi& F,
+            const Eigen::VectorXi& bnd,
+            Eigen::MatrixXd& UV)
+
+    Parameters
+    ----------
+    V : (n, 3) float ndarray
+        Vertex positions
+    F : (m, 3) int ndarray
+        Triangle indices
+    bnd : (k,) int ndarray
+        Boundary vertex indices
+
+    Returns
+    -------
+    bc : (k, 2) float ndarray
+        UV coordinates for the boundary vertices, placed on a circle
+        whose radius is sqrt(mesh_area / pi).
+    """
+    # 1) Compute total mesh area via doublearea
+    #    igl.doublearea(...) returns one "double area" value per face
+    dblArea_orig = igl.doublearea(V, F)  # shape (m,)
+    area = dblArea_orig.sum() / 2.0
+    radius = np.sqrt(area / np.pi)
+
+    # Uncomment if you want the same console output as in C++:
+    # print(f"map_vertices_to_circle_area_normalized, area = {area}, radius = {radius}")
+
+    # 2) Build a running length array along boundary vertices
+    k = bnd.shape[0]
+    length = np.zeros(k)
+    for i in range(1, k):
+        prev_idx = bnd[i - 1]
+        curr_idx = bnd[i]
+        length[i] = length[i - 1] + np.linalg.norm(V[prev_idx] - V[curr_idx])
+
+    # Add the distance between the last and the first boundary vertex
+    total_len = length[-1] + np.linalg.norm(V[bnd[0]] - V[bnd[-1]])
+
+    # 3) Place boundary vertices along the circle of computed radius
+    bc = np.zeros((k, 2))
+    for i in range(k):
+        frac = length[i] * (2.0 * np.pi) / total_len
+        bc[i, 0] = radius * np.cos(frac)
+        bc[i, 1] = radius * np.sin(frac)
+
+    return bc
+
+
 def getBDdataOnUnitCircle(m):
     BV = m.boundaryVertices()
     bloop = m.boundaryLoops()[0][::-1]
     bdry_uv = igl.map_vertices_to_circle(m.vertices(), BV[bloop])
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
+
+def getBDdataOnNormalizedCircle(m):
+    BV = m.boundaryVertices()
+    bloop = m.boundaryLoops()[0][::-1]
+    bdry_uv = map_vertices_to_circle_area_normalized(m.vertices(), m.elements(), BV[bloop])
+    bdry_uv[bloop] =  bdry_uv.copy()
+    return bdry_uv
+
+# read mesh and scale down vertices
+def read_mesh(mesh_path : str):
+    m_ori = mesh.Mesh(mesh_path)
+    vertices_ori = m_ori.vertices()
+    elements_ori = m_ori.elements()
+    mesh_area_ori = (m_ori.elementVolumes()).sum()
+    vertices_scale_down = vertices_ori / np.sqrt(mesh_area_ori)
+    return mesh.Mesh(vertices_scale_down, elements_ori)
 
 def tutteInitialization(m, bdry_uv):
     # Tutte Initialization
