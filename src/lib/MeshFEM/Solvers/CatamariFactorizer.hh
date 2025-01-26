@@ -80,7 +80,10 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void clearStashedFactorization()       override;
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
-    CholeskyProvider provider() const override { return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari; }
+    CholeskyProvider provider() const override {
+        if (m_legacy) return CholeskyProvider::CatamariLegacy;
+        return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari;
+    }
 
     virtual ~CatamariFactorizer();
 

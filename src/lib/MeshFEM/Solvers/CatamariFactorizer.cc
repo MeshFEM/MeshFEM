@@ -137,105 +137,6 @@ struct CatamariConverter {
         return m_result;
     }
 
-    // Achieve the same result as
-    // `catamari::supernodal_ldl::InitializeBlockColumn` for sparse matrix `A`
-    // or `A + sigma B` (with B of identical sparsity pattern to `A`) after
-    // possibly converting `A` and `B` into "reduced" versions by removing rows
-    // and columns corresponding to pinned vars.
-    void injectEntries(const catamari::SparseLDL<double> &ldl, const SuiteSparseMatrix &A, double sigma = 0.0, const SuiteSparseMatrix *B_optional = nullptr) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Inject entries");
-        auto f = ldl.supernodal_factorization.get();
-        if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
-        if (A.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
-            throw std::runtime_error("Unexpected symmetry mode");
-
-        auto &df = f->diagonal_factor_;
-        auto &lf = f->lower_factor_;
-        double *f_vals = f->factor_values_.Data();
-
-        using Int = catamari::Int;
-        auto &o   = f->ordering_;
-        auto &sno = o.supernode_offsets;
-        const Int num_supernodes = o.supernode_sizes.Size();
-
-        static tbb::affinity_partitioner ap;
-
-        if (m_conversionPlan.empty()) throw std::runtime_error("Conversion plan was not constructed");
-
-        size_t nthreads = get_max_num_tbb_threads();
-        {
-            BENCHMARK_SCOPED_TIMER_SECTION ztimer("zero and copy");
-            if (B_optional == nullptr || sigma == 0) {
-                const double *Ax = A.Ax.data();
-                tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes),
-                      [&](const tbb::blocked_range<catamari::Int> &r) {
-                           for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                                auto &db = df->blocks[supernode];
-                                auto &lb = lf->blocks[supernode];
-                                catamari::BlasMatrixView<double> front;
-                                front.data = db.Data();
-                                front.height = front.leading_dim = db.leading_dim;
-                                front.width = db.width;
-                                const Int supernode_start = sno[supernode];
-                                const Int supernode_end   = sno[supernode + 1];
-                                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
-                                    Int j_rel = j_perm - supernode_start;
-                                    const Int outSize = front.height - j_rel;
-                                    double *outPtr = front.Pointer(j_rel, j_rel);
-
-                                    const auto cpBegin = m_conversionPlan.columnData(j_perm);
-                                    const auto cpEnd   = m_conversionPlan.columnData(j_perm + 1);
-
-#if 0 // Single-pass version (apparently slower than using Eigen, and requires sorting)
-                                    double *endOutPtr = outPtr + outSize;
-                                    for (auto it = cpBegin; it != cpEnd; ++it) {
-                                        double *dst = f_vals + it->first;
-                                        while (outPtr < dst) *outPtr++ = 0.0;
-                                        *outPtr++ = Ax[it->second];
-                                    }
-                                    while (outPtr < endOutPtr) *outPtr++ = 0.0;
-#else
-                                    catamari::eigenMap(outPtr, outSize).setZero();
-                                    for (auto it = cpBegin; it != cpEnd; ++it)
-                                        f_vals[it->dst] = Ax[it->src];
-#endif
-                                }
-                           }
-                        }, ap);
-            }
-            else {
-                // Factorize with shift.
-                const auto &B = *B_optional;
-                SuiteSparse_long nc = A.m;
-                if ((B.m != nc) || (B.n != nc)) throw std::runtime_error("Unexpected input shape(s)");
-                if (B.Ai.size() != A.Ai.size()) throw std::runtime_error("B must have the same sparsity pattern as A");
-                const double *Ax = A.Ax.data();
-                tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes),
-                      [&](const tbb::blocked_range<catamari::Int> &r) {
-                           for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                                auto &db = df->blocks[supernode];
-                                auto &lb = lf->blocks[supernode];
-                                catamari::BlasMatrixView<double> front;
-                                front.data = db.Data();
-                                front.height = front.leading_dim = db.leading_dim;
-                                front.width = db.width;
-                                const Int supernode_start = sno[supernode];
-                                const Int supernode_end   = sno[supernode + 1];
-                                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
-                                    Int j_rel = j_perm - supernode_start;
-                                    catamari::eigenMap(front.Pointer(j_rel, j_rel), front.height - j_rel).setZero();
-
-                                    const auto cpBegin = m_conversionPlan.columnData(j_perm);
-                                    const auto cpEnd   = m_conversionPlan.columnData(j_perm + 1);
-                                    for (auto it = cpBegin; it != cpEnd; ++it)
-                                        f_vals[it->dst] = Ax[it->src];
-                                }
-                           }
-                        }, ap);
-            }
-        }
-    }
-
     // Get the most recently converted matrix.
     const CMat &get() const { return m_result; }
 
@@ -546,7 +447,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 }
 
 void CatamariFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */) {
-    assertFactorization(FactorizationType::Symbolic);
     m_numericFactorizationImpl(A);
 }
 
@@ -573,10 +473,11 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
             auto &lf = m_ldl->supernodal_factorization->lower_factor_;
             const Int num_supernodes = m_ldl->supernodal_factorization->ordering_.supernode_sizes.Size();
             std::cout << "Lower factor structure size (total degree): " << lf->StructureEnd(num_supernodes - 1) - lf->StructureBeg(0) << std::endl;
-            std::cout << "Factor data size: " << m_ldl->supernodal_factorization->factor_values_.Height() << std::endl;
 
-            if (!m_legacy)
+            if (!m_legacy) {
+                std::cout << "Factor data size: " << m_ldl->supernodal_factorization->factor_values_.Height() << std::endl;
                 std::cout << "Catamari converter size: " << m_ldl->supernodal_factorization->m_inputData.cplan->size() << std::endl;
+            }
             first = false;
         }
     }

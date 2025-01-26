@@ -160,7 +160,10 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_CATAMARI
         .value("Catamari",       CholeskyProvider::Catamari)
         .value("CatamariNesdis", CholeskyProvider::CatamariNesdis)
-#endif
+#if CATAMARI_OPENMP
+        .value("CatamariLegacy", CholeskyProvider::CatamariLegacy)
+#endif // CATAMARI_OPENMP
+#endif // MESHFEM_WITH_CATAMARI
 #if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
         .value("PARDISO", CholeskyProvider::PARDISO)
 #endif
@@ -181,9 +184,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("n_reduced",    &CFB::n_reduced)
         .def("hasFixedVars", &CFB::hasFixedVars)
         .def("getFixedVars", &CFB::getFixedVars)
-        .def("factorizeSymbolic", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
-                c.factorizeSymbolic(mat, pinnedVars); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>())
-        .def("factorizeNumeric", [](CFB &c, const SuiteSparseMatrix &mat, bool isInTryCatch) { c.factorizeNumeric(mat, isInTryCatch); }, py::arg("mat"), py::arg("isInTryCatch") = false)
+        .def("factorizeSymbolic", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) { c.factorizeSymbolic(mat, pinnedVars); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>()) .def("factorizeNumeric", [](CFB &c, const SuiteSparseMatrix &mat, bool isInTryCatch) { c.factorizeNumeric(mat, isInTryCatch); }, py::arg("mat"), py::arg("isInTryCatch") = false)
         .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma                            , bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma   , isInTryCatch); }, py::arg("mat"), py::arg("sigma")              , py::arg("isInTryCatch") = false)
         .def("factorizeNumericWithShift", [](CFB &c, const SuiteSparseMatrix &A, double sigma, const SuiteSparseMatrix &B, bool isInTryCatch) { c.factorizeNumericWithShift(A, sigma, B, isInTryCatch); }, py::arg("mat"), py::arg("sigma"), py::arg("B"), py::arg("isInTryCatch") = false)
         .def("factorize", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool isInTryCatch) {

@@ -18,9 +18,11 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
             return std::make_unique<PardisoFactorizer>();
         case CholeskyProvider::Catamari:
         case CholeskyProvider::CatamariNesdis:
+        case CholeskyProvider::CatamariLegacy:
 #if MESHFEM_WITH_CATAMARI
             {
-                auto c = std::make_unique<CatamariFactorizer>(std::forward<Args>(args)...);
+                bool legacy = provider == CholeskyProvider::CatamariLegacy;
+                auto c = std::make_unique<CatamariFactorizer>(legacy);
                 c->orderingMethod = (provider == CholeskyProvider::Catamari)
                                             ? CatamariFactorizer::OrderingMethod::Catamari
                                             : CatamariFactorizer::OrderingMethod::CholmodNesdis;
