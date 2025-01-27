@@ -167,10 +167,10 @@ def main():
         warnings.warn(f"Warning: The base_path '{base_path}' does not exist. Please check the path.")
         sys.exit(1)  # Exit if the path does not exist
     
-    if hessian_proj_option == 'TinyAD':
+    if hessian_proj_option in ['TinyAD', 'SLIM']:
         if thread_num != 0: # not in default case
             os.environ['OMP_NUM_THREADS'] = str(thread_num)
-    elif hessian_proj_option != 'SLIM':  
+    else:  
         os.environ['OMP_NUM_THREADS'] = '1'
         parallelism.set_max_num_tbb_threads(int(thread_num))
     

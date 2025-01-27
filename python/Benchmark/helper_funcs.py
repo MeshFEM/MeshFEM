@@ -370,7 +370,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
         execute_str = threads_str + str(16) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "yes"
         cmd = [
-            threads_str + str(16),
+            # threads_str + str(16),
             exe_binary_str,
             model_path,
             model_uv_path,
@@ -399,7 +399,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
         execute_str = threads_str + str(thread_num) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "no"
         cmd = [
-            threads_str + str(thread_num),
+            # threads_str + str(thread_num),
             exe_binary_str,
             model_path,
             model_uv_path,
