@@ -64,6 +64,15 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             linsys_solve_time = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
             hessian_eval_time = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
             line_search_time_list.append(line_search_time)
+        
+        elif hessian_proj_option == 'SLIM':
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSLIM(model_name, model_path, thread_num)
+            symbolic_factorize_time = benchmark_dict['symbolic_fac_time']
+            numeric_factorize_time = benchmark_dict['numeric_fac_time']
+            linsys_solve_time = benchmark_dict['linear_solve_time'] + symbolic_factorize_time + numeric_factorize_time
+            hessian_eval_time = benchmark_dict['hessian_eval_time']
+            symbolic_factorize_time_list.append(symbolic_factorize_time)
+            numeric_factroize_time_list.append(numeric_factorize_time)
 
         else:
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option)
@@ -124,6 +133,7 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
 
     m = helper_funcs.read_mesh(model_path)
     if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
+    elif hessian_proj_option == 'SLIM':  helper_funcs.runSLIM(model_name, model_path, uvsave_path=folder_dir)
     else:                                helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
 
@@ -160,7 +170,7 @@ def main():
     if hessian_proj_option == 'TinyAD':
         if thread_num != 0: # not in default case
             os.environ['OMP_NUM_THREADS'] = str(thread_num)
-    else:  
+    elif hessian_proj_option != 'SLIM':  
         os.environ['OMP_NUM_THREADS'] = '1'
         parallelism.set_max_num_tbb_threads(int(thread_num))
     

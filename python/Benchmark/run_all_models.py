@@ -131,6 +131,8 @@ def main():
         5: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff'],
         6: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
         7: ['AutoDiff'],
+        8: ['SLIM'],
+        9: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM']
     }
 
     # Set up argument parsing
@@ -209,68 +211,7 @@ if __name__ == "__main__":
     print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff]")
     print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
     print("Usage: Hessian Option List: [7] -- [AutoDiff]")
+    print("Usage: Hessian Option List: [8] -- [SLIM]")
+    print("Usage: Hessian Option List: [9] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
     main()
-
-    # # Check if the script is provided with the required arguments
-    # if len(sys.argv) < 6:
-    #     print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_list_option> <thread_list_option> [<repeat_num>]")
-    #     print("--------------------------------------------------------------------------------------------------------------------")
-    #     print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
-    #     print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
-    #     print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
-    #     print("Usage: Hessian Option List: [3] -- [TinyAD]")
-    #     print("Usage: Hessian Option List: [4] -- [Never]")
-    #     print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff]")
-    #     print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
-    #     print("Usage: Hessian Option List: [7] -- [AutoDiff]")
-    #     print("------------------------------------------------------------")
-    #     print("Usage: Thread Option List: [0] -- [0](default thread)")
-    #     print("Usage: Thread Option List: [1] -- [16]")
-    #     print("Usage: Thread Option List: [2] -- [1] ")
-    #     print("Usage: Thread Option List: [3] -- [4, 8, 16] ")
-    #     print("Usage: Thread Option List: [4] -- [2] ")
-    #     print("Usage: Thread Option List: [5] -- [2, 4, 8, 16] ")
-    #     print("Usage: Thread Option List: [6] -- [1, 2, 4, 8, 16] ")
-    #     print("Usage: Thread Option List: [7] -- [4] ")
-    #     sys.exit(1)
-
-    # # Parse command-line arguments
-    # result_path = sys.argv[1]
-    # modelbase_path = sys.argv[2]
-    # save_uv_option = sys.argv[3]
-    # hessian_list_option = int(sys.argv[4])
-    # thread_list_option = int(sys.argv[5])
-    # repeat_num = int(sys.argv[6]) if len(sys.argv) > 6 else 1
-    # if repeat_num <= 0:
-    #     print("[Error] <repeat_num> must be an positive integer >= 1.")
-    #     sys.exit(1)
-    
-    # thread_num_list = [0]
-    # hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways']
-
-    # if hessian_list_option == 1:
-    #     hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD']
-    # elif hessian_list_option == 2:
-    #     hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD']
-    # elif hessian_list_option == 3:
-    #     hessian_option_list = ['TinyAD']
-    # elif hessian_list_option == 4:
-    #     hessian_option_list = ['Never']
-    # elif hessian_list_option == 5:
-    #     hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff']
-    # elif hessian_list_option == 6:
-    #     hessian_option_list = ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD']
-    # elif hessian_list_option == 7:
-    #     hessian_option_list = ['AutoDiff']
-    
-    # if thread_list_option == 1:  thread_num_list = [16]
-    # elif thread_list_option == 2:  thread_num_list = [1]
-    # elif thread_list_option == 5:  thread_num_list = [2, 4, 8, 16]
-    # elif thread_list_option == 3:  thread_num_list = [4, 8, 16]
-    # elif thread_list_option == 4:  thread_num_list = [2]
-    # elif thread_list_option == 6:  thread_num_list = [1, 2, 4, 8, 16]
-    # elif thread_list_option == 7: thread_num_list = [4]
-    
-    # run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_option_list)
-    # writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_num)
     
