@@ -230,10 +230,10 @@ def readDictData(directory, thread_num_list, hessian_option_list):
                 thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
                 thread_dict['line_search'] = benchmark.totalTime('Line Search$', d=benchmark_dict)
             else:
-                thread_dict['linsolve'] = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict)
-                thread_dict['hessian_eval'] = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict)
+                thread_dict['hessian_eval'] = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=benchmark_dict)
                 thread_dict['symbol'] = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
                 thread_dict['numeric'] = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
+                thread_dict['linsolve'] = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict) + thread_dict['symbol'] + thread_dict['numeric']
             hessian_dict[thread_num] = thread_dict
         model_dict[hessian_option] = hessian_dict
     

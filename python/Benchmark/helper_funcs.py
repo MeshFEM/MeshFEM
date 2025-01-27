@@ -358,9 +358,9 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
 def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
     threads_str = "OMP_NUM_THREADS="
     exe_binary_str = "./ReweightedARAP"
+    model_uv_name = model_name + "_slim_uv.off"
     if uvsave_path is not None: # SAVE UV AT EVERY ITERATION
         TEMP_FILE_PATH = "SLIM_TEMP_UV"
-        model_uv_name = model_name + "_slim_uv.off"
         model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
         execute_str = threads_str + str(16) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "yes"
         cmd = [
@@ -389,7 +389,43 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
         print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
     else:
-        pass
+        TEMP_FILE_PATH = "SLIM_TEMP_DATA"
+        model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
+        execute_str = threads_str + str(thread_num) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "no"
+        cmd = [
+            threads_str + str(thread_num),
+            exe_binary_str,
+            model_path,
+            model_uv_path,
+            "no"
+        ]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error during execution: {e}")
+            sys.exit(1)
+        # Now we want to read data from SLIM_TEMP_DATA
+        obj_txt_path = os.path.join(TEMP_FILE_PATH, "obj_history.txt")
+        grad_norm_txt_path = os.path.join(TEMP_FILE_PATH, "grad_norm_history.txt")
+        iter_time_txt_path = os.path.join(TEMP_FILE_PATH, "iter_time_history.txt")
+        benchmark_data_txt_path = os.path.join(TEMP_FILE_PATH, "benchmark_data.txt")
+
+        obj_arr = np.loadtxt(obj_txt_path)
+        grad_norm_arr = np.loadtxt(grad_norm_txt_path)
+        iter_time_arr = np.loadtxt(iter_time_txt_path)
+        benchmark_data = np.loadtxt(benchmark_data_txt_path)
+
+        # process iter_time_arr deduce initial parametrization time
+        time_history_arr = iter_time_arr - iter_time_arr[0]
+        # construct dictionary benchmark_dict
+        benchmark_dict = {}
+        benchmark_dict['totalTime'] = benchmark_data[0] - iter_time_arr[0]
+        benchmark_dict['symbolic_fac_time'] = benchmark_data[1]
+        benchmark_dict['numeric_fac_time'] = benchmark_data[2]
+        benchmark_dict['hessian_eval_time'] = benchmark_data[3]
+        benchmark_dict['linear_solve_time'] = benchmark_data[4]
+
+        return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
         
 
 
