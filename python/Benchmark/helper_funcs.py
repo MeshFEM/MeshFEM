@@ -359,8 +359,14 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
     threads_str = "OMP_NUM_THREADS="
     exe_binary_str = "./ReweightedARAP"
     model_uv_name = model_name + "_slim_uv.off"
+    # create TEMP_FILE_PATH if it doesn't exists
+    UV_FILE_PATH = "SLIM_TEMP_UV"
+    DATA_FILE_PATH = "SLIM_TEMP_DATA"
+    if not os.path.exists(UV_FILE_PATH):  os.makedirs(UV_FILE_PATH)
+    if not os.path.exists(DATA_FILE_PATH):  os.makedirs(DATA_FILE_PATH)
+
     if uvsave_path is not None: # SAVE UV AT EVERY ITERATION
-        TEMP_FILE_PATH = "SLIM_TEMP_UV"
+        TEMP_FILE_PATH = UV_FILE_PATH
         model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
         execute_str = threads_str + str(16) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "yes"
         cmd = [
@@ -389,7 +395,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
         print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
     else:
-        TEMP_FILE_PATH = "SLIM_TEMP_DATA"
+        TEMP_FILE_PATH = DATA_FILE_PATH
         model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
         execute_str = threads_str + str(thread_num) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "no"
         cmd = [
@@ -424,7 +430,8 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         benchmark_dict['numeric_fac_time'] = benchmark_data[2]
         benchmark_dict['hessian_eval_time'] = benchmark_data[3]
         benchmark_dict['linear_solve_time'] = benchmark_data[4]
-
+        
+        delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
         
 
