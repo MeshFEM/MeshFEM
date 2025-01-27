@@ -7,6 +7,7 @@ Created: 01/11/2025  2:07:55
 
 import os, sys
 sys.path.append('../')
+import subprocess
 import MeshFEM
 import mesh, mesh_energy, energy
 import parametrization, py_newton_optimizer, benchmark
@@ -102,6 +103,17 @@ def tutteInitialization(m, bdry_uv):
     if len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
     return uv_init
 
+def delete_all_files_in_folder(folder_path):
+    """
+    Deletes only regular files (and symlinks) in the given folder,
+    leaving subdirectories (and their contents) untouched.
+    """
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        # If it's a file or a symlink, remove it
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.remove(file_path)
+
 def processEigenUVTXTs(folder_path):
     """
     Processes txt files in a given folder, converting them to raveled NumPy arrays
@@ -151,6 +163,64 @@ def processEigenUVTXTs(folder_path):
         for txt_file in txt_files:
             try:
                 os.remove(os.path.join(folder_path, txt_file))
+            except Exception as e:
+                print(f"Error deleting file {txt_file}: {e}")
+        return True
+    else:
+        print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
+        return False
+
+def processUVTXTs(source_path, to_path, txt_file_prefix_str):
+    """
+    Processes txt files in a given folder, converting them to raveled NumPy arrays
+    and saving them as compressed .npz files. Deletes the original txt files after
+    ensuring the same number of .npz files are created.
+
+    Args:
+        source_path (str): Path to the folder containing the txt files.
+        to_path (str): Path to the folder containing the npz files.
+        txt_file_prefix_str: e.g., "uv_Eigen_Iter_"
+
+    Returns:
+        bool: True if the number of .npz files matches the original txt files, False otherwise.
+    """
+    # Get all files in the folder
+    txt_files = [f for f in os.listdir(source_path) if f.startswith(txt_file_prefix_str) and f.endswith(".txt")]
+    npz_files_created = 0
+
+    for txt_file in txt_files:
+        try:
+            # Build full path for the txt file
+            txt_path = os.path.join(source_path, txt_file)
+            
+            # Read the txt file into a NumPy array
+            data = np.loadtxt(txt_path)
+            
+            # Ensure the data has two columns
+            if data.ndim == 1 or data.shape[1] != 2:
+                raise ValueError(f"File {txt_file} does not have two columns.")
+            
+            # Get the raveled version of the array
+            raveled_data = data.ravel()
+            
+            # Construct the .npz file name
+            file_index = txt_file.split('_')[-1].split('.')[0]  # Extract i from "uv_Eigen_Iter_i.txt"
+            npz_file_name = f"uv_ravel_iter_{file_index}.npz"
+            npz_path = os.path.join(to_path, npz_file_name)
+            
+            # Save the raveled array to a compressed .npz file
+            np.savez_compressed(npz_path, arr=raveled_data)
+            npz_files_created += 1
+        except Exception as e:
+            print(f"Error processing file {txt_file}: {e}")
+
+    # Check if the number of .npz files matches the number of txt files
+    npz_files = [f for f in os.listdir(to_path) if f.startswith("uv_ravel_iter_") and f.endswith(".npz")]
+    if len(npz_files) == len(txt_files):
+        # If numbers match, delete the txt files
+        for txt_file in txt_files:
+            try:
+                os.remove(os.path.join(source_path, txt_file))
             except Exception as e:
                 print(f"Error deleting file {txt_file}: {e}")
         return True
@@ -285,4 +355,45 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
         bk_dict = benchmark.to_dict()
         return np.array(obj_history), np.array(time_history), np.array(grad_history), bk_dict
 
+def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
+    threads_str = "OMP_NUM_THREADS="
+    exe_binary_str = "./ReweightedARAP"
+    if uvsave_path is not None: # SAVE UV AT EVERY ITERATION
+        TEMP_FILE_PATH = "SLIM_TEMP_UV"
+        model_uv_name = model_name + "_slim_uv.off"
+        model_uv_path = os.path.join(TEMP_FILE_PATH, model_uv_name)
+        execute_str = threads_str + str(16) + " " + exe_binary_str + " " + model_path + " " + model_uv_path + " " + "yes"
+        cmd = [
+            threads_str + str(16),
+            exe_binary_str,
+            model_path,
+            model_uv_path,
+            "yes"
+        ]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error during execution: {e}")
+            sys.exit(1)
+        # Now we want to read data from SLIM_TEMP_UV
+        obj_txt_path = os.path.join(TEMP_FILE_PATH, "obj_history.txt")
+        obj_arr = np.loadtxt(obj_txt_path)
+        grad_norm_txt_path = os.path.join(TEMP_FILE_PATH, "grad_norm_history.txt")
+        grad_norm_arr = np.loadtxt(grad_norm_txt_path)
+        obj_filename = 'obj_history.npy'
+        grad_norm_filename = 'grad_norm_history.npy'
+        np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
+        # Process UVs
+        if not processUVTXTs(TEMP_FILE_PATH, uvsave_path, "uv_SLIM_Iter_"):  raise RuntimeError(f"[Error] In Process SLIM txts in {TEMP_FILE_PATH}.")
+        delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
+    else:
+        pass
+        
+
+
+
+
+    
 
