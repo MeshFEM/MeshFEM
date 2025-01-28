@@ -27,6 +27,9 @@ def getColorLineList(options):
     elif options == 5:
         color_list.extend(['forestgreen', 'gold'])
         line_style_list.extend(['-', '-'])
+    elif options == 6:
+        color_list.extend(['forestgreen', 'gold', 'darkorange'])
+        line_style_list.extend(['-', '-', '-'])
     return color_list, line_style_list
 
 def create_list_of_lists(num_inner_lists):
@@ -229,6 +232,11 @@ def readDictData(directory, thread_num_list, hessian_option_list):
                 thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
                 thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
                 thread_dict['line_search'] = benchmark.totalTime('Line Search$', d=benchmark_dict)
+            elif hessian_option == 'SLIM':
+                thread_dict['hessian_eval'] = benchmark_dict['hessian_eval_time']
+                thread_dict['symbol'] = benchmark_dict['symbolic_fac_time']
+                thread_dict['numeric'] = benchmark_dict['numeric_fac_time']
+                thread_dict['linsolve'] = benchmark_dict['linear_solve_time'] + thread_dict['symbol'] + thread_dict['numeric']
             else:
                 thread_dict['hessian_eval'] = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=benchmark_dict)
                 thread_dict['symbol'] = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)

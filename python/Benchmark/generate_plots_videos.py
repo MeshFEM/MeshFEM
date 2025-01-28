@@ -51,8 +51,8 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
-        plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
-        plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+        # plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+        # plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
 
         # generate bar plots
         metric_key_list = ['time', 'hessian_eval', 'linsolve']
@@ -100,6 +100,7 @@ def main():
         1: ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD'],
         2: ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD'],
         3: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
+        5: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM'],
     }
 
     # Set up argument parsing
@@ -174,5 +175,6 @@ if __name__ == "__main__":
     print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
     print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
     print("Usage: Hessian Option List: [3] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
+    print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
     
     main()
