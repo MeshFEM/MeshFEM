@@ -51,6 +51,16 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
 
     # Uncomment if you want the same console output as in C++:
     # print(f"map_vertices_to_circle_area_normalized, area = {area}, radius = {radius}")
+    map_ij = np.zeros((V.shape[0], ), dtype=int)
+    interior = []
+    isOnBnd = np.zeros((V.shape[0], ), dtype=bool)
+    for i in range(bnd.shape[0]):
+        isOnBnd[bnd[i]] = True
+        map_ij[bnd[i]] = i
+    for i in range(isOnBnd.shape[0]):
+        if (not isOnBnd[i]):
+            map_ij[i] = len(interior)
+            interior.append(i)
 
     # 2) Build a running length array along boundary vertices
     k = bnd.shape[0]
@@ -67,9 +77,10 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
     bc = np.zeros((k, 2))
     for i in range(k):
         frac = length[i] * (2.0 * np.pi) / total_len
-        bc[i, 0] = radius * np.cos(frac)
-        bc[i, 1] = radius * np.sin(frac)
-
+        bc[map_ij[bnd[i]], 0] = radius * np.cos(frac)
+        bc[map_ij[bnd[i]], 1] = radius * np.sin(frac)
+        # bc[i, 0] = radius * np.cos(frac)
+        # bc[i, 1] = radius * np.sin(frac)
     return bc
 
 
@@ -82,8 +93,9 @@ def getBDdataOnUnitCircle(m):
 
 def getBDdataOnNormalizedCircle(m):
     BV = m.boundaryVertices()
-    bloop = m.boundaryLoops()[0][::-1]
-    bdry_uv = map_vertices_to_circle_area_normalized(m.vertices(), m.elements(), BV[bloop])
+    bnd_loop = igl.boundary_loop(m.elements())
+    bloop = np.searchsorted(BV, bnd_loop)
+    bdry_uv = map_vertices_to_circle_area_normalized(m.vertices(), m.elements(), bnd_loop)
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
