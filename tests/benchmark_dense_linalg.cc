@@ -145,13 +145,17 @@ int main(int argc, const char *argv[]) {
         matrix.height = A.rows();
         matrix.width = A.cols();
         matrix.leading_dim = A.outerStride();
-        size_t numTrials = 100;
+        size_t numTrials = 50;
         double time = 0;
 
         for (size_t i = 0; i < numTrials; ++i) {
             auto start = std::chrono::high_resolution_clock::now();
-            catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
-                                                    &matrix);
+            #pragma omp parallel
+            #pragma omp single
+            {
+                catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
+                                                        &matrix);
+            }
             auto end = std::chrono::high_resolution_clock::now();
             time += std::chrono::duration<double>(end - start).count();
         }
