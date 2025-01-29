@@ -8,6 +8,7 @@
 //  Created:  01/28/2025 13:02:01
 *///////////////////////////////////////////////////////////////////////////////
 #include <catamari.hpp>
+#include <catamari/dense_factorizations/cholesky-impl.hpp>
 
 namespace catamari {
 
@@ -134,8 +135,12 @@ int main(int argc, const char *argv[]) {
         matrix.leading_dim = A.outerStride();
         double time = 0;
 
+#if 1
         catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
                                                 &matrix);
+#else
+        catamari::LowerCholeskyFactorization(block_size, &matrix);
+#endif
     }
 
     for (int s : sizes) {
@@ -150,12 +155,16 @@ int main(int argc, const char *argv[]) {
 
         for (size_t i = 0; i < numTrials; ++i) {
             auto start = std::chrono::high_resolution_clock::now();
+#if 1
             #pragma omp parallel
             #pragma omp single
             {
                 catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
                                                         &matrix);
             }
+#else
+            catamari::LowerCholeskyFactorization(block_size, &matrix);
+#endif
             auto end = std::chrono::high_resolution_clock::now();
             time += std::chrono::duration<double>(end - start).count();
         }
