@@ -17,6 +17,7 @@ import video_writer
 import matplotlib
 matplotlib.use('agg')
 from matplotlib import pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 def getColorLineList(options):
     color_list = ['dodgerblue', 'magenta', 'tomato']
@@ -290,7 +291,7 @@ def getStepsMaxMin_FromMetricList(metric_list):
 
 # Plot different hessian projection options under one thread configuration
 def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 
-                              thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never']):
+                              thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], sect=None):
     tn = thread_ind
     num_options = len(hessian_option_list)
     iterations_list = []  # iteration numbers for each hessian projection option
@@ -304,12 +305,17 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.figure(figsize=(12, 12))
     plt.subplot(2,2,1)
     for i in range(num_options):
-        plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
     plt.ylabel(" Energy ", fontsize=14)
     plt.legend()
+    # Ensure x-axis values are only positive integers
+    ax = plt.gca()  # Get the current axis
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # Force integer x-axis ticks
+    plt.xlim(0, None) 
     
     plt.subplot(2,2,2)
     for i in range(num_options):
@@ -322,7 +328,8 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
 
     plt.subplot(2,2,3)
     for i in range(num_options):
-        plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
 
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
@@ -338,7 +345,10 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.legend()
     plt.tight_layout()
     
-    full_fn = user_model_name + '_objgradvsT' + '_thread' + str(thread_num_list[thread_ind]) + '.png'
+    full_fn = user_model_name + '_objgradvsT' + '_thread' + str(thread_num_list[thread_ind])
+    if sect is not None:  full_fn += '_sect' + str(sect)
+    file_ext = '.png'
+    full_fn += file_ext
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
@@ -412,7 +422,8 @@ def getBarPlotsYAxisTitle(metric_key):
 
 # Plot metric with numIter - offset size
 # Under different hessian projection options under one thread configuration
-def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, offset=0, hessian_option_list = ['Adaptive', 'Always', 'Never'], addScatter=True):
+def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, 
+                         offset=0, sect=None, hessian_option_list = ['Adaptive', 'Always', 'Never'], addScatter=True):
     
     num_options = len(hessian_option_list)
     if len(metric_list) != num_options:
@@ -450,11 +461,15 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     
     plt.figure(figsize=(8, 8))
     for i in range(num_options):
-        plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None: plt.plot(iterations_list[i][:sect], metric_list[i][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
     
     if addScatter:
         for ind in scatter_list:
-            plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
+            if sect is not None:
+                ip = bisect.bisect_left(iter_projTrue_list[ind], sect)
+                plt.scatter(iter_projTrue_list[ind][:ip], metric_projTrue_list[ind][:ip], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
+            else:  plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -462,9 +477,15 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     plt.legend()
     plt.tight_layout()
 
+    # Ensure x-axis values are only positive integers
+    ax = plt.gca()  # Get the current axis
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # Force integer x-axis ticks
+    plt.xlim(0, None) 
+
     full_fn = user_model_name + '_' + metric_title + 'VSIter'
-    if addScatter:  full_fn += '_Scatter.png'
-    else:           full_fn += '.png'
+    if addScatter:  full_fn += '_Scatter'
+    if sect is not None:  full_fn += '_sect' + str(sect)
+    full_fn += '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()

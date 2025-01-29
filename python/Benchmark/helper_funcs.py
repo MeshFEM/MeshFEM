@@ -126,62 +126,6 @@ def delete_all_files_in_folder(folder_path):
         if os.path.isfile(file_path) or os.path.islink(file_path):
             os.remove(file_path)
 
-def processEigenUVTXTs(folder_path):
-    """
-    Processes txt files in a given folder, converting them to raveled NumPy arrays
-    and saving them as compressed .npz files. Deletes the original txt files after
-    ensuring the same number of .npz files are created.
-
-    Args:
-        folder_path (str): Path to the folder containing the txt files.
-
-    Returns:
-        bool: True if the number of .npz files matches the original txt files, False otherwise.
-    """
-    # Get all files in the folder
-    txt_files = [f for f in os.listdir(folder_path) if f.startswith("uv_Eigen_Iter_") and f.endswith(".txt")]
-    npz_files_created = 0
-
-    for txt_file in txt_files:
-        try:
-            # Build full path for the txt file
-            txt_path = os.path.join(folder_path, txt_file)
-            
-            # Read the txt file into a NumPy array
-            data = np.loadtxt(txt_path)
-            
-            # Ensure the data has two columns
-            if data.ndim == 1 or data.shape[1] != 2:
-                raise ValueError(f"File {txt_file} does not have two columns.")
-            
-            # Get the raveled version of the array
-            raveled_data = data.ravel()
-            
-            # Construct the .npz file name
-            file_index = txt_file.split('_')[-1].split('.')[0]  # Extract i from "uv_Eigen_Iter_i.txt"
-            npz_file_name = f"uv_ravel_iter_{file_index}.npz"
-            npz_path = os.path.join(folder_path, npz_file_name)
-            
-            # Save the raveled array to a compressed .npz file
-            np.savez_compressed(npz_path, arr=raveled_data)
-            npz_files_created += 1
-        except Exception as e:
-            print(f"Error processing file {txt_file}: {e}")
-
-    # Check if the number of .npz files matches the number of txt files
-    npz_files = [f for f in os.listdir(folder_path) if f.startswith("uv_ravel_iter_") and f.endswith(".npz")]
-    if len(npz_files) == len(txt_files):
-        # If numbers match, delete the txt files
-        for txt_file in txt_files:
-            try:
-                os.remove(os.path.join(folder_path, txt_file))
-            except Exception as e:
-                print(f"Error deleting file {txt_file}: {e}")
-        return True
-    else:
-        print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
-        return False
-
 def processUVTXTs(source_path, to_path, txt_file_prefix_str):
     """
     Processes txt files in a given folder, converting them to raveled NumPy arrays
@@ -346,7 +290,7 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
     if uvsave_path is not None:
         uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, True, uvsave_path)
         # process all saved txt files into compressed npz files
-        if not processEigenUVTXTs(uvsave_path):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
+        if not processUVTXTs(uvsave_path, uvsave_path, "uv_Eigen_Iter_"):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
         obj_arr = np.array(obj_history)
         grad_norm_arr = np.array(grad_history)
         step_size_arr = np.array(step_size_history)

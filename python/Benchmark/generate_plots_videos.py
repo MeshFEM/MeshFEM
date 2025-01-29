@@ -49,6 +49,8 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
 
         # generate no-timing related figures
         plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
+        plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=80, hessian_option_list=hessian_option_list)
+        plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=20 ,hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
         # plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
@@ -67,6 +69,7 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         numThreads = len(thread_num_list)
         for i in range(numThreads):
             plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
+            plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=20)
             if video_flag:
                 # confirm video flag
                 video_dir = os.path.join(base_path, videos_folder_name, model_name)
