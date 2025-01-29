@@ -17,12 +17,17 @@ Int TBBLowerCholeskyFactorization(Int tile_size, Int block_size,
                                BlasMatrixView<Field>* matrix) {
     typedef ComplexBase<Field> Real;
     const Int height = matrix->height;
+    if (height <= 2 * tile_size)
+        return LowerCholeskyFactorizationDynamicBLASDispatch(block_size, matrix);
 
     // For use in tracking dependencies.
     Field* const matrix_data CATAMARI_UNUSED = matrix->data;
     const Int leading_dim CATAMARI_UNUSED = matrix->leading_dim;
 
     Int num_pivots = 0;
+    #pragma omp parallel
+    #pragma omp single
+
     #pragma omp taskgroup
     for (Int i = 0; i < height; i += tile_size) {
         const Int tsize = std::min(height - i, tile_size);
@@ -156,12 +161,8 @@ int main(int argc, const char *argv[]) {
         for (size_t i = 0; i < numTrials; ++i) {
             auto start = std::chrono::high_resolution_clock::now();
 #if 1
-            #pragma omp parallel
-            #pragma omp single
-            {
-                catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
-                                                        &matrix);
-            }
+            catamari::TBBLowerCholeskyFactorization(tile_size, block_size,
+                                                    &matrix);
 #else
             catamari::LowerCholeskyFactorization(block_size, &matrix);
 #endif
