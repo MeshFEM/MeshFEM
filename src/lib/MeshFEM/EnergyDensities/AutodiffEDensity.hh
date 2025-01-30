@@ -127,6 +127,8 @@ struct SymmetricDirichletDerivativeFree : public AutodiffEDensity<SymmetricDiric
 
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &A) { // Don't use the `auto` return type here! We must evaluate the expression template before returning...
+        auto J = A.determinant();
+        if (J < 0) return typename Derived::Scalar(std::numeric_limits<double>::infinity());
         return 0.5 * (A.squaredNorm() + A.inverse().squaredNorm());
     }
 };
