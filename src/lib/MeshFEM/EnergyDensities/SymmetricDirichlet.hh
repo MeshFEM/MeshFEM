@@ -36,7 +36,8 @@ struct SymmetricDirichlet
         setDeformationGradient(Matrix::Identity());
     }
 
-    SymmetricDirichlet(const SymmetricDirichlet &other, UninitializedDeformationTag &&){ }
+    SymmetricDirichlet(const SymmetricDirichlet &other, UninitializedDeformationTag &&)
+        : useAbsProjection(other.useAbsProjection) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
@@ -93,7 +94,10 @@ struct SymmetricDirichlet
         VN2_T D2;
         Eigen::Map<Matrix>(D2.data()) = U.col(1)*V.col(1).transpose();
 
-        lambda_4 = std::max(lambda_4, 0.0); // clamp potentially negative eigenvalue.
+        if (useAbsProjection)
+            lambda_4 = std::abs(lambda_4);
+        else
+            lambda_4 = std::max(lambda_4, 0.0); // clamp potentially negative eigenvalue.
         m_d2psi = lambda_1*D1*D1.transpose() + lambda_2*D2*D2.transpose() + 0.5*lambda_3*L*L.transpose() + 0.5*lambda_4*T*T.transpose();
     }
 
@@ -132,6 +136,8 @@ struct SymmetricDirichlet
 
     using Hessian = Eigen::Matrix<Real, N * N, N * N>;
     const Hessian &d2energy() const { return m_d2psi; }
+
+    bool useAbsProjection = false;
 
 private:
     bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.

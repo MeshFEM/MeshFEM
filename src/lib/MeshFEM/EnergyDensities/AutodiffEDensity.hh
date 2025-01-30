@@ -28,7 +28,7 @@ struct AutodiffEDensity {
     using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, N * N, 1>>;
 
     AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
-    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&) { }
+    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&) : useAbsProjection(other.useAbsProjection) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
@@ -78,8 +78,12 @@ struct AutodiffEDensity {
                 using ESolver = Eigen::SelfAdjointEigenSolver<Hessian>;
                 // TODO: short-circuit in diagonally dominant case.
                 ESolver Hes(m_d2energy);
-                if (Hes.eigenvalues()[0] < 0.0)
-                    m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (Hes.eigenvalues()[0] < 0.0) {
+                    if (useAbsProjection)
+                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseAbs().asDiagonal() * Hes.eigenvectors().transpose();
+                    else
+                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                }
             }
         }
     }
@@ -111,6 +115,7 @@ struct AutodiffEDensity {
     // `delta2_denergy` undefined until the next call to
     // `setDeformationGradient`.
     bool projectionEnabled = true;
+    bool useAbsProjection = false;
 
 private:
     Real m_energy;
