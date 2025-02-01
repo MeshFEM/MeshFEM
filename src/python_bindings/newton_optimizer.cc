@@ -237,7 +237,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 Real beta = opt.options.beta;
                 const Real betaMin = std::min(beta, 1e-6); // Initial shift "tau" to use when an indefinite matrix is detected.
 
-                opt.newton_step(step, prob.gradient(false), workingSet, beta, betaMin, feasibility);
+                opt.newton_step(step, -prob.gradient(false), workingSet, beta, betaMin, feasibility);
                 return step;
             }, py::arg("feasibility") = false)
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
