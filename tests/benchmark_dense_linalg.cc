@@ -7,6 +7,7 @@
 //  Company:  University of California, Davis
 //  Created:  01/28/2025 13:02:01
 *///////////////////////////////////////////////////////////////////////////////
+#include "MeshFEM/Parallelism.hh"
 #include <catamari.hpp>
 #include <catamari/dense_factorizations/cholesky-impl.hpp>
 #include <tbb/tbb.h>
@@ -22,7 +23,7 @@ struct CholeskyFlowgraph {
         : block_size(block_size_), matrix(matrix_)
     {
         Int height = matrix.height;
-        serial = force_serial || (height <= 2 * tile_size) || (get_max_num_tbb_threads() < 2); // Also if running single threaded...
+        serial = force_serial || (height < 3 * tile_size) || (get_max_num_tbb_threads() < 2); // Also if running single threaded...
         if (serial) return;
 
         Int num_tiles = (height + tile_size - 1) / tile_size; // Number of tiles along width and height
@@ -154,6 +155,10 @@ int main(int argc, const char *argv[]) {
     }
     size_t num_threads = std::stoul(argv[1]);
     set_max_num_tbb_threads(num_threads);
+
+#if __linux__
+    PinningObserver thread_pinner;
+#endif
 
     int maxSize = 3000;
     int numSizes = 100;
