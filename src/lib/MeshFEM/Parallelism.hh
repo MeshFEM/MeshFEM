@@ -117,6 +117,7 @@ private:
     bool m_spread = false;
 };
 #else
+#include <iostream>
 struct PinningObserver {
     PinningObserver(bool /* spread */ = true) {
         // Setting thread affinities is not supported on Apple Silicon: https://developer.apple.com/forums/thread/703361?answerId=709279022#709279022
