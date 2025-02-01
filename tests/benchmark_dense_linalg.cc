@@ -26,8 +26,8 @@ struct CholeskyFlowgraph {
         if (serial) return;
 
         Int num_tiles = (height + tile_size - 1) / tile_size; // Number of tiles along width and height
-        Eigen::Matrix<Node *, Eigen::Dynamic, Eigen::Dynamic> last_update(num_tiles, num_tiles);
-        last_update.setConstant(nullptr);
+        Eigen::Matrix<Node *, Eigen::Dynamic, Eigen::Dynamic> last_update;
+        last_update.setConstant(num_tiles, num_tiles, nullptr);
 
         num_pivots = 0;
 
@@ -121,6 +121,7 @@ struct CholeskyFlowgraph {
         num_pivots = 0;
         nodes[0]->try_put(tbb::flow::continue_msg());
         g.wait_for_all();
+        if (num_pivots < matrix.height) g.reset(); // Graph must be reset after it is cancelled.
         return num_pivots;
     }
 
