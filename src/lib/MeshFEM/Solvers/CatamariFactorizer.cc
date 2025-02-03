@@ -1,4 +1,5 @@
 #include "CatamariFactorizer.hh"
+#include <limits>
 
 #if MESHFEM_WITH_CATAMARI
 
@@ -295,7 +296,11 @@ CatamariFactorizer::CatamariFactorizer(bool legacy) {
     m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true;
     m_ldlControl->supernodal_control.parallel_ratio_threshold = 0.02;
     m_ldlControl->supernodal_control.legacy = m_legacy = legacy;
+    // m_ldlControl->supernodal_control.factor_tile_size = std::numeric_limits<catamari::Int>::max(); // Effectively disable node-level parallelism
 }
+
+void CatamariFactorizer::setUseLeftLooking(bool use_left) { m_ldlControl->supernodal_control.algorithm = use_left ? catamari::kLeftLookingLDL : catamari::kRightLookingLDL; }
+bool CatamariFactorizer::getUseLeftLooking() const { return m_ldlControl->supernodal_control.algorithm == catamari::kLeftLookingLDL; }
 
 size_t CatamariFactorizer::m_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 size_t CatamariFactorizer::n_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }

@@ -89,6 +89,9 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
 
+    void setUseLeftLooking(bool use_left);
+    bool getUseLeftLooking() const;
+
 private:
     template<typename... Args>
     void m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args);
