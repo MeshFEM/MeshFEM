@@ -78,7 +78,7 @@ if(NOT TARGET optional::optional)
 endif()
 
 # TBB library
-if(NOT TARGET tbb::tbb)
+if(NOT TARGET TBB::tbb)
     set(TBBMALLOC_BUILD ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
     set(TBBMALLOC_PROXY_BUILD OFF CACHE BOOL " " FORCE)
     set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
@@ -92,7 +92,7 @@ if(NOT TARGET tbb::tbb)
     # to leak in. Instead, we suppress warnings from the TBB headers using #pragmas in `Parallelism.hh`.
     # target_include_directories(tbb_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
     target_link_libraries(tbb_tbb INTERFACE tbbmalloc tbb)
-    add_library(tbb::tbb ALIAS tbb_tbb)
+    add_library(TBB::tbb ALIAS tbb_tbb)
 
     meshfem_target_hide_warnings(tbb_tbb)
 endif()

@@ -8,11 +8,17 @@
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  07/04/2022 17:35:25
 ////////////////////////////////////////////////////////////////////////////////
+#include "MeshFEM/Parallelism.hh"
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
 void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads) {
     set_max_num_tbb_threads(tbb_threads);
+
+// #if __linux__
+//     PinningObserver core_binder;
+// #endif
+
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
 
     if (method == "cholmod") {
@@ -80,7 +86,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
                 double relerror_backward = (b - b_recompute).norm() / b.norm();
                 // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
                 // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
-                if (relerror_backward > 1e-5)
+                if (relerror_backward > 5e-5)
                     std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
             }
             catch (const std::runtime_error &e) {

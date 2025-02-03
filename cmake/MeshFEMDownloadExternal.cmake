@@ -69,7 +69,7 @@ endfunction()
 function(meshfem_download_tbb)
     meshfem_download_project(tbb
         GIT_REPOSITORY https://github.com/oneapi-src/oneTBB
-        GIT_TAG        c9497714821c3d443ee44c732609eb6850195ffb
+        GIT_TAG        0c0ff192a2304e114bc9e6557582dfba101360ff # v2022.0.0 from Oct 31, 2024
     )
 endfunction()
 
