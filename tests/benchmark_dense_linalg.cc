@@ -44,6 +44,8 @@ int main(int argc, const char *argv[]) {
     Eigen::MatrixXd A = Eigen::MatrixXd::Random(s_max, s_max);
     A = (A.transpose() * A).eval();
 
+    tbb::task_group_context tgc;
+
     // Warm-up and verify
     for (int s : sizes) {
         catamari::BlasMatrixView<double> matrix;
@@ -63,7 +65,7 @@ int main(int argc, const char *argv[]) {
         matrix.data = A_ss.data();
 
 #if 1
-        num_pivots = catamari::CholeskyFlowgraph<double>(matrix, tile_size, block_size).run(matrix);
+        num_pivots = catamari::CholeskyFlowgraph<double>(tgc, matrix, tile_size, block_size).run(matrix);
         if (num_pivots < s) throw std::runtime_error("Non-SPD TBB");
 #else
         catamari::LowerCholeskyFactorizationOpenMP(tile_size, block_size, &matrix);
@@ -98,9 +100,9 @@ int main(int argc, const char *argv[]) {
             // Reusing the flowgraph ends up not being appreciably faster--and
             // appears to cause weird performance regressions at certain thread
             // counts on Apple Silicon...
-            //      if (!flowgraph) flowgraph = std::make_unique<catamari::CholeskyFlowgraph<double>>(matrix, tile_size, block_size);
+            //      if (!flowgraph) flowgraph = std::make_unique<catamari::CholeskyFlowgraph<double>>(tgc, matrix, tile_size, block_size);
             //      flowgraph->run(matrix);
-            catamari::CholeskyFlowgraph<double>(matrix, tile_size, block_size).run(matrix);
+            catamari::CholeskyFlowgraph<double>(tgc, matrix, tile_size, block_size).run(matrix);
             // catamari::LowerCholeskyFactorizationOpenMP(tile_size, block_size, &matrix);
 #else
             catamari::LowerCholeskyFactorization(block_size, &matrix);
