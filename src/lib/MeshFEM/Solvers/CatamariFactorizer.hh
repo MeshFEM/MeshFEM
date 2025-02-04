@@ -92,6 +92,9 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseLeftLooking(bool use_left);
     bool getUseLeftLooking() const;
 
+    void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
+    bool getUseBlockAccel() const { return m_useBlockAccel; }
+
 private:
     template<typename... Args>
     void m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args);
@@ -105,6 +108,7 @@ private:
 
     std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
     size_t m_blockSize = 1;
+    size_t m_useBlockAccel = true;
 
     // Support fused pre-permutation functionality (where row-col-removal is fused with permutation)
     void m_populatePermutedReducedRowForRow() const override;

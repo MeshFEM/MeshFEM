@@ -469,7 +469,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     assertFactorization(FactorizationType::Symbolic);
     catamari::SparseLDLResult<double> result;
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
-    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), A.Ax.data(), std::forward<Args>(args)...);
+    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
     {
         static bool first = true;

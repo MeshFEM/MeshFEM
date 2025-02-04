@@ -27,7 +27,8 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     else if (method.substr(0, 8)  == "catamari") {
 #if MESHFEM_WITH_CATAMARI
         std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
-        cf->setUseLeftLooking(method == "catamari_left");
+        cf->setUseBlockAccel(method.substr(method.size() - 8) != "_noblock");
+        cf->setUseLeftLooking(method.substr(0, 13) == "catamari_left");
         // Note that `CatamariFactorizer::OrderingMethod::CholmodNesdis` is the default;
         // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
         if (method == "catamari")
