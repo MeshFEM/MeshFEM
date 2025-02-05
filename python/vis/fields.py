@@ -135,8 +135,8 @@ class VectorField(VisualizationField):
         if (pos is None): raise Exception('Unhandled domainType')
         glyphGeometry  = {'position': V, 'index': F.ravel(), 'normal': N}
         instancingData = {'arrowColor': np.array(colors,  dtype=np.float32),
-                            'arrowVec':   np.array(vectors, dtype=np.float32),
-                            'arrowPos':   np.array(pos,     dtype=np.float32)}
+                          'arrowVec':   np.array(vectors, dtype=np.float32),
+                          'arrowPos':   np.array(pos,     dtype=np.float32)}
         return glyphGeometry, instancingData
 
     # Get a pythreejs Mesh of the arrow geometry, either allocating a new mesh object or
@@ -157,6 +157,6 @@ class VectorField(VisualizationField):
             for k, v in rawInstancedAttr.items(): # position/index/normal should be constant...
                 existingMesh.geometry.attributes[k].array = v
             arrowMesh = existingMesh
-            existingMesh.geometry.maxInstancedCount = pos.shape[0] # threejs does not automatically update maxInstancedCount after it is initialized to the full count of the original arrays by the renderer
+            existingMesh.geometry.maxInstancedCount = rawInstancedAttr['arrowPos'].shape[0] # threejs does not automatically update maxInstancedCount after it is initialized to the full count of the original arrays by the renderer
 
         return arrowMesh
