@@ -20,18 +20,28 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
 def getColorLineList(options):
-    color_list = ['dodgerblue', 'magenta', 'tomato']
-    line_style_list = ['-', '--', '-.']
-    if options == 4:
-        color_list.append('forestgreen')
-        line_style_list.append('-')
-    elif options == 5:
-        color_list.extend(['forestgreen', 'gold'])
-        line_style_list.extend(['-', '-'])
-    elif options == 6:
-        color_list.extend(['forestgreen', 'gold', 'darkorange'])
-        line_style_list.extend(['-', '-', '-'])
-    return color_list, line_style_list
+    color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
+                  'gold', 'darkorange', 'mediumvioletred', 'royalblue']
+    
+    line_style_list = [
+        '-',       # Solid
+        '--',      # Dashed
+        '-.',      # Dash-dot
+        ':',       # Dotted
+        (0, (3, 5, 1, 5)),  # Custom dash-dot pattern
+        (0, (5, 10)),       # Custom dashed pattern
+        (0, (1, 1)),        # Densely dotted
+        (0, (3, 2, 1, 2, 1, 2))  # Complex custom dash-dot
+    ]
+
+    lw_step = 0.5
+    lw_list = []
+    for i in range(options):
+        lw_temp = 2.0 + lw_step * i
+        lw_list.append(lw_temp)
+    lw_list.reverse()
+    return color_list[:options], line_style_list[:options], lw_list
+
 
 def create_list_of_lists(num_inner_lists):
     """
@@ -299,14 +309,14 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
         iterations = np.arange(0, obj_grad_time_list[i][tn].shape[1])
         iterations_list.append(iterations)
     
-    color_list, line_style_list = getColorLineList(num_options)
+    color_list, line_style_list, line_width_list = getColorLineList(num_options)
     
     # Generate plt
     plt.figure(figsize=(12, 12))
     plt.subplot(2,2,1)
     for i in range(num_options):
-        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -319,7 +329,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     
     plt.subplot(2,2,2)
     for i in range(num_options):
-        plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -328,8 +338,8 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
 
     plt.subplot(2,2,3)
     for i in range(num_options):
-        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
 
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
@@ -338,7 +348,7 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
 
     plt.subplot(2,2,4)
     for i in range(num_options):
-        plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
     plt.ylabel("Grad Norm", fontsize=14)
@@ -440,7 +450,7 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
         iterations = np.arange(0, len(metric_list[i]))
         iterations_list.append(iterations)
 
-    color_list, line_style_list = getColorLineList(num_options)
+    color_list, line_style_list, line_width_list = getColorLineList(num_options)
 
     iter_projTrue_list = create_list_of_lists(num_options)
     metric_projTrue_list = create_list_of_lists(num_options)
@@ -461,15 +471,15 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     
     plt.figure(figsize=(8, 8))
     for i in range(num_options):
-        if sect is not None: plt.plot(iterations_list[i][:sect], metric_list[i][:sect], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None: plt.plot(iterations_list[i][:sect], metric_list[i][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     
     if addScatter:
         for ind in scatter_list:
             if sect is not None:
                 ip = bisect.bisect_left(iter_projTrue_list[ind], sect)
-                plt.scatter(iter_projTrue_list[ind][:ip], metric_projTrue_list[ind][:ip], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
-            else:  plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors='none',  s=20)
+                plt.scatter(iter_projTrue_list[ind][:ip], metric_projTrue_list[ind][:ip], edgecolors=color_list[ind], marker='o', facecolors=color_list[ind],  s=50)
+            else:  plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors=color_list[ind],  s=50)
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -557,7 +567,7 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
     for i in range(num_options):
         iterations = np.arange(0, metric_list[i].shape[0])
         iterations_list.append(iterations)
-    color_list, line_style_list = getColorLineList(num_options)
+    color_list, line_style_list, line_width_list = getColorLineList(num_options)
 
     spf = 1 / fps
     aligned_timing_list = alignTiming(obj_grad_time_list, metric_list, thread_ind=thread_ind)
@@ -582,7 +592,7 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
         for i in range(num_options):
             iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
             plt.plot(iterations_list[i][:iterationForFrame+1], metric_list[i][:iterationForFrame+1], 
-                    ls=line_style_list[i], color=color_list[i], label=hessian_option_list[i])
+                    ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
             if i in scatter_list:  index_for_dots = max(0, bisect.bisect_left(iter_projTrue_list[i], iterationForFrame))
             plt.scatter(iter_projTrue_list[i][:index_for_dots], metric_projTrue_list[i][:index_for_dots], 
                         edgecolors=color_list[i], marker='o', facecolors='none',  s=30)

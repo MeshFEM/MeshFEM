@@ -219,6 +219,12 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     uv.setVars(uv_init.ravel())
 
     if hessian_proj_option == 'AutoDiff':  symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
+    elif hessian_proj_option == 'AutoDiffAbs':
+        symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
+        symmdiri_energy.useAbsProjection = True
+    elif hessian_proj_option == 'AdaptiveAbs':
+        symmdiri_energy = energy.SymmetricDirichlet(2)
+        symmdiri_energy.useAbsProjection = True
     else:  symmdiri_energy = energy.SymmetricDirichlet(2)
     # Construct `SymmetricDirichlet` parametrization energy and problem
     param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
@@ -234,7 +240,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     prob.hessianShift = hessian_shift
     opt = prob.optimizer()
     opt.options.niter = max_iter
-    if hessian_proj_option == 'Adaptive' or hessian_proj_option == 'AutoDiff':  
+    if hessian_proj_option in ['Adaptive', 'AutoDiff', 'AutoDiffAbs', 'AdaptiveAbs']:
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
     elif hessian_proj_option == 'Always':
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()

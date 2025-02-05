@@ -69,7 +69,7 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         numThreads = len(thread_num_list)
         for i in range(numThreads):
             plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
-            plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=20)
+            plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=8)
             if video_flag:
                 # confirm video flag
                 video_dir = os.path.join(base_path, videos_folder_name, model_name)
@@ -104,6 +104,8 @@ def main():
         2: ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD'],
         3: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
         5: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM'],
+        6: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD'],
+        7: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM'],
     }
 
     # Set up argument parsing
@@ -179,5 +181,7 @@ if __name__ == "__main__":
     print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
     print("Usage: Hessian Option List: [3] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
     print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
+    print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD]")
+    print("Usage: Hessian Option List: [7] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM]")
     
     main()

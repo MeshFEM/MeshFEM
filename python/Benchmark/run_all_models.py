@@ -132,7 +132,9 @@ def main():
         6: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
         7: ['AutoDiff'],
         8: ['SLIM'],
-        9: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM']
+        9: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM'],
+        10: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD'],
+        11: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM']
     }
 
     # Set up argument parsing
@@ -213,5 +215,7 @@ if __name__ == "__main__":
     print("Usage: Hessian Option List: [7] -- [AutoDiff]")
     print("Usage: Hessian Option List: [8] -- [SLIM]")
     print("Usage: Hessian Option List: [9] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
+    print("Usage: Hessian Option List: [10] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD]")
+    print("Usage: Hessian Option List: [11] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM]")
     main()
     
