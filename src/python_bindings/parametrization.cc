@@ -18,7 +18,7 @@ PYBIND11_MODULE(parametrization, m)
         ;
 
     // Parametrization algorithms
-    m.def("harmonic", &Parametrization::harmonic, py::arg("mesh"), py::arg("boundaryPositions"), "Harmonic Parametrization");
+    m.def("harmonic", &Parametrization::harmonic, py::arg("mesh"), py::arg("boundaryPositions"), py::arg("tutte") = false, "Harmonic/Tutte Parametrization");
     m.def("lscm",     &Parametrization::lscm,     py::arg("mesh"), py::arg("initParam") = Parametrization::UVMap(), "Least-Squares Conformal Parametrization");
     m.def("scp",      &Parametrization::scp,      py::arg("mesh"),
             py::arg("iprod") = Parametrization::SCPInnerProduct::Mass,
@@ -30,6 +30,9 @@ PYBIND11_MODULE(parametrization, m)
           "Get factor by which lengths are stretched when mapping from 2D to 3D");
     m.def("conformalDistortion", &Parametrization::conformalDistortion, py::arg("mesh"), py::arg("uv"),
           "Get the (quasi-)conformal distortion strain measure (sigma_0 - sigma_1) / sigma_1 >= 0");
+
+    m.def("getFlips", &Parametrization::getFlips, py::arg("mesh"), py::arg("uv"),
+          "Get indices of triangle flips given a mesh and a uv mapping");
 
     // Misc utilities
     m.def("rescale", &Parametrization::rescale, py::arg("mesh"), py::arg("uv"),

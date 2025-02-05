@@ -34,8 +34,6 @@
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
 #include "GlobalBenchmark.hh"
-#include "SparseMatrices.hh"
-#include "Types.hh"
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Utilities/MeshConversion.hh"
 
@@ -210,7 +208,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     size_t numThetas()    const { return numEdges();   }
     size_t numCreases()   const { return m_edgeVarStructure.numCreases; }
 
-    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(*this->m_assembler); }
+    const Assembler &assembler() const override { return dynamic_cast<const Assembler &>(*this->m_assembler); }
     const auto &varStructure() const { return assembler().varStructure(); }
 
     size_t           xOffset() const { return varStructure().offsetForType(0); }
@@ -281,35 +279,27 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using PerElementHessian = Eigen::Matrix<Real, 12, 12>;
     PerElementHessian elementHessian(size_t ei, const EnergyType etype, bool projectionMask = false) const;
 
-    using EBlockVars = VecMaxN_T<SuiteSparse_long, 9>; // Up to 9 (block) vars influence each element
+    using EBlockVars = ElementBlockVarsWithSizeRange<6, 9>;
     auto elementGetter() const {
         const auto &m = mesh();
-        return [this, &m](size_t ei) {
-            EBlockVars blockVars(9);
-            auto e = m.element(ei);
-            for (auto v : e.vertices())
-                blockVars[v.localIndex()] = v.index();
-            size_t crease_back = 6;
-            for (auto he : e.halfEdges()) {
-                blockVars[3 + he.localIndex()] = m.numVertices() + edgeForHalfEdge(he.index());
-                int ci = creaseForHalfEdge(he.index());
+        size_t thetaBlockOffset = varStructure().blockOffsetForType(1);
+        size_t creaseAngleBlockOffset = varStructure().blockOffsetForType(2);
+        return [this, thetaBlockOffset, creaseAngleBlockOffset, &m](size_t ei) {
+            EBlockVars blockVars(6);
+            m.getTriCorners(ei, blockVars.vars); // just fills the first three entries...
+            for (size_t lhi = 0; lhi < 3; ++lhi) {
+                size_t hei = m.halfedgeIdxOfTri(ei, lhi);
+                blockVars[3 + lhi] = thetaBlockOffset + edgeForHalfEdge(hei);
+                int ci = creaseForHalfEdge(hei);
                 if (ci < 0) continue;
-                blockVars[crease_back++] = numVertices() + numEdges() + ci;
+                blockVars[blockVars.numVars++] = creaseAngleBlockOffset + ci;
             }
-            blockVars.conservativeResize(crease_back);
             return blockVars;
         };
     }
 
-    void accumulateHessian(Real weight, CSCMat &Hout, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
-
-    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return assembler().blockSparsityPattern(mesh().numElements(), elementGetter());
-    }
-
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0, VariableMask vmask = VariableMask::Defo) const override {
-        if (vmask != VariableMask::Defo) throw std::runtime_error("hessianSparsityPattern: Only defo variables are supported");
-        return blockSparsityPattern()->toScalar(val);
+    virtual NewtonHessian hessianSparsityPattern(VariableMask vmask = VariableMask::Defo) const override {
+        return assembler().sparsityPattern(mesh().numElements(), elementGetter());;
     }
 
     // Convenience methods
@@ -319,19 +309,25 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return g;
     }
 
-    SuiteSparseMatrix hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
-        SuiteSparseMatrix H(hessianSparsityPattern());
+    struct CustomHEAData;
+
+    NewtonHessian hessian(bool projectionMask = false, VariableMask vmask = VariableMask::Defo, const EnergyType etype = EnergyType::Full) const {
+        auto H = hessianSparsityPattern();
         accumulateHessian(1.0, H, etype, projectionMask, vmask);
         return H;
     }
 
+    void accumulateHessian(Real weight, NewtonHessian &H, const EnergyType etype, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const;
+
     // Overloads implementing generic ElasticObject interface.
-    virtual Real  energy() const override { return energy(EnergyType::Full); }
+    virtual Real energy() const override { return energy(EnergyType::Full); }
+
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization = false, VariableMask vmask = VariableMask::Defo) const override {
         return accumulateGradient(weight, g, updatedParametrization, vmask, EnergyType::Full);
     }
-    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        accumulateHessian(weight, Hout, EnergyType::Full, projectionMask, vmask);
+
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+        accumulateHessian(weight, H, EnergyType::Full, projectionMask, vmask);
     }
 
     const std::vector<Frame> &midedgeReferenceFrames() const { return m_referenceFrame; }
@@ -645,6 +641,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
 
+    using Base::massMatrix;
     Real angleVarRelativeMomentOfInertia = 1e-6; // Relative to average nodal mass.
     virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
         // We only assign mass to the vertices (associating zero inertia with the midedge normals).

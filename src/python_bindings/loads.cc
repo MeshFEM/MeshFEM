@@ -10,27 +10,24 @@
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
+#include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "LoadBinding.hh"
-
-using APC = Loads::AttachmentPointCoordinate<double>;
+#include "BindingInstantiations.hh"
 
 struct LoadBinder {
     // Bind loads for a particular elastic structure type `Object`
     template<class Object>
-    static void bind_generic(py::module &module, py::module &detail_module) {
+    static void bind_generic(py::module &m, py::module &detail_module) {
         using Real = typename Object::Real;
         using Load = Loads::Load<Real>;
 
-        ////////////////////////////////////////////////////////////////////////
-        // Gravity
-        ////////////////////////////////////////////////////////////////////////
-        bindGravity<Object>(module, detail_module, ("Gravity" + NameMangler<Object>::name()).c_str());
+        bindGravity<Object>(m, detail_module);
+        bindInertia<Object>(m, detail_module);
 
         ////////////////////////////////////////////////////////////////////////
         // Traction
@@ -40,7 +37,7 @@ struct LoadBinder {
            .def_property("boundaryTractions", &TLoad::getBoundaryTractions, &TLoad::setBoundaryTractions)
            ;
 
-        module.def("Traction", [&](const std::shared_ptr<Object> &obj) {
+        m.def("Traction", [&](const std::shared_ptr<Object> &obj) {
                     return std::make_shared<TLoad>(obj);
                 }, py::arg("obj"))
              ;
@@ -54,21 +51,20 @@ struct LoadBinder {
         py::class_<SLoad, Load, std::shared_ptr<SLoad>>(detail_module, ("Spreaders" + NameMangler<Object>::name()).c_str())
              .def_property("magnitude", &SLoad::getMagnitude, &SLoad::setMagnitude)
              ;
-        module.def("Spreaders", [&](const std::shared_ptr<Object> &obj, const std::vector<VXi> &clusterVtxs,
+        m.def("Spreaders", [&](const std::shared_ptr<Object> &obj, const std::vector<VXi> &clusterVtxs,
                                    const MX2i &connectivity, Real force, bool disableHessian) {
                     return std::make_shared<SLoad>(obj, clusterVtxs, connectivity, force, disableHessian);
                 }, py::arg("obj"), py::arg("clusterVtxs"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
-              .def("Spreaders", [&](const std::shared_ptr<Object> &obj, const SuiteSparseMatrix &S,
-                                   const MX2i &connectivity, Real force, bool disableHessian) {
-                    return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
-                }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
-             ;
-
+         .def("Spreaders", [&](const std::shared_ptr<Object> &obj, const SuiteSparseMatrix &S,
+                              const MX2i &connectivity, Real force, bool disableHessian) {
+               return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
+           }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
+         ;
     }
 
     template<class Object>
-    static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &module, py::module &detail_module) {
-        bind_generic<Object>(module, detail_module);
+    static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &m, py::module &detail_module) {
+        bind_generic<Object>(m, detail_module);
 
         ////////////////////////////////////////////////////////////////////////
         // Solid-specific load: SphereFitter, CircumcenterBarrier
@@ -80,25 +76,27 @@ struct LoadBinder {
             .def_readwrite("stiffness", &SphereFitter::stiffness)
             .def_readwrite("r_tgt",     &SphereFitter::r_tgt)
             ;
-        module.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
-                    return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
-                }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
+        m.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
+                return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
+            }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
         ;
 
-        using CB = Loads::CircumcenterBarrier<Object>;
-        py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
-            .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
-            .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
-                                                 [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
-            .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
-                                              [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
-            .def("minCircumcenterBC", &CB::minCircumcenterBC, "Get the smallest barycentric coordinate of any of the elements (or any of the sub-elements if `m_subdivisionBarrier` is `true`).")
-            .def_readwrite("bc_min", &CB::bc_min)
-            ;
-        module.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
+        if constexpr (Object::Deg == 1) {
+            using CB = Loads::CircumcenterBarrier<Object>;
+            py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
+                .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
+                .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
+                                                     [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
+                .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
+                                                  [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
+                .def("minCircumcenterBC", &CB::minCircumcenterBC, "Get the smallest barycentric coordinate of any of the elements (or any of the sub-elements if `m_subdivisionBarrier` is `true`).")
+                .def_readwrite("bc_min", &CB::bc_min)
+                ;
+            m.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
                     return std::make_shared<CB>(obj, bc_min, subdivisionBarrier);
                 }, py::arg("obj"), py::arg("bc_min") = 0.0, py::arg("subdivisionBarrier") = false)
-        ;
+            ;
+        }
     }
 
     template<class Object>
@@ -123,11 +121,12 @@ struct LoadBinder {
     }
 
     template<class Object>
-    static std::enable_if_t<Object::N == 2> bind(py::module &/* module */, py::module &/* detail_module */) {
-        // No loads are defined for 2D yet
+    static std::enable_if_t<Object::N == 2> bind(py::module &m, py::module &detail_module) {
+        bind_generic<Object>(m, detail_module);
     }
 };
 
+using APC = Loads::AttachmentPointCoordinate<double>;
 template<class Springs>
 auto bindSprings(py::module &m, const std::string name) {
     using Load = Loads::Load<double>;
@@ -206,6 +205,7 @@ PYBIND11_MODULE(loads, m)
 {
     py::module::import("py_newton_optimizer");
     py::module::import("closest_point_projection");
+    py::module::import("sparse_matrices");
 
     using Load = Loads::Load<double>;
     py::class_<Load, NewtonObjectiveTermBase, std::shared_ptr<Load>>(m, "Load")

@@ -58,7 +58,7 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
 
     int error = 0;
 
-    BENCHMARK_SCOPED_TIMER_SECTION timer("pardiso call");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("pardiso call phase " + std::to_string(phase));
 #ifdef MESHFEM_WITH_MKL_PARDISO
     iparm[26] = 1;
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,

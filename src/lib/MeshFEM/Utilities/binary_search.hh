@@ -1,6 +1,6 @@
 #ifndef BINARY_SEARCH_HH
 #define BINARY_SEARCH_HH
-#include <algorithm>
+#include <functional> // for std::less
 
 // Branchless binary search adapted from https://mhdm.dev/posts/sb_lower_bound/
 // (drop-in replacement for std::lower_bound)

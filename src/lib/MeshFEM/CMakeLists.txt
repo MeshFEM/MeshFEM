@@ -11,6 +11,7 @@ add_library(MeshFEM SHARED
         ComponentMask.hh
         Concepts.hh
         DenseCollisionGrid.hh
+        DynamicSimulator.hh
         EdgeFields.cc
         EdgeFields.hh
         ElasticityTensor.hh
@@ -130,12 +131,17 @@ add_library(MeshFEM SHARED
         newton_optimizer/newton_optimizer.hh
         newton_optimizer/ConvergenceReport.hh
         newton_optimizer/MultiobjectiveProblem.cc
+        newton_optimizer/NewtonHessian.cc
 
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
 
         ElasticSolid.hh
         ElasticSheet.hh
+
+        IPCIntegration/IPCObjectiveTerm.hh
+        IPCIntegration/IPCObjectiveTerm.cc
+        IPCIntegration/IPCWrapper.cc
 
         BlockCSCHessian.cc
 
@@ -150,16 +156,16 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
-        tbb::tbb
+        TBB::tbb
         Threads::Threads
         Eigen3::Eigen
-        json::json
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr
         meshfem::boost
         meshfem::spectra
         rotation_optimization
+        nlohmann_json::nlohmann_json
 #		CGAL::CGAL
     PRIVATE
         warnings::all
@@ -176,7 +182,12 @@ if(MESHFEM_VECTORIZE)
     if(COMPILER_SUPPORTS_MARCH_NATIVE)
         target_compile_options(${PROJECT_NAME} PUBLIC -march=native -ffast-math)
     else()
-        target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math)
+        CHECK_CXX_COMPILER_FLAG(-mcpu=native COMPILER_SUPPORTS_MCPU_NATIVE)
+        if(COMPILER_SUPPORTS_MCPU_NATIVE)
+            target_compile_options(${PROJECT_NAME} PUBLIC -mcpu=native -ffast-math)
+        else()
+            target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math) # Last resort
+        endif()
     endif()
 endif()
 
@@ -223,4 +234,9 @@ if (MESHFEM_WITH_PARDISO)
         /home/jpanetta/software/pardiso/libpardiso600-GNU800-X86-64.so
          -L${MKLROOT}/lib/intel64 -lmkl_rt -Wl,--no-as-needed -lpthread -lm -ldl -lgomp
         -lgfortran)
+endif()
+
+if(MESHFEM_WITH_IPC_TOOLKIT)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_IPC_TOOLKIT)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ipc::toolkit)
 endif()

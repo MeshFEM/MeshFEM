@@ -445,8 +445,9 @@ struct AutoHessianProjection : Psi_F {
 
         m_hessian = evaluate_d2energy_dF2(*(Psi_F *)(this));
         if (usingProjection()) {
-            ESolver Hes(m_hessian);
-            m_hessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            ESolver Hes(m_hessian); // TODO: try skipping if diagonally dominant
+            if (Hes.eigenvalues()[0] < 0.0)
+                m_hessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
         }
     }
 

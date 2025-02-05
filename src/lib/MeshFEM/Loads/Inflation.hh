@@ -87,21 +87,19 @@ struct Inflation : public ObjectSpecificLoad<Object> {
         throw std::runtime_error("TODO");
     }
 
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix& H, bool /* projectionMask */ = true) const override {
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool /* projectionMask */ = true) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("Inflation load Hessian");
         const auto &sheet = getObj();
         const auto &m = sheet.mesh();
-        auto assemblePerTriContrib = [&](const size_t ti, SuiteSparseMatrix &Hout) {
-            const auto &tri = m.element(ti);
-            // TODO: Single loop over "other" vertices, determining v_a and v_b cyclically
-            for (    const auto v_b : tri.vertices()) {
-                for (const auto v_a : tri.vertices()) {
-                    size_t a = 3 * v_a.index(),
-                           b = 3 * v_b.index();
-                    if (a >= b) continue; // strict upper triangle only (no vertex self-interaction)
 
-                    const size_t vla = v_a.localIndex();
-                    const size_t vlb = v_b.localIndex();
+        auto eval_He = [&](const size_t ti) {
+            Eigen::Matrix<Real, 9, 9> He = Eigen::Matrix<Real, 9, 9>::Zero();
+
+            const auto &tri = m.element(ti);
+            // Fill in (strict) upper triangle.
+            // TODO: Single loop over "other" vertices, determining v_a and v_b cyclically
+            for (size_t vlb = 0; vlb < 3; ++vlb) {
+                for (size_t vla = 0; vla < vlb; ++vla) {
                     // Gradient wrt v1 of a triangle's signed volume contribution is:
                     //      d vol / d v1 = v_2 x  v_3
                     // so differentiating again with respect to v_2 or v_3
@@ -109,43 +107,23 @@ struct Inflation : public ObjectSpecificLoad<Object> {
                     // The sign here is referred to as ordering_sign below.
                     const size_t vlother = 3 - (vla + vlb);
                     const double ordering_sign = (vlb == ((vla + 1) % 3)) ? 1.0 : -1.0;
-                    // V3d contrib = (pressure * ordering_sign / 6.0) * triCornerPos.col(vlother);
-                    V3d contrib = (weight * pressure * ordering_sign / 6.0) * sheet.deformedPositions().row(tri.vertex(vlother).index());// triCornerPos.col(vlother);
+                    V3d w = (weight * pressure * ordering_sign / 6.0) * sheet.deformedPositions().row(tri.vertex(vlother).index());
 
-                    size_t hint;
-                    hint = Hout.addNZ(a + 1, b + 0,  contrib[2]);
-                    // Hout.addNZ(a + 2, b + 0, -contrib[1], hint);
-                    Hout.Ax[hint] -= contrib[1];
-
-                    hint += (Hout.Ap[b + 1] - Hout.Ap[b + 0]) - 2;
-                    hint = Hout.addNZ(a + 0, b + 1, -contrib[2], hint);
-                    // Hout.addNZ(a + 2, b + 1,  contrib[0], hint + 1);
-                    Hout.Ax[hint + 1] += contrib[0];
-
-                    hint += (Hout.Ap[b + 2] - Hout.Ap[b + 1]) - 1;
-                    hint = Hout.addNZ(a + 0, b + 2,  contrib[1], hint);
-                    // Hout.addNZ(a + 1, b + 2, -contrib[0], hint);
-                    Hout.Ax[hint] -= contrib[0];
+                    He.template block<3, 3>(3 * vla, 3 * vlb) << 0, -w[2],  w[1],
+                                                                 w[2],  0, -w[0],
+                                                                -w[1],  w[0], 0;
                 }
             }
+
+            return He;
         };
-        const size_t ne = m.numTris();
-        for (size_t ei = 0; ei < ne; ++ei)
-            assemblePerTriContrib(ei, H);
+
+        this->assembler().assembleHessian(H, m, eval_He);
     }
 
     // *Additional* nonzeros contributed by this load to the potential energy Hessian.
     // (There are none).
-    virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
-        const size_t nv = getObj().numVars();
-        TripletMatrix<> Hsp(nv, nv);
-        Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-        return SuiteSparseMatrix(Hsp);
-    }
-
-    virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return this->emptyBlockSparsityPattern();
-    }
+    virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
     virtual ~Inflation() { }
 

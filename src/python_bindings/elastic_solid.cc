@@ -5,7 +5,7 @@
 namespace py = pybind11;
 
 #include <MeshFEM/ElasticSolid.hh>
-#include <MeshFEM/ElasticSolidRotExtrap.hh>
+// #include <MeshFEM/ElasticSolidRotExtrap.hh>
 #include <MeshFEM/MassMatrix.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 #include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
@@ -83,6 +83,7 @@ struct ElasticSolidBinder {
               }, "Useful for detecting collapsed elements...")
           .def("deformedElementVolumes", &ES::deformedElementVolumes, "Numerical approximation of each element's volume in the deformed config.")
           .def("blockHessian", [](const ES &es, bool projectionMask) { es.blockHessian(projectionMask); }, py::arg("projectionMask") = false)
+
           .def_readwrite("useXBasedProjection", &ES::useXBasedProjection)
           .def("contract_d2E_dXdx", &ES::contract_d2E_dXdx, py::arg("y_adjoint"))
          ;
@@ -98,28 +99,28 @@ struct ElasticSolidBinder {
         }
 
 
-        using ESRE = ElasticSolidRotExtrap<K, Deg, EmbeddingSpace, Energy>;
-        module.def("ElasticSolidRotExtrap", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ESRE>(e, m); }, py::arg("mesh"), py::arg("energy"));
+        // using ESRE = ElasticSolidRotExtrap<K, Deg, EmbeddingSpace, Energy>;
+        // module.def("ElasticSolidRotExtrap", [](std::shared_ptr<Mesh> m, const Energy &e) { return std::make_shared<ESRE>(e, m); }, py::arg("mesh"), py::arg("energy"));
 
-        py::class_<ESRE, EO, std::shared_ptr<ESRE>> pyESRE(detail_module, (name + "RotExtrap").c_str());
+        // py::class_<ESRE, EO, std::shared_ptr<ESRE>> pyESRE(detail_module, (name + "RotExtrap").c_str());
 
-        using Method = typename ESRE::Method;
-        py::enum_<Method>(pyESRE, "Method")
-            .value("ElementExtrapolation", Method::ElementExtrapolation)
-            .value("ModalWarping",         Method::ModalWarping        )
-            ;
+        // using Method = typename ESRE::Method;
+        // py::enum_<Method>(pyESRE, "Method")
+        //     .value("ElementExtrapolation", Method::ElementExtrapolation)
+        //     .value("ModalWarping",         Method::ModalWarping        )
+        //     ;
 
-        pyESRE
-            .def_property_readonly("elasticSolid", [](const ESRE &esre) -> const ES & { return esre.elasticSolid(); }, py::return_value_policy::reference_internal)
-            .def_property_readonly("source_x",     &ESRE::source_x)
-            .def_property("method", &ESRE::getMethod, &ESRE::setMethod)
-            .def("visualizationGeometry", [](const ESRE &obj, double normalCreaseAngle) {
-                  FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.elasticSolid().deformedVertices());
-                  return getVisualizationGeometry(visMesh, normalCreaseAngle);
-               }, py::arg("normalCreaseAngle") = M_PI)
-            .def("visualizationField", [](const ESRE &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
-            .def("visualizationField", [](const ESRE &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
-            ;
+        // pyESRE
+        //     .def_property_readonly("elasticSolid", [](const ESRE &esre) -> const ES & { return esre.elasticSolid(); }, py::return_value_policy::reference_internal)
+        //     .def_property_readonly("source_x",     &ESRE::source_x)
+        //     .def_property("method", &ESRE::getMethod, &ESRE::setMethod)
+        //     .def("visualizationGeometry", [](const ESRE &obj, double normalCreaseAngle) {
+        //           FEMMesh<Mesh::K, 1, EmbeddingSpace> visMesh(getF(obj.mesh()), obj.elasticSolid().deformedVertices());
+        //           return getVisualizationGeometry(visMesh, normalCreaseAngle);
+        //        }, py::arg("normalCreaseAngle") = M_PI)
+        //     .def("visualizationField", [](const ESRE &es, const Eigen::VectorXd &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+        //     .def("visualizationField", [](const ESRE &es, const MXNd            &f) { return getVisualizationField(es.mesh(), f); }, "Convert a per-vertex or per-element field into a per-visualization-geometry field (called internally by MeshFEM visualization)", py::arg("perEntityField"))
+        //     ;
     }
 };
 

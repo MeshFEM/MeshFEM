@@ -52,6 +52,29 @@ tbb::task_arena &get_gradient_assembly_arena() {
     return *g_gradient_assembly_arena;
 }
 
+#include <map>
+#include <fstream>
+std::map<int, std::vector<int>> parse_cpu_topology() {
+#ifdef __linux__
+    std::map<int, std::vector<int>> core_to_logical_map; // The logical cores corresponding to each physical core.
+    std::ifstream infile("/proc/cpuinfo");
+    std::string line;
+    int cpu_id = -1, core_id = -1;
+
+    while (std::getline(infile, line)) {
+        if (line.find("processor") == 0) {
+            cpu_id = std::stoi(line.substr(line.find(":") + 1));
+        } else if (line.find("core id") == 0) {
+            core_id = std::stoi(line.substr(line.find(":") + 1));
+            core_to_logical_map[core_id].push_back(cpu_id);
+        }
+    }
+    return core_to_logical_map;
+#else
+    throw std::runtime_error("parse_cpu_topology is only supported on Linux!");
+#endif
+}
+
 #else // !MESHFEM_WITH_TBB
 
 void set_max_num_tbb_threads(int num_threads) {

@@ -26,46 +26,47 @@ template<class Derived>
 void customSort(Eigen::MatrixBase<Derived> &x) {
     auto *data = x.derived().data();
     switch (x.size()) {
-        case 1: return StaticTimSort<1>()(data);
-        case 2: return StaticTimSort<2>()(data);
-        case 3: return StaticTimSort<3>()(data);
-        case 4: return StaticTimSort<4>()(data);
-        case 5: return StaticTimSort<5>()(data);
         case 6: return StaticTimSort<6>()(data);
         case 7: return StaticTimSort<7>()(data);
         case 8: return StaticTimSort<8>()(data);
         case 9: return StaticTimSort<9>()(data);
-        case 10: return StaticTimSort<10>()(data);
-        case 11: return StaticTimSort<11>()(data);
-        case 12: return StaticTimSort<12>()(data);
         default: std::sort(data, data + x.size());
     }
 }
 
 template<size_t N>
-void benchmarkMaxDimension(size_t n, const size_t ntests = 1000000) {
+void benchmarkCustomSort(size_t n, const size_t ntests = 1000000) {
     if (n > N) return;
 
     VecMaxN_T<size_t, N> a(n);
     for (size_t i = 0; i < n; ++i)
         a[i] = std::rand() % 100;
 
-    BENCHMARK_START_TIMER_SECTION(std::to_string(N) + "_" + std::to_string(n) + "_custom_sort");
+    BENCHMARK_START_TIMER_SECTION(std::to_string(n) + "_custom_sort");
     for (size_t i = 0; i < ntests; ++i) {
         auto b = a;
-        // customSort(b);
-        mostlyStaticSort<6>(b.data(), b.size());
+        customSort(b);
         use(b);
     }
-    BENCHMARK_STOP_TIMER_SECTION(std::to_string(N) + "_" + std::to_string(n) + "_custom_sort");
+    BENCHMARK_STOP_TIMER_SECTION(std::to_string(n) + "_custom_sort");
+}
 
-    BENCHMARK_START_TIMER_SECTION(std::to_string(N) + "_" + std::to_string(n) + "_std_sort");
-    for (size_t i = 0; i < ntests; ++i) {
-        auto b = a;
-        std::sort(b.data(), b.data() + b.size());
-        use(b);
+template<size_t MinSize, size_t MaxSize>
+void benchmarkDispatched(const size_t ntests = 1000000) {
+    for (size_t n = MinSize; n <= MaxSize; ++n) {
+        VecMaxN_T<size_t, MaxSize> a(n);
+        for (size_t i = 0; i < n; ++i)
+            a[i] = std::rand() % 100;
+
+        BENCHMARK_START_TIMER_SECTION(std::to_string(n) + "_dispatched_sort_" + std::to_string(MinSize) + "_" + std::to_string(MaxSize));
+        for (size_t i = 0; i < ntests; ++i) {
+            auto b = a;
+            dispatchedStaticSort<MinSize, MaxSize>(b.data(), b.size());
+            use(b);
+        }
+
+        BENCHMARK_STOP_TIMER_SECTION(std::to_string(n) + "_dispatched_sort_" + std::to_string(MinSize) + "_" + std::to_string(MaxSize));
     }
-    BENCHMARK_STOP_TIMER_SECTION(std::to_string(N) + "_" + std::to_string(n) + "_std_sort");
 }
 
 template<size_t N>
@@ -76,6 +77,14 @@ void benchmarkDimension(const size_t ntests = 1000000) {
 
     StaticTimSort<N> timBoseNelsonSort;
 
+    BENCHMARK_START_TIMER_SECTION(std::to_string(N) + "_static_sort");
+    for (size_t i = 0; i < ntests; ++i) {
+        std::array<size_t, N> b = a;
+        timBoseNelsonSort(b);
+        use(b);
+    }
+    BENCHMARK_STOP_TIMER_SECTION(std::to_string(N) + "_static_sort");
+
     BENCHMARK_START_TIMER_SECTION(std::to_string(N) + "_std_sort");
     for (size_t i = 0; i < ntests; ++i) {
         std::array<size_t, N> b = a;
@@ -84,13 +93,6 @@ void benchmarkDimension(const size_t ntests = 1000000) {
     }
     BENCHMARK_STOP_TIMER_SECTION(std::to_string(N) + "_std_sort");
 
-    BENCHMARK_START_TIMER_SECTION(std::to_string(N) + "_static_sort");
-    for (size_t i = 0; i < ntests; ++i) {
-        std::array<size_t, N> b = a;
-        timBoseNelsonSort(b);
-        use(b);
-    }
-    BENCHMARK_STOP_TIMER_SECTION(std::to_string(N) + "_static_sort");
 }
 
 int main(int argc, const char *argv[]) {
@@ -111,12 +113,13 @@ int main(int argc, const char *argv[]) {
     benchmarkDimension<15>();
     benchmarkDimension<16>();
 
-    // for (size_t n = 1; n < 16; ++n) {
-    //     benchmarkMaxDimension< 9>(n);
-    //     benchmarkMaxDimension<10>(n);
-    //     benchmarkMaxDimension<11>(n);
-    //     benchmarkMaxDimension<12>(n);
-    // }
+    benchmarkCustomSort<9>(6);
+    benchmarkCustomSort<9>(7);
+    benchmarkCustomSort<9>(8);
+    benchmarkCustomSort<9>(9);
+
+    benchmarkDispatched<6, 9>();
+    benchmarkDispatched<6, 6>();
 
     BENCHMARK_REPORT();
     return 0;

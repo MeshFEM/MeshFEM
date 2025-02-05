@@ -238,6 +238,19 @@ public:
         if constexpr (Deg > 1) for (size_t i = 0; i < nse; ++i) nodeIndices[nsv + i] =    nv + m_N[nse * ei + i];
     }
 
+    using BdryNodeIndices = std::array<size_t, Simplex::numNodes(K - 1, Deg)>;
+    BdryNodeIndices boundaryElementVolumeNodeIndices(size_t bei) const {
+        BdryNodeIndices result;
+        boundaryElementVolumeNodeIndices(bei, result);
+        return result;
+    }
+    void boundaryElementVolumeNodeIndices(size_t bei, BdryNodeIndices &result) const {
+        // TODO: speed up by bypassing handle creation
+        auto be = boundaryElement(bei);
+        for (size_t i = 0; i < Simplex::numNodes(K - 1, Deg); ++i)
+            result[i] = be.node(i).volumeNode().index();
+    }
+
     // (re-)embed the mesh elements.
     // Mesh vertex nodes are read from the passed vertex position array and edge
     // nodes are positioned at the edge midpoint.

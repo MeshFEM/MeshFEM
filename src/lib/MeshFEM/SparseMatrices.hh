@@ -633,6 +633,10 @@ struct TripletMatrix {
     void dumpBinary(const std::string &path) const {
         std::ofstream os(path);
         if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        dumpBinaryToStream(os);
+    }
+
+    void dumpBinaryToStream(std::ostream &os) const {
         uint64_t N = nnz();
         os.write((char *) &N, sizeof(uint64_t));
 
@@ -651,6 +655,10 @@ struct TripletMatrix {
     void readBinary(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        readBinaryFromStream(is);
+    }
+
+    void readBinaryFromStream(std::istream &is) {
         uint64_t N;
         is.read((char *) &N, sizeof(uint64_t));
         nz.resize(N);
@@ -874,11 +882,19 @@ struct CSCMatrix {
 
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(_Real val) {
-        Ax.resize(nz);
-        data().setConstant(val);
+        Ax.assign(nz, val);
     }
 
+    bool isSparsityOnly() const { return Ax.size() == 0; }
+
+    // Overwrite the numerical values to zero, preserving the sparsity pattern.
+    // If this is a sparsity-only matrix, upgrade it to an ordinary one.
     template<bool multithreaded = true> void setZero() {
+        if (Ax.size() == 0) {
+            Ax.resize(nz); // upgrade sparsity-only matrix
+            return;
+        }
+
         if (multithreaded) {
             parallel_for_range(Ax.size(), [&](size_t i) {
                 spmat_helper::setZero(Ax[i]);
@@ -1012,7 +1028,6 @@ struct CSCMatrix {
 
     template<typename T = _Real, class ValueGetter>
     CSCMatrix<_Index, T> toSymmetryModeImpl(SymmetryMode newMode, const ValueGetter &value) const {
-        if (Ax.size() != size_t(nz)) throw std::runtime_error("Inconsistent nonzero count (is this a sparsity-only matrix with empty `Ax`?)");
         using Result = CSCMatrix<_Index, T>;
         if (newMode == symmetry_mode) {
             Result result(m, n);
@@ -1020,7 +1035,7 @@ struct CSCMatrix {
             result.Ai = Ai;
             result.Ax.reserve(Ax.size());
             for (SuiteSparse_long ii = 0; ii < nz; ++ii)
-                result.Ax[ii] = value(ii);
+                result.Ax.push_back(value(ii));
             return result;
         }
         if (m != n) throw std::runtime_error("Matrix is not symmetric");
@@ -1122,6 +1137,58 @@ struct CSCMatrix {
     // (discarding values).
     CSCMatrix toSymmetryModeSparsityOnly(SymmetryMode newMode, _Real val = 0.0) const {
         return toSymmetryModeImpl(newMode, [val](_Index /* ii */) { return val; });
+    }
+
+    // Treating this matrix's sparsity pattern as a block sparsity pattern with
+    // block size `UniformBlockSize`, expand it into the corresponding scalar sparsity pattern.
+    template<size_t UniformBlockSize, bool AssumeDiagonalExists = false>
+    CSCMatrix expandSparsityPattern() const {
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
+
+        static constexpr size_t N = UniformBlockSize;
+        size_t n_scalar = n * UniformBlockSize;
+        CSCMatrix result(n_scalar, n_scalar);
+        result.symmetry_mode = SymmetryMode::UPPER_TRIANGLE;
+
+        const CSCMatrix &blockHsp = *this;
+        typename CSCMatrix::InOrderBuilder builder(result, [&blockHsp](_Index *colSizes) {
+                // Count the number of nonzeros in each column of the scalar Hessian sparsity pattern.
+                for (_Index block_j = 0; block_j < blockHsp.n; ++block_j) {
+                    size_t gvar_j = block_j * N;
+                    size_t numBlocks = blockHsp.Ap[block_j + 1] - blockHsp.Ap[block_j];
+                    bool hasDiagonal = AssumeDiagonalExists || (blockHsp.Ai[blockHsp.Ap[block_j + 1] - 1] == block_j);
+                    if (hasDiagonal) {
+                        size_t colSize = (numBlocks - 1) * N + 1;
+                        for (size_t c_j = 0; c_j < N; ++c_j)
+                            colSizes[gvar_j + c_j] = colSize++;
+                    }
+                    else {
+                        for (size_t c_j = 0; c_j < N; ++c_j)
+                            colSizes[gvar_j + c_j] = N * numBlocks;
+                    }
+                }
+            }, /* sparsityOnly = */ true);
+
+        // BENCHMARK_SCOPED_TIMER_SECTION timer2("builderFiller");
+        // Filling out the index arrays (can be done in parallel)
+        for (_Index block_j = 0; block_j < blockHsp.n; ++block_j) {
+            size_t gvar_j = block_j * N;
+            for (_Index ii = blockHsp.Ap[block_j]; ii < blockHsp.Ap[block_j + 1]; ++ii) {
+                _Index block_i = blockHsp.Ai[ii];
+                if (block_i < block_j) {
+                    size_t gvar_i = block_i * N;
+                    for (size_t c_j = 0; c_j < N; ++c_j)
+                        for (size_t c_i = 0; c_i < N; ++c_i)
+                            builder.insert(gvar_i + c_i, gvar_j + c_j);
+                }
+                else {
+                    for (size_t c_j = 0; c_j < N; ++c_j)
+                        for (size_t c_i = 0; c_i <= c_j; ++c_i)
+                            builder.insert(gvar_j + c_i, gvar_j + c_j);
+                }
+            }
+        }
+        return result;
     }
 
     void reflectUpperTriangle() {
@@ -1630,7 +1697,10 @@ struct CSCMatrix {
     void dumpBinary(const std::string &path) const {
         std::ofstream os(path);
         if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
+        dumpBinaryToStream(os);
+    }
 
+    void dumpBinaryToStream(std::ostream &os) const {
         if ((Ap.size() != size_t(n + 1)) || (Ai.size() != size_t(nz)) || (Ax.size() != size_t(nz)))
                 throw std::runtime_error("Inconsistent matrix size metadata");
 
@@ -1646,7 +1716,10 @@ struct CSCMatrix {
     void readBinary(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
+        readBinaryFromStream(is);
+    }
 
+    void readBinaryFromStream(std::istream &is) {
         is.read((char *) & m, sizeof(_Index));
         is.read((char *) & n, sizeof(_Index));
         is.read((char *) &nz, sizeof(_Index));
@@ -1750,6 +1823,7 @@ struct CSCMatrix {
 
     template<typename _Real2> // Templated to support, e.g., application of non-autodiff matrix to autodiff vector.
     void applyRaw(const _Real2 *x, _Real2 *result, const bool transpose = false) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix.applyRaw");
         const bool swapIndices = transpose && (symmetry_mode == SymmetryMode::NONE);
 
         size_t len = transpose ? n : m;
@@ -1939,6 +2013,8 @@ struct CSCMatrix {
 
         if (toRemove == 0) return;
 
+        const bool sparsityOnly = Ax.empty();
+
         const _Index nconst = n;
         size_t entry_back = 0, colptr_back = 0;
         _Index idx_begin = 0; // Pointer to the beginning of the current column's entries (note Ap[j] will be overwritten by the updated end pointer for the column j - 1)
@@ -1952,7 +2028,7 @@ struct CSCMatrix {
                 const _Index i = Ai[idx];
                 if (shouldRemove(i)) continue;
                 Ai[entry_back] = replacementRowIdx[i];
-                Ax[entry_back] = Ax[idx];
+                if (!sparsityOnly) Ax[entry_back] = Ax[idx];
                 if (entryForReducedEntry) (*entryForReducedEntry)[entry_back] = idx;
                 ++entry_back;
             }
@@ -1966,7 +2042,7 @@ struct CSCMatrix {
         nz = entry_back;
         m = n = colptr_back;
 
-        Ax.resize(nz);
+        if (!sparsityOnly) Ax.resize(nz);
         Ai.resize(nz);
         Ap.resize(n + 1);
         if (entryForReducedEntry) (*entryForReducedEntry).resize(nz);

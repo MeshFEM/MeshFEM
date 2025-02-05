@@ -20,9 +20,11 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <MeshFEM/Elements/HingeElement.hh>
 #include <MeshFEM/Elements/MembraneElement.hh>
+#include <MeshFEM/Elements/ParametrizationElement.hh>
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/Elements/DiscreteShellHingeEnergy.hh>
 #include <MeshFEM/Stencils.hh>
+
 #include "MeshBindings.hh"
 #include "BindMembraneMaterial.hh"
 #include "MeshEnergyBinder.hh"
@@ -31,6 +33,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/MetricFitting.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
+#include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
+#include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
 // Bind the "NodalVars" factory method on each mesh type.
 struct NodalVarsBinder {
@@ -48,6 +52,21 @@ struct NodalVarsBinder {
 template<class NVars>
 void bind_nvars(py::module &detail) {
     py::class_<NVars, NewtonVarsBase, std::shared_ptr<NVars>>(detail, NameMangler<NVars>::name().c_str());
+}
+
+template<class E>
+auto bindParametrizationMeshEnergy(py::module &m, py::module &detail) {
+    using PME = ParametrizationMeshEnergy<E>;
+    using Element     = std::decay_t<decltype(std::declval<PME>().elements.front())>;
+    using ElementData = typename Element::EData;
+    using M32d        = typename ElementData::M32d;
+
+    auto pyPME = bindMeshEnergy<PME, E>("Parametrization", m, detail);
+    pyPME.def("getB", [](const PME &pme, size_t ei) { return pme.elements.at(ei).elementData.B(); });
+    pyPME.def("setB", [](      PME &pme, size_t ei, const M32d &B) { pme.elements.at(ei).elementData.setB(B); });
+    pyPME.def("elementJacobian", [](const PME &pme, size_t ei) { return pme.elements.at(ei).getFB(pme.extractLocalVars(ei)); });
+
+    return pyPME;
 }
 
 PYBIND11_MODULE(mesh_energy, m)
@@ -71,6 +90,7 @@ PYBIND11_MODULE(mesh_energy, m)
     py::class_<MeshEnergyBase, NewtonObjectiveTermBase, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
         .def("materialForElement", &MeshEnergyBase::materialForElement, py::arg("ei"), py::return_value_policy::reference_internal)
         .def("numElements", &MeshEnergyBase::numElements)
+        .def_readwrite("useXBasedProjection", &MeshEnergyBase::useXBasedProjection)
         ;
 
     using DSHEMat = DiscreteShellHingeEnergy<double>::MaterialProperties;
@@ -85,10 +105,15 @@ PYBIND11_MODULE(mesh_energy, m)
     bindMeshEnergy<MembraneMeshEnergy<NHE>>("NeoHookeanMembrane", m, detail);
     bindMeshEnergy<DiscreteShellHingeMeshEnergy<double>>("DiscreteShellBending", m, detail);
 
+    bindParametrizationMeshEnergy<                      NeoHookeanEnergy  <double, 2> >(m, detail);
+    bindParametrizationMeshEnergy<AutoHessianProjection<NeoHookeanEnergy  <double, 2>>>(m, detail);
+    bindParametrizationMeshEnergy<                      SymmetricDirichlet<double, 2> >(m, detail);
+    bindParametrizationMeshEnergy<        SymmetricDirichletDerivativeFree<double, 2> >(m, detail);
+
     // Bind solid element mesh energies
     using NHE3D = NeoHookeanEnergy<double, 3>;
-    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("NeoHookeanSolid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
+    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
 }

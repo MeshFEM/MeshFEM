@@ -94,6 +94,7 @@ option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLE
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
 option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
+option(MESHFEM_WITH_IPC_TOOLKIT       "Compile MeshFEM with Ipc_toolkit" ON)
 
 if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
     message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
@@ -122,6 +123,12 @@ add_subdirectory(src/lib)
 
 if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
+endif()
+
+# TODO: change back from a Git submodule to a CMake project download when
+# BlockCatamari is released.
+if (MESHFEM_WITH_CATAMARI)
+    add_subdirectory(3rdparty/catamari)
 endif()
 
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python

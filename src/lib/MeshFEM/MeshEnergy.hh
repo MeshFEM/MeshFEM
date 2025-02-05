@@ -3,8 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
 //
-//  Generic infrastructure for defining elements whose local variables are
-//  attached to entities of a mesh.
+//  Generic infrastructure for defining energies constructed as a sum over
+//  elements whose local variables are attached to entities of a mesh.
 //
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
@@ -73,7 +73,7 @@ struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
         ((MVSpec::initialize(m, m_x.segment(v.offsetForType(type), v.numVarsOfType(type))), ++type), ...);
     }
 
-    const Assembler &assembler() const { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
+    const Assembler &assembler() const override { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
     const auto &varStructure() const { return assembler().varStructure(); }
     const VXd &globalVars() const { return m_x; }
 
@@ -103,6 +103,8 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
     virtual size_t numElements() const = 0;
 
     virtual ~MeshEnergyBase() { }
+
+    bool useXBasedProjection = false;
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
 };
@@ -170,49 +172,39 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-    void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask = false) const override {
+    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
-        if constexpr (Element::CachesDeformedQuantities) {
+        if (!useXBasedProjection || !projectionMask) {
+            // Use projection implemented by the element itself (e.g., F-based projection)
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask);
+                if constexpr (Element::CachesDeformedQuantities)
+                    return elements[ei].hessian(weight, projectionMask);
+                else
+                    return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
-            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            // Use a brute-force x-based projection
+            using ElementHessian = typename Element::Hessian;
+            auto getProjectedHessian = [&](size_t ei) -> ElementHessian {
+                ElementHessian H_e;
+                if constexpr (Element::CachesDeformedQuantities)
+                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
+                else
+                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
+                Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
+                if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
+                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            };
+
+            assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });
         }
     }
 
-    // Allow block-accelerated Hessian assembly to be disabled for performance comparisons.
-    bool blockAccelerateHessian = true;
-    bool supportsBlockAcceleratedHessianAssembly() const override { return blockAccelerateHessian && Assembler::SingleBlockDim; }
-
-    using BCSCMat = typename Assembler::BCSCMat;
-    // Block-accelerated Hessian assembly
-    void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb_base, bool projectionMask) const override {
-        const BCSCMat &Hb = BCSCMat::cast(Hb_base);
-        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian (block accelerated)");
-        if constexpr (Element::CachesDeformedQuantities) {
-            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask);
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
-        }
-        else {
-            assembler().assembleHessianBlockAccelerated(Ax, Hb, elements.size(), [&](size_t ei) {
-                return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
-        }
-    }
-
-    std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-        return assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
+    NewtonHessian hessianSparsityPattern() const override {
+        return assembler().sparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
-    }
-
-    SuiteSparseMatrix hessianSparsityPattern(double val = 0.0) const override {
-        return blockSparsityPattern()->toScalar(val);
     }
 
     void varsUpdated() override {

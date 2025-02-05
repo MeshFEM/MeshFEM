@@ -4,3 +4,6 @@
 [submodule "3rdparty/RotationOptimization"]
 	path = 3rdparty/RotationOptimization
 	url = https://github.com/EPFL-LGG/RotationOptimization
+[submodule "3rdparty/catamari_dev"]
+	path = 3rdparty/catamari
+	url = git@github.com:MeshFEM/catamari_dev

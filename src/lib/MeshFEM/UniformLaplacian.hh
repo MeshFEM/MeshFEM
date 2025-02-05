@@ -4,7 +4,7 @@
 /*! @file
 //      Constructs the (primal mesh) uniform laplacian system. This is the graph
 //      laplacian of the mesh graph (i.e. vertices instead of FEM nodes).
-*/ 
+*/
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Company:  New York University
 //  Created:  12/12/2015 12:14:03
@@ -12,22 +12,22 @@
 #ifndef UNIFORMLAPLACIAN_HH
 #define UNIFORMLAPLACIAN_HH
 
-#include <algorithm> 
+#include <algorithm>
 #include <vector>
 #include <set>
 #include <stdexcept>
 #include <iostream>
 
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/Solvers/SPSDSystem.hh>
 
 namespace UniformLaplacian {
 
-// Assemble the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
+// Construct the rank-deficient nv x nv uniform graph Laplacian (rank nv - 1).
 // If varForVertex is passed, vertices can share variables (e.g. to implement
 // periodic constraints).
 template<class _Mesh>
-void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
-              const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+TripletMatrix<> construct(_Mesh &mesh, const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
     size_t numVertices = mesh.numVertices();
     bool hasVarForVertex = (varForVertex.size() != 0);
     if (hasVarForVertex && (varForVertex.size() != numVertices))
@@ -38,7 +38,7 @@ void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
         numVars = m + 1;
     }
     if (numVars > numVertices) { std::cerr << "WARNING: more variables than vertices." << std::endl; }
-    
+
     // We currently don't have vetex-vertex connectivity. It can be accessed
     // with circulators for TriMesh, but it would require a bit more code for
     // TetMesh--instead use elements to determine the connectivity
@@ -74,7 +74,15 @@ void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
         for (size_t vj : adj_i)
             L.addNZ(vi, vj, -1.0);
     }
+    return L;
+}
 
+// Assemble a SPSDSystem for solving linear systems using the uniform laplacian matrix.
+template<class _Mesh>
+void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
+              const std::vector<size_t> &varForVertex = std::vector<size_t>()) {
+
+    TripletMatrix<> L = construct(mesh, varForVertex);
     system.set(L);
 }
 

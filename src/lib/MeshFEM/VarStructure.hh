@@ -8,6 +8,20 @@
 // distinct dimensions (usually just 2). In the latter case, the variables of
 // each different dimension are collected together for efficiency.
 // The dimensions are specified by the `BlockDimensions_` template parameter(s).
+//
+// In addition to these ordinary block variables, we allow the user to define
+// a small number of additional "global" or "dense" variables that are added
+// either to the beginning or end of the full variable set.
+// This is intended for variables that are coupled to many/all other
+// optimization variables, otherwise requiring the insertion of highly
+// dense rows or columns into the sparse Hessian (e.g., entries of the
+// macroscopic deformation gradient of an elasticity homogenization problem).
+//
+// These "dense" variables are not assigned block indices, and the corresponding
+// blocks of the Hessian are *not* included in the "sparse" (BlockCSC)
+// Hessian that is factorized by the Newton solver. Instead a Schur complement
+// approach is used to solve the full Newton system using a factorization of
+// only the sparse block.
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
 //  Created:  01/15/2024 15:27:54
@@ -17,8 +31,59 @@
 
 #include "Types.hh"
 
+struct MESHFEM_EXPORT OptimizationVarStructureBase {
+    struct Block { size_t start, size; };
+
+    size_t   numVars()     const { return m_numScalarVars + m_numDenseVars; }
+    size_t numBlocks()     const { return m_numBlocks; }
+    size_t numSparseVars() const { return m_numScalarVars; }
+    size_t numDenseVars()  const { return m_numDenseVars; }
+
+    // Information about block variables (Note: offsets are relative to `sparseVarOffset()`)
+    virtual size_t blockType(size_t blockIndex) const = 0;
+    virtual Block  blockInfo(size_t blockIndex) const = 0;
+    virtual size_t blockSize(size_t block)      const = 0;
+    virtual size_t offsetForBlock(size_t block) const = 0;
+
+    // Information about scalar variables
+    virtual size_t blockContainingVar(size_t var) const = 0;
+
+    // Information about blockvar types (Note: offsets are relative to `sparseVarOffset()`)
+    virtual size_t      offsetForType(size_t type_id) const = 0;
+    virtual size_t      numVarsOfType(size_t type_id) const = 0;
+    virtual size_t blockOffsetForType(size_t type_id) const = 0;
+    virtual size_t    numBlocksOfType(size_t type_id) const = 0;
+
+    // Dense/global variable logic
+    enum class DenseVarPositioning { Beginning, End };
+    void setNumDenseVars(size_t ndv) { m_numDenseVars = ndv; }
+    DenseVarPositioning denseVarPositioning() const { return m_denseVarPositioning; }
+    size_t sparseVarOffset() const { return (denseVarPositioning() == DenseVarPositioning::Beginning) ? numDenseVars() : 0; }
+    size_t  denseVarOffset() const { return (denseVarPositioning() == DenseVarPositioning::End      ) ? 0 : m_numScalarVars; }
+
+    bool isSparseVar(size_t var) const { return (var >= sparseVarOffset()) && (var < sparseVarOffset() + numSparseVars()); }
+    bool isDenseVar (size_t var) const { return (var >=  denseVarOffset()) && (var <  denseVarOffset() +  numDenseVars()); }
+
+    // Variable slicing operations
+    template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(sparseVarOffset() + offsetForType(type_id), numVarsOfType(type_id)); }
+    template<class Derived> auto variablesOfType(const Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(sparseVarOffset() + offsetForType(type_id), numVarsOfType(type_id)); }
+
+    template<class Derived> auto  denseVars(      Eigen::MatrixBase<Derived> &x) const { return x.segment( denseVarOffset(), numDenseVars()); }
+    template<class Derived> auto  denseVars(const Eigen::MatrixBase<Derived> &x) const { return x.segment( denseVarOffset(), numDenseVars()); }
+    template<class Derived> auto sparseVars(      Eigen::MatrixBase<Derived> &x) const { return x.segment(sparseVarOffset(), numSparseVars()); }
+    template<class Derived> auto sparseVars(const Eigen::MatrixBase<Derived> &x) const { return x.segment(sparseVarOffset(), numSparseVars()); }
+
+    virtual ~OptimizationVarStructureBase() = default;
+protected:
+    // Number of "sparse" variables (and corresponding blocks)
+    size_t m_numBlocks, m_numScalarVars;
+
+    size_t m_numDenseVars = 0;
+    DenseVarPositioning m_denseVarPositioning = DenseVarPositioning::End;
+};
+
 template<size_t... BlockDimensions_>
-struct OptimizationVarStructure {
+struct OptimizationVarStructure final : public OptimizationVarStructureBase {
     static constexpr size_t FirstBlockDim  = std::get<0>(std::make_tuple(BlockDimensions_...));
     static constexpr size_t NumBlockTypes  = sizeof...(BlockDimensions_);
     static constexpr size_t MinBlockDim    = std::min({BlockDimensions_...});
@@ -27,9 +92,7 @@ struct OptimizationVarStructure {
     static constexpr std::array<size_t, NumBlockTypes> BlockDimensions{{BlockDimensions_...}};
     static constexpr size_t NONE = std::numeric_limits<size_t>::max();
 
-    struct Block { size_t start, size; };
-
-    size_t blockType(size_t blockIndex) const {
+    size_t blockType(size_t blockIndex [[maybe_unused]]) const override {
         if constexpr (SingleBlockDim) { return 0; }
         else {
             for (size_t ti = 0; ti < NumBlockTypes; ++ti)
@@ -38,17 +101,24 @@ struct OptimizationVarStructure {
         }
     }
 
-    Block blockInfo(size_t blockIndex) const {
+    Block blockInfoKnownType(size_t blockIndex, size_t ti) const {
         if constexpr (SingleBlockDim) { return Block{FirstBlockDim * blockIndex, FirstBlockDim}; }
         else {
-            size_t ti = blockType(blockIndex);
             if (ti != NONE) return Block{m_typeVarOffsets[ti] + (blockIndex - m_typeBlockOffsets[ti]) * BlockDimensions[ti], BlockDimensions[ti]};
             return Block{NONE, NONE};
         }
     }
 
+    Block blockInfo(size_t blockIndex) const override {
+        if constexpr (SingleBlockDim) { return Block{FirstBlockDim * blockIndex, FirstBlockDim}; }
+        else {
+            size_t ti = blockType(blockIndex);
+            return blockInfoKnownType(blockIndex, ti);
+        }
+    }
+
     // Query the block size of a given variable.
-    size_t blockSize(size_t block) const {
+    size_t blockSize(size_t block [[maybe_unused]]) const override {
         if constexpr (SingleBlockDim) { return FirstBlockDim; }
         else {
             size_t ti = blockType(block);
@@ -57,7 +127,7 @@ struct OptimizationVarStructure {
         }
     }
 
-    size_t offsetForBlock(size_t block) const {
+    size_t offsetForBlock(size_t block) const override {
         if constexpr (SingleBlockDim) { return FirstBlockDim * block; }
         else {
             size_t ti = blockType(block);
@@ -67,7 +137,7 @@ struct OptimizationVarStructure {
     }
 
     // Determine index of the block containing the scalar variable `var`.
-    size_t blockContainingVar(size_t var) const {
+    size_t blockContainingVar(size_t var) const override {
         if constexpr (SingleBlockDim) { return var / FirstBlockDim; }
         else {
             for (size_t ti = 0; ti < NumBlockTypes; ++ti)
@@ -91,20 +161,13 @@ struct OptimizationVarStructure {
         m_numScalarVars = m_typeVarOffsets[NumBlockTypes];
     }
 
-    size_t offsetForType(size_t type_id) const { return m_typeVarOffsets[type_id]; }
-    size_t numVarsOfType(size_t type_id) const { return m_typeVarOffsets[type_id + 1] - m_typeVarOffsets[type_id]; }
+    size_t offsetForType(size_t type_id) const override { return m_typeVarOffsets[type_id]; }
+    size_t numVarsOfType(size_t type_id) const override { return m_typeVarOffsets[type_id + 1] - m_typeVarOffsets[type_id]; }
 
-    size_t blockOffsetForType(size_t type_id) const { return m_typeBlockOffsets[type_id]; }
-    size_t    numBlocksOfType(size_t type_id) const { return m_typeBlockOffsets[type_id + 1] - m_typeBlockOffsets[type_id]; }
-
-    size_t   numVars() const { return m_numScalarVars; }
-    size_t numBlocks() const { return m_numBlocks; }
-
-    template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
-    template<class Derived> auto variablesOfType(const Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(offsetForType(type_id), numVarsOfType(type_id)); }
+    size_t blockOffsetForType(size_t type_id) const override { return m_typeBlockOffsets[type_id]; }
+    size_t    numBlocksOfType(size_t type_id) const override { return m_typeBlockOffsets[type_id + 1] - m_typeBlockOffsets[type_id]; }
 
 private:
-    size_t m_numBlocks, m_numScalarVars;
     std::array<size_t, NumBlockTypes> m_numBlocksPerType;
     std::array<size_t, NumBlockTypes + 1> m_typeBlockOffsets;
     std::array<size_t, NumBlockTypes + 1> m_typeVarOffsets;
@@ -124,6 +187,27 @@ struct PerElementBlockOffsetCalculation<VarStructure, ElementBlockVars, std::ena
     static constexpr size_t offset(size_t localBlockIndex) { return N * localBlockIndex; }
     static constexpr size_t blockSize(size_t /* localBlockIndex */) { return N; }
     static constexpr size_t globalScalarVar(size_t /* localBlockIndex */, size_t globalBlockVar)  { return N * globalBlockVar; }
+};
+
+// Local (block) variable list container for elements whose size
+// varies within a small range of possible sizes.
+template<size_t _MinNumVars, size_t _MaxNumVars>
+struct ElementBlockVarsWithSizeRange {
+    static constexpr size_t MinNumVars = _MinNumVars;
+    static constexpr size_t MaxNumVars = _MaxNumVars;
+
+    ElementBlockVarsWithSizeRange() { } // Leaves fully uninitialized...
+    ElementBlockVarsWithSizeRange(size_t n) : numVars(n) { }
+
+    std::array<size_t, MaxNumVars> vars;
+
+    size_t  operator[](size_t i) const { return vars[i]; }
+    size_t &operator[](size_t i)       { return vars[i]; }
+    size_t *data()                     { return vars.data(); }
+
+    size_t numVars;
+    size_t size() const { return numVars; }
+    void resize(size_t n) { numVars = n; }
 };
 
 // For problems with nonuniform block size, we look up the block sizes

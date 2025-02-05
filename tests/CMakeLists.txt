@@ -20,6 +20,7 @@ add_executable(unit_tests
     test_edensity_adaptors.cc
     test_edensities.cc
     test_field_sampler.cc
+    test_block_csc_hessian.cc
     )
 
 target_link_libraries(unit_tests PUBLIC
@@ -33,6 +34,17 @@ target_link_libraries(solve_system MeshFEM)
 
 add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
 target_link_libraries(benchmark_linear_systems MeshFEM)
+
+add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
+target_link_libraries(benchmark_dense_linalg MeshFEM)
+
+if (MESHFEM_WITH_IPC_TOOLKIT)
+add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
+target_link_libraries(benchmark_ipc_toolkit MeshFEM)
+endif()
+
+add_executable(benchmark_sorts benchmark_sorts.cc)
+target_link_libraries(benchmark_sorts MeshFEM)
 
 if (MSVC)
 else ()

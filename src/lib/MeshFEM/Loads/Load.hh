@@ -86,8 +86,7 @@ struct ObjectSpecificLoad : public Load<Real> {
 #endif
     }
 
-    using BCSCMat = typename EO::BCSCMat;
-    std::unique_ptr<BCSCMat> emptyBlockSparsityPattern() const { return getObj().assembler().emptyBlockSparsityPattern(); }
+    const auto &assembler() const { return getObj().assembler(); }
 
     virtual ~ObjectSpecificLoad() { }
 

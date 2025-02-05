@@ -2,12 +2,15 @@
 #define CATAMARIFACTORIZER_HH
 
 #include "CholeskyFactorizerBase.hh"
-#include <stdexcept>
 
 #if MESHFEM_WITH_CATAMARI
 
 #include <MeshFEM/Parallelism.hh>
-#include "CholmodFactorizer.hh"
+
+extern "C" {
+#include <cholmod.h>
+}
+
 #include <SuiteSparse_config.h>
 #include <MeshFEM_export.h>
 
@@ -26,15 +29,20 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         Catamari, CholmodNesdis, Metis
     };
 
-    CatamariFactorizer();
+    // legacy: whether to use Jack Poulson's original implementation for comparison
+    CatamariFactorizer(bool legacy = false);
 
     size_t m_reduced() const override;
     size_t n_reduced() const override;
 
-    using CholeskyFactorizerBase::factorizeSymbolic; // don't shadow
-    void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
+    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
+    using CholeskyFactorizerBase::factorizeNumeric;
+    using CholeskyFactorizerBase::factorizeNumericWithShift;
 
-    void factorizeNumeric(const SuiteSparseMatrix &mat, bool /* isInTryCatch */ = false) override;
+    void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
+    void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
+
+    void factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma,                             bool isInTryCatch=false) override;
 
@@ -72,22 +80,41 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void clearStashedFactorization()       override;
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
-    CholeskyProvider provider() const override { return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari; }
+    CholeskyProvider provider() const override {
+        if (m_legacy) return CholeskyProvider::CatamariLegacy;
+        return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari;
+    }
 
     virtual ~CatamariFactorizer();
 
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
 
+    void setUseLeftLooking(bool use_left);
+    bool getUseLeftLooking() const;
+
+    void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
+    bool getUseBlockAccel() const { return m_useBlockAccel; }
+
 private:
+    template<typename... Args>
+    void m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args);
+
+    void m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars);
+
     std::unique_ptr<catamari::SparseLDL<double>> m_ldl, m_ldlStash;
     std::unique_ptr<catamari::SparseLDLControl<double>> m_ldlControl;
 
     std::unique_ptr<CatamariConverter> m_catamariConverter;
 
     std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
+    size_t m_blockSize = 1;
+    size_t m_useBlockAccel = true;
 
     // Support fused pre-permutation functionality (where row-col-removal is fused with permutation)
     void m_populatePermutedReducedRowForRow() const override;
+
+    // Whether to use Jack Poulson's original code for comparison
+    bool m_legacy = false;
 };
 #endif
 

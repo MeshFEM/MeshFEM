@@ -8,26 +8,34 @@
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  07/04/2022 17:35:25
 ////////////////////////////////////////////////////////////////////////////////
+#include "MeshFEM/Parallelism.hh"
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
-void benchmark_method(const std::string &method, const char *sparsityPatternPath, size_t numNumericMatrices,
-                      const char **numericMatrices, size_t tbb_threads) {
+void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads) {
     set_max_num_tbb_threads(tbb_threads);
+
+// #if __linux__
+//     PinningObserver core_binder;
+// #endif
+
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
 
     if (method == "cholmod") {
         factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
     }
-    else if (method == "catamari" || method == "catamari_nesdis" || method == "catamari_metis") {
+    else if (method.substr(0, 8)  == "catamari") {
 #if MESHFEM_WITH_CATAMARI
-        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>();
+        std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
+        cf->setUseBlockAccel(method.substr(method.size() - 8) != "_noblock");
+        cf->setUseLeftLooking(method.substr(0, 13) == "catamari_left");
+        // Note that `CatamariFactorizer::OrderingMethod::CholmodNesdis` is the default;
+        // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_nesdis")
-            cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
         if (method == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
+
         factorizer = std::move(cf);
 #else
         throw std::runtime_error("Catamari not included");
@@ -38,23 +46,61 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
     }
     else throw std::runtime_error("Unknown method");
 
-    SuiteSparseMatrix Asp(sparsityPatternPath);
-    factorizer->factorizeSymbolic(Asp);
+    Eigen::VectorXd x_gt, b;
 
-    Eigen::VectorXd b = Eigen::VectorXd::Random(Asp.m);
+    for (int counter = 0; ; counter++) {
+        std::string symPath = directory + "/" + CholeskyFactorizerBase::symbolicMatrixFileName(counter);
+        std::ifstream symFile(symPath);
+        if (symFile.good()) {
+            // std::cout << symPath << std::endl;
+            std::vector<size_t> pinnedVars;
+            std::ifstream pinnedVarFile(directory + "/" + CholeskyFactorizerBase::pinnedVarsFileName(counter));
+            if (pinnedVarFile.good()) {
+                size_t pinnedVar;
+                while (pinnedVarFile >> pinnedVar) {
+                    pinnedVars.push_back(pinnedVar);
+                }
+            }
+            else { throw std::runtime_error("Failed to open pinned vars file corresponding to symbolic matrix " + std::to_string(counter)); }
+            auto Hsp = BlockCSCHessianBase::constructFromBinaryStream(symFile);
+            factorizer->factorizeSymbolic(*Hsp, pinnedVars);
 
-    for (size_t i = 0; i < numNumericMatrices; ++i) {
-        SuiteSparseMatrix A(numericMatrices[i]);
-        try {
-            factorizer->factorizeNumeric(A, true);
-        }
-        catch (std::exception &e) {
-            std::cout << e.what() << std::endl;
+            x_gt = Eigen::VectorXd::Random(Hsp->numScalarRows());
+            for (size_t i : factorizer->getFixedVars())
+                x_gt[i] = 0;
+
             continue;
         }
 
-        // auto x = factorizer->solve(b);
-        // std::cout << "Relative error: " << (A.apply(x) - b).norm() / b.norm() << std::endl;
+        std::string numPath = directory + "/" + CholeskyFactorizerBase::numericMatrixFileName(counter);
+        std::ifstream numFile(numPath);
+        if (numFile.good()) {
+            // std::cout << numPath << std::endl;
+            if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
+                throw std::runtime_error("Numeric matrix encountered before symbolic matrix");
+            auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
+            try {
+                factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+
+                // Verify
+                b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
+                auto x = factorizer->solve(b);
+                auto b_recompute = H->apply(x);
+                double relerror_backward = (b - b_recompute).norm() / b.norm();
+                // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
+                // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
+                if (relerror_backward > 5e-5)
+                    std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
+            }
+            catch (const std::runtime_error &e) {
+                std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+            }
+
+
+            continue;
+        }
+
+        break; // Ran out of matrices...
     }
 
     BENCHMARK_REPORT();
@@ -62,16 +108,13 @@ void benchmark_method(const std::string &method, const char *sparsityPatternPath
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 5) {
-        std::cout << "Usage: " << argv[0] << " method tbb_threads sparsityPattern.bin numeric_0.bin [numeric_1.bin ...]" << std::endl;
-        std::cout << "where method is in {cholmod, catamari, catamari_nesdis}" << std::endl;
+    if (argc != 4) {
+        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory" << std::endl;
+        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, pardiso}" << std::endl;
         exit(-1);
     }
 
-    const char **numericMatrices = argv + 4;
-    size_t numNumericMatrices = argc - 4;
-
-    benchmark_method(argv[1], argv[3], numNumericMatrices, numericMatrices, std::stod(argv[2]));
+    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]));
 
     return 0;
 }

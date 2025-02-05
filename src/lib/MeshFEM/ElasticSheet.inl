@@ -32,16 +32,26 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
 // the second fundamental form forward to the deformed configuration). We
 // calculate this pushed-forward fundamental form directly and then verify its
 // pullback agrees with II.
+#include <MeshFEM/newton_optimizer/NewtonProblem.hh>
+#include <MeshFEM/SystemAssembler.hh>
 template<class ESheet>
 struct NormalInferenceProblem : public NewtonProblem {
+    using Assembler = ScalarSystemAssembler;
+    Assembler m_assembler;
+
     using M3d = typename ESheet::M3d;
-    NormalInferenceProblem(ESheet &sheet) : m_sheet(sheet) {
-        m_hessianSparsity = sheet.hessianSparsityPattern();
-        const size_t to = sheet.thetaOffset();
-        const size_t numThetas = sheet.numThetas();
-        m_hessianSparsity.rowColRemoval([to, numThetas](size_t i) { return (i < to) || (i >= to + numThetas); });
+    NormalInferenceProblem(ESheet &sheet) : m_sheet(sheet), m_assembler(sheet.numThetas()) {
+        // Build the theta-theta block of the full Elastic sheet Hessian sparsity pattern...
+        m_hessianSparsity = m_assembler.sparsityPattern(sheet.mesh().numElements(),
+                                                        [&](size_t ei) { return varsForElement(ei); });
 
         m_updateDeformedII();
+    }
+
+    std::array<size_t, 3> varsForElement(size_t ei) const {
+        return { m_sheet.edgeForHalfEdge(3 * ei + 0),
+                 m_sheet.edgeForHalfEdge(3 * ei + 1),
+                 m_sheet.edgeForHalfEdge(3 * ei + 2) };
     }
 
     virtual size_t numVars() const override { return m_sheet.numThetas(); }
@@ -81,41 +91,46 @@ struct NormalInferenceProblem : public NewtonProblem {
     }
 
 protected:
-    virtual SuiteSparseMatrix m_getHessianSparsityPattern() const override { /* m_hessianSparsity.fill(1.0); */ return m_hessianSparsity; }
+    virtual NewtonHessian m_getHessianSparsityPattern() const override { return m_hessianSparsity; }
     virtual bool m_updateSparsityPattern() const override { return false; }
 
-    virtual void m_evalHessian(SuiteSparseMatrix &result, bool /* projectionMask */) const override {
+    virtual void m_evalHessian(NewtonHessian &result, bool /* projectionMask */) const override {
         result.setZero();
-        for (const auto e : m_sheet.mesh().elements()) {
-            const size_t ei = e.index();
-            const auto &dtg = m_sheet.deformedTriGeometry(ei);
-            const Real A = dtg.A;
-            const Real dE_dpsi = A;
-            for (const auto he : e.halfEdges()) {
-                const size_t lhi = he.localIndex();
-                const size_t edgeIdx = m_sheet.edgeForHalfEdge(he.index());
-                const Real sign = he.isPrimary() ? 1.0 : -1.0;
-                const Real len = dtg.edgeLens[lhi];
 
-                const auto &glambda = (dtg.unitEdgePerpendiculars.col(lhi) / dtg.h[lhi]).eval();
-                for (const auto he_b : e.halfEdges()) {
-                    const size_t lhi_b = he_b.localIndex();
-                    const Real len_b = dtg.edgeLens[lhi_b];
-                    const size_t edgeIdx_b = m_sheet.edgeForHalfEdge(he_b.index());
-                    if (edgeIdx > edgeIdx_b) continue;
+        m_assembler.assembleHessian(result,
+            m_sheet.mesh().numElements(),
+            [&](size_t ei) -> M3d {
+                M3d H_e;
+                auto e = m_sheet.mesh().element(ei);
+                const auto &dtg = m_sheet.deformedTriGeometry(ei);
+                const Real A = dtg.A;
+                const Real dE_dpsi = A;
+                for (const auto he : e.halfEdges()) {
+                    const size_t lhi = he.localIndex();
+                    const Real sign = he.isPrimary() ? 1.0 : -1.0;
+                    const Real len = dtg.edgeLens[lhi];
 
-                    const auto &glambda_b = (dtg.unitEdgePerpendiculars.col(lhi_b) / dtg.h[lhi_b]).eval();
+                    const auto &glambda = (dtg.unitEdgePerpendiculars.col(lhi) / dtg.h[lhi]).eval();
+                    for (const auto he_b : e.halfEdges()) {
+                        const size_t lhi_b = he_b.localIndex();
+                        if (lhi_b < lhi) continue; // Only fill in upper triangle of H_e
+                        const Real len_b = dtg.edgeLens[lhi_b];
 
-                    const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
-                    const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * dE_dpsi) * std::pow(glambda.dot(glambda_b), 2);
+                        const auto &glambda_b = (dtg.unitEdgePerpendiculars.col(lhi_b) / dtg.h[lhi_b]).eval();
 
-                    // (Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
-                    const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
+                        const Real sign_b = he_b.isPrimary() ? 1.0 : -1.0;
+                        const Real d2E_d2_A_gamma_div_len_ab = 4 * (4 * dE_dpsi) * std::pow(glambda.dot(glambda_b), 2);
 
-                    result.addNZ(edgeIdx, edgeIdx_b, (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len);
+                        // Shape operator/gamma are linear in theta, so (delta_b d_A_gamma_div_len_d_xa) term vanishes.
+                        const Real delta_b_dE_d_A_gamma_div_len = ((sign_b * (A / len_b))) * d2E_d2_A_gamma_div_len_ab;
+
+                        H_e(lhi, lhi_b) = (sign * (A / len)) * delta_b_dE_d_A_gamma_div_len;
+                    }
                 }
-            }
-        }
+                return H_e;
+            },
+            [&](size_t ei) { return varsForElement(ei); }
+        );
     }
 
     virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
@@ -146,7 +161,7 @@ protected:
     }
 
     ESheet &m_sheet;
-    mutable SuiteSparseMatrix m_hessianSparsity;
+    mutable NewtonHessian m_hessianSparsity;
     std::vector<M3d> m_deformedII;
 };
 
@@ -406,77 +421,80 @@ ElasticSheet<Psi_2x2>::elementHessian(size_t ei, const EnergyType etype, bool pr
 }
 
 template <class Psi_2x2>
-void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, CSCMat &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
-    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.hessian");
-    struct CustomHEAData {
-        CustomHEAData(const ElasticSheet &es, Real weight, size_t ei, const EnergyType etype, bool projectionMask) {
-            H_e = es.elementHessian(ei, etype, projectionMask);
-            if (weight != 1.0) H_e *= weight;
-            const auto &m = es.mesh();
-            evars.resize(9);
-            auto e = m.element(ei);
-            for (auto v : e.vertices())
-                evars[v.localIndex()] = v.index();
-            size_t numCreases = 0;
-            for (auto he : e.halfEdges()) {
-                halfedgeIsPrimary[he.localIndex()] = he.isPrimary();
-                evars[3 + he.localIndex()] = m.numVertices() + es.edgeForHalfEdge(he.index());
-                int ci = es.creaseForHalfEdge(he.index());
-                if (ci < 0) continue;
-                localHalfedgeForLocalCrease[numCreases] = he.localIndex();
-                evars[6 + numCreases++] = m.numVertices() + es.numEdges() + ci;
-            }
-            evars.conservativeResize(6 + numCreases);
+struct ElasticSheet<Psi_2x2>::CustomHEAData {
+    CustomHEAData(const ElasticSheet &es, Real weight, size_t ei, const EnergyType etype, bool projectionMask) {
+        H_e = es.elementHessian(ei, etype, projectionMask);
+        if (weight != 1.0) H_e *= weight;
+        const auto &m = es.mesh();
+        auto e = m.element(ei);
+        for (auto v : e.vertices())
+            evars[v.localIndex()] = v.index();
+        size_t numCreases = 0;
+        for (auto he : e.halfEdges()) {
+            halfedgeIsPrimary[he.localIndex()] = he.isPrimary();
+            evars[3 + he.localIndex()] = m.numVertices() + es.edgeForHalfEdge(he.index());
+            int ci = es.creaseForHalfEdge(he.index());
+            if (ci < 0) continue;
+            localHalfedgeForLocalCrease[numCreases] = he.localIndex();
+            evars[6 + numCreases++] = m.numVertices() + es.numEdges() + ci;
         }
+        evars.numVars = 6 + numCreases;
+    }
 
-        MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const {
-            // x-x block
-            if (b < 9) return H_e.template block<3, 3>(a, b);
+    MatMaxN_T<Real, 3> block(size_t a, size_t b, size_t /* bsa */, size_t /* bsb */) const { return block(a, b); }
 
-            // *-theta cols
-            if (b < 12) {
-                Real coeff = halfedgeIsPrimary[b - 9] ? 1.0 : -1.0;
-                if (a < 9) return coeff * H_e.template block<3, 1>(a, b);
-                MatMaxN_T<Real, 3> result(1, 1);
-                result(0, 0) = (halfedgeIsPrimary[a - 9] ? coeff : -coeff) * H_e(a, b); 
-                return result;
-            }
+    MatMaxN_T<Real, 3> block(size_t a, size_t b) const {
+        // x-x block
+        if (b < 9) return H_e.template block<3, 3>(a, b);
 
-            // *-crease_angle cols
-            size_t localCrease_b = b - 12;
-            b = 9 + localHalfedgeForLocalCrease[localCrease_b];
-            Real coeff = -0.5; // dgamma / d crease_angle = -0.5
-
+        // *-theta cols
+        if (b < 12) {
+            Real coeff = halfedgeIsPrimary[b - 9] ? 1.0 : -1.0;
             if (a < 9) return coeff * H_e.template block<3, 1>(a, b);
-            if (a >= 12) {
-                size_t localCrease_a = a - 12;
-                a = 9 + localHalfedgeForLocalCrease[localCrease_a];
-                coeff *= -0.5; // dgamma / d crease_angle = -0.5
-
-                if (a > b) {
-                    // The index rewriting above can reference the lower triangle of
-                    // the (theta-theta) block--redirect to the upper triangle.
-                    std::swap(a, b);
-                }
-            }
-            else if (a >= 9) {
-                coeff *= halfedgeIsPrimary[a - 9] ? 1.0 : -1.0;
-            }
-
             MatMaxN_T<Real, 3> result(1, 1);
-            result(0, 0) = coeff * H_e(a, b); 
+            result(0, 0) = (halfedgeIsPrimary[a - 9] ? coeff : -coeff) * H_e(a, b); 
             return result;
         }
 
-        // Number of block variables in the typical case.
-        static constexpr size_t TypicalNumVars() { return 6; }
+        // *-crease_angle cols
+        size_t localCrease_b = b - 12;
+        b = 9 + localHalfedgeForLocalCrease[localCrease_b];
+        Real coeff = -0.5; // dgamma / d crease_angle = -0.5
 
-        PerElementHessian H_e;
-        EBlockVars evars;
-        Eigen::Vector3i localHalfedgeForLocalCrease;
-        std::array<bool, 3> halfedgeIsPrimary;
-    };
+        if (a < 9) return coeff * H_e.template block<3, 1>(a, b);
+        if (a >= 12) {
+            size_t localCrease_a = a - 12;
+            a = 9 + localHalfedgeForLocalCrease[localCrease_a];
+            coeff *= -0.5; // dgamma / d crease_angle = -0.5
+
+            if (a > b) {
+                // The index rewriting above can reference the lower triangle of
+                // the (theta-theta) block--redirect to the upper triangle.
+                std::swap(a, b);
+            }
+        }
+        else if (a >= 9) {
+            coeff *= halfedgeIsPrimary[a - 9] ? 1.0 : -1.0;
+        }
+
+        MatMaxN_T<Real, 3> result(1, 1);
+        result(0, 0) = coeff * H_e(a, b); 
+        return result;
+    }
+
+    // Number of block variables in the typical case.
+    static constexpr size_t TypicalNumVars() { return 6; }
+
+    PerElementHessian H_e;
+    EBlockVars evars;
+    Eigen::Vector3i localHalfedgeForLocalCrease;
+    std::array<bool, 3> halfedgeIsPrimary;
+};
+
+template <class Psi_2x2>
+void ElasticSheet<Psi_2x2>::accumulateHessian(Real weight, NewtonHessian &H, const EnergyType etype, bool projectionMask, VariableMask vars) const {
+    if (vars != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.hessian");
 
     assembler().assembleHessian(H, mesh().numElements(), [this, etype, projectionMask, weight](size_t ei) { return CustomHEAData(*this, weight, ei, etype, projectionMask); });
 }

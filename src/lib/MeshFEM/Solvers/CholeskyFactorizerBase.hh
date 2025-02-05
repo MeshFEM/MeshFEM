@@ -4,13 +4,15 @@
 #include <stdexcept>
 #include <cassert>
 #include <memory>
+#include <functional>
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/BlockCSCHessian.hh>
 #include <MeshFEM/unused.hh>
 
 enum class CholeskyProvider {
-    CHOLMOD, Catamari, CatamariNesdis, PARDISO
+    CHOLMOD, Catamari, CatamariNesdis, CatamariLegacy, PARDISO
 };
 
 // Eigen provides a `swap` method rather than overloading `std::swap`
@@ -52,19 +54,22 @@ struct CholeskyFactorizerBase {
     const std::vector<size_t> &getFixedVars() const { return m_fixedVars; }
 
     // Check if the currently set `m_fixedVars` are equivalent to `fv`.
-    bool fixesSameVarsAs(std::vector<size_t> &fv) const {
-        std::vector<bool> varIsFixed_a, varIsFixed_b;
-        varIsFixed_a.assign(n(), false);
-        varIsFixed_b.assign(n(), false);
-
-        for (size_t v : m_fixedVars) varIsFixed_a[v] = true;
-        for (size_t v : fv)          varIsFixed_b[v] = true;
-
-        // Verify masks agree on all variables fixed by `fv` or `m_fixedVars`.
-        for (size_t v : m_fixedVars) { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
-        for (size_t v : fv)          { if (varIsFixed_a[v] != varIsFixed_b[v]) return false; }
+    bool fixesSameVarsAs(const std::vector<size_t> &fv) const {
+        std::vector<bool> mask(n(), false);
+        for (size_t v : m_fixedVars) mask[v] = true;
+        for (size_t v : fv) {
+            if (!mask[v]) return false; // `fv` fixes a variable not fixed by `m_fixedVars`
+            mask[v] = false;
+        }
+        for (size_t v : m_fixedVars)
+            if (mask[v]) return false; // `m_fixedVars` fixes a variable not fixed by `fv`
 
         return true;
+    }
+
+    // Same as above but with `fv` sorted and unique.
+    bool fixesSameVarsAsSortedUnique(const std::vector<size_t> &fv) const {
+        return m_fixedVars == fv;
     }
 
     // Perform only the symbolic factorization for the given matrix `mat` after removing the
@@ -88,6 +93,70 @@ struct CholeskyFactorizerBase {
 
     // (Re)compute both symbolic and numeric factorizations
     virtual void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) = 0;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Factorization routines taking a `BlockCSCHessian` instead of
+    // `SuiteSparseMatrix`. The default implementation of thes is to
+    // convert to a `SuiteSparseMatrix` and call the routines above.
+    // However, if the subclass can exploit block structure (like
+    // BlockCatamari), then it overrides these methods.
+    ////////////////////////////////////////////////////////////////////////////
+    // For factorizers that do not expect a BlockCSCHessian, we convert/expand to a SuiteSparseMatrix.
+    virtual void factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+        m_recordSymbolic(mat, pinnedVars);
+
+        if (mat.isScalar())
+            factorizeSymbolic((const SuiteSparseMatrix &)(mat), pinnedVars);
+        else {
+            m_scalarHessian = mat.toScalar();
+            factorizeSymbolic(m_scalarHessian, pinnedVars);
+        }
+    }
+
+    virtual void factorizeSymbolic(const BlockCSCHessianBase &mat) {
+        if (mat.isScalar())
+            factorizeSymbolic((const SuiteSparseMatrix &)(mat));
+        else {
+            m_scalarHessian = mat.toScalar();
+            factorizeSymbolic(m_scalarHessian);
+        }
+    }
+
+    // Hack to avoid copying BlockCSCHessianBase::Ax into m_scalarHessian::Ax.
+    // We swap the two arrays before the factorization and then swap them
+    // back afterwards (even if an exception is thrown).
+    struct DataSwapper {
+        DataSwapper(const SuiteSparseMatrix &A, const SuiteSparseMatrix &B)
+            : m_A(const_cast<SuiteSparseMatrix &>(A)),
+              m_B(const_cast<SuiteSparseMatrix &>(B)) {
+            std::swap(m_A.Ax, m_B.Ax);
+        }
+        ~DataSwapper() { std::swap(m_A.Ax, m_B.Ax); }
+    private:
+        SuiteSparseMatrix &m_A, &m_B;
+    };
+
+    void guardedFactorizationCall(const BlockCSCHessianBase &mat, const std::function<void(const SuiteSparseMatrix &)> &f) const {
+        if (recordingMatrices()) mat.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+
+        if (mat.isScalar())
+            f((const SuiteSparseMatrix &)(mat));
+        else {
+            DataSwapper swapper(m_scalarHessian, mat);
+            f(m_scalarHessian);
+        }
+    }
+
+    virtual void factorizeNumeric(const BlockCSCHessianBase &mat, bool isInTryCatch=false) {
+        guardedFactorizationCall(mat, [&](const SuiteSparseMatrix &A) { factorizeNumeric(A, isInTryCatch); });
+    }
+    virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) {
+        guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, B, isInTryCatch); });
+    }
+    virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) {
+        guardedFactorizationCall(A, [sigma, this, isInTryCatch](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, isInTryCatch); });
+    }
+
     virtual void clearFactors() = 0;
 
     virtual void stashFactorization() = 0;
@@ -253,33 +322,74 @@ struct CholeskyFactorizerBase {
     virtual CholeskyProvider provider() const = 0;
 
     virtual ~CholeskyFactorizerBase() { }
+
+    // If `path` is nonempty, record the matrices passed to symbolic and numeric factorization routines.
+    void recordMatrices(const std::string &directory_path) { m_matrix_dump_path = directory_path; }
+    void stopRecordingMatrices() { m_matrix_dump_path.clear(); }
+    bool recordingMatrices() const { return !m_matrix_dump_path.empty(); }
+    static std::string symbolicMatrixFileName(size_t i) { return "/symbolic_mat_" + m_matrixIdString(i) + ".bin"; }
+    static std::string  numericMatrixFileName(size_t i) { return "/numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
+    static std::string     pinnedVarsFileName(size_t i) { return "/pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
+
 protected:
+    // An increasing identifier used to sequence each matrix written
+    // to disk during recording (symbolic and numeric).
+    // We use the same ordering for both types since to that we easily
+    // know which numeric matrices correspond to which sparsity patterns.
+    static std::string m_matrixIdString(size_t id) {
+        size_t n_zero = 4;
+        std::string padded_num = std::to_string(id);
+        padded_num = std::string(n_zero - std::min(n_zero, padded_num.length()), '0') + padded_num;
+        return padded_num;
+    }
+
+    size_t m_generateMatrixId() const { return const_cast<size_t &>(m_matrixId)++; }
+
+    void m_recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+        if (recordingMatrices()) {
+            size_t id = m_generateMatrixId();
+            mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id));
+
+            std::ofstream varsFile(m_matrix_dump_path + "/" + pinnedVarsFileName(id));
+            for (size_t v : pinnedVars) varsFile << v << std::endl;
+        }
+    }
+
     FactorizationType m_factorizationType = FactorizationType::None;
 
     // Functionality for efficient solves under variable pins
-    std::vector<size_t> m_fixedVars;
+    std::vector<size_t> m_fixedVars; // sorted, unique *scalar* variable indices
     std::vector<SuiteSparse_long> m_entryForReducedEntry;
     std::vector<SuiteSparse_long> m_reducedRowForRow;
     mutable std::vector<SuiteSparse_long> m_permutedReducedRowForRow;
     std::unique_ptr<SuiteSparseMatrix> m_Areduced;
     using VXd = VecX_T<Real>;
+
     mutable VXd m_solveScratch;
+    mutable SuiteSparseMatrix m_scalarHessian;
+
+    std::string m_matrix_dump_path;
+    size_t m_matrixId = 0;
 
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization
-    const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
+    const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool alreadySorted = false) {
         if (pinnedVars.empty()) return &mat;
 
         m_Areduced = std::make_unique<SuiteSparseMatrix>(mat);
 
         // Deduplicate fixed vars and construct mask needed for efficient row/col removal.
         m_fixedVars.clear();
-        std::vector<bool> fixedVarMask;
-        fixedVarMask.assign(mat.n, false);
+        std::vector<bool> fixedVarMask(mat.n, false);
         for (size_t var : pinnedVars) {
+            if (var >= size_t(mat.n)) throw std::runtime_error("Fixed variable index out of range");
             if (!fixedVarMask[var]) m_fixedVars.push_back(var);
             fixedVarMask[var] = true;
         }
+
+        // Fixed variable indices must be sorted to accelerate comparison in `updateSymbolicFactorization`
+        if (!alreadySorted)
+            std::sort(m_fixedVars.begin(), m_fixedVars.end());
 
         m_Areduced->rowColRemoval([&](SuiteSparse_long i) { return fixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
         m_permutedReducedRowForRow.clear();
@@ -290,10 +400,13 @@ protected:
         // Inject values of `A` into row-col-removed matrix
         if (!hasFixedVars()) return &mat;
         if (!m_Areduced)  throw std::logic_error("Variables were not fixed");
+        if (m_Areduced->isSparsityOnly())
+            m_Areduced->setZero();
 
         auto &A_reduced = *m_Areduced;
-        for (SuiteSparse_long ii = 0; ii < A_reduced.nz; ++ii)
+        parallel_for_range(A_reduced.nz, [&](size_t ii) {
             A_reduced.Ax[ii] = mat.Ax[m_entryForReducedEntry[ii]];
+        });
         return m_Areduced.get();
     }
 

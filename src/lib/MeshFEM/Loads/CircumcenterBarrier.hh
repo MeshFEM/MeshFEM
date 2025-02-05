@@ -28,6 +28,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         static constexpr size_t N   = Object::N;
         static constexpr size_t K   = Object::K;
         static constexpr size_t Deg = Object::Deg;
+        static_assert(Deg == 1, "CircumcenterBarrier is only intended for linear meshes");
         using VKd  = Eigen::Matrix<Real, K, 1>;
         using AK1i = Eigen::Array <int, K + 1, 1>;
         using MKd  = Eigen::Matrix<Real, K, K>;
@@ -343,12 +344,13 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
         }
 
         // Hessian with respect to the deformed state H_xx
-        virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool /* projectionMask */ = true) const override {
+        virtual void accumulateHessian(Real weight, NewtonHessian &H, bool /* projectionMask */ = true) const override {
             const auto &o = Base::getObj();
             const auto &m = mesh();
             BENCHMARK_SCOPED_TIMER_SECTION timer("CircumcenterBarrier.hessian");
-            auto accumulate_per_element_contrib = [&](size_t ei, auto &Hout) { // `auto` here needed for sparsity-pattern sharing optimization
-                PerElementHessian eH = elementHessian(o.deformedPositions(), elementCorners(ei));
+
+            auto eval_He = [&](size_t ei) {
+                PerElementHessian He = elementHessian(o.deformedPositions(), elementCorners(ei));
 
                 if (m_subdivisionBarrier) {
                     constexpr size_t nlv = Simplex::numVertices(K);
@@ -356,7 +358,7 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                         PerElementHessian eHSub = elementHessian(x, sub_e);
                         for (size_t lvi_b = 0; lvi_b < nlv; ++lvi_b) {
                             for (size_t lvi_a = 0; lvi_a <= lvi_b; ++lvi_a) {
-                                auto H_ab = eH.template block<N, N>(N * lvi_a, N * lvi_b);
+                                auto H_ab = He.template block<N, N>(N * lvi_a, N * lvi_b);
                                 for (size_t k = 0; k < nlv; ++k) {
                                     size_t sub_v_k = sub_e[k];
                                     Real lambda_a = B(sub_v_k, lvi_a);
@@ -373,38 +375,16 @@ struct CircumcenterBarrier : public ObjectSpecificLoad<Object> {
                     });
                 }
 
-                if (weight != 1.0) eH *= weight;
-
-                auto e = m.element(ei);
-                for (auto v_b : e.vertices()) {
-                    for (auto v_a : e.vertices()) {
-                        if (v_a.index() > v_b.index()) continue;
-                        // Only the upper triangle was computed above...
-                        size_t br = N * v_a.localIndex();
-                        size_t bc = N * v_b.localIndex();
-                        if (br <= bc)
-                            Hout.addNZBlock(N * v_a.index(), N * v_b.index(), eH.template block<N, N>(br, bc));
-                        else
-                            Hout.addNZBlock(N * v_a.index(), N * v_b.index(), eH.template block<N, N>(bc, br).transpose());
-                    }
-                }
+                if (weight != 1.0) He *= weight;
+                return He;
             };
 
-            assemble_parallel(accumulate_per_element_contrib, H, m.numElements());
+            this->assembler().assembleHessian(H, m, eval_He);
         }
 
         // *Additional* nonzeros contributed by this load to the potential energy Hessian.
         // (There are none).
-        virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
-            const size_t nv = numVars();
-            TripletMatrix<> Hsp(nv, nv);
-            Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-            return SuiteSparseMatrix(Hsp);
-        }
-
-        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-            return this->emptyBlockSparsityPattern();
-        }
+        virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
         Real bc_min = 0.1;
         RawBarrierLog barrier;           // enforce a constraint of the form `c <= 0`

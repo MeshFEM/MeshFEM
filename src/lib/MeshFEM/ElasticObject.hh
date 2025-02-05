@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
+#include "Types.hh"
 #include <cstdlib>
 #include <functional>
 
@@ -53,16 +54,12 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     }
 
     using NewtonObjectiveTermBase::hessian; // Don't shadow the `hessian` convenience method
-    virtual void accumulateHessian(Real weight, SuiteSparseMatrix &H, bool projectionMask) const override {
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask) const override {
         return accumulateHessian(weight, H, projectionMask, VariableMask::Defo);
     }
 
-    virtual void accumulateHessian(Real weight, Real *Ax, const BlockCSCHessianBase &Hb, bool projectionMask) const override {
-        return accumulateHessian(weight, Ax, Hb, projectionMask, VariableMask::Defo);
-    }
-
-    virtual CSCMat hessianSparsityPattern(Real val = 0.0) const override {
-        return hessianSparsityPattern(0.0, VariableMask::Defo);
+    virtual NewtonHessian hessianSparsityPattern() const override {
+        return hessianSparsityPattern(VariableMask::Defo);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -113,11 +110,11 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     ////////////////////////////////////////////////////////////////////////////
     virtual Real  energy() const = 0;
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization, VariableMask vmask) const = 0;
-    virtual void accumulateHessian(Real weight, CSCMat &Hout, bool projectionMask, VariableMask vmask) const = 0;
-    virtual void accumulateHessian(Real weight, Real *, const BlockCSCHessianBase &Hb, bool projectionMask, VariableMask vmask) const { throw std::runtime_error("Block-accelerated Hessian assembly not implemented."); }
-    virtual CSCMat hessianSparsityPattern(Real val, VariableMask vmask) const = 0;
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask, VariableMask vmask) const = 0;
+    virtual NewtonHessian hessianSparsityPattern(VariableMask vmask) const = 0;
     virtual VXd contract_d2E_dXdx(const VXd &y) const { throw std::runtime_error("Unimplemented!"); }
 
+    using NewtonObjectiveTermBase::gradient; // prevent hiding
     // Convenience method
     VXd gradient(bool updatedParametrization, VariableMask vmask = VariableMask::Defo) const {
         VXd g = VXd::Zero(numVars());
@@ -133,6 +130,9 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual CSCMat sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
 
     virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool /* lumped */) const { M.setIdentity(true); }
+
+    // Whether the mass matrix depends on the deformed configuration.
+    virtual bool hasVariableMassMatrix() const { return false; }
 
     // Get a FieldSampler for sampling FEM fields defined on the reference configuration mesh.
     virtual std::unique_ptr<FieldSampler> referenceConfigSampler()                     const { throw std::runtime_error("Unimplemented"); }
@@ -154,13 +154,57 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
     CSCMat massMatrix(bool updatedParametrization, bool lumped = false) const {
-        CSCMat M(hessianSparsityPattern());
+        CSCMat M(hessianSparsityPattern().toScalar());
         massMatrix(M, updatedParametrization, lumped);
         return M;
     }
 
+    //////////////////////////////////////////////////////////////////////////
+    // Methods needed for IPCEquilibriumSolver
+    //////////////////////////////////////////////////////////////////////////
+    struct CollisionMesh {
+        // Index tables representing the boundary mesh used for collision (e.g.,
+        // for IPC). Note that these tables hold indices of *collision mesh
+        // vertices*, which are different from nodes/vertices of the underlying
+        // elastic object. Currently we only implement support for elastic
+        // objects whose collision mesh vertices coincide with nodes of a FEM
+        // mesh (which can be determined by `nodeForCollisionMeshVertex`). This
+        // notably exludes elastic rods.
+        Eigen::MatrixXi edges, faces;
+        Eigen::VectorXi nodeForCollisionMeshVertex;
+
+        using VMaxd = VecMaxN_T<Real, 3>;
+        BBox<VMaxd> bbox;
+
+        size_t fullModelBlockVars = 0; // number of block variables (nodes) in the volumetric simulation mesh
+        size_t N = 0;
+        size_t numCollisionVertices() const { return nodeForCollisionMeshVertex.size(); }
+
+        // Extract a per-vertex vector field over this collision mesh from the
+        // full simulation DoF vector `vars.`
+        Eigen::MatrixXd extractVectorField(const VXd &vars) const {
+            const size_t ncv = numCollisionVertices();
+            Eigen::MatrixXd result(ncv, N);
+            for (size_t i = 0 ; i < ncv; ++i)
+                result.row(i) = vars.segment(N * nodeForCollisionMeshVertex[i], N);
+            return result;
+        }
+    };
+
+    virtual CollisionMesh getCollisionMesh() const { throw std::runtime_error("Unimplemented"); }
+    virtual Real volume()            const { throw std::runtime_error("Unimplemented"); }
+
+    // Note: changing the mass density invalidates certain rest-state-cache
+    // quantities (like the gravity load vector), so we issue a rest-state
+    // update notification below.
+    Real getMassDensity() const { return m_rho; }
+    void setMassDensity(Real rho) { m_rho = rho; m_restConfigUpdated(); }
+
     virtual ~ElasticObject() { }
 private:
+    // Global material density (used for scaling the mass matrix and for gravity loads)
+    Real m_rho = 1.0;
+
     // The following two methods must be implemented by the derived class to
     // update the deformed/rest states.
     virtual void m_setDefoVars(const Eigen::Ref<const VXd> &vars) = 0;

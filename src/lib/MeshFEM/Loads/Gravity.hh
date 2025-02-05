@@ -22,23 +22,14 @@ namespace Loads {
         template<class Object>
         struct GravityLoadVector {
             using VXd  = typename Object::VXd;
-            static constexpr size_t N   = 3;
+            static constexpr size_t N   = Object::N;
             static constexpr size_t K   = Object::K;
             static constexpr size_t Deg = Object::Deg;
             static VXd compute(const Gravity<Object> &g) {
-                VXd result;
-                result.setZero(g.numVars());
-                const auto &m = g.getObj().mesh();
-                typename Object::Mesh::ElementData::Phis phiIntegrals;
-                auto integratedPhis = integratedShapeFunctions<Deg, K>();
-                for (const auto e : m.elements()) {
-                    for (const auto n : e.nodes()) {
-                        result.template segment<3>(3 * n.index()) +=
-                            g.get_g() * (integratedPhis[n.localIndex()] * e->volume());
-                    }
-                }
-                result *= -g.get_rho();
-                return result;
+                const auto &o = g.getObj();
+                auto M = o.massMatrix(/* updatedParametrization */ false, /* useLumpedMass */ false);
+                VXd neg_g_rep = (-g.get_g()).replicate(M.n / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
+                return M.apply(neg_g_rep);
             }
         };
     }
@@ -48,56 +39,42 @@ namespace Loads {
         using Real = typename Object::Real;
         using Base = ObjectSpecificLoad<Object>;
         using ST   = typename Base::EOStorageType;
+        static constexpr size_t N = Object::N;
         using VXd  = typename Object::VXd;
-        using V3d  = Eigen::Matrix<Real, 3, 1>;
-        using Base::numVars;
+        using VNd  = Eigen::Matrix<Real, N, 1>; // ElasticSolid has the information of N
+        using Base::getObj;
 
-        Gravity(const ST &obj, Real rho, const V3d &g = V3d(0.0, 0.0, 9.80635))
-            : Base(obj), m_rho(rho), m_g(g) {
-            m_updateCache();
+        static constexpr VNd default_gravity() {
+            VNd result = VNd::Zero();
+            static_assert(N == 2 || N == 3, "Gravity load only implemented in 2D and 3D");
+            result[1] = -9.80635; // Negative y direction.
+            return result;
         }
 
-        void set_rho(Real rho) { m_rho = rho; m_updateCache(); }
-        Real get_rho()   const { return m_rho; }
+        Gravity(const ST &obj, const VNd &g = default_gravity())
+            : Base(obj), m_g(g) { m_updateCache(); }
 
-        void set_g(V3d g)      { m_g = g; m_updateCache(); }
-        V3d  get_g()     const { return m_g; }
+        void set_g(VNd g)      { m_g = g; m_updateCache(); }
+        VNd  get_g()     const { return m_g; }
 
-        virtual Real energy() const override {
-            return m_grad.dot(Base::getObj().getVars());
-        }
+        virtual Real energy() const override { return m_grad.dot(Base::getObj().getVars()); }
 
         // Gradient with respect to the deformed state
-        virtual VXd grad_x() const override {
-            return m_grad;
-        }
+        virtual VXd grad_x() const override { return m_grad; }
 
         // Gradient with respect to the rest state
-        virtual VXd grad_X() const override {
-            throw std::runtime_error("TODO");
-        }
+        virtual VXd grad_X() const override { throw std::runtime_error("TODO"); }
 
         // Gravity is linear ==> Hessian is zero.
-        virtual void accumulateHessian(Real /* weight */, SuiteSparseMatrix& /* H */, bool /* projectionMask */ = true) const override { }
-
-        virtual SuiteSparseMatrix hessianSparsityPattern(Real /* val */ = 0.0) const override {
-            const size_t nv = numVars();
-            TripletMatrix<> Hsp(nv, nv);
-            Hsp.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
-            return SuiteSparseMatrix(Hsp);
-        }
-
-        virtual std::unique_ptr<BlockCSCHessianBase> blockSparsityPattern() const override {
-            return this->emptyBlockSparsityPattern();
-        }
+        virtual void accumulateHessian(Real /* weight */, NewtonHessian &/* H */, bool /* projectionMask */ = true) const override { }
+        virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
     private:
         virtual void m_stateUpdated(typename Base::VM vmask) override {
             if (vmask == Base::VM::Rest) m_updateCache();
         }
 
-        Real m_rho;
-        V3d  m_g; // Gravitational acceleration vector
+        VNd  m_g; // Gravitational acceleration vector
 
         void m_updateCache() {
             m_grad = detail::GravityLoadVector<Object>::compute(*this);
