@@ -63,16 +63,14 @@ struct IPCWrapper : public IPCWrapperBase {
 			/* inflation_radius = */ dhat / 2, ipc::BroadPhaseMethod::HASH_GRID);
         BENCHMARK_STOP_TIMER_SECTION("candidates.build");
         // const auto candidate_end = std::chrono::steady_clock::now();
-
+        double dmin = 0.0;
 #if 0
         double alpha = candidates.compute_collision_free_stepsize(
-            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ 1e-6, /* tolerance = */ 1e-6, /* max_iterations = */ 1e6);
+            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ ccdMaxIters);
 #else
         BENCHMARK_START_TIMER_SECTION("compute_collision_free_stepsize");
-        double dmin = 0.0;
-        size_t max_iteration = 1e6;
         double alpha = candidates.compute_collision_free_stepsize(
-            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ max_iteration);
+            collisionMesh, collisionVertexPositions, steppedCollisionVertexPositions, /* dmin = */ dmin, /* tolerance = */ ccdTol, /* max_iterations = */ ccdMaxIters);
         BENCHMARK_STOP_TIMER_SECTION("compute_collision_free_stepsize");
 #endif
 

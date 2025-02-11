@@ -61,6 +61,9 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     void set_ccdTol(Real ccdTol) { m_ipcWrapper->ccdTol = ccdTol; }
     Real get_ccdTol() const { return m_ipcWrapper->ccdTol; }
 
+    void set_ccdMaxIters(Real ccdMaxIters) { m_ipcWrapper->ccdMaxIters = ccdMaxIters; }
+    Real get_ccdMaxIters() const { return m_ipcWrapper->ccdMaxIters; }
+
     // Get the last attempted Newton step (for debugging the line search)
     const MXd &getCollisionVertexPositions() const { return m_collisionVertexPositions;     }
     const MXi &getCollisionMeshFaces()       const { return m_combinedCollisionMesh->faces; }
