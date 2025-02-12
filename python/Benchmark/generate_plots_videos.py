@@ -40,7 +40,7 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
         in_model_timer = time.time()
         # read benchmark data
         obj_grad_time_list = plot_video_utils.readConvergenceTimingData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
-        obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, step_list, dd_list = plot_video_utils.readHessianData(os.path.join(base_path, model_name), hessian_option_list)
+        obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_list, dd_list = plot_video_utils.readHessianData(os.path.join(base_path, model_name), hessian_option_list)
         uv_dist_list = plot_video_utils.readUVdist(os.path.join(base_path, model_name), hessian_option_list)
         model_dict = plot_video_utils.readDictData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
 
@@ -49,7 +49,8 @@ def gen_plots_videos(base_path, modelbase_path, plots_folder_name, videos_folder
 
         # generate no-timing related figures
         plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
-        plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=80, hessian_option_list=hessian_option_list)
+        plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=80, hessian_option_list=hessian_option_list, scName='ProjIndef', hessian_indef_list=hessian_indef_list) # for hessian projection scatter
+        
         plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=20 ,hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
         plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
@@ -97,17 +98,6 @@ def validate_videos_flag(value):
     return value.lower()  # Return the lowercase version for consistency
 
 def main():
-    # Define Hessian options mapping
-    hessian_options_map = {
-        0: ['Adaptive', 'Always', 'xbasedAlways'],
-        1: ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD'],
-        2: ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD'],
-        3: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
-        5: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM'],
-        6: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD'],
-        7: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM'],
-    }
-
     # Set up argument parsing
     parser = argparse.ArgumentParser(
         description="Generate plots and videos for a given experiment setup."
@@ -115,10 +105,11 @@ def main():
     parser.add_argument("result_path", type=str, help="Path to save the experiment results.")
     parser.add_argument("modelbase_path", type=str, help="Base path to the models.")
     parser.add_argument(
-        "hessian_list_option",
-        type=int,
-        choices=hessian_options_map.keys(),
-        help="Choose a Hessian option list by index.",
+        "-hessian_options",
+        type=str,
+        nargs="+",
+        required=True,
+        help="List of hessian options to test (e.g., -hessian_options Adaptive AutoDiff).",
     )
     parser.add_argument(
         "-threads",
@@ -150,7 +141,7 @@ def main():
     args = parser.parse_args()
 
     # Process parsed arguments
-    hessian_option_list = hessian_options_map.get(args.hessian_list_option, [])
+    hessian_option_list = args.hessian_options
     thread_num_list = args.threads  # Parsed as a list of integers
     gen_video_flag = args.videos_flag == "yes"  # Convert flag to boolean
 
@@ -175,13 +166,7 @@ def main():
 
 if __name__ == "__main__":
     print("Usage: python generate_plots_videos.py <result_path> <modelbase_path> <hessian_list_option> <thread_list_option> [<videos_flag>] [<plots_folder_name>] [<videos_folder_name>]")
+    print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM>(Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
-    print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
-    print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
-    print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
-    print("Usage: Hessian Option List: [3] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
-    print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
-    print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD]")
-    print("Usage: Hessian Option List: [7] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM]")
     
     main()

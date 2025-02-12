@@ -121,22 +121,6 @@ def validate_save_uv_option(value):
     return value.lower()  # Return the lowercase version for consistency
 
 def main():
-    # Define Hessian options mapping
-    hessian_options_map = {
-        0: ['Adaptive', 'Always', 'xbasedAlways'],
-        1: ['Adaptive', 'Always', 'xbasedAlways', 'Never', 'TinyAD'],
-        2: ['Adaptive', 'Always', 'xbasedAlways', 'TinyAD'],
-        3: ['TinyAD'],
-        4: ['Never'],
-        5: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff'],
-        6: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD'],
-        7: ['AutoDiff'],
-        8: ['SLIM'],
-        9: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'TinyAD', 'SLIM'],
-        10: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD'],
-        11: ['Adaptive', 'Always', 'xbasedAlways', 'AutoDiff', 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM']
-    }
-
     # Set up argument parsing
     parser = argparse.ArgumentParser(
         description="Run all models for a given experiment setup with specified options."
@@ -149,10 +133,11 @@ def main():
         help="Option to save UV data: 'yes', 'no', or 'both' (case-insensitive).",
     )
     parser.add_argument(
-        "hessian_list_option",
-        type=int,
-        choices=hessian_options_map.keys(),
-        help="Choose a Hessian option list by index.",
+        "-hessian_options",
+        type=str,
+        nargs="+",
+        required=True,
+        help="List of hessian options to test (e.g., -hessian_options Adaptive AutoDiff).",
     )
     parser.add_argument(
         "-threads",
@@ -177,7 +162,7 @@ def main():
         sys.exit(1)
 
     # Get hessian_option_list and thread_num_list
-    hessian_option_list = hessian_options_map.get(args.hessian_list_option, [])
+    hessian_option_list = args.hessian_options
     thread_num_list = args.threads  # Automatically parsed as a list of integers
 
     # Debugging information (optional)
@@ -204,18 +189,8 @@ def main():
 
 if __name__ == "__main__":
     print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_list_option> <thread_list_option> [<repeat_num>]")
+    print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM>(Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
-    print("Usage: Hessian Option List: [0] -- [Adaptive, Always, xbasedAlways]")
-    print("Usage: Hessian Option List: [1] -- [Adaptive, Always, xbasedAlways, Never, TinyAD]")
-    print("Usage: Hessian Option List: [2] -- [Adaptive, Always, xbasedAlways, TinyAD]")
-    print("Usage: Hessian Option List: [3] -- [TinyAD]")
-    print("Usage: Hessian Option List: [4] -- [Never]")
-    print("Usage: Hessian Option List: [5] -- [Adaptive, Always, xbasedAlways, AutoDiff]")
-    print("Usage: Hessian Option List: [6] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD]")
-    print("Usage: Hessian Option List: [7] -- [AutoDiff]")
-    print("Usage: Hessian Option List: [8] -- [SLIM]")
-    print("Usage: Hessian Option List: [9] -- [Adaptive, Always, xbasedAlways, AutoDiff, TinyAD, SLIM]")
-    print("Usage: Hessian Option List: [10] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD]")
-    print("Usage: Hessian Option List: [11] -- [Adaptive, Always, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM]")
+
     main()
     

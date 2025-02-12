@@ -254,7 +254,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
 
     benchmark.reset()
     start_time = time.time()
-    opt.optimize()
+    cr = opt.optimize()
     # benchmark.report()
     if uvsave_path is not None:      
         hessian_projected_history.append(int(prob.hessianWasProjected)) # The projection status of the Hessian used in are i-1
@@ -265,6 +265,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         # we saved uv coordinates per-iteration and hessian_projected_history
         hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
         hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
+        hessian_indef_arr = np.array(cr.indefinite, dtype=int)
         step_size_arr = np.array(step_norm_history)
         dd_arr = np.array(directional_derivative_history)
 
@@ -272,6 +273,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         grad_norm_filename = 'grad_norm_history.npy'
         hp_filename = 'hessian_projected_history.npy'
         hs_filename = 'hessian_shifted_amount_history.npy'
+        hindef_filename = 'hessian_indefinite_history.npy'
         step_filename = 'step_size_history.npy'
         dd_filename = 'directional_derivative_history.npy'
 
@@ -279,9 +281,10 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
         np.save(os.path.join(uvsave_path, hs_filename), hessian_shifted_arr)
+        np.save(os.path.join(uvsave_path, hindef_filename), hessian_indef_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -396,7 +399,71 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
         
+# Input Parameter:
+# numCISBE: numConsecutiveIndefiniteStepsBeforeEnable
+# numPSBD: numProjectionStepsBeforeDisable
+def runSymmds_AdaptiveParameter(m, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-8, grad_tol=None):
 
+    obj_history = []
+    time_history = []
+    grad_norm_history = []
+    hessian_projected_history = []
+    hessian_shifted_amount_history = []
+    step_norm_history = []
+    directional_derivative_history = []
+
+    def customCallback(prob, i):
+        it_time = time.time()
+        obj_history.append(prob.energy())
+        time_history.append(it_time)
+        grad_norm_history.append(np.linalg.norm(prob.gradient()))
+        if i > 1:
+            hessian_projected_history.append(int(prob.hessianWasProjected))
+            hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+    
+    def customSaveStepDCallback(prob, step, directional_derivative):
+        step_norm_history.append(np.linalg.norm(step))
+        directional_derivative_history.append(-directional_derivative)
+
+    uv = mesh_energy.NodalVars(m, 2)
+    bdry_uv = getBDdataOnNormalizedCircle(m)
+    uv_init = tutteInitialization(m, bdry_uv)
+    uv.setVars(uv_init.ravel())
+
+    symmdiri_energy = energy.SymmetricDirichlet(2)
+    # Construct `SymmetricDirichlet` parametrization energy and problem
+    param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
+    prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
+    prob.setCustomIterationCallback(customCallback)
+    prob.setCustomLineSearchBeganCallback(customSaveStepDCallback)
+
+    # Work around energy nullspace by adding a small shift
+    prob.hessianShift = hessian_shift
+    opt = prob.optimizer()
+    opt.options.niter = max_iter
+    opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
+    opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = numCISBE
+    opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = numPSBD
+    if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
+
+    benchmark.reset()
+    start_time = time.time()
+    cr = opt.optimize()
+    # The projection status of the Hessian used in are i-1
+    hessian_projected_history.append(int(prob.hessianWasProjected)) 
+    hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+
+    # Convert List to Array
+    hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
+    hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
+    hessian_indef_arr = np.array(cr.indefinite, dtype=int)
+    step_size_arr = np.array(step_norm_history)
+    dd_arr = np.array(directional_derivative_history)
+
+    bk_dict = benchmark.to_dict()
+    time_arr = np.array(time_history) - start_time
+
+    return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict, hessian_projected_arr, hessian_shifted_arr, hessian_indef_arr, step_size_arr, dd_arr
 
 
 

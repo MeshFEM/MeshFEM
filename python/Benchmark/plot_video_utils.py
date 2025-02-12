@@ -11,6 +11,7 @@ sys.path.append('../')
 import MeshFEM, mesh, mesh_energy,viewer, benchmark
 import mesh_operations
 import numpy as np
+import re
 import math, bisect, time
 import pickle
 import video_writer
@@ -22,6 +23,9 @@ from matplotlib.ticker import MaxNLocator
 def getColorLineList(options):
     color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
                   'gold', 'darkorange', 'mediumvioletred', 'royalblue']
+    
+    cmap = plt.get_cmap("tab10")  # or "Set1", "viridis", etc.
+    color_list = [cmap(i) for i in range(options)]
     
     line_style_list = [
         '-',       # Solid
@@ -66,6 +70,10 @@ def list_to_string(int_list):
     str: A string with all integers concatenated in sequence.
     """
     return ''.join(map(str, int_list))
+
+def check_adap_option_format(string : str):
+    pattern = re.compile(r"^C\d+P\d+$")  # Matches 'C' + digits + 'P' + digits
+    return bool(pattern.match(string))
 
 # Under Hessian_Option/UVs
 # The directory should contain 'uv_ravel_iter_i.npz' data
@@ -123,10 +131,12 @@ def read_HessianProjected_data(directory):
 
     hp_file_name = 'hessian_projected_history.npy'
     hs_file_name = 'hessian_shifted_amount_history.npy'
+    hindef_file_name = 'hessian_indefinite_history.npy'
     hessian_projected_data = readOptionData(directory, hp_file_name)
     hessian_shifted_amount_data = readOptionData(directory, hs_file_name)
+    hessian_indef_data = readOptionData(directory, hindef_file_name)
 
-    return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, step_size_data, dd_data
+    return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_size_data, dd_data
 
 # Under Hessian_Option/thread_i/
 def getFastestRepeatIndex(directory):
@@ -143,7 +153,7 @@ def getFastestRepeatIndex(directory):
         return fast_ind
 
 # Under Hessian_Option/thread_i/repeat_i
-def read_benchmark_data(directory):
+def read_benchmark_data(directory, read_hessian_data=False):
     # Full paths to the files
     pkl_file_path = os.path.join(directory, "benchmark_dict.pkl")
     npz_file_path = os.path.join(directory, "obj_time_gradnorm.npz")
@@ -163,6 +173,18 @@ def read_benchmark_data(directory):
     obj_arr = npz_data['obj_arr']
     time_arr = npz_data['time_arr']
     grad_norm_arr = npz_data['grad_norm_arr']
+
+    if read_hessian_data:
+        hessian_npz_file_path = os.path.join(directory, "hessian_data.npz")
+        if not os.path.isfile(hessian_npz_file_path):  raise FileNotFoundError(f"'hessian_data.npz' not found in {directory}")
+        hessian_npz_data = np.load(hessian_npz_file_path)
+        hessian_projected_arr = hessian_npz_data['hp_arr']
+        hessian_shift_arr = hessian_npz_data['hs_arr']
+        hessian_indef_arr = hessian_npz_data['hi_arr']
+        step_size_arr = hessian_npz_data['step_size_arr']
+        dd_arr = hessian_npz_data['dd_arr']
+
+        return obj_arr, time_arr, grad_norm_arr, hessian_projected_arr, hessian_shift_arr, hessian_indef_arr, step_size_arr, dd_arr 
 
     return obj_arr, time_arr, grad_norm_arr, benchmark_dict
 
@@ -191,22 +213,62 @@ def readHessianData(directory, hessian_option_list = ['Adaptive', 'Always', 'Nev
     grad_norm_list = []
     hessian_projected_list = []
     hessian_shifted_amount_list = []
+    hessian_indef_list = []
     step_size_list = []
     dd_list = []
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
         # read UV_related Hessian data
         uv_folder_name = 'UVs'
         uv_dir = os.path.join(directory, hessian_option, uv_folder_name)
-        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
+        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
 
         obj_list.append(obj_data)
         grad_norm_list.append(grad_norm_data)
         hessian_projected_list.append(hessian_projected_data)
         hessian_shifted_amount_list.append(hessian_shifted_amount_data)
+        hessian_indef_list.append(hessian_indef_data)
         step_size_list.append(step_data)
         dd_list.append(dd_data)
     
-    return obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, step_size_list, dd_list
+    return obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_size_list, dd_list
+
+# For input step_tuples
+# Input parameter: directory = base_path/user_model_name a string
+def readHessianTimingData(directory : str, thread_num_list, step_tuple_list):
+    numTuples = len(step_tuple_list)
+    # data structure: adpdata_dict
+    # outer dict key  <---> an parameter experiment (C5P10) 
+    # list contains: 2-level dict. Outer level --> key: thread-num --> a inner dict
+    # inner dict's key (add _arr): obj, grad, time, hessian_projected, hessian_shift, hessian_indefinite, step_size, directional_derivative
+    adpdata_dict = {}
+    for step_tuple in step_tuple_list:
+        step_tuple_str = f"C{step_tuple[0]}P{step_tuple[1]}"
+        step_dict = {}
+        for thread_num in thread_num_list:
+            thread_dir_name = 'thread' + '_' + str(thread_num)
+            cur_dir = os.path.join(directory, step_tuple_str, thread_dir_name)
+            fast_ind = getFastestRepeatIndex(cur_dir) # read file 'summary.txt'
+            repeat_dir_name = 'repeat' + '_' + fast_ind
+            data_dir = os.path.join(cur_dir, repeat_dir_name)
+            obj_arr, time_arr, grad_norm_arr, hessian_projected_arr, hessian_shift_arr, hessian_indef_arr, step_size_arr, dd_arr = read_benchmark_data(data_dir, read_hessian_data=True)
+            
+            thread_dict = {}
+            thread_dict['iter'] = obj_arr.shape[0]
+            thread_dict['totalTime'] = time_arr[-1]
+            thread_dict['obj_arr'] = obj_arr
+            thread_dict['time_arr'] = time_arr
+            thread_dict['grad_norm_arr'] = grad_norm_arr
+            thread_dict['hessian_projected_arr'] = hessian_projected_arr
+            thread_dict['hessian_shift_arr'] = hessian_shift_arr
+            thread_dict['hessian_indef_arr'] = hessian_indef_arr
+            thread_dict['step_size_arr'] = step_size_arr
+            thread_dict['directional_derivative_arr'] = dd_arr
+
+            step_dict[thread_num] = thread_dict
+        adpdata_dict[step_tuple_str] = step_dict
+        
+    return adpdata_dict
+
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
@@ -223,10 +285,13 @@ def readUVdist(directory, hessian_option_list = ['Adaptive', 'Always', 'Never'])
 
 # For one model's all Hessian options
 # Input parameter: directory = base_path/user_model_name
-def readDictData(directory, thread_num_list, hessian_option_list):
+# Updated: when pass in step_tuple_list as hessian_option_list, convert tuple (x,y) to be str 'CxPy'
+def readDictData(directory : str, thread_num_list, hessian_option_list):
     # Build nested-dictonary
     model_dict = {}
     for hessian_option in hessian_option_list:
+        # check whether hessian_option is a tuple
+        if isinstance(hessian_option, tuple):  hessian_option = f"C{hessian_option[0]}P{hessian_option[1]}"
         hessian_dict = {}
         for thread_num in thread_num_list:
             thread_dir_name = 'thread' + '_' + str(thread_num)
@@ -413,7 +478,7 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
         elapsed_record_time = time.time() - start_record_timer
         print(f"[Viedo] {video_fn} recorded in {save_directory}. Recording Time: {elapsed_record_time:.4f} seconds.")
 
-def getYAxisTitle(metric_title):
+def getYAxisTitle(metric_title : str):
     yAxisTitle = "Y-Axis"
     if metric_title == 'UVdist': yAxisTitle = "Distance to Converged UV"
     elif metric_title == 'Obj': yAxisTitle = "Energy"
@@ -422,7 +487,7 @@ def getYAxisTitle(metric_title):
     elif metric_title == 'DD': yAxisTitle = "Directional Derivative"
     return yAxisTitle
 
-def getBarPlotsYAxisTitle(metric_key):
+def getBarPlotsYAxisTitle(metric_key : str):
     yAxisTitle = "Y-Axis"
     if metric_key == 'time':  yAxisTitle = "Total Time"
     elif metric_key == 'iter': yAxisTitle = "Iteration"
@@ -430,10 +495,41 @@ def getBarPlotsYAxisTitle(metric_key):
     elif metric_key == 'hessian_eval':  yAxisTitle = "Hessian Evaluation Time"
     return yAxisTitle
 
+def getMetricTitleFromKey(metric_key : str):
+    metric_title = 'Metric'
+    if metric_key == 'obj_arr': metric_title = 'Obj'
+    elif metric_key == 'grad_norm_arr': metric_title = 'Grad'
+    elif metric_key == 'step_size_arr': metric_title = 'Step'
+    elif metric_key == 'directional_derivative_arr': metric_title = 'DD'
+
+    return metric_title
+
+def saveMetricIterFigure_AdapExpWrapper(adap_exp_data_dict, thread_num, model_name, metric_key, save_directory, 
+                                        step_tuple_str_list, offset=0, sect=None,
+                                        addScatter=True, scName='Scatter', addHessianIndef=False):
+    # extract metric_list, hessian_projected_list, hessian_indef_list from adap_exp_data_dict
+    # vs Iter, using arbitrary thread number
+    metric_list = []
+    hessian_projected_list = []
+    hessian_indef_list = []
+    for step_tuple_str in step_tuple_str_list:
+        thread_dict = adap_exp_data_dict[step_tuple_str][thread_num]
+        metric_list.append(thread_dict[metric_key])
+        hessian_projected_list.append(thread_dict['hessian_projected_arr'])
+        hessian_indef_list.append(thread_dict['hessian_indef_arr'])
+    
+    metric_title = getMetricTitleFromKey(metric_key)
+    if not addHessianIndef: hessian_indef_list = None
+
+    saveMetricIterFigure(metric_list, hessian_projected_list, model_name, metric_title, save_directory,
+                             offset, sect, step_tuple_str_list, addScatter, scName, hessian_indef_list)
+    
+
 # Plot metric with numIter - offset size
 # Under different hessian projection options under one thread configuration
 def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, metric_title, save_directory, 
-                         offset=0, sect=None, hessian_option_list = ['Adaptive', 'Always', 'Never'], addScatter=True):
+                         offset=0, sect=None, hessian_option_list = ['Adaptive', 'Always', 'Never'], 
+                         addScatter=True, scName = 'Scatter', hessian_indef_list=None):
     
     num_options = len(hessian_option_list)
     if len(metric_list) != num_options:
@@ -442,6 +538,12 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     scatter_list = []
     if 'Adaptive' in hessian_option_list:  scatter_list.append(hessian_option_list.index('Adaptive'))
     if 'AutoDiff' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AutoDiff'))
+    if 'AutoDiffAbs' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AutoDiffAbs'))
+    if 'AdaptiveAbs' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AdaptiveAbs'))
+    # for adaptive experiments where all adaptive-options are "CXPY" where X,Y are integers
+    for hessian_option in hessian_option_list:
+        if check_adap_option_format(hessian_option):
+            scatter_list.append(hessian_option_list.index(hessian_option))
     
     yAxisTitle = getYAxisTitle(metric_title)
 
@@ -454,6 +556,8 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
 
     iter_projTrue_list = create_list_of_lists(num_options)
     metric_projTrue_list = create_list_of_lists(num_options)
+    iter_Hindef_list = create_list_of_lists(num_options)
+    metric_Hindef_list = create_list_of_lists(num_options)
 
     if offset > 0:
         for ind in scatter_list:
@@ -462,12 +566,23 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
             metric_projtrue_list = metric_list[ind][modified_hessian_proj_list==1]
             iter_projTrue_list[ind] = adaptive_projtrue_iter
             metric_projTrue_list[ind] = metric_projtrue_list
+            if hessian_indef_list is not None:
+                modified_Hindef_list = hessian_indef_list[ind][:(0-offset)]
+                adaptive_Hindef_iter = iterations_list[ind][modified_Hindef_list == 1]
+                metric_Hindef_modified_list = metric_list[ind][modified_Hindef_list == 1]
+                iter_Hindef_list[ind] = adaptive_Hindef_iter
+                metric_Hindef_list[ind] = metric_Hindef_modified_list
     else: 
         for ind in scatter_list:
             adaptive_projtrue_iter = iterations_list[ind][hessian_projected_list[ind]==1]
             metric_projtrue_list = metric_list[ind][hessian_projected_list[ind]==1]
             iter_projTrue_list[ind] = adaptive_projtrue_iter
             metric_projTrue_list[ind] = metric_projtrue_list
+            if hessian_indef_list is not None:
+                adaptive_Hindef_iter = iterations_list[ind][hessian_indef_list[ind] == 1]
+                metric_Hindef_ind_list = metric_list[ind][hessian_indef_list[ind] == 1]
+                iter_Hindef_list[ind] = adaptive_Hindef_iter
+                metric_Hindef_list[ind] = metric_Hindef_ind_list
     
     plt.figure(figsize=(8, 8))
     for i in range(num_options):
@@ -479,7 +594,13 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
             if sect is not None:
                 ip = bisect.bisect_left(iter_projTrue_list[ind], sect)
                 plt.scatter(iter_projTrue_list[ind][:ip], metric_projTrue_list[ind][:ip], edgecolors=color_list[ind], marker='o', facecolors=color_list[ind],  s=50)
-            else:  plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors=color_list[ind],  s=50)
+                if hessian_indef_list is not None:
+                    ip2 = bisect.bisect_left(iter_Hindef_list[ind], sect)
+                    plt.scatter(iter_Hindef_list[ind][:ip2], metric_Hindef_list[ind][:ip2], edgecolors=color_list[ind], marker='D', facecolors='none',  s=50)
+            else:  
+                plt.scatter(iter_projTrue_list[ind], metric_projTrue_list[ind], edgecolors=color_list[ind], marker='o', facecolors=color_list[ind],  s=50)
+                if hessian_indef_list is not None:
+                    plt.scatter(iter_Hindef_list[ind], metric_Hindef_list[ind], edgecolors=color_list[ind], marker='D', facecolors='none',  s=50)
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -493,7 +614,7 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     plt.xlim(0, None) 
 
     full_fn = user_model_name + '_' + metric_title + 'VSIter'
-    if addScatter:  full_fn += '_Scatter'
+    if addScatter:  full_fn += '_' + scName
     if sect is not None:  full_fn += '_sect' + str(sect)
     full_fn += '.png'
     plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
