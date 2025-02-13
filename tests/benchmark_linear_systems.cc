@@ -12,7 +12,7 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
-void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads) {
+void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
     set_max_num_tbb_threads(tbb_threads);
 
 // #if __linux__
@@ -79,23 +79,25 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
                 throw std::runtime_error("Numeric matrix encountered before symbolic matrix");
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
-            try {
-                factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+            for (size_t r = 0; r < repeats; ++r) {
+                try {
+                    factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+                    if (r > 0) continue; // Only verify in first pass
 
-                // Verify
-                b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
-                auto x = factorizer->solve(b);
-                auto b_recompute = H->apply(x);
-                double relerror_backward = (b - b_recompute).norm() / b.norm();
-                // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
-                // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
-                if (relerror_backward > 5e-5)
-                    std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
+                    // Verify
+                    b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
+                    auto x = factorizer->solve(b);
+                    auto b_recompute = H->apply(x);
+                    double relerror_backward = (b - b_recompute).norm() / b.norm();
+                    // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
+                    // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
+                    if (relerror_backward > 5e-5)
+                        std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
+                }
+                catch (const std::runtime_error &e) {
+                    std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+                }
             }
-            catch (const std::runtime_error &e) {
-                std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
-            }
-
 
             continue;
         }
@@ -108,13 +110,16 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc != 4) {
-        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory" << std::endl;
-        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, pardiso}" << std::endl;
+    if (argc < 4 || argc > 5) {
+        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory [numeric_repeats]" << std::endl;
+        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso}" << std::endl;
         exit(-1);
     }
 
-    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]));
+    size_t repeats = 1;
+    if (argc == 5) repeats = std::stoi(argv[4]);
+
+    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]), repeats);
 
     return 0;
 }
