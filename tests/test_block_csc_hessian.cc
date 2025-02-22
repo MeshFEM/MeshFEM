@@ -96,6 +96,22 @@ void runTest() {
         blockH->addDiag(d);
         REQUIRE(scalarH.trace() == blockH->trace());
     }
+
+    // Validate `addWithSubSparsityFast`
+    {
+        NewtonHessian H_subset(assembler.template blockSparsityPattern(numElements - numElements / 2,
+                [&elements](size_t ei) { return elements.row(ei); }));
+        H_subset.insertSparsityPatternDiagonalBlocksIfNeeded();
+        H_subset.H_ss->setZero(); // allocate value storage
+        H_subset.H_ss->data().setRandom();
+
+        SuiteSparseMatrix scalarH_subset = H_subset.toScalar();
+        blockH->addWithSubSparsityFast(*(H_subset.H_ss));
+        scalarH.addWithSubSparsityFast(scalarH_subset);
+        SuiteSparseMatrix scalarH_compare = blockH->toScalar();
+        
+        REQUIRE((scalarH_compare.data() - scalarH.data()).norm() == 0);
+    }
 }
 
 template<template<class Derived> class Policy>

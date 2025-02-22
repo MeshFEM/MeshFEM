@@ -467,7 +467,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     void mergeSparsityPattern(const BlockCSCHessianBase &other) {
         if (this->blockVarSizesAndCounts() != other.blockVarSizesAndCounts())
-            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable sizes/counts");
+            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable structure");
         const CSCMat &other_csc = other;
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
         this->Ai = std::move(result.Ai);
@@ -514,6 +514,8 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` and `addNZBlock` implementations.
     virtual void addNZScalar(size_t vi, size_t vj, double val) = 0;
     virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) = 0;
+
+    virtual void addWithSubSparsityFast(const BlockCSCHessianBase &b, const double alpha = 1.0, bool parallel = true) = 0;
 
     template<class _InVector>
     void addDiag(const _InVector &d) {
@@ -817,6 +819,56 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
                     loc += this->scalarColStride(bj) + c_j;
             }
         }
+    }
+
+    // Perform the operation:
+    //  (*this) += alpha * b
+    // Assumes RHS sparsity pattern is a subset of LHS.
+    virtual void addWithSubSparsityFast(const BlockCSCHessianBase &b_base, const _Real alpha = 1.0, bool parallel = true) override {
+        if (blockVarSizesAndCounts() != b_base.blockVarSizesAndCounts())
+            throw std::runtime_error("BlockCSCHessian::addWithSubSparsityFast: incompatible variable block structure");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("addWithSubSparsityFast::only `UPPER_TRIANGLE` symmetry mode is implemented");
+        const BlockCSCHessian &b = cast(b_base);
+
+        auto addColumn = [&](_Index j) {
+            auto csB = b.columnScanner(j);
+            size_t bsj = csB.colBlockSize();
+
+            for (auto csA = columnScanner(j); !csA.atEnd() && !csB.atEnd(); ++csA) {
+                _Index rA = Ai[csA.blockLoc()];
+                _Index rB = b.Ai[csB.blockLoc()];
+
+                if (rA == rB) {
+                          _Real *ptr_A =   Ax.data() + csA.scalarLoc();
+                    const _Real *ptr_B = b.Ax.data() + csB.scalarLoc();
+                    if (rA != j) {
+                        // Add upper-tri block
+                        for (size_t c = 0; c < bsj; ++c) {
+                            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_A, csA.rowBlockSize()) +=
+                                alpha * Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_B, csB.rowBlockSize());
+                            ptr_A += csA.colStride(c);
+                            ptr_B += csB.colStride(c);
+                        }
+                    }
+                    else {
+                        // Add the diagonal block
+                        for (size_t c = 0; c < bsj; ++c) {
+                            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_A, c + 1) +=
+                                alpha * Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_B, c + 1);
+                            ptr_A += csA.diagBlockColStride(c);
+                            ptr_B += csB.diagBlockColStride(c);
+                        }
+                    }
+                    ++csB;
+                }
+                else {
+                    assert(rA < rB && "b's sparsity not a subset of ours");
+                }
+            }
+            assert(csB.atEnd() && "Hit end of column A before end of column B :(");
+        };
+
+        parallel_for_range(n, addColumn, /* grain_size = */ 50, /*parallelism_threshold = */ parallel ? 500 : std::numeric_limits<size_t>::max());
     }
 
     std::unique_ptr<BlockCSCHessianBase> clone() const override;
